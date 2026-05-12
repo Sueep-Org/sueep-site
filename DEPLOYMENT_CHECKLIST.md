@@ -10,11 +10,11 @@
   - [ ] All NEXT_PUBLIC_FIREBASE_* variables
   - [ ] STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   - [ ] DATABASE_URL and DIRECT_URL
-  - [ ] ERP_SESSION_SECRET and ERP_ACCESS_PASSWORD
+  - [ ] ERP_SESSION_SECRET (min 32 random characters)
   - [ ] (Optional) HUBSPOT_ACCESS_TOKEN, HUBSPOT_CLIENT_SECRET, HUBSPOT_PIPELINE_STAGE_MAP
 - [ ] Local development tested: `npm run dev` works without errors
 - [ ] Local build tested: `npm run build` succeeds (includes Prisma migrations & code generation)
-- [ ] All features tested locally (Firebase auth, database queries, Stripe checkout, etc.)
+- [ ] All features tested locally (Firebase auth, ERP login, database queries, Stripe checkout, etc.)
 - [ ] Code committed to git
 
 ## Vercel Setup Checklist
@@ -31,8 +31,7 @@
   - [ ] NEXT_PUBLIC_FIREBASE_APP_ID
   - [ ] DATABASE_URL (must use pooled connection for Neon)
   - [ ] DIRECT_URL (must use direct connection for Neon)
-  - [ ] ERP_SESSION_SECRET
-  - [ ] ERP_ACCESS_PASSWORD
+  - [ ] ERP_SESSION_SECRET (min 32 random characters)
   - [ ] STRIPE_SECRET_KEY
   - [ ] NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   - [ ] HUBSPOT_ACCESS_TOKEN (optional - only if using HubSpot sync)
@@ -97,8 +96,7 @@ vercel --prod
 - STRIPE_SECRET_KEY (required for payment processing)
 - DATABASE_URL (must use pooled connection: "-pooler" in hostname)
 - DIRECT_URL (must use direct connection: add "&channel_binding=require")
-- ERP_SESSION_SECRET (32+ random characters)
-- ERP_ACCESS_PASSWORD
+- ERP_SESSION_SECRET (min 32 random characters for JWT signing)
 - HUBSPOT_ACCESS_TOKEN (if using HubSpot integration)
 - HUBSPOT_CLIENT_SECRET (if using HubSpot integration)
 - HUBSPOT_PIPELINE_STAGE_MAP (if using HubSpot integration)

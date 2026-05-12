@@ -73,9 +73,8 @@
    vercel env add DATABASE_URL
    vercel env add DIRECT_URL
    
-   # ERP Session
+   # ERP Session (uses Firebase auth, so only needs session secret for JWT)
    vercel env add ERP_SESSION_SECRET
-   vercel env add ERP_ACCESS_PASSWORD
    
    # Stripe (Required for payment processing)
    vercel env add STRIPE_SECRET_KEY
@@ -99,7 +98,7 @@
 1. Push code to GitHub:
    ```bash
    git add .
-   git commit -m "Add Firebase configuration"
+   git commit -m "Add Firebase ERP authentication"
    git push origin main
    ```
 
@@ -118,6 +117,7 @@ Make sure these are set as environment variables in Vercel (not in code):
 - `DIRECT_URL` - Must use *direct* connection
 - `STRIPE_SECRET_KEY` - Required for payments to work
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Required for Stripe checkout UI
+- `ERP_SESSION_SECRET` - Used to sign JWT session tokens for ERP access (min 32 characters)
 3. Add all variables from your `.env.local` file:
    - Mark Firebase variables as "Environments: Production, Preview, Development"
    - Mark sensitive keys as "Environments: Production" only
