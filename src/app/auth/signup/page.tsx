@@ -33,8 +33,8 @@ export default function FirebaseSignupPage() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to sign up');
     } finally {
       setLoading(false);
     }

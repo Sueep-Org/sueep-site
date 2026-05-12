@@ -21,8 +21,8 @@ export default function FirebaseLoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log in');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to log in');
     } finally {
       setLoading(false);
     }
