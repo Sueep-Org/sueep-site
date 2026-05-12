@@ -7,6 +7,7 @@ import {
   type DealLifecyclePhase,
 } from "@/lib/hubspot/pipelineStages";
 import { searchDealsInConfiguredStages, type HubSpotDealRecord } from "@/lib/hubspot/dealSearch";
+import { syncDealContactsToProject } from "@/lib/hubspot/syncDealContactsToProject";
 
 function prop(r: HubSpotDealRecord, name: string): string | null {
   const v = r.properties[name];
@@ -37,6 +38,8 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   reconciledJanitorial?: Array<{ hubspotDealId: string; projectId: string }>;
 }> {
   const deals = await searchDealsInConfiguredStages(200);
+  const startDateProperty = process.env.HUBSPOT_PROJECT_START_DATE_PROPERTY?.trim() || null;
+  const endDateProperty = process.env.HUBSPOT_PROJECT_END_DATE_PROPERTY?.trim() || null;
   const cfg = parseHubSpotPipelineStageMap();
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
@@ -48,6 +51,8 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     const name = prop(deal, "dealname")?.trim() || "Untitled deal";
     const amountRaw = prop(deal, "amount");
     const closeRaw = prop(deal, "closedate");
+    const startRaw = startDateProperty ? prop(deal, startDateProperty) : null;
+    const endRaw = endDateProperty ? prop(deal, endDateProperty) : null;
 
     const classified = classifyHubSpotDealStage(pipelineId, stageId);
     if (!classified) {
@@ -56,6 +61,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
 
     const { segment, phase } = classified;
+    const projectSegment = segment === "COMMERCIAL" ? "COMMERCIAL_CLEANING" : "RESIDENTIAL_PAINTING";
     const status = erpStatusFromPhase(phase);
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;
@@ -66,19 +72,22 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       if (!shouldSyncDealToErp(phase) && !existing) {
         continue;
       }
-      const projectDate = parseHubSpotDate(closeRaw);
+      const projectDate = parseHubSpotDate(startRaw ?? closeRaw);
+      const projectEndDate = parseHubSpotDate(endRaw ?? closeRaw);
 
       if (existing) {
         await prisma.project.update({
           where: { id: existing.id },
           data: {
             jobTitle: name,
-            segment,
+            ...(existing.supervisor ? {} : { supervisor: "UNASSIGNED PM" }),
+            segment: projectSegment,
             status,
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             ...(contractValueCents !== undefined ? { contractValueCents } : {}),
-            ...(projectDate ? { projectDate } : {}),
+            projectDate,
+            projectEndDate,
           },
         });
         synced.push({
@@ -88,6 +97,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           segment,
           phase,
         });
+        await syncDealContactsToProject(existing.id, deal.id);
       } else {
         const created = await prisma.project.create({
           data: {
@@ -95,10 +105,12 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             jobTitle: name,
-            segment,
+            supervisor: "UNASSIGNED PM",
+            segment: projectSegment,
             status,
             contractValueCents: contractValueCents ?? null,
             projectDate,
+            projectEndDate,
           },
         });
         synced.push({
@@ -108,6 +120,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           segment,
           phase,
         });
+        await syncDealContactsToProject(created.id, deal.id);
       }
     } catch (e) {
       errors.push(`Deal ${deal.id}: ${e instanceof Error ? e.message : String(e)}`);

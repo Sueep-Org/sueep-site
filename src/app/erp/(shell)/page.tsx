@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { HubSpotSyncPanel } from "./HubSpotSyncPanel";
-import { DashboardInsights } from "./DashboardInsights";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -122,18 +121,6 @@ export default async function ErpDashboardPage() {
           </div>
         ))}
       </div>
-
-      <DashboardInsights
-        statusRows={statusRows}
-        segmentRows={[
-          { label: "Commercial", count: commercialCount },
-          { label: "Residential", count: residentialCount },
-        ]}
-        projects={recentProjects}
-        avgCompletionPercent={avgCompletionPercent}
-        laborLast7Days={laborLast7Days}
-        materialsLast7Days={materialsLast7Days}
-      />
 
       <div className="flex flex-wrap gap-4 text-sm">
         <Link href="/erp/schedule" className="font-medium text-pink-400 hover:underline">
