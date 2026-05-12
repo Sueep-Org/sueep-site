@@ -17,6 +17,7 @@
     "@prisma/client": "5.22.0",
     "@stripe/react-stripe-js": "^6.1.0",
     "@stripe/stripe-js": "^9.1.0",
+    "firebase": "^12.13.0",
     "jose": "^6.2.2",
     "next": "15.5.7",
     "react": "19.1.2",
