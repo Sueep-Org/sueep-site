@@ -1,3 +1,5 @@
+'use client';
+
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
@@ -10,6 +12,22 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Prevent re-initialzation on hot reloads in development
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const auth = getAuth(app);
+// Initialize Firebase only in the browser environment
+const initializeFirebase = () => {
+  if (typeof window === 'undefined') {
+    // Server environment - return null
+    return null;
+  }
+  
+  // Client environment - initialize Firebase
+  try {
+    const apps = getApps();
+    return apps.length === 0 ? initializeApp(firebaseConfig) : apps[0];
+  } catch (error) {
+    console.error('Failed to initialize Firebase:', error);
+    return null;
+  }
+};
+
+const app = initializeFirebase();
+export const auth = app ? getAuth(app) : null;

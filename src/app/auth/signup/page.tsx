@@ -30,11 +30,17 @@ export default function FirebaseSignupPage() {
 
     setLoading(true);
 
+    if (!auth) {
+      setError('Firebase authentication is not initialized');
+      setLoading(false);
+      return;
+    }
+
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to sign up');
     } finally {
       setLoading(false);
     }

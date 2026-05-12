@@ -18,11 +18,17 @@ export default function FirebaseLoginPage() {
     setError('');
     setLoading(true);
 
+    if (!auth) {
+      setError('Firebase authentication is not initialized');
+      setLoading(false);
+      return;
+    }
+
     try {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log in');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to log in');
     } finally {
       setLoading(false);
     }
