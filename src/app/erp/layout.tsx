@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ErpRootLayout({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">{children}</div>;
+  return <div className="min-h-screen bg-white text-gray-900 antialiased">{children}</div>;
 }

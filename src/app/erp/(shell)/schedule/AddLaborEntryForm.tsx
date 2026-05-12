@@ -1,0 +1,272 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+interface AddLaborEntryFormProps {
+  projectId: string;
+  projectTitle?: string;
+  onSuccess?: () => void;
+  defaultDate?: string;
+  allProjects?: Array<{ id: string; jobTitle: string }>;
+}
+
+export function AddLaborEntryForm({
+  projectId,
+  projectTitle,
+  onSuccess,
+  defaultDate,
+  allProjects = [],
+}: AddLaborEntryFormProps) {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [projects, setProjects] = useState(allProjects);
+
+  useEffect(() => {
+    if (isOpen && projects.length === 0 && projectId === "new") {
+      // Fetch projects
+      fetch("/api/erp/projects")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.data) {
+            setProjects(data.data);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isOpen, projectId, projects.length]);
+
+  const today = new Date().toISOString().split("T")[0];
+  const [formData, setFormData] = useState({
+    projectId: projectId !== "new" ? projectId : "",
+    workDate: defaultDate || today,
+    workerName: "",
+    role: "",
+    hours: "",
+    hourlyRateCents: "",
+    taskDescription: "",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (!formData.projectId || !formData.workerName.trim() || !formData.hours) {
+        throw new Error("Project, worker name, and hours are required");
+      }
+
+      const response = await fetch("/api/erp/labor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: formData.projectId,
+          workDate: formData.workDate,
+          workerName: formData.workerName,
+          role: formData.role || null,
+          hours: parseFloat(formData.hours),
+          hourlyRateCents: formData.hourlyRateCents
+            ? parseInt(formData.hourlyRateCents)
+            : 0,
+          taskDescription: formData.taskDescription || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to add labor entry");
+      }
+
+      setSuccess(true);
+      setFormData({
+        projectId: projectId !== "new" ? projectId : "",
+        workDate: today,
+        workerName: "",
+        role: "",
+        hours: "",
+        hourlyRateCents: "",
+        taskDescription: "",
+      });
+
+      setTimeout(() => {
+        setIsOpen(false);
+        setSuccess(false);
+        router.refresh();
+        onSuccess?.();
+      }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        className="inline-flex items-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+      >
+        <span>+ Log Hours</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-900 p-6">
+        <h2 className="text-lg font-semibold text-white">Log Work Hours</h2>
+        {projectTitle && <p className="mt-1 text-sm text-zinc-400">{projectTitle}</p>}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {projectId === "new" && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-400">
+                Project *
+              </label>
+              <select
+                value={formData.projectId}
+                onChange={(e) =>
+                  setFormData({ ...formData, projectId: e.target.value })
+                }
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white"
+              >
+                <option value="">Select a project...</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.jobTitle}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">Work Date</label>
+            <input
+              type="date"
+              value={formData.workDate}
+              onChange={(e) =>
+                setFormData({ ...formData, workDate: e.target.value })
+              }
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">
+              Worker Name *
+            </label>
+            <input
+              type="text"
+              value={formData.workerName}
+              onChange={(e) =>
+                setFormData({ ...formData, workerName: e.target.value })
+              }
+              placeholder="e.g., John Smith"
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">
+              Role
+            </label>
+            <input
+              type="text"
+              value={formData.role}
+              onChange={(e) =>
+                setFormData({ ...formData, role: e.target.value })
+              }
+              placeholder="e.g., Lead Painter, Helper"
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400">
+                Hours *
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                value={formData.hours}
+                onChange={(e) =>
+                  setFormData({ ...formData, hours: e.target.value })
+                }
+                placeholder="e.g., 8"
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400">
+                Hourly Rate (cents)
+              </label>
+              <input
+                type="number"
+                value={formData.hourlyRateCents}
+                onChange={(e) =>
+                  setFormData({ ...formData, hourlyRateCents: e.target.value })
+                }
+                placeholder="e.g., 2500"
+                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-400">
+              Task Description
+            </label>
+            <textarea
+              value={formData.taskDescription}
+              onChange={(e) =>
+                setFormData({ ...formData, taskDescription: e.target.value })
+              }
+              placeholder="What work was done?"
+              rows={3}
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded border border-red-500/30 bg-red-900/20 p-2 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded border border-emerald-500/30 bg-emerald-900/20 p-2 text-xs text-emerald-400">
+              Hours logged successfully!
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setError(null);
+              }}
+              className="flex-1 rounded border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 rounded bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+            >
+              {isLoading ? "Saving..." : "Log Hours"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

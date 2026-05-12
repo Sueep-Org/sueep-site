@@ -16,25 +16,25 @@ const nav = [
 export default function ErpShellLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/50">
-        <div className="border-b border-zinc-800 p-4">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-gray-200 bg-gray-50">
+        <div className="border-b border-gray-200 p-4">
           <Link href="/erp" className="block">
             <ErpBrandLogo className="h-9 w-auto" priority />
           </Link>
-          <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-500">Internal</p>
+          <p className="mt-2 text-[10px] uppercase tracking-wider text-gray-500">Internal</p>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3 text-sm">
           {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              className="rounded-md px-3 py-2 text-gray-600 hover:bg-gray-200 hover:text-gray-900"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="border-t border-zinc-800 p-3">
+        <div className="border-t border-gray-200 p-3">
           <ErpLogoutButton />
         </div>
       </aside>
