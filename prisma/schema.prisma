@@ -48,6 +48,12 @@ model Project {
   actualHours Float?
 
   laborEntries LaborEntry[]
+  materialEntries MaterialEntry[]
+  distanceEntries DistanceEntry[]
+  workOrders ProjectWorkOrder[]
+  images ProjectImage[]
+  changeOrders ProjectChangeOrder[]
+  contacts ProjectContact[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -59,6 +65,92 @@ model Project {
   @@index([projectDate])
 }
 
+model ProjectWorkOrder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title         String
+  location      String?
+  requestedBy   String?
+  priority      String   @default("MEDIUM")
+  dueDate       DateTime?
+  scopeDetails  String?
+  specifications String?
+  supportInfo   String?
+  photoUrls     Json?
+
+  @@index([projectId, createdAt])
+  @@index([priority])
+  @@index([dueDate])
+}
+
+model ProjectImage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  imageUrl  String
+  caption   String?
+  uploadedBy String?
+  takenAt   DateTime?
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectChangeOrder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title              String
+  description        String?
+  requestedBy        String?
+  status             String   @default("DRAFT")
+  estimatedCostCents Int?
+  estimatedDays      Int?
+  reason             String?
+  resolutionNotes    String?
+
+  @@index([projectId, createdAt])
+  @@index([status])
+}
+
+model ProjectContact {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  fullName String
+  role     String?
+  company  String?
+  email    String?
+  phone    String?
+  notes    String?
+  hubspotContactId String?
+  /// HUBSPOT | MANUAL
+  source   String   @default("MANUAL")
+  isPrimary Boolean @default(false)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, source])
+  @@index([email])
+  @@index([phone])
+  @@unique([projectId, hubspotContactId])
+}
+
 model LaborEntry {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -66,6 +158,8 @@ model LaborEntry {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   workDate DateTime
 
@@ -78,5 +172,126 @@ model LaborEntry {
   taskDescription String?
 
   @@index([projectId])
+  @@index([employeeId])
   @@index([workDate])
+}
+
+model MaterialEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  usedOn DateTime
+  /// CLEANING_PRODUCTS | PAINT
+  category String
+  itemName  String
+  quantity  Float?
+  unit      String?
+  costCents Int
+  notes     String?
+
+  @@index([projectId])
+  @@index([usedOn])
+  @@index([category])
+}
+
+model DistanceEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  travelDate DateTime
+  miles      Float
+  personName String?
+  notes      String?
+
+  @@index([projectId])
+  @@index([travelDate])
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firstName String
+  lastName  String
+  email     String? @unique
+  phone     String?
+  role      String?
+  /// Cents per hour (e.g. $18.75 => 1875)
+  hourlyPayCents Int?
+  defaultProject String?
+  /// ACTIVE | INACTIVE
+  status String @default("ACTIVE")
+  hireDate DateTime?
+  notes    String?
+
+  laborEntries LaborEntry[]
+  documents EmployeeDocument[]
+
+  @@index([status])
+  @@index([defaultProject])
+  @@index([hourlyPayCents])
+  @@index([lastName, firstName])
+}
+
+model EmployeeDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  documentType String
+  title        String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  isVerified   Boolean  @default(false)
+  fileUrl      String?
+  notes        String?
+
+  @@index([employeeId])
+  @@index([documentType])
+  @@index([expiresAt])
+}
+
+/// Job interest / onboarding intake from sueep.com (public form). Extend `responses` when questionnaire fields are finalized.
+model CandidateApplication {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fullName  String
+  email     String
+  phone     String?
+
+  /// Role or work type they are interested in (placeholder until full questionnaire).
+  positionInterest String?
+
+  additionalNotes String?
+
+  /// Arbitrary fields keyed by future form labels or Google Form column IDs.
+  responses Json?
+
+  /// NEW | SELECTED | QUESTIONNAIRE_SENT | QUESTIONNAIRE_COMPLETE | CONTACTED | INTERVIEW | OFFER | HIRED | DECLINED
+  status String @default("NEW")
+
+  internalNotes String?
+
+  /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
+  questionnaireToken String? @unique
+  questionnaireSentAt      DateTime?
+  questionnaireCompletedAt DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
 }

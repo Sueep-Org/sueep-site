@@ -11,14 +11,35 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: { laborEntries: { orderBy: { workDate: "desc" } } },
-  });
+  const [project, laborEmployees] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      include: {
+        laborEntries: {
+          orderBy: { workDate: "desc" },
+          include: { employee: { select: { firstName: true, lastName: true } } },
+        },
+      },
+    }),
+    prisma.employee.findMany({
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        hourlyPayCents: true,
+        status: true,
+      },
+    }),
+  ]);
   if (!project) notFound();
 
   const laborRows = project.laborEntries.map((e) => ({
     id: e.id,
+    employeeId: e.employeeId,
+    employeeName: e.employee
+      ? `${e.employee.firstName} ${e.employee.lastName}`.trim() || null
+      : null,
     workDate: e.workDate.toISOString(),
     workerName: e.workerName,
     role: e.role,
@@ -73,7 +94,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
       />
 
-      <ProjectLaborSection projectId={project.id} initialEntries={laborRows} />
+      <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
     </div>
   );
 }
