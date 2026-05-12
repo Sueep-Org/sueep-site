@@ -31,10 +31,15 @@ export default function FirebaseSignupPage() {
     setLoading(true);
 
     try {
+      if (!auth) {
+        setError("Sign-up is not configured (Firebase env vars).");
+        return;
+      }
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to sign up';
+      setError(message);
     } finally {
       setLoading(false);
     }

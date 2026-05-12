@@ -19,10 +19,15 @@ export default function FirebaseLoginPage() {
     setLoading(true);
 
     try {
+      if (!auth) {
+        setError("Sign-in is not configured (Firebase env vars).");
+        return;
+      }
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to log in');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to log in';
+      setError(message);
     } finally {
       setLoading(false);
     }

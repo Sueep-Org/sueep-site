@@ -30,6 +30,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
+      if (!auth) return;
       await signOut(auth);
       router.push('/');
     } catch (error) {
