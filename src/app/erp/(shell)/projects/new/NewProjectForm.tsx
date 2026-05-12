@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 
 const input =
   "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -65,9 +66,12 @@ export function NewProjectForm() {
           <label className={label} htmlFor="segment">
             Segment
           </label>
-          <select id="segment" name="segment" className={input} defaultValue="COMMERCIAL">
-            <option value="COMMERCIAL">Commercial</option>
-            <option value="RESIDENTIAL">Residential</option>
+          <select id="segment" name="segment" className={input} defaultValue="COMMERCIAL_CLEANING">
+            {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </div>
         <div>
@@ -91,9 +95,9 @@ export function NewProjectForm() {
       </div>
       <div>
         <label className={label} htmlFor="supervisor">
-          Supervisor
+          Supervisor / PM *
         </label>
-        <input id="supervisor" name="supervisor" className={input} />
+        <input id="supervisor" name="supervisor" required className={input} />
       </div>
       <div>
         <label className={label} htmlFor="description">

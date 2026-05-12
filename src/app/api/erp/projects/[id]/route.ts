@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
+import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 
-const SEGMENTS = ["COMMERCIAL", "RESIDENTIAL"] as const;
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -47,7 +47,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const data: Record<string, unknown> = {};
 
   if (body.jobTitle !== undefined) data.jobTitle = String(body.jobTitle || "").trim() || existing.jobTitle;
-  if (body.supervisor !== undefined) data.supervisor = body.supervisor ? String(body.supervisor).trim() : null;
+  if (body.supervisor !== undefined) {
+    const supervisor = String(body.supervisor || "").trim();
+    if (!supervisor) return NextResponse.json({ error: "supervisor (PM) is required" }, { status: 400 });
+    data.supervisor = supervisor;
+  }
   if (body.description !== undefined) data.description = body.description ? String(body.description).trim() : null;
   if (body.projectDate !== undefined) {
     data.projectDate =
@@ -64,8 +68,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.percentDone !== undefined) data.percentDone = pct(body.percentDone) ?? 0;
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
   if (body.segment !== undefined) {
-    const s = String(body.segment).toUpperCase();
-    if (SEGMENTS.includes(s as (typeof SEGMENTS)[number])) data.segment = s;
+    const normalized = normalizeProjectSegment(String(body.segment));
+    if (PROJECT_SEGMENTS.includes(normalized)) data.segment = normalized;
   }
   if (body.status !== undefined) {
     const s = String(body.status).toUpperCase();
