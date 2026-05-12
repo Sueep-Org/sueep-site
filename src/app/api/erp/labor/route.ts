@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/erp/labor
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     const workDate = searchParams.get("workDate");
     const workerName = searchParams.get("workerName");
 
-    const where: any = {};
+    const where: Prisma.LaborEntryWhereInput = {};
     if (projectId) where.projectId = projectId;
     if (workDate) {
       const date = new Date(workDate);

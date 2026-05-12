@@ -10,6 +10,7 @@ const nav = [
   { href: "/erp/hubspot", label: "HubSpot sync" },
   { href: "/erp/schedule", label: "Schedule" },
   { href: "/erp/projects", label: "Projects" },
+  { href: "/erp/employees", label: "Employees" },
   { href: "/erp/projects/new", label: "New project" },
 ];
 
