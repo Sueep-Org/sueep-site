@@ -59,21 +59,37 @@
    - Answer prompts to link to your Vercel project
    - Choose environment (production/preview)
 
-3. Set environment variables in Vercel:
+3. Set all environment variables in Vercel (these are required):
    ```bash
+   # Firebase
    vercel env add NEXT_PUBLIC_FIREBASE_API_KEY
    vercel env add NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
    vercel env add NEXT_PUBLIC_FIREBASE_PROJECT_ID
    vercel env add NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
    vercel env add NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
    vercel env add NEXT_PUBLIC_FIREBASE_APP_ID
+   
+   # Database
    vercel env add DATABASE_URL
    vercel env add DIRECT_URL
+   
+   # ERP Session
    vercel env add ERP_SESSION_SECRET
    vercel env add ERP_ACCESS_PASSWORD
+   
+   # Stripe (Required for payment processing)
+   vercel env add STRIPE_SECRET_KEY
+   vercel env add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
    ```
 
-4. Deploy to production:
+4. Optional environment variables (if using HubSpot integration):
+   ```bash
+   vercel env add HUBSPOT_ACCESS_TOKEN
+   vercel env add HUBSPOT_CLIENT_SECRET
+   vercel env add HUBSPOT_PIPELINE_STAGE_MAP
+   ```
+
+5. Deploy to production:
    ```bash
    vercel --prod
    ```
@@ -90,14 +106,18 @@
 2. Go to [Vercel Dashboard](https://vercel.com/dashboard)
 3. Click "Add New..." → "Project"
 4. Import your GitHub repository
-5. Set environment variables in Vercel project settings
+5. **Set all environment variables in Vercel project settings:**
+   - Go to **Settings** → **Environment Variables**
+   - Add **all required variables** listed in Step 3 above
 6. Click "Deploy" - automatic deployments on push to main
 
-## Step 4: Configure Vercel Environment Variables
+### Critical: Environment Variables in Vercel
 
-In Vercel Dashboard:
-1. Navigate to your project
-2. Go to **Settings** → **Environment Variables**
+Make sure these are set as environment variables in Vercel (not in code):
+- `DATABASE_URL` - Must use *pooled* connection (contains "-pooler" for Neon)
+- `DIRECT_URL` - Must use *direct* connection
+- `STRIPE_SECRET_KEY` - Required for payments to work
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Required for Stripe checkout UI
 3. Add all variables from your `.env.local` file:
    - Mark Firebase variables as "Environments: Production, Preview, Development"
    - Mark sensitive keys as "Environments: Production" only
