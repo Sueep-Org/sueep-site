@@ -1,5 +1,6 @@
 # Local ERP database only. Run: docker compose up -d
-# Then set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sueep_erp in .env.local
+# Set DATABASE_URL + DIRECT_URL in .env.local to postgresql://postgres:postgres@localhost:5432/sueep_erp
+# Then create tables: npx prisma migrate deploy
 services:
   db:
     image: postgres:16-alpine

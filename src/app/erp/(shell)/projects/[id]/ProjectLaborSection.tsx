@@ -15,8 +15,8 @@ export type LaborRow = {
 };
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-zinc-600";
 
 function lineCostCents(hours: string, rateCents: number): number {
   const h = Number(hours);
@@ -103,17 +103,17 @@ export function ProjectLaborSection({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Labor log</h2>
-          <p className="text-sm text-zinc-300">
-            Sum of lines: <span className="font-semibold text-white">{centsToDollars(totalLaborCents)}</span>
+          <p className="text-sm text-zinc-700">
+            Sum of lines: <span className="font-semibold text-zinc-900">{centsToDollars(totalLaborCents)}</span>
           </p>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
+            <thead className="border-b border-gray-200 text-xs uppercase text-zinc-500">
               <tr>
                 <th className="py-2 pr-2 font-medium">Date</th>
                 <th className="py-2 pr-2 font-medium">Worker</th>
@@ -124,7 +124,7 @@ export function ProjectLaborSection({
                 <th className="py-2 font-medium">Task</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-gray-200">
               {entries.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-zinc-500">
@@ -134,12 +134,12 @@ export function ProjectLaborSection({
               ) : (
                 entries.map((r) => (
                   <tr key={r.id}>
-                    <td className="py-2 pr-2 text-zinc-300">{new Date(r.workDate).toLocaleDateString()}</td>
-                    <td className="py-2 pr-2 text-white">{r.workerName}</td>
-                    <td className="py-2 pr-2 text-zinc-400">{r.role || "—"}</td>
-                    <td className="py-2 pr-2 text-zinc-300">{r.hours}</td>
-                    <td className="py-2 pr-2 text-zinc-300">{centsToDollars(r.hourlyRateCents)}/hr</td>
-                    <td className="py-2 pr-2 text-zinc-200">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
+                    <td className="py-2 pr-2 text-zinc-700">{new Date(r.workDate).toLocaleDateString()}</td>
+                    <td className="py-2 pr-2 text-zinc-900">{r.workerName}</td>
+                    <td className="py-2 pr-2 text-zinc-600">{r.role || "—"}</td>
+                    <td className="py-2 pr-2 text-zinc-700">{r.hours}</td>
+                    <td className="py-2 pr-2 text-zinc-700">{centsToDollars(r.hourlyRateCents)}/hr</td>
+                    <td className="py-2 pr-2 text-zinc-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
                     <td className="py-2 text-zinc-500">{r.taskDescription || "—"}</td>
                   </tr>
                 ))
@@ -149,7 +149,7 @@ export function ProjectLaborSection({
         </div>
       </div>
 
-      <form onSubmit={onAddLabor} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+      <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add labor entry</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
@@ -190,7 +190,7 @@ export function ProjectLaborSection({
           </div>
         </div>
         {error ? (
-          <p className="mt-3 text-sm text-red-400" role="alert">
+          <p className="mt-3 text-sm text-red-600" role="alert">
             {error}
           </p>
         ) : null}

@@ -10,7 +10,7 @@ export function ErpLogoutButton() {
     <button
       type="button"
       onClick={() => void logout()}
-      className="w-full rounded-md border border-zinc-700 px-3 py-2 text-left text-xs text-zinc-400 hover:border-zinc-600 hover:text-white"
+      className="w-full rounded-md border border-gray-300 px-3 py-2 text-left text-xs text-zinc-600 hover:border-gray-400 hover:text-zinc-900"
     >
       Sign out
     </button>

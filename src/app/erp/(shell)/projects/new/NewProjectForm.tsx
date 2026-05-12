@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-zinc-600";
 
 export function NewProjectForm() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export function NewProjectForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 rounded-lg border border-zinc-800 bg-zinc-900/40 p-6">
+    <form onSubmit={onSubmit} className="space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label className={label} htmlFor="segment">
@@ -180,7 +180,7 @@ export function NewProjectForm() {
       </div>
 
       {error ? (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-red-600" role="alert">
           {error}
         </p>
       ) : null}

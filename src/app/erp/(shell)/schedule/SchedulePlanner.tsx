@@ -94,30 +94,30 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Schedule</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h1 className="text-2xl font-semibold text-zinc-900">Schedule</h1>
+        <p className="mt-1 text-sm text-zinc-600">
           Calendar and Gantt views of all projects. Bars use start / target end dates; without an end date, a{" "}
           {14}-day window is assumed. Click a project to open the detail page.
         </p>
       </div>
 
       {/* Calendar */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Calendar</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={prevMonth}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-zinc-800 hover:bg-gray-100"
             >
               ← Prev
             </button>
-            <span className="min-w-[160px] text-center text-sm font-medium text-white">{monthLabel(cursor)}</span>
+            <span className="min-w-[160px] text-center text-sm font-medium text-zinc-900">{monthLabel(cursor)}</span>
             <button
               type="button"
               onClick={nextMonth}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-zinc-800 hover:bg-gray-100"
             >
               Next →
             </button>
@@ -125,14 +125,14 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
-            <div className="grid grid-cols-7 gap-px rounded-lg border border-zinc-800 bg-zinc-800 text-center text-[10px] font-medium uppercase text-zinc-500">
+            <div className="grid grid-cols-7 gap-px rounded-lg border border-gray-200 bg-gray-200 text-center text-[10px] font-medium uppercase text-zinc-500">
               {WEEKDAYS.map((d) => (
-                <div key={d} className="bg-zinc-950 py-2">
+                <div key={d} className="bg-white py-2">
                   {d}
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-px border border-t-0 border-zinc-800 bg-zinc-800">
+            <div className="grid grid-cols-7 gap-px border border-t-0 border-gray-200 bg-gray-200">
               {matrix.flat().map((cell, i) => {
                 const k = dayKey(cell);
                 const inMonth = sameMonth(cell, cursor);
@@ -140,15 +140,15 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
                 return (
                   <div
                     key={`${k}-${i}`}
-                    className={`min-h-[92px] bg-zinc-950 p-1.5 text-left ${inMonth ? "" : "opacity-40"}`}
+                    className={`min-h-[92px] bg-white p-1.5 text-left ${inMonth ? "" : "opacity-40"}`}
                   >
-                    <div className="text-xs font-medium text-zinc-400">{cell.getDate()}</div>
+                    <div className="text-xs font-medium text-zinc-600">{cell.getDate()}</div>
                     <ul className="mt-1 space-y-0.5">
                       {items.slice(0, 4).map((p) => (
                         <li key={p.id}>
                           <Link
                             href={`/erp/projects/${p.id}`}
-                            className="block truncate rounded px-0.5 text-[10px] text-pink-400 hover:underline"
+                            className="block truncate rounded px-0.5 text-[10px] text-pink-600 hover:underline"
                             title={p.jobTitle}
                           >
                             {p.jobTitle}
@@ -168,23 +168,23 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
       </section>
 
       {/* Gantt */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500">Gantt</h2>
         {windows.length === 0 ? (
           <p className="text-sm text-zinc-500">No projects yet. Create one in Projects → New project.</p>
         ) : (
-          <div className="flex max-h-[min(70vh,720px)] flex-col overflow-hidden rounded-lg border border-zinc-800">
+          <div className="flex max-h-[min(70vh,720px)] flex-col overflow-hidden rounded-lg border border-gray-200">
             <div className="flex min-h-0 flex-1 overflow-auto">
-              <div className="sticky left-0 z-10 w-[220px] shrink-0 border-r border-zinc-800 bg-zinc-950">
-                <div className="flex h-14 items-center border-b border-zinc-800 px-3 text-[10px] font-semibold uppercase text-zinc-500">
+              <div className="sticky left-0 z-10 w-[220px] shrink-0 border-r border-gray-200 bg-gray-50">
+                <div className="flex h-14 items-center border-b border-gray-200 px-3 text-[10px] font-semibold uppercase text-zinc-500">
                   Project
                 </div>
                 {windows.map(({ p }) => (
                   <div
                     key={p.id}
-                    className="flex h-12 items-center border-b border-zinc-800/80 px-3 text-xs text-zinc-200"
+                    className="flex h-12 items-center border-b border-gray-200/80 px-3 text-xs text-zinc-800"
                   >
-                    <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-400 hover:underline">
+                    <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-600 hover:underline">
                       {p.jobTitle}
                     </Link>
                   </div>
@@ -193,7 +193,7 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
               <div className="min-w-0 flex-1 overflow-x-auto">
                 <div style={{ width: timelineWidth }} className="relative">
                   <div
-                    className="flex h-14 items-end border-b border-zinc-800 bg-zinc-950/80 text-[10px] text-zinc-500"
+                    className="flex h-14 items-end border-b border-gray-200 bg-gray-100 text-[10px] text-zinc-500"
                     style={{ width: timelineWidth }}
                   >
                     {Array.from({ length: totalDays }).map((_, i) => {
@@ -206,7 +206,7 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
                         <div
                           key={i}
                           style={{ width: PX_PER_DAY, minWidth: PX_PER_DAY }}
-                          className={`shrink-0 border-l border-zinc-800/80 ${d.getDay() === 0 ? "bg-zinc-900/50" : ""}`}
+                          className={`shrink-0 border-l border-gray-200/80 ${d.getDay() === 0 ? "bg-gray-100" : ""}`}
                         >
                           {show ? <span className="pl-0.5">{show}</span> : null}
                         </div>
@@ -221,7 +221,7 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
                     return (
                       <div
                         key={w.p.id}
-                        className="relative h-12 border-b border-zinc-800/80"
+                        className="relative h-12 border-b border-gray-200/80"
                         style={{ width: timelineWidth }}
                       >
                         <Link

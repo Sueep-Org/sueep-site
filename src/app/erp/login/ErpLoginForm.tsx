@@ -39,7 +39,7 @@ export function ErpLoginForm() {
   return (
     <form onSubmit={onSubmit} className="mt-6 space-y-4">
       <div>
-        <label htmlFor="erp-pw" className="block text-xs font-medium text-zinc-400">
+        <label htmlFor="erp-pw" className="block text-xs font-medium text-zinc-600">
           Password
         </label>
         <input
@@ -48,13 +48,13 @@ export function ErpLoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           placeholder="••••••••"
           required
         />
       </div>
       {error ? (
-        <p className="text-xs text-red-400" role="alert">
+        <p className="text-xs text-red-600" role="alert">
           {error}
         </p>
       ) : null}
