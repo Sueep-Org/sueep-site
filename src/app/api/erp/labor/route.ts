@@ -32,7 +32,19 @@ export async function GET(request: NextRequest) {
 
     const entries = await prisma.laborEntry.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        projectId: true,
+        workDate: true,
+        workerName: true,
+        role: true,
+        hours: true,
+        hourlyRateCents: true,
+        taskDescription: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationAccuracy: true,
+        lastLocationAt: true,
         project: {
           select: {
             id: true,
@@ -124,7 +136,19 @@ export async function POST(request: NextRequest) {
         locationAccuracy: locationAccuracy ? parseFloat(locationAccuracy) : null,
         lastLocationAt: locationLatitude && locationLongitude ? new Date() : null,
       },
-      include: {
+      select: {
+        id: true,
+        projectId: true,
+        workDate: true,
+        workerName: true,
+        role: true,
+        hours: true,
+        hourlyRateCents: true,
+        taskDescription: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationAccuracy: true,
+        lastLocationAt: true,
         project: {
           select: {
             id: true,
