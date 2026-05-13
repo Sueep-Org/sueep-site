@@ -15,6 +15,8 @@ export type ProjectTableRow = {
   projectDate: string | null;
   supervisor: string | null;
   percentDone: number;
+  percentInvoiced: number;
+  billingStatus: string | null;
   contractValueCents: number | null;
   employees: string[];
   totalHours: number;
@@ -33,25 +35,21 @@ export type ProjectTableRow = {
 };
 
 function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
-  if (state === "COMPLETED") {
-    return {
-      row: "bg-gray-100 hover:bg-gray-200",
-      detail: "bg-gray-50",
-      sticky: "bg-gray-200",
-    };
-  }
-  if (state === "UPCOMING") {
-    return {
-      row: "bg-purple-50 hover:bg-purple-100",
-      detail: "bg-purple-50",
-      sticky: "bg-purple-100",
-    };
-  }
-  return {
-    row: "bg-emerald-50 hover:bg-emerald-100",
-    detail: "bg-emerald-50",
-    sticky: "bg-emerald-100",
+  if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
+  if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
+  return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
+}
+
+function billingBadge(status: string | null) {
+  if (!status) return <span className="text-gray-400">—</span>;
+  const map: Record<string, { label: string; cls: string }> = {
+    BILLING: { label: "Billing", cls: "bg-blue-100 text-blue-700" },
+    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-emerald-100 text-emerald-700" },
+    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-600" },
   };
+  const opt = map[status];
+  if (!opt) return <span className="text-gray-400">—</span>;
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${opt.cls}`}>{opt.label}</span>;
 }
 
 export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
@@ -64,22 +62,36 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-300">
-      <table className="w-full min-w-[1400px] text-left text-sm">
-        <thead className="border-b border-gray-300 bg-gray-100 text-xs uppercase text-gray-600">
+      <table className="w-full min-w-[1600px] text-left text-sm">
+        <thead className="border-b border-gray-300 text-xs uppercase">
+          {/* Group header row — no sticky here to avoid colSpan rendering bugs */}
           <tr>
-            <th className="sticky left-0 z-40 w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium">
-              Job
+            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
+              Project Details
             </th>
-            <th className="sticky left-[420px] z-40 w-[220px] min-w-[220px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium">
-              Supervisor / PM
+            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
+              Cost / Hours
             </th>
-            <th className="px-3 py-2 font-medium">Segment</th>
-            <th className="px-3 py-2 font-medium">Contract</th>
-            <th className="px-3 py-2 font-medium">Material (Est / Act)</th>
-            <th className="px-3 py-2 font-medium">Labor (Est / Act)</th>
-            <th className="px-3 py-2 font-medium">Hours (Est / Act)</th>
-            <th className="px-3 py-2 font-medium">Progress</th>
-            <th className="px-3 py-2 font-medium">Miles</th>
+            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
+              Progress
+            </th>
+            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
+              Invoicing
+            </th>
+          </tr>
+          {/* Column header row */}
+          <tr className="bg-gray-100 text-gray-600">
+            <th className="sticky left-0 z-40 w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium">Job</th>
+            <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-medium">PM</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Segment</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Contract</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Material (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Labor (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Hours (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Progress</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">Miles</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-medium">% Invoiced</th>
+            <th className="px-3 py-2 font-medium">Billing Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-300">
@@ -93,8 +105,9 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                   className={`${styles.row} cursor-pointer`}
                   onClick={() => toggle(p.id)}
                   aria-expanded={isOpen}
-                  title={isOpen ? "Collapse project row" : "Expand project row"}
+                  title={isOpen ? "Collapse" : "Expand"}
                 >
+                  {/* Project Details */}
                   <td className={`sticky left-0 z-30 w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
                     <Link
                       href={`/erp/projects/${p.id}`}
@@ -103,33 +116,42 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                     >
                       {p.jobTitle}
                     </Link>
-                    {p.description ? <p className="mt-1 text-xs text-gray-600 line-clamp-1">{p.description}</p> : null}
+                    {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
                   </td>
-                  <td
-                    className={`sticky left-[420px] z-30 w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900 ${styles.sticky}`}
-                  >
-                    {p.supervisor || "Unassigned PM"}
+                  <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900">
+                    {p.supervisor || <span className="text-gray-400">Unassigned</span>}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-600">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
-                    <span className="text-gray-600">/ A:</span> {centsToDollars(p.actualMaterialCents)}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+
+                  {/* Cost / Hours */}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                    <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
+                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-600">E:</span> {centsToDollars(p.estLaborCents)}{" "}
-                    <span className="text-gray-600">/ A:</span> {centsToDollars(p.actualLaborCents)}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                    <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
+                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-600">E:</span> {p.estHours ?? "—"}{" "}
-                    <span className="text-gray-600">/ A:</span> {p.actualHours.toFixed(2)}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                    <span className="text-gray-500">E:</span> {p.estHours ?? "—"}{" "}
+                    <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                  <td className="px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
+
+                  {/* Progress */}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
+
+                  {/* Invoicing */}
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                    {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
                 </tr>
+
                 {isOpen ? (
                   <tr className={styles.detail}>
-                    <td colSpan={9} className="px-4 py-3">
+                    <td colSpan={11} className="px-4 py-3">
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
                           <p className="text-[10px] uppercase text-gray-600">Team</p>

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { centsToDollars } from "@/lib/erp/money";
+import { ProjectBillingEditor } from "./ProjectBillingEditor";
 import { ProjectDatesEditor } from "./ProjectDatesEditor";
 import { ProjectManagerEditor } from "./ProjectManagerEditor";
+import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 
 export const dynamic = "force-dynamic";
@@ -93,6 +95,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         projectId={project.id}
         supervisor={project.supervisor}
         employees={laborEmployees}
+      />
+
+      <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
+
+      <ProjectBillingEditor
+        projectId={project.id}
+        percentInvoiced={project.percentInvoiced}
+        billingStatus={project.billingStatus}
       />
 
       <ProjectDatesEditor

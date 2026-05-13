@@ -35,6 +35,9 @@ model Project {
   percentDone     Float @default(0)
   percentInvoiced Float @default(0)
 
+  /// BILLING | INACTIVE | INVOICE_PAID — manually set per project
+  billingStatus String?
+
   contractValueCents Int?
 
   estMaterialCents Int?

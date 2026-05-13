@@ -4,6 +4,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
+const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -75,6 +76,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const s = String(body.status).toUpperCase();
     if (STATUSES.includes(s as (typeof STATUSES)[number])) data.status = s;
   }
+  if (body.billingStatus !== undefined) {
+    if (body.billingStatus === null || body.billingStatus === "") {
+      data.billingStatus = null;
+    } else {
+      const b = String(body.billingStatus).toUpperCase();
+      if (BILLING_STATUSES.includes(b as (typeof BILLING_STATUSES)[number])) data.billingStatus = b;
+    }
+  }
+  if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
   if (body.contractValue !== undefined) data.contractValueCents = cents(body.contractValue);
   if (body.estMaterial !== undefined) data.estMaterialCents = cents(body.estMaterial);

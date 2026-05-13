@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
+import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -12,6 +13,10 @@ export function NewProjectForm() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [serviceType, setServiceType] = useState("");
+  const [customType, setCustomType] = useState("");
+
+  const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,7 +28,7 @@ export function NewProjectForm() {
       segment: fd.get("segment"),
       jobTitle: fd.get("jobTitle"),
       supervisor: fd.get("supervisor") || undefined,
-      description: fd.get("description") || undefined,
+      description: descriptionValue || undefined,
       projectDate: fd.get("projectDate") || undefined,
       projectEndDate: fd.get("projectEndDate") || undefined,
       percentDone: fd.get("percentDone") || undefined,
@@ -99,11 +104,41 @@ export function NewProjectForm() {
         </label>
         <input id="supervisor" name="supervisor" required className={input} />
       </div>
-      <div>
-        <label className={label} htmlFor="description">
-          Description
-        </label>
-        <textarea id="description" name="description" rows={2} className={input} placeholder="Final cleaning, painting, CO…" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className={label} htmlFor="serviceType">
+            Work type
+          </label>
+          <select
+            id="serviceType"
+            className={input}
+            value={serviceType}
+            onChange={(e) => setServiceType(e.target.value)}
+          >
+            <option value="">— Select —</option>
+            {SERVICE_TYPE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+            <option value="__other__">Other…</option>
+          </select>
+        </div>
+        {serviceType === "__other__" && (
+          <div>
+            <label className={label} htmlFor="customType">
+              Custom work type
+            </label>
+            <input
+              id="customType"
+              type="text"
+              className={input}
+              value={customType}
+              onChange={(e) => setCustomType(e.target.value)}
+              placeholder="Describe the work"
+            />
+          </div>
+        )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

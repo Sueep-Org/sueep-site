@@ -71,6 +71,8 @@ export default async function ErpProjectsPage() {
       projectDate: p.projectDate ? p.projectDate.toISOString() : null,
       supervisor: p.supervisor,
       percentDone: p.percentDone,
+      percentInvoiced: p.percentInvoiced,
+      billingStatus: p.billingStatus ?? null,
       contractValueCents: p.contractValueCents,
       employees,
       totalHours,
@@ -96,26 +98,12 @@ export default async function ErpProjectsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
           <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            WIP
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs text-purple-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-            Upcoming
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-500" />
-            Completed
-          </span>
-          <Link
-            href="/erp/projects/new"
-            className="ml-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
-          >
-            New project
-          </Link>
-        </div>
+        <Link
+          href="/erp/projects/new"
+          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
+        >
+          New project
+        </Link>
       </div>
 
       {rows.length === 0 ? (
