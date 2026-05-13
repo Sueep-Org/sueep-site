@@ -130,7 +130,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
         </form>
         <div className="mt-4 overflow-x-auto rounded-lg border border-gray-300">
           <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead className="border-b border-gray-300 bg-gray-100 text-xs uppercase text-gray-600">
+            <thead className="border-b border-pink-300 bg-pink-500 text-xs uppercase text-white">
               <tr>
                 <th className="px-3 py-2 font-medium">
                   <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">

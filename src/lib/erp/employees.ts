@@ -32,7 +32,7 @@ export function complianceBadgeClasses(state: EmployeeComplianceState): string {
   if (state === "EXPIRING_SOON") return "bg-amber-100 text-amber-800 border border-amber-300";
   if (state === "NON_COMPLIANT") return "bg-red-100 text-red-800 border border-red-300";
   if (state === "INACTIVE") return "bg-gray-100 text-gray-600 border border-gray-300";
-  return "bg-gray-100 text-gray-700 border border-gray-300";
+  return "bg-red-100 text-gray-700 border border-gray-300";
 }
 
 export function complianceLabel(state: EmployeeComplianceState): string {
