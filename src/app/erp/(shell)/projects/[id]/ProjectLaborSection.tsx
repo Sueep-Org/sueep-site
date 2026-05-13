@@ -27,8 +27,8 @@ export type LaborEmployeeOption = {
 const OTHER_VALUE = "__other__";
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-gray-600";
 
 function lineCostCents(hours: string, rateCents: number): number {
   const h = Number(hours);
@@ -164,17 +164,17 @@ export function ProjectLaborSection({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Labor log</h2>
-          <p className="text-sm text-zinc-300">
-            Sum of lines: <span className="font-semibold text-white">{centsToDollars(totalLaborCents)}</span>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
+          <p className="text-sm text-gray-700">
+            Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span>
           </p>
         </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
+            <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
               <tr>
                 <th className="py-2 pr-2 font-medium">Date</th>
                 <th className="py-2 pr-2 font-medium">Worker</th>
@@ -185,28 +185,28 @@ export function ProjectLaborSection({
                 <th className="py-2 font-medium">Task</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-gray-100">
               {entries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-zinc-500">
+                  <td colSpan={7} className="py-6 text-center text-gray-500">
                     No labor entries yet.
                   </td>
                 </tr>
               ) : (
                 entries.map((r) => (
                   <tr key={r.id}>
-                    <td className="py-2 pr-2 text-zinc-300">{new Date(r.workDate).toLocaleDateString()}</td>
-                    <td className="py-2 pr-2 text-white">
+                    <td className="py-2 pr-2 text-gray-600">{new Date(r.workDate).toLocaleDateString()}</td>
+                    <td className="py-2 pr-2 text-gray-900">
                       {r.employeeName || r.workerName}
                       {r.employeeName && r.employeeName !== r.workerName ? (
-                        <span className="ml-1 text-xs text-zinc-500">({r.workerName})</span>
+                        <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
                       ) : null}
                     </td>
-                    <td className="py-2 pr-2 text-zinc-400">{r.role || "—"}</td>
-                    <td className="py-2 pr-2 text-zinc-300">{r.hours}</td>
-                    <td className="py-2 pr-2 text-zinc-300">{centsToDollars(r.hourlyRateCents)}/hr</td>
-                    <td className="py-2 pr-2 text-zinc-200">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
-                    <td className="py-2 text-zinc-500">{r.taskDescription || "—"}</td>
+                    <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
+                    <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
+                    <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
+                    <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
+                    <td className="py-2 text-gray-500">{r.taskDescription || "—"}</td>
                   </tr>
                 ))
               )}
@@ -215,9 +215,9 @@ export function ProjectLaborSection({
         </div>
       </div>
 
-      <form onSubmit={onAddLabor} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add labor entry</h2>
-        <p className="mt-2 text-xs text-zinc-500">
+      <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+        <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
           “Other” only when the worker is not in the list.
         </p>

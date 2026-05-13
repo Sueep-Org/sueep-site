@@ -69,20 +69,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/erp/projects" className="text-xs text-pink-400 hover:underline">
+        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
           ← Projects
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{project.jobTitle}</h1>
-        {project.description ? <p className="mt-2 text-sm text-zinc-400">{project.description}</p> : null}
+        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
+        {project.description ? <p className="mt-2 text-sm text-gray-500">{project.description}</p> : null}
       </div>
 
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Project details</h2>
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Project details</h2>
         <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {meta.map((row) => (
             <div key={row.k}>
-              <dt className="text-[10px] uppercase text-zinc-500">{row.k}</dt>
-              <dd className="text-sm text-zinc-200">{row.v}</dd>
+              <dt className="text-[10px] uppercase text-gray-500">{row.k}</dt>
+              <dd className="text-sm text-gray-800">{row.v}</dd>
             </div>
           ))}
         </dl>

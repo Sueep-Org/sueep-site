@@ -118,14 +118,14 @@ export function AddLaborEntryForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-lg font-semibold text-white">Log Work Hours</h2>
-        {projectTitle && <p className="mt-1 text-sm text-zinc-400">{projectTitle}</p>}
+      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="text-lg font-semibold text-gray-900">Log Work Hours</h2>
+        {projectTitle && <p className="mt-1 text-sm text-gray-500">{projectTitle}</p>}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {projectId === "new" && (
             <div>
-              <label className="block text-xs font-medium text-zinc-400">
+              <label className="block text-xs font-medium text-gray-600">
                 Project *
               </label>
               <select
@@ -133,7 +133,7 @@ export function AddLaborEntryForm({
                 onChange={(e) =>
                   setFormData({ ...formData, projectId: e.target.value })
                 }
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white"
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
               >
                 <option value="">Select a project...</option>
                 {projects.map((p) => (
@@ -146,19 +146,19 @@ export function AddLaborEntryForm({
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400">Work Date</label>
+            <label className="block text-xs font-medium text-gray-600">Work Date</label>
             <input
               type="date"
               value={formData.workDate}
               onChange={(e) =>
                 setFormData({ ...formData, workDate: e.target.value })
               }
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400">
+            <label className="block text-xs font-medium text-gray-600">
               Worker Name *
             </label>
             <input
@@ -168,12 +168,12 @@ export function AddLaborEntryForm({
                 setFormData({ ...formData, workerName: e.target.value })
               }
               placeholder="e.g., John Smith"
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400">
+            <label className="block text-xs font-medium text-gray-600">
               Role
             </label>
             <input
@@ -183,13 +183,13 @@ export function AddLaborEntryForm({
                 setFormData({ ...formData, role: e.target.value })
               }
               placeholder="e.g., Lead Painter, Helper"
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400">
+              <label className="block text-xs font-medium text-gray-600">
                 Hours *
               </label>
               <input
@@ -200,11 +200,11 @@ export function AddLaborEntryForm({
                   setFormData({ ...formData, hours: e.target.value })
                 }
                 placeholder="e.g., 8"
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400">
+              <label className="block text-xs font-medium text-gray-600">
                 Hourly Rate (cents)
               </label>
               <input
@@ -214,13 +214,13 @@ export function AddLaborEntryForm({
                   setFormData({ ...formData, hourlyRateCents: e.target.value })
                 }
                 placeholder="e.g., 2500"
-                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400">
+            <label className="block text-xs font-medium text-gray-600">
               Task Description
             </label>
             <textarea
@@ -230,18 +230,18 @@ export function AddLaborEntryForm({
               }
               placeholder="What work was done?"
               rows={3}
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-white placeholder-zinc-500"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
             />
           </div>
 
           {error && (
-            <div className="rounded border border-red-500/30 bg-red-900/20 p-2 text-xs text-red-400">
+            <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="rounded border border-emerald-500/30 bg-emerald-900/20 p-2 text-xs text-emerald-400">
+            <div className="rounded border border-emerald-300 bg-emerald-50 p-2 text-xs text-emerald-600">
               Hours logged successfully!
             </div>
           )}
@@ -253,7 +253,7 @@ export function AddLaborEntryForm({
                 setIsOpen(false);
                 setError(null);
               }}
-              className="flex-1 rounded border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+              className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
             >
               Cancel
             </button>

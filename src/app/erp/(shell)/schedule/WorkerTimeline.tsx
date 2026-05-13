@@ -70,8 +70,8 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
 
   if (workers.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-center">
-        <p className="text-sm text-zinc-500">No worker data available.</p>
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+        <p className="text-sm text-gray-500">No worker data available.</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               sortBy === "worker"
                 ? "bg-pink-600 text-white"
-                : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                : "border border-gray-300 text-gray-600 hover:bg-gray-100"
             }`}
           >
             By Worker
@@ -130,27 +130,27 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
                         key={dateKey}
                         className={`rounded border p-2 text-center text-xs ${
                           dayHours > 0
-                            ? "border-pink-600/50 bg-pink-900/20"
-                            : `border-zinc-700 ${isToday ? "bg-zinc-800/50" : "bg-zinc-800/20"}`
+                            ? "border-pink-300 bg-pink-50"
+                            : `border-gray-200 ${isToday ? "bg-gray-100" : "bg-gray-50"}`
                         }`}
                       >
-                        <div className="font-mono text-[10px] text-zinc-500">
+                        <div className="font-mono text-[10px] text-gray-500">
                           {date.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" })}
                         </div>
                         {dayHours > 0 && (
                           <>
-                            <div className="mt-1 font-semibold text-pink-400">{dayHours.toFixed(1)}h</div>
+                            <div className="mt-1 font-semibold text-pink-600">{dayHours.toFixed(1)}h</div>
                             <div className="mt-1 space-y-0.5">
                               {dayEntries.slice(0, 2).map((entry: LaborEntryData) => {
                                 const project = projectMap.get(entry.projectId);
                                 return (
-                                  <div key={entry.id} className="text-[9px] text-zinc-300 truncate">
+                                  <div key={entry.id} className="text-[9px] text-gray-600 truncate">
                                     {project?.jobTitle || "Unknown"}
                                   </div>
                                 );
                               })}
                               {dayEntries.length > 2 && (
-                                <div className="text-[9px] text-zinc-500">+{dayEntries.length - 2}</div>
+                                <div className="text-[9px] text-gray-500">+{dayEntries.length - 2}</div>
                               )}
                             </div>
                           </>

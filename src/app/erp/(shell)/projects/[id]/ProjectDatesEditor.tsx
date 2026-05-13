@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-gray-600";
 
 type Props = {
   projectId: string;
@@ -54,9 +54,9 @@ export function ProjectDatesEditor({ projectId, projectDateIso, projectEndDateIs
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Schedule (calendar & Gantt)</h2>
-      <p className="mt-1 text-[11px] text-zinc-500">
+    <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule (calendar & Gantt)</h2>
+      <p className="mt-1 text-[11px] text-gray-400">
         Start and target end dates control how this job appears on the Schedule page.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
