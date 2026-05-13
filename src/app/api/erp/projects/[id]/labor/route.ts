@@ -60,6 +60,11 @@ export async function POST(req: Request, ctx: Ctx) {
 
   if (hourlyRateCents < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
 
+  // Location support
+  const locationLatitude = body.locationLatitude != null ? parseFloat(String(body.locationLatitude)) : null;
+  const locationLongitude = body.locationLongitude != null ? parseFloat(String(body.locationLongitude)) : null;
+  const locationAccuracy = body.locationAccuracy != null ? parseFloat(String(body.locationAccuracy)) : null;
+
   try {
     const entry = await prisma.laborEntry.create({
       data: {
@@ -70,6 +75,10 @@ export async function POST(req: Request, ctx: Ctx) {
         hours,
         hourlyRateCents,
         taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
+        locationLatitude: Number.isFinite(locationLatitude) ? locationLatitude : null,
+        locationLongitude: Number.isFinite(locationLongitude) ? locationLongitude : null,
+        locationAccuracy: Number.isFinite(locationAccuracy) ? locationAccuracy : null,
+        lastLocationAt: (Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude)) ? new Date() : null,
       },
     });
     return NextResponse.json(entry);
