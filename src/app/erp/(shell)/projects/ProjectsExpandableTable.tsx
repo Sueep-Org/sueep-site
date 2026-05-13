@@ -6,7 +6,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 
-type ProjectTableRow = {
+export type ProjectTableRow = {
   id: string;
   jobTitle: string;
   description: string | null;
@@ -29,6 +29,7 @@ type ProjectTableRow = {
   cleaningCents: number;
   paintCents: number;
   miles: number;
+  hubspotPipelineId: string | null;
 };
 
 function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {

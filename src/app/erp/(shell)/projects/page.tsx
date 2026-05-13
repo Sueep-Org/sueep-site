@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
-import { ProjectsExpandableTable } from "./ProjectsExpandableTable";
+import { ProjectsTabs } from "./ProjectsTabs";
 
 export const dynamic = "force-dynamic";
 
 export default async function ErpProjectsPage() {
+  const cfg = parseHubSpotPipelineStageMap();
+
   const projects = await prisma.project.findMany({
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
     take: 300,
@@ -22,6 +25,7 @@ export default async function ErpProjectsPage() {
       distanceEntries: { select: { miles: true } },
     },
   });
+
   const lifecycleRank = (p: (typeof projects)[number]) => {
     const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null);
     if (lifecycle === "ACTIVE") return 0;
@@ -81,6 +85,7 @@ export default async function ErpProjectsPage() {
       cleaningCents,
       paintCents,
       miles,
+      hubspotPipelineId: p.hubspotPipelineId ?? null,
     };
   });
 
@@ -113,23 +118,26 @@ export default async function ErpProjectsPage() {
         </div>
       </div>
 
-      <div>
-        {rows.length === 0 ? (
-          <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
-            No projects yet.{" "}
-            <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
-              Create one
-            </Link>{" "}
-            or import from HubSpot under{" "}
-            <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
-              HubSpot sync
-            </Link>
-            .
-          </div>
-        ) : (
-          <ProjectsExpandableTable rows={rows} />
-        )}
-      </div>
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
+          No projects yet.{" "}
+          <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
+            Create one
+          </Link>{" "}
+          or import from HubSpot under{" "}
+          <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
+            HubSpot sync
+          </Link>
+          .
+        </div>
+      ) : (
+        <ProjectsTabs
+          rows={rows}
+          postConstructionPipelineId={cfg?.postConstruction.pipelineId ?? null}
+          janitorialPipelineId={cfg?.janitorial.pipelineId ?? null}
+          residentialPipelineId={cfg?.residential.pipelineId ?? null}
+        />
+      )}
     </div>
   );
 }
