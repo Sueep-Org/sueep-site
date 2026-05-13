@@ -81,7 +81,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
           </tr>
           {/* Column header row */}
           <tr className="bg-pink-400 text-white">
-            <th className="sticky left-0 z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-400 px-3 py-2 font-medium">Job</th>
+            <th className="md:sticky md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-400 px-3 py-2 font-medium">Job</th>
             <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
             <th className="border-r border-white px-3 py-2 font-medium">Segment</th>
             <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
@@ -108,7 +108,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                   title={isOpen ? "Collapse" : "Expand"}
                 >
                   {/* Project Details */}
-                  <td className={`sticky left-0 z-30 w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
+                  <td className={`md:sticky md:left-0 md:z-30 w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
