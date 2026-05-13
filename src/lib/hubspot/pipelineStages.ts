@@ -24,8 +24,8 @@ export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "OTHER";
 export type HubSpotPipelineStageMap = {
   /** Post-construction pipeline object id (string from HubSpot) */
   postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
-  /** Janitorial pipeline */
-  janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
+  /** Janitorial pipeline — stages are "Awarded" and "Signed" */
+  janitorial: { pipelineId: string; stages: { awarded: string; signed: string; workCompleted: string } };
   /** Residential pipeline — “Confirmed” plays the same role as commercial “Quote approved” */
   residential: { pipelineId: string; stages: { confirmed: string; workInProgress: string; workCompleted: string } };
 };
@@ -66,12 +66,18 @@ export function classifyHubSpotDealStage(
     return { segment: "RESIDENTIAL", phase: "OTHER" };
   }
 
-  const commercialPipelines = [cfg.postConstruction, cfg.janitorial] as const;
-  for (const p of commercialPipelines) {
-    if (pipelineId !== p.pipelineId) continue;
-    const { quoteApproved, workInProgress, workCompleted } = p.stages;
+  if (pipelineId === cfg.postConstruction.pipelineId) {
+    const { quoteApproved, workInProgress, workCompleted } = cfg.postConstruction.stages;
     if (matches(quoteApproved)) return { segment: "COMMERCIAL", phase: "AWARDED" };
     if (matches(workInProgress)) return { segment: "COMMERCIAL", phase: "WIP" };
+    if (matches(workCompleted)) return { segment: "COMMERCIAL", phase: "COMPLETED" };
+    return { segment: "COMMERCIAL", phase: "OTHER" };
+  }
+
+  if (pipelineId === cfg.janitorial.pipelineId) {
+    const { awarded, signed, workCompleted } = cfg.janitorial.stages;
+    if (matches(awarded)) return { segment: "COMMERCIAL", phase: "AWARDED" };
+    if (matches(signed)) return { segment: "COMMERCIAL", phase: "WIP" };
     if (matches(workCompleted)) return { segment: "COMMERCIAL", phase: "COMPLETED" };
     return { segment: "COMMERCIAL", phase: "OTHER" };
   }
