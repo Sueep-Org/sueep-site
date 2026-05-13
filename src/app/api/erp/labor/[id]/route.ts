@@ -1,15 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * GET /api/erp/labor/[id]
  * Get a specific labor entry
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export async function GET(_req: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
   try {
     const entry = await prisma.laborEntry.findUnique({
       where: { id },
@@ -57,13 +56,10 @@ export async function GET(
  * PATCH /api/erp/labor/[id]
  * Update a labor entry
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export async function PATCH(req: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
   try {
-    const body = await request.json();
+    const body = await req.json();
 
     const entry = await prisma.laborEntry.update({
       where: { id },
@@ -112,11 +108,8 @@ export async function PATCH(
  * DELETE /api/erp/labor/[id]
  * Delete a labor entry
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
   try {
     await prisma.laborEntry.delete({
       where: { id },
