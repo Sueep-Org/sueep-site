@@ -17,7 +17,7 @@ const nav = [
 export default function ErpShellLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-gray-200 bg-gray-50">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
           <Link href="/erp" className="block">
             <ErpBrandLogo className="h-9 w-auto" priority />

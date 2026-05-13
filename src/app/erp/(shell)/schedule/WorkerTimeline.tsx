@@ -108,7 +108,7 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
           {workers.map((worker) => {
             const workerDates = entriesByWorkerDate.get(worker) || new Map();
             const workerEntries = Array.from(workerDates.values()).flat();
-            const totalHours = workerEntries.reduce((sum, e) => sum + e.hours, 0);
+            const totalHours = workerEntries.reduce((sum: number, e: LaborEntryData) => sum + e.hours, 0);
 
             return (
               <div key={worker} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
@@ -121,7 +121,7 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
                   {dateRange.map((date) => {
                     const dateKey = date.toISOString().slice(0, 10);
                     const dayEntries = workerDates.get(dateKey) || [];
-                    const dayHours = dayEntries.reduce((sum, e) => sum + e.hours, 0);
+                    const dayHours = dayEntries.reduce((sum: number, e: LaborEntryData) => sum + e.hours, 0);
                     const isToday =
                       date.getTime() === startOfDay(new Date()).getTime();
 
@@ -141,7 +141,7 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
                           <>
                             <div className="mt-1 font-semibold text-pink-400">{dayHours.toFixed(1)}h</div>
                             <div className="mt-1 space-y-0.5">
-                              {dayEntries.slice(0, 2).map((entry) => {
+                              {dayEntries.slice(0, 2).map((entry: LaborEntryData) => {
                                 const project = projectMap.get(entry.projectId);
                                 return (
                                   <div key={entry.id} className="text-[9px] text-zinc-300 truncate">

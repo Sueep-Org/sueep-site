@@ -7,11 +7,12 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const entry = await prisma.laborEntry.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         project: {
           select: {
@@ -58,13 +59,14 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
 
     const entry = await prisma.laborEntry.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(body.workDate && { workDate: new Date(body.workDate) }),
         ...(body.workerName && { workerName: body.workerName }),
@@ -112,11 +114,12 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     await prisma.laborEntry.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({
