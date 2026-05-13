@@ -22,6 +22,7 @@ function formatHourlyPay(cents: number | null): string {
 export default async function EmployeesPage({ searchParams }: PageProps) {
   const qp = await searchParams;
   const projectFilter = firstValue(qp.project).trim().toLowerCase();
+  const nameFilter = firstValue(qp.name).trim().toLowerCase();
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
   const sortBy = sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" ? sortByRaw : "name";
@@ -34,6 +35,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
 
   const rows = employees
     .filter((e) => (projectFilter ? (e.defaultProject || "").toLowerCase().includes(projectFilter) : true))
+    .filter((e) => (nameFilter ? `${e.firstName} ${e.lastName}`.toLowerCase().includes(nameFilter) : true))
     .map((e) => {
     const compliance = evaluateEmployeeCompliance(e.status, e.documents, now);
     const nextExpiry =
@@ -94,6 +96,18 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
         <p className="mt-1 text-xs text-gray-600">Open an employee to add compliance documents and update profile details.</p>
         <form className="mt-3 flex flex-wrap items-end gap-2">
           <div>
+            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="nameFilter">
+              Search by name
+            </label>
+            <input
+              id="nameFilter"
+              name="name"
+              defaultValue={nameFilter}
+              placeholder="e.g. John Smith"
+              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+            />
+          </div>
+          <div>
             <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="projectFilter">
               Filter by project
             </label>
@@ -119,18 +133,18 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
             <thead className="border-b border-gray-300 bg-gray-100 text-xs uppercase text-gray-600">
               <tr>
                 <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}`} className="hover:text-gray-900">
+                  <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
                     Name
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-medium">Role</th>
                 <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=hourlyPay&sortDir=${sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}`} className="hover:text-gray-900">
+                  <Link href={`/erp/employees?sortBy=hourlyPay&sortDir=${sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
                     Hourly pay
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=defaultProject&sortDir=${sortBy === "defaultProject" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}`} className="hover:text-gray-900">
+                  <Link href={`/erp/employees?sortBy=defaultProject&sortDir=${sortBy === "defaultProject" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
                     Default project
                   </Link>
                 </th>
