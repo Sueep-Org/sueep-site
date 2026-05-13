@@ -148,6 +148,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     Default project
                   </Link>
                 </th>
+                <th className="px-3 py-2 font-medium">Start date</th>
                 <th className="px-3 py-2 font-medium">Compliance</th>
                 <th className="px-3 py-2 font-medium">Docs on file</th>
                 <th className="px-3 py-2 font-medium">Next expiry</th>
@@ -157,7 +158,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
             <tbody className="divide-y divide-gray-300">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -172,6 +173,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
                     <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>
                     <td className="px-3 py-2 text-gray-900">{r.defaultProject || "—"}</td>
+                    <td className="px-3 py-2 text-gray-900">{r.hireDate ? new Date(r.hireDate).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(r.compliance)}`}>
                         {complianceLabel(r.compliance)}
