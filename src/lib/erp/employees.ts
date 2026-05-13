@@ -28,11 +28,11 @@ export function evaluateEmployeeCompliance(status: string, docs: EmployeeDocumen
 }
 
 export function complianceBadgeClasses(state: EmployeeComplianceState): string {
-  if (state === "COMPLIANT") return "bg-emerald-950/60 text-emerald-300 border border-emerald-800";
-  if (state === "EXPIRING_SOON") return "bg-amber-950/60 text-amber-300 border border-amber-800";
-  if (state === "NON_COMPLIANT") return "bg-red-950/60 text-red-300 border border-red-800";
-  if (state === "INACTIVE") return "bg-zinc-900 text-zinc-400 border border-zinc-700";
-  return "bg-zinc-900 text-zinc-300 border border-zinc-700";
+  if (state === "COMPLIANT") return "bg-emerald-100 text-emerald-800 border border-emerald-300";
+  if (state === "EXPIRING_SOON") return "bg-amber-100 text-amber-800 border border-amber-300";
+  if (state === "NON_COMPLIANT") return "bg-red-100 text-red-800 border border-red-300";
+  if (state === "INACTIVE") return "bg-gray-100 text-gray-600 border border-gray-300";
+  return "bg-gray-100 text-gray-700 border border-gray-300";
 }
 
 export function complianceLabel(state: EmployeeComplianceState): string {

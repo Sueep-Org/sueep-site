@@ -95,7 +95,7 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               sortBy === "date"
                 ? "bg-pink-600 text-white"
-                : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                : "border border-gray-300 text-gray-700 hover:bg-gray-100"
             }`}
           >
             By Date
@@ -111,10 +111,10 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
             const totalHours = workerEntries.reduce((sum: number, e: LaborEntryData) => sum + e.hours, 0);
 
             return (
-              <div key={worker} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+              <div key={worker} className="rounded-lg border border-gray-300 bg-gray-50 p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-zinc-100">{worker}</h3>
-                  <span className="text-sm text-pink-400">{totalHours.toFixed(1)}h total</span>
+                  <h3 className="font-semibold text-gray-900">{worker}</h3>
+                  <span className="text-sm text-pink-600">{totalHours.toFixed(1)}h total</span>
                 </div>
 
                 <div className="grid auto-rows-max grid-cols-7 gap-2">
@@ -180,40 +180,39 @@ export function WorkerTimeline({ laborEntries, projects, daysToShow = 14 }: Work
               <div
                 key={dateKey}
                 className={`rounded-lg border p-4 ${
-                  isToday ? "border-pink-600/50 bg-pink-900/10" : "border-zinc-800 bg-zinc-950/40"
+                  isToday ? "border-pink-300 bg-pink-50" : "border-gray-300 bg-gray-50"
                 }`}
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-zinc-100">
+                  <h3 className="font-semibold text-gray-900">
                     {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                   </h3>
-                  <span className="text-sm text-pink-400">{dayHours.toFixed(1)}h</span>
+                  <span className="text-sm text-pink-600">{dayHours.toFixed(1)}h</span>
                 </div>
 
                 <div className="space-y-2">
-                  {dayEntries.map((entry) => {
+                  {dayEntries.map((entry: LaborEntryData) => {
                     const project = projectMap.get(entry.projectId);
-                    const entryCost = entry.hours * entry.hourlyRateCents;
                     return (
-                      <div key={entry.id} className="rounded border border-zinc-800/50 bg-zinc-900/20 p-2 text-xs">
+                      <div key={entry.id} className="rounded border border-gray-200 bg-white p-2 text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-zinc-200">{entry.workerName}</span>
-                          <span className="text-pink-400">{entry.hours.toFixed(1)}h</span>
+                          <span className="font-medium text-gray-900">{entry.workerName}</span>
+                          <span className="text-pink-600">{entry.hours.toFixed(1)}h</span>
                         </div>
-                        <div className="mt-1 flex items-center justify-between text-zinc-400">
+                        <div className="mt-1 flex items-center justify-between text-gray-600">
                           <div>
                             {entry.role && <span>{entry.role}</span>}
                             {entry.role && project && " • "}
                             {project && (
-                              <Link href={`/erp/projects/${entry.projectId}`} className="text-pink-400 hover:underline">
+                              <Link href={`/erp/projects/${entry.projectId}`} className="text-pink-600 hover:underline">
                                 {project.jobTitle}
                               </Link>
                             )}
                           </div>
-                          <span className="text-emerald-400">${((entry.hours * entry.hourlyRateCents) / 100).toFixed(2)}</span>
+                          <span className="text-emerald-600">${((entry.hours * entry.hourlyRateCents) / 100).toFixed(2)}</span>
                         </div>
                         {entry.taskDescription && (
-                          <div className="mt-1 text-zinc-500">{entry.taskDescription}</div>
+                          <div className="mt-1 text-gray-500">{entry.taskDescription}</div>
                         )}
                       </div>
                     );

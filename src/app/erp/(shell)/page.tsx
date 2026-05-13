@@ -87,14 +87,14 @@ export default async function ErpDashboardPage() {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return (
-      <div className="space-y-4 rounded-lg border border-red-900/60 bg-red-950/40 p-6 text-sm text-red-100">
-        <h1 className="text-lg font-semibold text-white">ERP database unavailable</h1>
-        <p className="text-red-200/90">
-          The dashboard could not reach PostgreSQL. On Vercel, set <code className="text-red-50">DATABASE_URL</code> to a
-          hosted database (e.g. Neon), run <code className="text-red-50">prisma migrate deploy</code> on deploy (already
-          in <code className="text-red-50">npm run build</code>), then redeploy.
+      <div className="space-y-4 rounded-lg border border-red-300 bg-red-50 p-6 text-sm text-red-800">
+        <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
+        <p className="text-red-700">
+          The dashboard could not reach PostgreSQL. On Vercel, set <code className="text-red-900">DATABASE_URL</code> to a
+          hosted database (e.g. Neon), run <code className="text-red-900">prisma migrate deploy</code> on deploy (already
+          in <code className="text-red-900">npm run build</code>), then redeploy.
         </p>
-        <p className="text-xs text-red-300/80">Details: {msg}</p>
+        <p className="text-xs text-red-600">Details: {msg}</p>
       </div>
     );
   }
@@ -102,8 +102,8 @@ export default async function ErpDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-400">Internal ERP — projects, labor, and cost baselines.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+        <p className="mt-1 text-sm text-gray-600">Internal ERP — projects, labor, and cost baselines.</p>
       </div>
 
       <HubSpotSyncPanel id="hubspot-sync" />
@@ -115,21 +115,21 @@ export default async function ErpDashboardPage() {
           { label: "Labor entries", value: laborCount },
           { label: "Commercial / Residential", value: `${commercialCount} / ${residentialCount}` },
         ].map((card) => (
-          <div key={card.label} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">{card.label}</p>
-            <p className="mt-2 text-2xl font-bold text-white">{card.value}</p>
+          <div key={card.label} className="rounded-lg border border-gray-300 bg-gray-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-gray-500">{card.label}</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900">{card.value}</p>
           </div>
         ))}
       </div>
 
       <div className="flex flex-wrap gap-4 text-sm">
-        <Link href="/erp/schedule" className="font-medium text-pink-400 hover:underline">
+        <Link href="/erp/schedule" className="font-medium text-pink-600 hover:underline">
           Schedule (calendar & Gantt) →
         </Link>
-        <Link href="/erp/projects" className="font-medium text-pink-400 hover:underline">
+        <Link href="/erp/projects" className="font-medium text-pink-600 hover:underline">
           Go to projects →
         </Link>
-        <Link href="/erp/employees" className="font-medium text-pink-400 hover:underline">
+        <Link href="/erp/employees" className="font-medium text-pink-600 hover:underline">
           Employees →
         </Link>
       </div>

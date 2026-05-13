@@ -74,8 +74,8 @@ export default async function SchedulePage() {
     <div className="space-y-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Schedule & Labor Tracking</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h1 className="text-2xl font-semibold text-gray-900">Schedule & Labor Tracking</h1>
+          <p className="mt-1 text-sm text-gray-600">
             Manage project timelines, worker schedules, and labor hours.
           </p>
         </div>
@@ -86,10 +86,10 @@ export default async function SchedulePage() {
       <SchedulePlanner projects={projects} />
 
       {/* Labor Tracking */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <section className="rounded-xl border border-gray-300 bg-gray-50 p-4">
         <div className="mb-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Labor Tracking</h2>
-          <p className="mt-1 text-xs text-zinc-400">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Labor Tracking</h2>
+          <p className="mt-1 text-xs text-gray-600">
             Track worker hours, costs, and project labor allocation.
           </p>
         </div>
@@ -97,10 +97,10 @@ export default async function SchedulePage() {
       </section>
 
       {/* Worker Timeline */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <section className="rounded-xl border border-gray-300 bg-gray-50 p-4">
         <div className="mb-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Worker Timeline</h2>
-          <p className="mt-1 text-xs text-zinc-400">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Worker Timeline</h2>
+          <p className="mt-1 text-xs text-gray-600">
             View worker availability and project assignments over the next 14 days.
           </p>
         </div>

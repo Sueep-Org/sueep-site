@@ -34,22 +34,22 @@ type ProjectTableRow = {
 function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
   if (state === "COMPLETED") {
     return {
-      row: "bg-zinc-800/35 hover:bg-zinc-800/55",
-      detail: "bg-zinc-800/45",
-      sticky: "bg-zinc-800/70",
+      row: "bg-gray-100 hover:bg-gray-200",
+      detail: "bg-gray-50",
+      sticky: "bg-gray-200",
     };
   }
   if (state === "UPCOMING") {
     return {
-      row: "bg-purple-950/20 hover:bg-purple-950/30",
-      detail: "bg-purple-950/30",
-      sticky: "bg-purple-950/35",
+      row: "bg-purple-50 hover:bg-purple-100",
+      detail: "bg-purple-50",
+      sticky: "bg-purple-100",
     };
   }
   return {
-    row: "bg-emerald-950/20 hover:bg-emerald-950/30",
-    detail: "bg-emerald-950/30",
-    sticky: "bg-emerald-950/35",
+    row: "bg-emerald-50 hover:bg-emerald-100",
+    detail: "bg-emerald-50",
+    sticky: "bg-emerald-100",
   };
 }
 
@@ -62,14 +62,14 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-800">
+    <div className="overflow-x-auto rounded-lg border border-gray-300">
       <table className="w-full min-w-[1400px] text-left text-sm">
-        <thead className="border-b border-zinc-800 bg-zinc-900/80 text-xs uppercase text-zinc-500">
+        <thead className="border-b border-gray-300 bg-gray-100 text-xs uppercase text-gray-600">
           <tr>
-            <th className="sticky left-0 z-40 w-[420px] min-w-[420px] border-r border-zinc-800 bg-zinc-900 px-3 py-2 font-medium">
+            <th className="sticky left-0 z-40 w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium">
               Job
             </th>
-            <th className="sticky left-[420px] z-40 w-[220px] min-w-[220px] border-r border-zinc-800 bg-zinc-900 px-3 py-2 font-medium">
+            <th className="sticky left-[420px] z-40 w-[220px] min-w-[220px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-medium">
               Supervisor / PM
             </th>
             <th className="px-3 py-2 font-medium">Segment</th>
@@ -81,7 +81,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
             <th className="px-3 py-2 font-medium">Miles</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800">
+        <tbody className="divide-y divide-gray-300">
           {rows.map((p) => {
             const isOpen = openSet.has(p.id);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
@@ -94,67 +94,67 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse project row" : "Expand project row"}
                 >
-                  <td className={`sticky left-0 z-30 w-[420px] min-w-[420px] border-r border-zinc-800 px-3 py-2 ${styles.sticky}`}>
+                  <td className={`sticky left-0 z-30 w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-medium text-pink-400 hover:underline"
+                      className="font-medium text-pink-600 hover:underline"
                     >
                       {p.jobTitle}
                     </Link>
-                    {p.description ? <p className="mt-1 text-xs text-zinc-500 line-clamp-1">{p.description}</p> : null}
+                    {p.description ? <p className="mt-1 text-xs text-gray-600 line-clamp-1">{p.description}</p> : null}
                   </td>
                   <td
-                    className={`sticky left-[420px] z-30 w-[220px] min-w-[220px] border-r border-zinc-800 px-3 py-2 text-zinc-300 ${styles.sticky}`}
+                    className={`sticky left-[420px] z-30 w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900 ${styles.sticky}`}
                   >
                     {p.supervisor || "Unassigned PM"}
                   </td>
-                  <td className="px-3 py-2 text-zinc-300">{projectSegmentLabel(p.segment)}</td>
-                  <td className="px-3 py-2 text-zinc-300">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="px-3 py-2 text-zinc-300">
-                    <span className="text-zinc-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
-                    <span className="text-zinc-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
+                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">
+                    <span className="text-gray-600">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
+                    <span className="text-gray-600">/ A:</span> {centsToDollars(p.actualMaterialCents)}
                   </td>
-                  <td className="px-3 py-2 text-zinc-300">
-                    <span className="text-zinc-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
-                    <span className="text-zinc-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
+                  <td className="px-3 py-2 text-gray-900">
+                    <span className="text-gray-600">E:</span> {centsToDollars(p.estLaborCents)}{" "}
+                    <span className="text-gray-600">/ A:</span> {centsToDollars(p.actualLaborCents)}
                   </td>
-                  <td className="px-3 py-2 text-zinc-300">
-                    <span className="text-zinc-500">E:</span> {p.estHours ?? "—"}{" "}
-                    <span className="text-zinc-500">/ A:</span> {p.actualHours.toFixed(2)}
+                  <td className="px-3 py-2 text-gray-900">
+                    <span className="text-gray-600">E:</span> {p.estHours ?? "—"}{" "}
+                    <span className="text-gray-600">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
-                  <td className="px-3 py-2 text-zinc-300">{p.percentDone}%</td>
-                  <td className="px-3 py-2 text-zinc-300">{p.miles.toFixed(1)}</td>
+                  <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                  <td className="px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
                 </tr>
                 {isOpen ? (
                   <tr className={styles.detail}>
                     <td colSpan={9} className="px-4 py-3">
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div>
-                          <p className="text-[10px] uppercase text-zinc-500">Team</p>
-                          <p className="mt-1 text-sm text-zinc-200">
+                          <p className="text-[10px] uppercase text-gray-600">Team</p>
+                          <p className="mt-1 text-sm text-gray-900">
                             {p.employees.length ? p.employees.join(", ") : "No labor logs yet"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-zinc-500">Labor (Est / Act)</p>
-                          <p className="mt-1 text-sm text-zinc-200">
+                          <p className="text-[10px] uppercase text-gray-600">Labor (Est / Act)</p>
+                          <p className="mt-1 text-sm text-gray-900">
                             {centsToDollars(p.estLaborCents)} / {centsToDollars(p.actualLaborCents)}
                           </p>
-                          <p className="text-xs text-zinc-500">Hours: {p.estHours ?? "—"} / {p.actualHours.toFixed(2)}</p>
+                          <p className="text-xs text-gray-600">Hours: {p.estHours ?? "—"} / {p.actualHours.toFixed(2)}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] uppercase text-zinc-500">Materials (Est / Act)</p>
-                          <p className="mt-1 text-sm text-zinc-200">
+                          <p className="text-[10px] uppercase text-gray-600">Materials (Est / Act)</p>
+                          <p className="mt-1 text-sm text-gray-900">
                             {centsToDollars(p.estMaterialCents)} / {centsToDollars(p.actualMaterialCents)}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-xs text-gray-600">
                             Cleaning: {centsToDollars(p.cleaningCents)} · Paint: {centsToDollars(p.paintCents)} · Miles: {p.miles.toFixed(1)}
                           </p>
                         </div>
                       </div>
                       <div className="mt-3 text-xs">
-                        <Link href={`/erp/projects/${p.id}`} className="font-medium text-pink-400 hover:underline">
+                        <Link href={`/erp/projects/${p.id}`} className="font-medium text-pink-600 hover:underline">
                           Open full project details →
                         </Link>
                       </div>

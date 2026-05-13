@@ -81,41 +81,41 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
   return (
     <div
       id={id}
-      className="rounded-lg border border-zinc-800 border-l-4 border-l-orange-500 bg-zinc-900/40 p-4 shadow-sm shadow-orange-950/20"
+      className="rounded-lg border border-gray-300 border-l-4 border-l-orange-500 bg-gray-50 p-4 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-white">Sync deals from HubSpot</h2>
-      <p className="mt-1 text-xs text-zinc-500">
+      <h2 className="text-base font-semibold text-gray-900">Sync deals from HubSpot</h2>
+      <p className="mt-1 text-xs text-gray-600">
         Pull deals from your three pipelines (stages you configured in{" "}
-        <code className="text-zinc-400">HUBSPOT_PIPELINE_STAGE_MAP</code>) into ERP projects. They then show on Projects and Schedule. For janitorial, leave{" "}
-        <code className="text-zinc-400">workCompleted</code> empty to keep only active deals (Awarded + Signed).
+        <code className="text-gray-700">HUBSPOT_PIPELINE_STAGE_MAP</code>) into ERP projects. They then show on Projects and Schedule. For janitorial, leave{" "}
+        <code className="text-gray-700">workCompleted</code> empty to keep only active deals (Awarded + Signed).
       </p>
-      <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-zinc-500">
+      <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-gray-600">
         <li>
-          In Vercel, set <code className="text-zinc-400">HUBSPOT_PIPELINE_STAGE_MAP</code> (see{" "}
-          <code className="text-zinc-400">.env.example</code>). Use{" "}
-          <a href="/api/erp/hubspot/pipelines" className="text-pink-400 hover:underline" target="_blank" rel="noreferrer">
+          In Vercel, set <code className="text-gray-700">HUBSPOT_PIPELINE_STAGE_MAP</code> (see{" "}
+          <code className="text-gray-700">.env.example</code>). Use{" "}
+          <a href="/api/erp/hubspot/pipelines" className="text-pink-600 hover:underline" target="_blank" rel="noreferrer">
             /api/erp/hubspot/pipelines
           </a>{" "}
           (while logged in) to copy pipeline and stage IDs.
         </li>
         <li>
-          <code className="text-zinc-400">HUBSPOT_ACCESS_TOKEN</code> must be set on Vercel.
+          <code className="text-gray-700">HUBSPOT_ACCESS_TOKEN</code> must be set on Vercel.
         </li>
         <li>
-          <span className="font-medium text-zinc-400">Deploying does not import deals.</span> Open this dashboard after deploy and click Sync (or call{" "}
-          <code className="text-zinc-400">POST /api/erp/hubspot/sync</code>).
+          <span className="font-medium text-gray-700">Deploying does not import deals.</span> Open this dashboard after deploy and click Sync (or call{" "}
+          <code className="text-gray-700">POST /api/erp/hubspot/sync</code>).
         </li>
       </ol>
       {previewError ? (
-        <p className="mt-3 text-xs text-amber-400/90" role="status">
+        <p className="mt-3 text-xs text-amber-600" role="status">
           HubSpot preview: {previewError}
         </p>
       ) : preview ? (
-        <p className="mt-3 text-xs text-zinc-400" role="status">
+        <p className="mt-3 text-xs text-gray-600" role="status">
           {preview}
         </p>
       ) : (
-        <p className="mt-3 text-xs text-zinc-500">Loading HubSpot preview…</p>
+        <p className="mt-3 text-xs text-gray-500">Loading HubSpot preview…</p>
       )}
       <button
         type="button"
@@ -125,9 +125,9 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
       >
         {loading ? "Syncing…" : "Sync deals from HubSpot"}
       </button>
-      {message ? <p className="mt-2 text-xs text-emerald-400">{message}</p> : null}
+      {message ? <p className="mt-2 text-xs text-emerald-600">{message}</p> : null}
       {error ? (
-        <p className="mt-2 text-xs text-red-400" role="alert">
+        <p className="mt-2 text-xs text-red-600" role="alert">
           {error}
         </p>
       ) : null}

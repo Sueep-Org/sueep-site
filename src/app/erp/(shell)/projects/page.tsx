@@ -92,25 +92,25 @@ export default async function ErpProjectsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Projects</h1>
-          <p className="mt-1 text-sm text-zinc-400">Simple view: core info on top, details on expand.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
+          <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-800 bg-emerald-950/40 px-2.5 py-1 text-xs text-emerald-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             WIP
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-purple-800 bg-purple-950/40 px-2.5 py-1 text-xs text-purple-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs text-purple-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
             Upcoming
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-600 bg-zinc-800/60 px-2.5 py-1 text-xs text-zinc-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-500" />
             Completed
           </span>
           <Link
             href="/erp/projects/new"
-            className="ml-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
+            className="ml-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
           >
             New project
           </Link>
@@ -119,13 +119,13 @@ export default async function ErpProjectsPage() {
 
       <div>
         {rows.length === 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-8 text-center text-zinc-500">
+          <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
             No projects yet.{" "}
-            <Link href="/erp/projects/new" className="text-pink-400 hover:underline">
+            <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
               Create one
             </Link>{" "}
             or import from HubSpot under{" "}
-            <Link href="/erp/hubspot" className="text-pink-400 hover:underline">
+            <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
               HubSpot sync
             </Link>
             .
