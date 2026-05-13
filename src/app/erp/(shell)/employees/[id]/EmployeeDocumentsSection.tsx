@@ -19,8 +19,8 @@ type Props = {
 };
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-gray-600";
 
 export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>(initialDocuments);
@@ -92,9 +92,9 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
   }
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-      <h2 className="text-sm font-semibold text-zinc-200">Documentation</h2>
-      <p className="mt-1 text-xs text-zinc-500">Add compliance documents and mark verification status.</p>
+    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h2 className="text-sm font-semibold text-gray-800">Documentation</h2>
+      <p className="mt-1 text-xs text-gray-500">Add compliance documents and mark verification status.</p>
 
       <form onSubmit={addDoc} className="mt-4 space-y-3">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -129,8 +129,8 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
             <input id="expiresAt" name="expiresAt" type="date" className={input} />
           </div>
           <div className="flex items-end">
-            <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
-              <input type="checkbox" name="isVerified" className="rounded border-zinc-700 bg-zinc-950" />
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="isVerified" className="rounded border-gray-300 bg-white" />
               Verified
             </label>
           </div>
@@ -141,19 +141,19 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
           </label>
           <textarea id="notes" name="notes" rows={2} className={input} />
         </div>
-        {error ? <p className="text-xs text-red-400">{error}</p> : null}
+        {error ? <p className="text-xs text-red-500">{error}</p> : null}
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-900 hover:bg-white disabled:opacity-50"
+          className="rounded-md bg-pink-600 px-3 py-2 text-xs font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
         >
           {loading ? "Adding…" : "Add document"}
         </button>
       </form>
 
-      <div className="mt-6 overflow-x-auto rounded-lg border border-zinc-800">
+      <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="border-b border-zinc-800 bg-zinc-900/80 text-xs uppercase text-zinc-500">
+          <thead className="border-b border-gray-200 bg-gray-100 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-3 py-2 font-medium">Type</th>
               <th className="px-3 py-2 font-medium">Title</th>
@@ -164,24 +164,24 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
               <th className="px-3 py-2 font-medium">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-gray-100">
             {sortedDocs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-zinc-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
                   No documents yet.
                 </td>
               </tr>
             ) : (
               sortedDocs.map((d) => (
                 <tr key={d.id}>
-                  <td className="px-3 py-2 text-zinc-200">{d.documentType}</td>
-                  <td className="px-3 py-2 text-zinc-300">{d.title || "—"}</td>
-                  <td className="px-3 py-2 text-zinc-300">{d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2 text-zinc-300">{d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2 text-zinc-300">{d.isVerified ? "Yes" : "No"}</td>
-                  <td className="px-3 py-2 text-zinc-300">
+                  <td className="px-3 py-2 text-gray-800">{d.documentType}</td>
+                  <td className="px-3 py-2 text-gray-700">{d.title || "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{d.isVerified ? "Yes" : "No"}</td>
+                  <td className="px-3 py-2 text-gray-700">
                     {d.fileUrl ? (
-                      <a href={d.fileUrl} target="_blank" rel="noreferrer" className="text-pink-400 hover:underline">
+                      <a href={d.fileUrl} target="_blank" rel="noreferrer" className="text-pink-600 hover:underline">
                         Open
                       </a>
                     ) : (
@@ -190,10 +190,10 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex gap-3 text-xs">
-                      <button type="button" onClick={() => void toggleVerify(d)} className="text-zinc-300 hover:text-white">
+                      <button type="button" onClick={() => void toggleVerify(d)} className="text-gray-600 hover:text-gray-900">
                         {d.isVerified ? "Unverify" : "Verify"}
                       </button>
-                      <button type="button" onClick={() => void deleteDoc(d)} className="text-red-300 hover:text-red-200">
+                      <button type="button" onClick={() => void deleteDoc(d)} className="text-red-500 hover:text-red-700">
                         Delete
                       </button>
                     </div>

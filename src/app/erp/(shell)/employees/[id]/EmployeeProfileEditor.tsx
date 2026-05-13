@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-gray-600";
 
 type Props = {
   employeeId: string;
@@ -71,8 +71,8 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
   const hourlyPay = initial.hourlyPayCents != null ? (initial.hourlyPayCents / 100).toFixed(2) : "";
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-      <h2 className="text-sm font-semibold text-zinc-200">General information</h2>
+    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h2 className="text-sm font-semibold text-gray-800">General information</h2>
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -139,8 +139,8 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
           </label>
           <textarea id="notes" name="notes" rows={3} defaultValue={initial.notes ?? ""} className={input} />
         </div>
-        {error ? <p className="text-xs text-red-400">{error}</p> : null}
-        {ok ? <p className="text-xs text-emerald-400">{ok}</p> : null}
+        {error ? <p className="text-xs text-red-500">{error}</p> : null}
+        {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
         <button
           type="submit"
           disabled={loading}

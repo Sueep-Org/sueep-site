@@ -22,13 +22,13 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/erp/employees" className="text-xs text-pink-400 hover:underline">
+        <Link href="/erp/employees" className="text-xs text-pink-600 hover:underline">
           ← Employees
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-white">
+        <h1 className="mt-2 text-2xl font-semibold text-gray-900">
           {employee.firstName} {employee.lastName}
         </h1>
-        <p className="mt-1 text-sm text-zinc-400">General employee profile, compliance status, and documentation.</p>
+        <p className="mt-1 text-sm text-gray-500">General employee profile, compliance status, and documentation.</p>
         <div className="mt-3">
           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(compliance)}`}>
             {complianceLabel(compliance)}
