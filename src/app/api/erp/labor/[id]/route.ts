@@ -12,7 +12,19 @@ export async function GET(_req: Request, ctx: Ctx) {
   try {
     const entry = await prisma.laborEntry.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        projectId: true,
+        workDate: true,
+        workerName: true,
+        role: true,
+        hours: true,
+        hourlyRateCents: true,
+        taskDescription: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationAccuracy: true,
+        lastLocationAt: true,
         project: {
           select: {
             id: true,
@@ -87,7 +99,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
           lastLocationAt: new Date() 
         }),
       },
-      include: {
+      select: {
+        id: true,
+        projectId: true,
+        workDate: true,
+        workerName: true,
+        role: true,
+        hours: true,
+        hourlyRateCents: true,
+        taskDescription: true,
+        locationLatitude: true,
+        locationLongitude: true,
+        locationAccuracy: true,
+        lastLocationAt: true,
         project: {
           select: {
             id: true,
