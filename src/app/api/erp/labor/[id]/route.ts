@@ -41,6 +41,10 @@ export async function GET(_req: Request, ctx: Ctx) {
         hours: entry.hours,
         hourlyRateCents: entry.hourlyRateCents,
         taskDescription: entry.taskDescription,
+        locationLatitude: entry.locationLatitude,
+        locationLongitude: entry.locationLongitude,
+        locationAccuracy: entry.locationAccuracy,
+        lastLocationAt: entry.lastLocationAt?.toISOString(),
       },
     });
   } catch (error) {
@@ -70,6 +74,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
         ...(body.hours && { hours: parseFloat(body.hours) }),
         ...(body.hourlyRateCents && { hourlyRateCents: parseInt(body.hourlyRateCents) }),
         ...(body.taskDescription !== undefined && { taskDescription: body.taskDescription }),
+        ...(body.locationLatitude !== undefined && { 
+          locationLatitude: body.locationLatitude ? parseFloat(body.locationLatitude) : null 
+        }),
+        ...(body.locationLongitude !== undefined && { 
+          locationLongitude: body.locationLongitude ? parseFloat(body.locationLongitude) : null 
+        }),
+        ...(body.locationAccuracy !== undefined && { 
+          locationAccuracy: body.locationAccuracy ? parseFloat(body.locationAccuracy) : null 
+        }),
+        ...(body.locationLatitude && body.locationLongitude && { 
+          lastLocationAt: new Date() 
+        }),
       },
       include: {
         project: {
@@ -93,6 +109,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
         hours: entry.hours,
         hourlyRateCents: entry.hourlyRateCents,
         taskDescription: entry.taskDescription,
+        locationLatitude: entry.locationLatitude,
+        locationLongitude: entry.locationLongitude,
+        locationAccuracy: entry.locationAccuracy,
+        lastLocationAt: entry.lastLocationAt?.toISOString(),
       },
     });
   } catch (error) {

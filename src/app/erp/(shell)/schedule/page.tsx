@@ -5,6 +5,7 @@ import { SchedulePlanner } from "./SchedulePlanner";
 import { LaborTracker } from "./LaborTracker";
 import { WorkerTimeline } from "./WorkerTimeline";
 import { AddLaborEntryForm } from "./AddLaborEntryForm";
+import { LocationTracker } from "./LocationTracker";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -72,14 +73,17 @@ export default async function SchedulePage() {
 
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
           <h1 className="text-2xl font-semibold text-gray-900">Schedule & Labor Tracking</h1>
           <p className="mt-1 text-sm text-gray-600">
             Manage project timelines, worker schedules, and labor hours.
           </p>
         </div>
-        <AddLaborEntryForm projectId="new" projectTitle="Quick Log" />
+        <div className="flex items-center gap-3">
+          <LocationTracker autoStart={true} />
+          <AddLaborEntryForm projectId="new" projectTitle="Quick Log" />
+        </div>
       </div>
 
       {/* Project Schedule */}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useGeolocation } from "@/lib/hooks/useGeolocation";
 
 interface AddLaborEntryFormProps {
   projectId: string;
@@ -9,6 +10,19 @@ interface AddLaborEntryFormProps {
   onSuccess?: () => void;
   defaultDate?: string;
   allProjects?: Array<{ id: string; jobTitle: string }>;
+}
+
+interface LaborPayload {
+  projectId: string;
+  workDate: string;
+  workerName: string;
+  role: string | null;
+  hours: number;
+  hourlyRateCents: number;
+  taskDescription: string | null;
+  locationLatitude?: number;
+  locationLongitude?: number;
+  locationAccuracy?: number;
 }
 
 export function AddLaborEntryForm({
@@ -19,11 +33,13 @@ export function AddLaborEntryForm({
   allProjects = [],
 }: AddLaborEntryFormProps) {
   const router = useRouter();
+  const { location } = useGeolocation({ enableHighAccuracy: true });
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [projects, setProjects] = useState(allProjects);
+  const [locationStatus, setLocationStatus] = useState<"pending" | "captured" | "error">("pending");
 
   useEffect(() => {
     if (isOpen && projects.length === 0 && projectId === "new") {
@@ -60,20 +76,32 @@ export function AddLaborEntryForm({
         throw new Error("Project, worker name, and hours are required");
       }
 
+      const payload: LaborPayload = {
+        projectId: formData.projectId,
+        workDate: formData.workDate,
+        workerName: formData.workerName,
+        role: formData.role || null,
+        hours: parseFloat(formData.hours),
+        hourlyRateCents: formData.hourlyRateCents
+          ? parseInt(formData.hourlyRateCents)
+          : 0,
+        taskDescription: formData.taskDescription || null,
+      };
+
+      // Include location if available
+      if (location) {
+        payload.locationLatitude = location.latitude;
+        payload.locationLongitude = location.longitude;
+        payload.locationAccuracy = location.accuracy;
+        setLocationStatus("captured");
+      } else {
+        setLocationStatus("error");
+      }
+
       const response = await fetch("/api/erp/labor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: formData.projectId,
-          workDate: formData.workDate,
-          workerName: formData.workerName,
-          role: formData.role || null,
-          hours: parseFloat(formData.hours),
-          hourlyRateCents: formData.hourlyRateCents
-            ? parseInt(formData.hourlyRateCents)
-            : 0,
-          taskDescription: formData.taskDescription || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -95,6 +123,7 @@ export function AddLaborEntryForm({
       setTimeout(() => {
         setIsOpen(false);
         setSuccess(false);
+        setLocationStatus("pending");
         router.refresh();
         onSuccess?.();
       }, 1500);
@@ -245,6 +274,17 @@ export function AddLaborEntryForm({
               Hours logged successfully!
             </div>
           )}
+
+          {/* Location Status */}
+          <div className={`rounded p-2 text-xs font-medium ${
+            locationStatus === "captured" 
+              ? "border border-green-300 bg-green-50 text-green-700"
+              : locationStatus === "error"
+              ? "border border-yellow-300 bg-yellow-50 text-yellow-700"
+              : "border border-gray-300 bg-gray-50 text-gray-700"
+          }`}>
+            📍 Location: {locationStatus === "captured" ? `Captured (${location?.accuracy.toFixed(0)}m accuracy)` : locationStatus === "error" ? "Enable location access for precise tracking" : "Waiting for location..."}
+          </div>
 
           <div className="flex gap-2 pt-4">
             <button

@@ -171,6 +171,15 @@ model LaborEntry {
 
   taskDescription String?
 
+  /// Location when entry was created (latitude)
+  locationLatitude  Float?
+  /// Location when entry was created (longitude)
+  locationLongitude Float?
+  /// Accuracy of location in meters
+  locationAccuracy  Float?
+  /// Timestamp when location was last captured
+  lastLocationAt    DateTime?
+
   @@index([projectId])
   @@index([employeeId])
   @@index([workDate])

@@ -55,6 +55,10 @@ export async function GET(request: NextRequest) {
         hours: e.hours,
         hourlyRateCents: e.hourlyRateCents,
         taskDescription: e.taskDescription,
+        locationLatitude: e.locationLatitude,
+        locationLongitude: e.locationLongitude,
+        locationAccuracy: e.locationAccuracy,
+        lastLocationAt: e.lastLocationAt?.toISOString(),
       })),
     });
   } catch (error) {
@@ -73,7 +77,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { projectId, workDate, workerName, role, hours, hourlyRateCents, taskDescription } = body;
+    const { 
+      projectId, 
+      workDate, 
+      workerName, 
+      role, 
+      hours, 
+      hourlyRateCents, 
+      taskDescription,
+      locationLatitude,
+      locationLongitude,
+      locationAccuracy,
+    } = body;
 
     if (!projectId || !workDate || !workerName || !hours) {
       return NextResponse.json(
@@ -104,6 +119,10 @@ export async function POST(request: NextRequest) {
         hours: parseFloat(hours),
         hourlyRateCents: parseInt(hourlyRateCents) || 0,
         taskDescription: taskDescription || null,
+        locationLatitude: locationLatitude ? parseFloat(locationLatitude) : null,
+        locationLongitude: locationLongitude ? parseFloat(locationLongitude) : null,
+        locationAccuracy: locationAccuracy ? parseFloat(locationAccuracy) : null,
+        lastLocationAt: locationLatitude && locationLongitude ? new Date() : null,
       },
       include: {
         project: {
@@ -127,6 +146,9 @@ export async function POST(request: NextRequest) {
         hours: laborEntry.hours,
         hourlyRateCents: laborEntry.hourlyRateCents,
         taskDescription: laborEntry.taskDescription,
+        locationLatitude: laborEntry.locationLatitude,
+        locationLongitude: laborEntry.locationLongitude,
+        locationAccuracy: laborEntry.locationAccuracy,
       },
     });
   } catch (error) {
