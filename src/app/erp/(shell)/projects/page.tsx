@@ -1,16 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsExpandableTable } from "./ProjectsExpandableTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function ErpProjectsPage() {
-  const cfg = parseHubSpotPipelineStageMap();
-  const janitorialPipelineId = cfg?.janitorial.pipelineId?.trim() || null;
   const projects = await prisma.project.findMany({
-    ...(janitorialPipelineId ? { where: { NOT: { hubspotPipelineId: janitorialPipelineId } } } : {}),
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
     take: 300,
     include: {
