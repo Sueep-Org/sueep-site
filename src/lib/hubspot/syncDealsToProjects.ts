@@ -66,6 +66,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;
 
+    let syncedProjectId: string | null = null;
     try {
       const existing = await prisma.project.findUnique({ where: { hubspotDealId: deal.id } });
 
@@ -74,7 +75,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       }
       const projectDate = parseHubSpotDate(startRaw ?? closeRaw);
       const projectEndDate = parseHubSpotDate(endRaw ?? closeRaw);
-
       if (existing) {
         await prisma.project.update({
           where: { id: existing.id },
@@ -90,6 +90,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             projectEndDate,
           },
         });
+        syncedProjectId = existing.id;
         synced.push({
           hubspotDealId: deal.id,
           projectId: existing.id,
@@ -97,7 +98,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           segment,
           phase,
         });
-        await syncDealContactsToProject(existing.id, deal.id);
       } else {
         const created = await prisma.project.create({
           data: {
@@ -113,6 +113,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             projectEndDate,
           },
         });
+        syncedProjectId = created.id;
         synced.push({
           hubspotDealId: deal.id,
           projectId: created.id,
@@ -120,10 +121,18 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           segment,
           phase,
         });
-        await syncDealContactsToProject(created.id, deal.id);
       }
     } catch (e) {
       errors.push(`Deal ${deal.id}: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+
+    if (syncedProjectId) {
+      try {
+        await syncDealContactsToProject(syncedProjectId, deal.id);
+      } catch (e) {
+        console.warn(`Deal ${deal.id}: contact sync skipped —`, e instanceof Error ? e.message : e);
+      }
     }
   }
 
