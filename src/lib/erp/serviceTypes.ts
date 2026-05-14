@@ -4,6 +4,7 @@ export const SERVICE_TYPE_OPTIONS = [
   "Powder Puff Cleaning",
   "Turnover Cleaning",
   "Painting",
+  "Carpet Cleaning",
   "Caulking",
   "Change Order",
 ] as const;
