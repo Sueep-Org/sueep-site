@@ -6,10 +6,27 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function TurnoverRequestsPage() {
-  const requests = await prisma.turnoverRequest.findMany({
-    orderBy: [{ createdAt: "desc" }],
-    include: { building: true },
-  });
+  let requests: any[] = [];
+
+  try {
+    requests = await prisma.turnoverRequest.findMany({
+      orderBy: [{ createdAt: "desc" }],
+      include: { building: true },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return (
+      <div className="space-y-4 rounded-lg border border-red-300 bg-red-50 p-6 text-sm text-red-800">
+        <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
+        <p className="text-red-700">
+          The turnover requests page could not reach PostgreSQL. On Vercel, set <code className="text-red-900">DATABASE_URL</code> to a
+          hosted database (e.g. Neon), run <code className="text-red-900">prisma migrate deploy</code> on deploy (already
+          in <code className="text-red-900">npm run build</code>), then redeploy.
+        </p>
+        <p className="text-xs text-red-600">Details: {msg}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -50,7 +67,7 @@ export default async function TurnoverRequestsPage() {
               ) : (
                 requests.map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-900">{request.building?.name || "—"}</td>
+                    <td className="px-4 py-3 text-gray-900">{request.building.name}</td>
                     <td className="px-4 py-3 text-gray-900">{request.requestType}</td>
                     <td className="px-4 py-3 text-gray-900">{request.unitNumber || "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{request.priceCents != null ? `$${(request.priceCents / 100).toFixed(0)}` : "—"}</td>
