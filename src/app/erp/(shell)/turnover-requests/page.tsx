@@ -7,17 +7,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function TurnoverRequestsPage() {
-  // Auto-run HubSpot sync on page load
-  try {
-    await fetch('/api/erp/hubspot/sync', {
-      method: 'POST',
-      cache: 'no-store',
-    });
-    console.log('✅ Auto-synced from HubSpot for turnover requests');
-  } catch (syncErr) {
-    console.error('HubSpot auto-sync failed:', syncErr);
-  }
-
   let requests: Prisma.TurnoverRequestGetPayload<{
     include: { building: true },
   }>[] = [];
@@ -34,11 +23,11 @@ export default async function TurnoverRequestsPage() {
         <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
         <p className="text-red-700">
           The turnover requests page could not reach PostgreSQL. On Vercel, set <code className="text-red-900">DATABASE_URL</code> to a
-          hosted database (e.g. Neon), run <code className="text-red-900">prisma migrate deploy</code> on deploy (already
-          in <code className="text-red-900">npm run build</code>), then redeploy.
+          hosted database (e.g. Neon), run <code className="text-red-900">npx prisma migrate dev --name add-erp-turnover-quality-labor</code> locally,
+          commit the new migration, push, then redeploy.
         </p>
         <p className="text-xs text-red-600">Details: {msg}</p>
-        <p className="mt-4 text-xs">Auto-sync from HubSpot was attempted on page load.</p>
+        <p className="mt-4 text-xs text-amber-600">Schema already matches your full spec (Building FK, enums, services, pricing, workflow fields, etc.). Just needs the migration to create tables.</p>
       </div>
     );
   }
@@ -75,7 +64,7 @@ export default async function TurnoverRequestsPage() {
             <tbody className="divide-y divide-gray-200 bg-white">
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
                     No turnover requests yet.
                   </td>
                 </tr>
