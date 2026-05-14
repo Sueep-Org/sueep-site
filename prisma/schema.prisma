@@ -124,6 +124,7 @@ model TurnoverRequest {
   status    TurnoverRequestStatus @default(PENDING)
 
   laborAssignments LaborAssignment[]
+  qualityChecks    QualityCheck[]
 
   @@index([buildingId])
   @@index([status])
@@ -148,6 +149,23 @@ model LaborAssignment {
 
   @@index([turnoverRequestId])
   @@index([laborerId])
+}
+
+model QualityCheck {
+  id                   String   @id @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  turnoverRequestId    String
+  turnoverRequest      TurnoverRequest @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+
+  supervisorName       String
+  supervisorSignatureUrl String?
+  pmApproval           Boolean @default(false)
+  evidencePhotos       Json?
+  notes                String?
+
+  @@index([turnoverRequestId])
 }
 
 model ProjectWorkOrder {
