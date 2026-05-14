@@ -30,13 +30,17 @@ export function NewProjectForm() {
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
+
+        type ProjectLike = { jobTitle?: string; title?: string; name?: string };
+
+        const list: ProjectLike[] = Array.isArray(data) ? data : (data?.projects || []);
         const titles = Array.from(
           new Set(
-            (Array.isArray(data) ? data : data?.projects || [])
-              .map((p: any) => p?.jobTitle || p?.title || p?.name)
-              .filter(Boolean)
+            list
+              .map((p) => p?.jobTitle || p?.title || p?.name)
+              .filter((t): t is string => Boolean(t))
           )
-        ) as string[];
+        );
         setJobOptions(titles.length ? titles : fallbackJobTitles);
       })
       .catch(() => {
