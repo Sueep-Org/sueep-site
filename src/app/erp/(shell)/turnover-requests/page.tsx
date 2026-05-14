@@ -50,7 +50,7 @@ export default async function TurnoverRequestsPage() {
               ) : (
                 requests.map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-900">{request.building.name}</td>
+                    <td className="px-4 py-3 text-gray-900">{request.building?.name || "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{request.requestType}</td>
                     <td className="px-4 py-3 text-gray-900">{request.unitNumber || "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{request.priceCents != null ? `$${(request.priceCents / 100).toFixed(0)}` : "—"}</td>
