@@ -8,6 +8,11 @@ export const runtime = "nodejs";
 
 type PageProps = { params: Promise<{ id: string }> };
 
+function normalizeEvidencePhotos(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
 export default async function QualityCheckDetailPage({ params }: PageProps) {
   const { id } = await params;
   const check = await prisma.qualityCheck.findUnique({
@@ -36,7 +41,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
               supervisorName: check.supervisorName,
               supervisorSignatureUrl: check.supervisorSignatureUrl,
               pmApproval: check.pmApproval,
-              evidencePhotos: Array.isArray(check.evidencePhotos) ? check.evidencePhotos : [],
+              evidencePhotos: normalizeEvidencePhotos(check.evidencePhotos),
               notes: check.notes,
             }}
           />
