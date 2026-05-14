@@ -43,7 +43,7 @@ export default async function LaborAssignmentDetailPage({ params }: PageProps) {
               assignedDate: assignment.assignedDate ? assignment.assignedDate.toISOString().split("T")[0] : null,
               startDate: assignment.startDate ? assignment.startDate.toISOString().split("T")[0] : null,
               endDate: assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : null,
-              materialsUsed: assignment.materialsUsed ? (assignment.materialsUsed as string[]) : [],
+              materialsUsed: Array.isArray(assignment.materialsUsed) ? (assignment.materialsUsed as string[]) : [],
               notes: assignment.notes,
             }}
           />
@@ -78,7 +78,7 @@ export default async function LaborAssignmentDetailPage({ params }: PageProps) {
             </div>
             <div>
               <dt className="font-semibold text-gray-600">Materials used</dt>
-              <dd>{assignment.materialsUsed?.join(", ") || "—"}</dd>
+              <dd>{Array.isArray(assignment.materialsUsed) ? (assignment.materialsUsed as string[]).join(", ") : "—"}</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-600">Notes</dt>
