@@ -16,7 +16,7 @@ interface RequestEditorProps {
     bedrooms: number | null;
     bathrooms: number | null;
     fullPaint: boolean;
-    touchUpPaint: number;
+    touchUpPaint: number | null;
     fullClean: boolean;
     carpetCleaning: boolean;
     materialsAdditional: boolean;
@@ -35,7 +35,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   const [bedrooms, setBedrooms] = useState(initial.bedrooms?.toString() ?? "");
   const [bathrooms, setBathrooms] = useState(initial.bathrooms?.toString() ?? "");
   const [fullPaint, setFullPaint] = useState(initial.fullPaint);
-  const [touchUpPaint, setTouchUpPaint] = useState(initial.touchUpPaint.toString());
+  const [touchUpPaint, setTouchUpPaint] = useState(initial.touchUpPaint?.toString() ?? "");
   const [fullClean, setFullClean] = useState(initial.fullClean);
   const [carpetCleaning, setCarpetCleaning] = useState(initial.carpetCleaning);
   const [materialsAdditional, setMaterialsAdditional] = useState(initial.materialsAdditional);
