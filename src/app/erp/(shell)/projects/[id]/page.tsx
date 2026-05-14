@@ -54,9 +54,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const meta = [
     { k: "Segment", v: project.segment },
     { k: "Status", v: project.status },
-    { k: "Building", v: project.buildingName || "—" },
-    { k: "Building address", v: project.buildingAddress || "—" },
-    { k: "Unit number", v: project.unitNumber || "—" },
     { k: "Supervisor", v: project.supervisor || "—" },
     { k: "Start date", v: project.projectDate ? project.projectDate.toLocaleDateString() : "—" },
     { k: "Target end", v: project.projectEndDate ? project.projectEndDate.toLocaleDateString() : "—" },
