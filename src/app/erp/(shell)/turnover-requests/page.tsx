@@ -7,21 +7,15 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function TurnoverRequestsPage() {
-  // Auto-run HubSpot sync on page load (server-side)
+  // Auto-run HubSpot sync on page load
   try {
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000';
-    await fetch(`${baseUrl}/api/erp/hubspot/sync`, {
+    await fetch('/api/erp/hubspot/sync', {
       method: 'POST',
       cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-      },
     });
-    console.log('✅ HubSpot sync triggered from turnover requests page');
-  } catch (syncError) {
-    console.error('HubSpot sync failed (non-blocking):', syncError);
+    console.log('✅ Auto-synced from HubSpot for turnover requests');
+  } catch (syncErr) {
+    console.error('HubSpot auto-sync failed:', syncErr);
   }
 
   let requests: Prisma.TurnoverRequestGetPayload<{
@@ -39,10 +33,12 @@ export default async function TurnoverRequestsPage() {
       <div className="space-y-4 rounded-lg border border-red-300 bg-red-50 p-6 text-sm text-red-800">
         <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
         <p className="text-red-700">
-          HubSpot sync was triggered. The turnover requests page could not reach PostgreSQL yet.
-          Check the sync logs or run <code className="text-red-900">prisma migrate deploy</code> if needed.
+          The turnover requests page could not reach PostgreSQL. On Vercel, set <code className="text-red-900">DATABASE_URL</code> to a
+          hosted database (e.g. Neon), run <code className="text-red-900">prisma migrate deploy</code> on deploy (already
+          in <code className="text-red-900">npm run build</code>), then redeploy.
         </p>
         <p className="text-xs text-red-600">Details: {msg}</p>
+        <p className="mt-4 text-xs">Auto-sync from HubSpot was attempted on page load.</p>
       </div>
     );
   }
@@ -80,7 +76,7 @@ export default async function TurnoverRequestsPage() {
               {requests.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
-                    No turnover requests yet. Data is syncing from HubSpot...
+                    No turnover requests yet.
                   </td>
                 </tr>
               ) : (

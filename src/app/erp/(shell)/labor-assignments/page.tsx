@@ -7,6 +7,17 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function LaborAssignmentsPage() {
+  // Auto-run HubSpot sync on page load
+  try {
+    await fetch('/api/erp/hubspot/sync', {
+      method: 'POST',
+      cache: 'no-store',
+    });
+    console.log('✅ Auto-synced from HubSpot for labor assignments');
+  } catch (syncErr) {
+    console.error('HubSpot auto-sync failed:', syncErr);
+  }
+
   let assignments: Prisma.LaborAssignmentGetPayload<{
     include: {
       turnoverRequest: { include: { building: true } },
@@ -33,6 +44,7 @@ export default async function LaborAssignmentsPage() {
           in <code className="text-red-900">npm run build</code>), then redeploy.
         </p>
         <p className="text-xs text-red-600">Details: {msg}</p>
+        <p className="mt-4 text-xs">Auto-sync from HubSpot was attempted on page load.</p>
       </div>
     );
   }
