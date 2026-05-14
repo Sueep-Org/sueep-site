@@ -10,6 +10,17 @@ function parseDate(value: unknown): Date | null | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  }
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export async function GET() {
   const assignments = await prisma.laborAssignment.findMany({
     orderBy: [{ assignedDate: "desc" }],
@@ -39,6 +50,8 @@ export async function POST(req: Request) {
   const assignedDate = parseDate(body.assignedDate);
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
+  const notes = body.notes != null ? String(body.notes).trim() : null;
+  const materialsUsed = parseStringArray(body.materialsUsed);
 
   try {
     const assignment = await prisma.laborAssignment.create({
@@ -49,8 +62,16 @@ export async function POST(req: Request) {
         assignedDate,
         startDate,
         endDate,
+        notes: notes || null,
+        materialsUsed: materialsUsed.length > 0 ? materialsUsed : undefined,
       },
     });
+
+    const turnoverRequest = await prisma.turnoverRequest.findUnique({ where: { id: turnoverRequestId } });
+    if (turnoverRequest?.status === "PENDING") {
+      await prisma.turnoverRequest.update({ where: { id: turnoverRequestId }, data: { status: "ASSIGNED" } });
+    }
+
     return NextResponse.json(assignment);
   } catch (e) {
     console.error("POST /api/erp/labor-assignments", e);

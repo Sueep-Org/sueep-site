@@ -64,6 +64,10 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
               <dd>{request.status}</dd>
             </div>
             <div>
+              <dt className="font-semibold text-gray-600">Price</dt>
+              <dd>{request.priceCents != null ? `$${(request.priceCents / 100).toFixed(0)}` : "—"}</dd>
+            </div>
+            <div>
               <dt className="font-semibold text-gray-600">Created by</dt>
               <dd>{request.createdBy || "—"}</dd>
             </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -75,8 +76,27 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const statusRaw = String(body.status || "").toUpperCase();
     if (STATUSES.includes(statusRaw as (typeof STATUSES)[number])) {
       data.status = statusRaw;
+      if (statusRaw === "COMPLETED" && existing.completedAt == null) {
+        data.completedAt = new Date();
+      }
     }
   }
+
+  const pricingInput = {
+    requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
+    bedrooms: body.bedrooms !== undefined ? parseIntValue(body.bedrooms) : existing.bedrooms,
+    bathrooms: body.bathrooms !== undefined ? parseIntValue(body.bathrooms) : existing.bathrooms,
+    fullPaint: data.fullPaint !== undefined ? Boolean(data.fullPaint) : existing.fullPaint,
+    touchUpPaint:
+      body.touchUpPaint !== undefined ? parseIntValue(body.touchUpPaint) ?? 0 : existing.touchUpPaint ?? 0,
+    fullClean: data.fullClean !== undefined ? Boolean(data.fullClean) : existing.fullClean,
+    carpetCleaning: data.carpetCleaning !== undefined ? Boolean(data.carpetCleaning) : existing.carpetCleaning,
+    materialsAdditional:
+      data.materialsAdditional !== undefined ? Boolean(data.materialsAdditional) : existing.materialsAdditional,
+  };
+
+  const pricing = computeTurnoverPricing(pricingInput);
+  data.priceCents = pricing.priceCents || null;
 
   try {
     const request = await prisma.turnoverRequest.update({ where: { id }, data: data as object });

@@ -119,6 +119,10 @@ model TurnoverRequest {
 
   startDate DateTime?
   endDate   DateTime?
+  priceCents Int?
+  completedAt DateTime?
+  invoiceGeneratedAt DateTime?
+  invoiceUrl String?
 
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
@@ -142,10 +146,12 @@ model LaborAssignment {
   laborerId String
   laborer   Employee @relation(fields: [laborerId], references: [id], onDelete: Cascade)
 
-  role         String?
-  assignedDate DateTime?
-  startDate    DateTime?
-  endDate      DateTime?
+  role          String?
+  assignedDate  DateTime?
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  materialsUsed Json?
 
   @@index([turnoverRequestId])
   @@index([laborerId])

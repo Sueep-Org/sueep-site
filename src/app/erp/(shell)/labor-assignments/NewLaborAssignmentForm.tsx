@@ -28,6 +28,8 @@ export function NewLaborAssignmentForm() {
           assignedDate: formData.get("assignedDate") || null,
           startDate: formData.get("startDate") || null,
           endDate: formData.get("endDate") || null,
+          materialsUsed: formData.get("materialsUsed") || null,
+          notes: formData.get("notes") || null,
         }),
       });
 
@@ -94,6 +96,22 @@ export function NewLaborAssignmentForm() {
               <input
                 name="endDate"
                 type="date"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+              />
+            </label>
+            <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+              Materials used
+              <input
+                name="materialsUsed"
+                placeholder="Paint, primer, tarps"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+              />
+            </label>
+            <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+              Notes
+              <textarea
+                name="notes"
+                rows={3}
                 className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
               />
             </label>

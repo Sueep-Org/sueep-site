@@ -13,6 +13,8 @@ type Props = {
     assignedDate: string | null;
     startDate: string | null;
     endDate: string | null;
+    materialsUsed?: string[];
+    notes?: string | null;
   };
 };
 
@@ -40,6 +42,8 @@ export function LaborAssignmentProfileEditor({ assignmentId, initial }: Props) {
           assignedDate: formData.get("assignedDate") || null,
           startDate: formData.get("startDate") || null,
           endDate: formData.get("endDate") || null,
+          materialsUsed: formData.get("materialsUsed") || null,
+          notes: formData.get("notes") || null,
         }),
       });
       const data = await res.json();
@@ -95,6 +99,24 @@ export function LaborAssignmentProfileEditor({ assignmentId, initial }: Props) {
               name="endDate"
               type="date"
               defaultValue={initial.endDate ?? ""}
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+            Materials used
+            <input
+              name="materialsUsed"
+              defaultValue={initial.materialsUsed?.join(", ") ?? ""}
+              placeholder="Paint, primer, tarps"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+            Notes
+            <textarea
+              name="notes"
+              rows={3}
+              defaultValue={initial.notes ?? ""}
               className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
             />
           </label>

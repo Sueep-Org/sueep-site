@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 
 type RequestBody = Record<string, unknown>;
 
@@ -40,6 +42,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "buildingId is required" }, { status: 400 });
   }
 
+  const building = await prisma.building.findUnique({ where: { id: buildingId } });
+  if (!building) {
+    return NextResponse.json({ error: "Building not found" }, { status: 400 });
+  }
+
   const requestTypeRaw = String(body.requestType || "TURNOVER").toUpperCase();
   const requestType = REQUEST_TYPES.includes(requestTypeRaw as (typeof REQUEST_TYPES)[number])
     ? (requestTypeRaw as (typeof REQUEST_TYPES)[number])
@@ -57,6 +64,17 @@ export async function POST(req: Request) {
   const endDate = parseDate(body.endDate);
   const createdBy = body.createdBy != null ? String(body.createdBy).trim() : null;
 
+  const pricing = computeTurnoverPricing({
+    requestType,
+    bedrooms,
+    bathrooms,
+    fullPaint,
+    touchUpPaint,
+    fullClean,
+    carpetCleaning,
+    materialsAdditional,
+  });
+
   try {
     const request = await prisma.turnoverRequest.create({
       data: {
@@ -72,9 +90,32 @@ export async function POST(req: Request) {
         materialsAdditional,
         startDate,
         endDate,
+        priceCents: pricing.priceCents || null,
         createdBy: createdBy || null,
       },
     });
+
+    const recipient = building.pmEmail?.trim() || process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
+    const emailHtml = buildTurnoverRequestEmailHtml({
+      buildingName: building.name,
+      unitNumber,
+      requestType,
+      bedrooms,
+      bathrooms,
+      services: pricing.services,
+      startDate: startDate ? startDate.toISOString().split("T")[0] : null,
+      endDate: endDate ? endDate.toISOString().split("T")[0] : null,
+      priceLabel: pricing.priceLabel,
+      createdBy,
+    });
+
+    await sendEmail({
+      to: recipient,
+      subject: `New Turnover Request Created — ${building.name}`,
+      html: emailHtml,
+      replyTo: createdBy || undefined,
+    });
+
     return NextResponse.json(request);
   } catch (e) {
     console.error("POST /api/erp/turnover-requests", e);

@@ -10,6 +10,17 @@ function parseDate(value: unknown): Date | null | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  }
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const assignment = await prisma.laborAssignment.findUnique({
@@ -55,6 +66,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.assignedDate !== undefined) data.assignedDate = parseDate(body.assignedDate);
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
+  if (body.notes !== undefined) data.notes = String(body.notes || "").trim() || null;
+  if (body.materialsUsed !== undefined) {
+    const materialsUsed = parseStringArray(body.materialsUsed);
+    data.materialsUsed = materialsUsed.length > 0 ? materialsUsed : null;
+  }
 
   try {
     const assignment = await prisma.laborAssignment.update({ where: { id }, data: data as object });

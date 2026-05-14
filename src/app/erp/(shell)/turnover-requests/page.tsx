@@ -31,6 +31,7 @@ export default async function TurnoverRequestsPage() {
                 <th className="px-4 py-3">Building</th>
                 <th className="px-4 py-3">Request type</th>
                 <th className="px-4 py-3">Unit</th>
+                <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Start</th>
                 <th className="px-4 py-3">End</th>
@@ -52,6 +53,7 @@ export default async function TurnoverRequestsPage() {
                     <td className="px-4 py-3 text-gray-900">{request.building.name}</td>
                     <td className="px-4 py-3 text-gray-900">{request.requestType}</td>
                     <td className="px-4 py-3 text-gray-900">{request.unitNumber || "—"}</td>
+                    <td className="px-4 py-3 text-gray-900">{request.priceCents != null ? `$${(request.priceCents / 100).toFixed(0)}` : "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{request.status}</td>
                     <td className="px-4 py-3 text-gray-900">{request.startDate ? request.startDate.toISOString().split("T")[0] : "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{request.endDate ? request.endDate.toISOString().split("T")[0] : "—"}</td>

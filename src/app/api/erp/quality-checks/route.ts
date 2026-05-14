@@ -52,6 +52,12 @@ export async function POST(req: Request) {
         notes: notes || null,
       },
     });
+
+    await prisma.turnoverRequest.update({
+      where: { id: turnoverRequestId },
+      data: { status: pmApproval ? "APPROVED" : "QUALITY_CHECK" },
+    });
+
     return NextResponse.json(check);
   } catch (e) {
     console.error("POST /api/erp/quality-checks", e);
