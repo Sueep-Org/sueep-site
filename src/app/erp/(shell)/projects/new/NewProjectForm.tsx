@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
@@ -16,7 +16,45 @@ export function NewProjectForm() {
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");
 
+  // Job Title dropdown state (populated from schedule / existing projects)
+  const [jobOptions, setJobOptions] = useState<string[]>([]);
+  const [jobTitle, setJobTitle] = useState("");
+  const [customJobTitle, setCustomJobTitle] = useState("");
+
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
+
+  // Load job titles from projects API (proxy for schedule jobs). Fallback to examples if needed.
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/erp/projects")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        if (!mounted) return;
+        const titles = Array.from(
+          new Set(
+            (Array.isArray(data) ? data : data?.projects || [])
+              .map((p: any) => p?.jobTitle || p?.title || p?.name)
+              .filter(Boolean)
+          )
+        ) as string[];
+        setJobOptions(titles.length ? titles : fallbackJobTitles);
+      })
+      .catch(() => {
+        if (mounted) setJobOptions(fallbackJobTitles);
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const fallbackJobTitles = [
+    "Blumberg Homes — 2323 Jefferson",
+    "Acme Tower — Lobby Refresh",
+    "Parkview Apartments Turnover Q2",
+    "Riverside Office Park — Common Areas",
+    "Harborview Condos — Unit Turns",
+  ];
+
+  const isCustomJob = jobTitle === "__custom__";
+  const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -26,7 +64,7 @@ export function NewProjectForm() {
 
     const payload = {
       segment: fd.get("segment"),
-      jobTitle: fd.get("jobTitle"),
+      jobTitle: finalJobTitle || fd.get("jobTitle") || undefined,
       supervisor: fd.get("supervisor") || undefined,
       description: descriptionValue || undefined,
       projectDate: fd.get("projectDate") || undefined,
@@ -92,18 +130,54 @@ export function NewProjectForm() {
           <input id="projectEndDate" name="projectEndDate" type="date" className={input} />
         </div>
       </div>
+
+      {/* Job Title dropdown — populated from schedule / existing projects */}
       <div>
         <label className={label} htmlFor="jobTitle">
           Job title *
         </label>
-        <input id="jobTitle" name="jobTitle" required className={input} placeholder="e.g. Blumberg Homes — 2323 Jefferson" />
+        <select
+          id="jobTitle"
+          name="jobTitle"
+          required={!isCustomJob}
+          className={input}
+          value={jobTitle}
+          onChange={(e) => setJobTitle(e.target.value)}
+        >
+          <option value="">— Select from schedule —</option>
+          {jobOptions.map((title) => (
+            <option key={title} value={title}>
+              {title}
+            </option>
+          ))}
+          <option value="__custom__">Other / Enter custom job title…</option>
+        </select>
+        {isCustomJob && (
+          <div className="mt-2">
+            <label className={label} htmlFor="customJobTitle">
+              Custom job title
+            </label>
+            <input
+              id="customJobTitle"
+              name="customJobTitle"
+              required
+              className={input}
+              value={customJobTitle}
+              onChange={(e) => setCustomJobTitle(e.target.value)}
+              placeholder="e.g. Special Event Setup — Main Hall"
+            />
+          </div>
+        )}
+        <p className="mt-1 text-[10px] text-gray-500">Pulled from scheduled jobs. Add more via Schedule module.</p>
       </div>
+
       <div>
         <label className={label} htmlFor="supervisor">
           Supervisor / PM *
         </label>
         <input id="supervisor" name="supervisor" required className={input} />
       </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={label} htmlFor="serviceType">
@@ -119,7 +193,7 @@ export function NewProjectForm() {
             {SERVICE_TYPE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
-              </option>
+            </option>
             ))}
             <option value="__other__">Other…</option>
           </select>
@@ -140,6 +214,7 @@ export function NewProjectForm() {
           </div>
         )}
       </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={label} htmlFor="percentDone">
