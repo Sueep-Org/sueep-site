@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewLaborAssignmentForm } from "./NewLaborAssignmentForm";
+import type { Prisma } from '@prisma/client';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function LaborAssignmentsPage() {
-  let assignments: unknown[] = [];
+  let assignments: Prisma.LaborAssignmentGetPayload<{
+    include: {
+      turnoverRequest: { include: { building: true } },
+      laborer: true,
+    },
+  }>[] = [];
 
   try {
     assignments = await prisma.laborAssignment.findMany({
@@ -65,7 +71,7 @@ export default async function LaborAssignmentsPage() {
                   </td>
                 </tr>
               ) : (
-                assignments.map((assignment: any) => (
+                assignments.map((assignment) => (
                   <tr key={assignment.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">
                       {assignment.laborer ? `${assignment.laborer.firstName} ${assignment.laborer.lastName}` : "—"}

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewTurnoverRequestForm } from "./NewTurnoverRequestForm";
+import type { Prisma } from '@prisma/client';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function TurnoverRequestsPage() {
-  let requests: unknown[] = [];
+  let requests: Prisma.TurnoverRequestGetPayload<{
+    include: { building: true },
+  }>[] = [];
 
   try {
     requests = await prisma.turnoverRequest.findMany({
@@ -65,7 +68,7 @@ export default async function TurnoverRequestsPage() {
                   </td>
                 </tr>
               ) : (
-                requests.map((request: any) => (
+                requests.map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">{request.building.name}</td>
                     <td className="px-4 py-3 text-gray-900">{request.requestType}</td>

@@ -1,12 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { NewQualityCheckForm } from "./NewQualityCheckForm";
+import type { Prisma } from '@prisma/client';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function QualityChecksPage() {
-  let checks: unknown[] = [];
+  let checks: Prisma.QualityCheckGetPayload<{
+    include: { turnoverRequest: { include: { building: true } } },
+  }>[] = [];
 
   try {
     checks = await prisma.qualityCheck.findMany({
@@ -59,7 +62,7 @@ export default async function QualityChecksPage() {
                   </td>
                 </tr>
               ) : (
-                checks.map((check: any) => (
+                checks.map((check) => (
                   <tr key={check.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">
                       {check.turnoverRequest.building.name} • {check.turnoverRequest.requestType}
