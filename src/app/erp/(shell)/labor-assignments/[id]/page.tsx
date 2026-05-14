@@ -43,7 +43,7 @@ export default async function LaborAssignmentDetailPage({ params }: PageProps) {
               assignedDate: assignment.assignedDate ? assignment.assignedDate.toISOString().split("T")[0] : null,
               startDate: assignment.startDate ? assignment.startDate.toISOString().split("T")[0] : null,
               endDate: assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : null,
-              materialsUsed: assignment.materialsUsed ?? [],
+              materialsUsed: assignment.materialsUsed ? (assignment.materialsUsed as string[]) : [],
               notes: assignment.notes,
             }}
           />
