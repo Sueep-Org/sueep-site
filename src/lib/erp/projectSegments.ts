@@ -3,6 +3,7 @@ export const PROJECT_SEGMENTS = [
     "COMMERCIAL_CLEANING",
     "RESIDENTIAL_PAINTING",
     "CHANGE_ORDER",
+    "JANITORIAL_TURNOVER_REQUESTS",
     "OTHER",
   ] as const;
   
@@ -18,6 +19,7 @@ export const PROJECT_SEGMENTS = [
     COMMERCIAL_CLEANING: "Commercial cleaning",
     RESIDENTIAL_PAINTING: "Residential painting",
     CHANGE_ORDER: "Change order",
+    JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
     OTHER: "Other",
   };
   
