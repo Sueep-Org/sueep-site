@@ -10,6 +10,7 @@ export function NewTurnoverRequestForm() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [createdRequest, setCreatedRequest] = useState<any>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -46,7 +47,9 @@ export function NewTurnoverRequestForm() {
         setLoading(false);
         return;
       }
+      setCreatedRequest(data);
       setOpen(false);
+      // Optionally refresh or redirect
       if (data.id) {
         router.push(`/erp/turnover-requests/${data.id}`);
       } else {
@@ -58,11 +61,45 @@ export function NewTurnoverRequestForm() {
     }
   }
 
+  function generateEmailConfirmation() {
+    if (!createdRequest) return;
+
+    const subject = `Turnover Request Confirmation - ${createdRequest.unitNumber || 'Unit'} @ Building`;
+    const body = `Hi PM / Sales,
+
+A new turnover request has been captured and logged.
+
+Request ID: ${createdRequest.id}
+Building: ${createdRequest.building?.name || 'N/A'}
+Unit: ${createdRequest.unitNumber || 'N/A'}
+Type: ${createdRequest.requestType}
+
+Dates: ${createdRequest.startDate ? new Date(createdRequest.startDate).toLocaleDateString() : 'TBD'} → ${createdRequest.endDate ? new Date(createdRequest.endDate).toLocaleDateString() : 'TBD'}
+
+Services requested:
+${createdRequest.fullPaint ? '- Full Paint\n' : ''}${createdRequest.fullClean ? '- Full Clean\n' : ''}${createdRequest.carpetCleaning ? '- Carpet Cleaning\n' : ''}${createdRequest.materialsAdditional ? '- Additional Materials\n' : ''}${createdRequest.touchUpPaint ? `- Touch-up paint (${createdRequest.touchUpPaint} qty)\n` : ''}
+
+Next steps:
+- PM has been notified
+- Laborers can now be assigned via the request detail page
+- Please confirm dates and scope if anything has changed
+
+Thank you,
+Sueep Operations
+`;
+
+    const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailto, '_blank');
+  }
+
   return (
     <div>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => !value);
+          setCreatedRequest(null);
+        }}
         className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
       >
         {open ? "Close" : "New request"}
@@ -70,6 +107,8 @@ export function NewTurnoverRequestForm() {
 
       {open ? (
         <form onSubmit={onSubmit} className="mt-3 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Sales / PM Input</div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <BuildingSelect required />
             <label className="block text-xs font-medium text-gray-600">
@@ -148,10 +187,33 @@ export function NewTurnoverRequestForm() {
             disabled={loading}
             className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
           >
-            {loading ? "Saving…" : "Create request"}
+            {loading ? "Saving…" : "Create request & capture info"}
           </button>
+
+          <p className="text-[10px] text-gray-500">After creation: PM will be notified • Laborers can be assigned on the detail page • Email confirmation available</p>
         </form>
       ) : null}
+
+      {createdRequest && (
+        <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm">
+          <div className="font-medium text-green-800">Request captured successfully.</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={generateEmailConfirmation}
+              className="rounded-md bg-white px-3 py-1 text-xs font-medium text-green-700 border border-green-300 hover:bg-green-100"
+            >
+              Generate email confirmation (mailto)
+            </button>
+            <a
+              href={`/erp/turnover-requests/${createdRequest.id}`}
+              className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-500"
+            >
+              Go to request → Assign laborers
+            </a>
+          </div>
+          <p className="mt-2 text-[10px] text-green-700">PM notification triggered via building PM contact. Labor assignment available on detail page.</p>
+        </div>
+      )}
     </div>
   );
 }
