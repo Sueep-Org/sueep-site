@@ -79,7 +79,53 @@ model Building {
   pmEmail String?
   pmPhone String?
 
+  turnoverRequests TurnoverRequest[]
+
   @@index([name])
+}
+
+enum TurnoverRequestType {
+  TURNOVER
+  REGULAR
+}
+
+enum TurnoverRequestStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  QUALITY_CHECK
+  APPROVED
+}
+
+model TurnoverRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  requestType TurnoverRequestType @default(TURNOVER)
+  unitNumber  String?
+  bedrooms    Int?
+  bathrooms   Int?
+
+  fullPaint           Boolean @default(false)
+  touchUpPaint        Int?     @default(0)
+  fullClean           Boolean @default(false)
+  carpetCleaning      Boolean @default(false)
+  materialsAdditional Boolean @default(false)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdBy String?
+  status    TurnoverRequestStatus @default(PENDING)
+
+  @@index([buildingId])
+  @@index([status])
+  @@index([requestType])
 }
 
 model ProjectWorkOrder {

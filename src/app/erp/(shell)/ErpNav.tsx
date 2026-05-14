@@ -13,6 +13,7 @@ const nav = [
   { href: "/erp/projects", label: "Projects" },
   { href: "/erp/employees", label: "Employees" },
   { href: "/erp/buildings", label: "Buildings" },
+  { href: "/erp/turnover-requests", label: "Turnover Requests" },
   { href: "/erp/projects/new", label: "New Project" },
 ];
 
