@@ -10,7 +10,7 @@ export function NewTurnoverRequestForm() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [createdRequest, setCreatedRequest] = useState<any>(null);
+  const [createdRequest, setCreatedRequest] = useState<Record<string, unknown> | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,7 +49,6 @@ export function NewTurnoverRequestForm() {
       }
       setCreatedRequest(data);
       setOpen(false);
-      // Optionally refresh or redirect
       if (data.id) {
         router.push(`/erp/turnover-requests/${data.id}`);
       } else {
