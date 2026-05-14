@@ -32,6 +32,11 @@ model Project {
   supervisor  String?
   description String?
 
+  // Building / property context (for turnover, commercial, residential jobs)
+  buildingName    String?
+  buildingAddress String?
+  unitNumber      String?
+
   percentDone     Float @default(0)
   percentInvoiced Float @default(0)
 
