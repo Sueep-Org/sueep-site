@@ -5,12 +5,26 @@ import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
 
+type CreatedRequest = {
+  id?: string;
+  unitNumber?: string;
+  requestType?: string;
+  startDate?: string;
+  endDate?: string;
+  fullPaint?: boolean;
+  fullClean?: boolean;
+  carpetCleaning?: boolean;
+  materialsAdditional?: boolean;
+  touchUpPaint?: number | string;
+  building?: { name?: string };
+};
+
 export function NewTurnoverRequestForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [createdRequest, setCreatedRequest] = useState<Record<string, unknown> | null>(null);
+  const [createdRequest, setCreatedRequest] = useState<CreatedRequest | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
