@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function QualityChecksPage() {
-  let checks: any[] = [];
+  let checks: unknown[] = [];
 
   try {
     checks = await prisma.qualityCheck.findMany({
@@ -59,7 +59,7 @@ export default async function QualityChecksPage() {
                   </td>
                 </tr>
               ) : (
-                checks.map((check) => (
+                checks.map((check: any) => (
                   <tr key={check.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">
                       {check.turnoverRequest.building.name} • {check.turnoverRequest.requestType}

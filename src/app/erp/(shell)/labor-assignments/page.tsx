@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function LaborAssignmentsPage() {
-  let assignments: any[] = [];
+  let assignments: unknown[] = [];
 
   try {
     assignments = await prisma.laborAssignment.findMany({
@@ -65,7 +65,7 @@ export default async function LaborAssignmentsPage() {
                   </td>
                 </tr>
               ) : (
-                assignments.map((assignment) => (
+                assignments.map((assignment: any) => (
                   <tr key={assignment.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">
                       {assignment.laborer ? `${assignment.laborer.firstName} ${assignment.laborer.lastName}` : "—"}

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function TurnoverRequestsPage() {
-  let requests: any[] = [];
+  let requests: unknown[] = [];
 
   try {
     requests = await prisma.turnoverRequest.findMany({
@@ -65,7 +65,7 @@ export default async function TurnoverRequestsPage() {
                   </td>
                 </tr>
               ) : (
-                requests.map((request) => (
+                requests.map((request: any) => (
                   <tr key={request.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">{request.building.name}</td>
                     <td className="px-4 py-3 text-gray-900">{request.requestType}</td>
