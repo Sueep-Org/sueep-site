@@ -123,9 +123,31 @@ model TurnoverRequest {
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
 
+  laborAssignments LaborAssignment[]
+
   @@index([buildingId])
   @@index([status])
   @@index([requestType])
+}
+
+model LaborAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  turnoverRequestId String
+  turnoverRequest   TurnoverRequest @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+
+  laborerId String
+  laborer   Employee @relation(fields: [laborerId], references: [id], onDelete: Cascade)
+
+  role         String?
+  assignedDate DateTime?
+  startDate    DateTime?
+  endDate      DateTime?
+
+  @@index([turnoverRequestId])
+  @@index([laborerId])
 }
 
 model ProjectWorkOrder {
@@ -307,6 +329,7 @@ model Employee {
 
   laborEntries LaborEntry[]
   documents EmployeeDocument[]
+  laborAssignments LaborAssignment[]
 
   @@index([status])
   @@index([defaultProject])
