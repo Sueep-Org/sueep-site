@@ -68,6 +68,20 @@ model Project {
   @@index([projectDate])
 }
 
+model Building {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  address String
+  pmName  String?
+  pmEmail String?
+  pmPhone String?
+
+  @@index([name])
+}
+
 model ProjectWorkOrder {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
