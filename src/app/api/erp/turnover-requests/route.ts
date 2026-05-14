@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
   const requestTypeRaw = String(body.requestType || "TURNOVER").toUpperCase();
   const requestType = REQUEST_TYPES.includes(requestTypeRaw as (typeof REQUEST_TYPES)[number])
-    ? requestTypeRaw
+    ? (requestTypeRaw as (typeof REQUEST_TYPES)[number])
     : "TURNOVER";
 
   const unitNumber = body.unitNumber != null ? String(body.unitNumber).trim() : null;
