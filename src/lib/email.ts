@@ -1,6 +1,5 @@
 import { Resend } from "resend";
 
-const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
 const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
 
 export async function sendEmail(options: {

@@ -8,6 +8,14 @@ import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
+
+const fallbackJobTitles = [
+  "Blumberg Homes — 2323 Jefferson",
+  "Acme Tower — Lobby Refresh",
+  "Parkview Apartments Turnover Q2",
+  "Riverside Office Park — Common Areas",
+  "Harborview Condos — Unit Turns",
+];
 const checkboxLabel = "ml-2 text-sm text-gray-700";
 const sectionHeader = "text-sm font-semibold text-gray-900";
 
@@ -124,14 +132,6 @@ export function NewProjectForm() {
       mounted = false;
     };
   }, []);
-
-  const fallbackJobTitles = [
-    "Blumberg Homes — 2323 Jefferson",
-    "Acme Tower — Lobby Refresh",
-    "Parkview Apartments Turnover Q2",
-    "Riverside Office Park — Common Areas",
-    "Harborview Condos — Unit Turns",
-  ];
 
   const isCustomJob = jobTitle === "__custom__";
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;

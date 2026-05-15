@@ -29,12 +29,15 @@ export function useScheduleData(startDate?: Date, endDate?: Date) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const startIso = startDate?.toISOString();
+  const endIso = endDate?.toISOString();
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const params = new URLSearchParams();
-        if (startDate) params.set("startDate", startDate.toISOString());
-        if (endDate) params.set("endDate", endDate.toISOString());
+        if (startIso) params.set("startDate", startIso);
+        if (endIso) params.set("endDate", endIso);
 
         const response = await fetch(`/api/erp/schedule?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch schedule data");
@@ -53,7 +56,7 @@ export function useScheduleData(startDate?: Date, endDate?: Date) {
     };
 
     fetchData();
-  }, [startDate?.toISOString(), endDate?.toISOString()]);
+  }, [startIso, endIso]);
 
   return { data, loading, error };
 }

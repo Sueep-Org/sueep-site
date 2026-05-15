@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { startOfDay, dayKey, addDays } from "@/lib/erp/schedule";
+import { dayKey } from "@/lib/erp/schedule";
 
 export type LaborEntryData = {
   id: string;
@@ -23,14 +23,13 @@ export type ProjectData = {
 interface LaborTrackerProps {
   laborEntries: LaborEntryData[];
   projects: ProjectData[];
-  dateRange?: { start: Date; end: Date };
 }
 
 function formatCurrency(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export function LaborTracker({ laborEntries, projects, dateRange }: LaborTrackerProps) {
+export function LaborTracker({ laborEntries, projects }: LaborTrackerProps) {
   const projectMap = useMemo(() => {
     const map = new Map<string, ProjectData>();
     projects.forEach((p) => map.set(p.id, p));
