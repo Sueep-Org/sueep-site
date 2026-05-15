@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return new NextResponse(doc.data, {
+  return new NextResponse(new Uint8Array(doc.data), {
     headers: {
       "Content-Type": doc.mimeType,
       "Content-Disposition": `inline; filename="${doc.filename}"`,
