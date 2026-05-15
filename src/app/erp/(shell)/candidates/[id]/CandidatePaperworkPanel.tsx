@@ -70,10 +70,7 @@ export function CandidatePaperworkPanel({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-100 p-5 space-y-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-        Paperwork upload link
-      </h2>
+    <div className="space-y-4">
       <p className="text-xs text-zinc-400 leading-relaxed">
         When status is set to Onboarding and documents are configured above, send the candidate a
         secure upload link. No ERP login required — the link expires after 7 days.

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
 import { CandidateQuestionnairePanel } from "./CandidateQuestionnairePanel";
 import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,40 +66,45 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         </p>
       </div>
 
-      <CandidateQuestionnairePanel
-        id={row.id}
-        email={row.email}
-        questionnaireToken={row.questionnaireToken}
-        questionnaireSentAt={row.questionnaireSentAt ? row.questionnaireSentAt.toISOString() : null}
-        questionnaireCompletedAt={row.questionnaireCompletedAt ? row.questionnaireCompletedAt.toISOString() : null}
-        googleFormConfigured={Boolean(process.env.QUESTIONNAIRE_GOOGLE_FORM_URL?.trim())}
-        resendConfigured={Boolean(process.env.RESEND_API_KEY)}
-        webhookConfigured={Boolean(process.env.CANDIDATE_QUESTIONNAIRE_WEBHOOK_SECRET?.trim())}
-        siteUrl={siteUrl}
-      />
+      <CollapsiblePanel title="Questionnaire (Google Form)" defaultOpen={false}>
+        <CandidateQuestionnairePanel
+          id={row.id}
+          email={row.email}
+          questionnaireToken={row.questionnaireToken}
+          questionnaireSentAt={row.questionnaireSentAt ? row.questionnaireSentAt.toISOString() : null}
+          questionnaireCompletedAt={row.questionnaireCompletedAt ? row.questionnaireCompletedAt.toISOString() : null}
+          googleFormConfigured={Boolean(process.env.QUESTIONNAIRE_GOOGLE_FORM_URL?.trim())}
+          resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+          webhookConfigured={Boolean(process.env.CANDIDATE_QUESTIONNAIRE_WEBHOOK_SECRET?.trim())}
+          siteUrl={siteUrl}
+        />
+      </CollapsiblePanel>
 
-      <CandidateApplicationEditor
-        initial={{
-          id: row.id,
-          status: row.status,
-          internalNotes: row.internalNotes,
-          paperwork: row.paperwork as { label: string; url: string }[] | null,
-        }}
-      />
+      <CollapsiblePanel title="Pipeline">
+        <CandidateApplicationEditor
+          initial={{
+            id: row.id,
+            status: row.status,
+            internalNotes: row.internalNotes,
+            paperwork: row.paperwork as { label: string; url: string }[] | null,
+          }}
+        />
+      </CollapsiblePanel>
 
-      <CandidatePaperworkPanel
-        id={row.id}
-        email={row.email}
-        status={row.status}
-        paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
-        paperworkUploadToken={row.paperworkUploadToken}
-        paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
-        resendConfigured={Boolean(process.env.RESEND_API_KEY)}
-        siteUrl={siteUrl}
-      />
+      <CollapsiblePanel title="Paperwork upload link" defaultOpen={row.status === "ONBOARDING"}>
+        <CandidatePaperworkPanel
+          id={row.id}
+          email={row.email}
+          status={row.status}
+          paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+          paperworkUploadToken={row.paperworkUploadToken}
+          paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
+          resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+          siteUrl={siteUrl}
+        />
+      </CollapsiblePanel>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-100 p-5 space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Submission</h2>
+      <CollapsiblePanel title="Submission" defaultOpen={false}>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-pink-500">Email</dt>
@@ -132,7 +138,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           </div>
         </dl>
         <p className="text-xs text-zinc-600 font-mono">id: {row.id}</p>
-      </div>
+      </CollapsiblePanel>
     </div>
   );
 }

@@ -16,13 +16,16 @@ export async function sendEmail(options: {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: options.to,
     subject: options.subject,
     html: options.html,
     reply_to: options.replyTo,
   });
+  if (error) {
+    throw new Error(`Resend error: ${error.message}`);
+  }
 }
 
 export function formatUsd(cents: number) {

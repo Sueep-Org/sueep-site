@@ -45,16 +45,22 @@ export async function POST(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
   const uploadUrl = `${siteUrl}/candidate-portal/${token}`;
 
-  await sendEmail({
-    to: candidate.email,
-    subject: "Upload your onboarding documents — Sueep",
-    html: buildPaperworkUploadEmail({
-      fullName: candidate.fullName,
-      uploadUrl,
-      documents: paperwork.map((p) => p.label),
-      expiryDays: TOKEN_EXPIRY_DAYS,
-    }),
-  });
+  try {
+    await sendEmail({
+      to: candidate.email,
+      subject: "Upload your onboarding documents — Sueep",
+      html: buildPaperworkUploadEmail({
+        fullName: candidate.fullName,
+        uploadUrl,
+        documents: paperwork.map((p) => p.label),
+        expiryDays: TOKEN_EXPIRY_DAYS,
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Email send failed";
+    console.error("send-upload-link email error:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
   return NextResponse.json({ ok: true, expiry: expiry.toISOString() });
 }

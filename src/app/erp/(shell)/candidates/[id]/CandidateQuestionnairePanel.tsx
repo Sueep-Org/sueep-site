@@ -69,8 +69,7 @@ export function CandidateQuestionnairePanel(props: Props) {
   const completed = Boolean(props.questionnaireCompletedAt);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-100 p-5 space-y-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Questionnaire (Google Form)</h2>
+    <div className="space-y-4">
       <p className="text-xs text-zinc-400 leading-relaxed">
         Initial interest is captured from the website. When you select someone, send the questionnaire email — they open
         your Google Form using the personal link (and code). Completion updates this row via webhook or manual button

@@ -86,8 +86,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-100 p-5 space-y-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Pipeline</h2>
+    <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="status" className="block text-xs font-medium text-pink-500 mb-1">
