@@ -68,8 +68,11 @@ export function NewTurnoverRequestForm() {
       } else {
         router.refresh();
       }
-    } catch (err: any) {
-      setError(`Network error: ${err.message || 'Failed to reach server'}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error 
+        ? err.message 
+        : 'Failed to reach server';
+      setError(`Network error: ${message}`);
       console.error(err);
       setLoading(false);
     }
