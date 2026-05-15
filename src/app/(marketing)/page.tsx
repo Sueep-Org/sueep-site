@@ -22,6 +22,9 @@ export default function Home() {
             >
               Referral program
             </Link>
+            <Link href="/careers" className="text-xs font-normal text-gray-500 hover:text-[#E73C6E]">
+              Careers
+            </Link>
             <Link
               href="/blog"
               className="text-xs font-normal text-gray-500 hover:text-[#E73C6E]"
@@ -35,6 +38,9 @@ export default function Home() {
               className="md:hidden text-xs text-gray-500 hover:text-[#E73C6E] whitespace-nowrap"
             >
               Referral
+            </Link>
+            <Link href="/careers" className="md:hidden text-xs text-gray-500 hover:text-[#E73C6E] whitespace-nowrap">
+              Careers
             </Link>
             <Link
               href="/blog"
@@ -212,6 +218,5 @@ export default function Home() {
     </main>
   );
 }
-
 
 

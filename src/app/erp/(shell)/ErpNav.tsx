@@ -12,6 +12,7 @@ const nav = [
   { href: "/erp/schedule", label: "Schedule" },
   { href: "/erp/projects", label: "Projects" },
   { href: "/erp/employees", label: "Employees" },
+  { href: "/erp/candidates", label: "Candidates" },
   { href: "/erp/quality-checks", label: "Quality Checks" },
   { href: "/erp/labor-assignments", label: "Labor Assignments" },
   { href: "/erp/projects/new", label: "New Project" },
