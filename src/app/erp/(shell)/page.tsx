@@ -11,79 +11,15 @@ export default async function ErpDashboardPage() {
   let residentialCount: number;
   let laborCount: number;
   let activeCount: number;
-  let laborLast7Days: number;
-  let materialsLast7Days: number;
-  let avgCompletionPercent = 0;
-  let statusRows: { label: string; count: number }[] = [];
-  let recentProjects: {
-    id: string;
-    jobTitle: string;
-    status: string;
-    segment: string;
-    percentDone: number;
-    supervisor: string | null;
-    updatedAtIso: string;
-  }[] = [];
 
   try {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const [projectStats, statusCounts, recentProjectRows, completionAggregate] = await Promise.all([
-      Promise.all([
+    [projectCount, commercialCount, residentialCount, laborCount, activeCount] = await Promise.all([
       prisma.project.count(),
       prisma.project.count({ where: { segment: "COMMERCIAL" } }),
       prisma.project.count({ where: { segment: "RESIDENTIAL" } }),
       prisma.laborEntry.count(),
       prisma.project.count({ where: { status: "ACTIVE" } }),
-        prisma.laborEntry.count({ where: { workDate: { gte: sevenDaysAgo } } }),
-        prisma.materialEntry.count({ where: { usedOn: { gte: sevenDaysAgo } } }),
-      ]),
-      prisma.project.groupBy({
-        by: ["status"],
-        _count: { _all: true },
-      }),
-      prisma.project.findMany({
-        orderBy: [{ updatedAt: "desc" }],
-        take: 8,
-        select: {
-          id: true,
-          jobTitle: true,
-          status: true,
-          segment: true,
-          percentDone: true,
-          supervisor: true,
-          updatedAt: true,
-        },
-      }),
-      prisma.project.aggregate({
-        _avg: { percentDone: true },
-      }),
     ]);
-
-    [
-      projectCount,
-      commercialCount,
-      residentialCount,
-      laborCount,
-      activeCount,
-      laborLast7Days,
-      materialsLast7Days,
-    ] = projectStats;
-
-    avgCompletionPercent = completionAggregate._avg.percentDone ?? 0;
-    statusRows = statusCounts
-      .map((row) => ({ label: row.status, count: row._count._all }))
-      .sort((a, b) => b.count - a.count);
-    recentProjects = recentProjectRows.map((p) => ({
-      id: p.id,
-      jobTitle: p.jobTitle,
-      status: p.status,
-      segment: p.segment,
-      percentDone: p.percentDone ?? 0,
-      supervisor: p.supervisor,
-      updatedAtIso: p.updatedAt.toISOString(),
-    }));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return (

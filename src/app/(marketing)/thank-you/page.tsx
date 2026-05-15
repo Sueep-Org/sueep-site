@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 import PaintingFollowUpFlow from "@/app/(marketing)/painting/PaintingFollowUpFlow";
@@ -156,7 +157,7 @@ if (typeof gtag === 'function') {
       <footer className="bg-black text-gray-400 text-sm py-6">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col items-center justify-center gap-3">
-            <img src="/sueeplogo.png" alt="Sueep logo" className="h-12 md:h-14 lg:h-16 w-auto" />
+            <Image src="/sueeplogo.png" alt="Sueep logo" width={64} height={64} className="h-12 md:h-14 lg:h-16 w-auto" />
           </div>
           <div className="mt-4 flex justify-between items-center">
             <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>

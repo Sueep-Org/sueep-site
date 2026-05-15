@@ -38,7 +38,7 @@ export function BuildingSelect({
         if (!res.ok) throw new Error("Failed to load buildings");
         const data = (await res.json()) as BuildingOption[];
         if (!cancelled) setBuildings(data);
-      } catch (e) {
+      } catch {
         if (!cancelled) setError("Could not load buildings");
       } finally {
         if (!cancelled) setLoading(false);

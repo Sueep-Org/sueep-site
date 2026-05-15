@@ -222,7 +222,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
                 addRequired();
               }
             }}
-            placeholder="e.g. I-9, OSHA card, Driver's license"
+            placeholder="e.g. I-9, OSHA card, Driver&apos;s license"
             className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           />
           <button
