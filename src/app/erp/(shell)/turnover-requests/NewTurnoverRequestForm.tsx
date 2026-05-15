@@ -55,9 +55,9 @@ export function NewTurnoverRequestForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Failed to create request");
+        setError(data.error || `HTTP ${res.status}: Failed to create request`);
         setLoading(false);
         return;
       }
@@ -68,12 +68,14 @@ export function NewTurnoverRequestForm() {
       } else {
         router.refresh();
       }
-    } catch {
-      setError("Network error");
+    } catch (err: any) {
+      setError(`Network error: ${err.message || 'Failed to reach server'}`);
+      console.error(err);
       setLoading(false);
     }
   }
 
+  // ... rest of the component remains the same
   function generateEmailConfirmation() {
     if (!createdRequest) return;
 
