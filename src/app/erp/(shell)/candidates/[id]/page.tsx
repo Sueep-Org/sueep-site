@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
 import { CandidateQuestionnairePanel } from "./CandidateQuestionnairePanel";
+import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,13 +12,42 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function CandidateDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const row = await prisma.candidateApplication.findUnique({ where: { id } });
+  const row = await prisma.candidateApplication.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      createdAt: true,
+      fullName: true,
+      email: true,
+      phone: true,
+      positionInterest: true,
+      additionalNotes: true,
+      responses: true,
+      status: true,
+      internalNotes: true,
+      paperwork: true,
+      paperworkUploadToken: true,
+      paperworkUploadTokenExpiry: true,
+      questionnaireToken: true,
+      questionnaireSentAt: true,
+      questionnaireCompletedAt: true,
+    },
+  });
   if (!row) notFound();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
 
-  const responsesPretty =
-    row.responses != null ? JSON.stringify(row.responses, null, 2) : null;
+  const responses = (row.responses ?? {}) as Record<string, string>;
+  const cleaningExp = responses.cleaningExperience;
+  const cleaningYears = responses.cleaningYears;
+  const hasVehicle = responses.hasVehicle;
+
+  const cleaningExpLabel =
+    cleaningExp === "yes"
+      ? `Yes${cleaningYears ? ` — ${cleaningYears} yr${Number(cleaningYears) !== 1 ? "s" : ""}` : ""}`
+      : cleaningExp === "no"
+      ? "No"
+      : "—";
 
   return (
     <div className="space-y-6">
@@ -47,42 +77,60 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         siteUrl={siteUrl}
       />
 
-      <CandidateApplicationEditor initial={{ id: row.id, status: row.status, internalNotes: row.internalNotes }} />
+      <CandidateApplicationEditor
+        initial={{
+          id: row.id,
+          status: row.status,
+          internalNotes: row.internalNotes,
+          paperwork: row.paperwork as { label: string; url: string }[] | null,
+        }}
+      />
 
-      <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
+      <CandidatePaperworkPanel
+        id={row.id}
+        email={row.email}
+        status={row.status}
+        paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+        paperworkUploadToken={row.paperworkUploadToken}
+        paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
+        resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+        siteUrl={siteUrl}
+      />
+
+      <div className="rounded-lg border border-gray-200 bg-gray-100 p-5 space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Submission</h2>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-zinc-500">Email</dt>
-            <dd className="mt-0.5 text-white">
+            <dt className="text-pink-500">Email</dt>
+            <dd className="mt-0.5 text-pink-500">
               <a href={`mailto:${row.email}`} className="text-[#E73C6E] hover:underline">
                 {row.email}
               </a>
             </dd>
           </div>
           <div>
-            <dt className="text-zinc-500">Phone</dt>
-            <dd className="mt-0.5 text-white">{row.phone || "—"}</dd>
+            <dt className="text-pink-500">Phone</dt>
+            <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-pink-500">Position interest</dt>
+            <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-pink-500">Has vehicle</dt>
+            <dd className="mt-0.5 text-zinc-500">
+              {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-pink-500">Cleaning experience</dt>
+            <dd className="mt-0.5 text-zinc-500">{cleaningExpLabel}</dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Work interest</dt>
-            <dd className="mt-0.5 text-zinc-200 whitespace-pre-wrap">{row.positionInterest || "—"}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Applicant notes</dt>
-            <dd className="mt-0.5 text-zinc-200 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
+            <dt className="text-pink-500">Additional comments</dt>
+            <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
           </div>
         </dl>
-        {responsesPretty && (
-          <div>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500 mb-2">
-              Extra responses (structured)
-            </h3>
-            <pre className="max-h-64 overflow-auto rounded-md bg-zinc-900 border border-zinc-800 p-3 text-xs text-zinc-300 font-mono">
-              {responsesPretty}
-            </pre>
-          </div>
-        )}
         <p className="text-xs text-zinc-600 font-mono">id: {row.id}</p>
       </div>
     </div>

@@ -60,6 +60,35 @@ export function buildTurnoverRequestEmailHtml(params: {
   `;
 }
 
+export function buildPaperworkUploadEmail(params: {
+  fullName: string;
+  uploadUrl: string;
+  documents: string[];
+  expiryDays?: number;
+}) {
+  const docList = params.documents
+    .map((d) => `<li style="margin-bottom:6px">${escapeHtml(d)}</li>`)
+    .join("");
+  const days = params.expiryDays ?? 7;
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: upload your onboarding documents</h2>
+      <p>Hi ${escapeHtml(params.fullName)},</p>
+      <p>Congratulations on moving forward with Sueep! To complete your onboarding we need you to upload the following documents:</p>
+      <ul style="margin:12px 0;padding-left:20px">${docList}</ul>
+      <p>Use the secure link below — no account required. The link expires in ${days} days.</p>
+      <p style="margin:20px 0">
+        <a href="${escapeHtml(params.uploadUrl)}"
+           style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
+          Upload my documents
+        </a>
+      </p>
+      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.uploadUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

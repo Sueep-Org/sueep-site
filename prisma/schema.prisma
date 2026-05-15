@@ -400,10 +400,17 @@ model CandidateApplication {
   /// Arbitrary fields keyed by future form labels or Google Form column IDs.
   responses Json?
 
-  /// NEW | SELECTED | QUESTIONNAIRE_SENT | QUESTIONNAIRE_COMPLETE | CONTACTED | INTERVIEW | OFFER | HIRED | DECLINED
-  status String @default("NEW")
+  /// APPLIED | INTERVIEWING | ONBOARDING | DENIED
+  status String @default("APPLIED")
 
   internalNotes String?
+
+  /// Paperwork items required for onboarding. Array of { label: string; url: string }.
+  paperwork Json?
+
+  /// Token emailed to the candidate so they can upload documents via the public portal (no ERP login required).
+  paperworkUploadToken       String?   @unique
+  paperworkUploadTokenExpiry DateTime?
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
   questionnaireToken String? @unique

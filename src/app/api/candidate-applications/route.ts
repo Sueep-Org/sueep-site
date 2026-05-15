@@ -1,26 +1,24 @@
 import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
-const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
-
 const KNOWN_BODY_KEYS = new Set([
   "fullName",
   "email",
   "phone",
-  "positionInterest",
+  "cleaningExperience",
+  "cleaningYears",
+  "hasVehicle",
   "additionalNotes",
   "_honey",
 ]);
 
 /**
  * POST /api/candidate-applications
- * Public intake from /careers. Persists to ERP DB; optional Resend notify (same pattern as referrals).
+ * Public intake from /careers. Persists to ERP DB only.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -32,7 +30,9 @@ export async function POST(req: NextRequest) {
     let fullName = "";
     let email = "";
     let phone = "";
-    let positionInterest = "";
+    let cleaningExperience = "";
+    let cleaningYears = "";
+    let hasVehicle = "";
     let additionalNotes = "";
     let honey = "";
     const extraResponses: Record<string, unknown> = {};
@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
       fullName = String(body.fullName || "").trim();
       email = String(body.email || "").trim().toLowerCase();
       phone = String(body.phone || "").trim();
-      positionInterest = String(body.positionInterest || "").trim();
+      cleaningExperience = String(body.cleaningExperience || "").trim();
+      cleaningYears = String(body.cleaningYears || "").trim();
+      hasVehicle = String(body.hasVehicle || "").trim();
       additionalNotes = String(body.additionalNotes || "").trim();
       honey = String(body._honey || "");
       for (const [k, v] of Object.entries(body)) {
@@ -55,7 +57,9 @@ export async function POST(req: NextRequest) {
       fullName = String(form.get("fullName") || "").trim();
       email = String(form.get("email") || "").trim().toLowerCase();
       phone = String(form.get("phone") || "").trim();
-      positionInterest = String(form.get("positionInterest") || "").trim();
+      cleaningExperience = String(form.get("cleaningExperience") || "").trim();
+      cleaningYears = String(form.get("cleaningYears") || "").trim();
+      hasVehicle = String(form.get("hasVehicle") || "").trim();
       additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
     } else {
@@ -76,48 +80,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "fullName and a valid email are required" }, { status: 400 });
     }
 
+    const formResponses: Record<string, unknown> = {
+      ...(cleaningExperience ? { cleaningExperience } : {}),
+      ...(cleaningYears ? { cleaningYears } : {}),
+      ...(hasVehicle ? { hasVehicle } : {}),
+      ...extraResponses,
+    };
+
     const row = await prisma.candidateApplication.create({
       data: {
         fullName,
         email,
         phone: phone || null,
-        positionInterest: positionInterest || null,
+        positionInterest: "Cleaning",
+        status: "APPLIED",
         additionalNotes: additionalNotes || null,
-        ...(Object.keys(extraResponses).length > 0
-          ? { responses: extraResponses as Prisma.InputJsonValue }
+        ...(Object.keys(formResponses).length > 0
+          ? { responses: formResponses as Prisma.InputJsonValue }
           : {}),
       },
     });
-
-    const subject = `Careers inquiry: ${fullName}`;
-    const summaryHtml = `
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">
-        <h2 style="margin:0 0 12px 0">New careers / onboarding submission</h2>
-        <p><strong>Name:</strong> ${escapeHtml(fullName)}</p>
-        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-        <p><strong>Phone:</strong> ${escapeHtml(phone || "—")}</p>
-        <p><strong>Interest:</strong> ${escapeHtml(positionInterest || "—")}</p>
-        <p><strong>Notes:</strong></p>
-        <pre style="white-space:pre-wrap;margin:0">${escapeHtml(additionalNotes || "—")}</pre>
-        <p style="margin-top:16px"><strong>Application id:</strong> ${escapeHtml(row.id)}</p>
-        <p>Open ERP → Candidates to review.</p>
-      </div>
-    `;
-
-    if (process.env.RESEND_API_KEY) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        await resend.emails.send({
-          from: FROM_EMAIL,
-          to: TO_EMAIL,
-          subject,
-          html: summaryHtml,
-          reply_to: email,
-        });
-      } catch (e) {
-        console.error("[api/candidate-applications] Resend failed", e);
-      }
-    }
 
     if (isFormPost) {
       return NextResponse.redirect(new URL("/careers?submitted=1", req.url), { status: 303 });
@@ -135,13 +117,4 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
-}
-
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
