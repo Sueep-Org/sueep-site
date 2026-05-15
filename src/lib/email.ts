@@ -16,13 +16,16 @@ export async function sendEmail(options: {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: options.to,
     subject: options.subject,
     html: options.html,
     reply_to: options.replyTo,
   });
+  if (error) {
+    throw new Error(`Resend error: ${error.message}`);
+  }
 }
 
 export function formatUsd(cents: number) {
@@ -56,6 +59,35 @@ export function buildTurnoverRequestEmailHtml(params: {
       <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
       <p><strong>Price:</strong> ${escapeHtml(params.priceLabel)}</p>
       <p><strong>Created by:</strong> ${escapeHtml(params.createdBy || "system")}</p>
+    </div>
+  `;
+}
+
+export function buildPaperworkUploadEmail(params: {
+  fullName: string;
+  uploadUrl: string;
+  documents: string[];
+  expiryDays?: number;
+}) {
+  const docList = params.documents
+    .map((d) => `<li style="margin-bottom:6px">${escapeHtml(d)}</li>`)
+    .join("");
+  const days = params.expiryDays ?? 7;
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: upload your onboarding documents</h2>
+      <p>Hi ${escapeHtml(params.fullName)},</p>
+      <p>Congratulations on moving forward with Sueep! To complete your onboarding we need you to upload the following documents:</p>
+      <ul style="margin:12px 0;padding-left:20px">${docList}</ul>
+      <p>Use the secure link below — no account required. The link expires in ${days} days.</p>
+      <p style="margin:20px 0">
+        <a href="${escapeHtml(params.uploadUrl)}"
+           style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
+          Upload my documents
+        </a>
+      </p>
+      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.uploadUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
     </div>
   `;
 }

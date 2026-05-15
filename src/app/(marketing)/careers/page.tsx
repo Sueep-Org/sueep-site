@@ -71,8 +71,7 @@ export default async function CareersPage({
           </h1>
           <p className="mt-4 text-gray-600 text-base md:text-lg leading-relaxed">
             Submit this short application so we have your contact details and interests on file. If we move forward with
-            you, our hiring team will email you a personal link to complete our full questionnaire on Google Forms —
-            that isn&apos;t published on this page.
+            you, our hiring team will email you. Please note this application is for cleaning and janitorial positions.
           </p>
           <div className="mt-8">
             <a href="#apply" className={primaryCtaClass}>
@@ -135,28 +134,62 @@ export default async function CareersPage({
             </div>
 
             <div>
-              <label htmlFor="positionInterest" className={labelClass}>
-                What kind of work are you interested in?
+              <label className={labelClass}>
+                Do you have cleaning experience? <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-6 mt-1">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="radio" name="cleaningExperience" value="yes" required className="accent-[#E73C6E]" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="radio" name="cleaningExperience" value="no" required className="accent-[#E73C6E]" />
+                  No
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="cleaningYears" className={labelClass}>
+                If yes, how many years of cleaning experience?
               </label>
               <input
-                id="positionInterest"
-                name="positionInterest"
-                type="text"
+                id="cleaningYears"
+                name="cleaningYears"
+                type="number"
+                min="0"
+                max="99"
                 className={inputClass}
-                placeholder="e.g. painting, commercial cleaning, labor, office"
+                placeholder="e.g. 3"
               />
             </div>
 
             <div>
+              <label className={labelClass}>
+                Do you have a vehicle? <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-6 mt-1">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="radio" name="hasVehicle" value="yes" required className="accent-[#E73C6E]" />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="radio" name="hasVehicle" value="no" required className="accent-[#E73C6E]" />
+                  No
+                </label>
+              </div>
+            </div>
+
+            <div>
               <label htmlFor="additionalNotes" className={labelClass}>
-                Anything else we should know?
+                Additional comments
               </label>
               <textarea
                 id="additionalNotes"
                 name="additionalNotes"
-                rows={5}
-                className={`${inputClass} resize-y min-h-[120px]`}
-                placeholder="Experience, certifications, availability, neighborhoods you serve…"
+                rows={4}
+                className={`${inputClass} resize-y min-h-[100px]`}
+                placeholder="Anything else you'd like us to know…"
               />
             </div>
 
