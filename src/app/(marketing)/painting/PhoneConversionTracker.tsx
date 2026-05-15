@@ -3,8 +3,6 @@
 import { useEffect } from "react";
 import Script from "next/script";
 
-type GtagFn = (...args: unknown[]) => void;
-
 declare function gtag_report_conversion(url?: string): void;
 
 export default function PhoneConversionTracker() {
@@ -13,7 +11,7 @@ export default function PhoneConversionTracker() {
       document.querySelectorAll<HTMLAnchorElement>('a[href^="tel:"]')
     );
 
-    const handleClick = (event: MouseEvent) => {
+    const handleClick = (_event: MouseEvent) => {
       if (typeof gtag_report_conversion === "function") {
         gtag_report_conversion();
       }

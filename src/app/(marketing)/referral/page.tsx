@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export const metadata = {
@@ -31,10 +32,11 @@ export default async function ReferralPage({
 
       {/* Hero */}
       <section className="relative min-h-[85vh] sm:min-h-[80vh] flex flex-col justify-center overflow-hidden">
-        <img
+        <Image
           src="/hero.jpg"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          fill
+          className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/60" />
         <div className="relative z-10 max-w-4xl mx-auto px-5 py-16 sm:py-20 md:py-24 text-center">
@@ -324,20 +326,22 @@ export default async function ReferralPage({
           </div>
           <div className="mt-12 grid md:grid-cols-2 gap-6">
             <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-[4/3]">
-              <img
+              <Image
                 src="/referrals/before.png"
                 alt="Home exterior before paint refresh"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
               />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                 <p className="text-white text-sm font-semibold">Before</p>
               </div>
             </div>
             <div className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 aspect-[4/3]">
-              <img
+              <Image
                 src="/referrals/after.png"
                 alt="Home exterior after professional painting"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
               />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                 <p className="text-white text-sm font-semibold">After</p>

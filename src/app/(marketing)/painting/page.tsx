@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import PaintingLeadForm from "./PaintingLeadForm";
 
@@ -17,10 +18,11 @@ export default function PaintingPage() {
     <main className="bg-white text-gray-900">
       {/* Hero Section (match sueep.com homepage cover) */}
       <section className="relative h-[80vh] flex items-center justify-center text-center overflow-hidden">
-        <img
+        <Image
           src={HERO_IMAGE}
           alt="Sueep team with van outside residential building"
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          fill
+          className="object-cover object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/15 to-black/10" />
         {/* Top-right prominent phone number */}
@@ -139,12 +141,12 @@ export default function PaintingPage() {
             ].map((s) => (
               <div key={s.title} className="w-full max-w-sm p-6 bg-white border border-gray-200 rounded-lg hover:shadow-md transition">
                 {/* Service image (add files to public/painting/) */}
-                <div className="overflow-hidden rounded-md border border-gray-200">
-                  <img
+                <div className="relative overflow-hidden rounded-md border border-gray-200 aspect-[16/9]">
+                  <Image
                     src={s.img}
                     alt={`${s.title} by Sueep`}
-                    className={`w-full aspect-[16/9] object-cover ${s.objPos || "object-center"}`}
-                    loading="lazy"
+                    fill
+                    className={`object-cover ${s.objPos || "object-center"}`}
                   />
                 </div>
                 <h3 className="mt-4 font-semibold">{s.title}</h3>
@@ -181,10 +183,11 @@ export default function PaintingPage() {
       {/* Credibility Block */}
       <section className="relative" aria-labelledby="cred-heading">
         <div className="relative h-[340px] md:h-[460px] lg:h-[520px] overflow-hidden">
-          <img
+          <Image
             src={`${BOTTOM_IMAGE}?v=2`}
             alt="Professional painting"
-            className="absolute inset-0 w-full h-full object-cover object-[50%_70%]"
+            fill
+            className="object-cover object-[50%_70%]"
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 h-full flex items-center justify-center text-center px-6">
@@ -240,7 +243,7 @@ export default function PaintingPage() {
       <footer className="bg-black text-gray-400 text-sm py-6">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col items-center justify-center gap-3">
-            <img src="/sueeplogo.png" alt="Sueep logo" className="h-12 md:h-14 lg:h-16 w-auto" />
+            <Image src="/sueeplogo.png" alt="Sueep logo" width={64} height={64} className="h-12 md:h-14 lg:h-16 w-auto" />
           </div>
           <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3">
             <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>

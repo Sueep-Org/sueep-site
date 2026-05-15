@@ -240,7 +240,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Documents on File">
-        <p className="text-xs text-gray-500">Upload and manage this employee's documents.</p>
+        <p className="text-xs text-gray-500">Upload and manage this employee&apos;s documents.</p>
 
         <form onSubmit={addDoc} className="space-y-3">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
