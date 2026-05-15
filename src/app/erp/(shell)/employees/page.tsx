@@ -28,9 +28,10 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   const qp = await searchParams;
   const projectFilter = firstValue(qp.project).trim().toLowerCase();
   const nameFilter = firstValue(qp.name).trim().toLowerCase();
+  const complianceFilter = firstValue(qp.compliance).trim().toUpperCase();
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
-  const sortBy = sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" ? sortByRaw : "name";
+  const sortBy = sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" || sortByRaw === "compliance" ? sortByRaw : "name";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
   const employees = await prisma.employee.findMany({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -45,7 +46,10 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
       const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
       const nextExpiry = e.documents.find((d) => d.expiresAt != null)?.expiresAt ?? null;
       return { ...e, compliance, nextExpiry };
-    });
+    })
+    .filter((e) => (complianceFilter ? e.compliance === complianceFilter : true));
+
+  const complianceOrder = { NON_COMPLIANT: 0, NOT_CONFIGURED: 1, COMPLIANT: 2, INACTIVE: 3 };
 
   rows.sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -57,6 +61,10 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
       const av = (a.defaultProject || "").toLowerCase();
       const bv = (b.defaultProject || "").toLowerCase();
       if (av !== bv) return av.localeCompare(bv) * dir;
+    } else if (sortBy === "compliance") {
+      const av = complianceOrder[a.compliance];
+      const bv = complianceOrder[b.compliance];
+      if (av !== bv) return (av - bv) * dir;
     }
     const an = `${a.lastName} ${a.firstName}`.toLowerCase();
     const bn = `${b.lastName} ${b.firstName}`.toLowerCase();
@@ -123,6 +131,23 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
               className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
             />
           </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="complianceFilter">
+              Compliance
+            </label>
+            <select
+              id="complianceFilter"
+              name="compliance"
+              defaultValue={complianceFilter}
+              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+            >
+              <option value="">All</option>
+              <option value="COMPLIANT">Compliant</option>
+              <option value="NON_COMPLIANT">Non-compliant</option>
+              <option value="NOT_CONFIGURED">Not configured</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+          </div>
           <input type="hidden" name="sortBy" value={sortBy} />
           <input type="hidden" name="sortDir" value={sortDir} />
           <button type="submit" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 hover:bg-gray-50">
@@ -153,7 +178,11 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-medium">Start date</th>
-                <th className="px-3 py-2 font-medium">Compliance</th>
+                <th className="px-3 py-2 font-medium">
+                  <Link href={`/erp/employees?sortBy=compliance&sortDir=${sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
+                    Compliance
+                  </Link>
+                </th>
                 <th className="px-3 py-2 font-medium">Docs on file</th>
                 <th className="px-3 py-2 font-medium">Next expiry</th>
                 <th className="px-3 py-2 font-medium">Contact</th>
