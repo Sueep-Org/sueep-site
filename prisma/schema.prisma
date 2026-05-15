@@ -351,6 +351,9 @@ model Employee {
   hireDate DateTime?
   notes    String?
 
+  /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
+  requiredDocuments Json @default("[]")
+
   laborEntries LaborEntry[]
   documents EmployeeDocument[]
   laborAssignments LaborAssignment[]

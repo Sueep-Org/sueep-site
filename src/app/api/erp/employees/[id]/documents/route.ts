@@ -41,7 +41,6 @@ export async function POST(req: Request, ctx: Ctx) {
         title: body.title ? String(body.title).trim() : null,
         issuedAt: issuedAt ?? null,
         expiresAt: expiresAt ?? null,
-        isVerified: Boolean(body.isVerified),
         fileUrl: body.fileUrl ? String(body.fileUrl).trim() : null,
         notes: body.notes ? String(body.notes).trim() : null,
       },

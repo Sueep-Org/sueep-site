@@ -6,7 +6,7 @@ const STATUSES = [
   { value: "APPLIED", label: "Applied", cls: "bg-blue-100 text-blue-700" },
   { value: "INTERVIEWING", label: "Interviewing", cls: "bg-purple-100 text-purple-700" },
   { value: "ONBOARDING", label: "Onboarding", cls: "bg-emerald-100 text-emerald-700" },
-  { value: "DENIED", label: "Denied", cls: "bg-gray-100 text-gray-500" },
+  { value: "DENIED", label: "Denied", cls: "bg-red-100 text-red-600" },
 ];
 
 export function CandidateStatusSelect({ id, initialStatus }: { id: string; initialStatus: string }) {

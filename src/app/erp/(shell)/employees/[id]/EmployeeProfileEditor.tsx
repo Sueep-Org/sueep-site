@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const input =
@@ -23,7 +24,9 @@ type Props = {
 };
 
 export function EmployeeProfileEditor({ employeeId, initial }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
 
@@ -64,6 +67,25 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
       setError("Network error");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Permanently delete this employee? This cannot be undone.")) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/erp/employees/${employeeId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Delete failed");
+        setDeleting(false);
+        return;
+      }
+      router.push("/erp/employees");
+    } catch {
+      setError("Network error");
+      setDeleting(false);
     }
   }
 
@@ -141,13 +163,23 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
         </div>
         {error ? <p className="text-xs text-red-500">{error}</p> : null}
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
-          {loading ? "Saving…" : "Save profile"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={loading || deleting}
+            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          >
+            {loading ? "Saving…" : "Save profile"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={loading || deleting}
+            className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleting ? "Deleting…" : "Delete employee"}
+          </button>
+        </div>
       </form>
     </section>
   );

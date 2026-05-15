@@ -77,6 +77,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hireDate = d;
   }
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).trim() : null;
+  if (body.requiredDocuments !== undefined) {
+    if (!Array.isArray(body.requiredDocuments)) {
+      return NextResponse.json({ error: "requiredDocuments must be an array" }, { status: 400 });
+    }
+    data.requiredDocuments = (body.requiredDocuments as unknown[]).filter((v): v is string => typeof v === "string");
+  }
 
   try {
     const employee = await prisma.employee.update({ where: { id }, data });

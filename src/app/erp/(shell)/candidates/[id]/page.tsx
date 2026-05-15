@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
 import { CandidateQuestionnairePanel } from "./CandidateQuestionnairePanel";
 import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
-import { CollapsiblePanel } from "./CollapsiblePanel";
+import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -103,6 +104,13 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           siteUrl={siteUrl}
         />
       </CollapsiblePanel>
+
+      <FinishOnboardingPanel
+        id={row.id}
+        fullName={row.fullName}
+        status={row.status}
+        paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+      />
 
       <CollapsiblePanel title="Submission" defaultOpen={false}>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">

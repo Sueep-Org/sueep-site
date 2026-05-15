@@ -29,11 +29,12 @@ export async function GET() {
     },
   });
 
-  const now = new Date();
-  const rows = employees.map((e) => ({
-    ...e,
-    compliance: evaluateEmployeeCompliance(e.status, e.documents, now),
-  }));
+  const rows = employees.map((e) => {
+    const requiredDocs = Array.isArray(e.requiredDocuments)
+      ? (e.requiredDocuments as unknown[]).filter((v): v is string => typeof v === "string")
+      : [];
+    return { ...e, compliance: evaluateEmployeeCompliance(e.status, requiredDocs, e.documents) };
+  });
   return NextResponse.json(rows);
 }
 

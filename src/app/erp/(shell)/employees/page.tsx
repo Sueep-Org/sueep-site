@@ -19,6 +19,11 @@ function formatHourlyPay(cents: number | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function parseRequiredDocuments(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
+}
+
 export default async function EmployeesPage({ searchParams }: PageProps) {
   const qp = await searchParams;
   const projectFilter = firstValue(qp.project).trim().toLowerCase();
@@ -27,7 +32,6 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
   const sortBy = sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" ? sortByRaw : "name";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
-  const now = new Date();
   const employees = await prisma.employee.findMany({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: { documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] } },
@@ -37,10 +41,10 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     .filter((e) => (projectFilter ? (e.defaultProject || "").toLowerCase().includes(projectFilter) : true))
     .filter((e) => (nameFilter ? `${e.firstName} ${e.lastName}`.toLowerCase().includes(nameFilter) : true))
     .map((e) => {
-    const compliance = evaluateEmployeeCompliance(e.status, e.documents, now);
-    const nextExpiry =
-      e.documents.find((d) => d.expiresAt != null)?.expiresAt ?? null;
-    return { ...e, compliance, nextExpiry };
+      const requiredDocs = parseRequiredDocuments(e.requiredDocuments);
+      const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
+      const nextExpiry = e.documents.find((d) => d.expiresAt != null)?.expiresAt ?? null;
+      return { ...e, compliance, nextExpiry };
     });
 
   rows.sort((a, b) => {
@@ -60,14 +64,14 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   });
 
   const compliantCount = rows.filter((r) => r.compliance === "COMPLIANT").length;
-  const missingCount = rows.filter((r) => r.compliance === "MISSING" || r.compliance === "NON_COMPLIANT").length;
-  const expiringCount = rows.filter((r) => r.compliance === "EXPIRING_SOON").length;
+  const nonCompliantCount = rows.filter((r) => r.compliance === "NON_COMPLIANT").length;
+  const notConfiguredCount = rows.filter((r) => r.compliance === "NOT_CONFIGURED").length;
 
   const complianceCards = [
     { label: "Employees", value: String(rows.length) },
     { label: "Compliant", value: String(compliantCount) },
-    { label: "Missing docs", value: String(missingCount) },
-    { label: "Expiring soon (30d)", value: String(expiringCount) },
+    { label: "Non-compliant", value: String(nonCompliantCount) },
+    { label: "Not configured", value: String(notConfiguredCount) },
   ];
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 type DocumentRow = {
   id: string;
@@ -8,7 +9,6 @@ type DocumentRow = {
   title: string | null;
   issuedAt: string | null;
   expiresAt: string | null;
-  isVerified: boolean;
   fileUrl: string | null;
   notes: string | null;
 };
@@ -16,16 +16,93 @@ type DocumentRow = {
 type Props = {
   employeeId: string;
   initialDocuments: DocumentRow[];
+  initialRequiredDocuments: string[];
 };
 
-const input =
+const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const labelCls = "block text-xs font-medium text-gray-600";
 
-export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props) {
+export function EmployeeDocumentsSection({ employeeId, initialDocuments, initialRequiredDocuments }: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>(initialDocuments);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [required, setRequired] = useState<string[]>(initialRequiredDocuments);
+  const [newReq, setNewReq] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [savingReq, setSavingReq] = useState(false);
+  const [reqError, setReqError] = useState("");
+  const [reqOk, setReqOk] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState("");
+
+  const presentTypes = useMemo(() => new Set(docs.map((d) => d.documentType.toLowerCase())), [docs]);
+
+  const presentCount = useMemo(
+    () => required.filter((r) => presentTypes.has(r.toLowerCase())).length,
+    [required, presentTypes],
+  );
+
+  async function persistRequired(next: string[]) {
+    setSavingReq(true);
+    setReqError("");
+    setReqOk(false);
+    try {
+      const res = await fetch(`/api/erp/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ requiredDocuments: next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setReqError(data.error ?? "Failed to save");
+        return;
+      }
+      setReqOk(true);
+      setTimeout(() => setReqOk(false), 2000);
+    } catch {
+      setReqError("Network error");
+    } finally {
+      setSavingReq(false);
+    }
+  }
+
+  function addRequired() {
+    const trimmed = newReq.trim();
+    if (!trimmed) return;
+    if (required.map((r) => r.toLowerCase()).includes(trimmed.toLowerCase())) return;
+    const next = [...required, trimmed];
+    setRequired(next);
+    setNewReq("");
+    void persistRequired(next);
+  }
+
+  function removeRequired(i: number) {
+    const next = required.filter((_, idx) => idx !== i);
+    setRequired(next);
+    void persistRequired(next);
+  }
+
+  function startEdit(i: number) {
+    setEditingIndex(i);
+    setEditValue(required[i]);
+  }
+
+  function cancelEdit() {
+    setEditingIndex(null);
+    setEditValue("");
+  }
+
+  function saveEdit(i: number) {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    const duplicate = required.some((r, idx) => idx !== i && r.toLowerCase() === trimmed.toLowerCase());
+    if (duplicate) return;
+    const next = required.map((r, idx) => (idx === i ? trimmed : r));
+    setRequired(next);
+    setEditingIndex(null);
+    setEditValue("");
+    void persistRequired(next);
+  }
 
   const sortedDocs = useMemo(
     () =>
@@ -40,15 +117,14 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
 
   async function addDoc(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    setAddError("");
+    setAddLoading(true);
     const fd = new FormData(e.currentTarget);
     const payload = {
       documentType: fd.get("documentType"),
       title: fd.get("title") || null,
       issuedAt: fd.get("issuedAt") || null,
       expiresAt: fd.get("expiresAt") || null,
-      isVerified: fd.get("isVerified") === "on",
       fileUrl: fd.get("fileUrl") || null,
       notes: fd.get("notes") || null,
     };
@@ -61,28 +137,17 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
       });
       const data = (await res.json()) as DocumentRow & { error?: string };
       if (!res.ok) {
-        setError(data.error || "Failed to add document");
-        setLoading(false);
+        setAddError(data.error ?? "Failed to add document");
+        setAddLoading(false);
         return;
       }
       setDocs((prev) => [data, ...prev]);
       e.currentTarget.reset();
     } catch {
-      setError("Network error");
+      setAddError("Network error");
     } finally {
-      setLoading(false);
+      setAddLoading(false);
     }
-  }
-
-  async function toggleVerify(doc: DocumentRow) {
-    const res = await fetch(`/api/erp/employees/${employeeId}/documents/${doc.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ isVerified: !doc.isVerified }),
-    });
-    if (!res.ok) return;
-    const updated = (await res.json()) as DocumentRow;
-    setDocs((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
   }
 
   async function deleteDoc(doc: DocumentRow) {
@@ -92,118 +157,195 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments }: Props
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Documentation</h2>
-      <p className="mt-1 text-xs text-gray-500">Add compliance documents and mark verification status.</p>
+    <div className="space-y-4">
+      <CollapsiblePanel title="Required Documents">
+        <p className="text-xs text-gray-500">
+          Define which document types this employee must have on file. Compliance is met when all are present.
+        </p>
 
-      <form onSubmit={addDoc} className="mt-4 space-y-3">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {required.length > 0 && (
           <div>
-            <label className={label} htmlFor="documentType">
-              Document type
-            </label>
-            <input id="documentType" name="documentType" required placeholder="e.g. OSHA, I-9, ID" className={input} />
+            <p className="text-xs text-gray-500 mb-2">
+              {presentCount} / {required.length} on file
+            </p>
+            <ul className="space-y-1.5">
+              {required.map((req, i) => {
+                const present = presentTypes.has(req.toLowerCase());
+                if (editingIndex === i) {
+                  return (
+                    <li key={i} className="flex items-center gap-2">
+                      <span className={present ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
+                        {present ? "✓" : "✗"}
+                      </span>
+                      <input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); saveEdit(i); }
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        className="flex-1 rounded-md border border-pink-400 bg-white px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                      />
+                      <button type="button" onClick={() => saveEdit(i)} disabled={savingReq} className="text-xs text-emerald-600 hover:text-emerald-800 disabled:opacity-40">Save</button>
+                      <button type="button" onClick={cancelEdit} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={i} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className={present ? "text-emerald-600 font-bold" : "text-red-500 font-bold"}>
+                        {present ? "✓" : "✗"}
+                      </span>
+                      <span className="text-gray-800">{req}</span>
+                    </span>
+                    <span className="flex gap-3">
+                      <button type="button" onClick={() => startEdit(i)} disabled={savingReq} className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40">Edit</button>
+                      <button type="button" onClick={() => removeRequired(i)} disabled={savingReq} className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-40">Delete</button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-          <div>
-            <label className={label} htmlFor="title">
-              Title (optional)
-            </label>
-            <input id="title" name="title" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="fileUrl">
-              File URL (optional)
-            </label>
-            <input id="fileUrl" name="fileUrl" placeholder="https://..." className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="issuedAt">
-              Issued date
-            </label>
-            <input id="issuedAt" name="issuedAt" type="date" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="expiresAt">
-              Expiration date
-            </label>
-            <input id="expiresAt" name="expiresAt" type="date" className={input} />
-          </div>
-          <div className="flex items-end">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" name="isVerified" className="rounded border-gray-300 bg-white" />
-              Verified
-            </label>
-          </div>
-        </div>
-        <div>
-          <label className={label} htmlFor="notes">
-            Notes
-          </label>
-          <textarea id="notes" name="notes" rows={2} className={input} />
-        </div>
-        {error ? <p className="text-xs text-red-500">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-pink-600 px-3 py-2 text-xs font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
-        >
-          {loading ? "Adding…" : "Add document"}
-        </button>
-      </form>
+        )}
 
-      <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="border-b border-gray-200 bg-gray-100 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Type</th>
-              <th className="px-3 py-2 font-medium">Title</th>
-              <th className="px-3 py-2 font-medium">Issued</th>
-              <th className="px-3 py-2 font-medium">Expires</th>
-              <th className="px-3 py-2 font-medium">Verified</th>
-              <th className="px-3 py-2 font-medium">File</th>
-              <th className="px-3 py-2 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {sortedDocs.length === 0 ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newReq}
+            onChange={(e) => setNewReq(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addRequired();
+              }
+            }}
+            placeholder="e.g. I-9, OSHA card, Driver's license"
+            className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
+          <button
+            type="button"
+            onClick={addRequired}
+            disabled={savingReq}
+            className="rounded-md bg-[#E73C6E] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+
+        {reqError ? <p className="text-xs text-red-500">{reqError}</p> : null}
+        {reqOk ? <p className="text-xs text-emerald-600">Saved.</p> : null}
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Documents on File">
+        <p className="text-xs text-gray-500">Upload and manage this employee's documents.</p>
+
+        <form onSubmit={addDoc} className="space-y-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className={labelCls} htmlFor="documentType">
+                Document type
+              </label>
+              <input id="documentType" name="documentType" required placeholder="e.g. OSHA card, I-9" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="title">
+                Title (optional)
+              </label>
+              <input id="title" name="title" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="fileUrl">
+                File URL (optional)
+              </label>
+              <input id="fileUrl" name="fileUrl" placeholder="https://…" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="issuedAt">
+                Issued date
+              </label>
+              <input id="issuedAt" name="issuedAt" type="date" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="expiresAt">
+                Expiration date
+              </label>
+              <input id="expiresAt" name="expiresAt" type="date" className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="notes">
+              Notes
+            </label>
+            <textarea id="notes" name="notes" rows={2} className={inputCls} />
+          </div>
+          {addError ? <p className="text-xs text-red-500">{addError}</p> : null}
+          <button
+            type="submit"
+            disabled={addLoading}
+            className="rounded-md bg-[#E73C6E] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {addLoading ? "Adding…" : "Add document"}
+          </button>
+        </form>
+
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full min-w-[700px] text-left text-sm">
+            <thead className="border-b border-gray-200 bg-gray-100 text-xs uppercase text-gray-500">
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
-                  No documents yet.
-                </td>
+                <th className="px-3 py-2 font-medium">Type</th>
+                <th className="px-3 py-2 font-medium">Title</th>
+                <th className="px-3 py-2 font-medium">Issued</th>
+                <th className="px-3 py-2 font-medium">Expires</th>
+                <th className="px-3 py-2 font-medium">File</th>
+                <th className="px-3 py-2 font-medium">Actions</th>
               </tr>
-            ) : (
-              sortedDocs.map((d) => (
-                <tr key={d.id}>
-                  <td className="px-3 py-2 text-gray-800">{d.documentType}</td>
-                  <td className="px-3 py-2 text-gray-700">{d.title || "—"}</td>
-                  <td className="px-3 py-2 text-gray-700">{d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2 text-gray-700">{d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2 text-gray-700">{d.isVerified ? "Yes" : "No"}</td>
-                  <td className="px-3 py-2 text-gray-700">
-                    {d.fileUrl ? (
-                      <a href={d.fileUrl} target="_blank" rel="noreferrer" className="text-pink-600 hover:underline">
-                        Open
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-3 text-xs">
-                      <button type="button" onClick={() => void toggleVerify(d)} className="text-gray-600 hover:text-gray-900">
-                        {d.isVerified ? "Unverify" : "Verify"}
-                      </button>
-                      <button type="button" onClick={() => void deleteDoc(d)} className="text-red-500 hover:text-red-700">
-                        Delete
-                      </button>
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {sortedDocs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                    No documents yet.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
+              ) : (
+                sortedDocs.map((d) => (
+                  <tr key={d.id}>
+                    <td className="px-3 py-2 text-gray-800">{d.documentType}</td>
+                    <td className="px-3 py-2 text-gray-700">{d.title ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {d.fileUrl ? (
+                        <a href={d.fileUrl} target="_blank" rel="noreferrer" className="text-pink-600 hover:underline">
+                          Open
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => void deleteDoc(d)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CollapsiblePanel>
+    </div>
   );
 }

@@ -15,7 +15,8 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   const candidates = await prisma.candidateApplication.findMany({
     where: {
       ...(search ? { fullName: { contains: search, mode: "insensitive" } } : {}),
-      ...(statusFilter ? { status: statusFilter } : {}),
+      // When no status filter is active, hide hired candidates (they are now employees)
+      ...(statusFilter ? { status: statusFilter } : { status: { not: "HIRED" } }),
     },
     orderBy: { createdAt: "desc" },
   });

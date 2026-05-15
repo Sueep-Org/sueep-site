@@ -39,7 +39,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (d === undefined) return NextResponse.json({ error: "Invalid expiresAt" }, { status: 400 });
     data.expiresAt = d;
   }
-  if (body.isVerified !== undefined) data.isVerified = Boolean(body.isVerified);
   if (body.fileUrl !== undefined) data.fileUrl = body.fileUrl ? String(body.fileUrl).trim() : null;
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).trim() : null;
 

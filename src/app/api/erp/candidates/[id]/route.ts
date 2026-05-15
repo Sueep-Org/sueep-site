@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const VALID_STATUSES = ["APPLIED", "INTERVIEWING", "ONBOARDING", "DENIED"];
+const VALID_STATUSES = ["APPLIED", "INTERVIEWING", "ONBOARDING", "DENIED", "HIRED"];
 
 export async function PATCH(
   req: NextRequest,
