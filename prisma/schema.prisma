@@ -412,6 +412,8 @@ model CandidateApplication {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
+  documents CandidateDocument[]
+
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
   questionnaireToken String? @unique
   questionnaireSentAt      DateTime?
@@ -420,4 +422,21 @@ model CandidateApplication {
   @@index([status])
   @@index([createdAt])
   @@index([email])
+}
+
+model CandidateDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  candidateApplicationId String
+  candidateApplication   CandidateApplication @relation(fields: [candidateApplicationId], references: [id], onDelete: Cascade)
+
+  /// Matches the label in the paperwork JSONB array
+  label    String
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  @@index([candidateApplicationId])
 }
