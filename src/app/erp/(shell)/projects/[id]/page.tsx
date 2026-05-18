@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { centsToDollars } from "@/lib/erp/money";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { ProjectBillingEditor } from "./ProjectBillingEditor";
 import { ProjectDatesEditor } from "./ProjectDatesEditor";
 import { ProjectManagerEditor } from "./ProjectManagerEditor";
 import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
+import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
+import { ProjectDeleteButton } from "./ProjectDeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,7 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
@@ -36,6 +40,15 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }),
   ]);
   if (!project) notFound();
+
+  const isManual = !project.hubspotDealId;
+  const pipelineOptions = cfg
+    ? [
+        { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
+        { id: cfg.janitorial.pipelineId, label: "Janitorial" },
+        { id: cfg.residential.pipelineId, label: "Residential" },
+      ].filter((o) => o.id?.trim())
+    : [];
 
   const laborRows = project.laborEntries.map((e) => ({
     id: e.id,
@@ -75,7 +88,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
           ← Projects
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
+          <ProjectDeleteButton projectId={project.id} />
+        </div>
         {project.description ? <p className="mt-2 text-sm text-gray-500">{project.description}</p> : null}
       </div>
 
@@ -90,6 +106,16 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           ))}
         </dl>
       </div>
+
+      <ProjectWorkflowEditor
+        projectId={project.id}
+        status={project.status}
+        projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+        segment={project.segment}
+        hubspotPipelineId={project.hubspotPipelineId ?? null}
+        isManual={isManual}
+        pipelineOptions={pipelineOptions}
+      />
 
       <ProjectManagerEditor
         projectId={project.id}

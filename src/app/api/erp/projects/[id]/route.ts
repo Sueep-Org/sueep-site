@@ -72,6 +72,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const normalized = normalizeProjectSegment(String(body.segment));
     if (PROJECT_SEGMENTS.includes(normalized)) data.segment = normalized;
   }
+  if (body.hubspotPipelineId !== undefined) {
+    data.hubspotPipelineId = body.hubspotPipelineId ? String(body.hubspotPipelineId).trim() : null;
+  }
   if (body.status !== undefined) {
     const s = String(body.status).toUpperCase();
     if (STATUSES.includes(s as (typeof STATUSES)[number])) data.status = s;
