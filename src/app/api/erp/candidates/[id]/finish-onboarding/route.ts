@@ -17,6 +17,9 @@ export async function POST(
       phone: true,
       positionInterest: true,
       status: true,
+      bankAccountType: true,
+      bankAccountNumber: true,
+      bankRoutingNumber: true,
       documents: { select: { id: true, label: true, filename: true } },
     },
   });
@@ -46,6 +49,9 @@ export async function POST(
         role: candidate.positionInterest ?? null,
         status: "ACTIVE",
         hireDate: new Date(),
+        bankAccountType: candidate.bankAccountType ?? null,
+        bankAccountNumber: candidate.bankAccountNumber ?? null,
+        bankRoutingNumber: candidate.bankRoutingNumber ?? null,
       },
       select: { id: true },
     });

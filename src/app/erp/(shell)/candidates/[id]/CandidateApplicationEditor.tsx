@@ -10,6 +10,14 @@ const STATUSES = [
   "DENIED",
 ] as const;
 
+const DEFAULT_PAPERWORK = [
+  "Driver's License",
+  "Social Security Card",
+  "Passport or ID",
+  "W-4",
+  "I-9",
+];
+
 type PaperworkItem = { label: string; url: string };
 
 export type CandidateApplicationRow = {
@@ -17,6 +25,7 @@ export type CandidateApplicationRow = {
   status: string;
   internalNotes: string | null;
   paperwork: PaperworkItem[] | null;
+  bankAccountRequired: boolean;
 };
 
 export function CandidateApplicationEditor({ initial }: { initial: CandidateApplicationRow }) {
@@ -24,10 +33,19 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
   const [status, setStatus] = useState(initial.status);
   const [internalNotes, setInternalNotes] = useState(initial.internalNotes ?? "");
   const [paperwork, setPaperwork] = useState<PaperworkItem[]>(initial.paperwork ?? []);
+  const [bankAccountRequired, setBankAccountRequired] = useState(initial.bankAccountRequired);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  function handleStatusChange(newStatus: string) {
+    setStatus(newStatus);
+    if (newStatus === "ONBOARDING" && paperwork.length === 0 && !bankAccountRequired) {
+      setPaperwork(DEFAULT_PAPERWORK.map((label) => ({ label, url: "" })));
+      setBankAccountRequired(true);
+    }
+  }
 
   function addItem() {
     setPaperwork((prev) => [...prev, { label: "", url: "" }]);
@@ -56,8 +74,8 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
   }
 
   async function save() {
-    if (status === "ONBOARDING" && paperwork.length === 0) {
-      setError("Add at least one paperwork item before setting status to Onboarding.");
+    if (status === "ONBOARDING" && paperwork.length === 0 && !bankAccountRequired) {
+      setError("Add at least one paperwork item or bank account info before setting status to Onboarding.");
       return;
     }
     const incomplete = paperwork.find((p) => !p.label.trim());
@@ -72,7 +90,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
     const res = await fetch(`/api/erp/candidates/${initial.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, internalNotes, paperwork }),
+      body: JSON.stringify({ status, internalNotes, paperwork, bankAccountRequired }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -95,7 +113,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
           <select
             id="status"
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => handleStatusChange(e.target.value)}
             className="w-full rounded-md border border-gray-300 bg-gray-200 px-3 py-2 text-sm text-pink-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
           >
             {STATUSES.map((s) => (
@@ -121,7 +139,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
               + Add item
             </button>
           </div>
-          {paperwork.length === 0 && (
+          {paperwork.length === 0 && !bankAccountRequired && (
             <p className="text-xs text-gray-400">No paperwork items yet. Add at least one.</p>
           )}
           {paperwork.map((item, i) => (
@@ -131,13 +149,6 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
                 placeholder="Document name (e.g. I-9)"
                 value={item.label}
                 onChange={(e) => updateItem(i, "label", e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 bg-gray-200 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
-              />
-              <input
-                type="url"
-                placeholder="Upload link"
-                value={item.url}
-                onChange={(e) => updateItem(i, "url", e.target.value)}
                 className="flex-1 rounded-md border border-gray-300 bg-gray-200 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
               />
               <button
@@ -150,6 +161,31 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
               </button>
             </div>
           ))}
+
+          {bankAccountRequired ? (
+            <div className="flex items-center gap-2 rounded-md border border-dashed border-gray-300 bg-gray-100 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-gray-700">Bank Account Info</span>
+                <span className="ml-2 text-xs text-gray-400">(text fields on candidate portal)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBankAccountRequired(false)}
+                className="text-gray-400 hover:text-red-500 px-1 text-sm shrink-0"
+                aria-label="Remove bank account requirement"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setBankAccountRequired(true)}
+              className="text-xs text-[#E73C6E] hover:underline"
+            >
+              + Add bank account info section
+            </button>
+          )}
         </div>
       )}
 

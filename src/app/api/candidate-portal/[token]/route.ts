@@ -15,6 +15,7 @@ async function resolveCandidate(token: string) {
       status: true,
       paperwork: true,
       paperworkUploadTokenExpiry: true,
+      bankAccountRequired: true,
     },
   });
   if (!candidate) return null;
@@ -39,11 +40,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     fullName: candidate.fullName,
     paperwork,
     expiry: candidate.paperworkUploadTokenExpiry!.toISOString(),
+    bankAccountRequired: candidate.bankAccountRequired,
   });
 }
 
-// Called by the portal client after a file is uploaded to Firebase Storage.
-// Body: { label: string; url: string }
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { token } = await params;
   const candidate = await resolveCandidate(token);
@@ -51,20 +51,44 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "Link not found or expired" }, { status: 404 });
   }
 
-  let body: { label?: unknown; url?: unknown };
+  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as { label?: unknown; url?: unknown };
+    body = (await req.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // Bank account info update
+  if (body.bankAccountType !== undefined || body.bankAccountNumber !== undefined || body.bankRoutingNumber !== undefined) {
+    if (!candidate.bankAccountRequired) {
+      return NextResponse.json({ error: "Bank account info not required for this candidate" }, { status: 400 });
+    }
+    const accountType = typeof body.bankAccountType === "string" ? body.bankAccountType.trim() : null;
+    const accountNumber = typeof body.bankAccountNumber === "string" ? body.bankAccountNumber.trim() : null;
+    const routingNumber = typeof body.bankRoutingNumber === "string" ? body.bankRoutingNumber.trim() : null;
+
+    if (!accountNumber || !routingNumber) {
+      return NextResponse.json({ error: "Account number and routing number are required" }, { status: 400 });
+    }
+
+    await prisma.candidateApplication.update({
+      where: { id: candidate.id },
+      data: {
+        bankAccountType: accountType,
+        bankAccountNumber: accountNumber,
+        bankRoutingNumber: routingNumber,
+      },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // File upload URL update (legacy / Firebase Storage flow)
   const label = typeof body.label === "string" ? body.label.trim() : "";
   const url = typeof body.url === "string" ? body.url.trim() : "";
   if (!label || !url) {
     return NextResponse.json({ error: "label and url are required" }, { status: 400 });
   }
 
-  // Only allow https:// URLs pointing to Firebase Storage or known safe hosts
   if (!url.startsWith("https://")) {
     return NextResponse.json({ error: "url must be https" }, { status: 400 });
   }

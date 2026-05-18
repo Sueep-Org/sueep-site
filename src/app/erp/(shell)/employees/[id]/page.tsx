@@ -5,6 +5,7 @@ import { complianceBadgeClasses, complianceLabel, evaluateEmployeeCompliance } f
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
+import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,17 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
             status: employee.status,
             hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
             notes: employee.notes,
+          }}
+        />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Bank Account Info">
+        <EmployeeBankAccountSection
+          employeeId={employee.id}
+          initial={{
+            bankAccountType: employee.bankAccountType,
+            bankAccountNumber: employee.bankAccountNumber,
+            bankRoutingNumber: employee.bankRoutingNumber,
           }}
         />
       </CollapsiblePanel>

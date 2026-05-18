@@ -8,14 +8,35 @@ type Props = {
   token: string;
   fullName: string;
   paperwork: PaperworkItem[];
+  bankAccountRequired: boolean;
+  initialBankAccountType: string | null;
+  initialBankAccountNumber: string | null;
+  initialBankRoutingNumber: string | null;
 };
 
 type UploadState = "idle" | "uploading" | "done" | "error";
+type BankSaveState = "idle" | "saving" | "saved" | "error";
 
-export function CandidatePortalClient({ token, fullName, paperwork: initial }: Props) {
+export function CandidatePortalClient({
+  token,
+  fullName,
+  paperwork: initial,
+  bankAccountRequired,
+  initialBankAccountType,
+  initialBankAccountNumber,
+  initialBankRoutingNumber,
+}: Props) {
   const [items, setItems] = useState<PaperworkItem[]>(initial);
   const [uploadState, setUploadState] = useState<Record<string, UploadState>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [bankAccountType, setBankAccountType] = useState(initialBankAccountType ?? "checking");
+  const [bankAccountNumber, setBankAccountNumber] = useState(initialBankAccountNumber ?? "");
+  const [bankRoutingNumber, setBankRoutingNumber] = useState(initialBankRoutingNumber ?? "");
+  const [bankSaveState, setBankSaveState] = useState<BankSaveState>(
+    initialBankAccountNumber ? "saved" : "idle"
+  );
+  const [bankError, setBankError] = useState("");
 
   async function handleFileChange(label: string, file: File) {
     setUploadState((s) => ({ ...s, [label]: "uploading" }));
@@ -41,7 +62,31 @@ export function CandidatePortalClient({ token, fullName, paperwork: initial }: P
     }
   }
 
-  const allDone = items.every((p) => p.url);
+  async function saveBankAccount() {
+    if (!bankAccountNumber.trim() || !bankRoutingNumber.trim()) {
+      setBankError("Account number and routing number are required.");
+      return;
+    }
+    setBankError("");
+    setBankSaveState("saving");
+    try {
+      const res = await fetch(`/api/candidate-portal/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ bankAccountType, bankAccountNumber, bankRoutingNumber }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Save failed");
+      setBankSaveState("saved");
+    } catch (err) {
+      setBankSaveState("error");
+      setBankError(err instanceof Error ? err.message : "Save failed");
+    }
+  }
+
+  const filesDone = items.every((p) => p.url);
+  const bankDone = !bankAccountRequired || bankSaveState === "saved";
+  const allDone = filesDone && bankDone;
 
   return (
     <div className="min-h-screen bg-white px-4 py-12">
@@ -108,6 +153,64 @@ export function CandidatePortalClient({ token, fullName, paperwork: initial }: P
               </div>
             );
           })}
+
+          {bankAccountRequired && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-900">Bank Account Info</p>
+                {bankSaveState === "saved" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    ✓ Saved
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Account type</label>
+                <select
+                  value={bankAccountType}
+                  onChange={(e) => setBankAccountType(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
+                >
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Account number</label>
+                <input
+                  type="text"
+                  value={bankAccountNumber}
+                  onChange={(e) => setBankAccountNumber(e.target.value)}
+                  placeholder="Enter account number"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Routing number</label>
+                <input
+                  type="text"
+                  value={bankRoutingNumber}
+                  onChange={(e) => setBankRoutingNumber(e.target.value)}
+                  placeholder="Enter routing number"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
+                />
+              </div>
+
+              {bankError && <p className="text-xs text-red-500">{bankError}</p>}
+
+              <button
+                type="button"
+                onClick={() => void saveBankAccount()}
+                disabled={bankSaveState === "saving"}
+                className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {bankSaveState === "saving" ? "Saving…" : bankSaveState === "saved" ? "Update bank info" : "Save bank info"}
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="mt-8 text-center text-xs text-gray-400">

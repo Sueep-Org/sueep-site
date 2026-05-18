@@ -28,6 +28,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       status: true,
       internalNotes: true,
       paperwork: true,
+      bankAccountRequired: true,
       paperworkUploadToken: true,
       paperworkUploadTokenExpiry: true,
       questionnaireToken: true,
@@ -54,7 +55,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Link href="/erp/candidates" className="text-zinc-500 hover:text-white">
+        <Link href="/erp/candidates" className="text-zinc-500 hover:text-pink-500">
           ← Candidates
         </Link>
       </div>
@@ -88,6 +89,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             status: row.status,
             internalNotes: row.internalNotes,
             paperwork: row.paperwork as { label: string; url: string }[] | null,
+            bankAccountRequired: row.bankAccountRequired,
           }}
         />
       </CollapsiblePanel>

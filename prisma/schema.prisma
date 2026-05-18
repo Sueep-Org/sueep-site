@@ -351,6 +351,10 @@ model Employee {
   hireDate DateTime?
   notes    String?
 
+  bankAccountType   String?
+  bankAccountNumber String?
+  bankRoutingNumber String?
+
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")
 
@@ -407,6 +411,12 @@ model CandidateApplication {
   status String @default("APPLIED")
 
   internalNotes String?
+
+  /// Whether the candidate must provide bank account details on the portal
+  bankAccountRequired Boolean @default(false)
+  bankAccountType     String?
+  bankAccountNumber   String?
+  bankRoutingNumber   String?
 
   /// Paperwork items required for onboarding. Array of { label: string; url: string }.
   paperwork Json?

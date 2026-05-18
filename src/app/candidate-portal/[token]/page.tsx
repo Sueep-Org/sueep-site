@@ -16,6 +16,10 @@ export default async function CandidatePortalPage({ params }: PageProps) {
       fullName: true,
       paperwork: true,
       paperworkUploadTokenExpiry: true,
+      bankAccountRequired: true,
+      bankAccountType: true,
+      bankAccountNumber: true,
+      bankRoutingNumber: true,
     },
   });
 
@@ -34,6 +38,10 @@ export default async function CandidatePortalPage({ params }: PageProps) {
       token={token}
       fullName={candidate.fullName}
       paperwork={paperwork}
+      bankAccountRequired={candidate.bankAccountRequired}
+      initialBankAccountType={candidate.bankAccountType}
+      initialBankAccountNumber={candidate.bankAccountNumber}
+      initialBankRoutingNumber={candidate.bankRoutingNumber}
     />
   );
 }
