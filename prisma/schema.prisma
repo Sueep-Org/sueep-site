@@ -474,6 +474,9 @@ model CandidateApplication {
   bankAccountNumber   String?
   bankRoutingNumber   String?
 
+  /// Instructions shown at the top of the candidate's paperwork upload portal.
+  paperworkInstructions String?
+
   /// Paperwork items required for onboarding. Array of { label: string; url: string }.
   paperwork Json?
 

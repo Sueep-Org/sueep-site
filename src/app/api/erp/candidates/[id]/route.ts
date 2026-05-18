@@ -35,6 +35,10 @@ export async function PATCH(
     data.bankAccountRequired = Boolean(body.bankAccountRequired);
   }
 
+  if (body.paperworkInstructions !== undefined) {
+    data.paperworkInstructions = body.paperworkInstructions ? String(body.paperworkInstructions).trim() : null;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
