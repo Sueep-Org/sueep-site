@@ -102,6 +102,43 @@ export function CandidatePortalClient({
           <p className="mt-1 text-xs text-gray-400">PDF, JPEG, or PNG · max 4 MB each</p>
         </div>
 
+        <div className="mb-6 rounded-lg border border-[#E73C6E]/20 bg-pink-50 px-5 py-4 space-y-4 text-sm">
+          <div>
+            <p className="font-semibold text-[#E73C6E] text-base">Welcome to the team!</p>
+            <p className="mt-1 text-gray-600">
+              As part of your official enrollment, we need to collect some essential documentation for{" "}
+              <strong className="text-gray-800">payroll and legal verification</strong> (W-2 profile).
+            </p>
+          </div>
+
+          <div>
+            <p className="font-semibold text-gray-800 mb-1">General instructions</p>
+            <ol className="list-decimal list-inside space-y-1 text-gray-600">
+              <li>Download the templates provided in the links below for the <strong className="text-gray-800">W-4</strong> and <strong className="text-gray-800">I-9</strong> forms.</li>
+              <li>Fill them out digitally (you can use your computer or apps like <strong className="text-gray-800">Adobe Fill &amp; Sign</strong>).</li>
+              <li>Upload the completed PDFs along with clear copies of your <strong className="text-gray-800">personal identification</strong>.</li>
+            </ol>
+          </div>
+
+          <div className="border-t border-[#E73C6E]/20 pt-3">
+            <p className="font-semibold text-[#E73C6E] mb-1">W-4 Form</p>
+            <ol className="list-decimal list-inside space-y-1 text-gray-600">
+              <li>Complete <strong className="text-gray-800">Step 1</strong> — Personal Information.</li>
+              <li>Complete <strong className="text-gray-800">Step 5</strong> — Signature and Date.</li>
+              <li>Steps 2, 3, and 4 are <strong className="text-gray-800">optional</strong> unless you have additional income or dependents.</li>
+            </ol>
+          </div>
+
+          <div className="border-t border-[#E73C6E]/20 pt-3">
+            <p className="font-semibold text-[#E73C6E] mb-1">I-9 Form</p>
+            <ol className="list-decimal list-inside space-y-1 text-gray-600">
+              <li>Fill out <strong className="text-gray-800">Section 1 only</strong>.</li>
+              <li>Check the box regarding your <strong className="text-gray-800">citizenship / immigration status</strong>.</li>
+              <li>Sign and date the form.</li>
+            </ol>
+          </div>
+        </div>
+
         {allDone && (
           <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-center">
             <p className="text-sm font-medium text-emerald-700">
