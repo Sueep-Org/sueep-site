@@ -82,7 +82,7 @@ export default async function SchedulePage() {
         </div>
         <div className="flex items-center gap-3">
           <LocationTracker autoStart={true} />
-          <AddLaborEntryForm projectId="new" projectTitle="Quick Log" />
+          <AddLaborEntryForm projectId="new" projectTitle="Quick Log" allProjects={projectsForTracking} />
         </div>
       </div>
 

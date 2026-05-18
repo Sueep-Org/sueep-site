@@ -12,8 +12,18 @@ interface AddLaborEntryFormProps {
   allProjects?: Array<{ id: string; jobTitle: string }>;
 }
 
+interface EmployeeOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string | null;
+  hourlyPayCents: number | null;
+  status: string;
+}
+
 interface LaborPayload {
   projectId: string;
+  employeeId?: string;
   workDate: string;
   workerName: string;
   role: string | null;
@@ -39,6 +49,7 @@ export function AddLaborEntryForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [projects, setProjects] = useState(allProjects);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [locationStatus, setLocationStatus] = useState<"pending" | "captured" | "error">("pending");
 
   // Request location when form opens
@@ -59,23 +70,10 @@ export function AddLaborEntryForm({
     }
   }, [location, geoError, permission]);
 
-  useEffect(() => {
-    if (isOpen && projects.length === 0 && projectId === "new") {
-      // Fetch projects
-      fetch("/api/erp/projects")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.data) {
-            setProjects(data.data);
-          }
-        })
-        .catch(console.error);
-    }
-  }, [isOpen, projectId, projects.length]);
-
   const today = new Date().toISOString().split("T")[0];
   const [formData, setFormData] = useState({
     projectId: projectId !== "new" ? projectId : "",
+    employeeId: "",
     workDate: defaultDate || today,
     workerName: "",
     role: "",
@@ -84,18 +82,63 @@ export function AddLaborEntryForm({
     taskDescription: "",
   });
 
+  useEffect(() => {
+    setProjects(allProjects);
+  }, [allProjects]);
+
+  useEffect(() => {
+    if (!isOpen || projectId !== "new" || projects.length > 0) return;
+
+    fetch("/api/erp/projects")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.data;
+        if (Array.isArray(list)) {
+          setProjects(list.map((p) => ({ id: p.id, jobTitle: p.jobTitle })).filter((p) => p.id && p.jobTitle));
+        }
+      })
+      .catch(console.error);
+  }, [isOpen, projectId, projects.length]);
+
+  useEffect(() => {
+    if (!isOpen || employees.length > 0) return;
+
+    fetch("/api/erp/employees")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        if (Array.isArray(data)) setEmployees(data);
+      })
+      .catch(console.error);
+  }, [isOpen, employees.length]);
+
+  function employeeName(employee: EmployeeOption) {
+    return `${employee.firstName} ${employee.lastName}`.trim();
+  }
+
+  function handleEmployeeChange(employeeId: string) {
+    const employee = employees.find((e) => e.id === employeeId);
+    setFormData((prev) => ({
+      ...prev,
+      employeeId,
+      workerName: employee ? employeeName(employee) : "",
+      role: employee?.role || "",
+      hourlyRateCents: employee?.hourlyPayCents != null ? String(employee.hourlyPayCents) : "",
+    }));
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
     try {
-      if (!formData.projectId || !formData.workerName.trim() || !formData.hours) {
+      if (!formData.projectId || !formData.employeeId || !formData.workerName.trim() || !formData.hours) {
         throw new Error("Project, worker name, and hours are required");
       }
 
       const payload: LaborPayload = {
         projectId: formData.projectId,
+        employeeId: formData.employeeId,
         workDate: formData.workDate,
         workerName: formData.workerName,
         role: formData.role || null,
@@ -127,6 +170,7 @@ export function AddLaborEntryForm({
       setSuccess(true);
       setFormData({
         projectId: projectId !== "new" ? projectId : "",
+        employeeId: "",
         workDate: today,
         workerName: "",
         role: "",
@@ -167,27 +211,29 @@ export function AddLaborEntryForm({
         {projectTitle && <p className="mt-1 text-sm text-gray-500">{projectTitle}</p>}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {projectId === "new" && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600">
-                Project *
-              </label>
-              <select
-                value={formData.projectId}
-                onChange={(e) =>
-                  setFormData({ ...formData, projectId: e.target.value })
-                }
-                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
-              >
-                <option value="">Select a project...</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.jobTitle}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600">
+              Project *
+            </label>
+            <select
+              value={formData.projectId}
+              disabled={projectId !== "new"}
+              onChange={(e) =>
+                setFormData({ ...formData, projectId: e.target.value })
+              }
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 disabled:bg-gray-100"
+            >
+              <option value="">Select a project...</option>
+              {projectId !== "new" && projectTitle ? (
+                <option value={projectId}>{projectTitle}</option>
+              ) : null}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.jobTitle}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-600">Work Date</label>
@@ -205,15 +251,20 @@ export function AddLaborEntryForm({
             <label className="block text-xs font-medium text-gray-600">
               Worker Name *
             </label>
-            <input
-              type="text"
-              value={formData.workerName}
-              onChange={(e) =>
-                setFormData({ ...formData, workerName: e.target.value })
-              }
-              placeholder="e.g., John Smith"
-              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
-            />
+            <select
+              value={formData.employeeId}
+              onChange={(e) => handleEmployeeChange(e.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+            >
+              <option value="">Select an employee...</option>
+              {employees
+                .filter((employee) => employee.status !== "INACTIVE")
+                .map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employeeName(employee)}
+                  </option>
+                ))}
+            </select>
           </div>
 
           <div>

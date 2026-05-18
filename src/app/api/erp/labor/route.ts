@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         projectId: true,
+        employeeId: true,
         workDate: true,
         workerName: true,
         role: true,
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
       data: entries.map((e) => ({
         id: e.id,
         projectId: e.projectId,
+        employeeId: e.employeeId,
         projectTitle: e.project.jobTitle,
         workDate: e.workDate.toISOString(),
         workerName: e.workerName,
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       projectId, 
+      employeeId,
       workDate, 
       workerName, 
       role, 
@@ -122,14 +125,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let employeeName = workerName;
+    let employeeRole = role || null;
+    let employeeRateCents = parseInt(hourlyRateCents) || 0;
+    let linkedEmployeeId: string | undefined;
+    if (employeeId) {
+      const employee = await prisma.employee.findUnique({
+        where: { id: String(employeeId) },
+        select: { id: true, firstName: true, lastName: true, role: true, hourlyPayCents: true },
+      });
+      if (!employee) {
+        return NextResponse.json(
+          { success: false, error: "Employee not found" },
+          { status: 404 }
+        );
+      }
+      linkedEmployeeId = employee.id;
+      employeeName = `${employee.firstName} ${employee.lastName}`.trim() || workerName;
+      employeeRole = employeeRole || employee.role || null;
+      employeeRateCents = employee.hourlyPayCents ?? employeeRateCents;
+    }
+
     const laborEntry = await prisma.laborEntry.create({
       data: {
         projectId,
+        employeeId: linkedEmployeeId,
         workDate: new Date(workDate),
-        workerName,
-        role: role || null,
+        workerName: employeeName,
+        role: employeeRole,
         hours: parseFloat(hours),
-        hourlyRateCents: parseInt(hourlyRateCents) || 0,
+        hourlyRateCents: employeeRateCents,
         taskDescription: taskDescription || null,
         locationLatitude: locationLatitude ? parseFloat(locationLatitude) : null,
         locationLongitude: locationLongitude ? parseFloat(locationLongitude) : null,
@@ -139,6 +164,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         projectId: true,
+        employeeId: true,
         workDate: true,
         workerName: true,
         role: true,
@@ -163,6 +189,7 @@ export async function POST(request: NextRequest) {
       data: {
         id: laborEntry.id,
         projectId: laborEntry.projectId,
+        employeeId: laborEntry.employeeId,
         projectTitle: laborEntry.project.jobTitle,
         workDate: laborEntry.workDate.toISOString(),
         workerName: laborEntry.workerName,

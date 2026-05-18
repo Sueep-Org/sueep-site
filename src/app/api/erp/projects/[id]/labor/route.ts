@@ -60,6 +60,12 @@ export async function POST(req: Request, ctx: Ctx) {
 
   if (hourlyRateCents < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
 
+  const employeeId = body.employeeId != null ? String(body.employeeId).trim() : "";
+  if (employeeId) {
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
+
   // Location support
   const locationLatitude = body.locationLatitude != null ? parseFloat(String(body.locationLatitude)) : null;
   const locationLongitude = body.locationLongitude != null ? parseFloat(String(body.locationLongitude)) : null;
@@ -69,6 +75,7 @@ export async function POST(req: Request, ctx: Ctx) {
     const entry = await prisma.laborEntry.create({
       data: {
         projectId: id,
+        employeeId: employeeId || null,
         workDate,
         workerName,
         role: body.role != null ? String(body.role).trim() || null : null,
