@@ -14,13 +14,14 @@ export default async function ContractorsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>
+          <h1 className="text-2xl font-bold text-pink-600">Contractor Verification</h1>
           <p className="mt-1 text-sm text-gray-500">
             {contractors.length} contractor{contractors.length !== 1 ? "s" : ""}
           </p>
         </div>
         <NewContractorForm />
       </div>
+              <hr className="border-pink-200" />
 
       {contractors.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">

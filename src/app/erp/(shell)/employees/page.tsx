@@ -74,38 +74,69 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   const nonCompliantCount = rows.filter((r) => r.compliance === "NON_COMPLIANT").length;
   const notConfiguredCount = rows.filter((r) => r.compliance === "NOT_CONFIGURED").length;
 
-  const complianceCards = [
-    { label: "Employees", value: String(rows.length) },
-    { label: "Compliant", value: String(compliantCount) },
-    { label: "Non-compliant", value: String(nonCompliantCount) },
-    { label: "Not configured", value: String(notConfiguredCount) },
-  ];
+  const inactiveCount = employees.filter((e) => e.status === "INACTIVE").length;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Employees</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Track compliance completion, documentation, and general employee information.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-pink-600">Employees</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Track compliance completion, documentation, and general employee information.
+        </p>
+      </div>
+
+      <hr className="border-pink-200" />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/erp/employees"
+          className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          <span className="h-2 w-2 rounded-full bg-gray-400" />
+          <span className="font-medium text-gray-700">{rows.length}</span>
+          <span className="text-gray-400 text-xs">total</span>
+        </Link>
+        <Link
+          href="/erp/employees?compliance=COMPLIANT"
+          className="flex items-center gap-2.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm hover:bg-emerald-100 transition-colors"
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="font-medium text-emerald-700">{compliantCount}</span>
+          <span className="text-emerald-600 text-xs">compliant</span>
+        </Link>
+        <Link
+          href="/erp/employees?compliance=NON_COMPLIANT"
+          className="flex items-center gap-2.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm hover:bg-red-100 transition-colors"
+        >
+          <span className="h-2 w-2 rounded-full bg-red-500" />
+          <span className="font-medium text-red-700">{nonCompliantCount}</span>
+          <span className="text-red-600 text-xs">non-compliant</span>
+        </Link>
+        <Link
+          href="/erp/employees?compliance=NOT_CONFIGURED"
+          className="flex items-center gap-2.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm hover:bg-amber-100 transition-colors"
+        >
+          <span className="h-2 w-2 rounded-full bg-amber-400" />
+          <span className="font-medium text-amber-700">{notConfiguredCount}</span>
+          <span className="text-amber-600 text-xs">not configured</span>
+        </Link>
+        {inactiveCount > 0 && (
+          <Link
+            href="/erp/employees?compliance=INACTIVE"
+            className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm hover:bg-gray-100 transition-colors"
+          >
+            <span className="h-2 w-2 rounded-full bg-gray-300" />
+            <span className="font-medium text-gray-500">{inactiveCount}</span>
+            <span className="text-gray-400 text-xs">inactive</span>
+          </Link>
+        )}
         <NewEmployeeForm />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {complianceCards.map((card) => (
-          <div key={card.label} className="rounded-lg border border-gray-300 bg-gray-50 p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-500">{card.label}</p>
-            <p className="mt-2 text-2xl font-bold text-gray-900">{card.value}</p>
-          </div>
-        ))}
-      </div>
+      <hr className="border-pink-200" />
 
-      <section className="rounded-lg border border-gray-300 bg-gray-50 p-4">
-        <h2 className="text-sm font-semibold text-gray-900">Employee Compliance</h2>
-        <p className="mt-1 text-xs text-gray-600">Open an employee to add compliance documents and update profile details.</p>
-        <form className="mt-3 flex flex-wrap items-end gap-2">
+      <section className="rounded-lg">
+        <form className="flex flex-wrap items-end gap-2">
           <div>
             <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="nameFilter">
               Search by name
@@ -186,7 +217,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                 <th className="px-3 py-2 font-medium">Contact</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-300">
+            <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
@@ -195,7 +226,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50">
+                  <tr key={r.id} className="even:bg-gray-50 odd:bg-white hover:bg-pink-50 transition-colors">
                     <td className="px-3 py-2">
                       <Link href={`/erp/employees/${r.id}`} className="font-medium text-pink-600 hover:underline">
                         {r.firstName} {r.lastName}
