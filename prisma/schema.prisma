@@ -392,6 +392,59 @@ model EmployeeDocument {
   @@index([expiresAt])
 }
 
+model Contractor {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name  String
+  email String? @unique
+
+  /// ACTIVE | INACTIVE
+  status String @default("ACTIVE")
+
+  /// Paperwork items required. Array of { label: string; url: string }.
+  paperwork                  Json?
+  paperworkUploadToken       String?   @unique
+  paperworkUploadTokenExpiry DateTime?
+
+  /// Token for the contractor info form link
+  infoToken       String?   @unique
+  infoTokenExpiry DateTime?
+
+  /// Info collected from contractor via the info form
+  contractorFullName String?
+  address            String?
+  dateOfBirth        String?
+  ssn                String?
+  bankAccountType    String?
+  bankAccountNumber  String?
+  bankRoutingNumber  String?
+  phone              String?
+  hasInsurance       Boolean?
+
+  documents ContractorDocument[]
+
+  @@index([status])
+  @@index([name])
+}
+
+model ContractorDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  label    String
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  @@index([contractorId])
+}
+
 /// Job interest / onboarding intake from sueep.com (public form). Extend `responses` when questionnaire fields are finalized.
 model CandidateApplication {
   id        String   @id @default(cuid())
