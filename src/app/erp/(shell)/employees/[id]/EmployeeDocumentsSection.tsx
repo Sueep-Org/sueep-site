@@ -34,6 +34,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
   const [reqOk, setReqOk] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   const presentTypes = useMemo(() => new Set(docs.map((d) => d.documentType.toLowerCase())), [docs]);
 
@@ -120,20 +121,11 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
     setAddError("");
     setAddLoading(true);
     const fd = new FormData(e.currentTarget);
-    const payload = {
-      documentType: fd.get("documentType"),
-      title: fd.get("title") || null,
-      issuedAt: fd.get("issuedAt") || null,
-      expiresAt: fd.get("expiresAt") || null,
-      fileUrl: fd.get("fileUrl") || null,
-      notes: fd.get("notes") || null,
-    };
 
     try {
       const res = await fetch(`/api/erp/employees/${employeeId}/documents`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: fd,
       });
       const data = (await res.json()) as DocumentRow & { error?: string };
       if (!res.ok) {
@@ -143,6 +135,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
       }
       setDocs((prev) => [data, ...prev]);
       e.currentTarget.reset();
+      setSelectedFileName(null);
     } catch {
       setAddError("Network error");
     } finally {
@@ -257,10 +250,25 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
               <input id="title" name="title" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls} htmlFor="fileUrl">
-                File URL (optional)
+              <label className={labelCls}>
+                File (optional)
               </label>
-              <input id="fileUrl" name="fileUrl" placeholder="https://…" className={inputCls} />
+              <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:border-pink-400 transition-colors">
+                <span className="rounded bg-[#E73C6E] px-2 py-0.5 text-xs font-medium text-white">
+                  Choose file
+                </span>
+                <span className="truncate text-gray-500">
+                  {selectedFileName ?? "No file chosen"}
+                </span>
+                <input
+                  type="file"
+                  name="file"
+                  className="sr-only"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name ?? null)}
+                />
+              </label>
+              <p className="mt-1 text-xs text-gray-400">PDF, JPEG, PNG, or WEBP · max 4 MB</p>
             </div>
             <div>
               <label className={labelCls} htmlFor="issuedAt">

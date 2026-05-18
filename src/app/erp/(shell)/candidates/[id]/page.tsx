@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
-import { CandidateQuestionnairePanel } from "./CandidateQuestionnairePanel";
 import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
@@ -31,9 +30,6 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       bankAccountRequired: true,
       paperworkUploadToken: true,
       paperworkUploadTokenExpiry: true,
-      questionnaireToken: true,
-      questionnaireSentAt: true,
-      questionnaireCompletedAt: true,
     },
   });
   if (!row) notFound();
@@ -67,20 +63,6 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
         </p>
       </div>
-
-      <CollapsiblePanel title="Questionnaire (Google Form)" defaultOpen={false}>
-        <CandidateQuestionnairePanel
-          id={row.id}
-          email={row.email}
-          questionnaireToken={row.questionnaireToken}
-          questionnaireSentAt={row.questionnaireSentAt ? row.questionnaireSentAt.toISOString() : null}
-          questionnaireCompletedAt={row.questionnaireCompletedAt ? row.questionnaireCompletedAt.toISOString() : null}
-          googleFormConfigured={Boolean(process.env.QUESTIONNAIRE_GOOGLE_FORM_URL?.trim())}
-          resendConfigured={Boolean(process.env.RESEND_API_KEY)}
-          webhookConfigured={Boolean(process.env.CANDIDATE_QUESTIONNAIRE_WEBHOOK_SECRET?.trim())}
-          siteUrl={siteUrl}
-        />
-      </CollapsiblePanel>
 
       <CollapsiblePanel title="Pipeline">
         <CandidateApplicationEditor

@@ -382,6 +382,9 @@ model EmployeeDocument {
   expiresAt    DateTime?
   isVerified   Boolean  @default(false)
   fileUrl      String?
+  fileData     Bytes?
+  fileMimeType String?
+  fileFilename String?
   notes        String?
 
   @@index([employeeId])
