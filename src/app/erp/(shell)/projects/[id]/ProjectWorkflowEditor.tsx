@@ -6,21 +6,26 @@ import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/project
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 
 const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = "block text-xs font-medium text-gray-600";
+
+type PipelineOption = { id: string; label: string };
 
 type Props = {
   projectId: string;
   status: string;
   projectDateIso: string | null;
   segment: string;
+  hubspotPipelineId: string | null;
+  isManual: boolean;
+  pipelineOptions: PipelineOption[];
 };
 
 function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segment }: Props) {
+export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segment, hubspotPipelineId, isManual, pipelineOptions }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -35,6 +40,7 @@ export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segme
 
     const lifecycle = String(fd.get("lifecycle") || "ACTIVE") as ProjectLifecycle;
     const nextSegment = String(fd.get("segment") || "OTHER");
+    const nextPipelineId = isManual ? (String(fd.get("pipelineId") || "").trim() || null) : undefined;
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -57,14 +63,17 @@ export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segme
     }
 
     try {
+      const payload: Record<string, unknown> = {
+        status: nextStatus,
+        segment: nextSegment,
+        projectDate: nextProjectDate,
+      };
+      if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
+
       const res = await fetch(`/api/erp/projects/${projectId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          status: nextStatus,
-          segment: nextSegment,
-          projectDate: nextProjectDate,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -81,9 +90,9 @@ export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segme
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Workflow & segment</h2>
-      <p className="mt-1 text-[11px] text-zinc-500">Move projects between upcoming, WIP, and completed, and reclassify segment.</p>
+    <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Workflow & segment</h2>
+      <p className="mt-1 text-[11px] text-gray-500">Move projects between upcoming, WIP, and completed, and reclassify segment.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label className={label} htmlFor="wf-lifecycle">
@@ -107,6 +116,21 @@ export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segme
             ))}
           </select>
         </div>
+        {isManual && pipelineOptions.length > 0 && (
+          <div>
+            <label className={label} htmlFor="wf-pipeline">
+              Category tab
+            </label>
+            <select id="wf-pipeline" name="pipelineId" className={input} defaultValue={hubspotPipelineId ?? ""}>
+              <option value="">Manual (no category)</option>
+              {pipelineOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       {error ? (
         <p className="mt-2 text-xs text-red-400" role="alert">
@@ -116,7 +140,7 @@ export function ProjectWorkflowEditor({ projectId, status, projectDateIso, segme
       <button
         type="submit"
         disabled={loading}
-        className="mt-4 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+        className="mt-4 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700 disabled:opacity-50"
       >
         {loading ? "Saving…" : "Save workflow"}
       </button>

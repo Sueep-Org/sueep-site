@@ -8,6 +8,7 @@ import {
 } from "@/lib/hubspot/pipelineStages";
 import { searchDealsInConfiguredStages, type HubSpotDealRecord } from "@/lib/hubspot/dealSearch";
 import { syncDealContactsToProject } from "@/lib/hubspot/syncDealContactsToProject";
+import { hubspotFetch } from "@/lib/hubspot/client";
 
 function prop(r: HubSpotDealRecord, name: string): string | null {
   const v = r.properties[name];
@@ -28,6 +29,20 @@ export type SyncDealResult = {
   phase: DealLifecyclePhase;
 };
 
+async function isDealClosedLost(dealId: string): Promise<boolean> {
+  try {
+    const res = await hubspotFetch(`/crm/v3/objects/deals/${dealId}?properties=hs_is_closed,hs_deal_stage_probability`);
+    if (!res.ok) return false;
+    const data = (await res.json()) as { properties?: { hs_is_closed?: string; hs_deal_stage_probability?: string } };
+    const props = data.properties ?? {};
+    if (props.hs_is_closed !== "true") return false;
+    const prob = parseFloat(props.hs_deal_stage_probability ?? "");
+    return Number.isFinite(prob) && prob < 5;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pull deals from HubSpot (configured pipelines/stages) and upsert `Project` rows
  * so they appear on the schedule / Gantt.
@@ -36,10 +51,12 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   synced: SyncDealResult[];
   errors: string[];
   reconciledJanitorial?: Array<{ hubspotDealId: string; projectId: string }>;
+  removedLostDeals?: string[];
 }> {
-  const deals = await searchDealsInConfiguredStages(200);
   const startDateProperty = process.env.HUBSPOT_PROJECT_START_DATE_PROPERTY?.trim() || null;
   const endDateProperty = process.env.HUBSPOT_PROJECT_END_DATE_PROPERTY?.trim() || null;
+  const extraProperties = [startDateProperty, endDateProperty].filter((p): p is string => Boolean(p));
+  const deals = await searchDealsInConfiguredStages(200, extraProperties);
   const cfg = parseHubSpotPipelineStageMap();
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
@@ -159,9 +176,33 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
   }
 
+  // Remove projects whose HubSpot deal is now closed-lost (no longer in any active stage)
+  const removedLostDeals: string[] = [];
+  const orphanedProjects = await prisma.project.findMany({
+    where: {
+      hubspotDealId: { not: null },
+      NOT: { hubspotDealId: { in: [...seenDealIds] } },
+    },
+    select: { id: true, hubspotDealId: true },
+  });
+  for (const project of orphanedProjects) {
+    const hid = project.hubspotDealId!;
+    if (reconciledJanitorial.some((r) => r.projectId === project.id)) continue;
+    const lost = await isDealClosedLost(hid);
+    if (lost) {
+      try {
+        await prisma.project.delete({ where: { id: project.id } });
+        removedLostDeals.push(hid);
+      } catch {
+        // project may have been deleted already or has constraints
+      }
+    }
+  }
+
   return {
     synced,
     errors,
     ...(reconciledJanitorial.length > 0 ? { reconciledJanitorial } : {}),
+    ...(removedLostDeals.length > 0 ? { removedLostDeals } : {}),
   };
 }

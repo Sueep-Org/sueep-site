@@ -25,13 +25,19 @@ export type HubSpotDealRecord = {
  * Fetch deals whose `dealstage` is one of your configured stages (all three pipelines).
  * HubSpot search API: POST /crm/v3/objects/deals/search
  */
-export async function searchDealsInConfiguredStages(limit = 100): Promise<HubSpotDealRecord[]> {
+export async function searchDealsInConfiguredStages(
+  limit = 100,
+  extraProperties: string[] = [],
+): Promise<HubSpotDealRecord[]> {
   const cfg = parseHubSpotPipelineStageMap();
   if (!cfg) {
     throw new Error("HUBSPOT_PIPELINE_STAGE_MAP is not set");
   }
   const stageIds = collectAllDealStageIds(cfg);
   if (stageIds.length === 0) return [];
+
+  const baseProperties = ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed"];
+  const properties = [...new Set([...baseProperties, ...extraProperties.filter(Boolean)])];
 
   const res = await hubspotFetch("/crm/v3/objects/deals/search", {
     method: "POST",
@@ -47,7 +53,7 @@ export async function searchDealsInConfiguredStages(limit = 100): Promise<HubSpo
           ],
         },
       ],
-      properties: ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed"],
+      properties,
       limit,
     }),
   });
