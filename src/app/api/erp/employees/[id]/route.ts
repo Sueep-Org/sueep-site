@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 type Ctx = { params: Promise<{ id: string }> };
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
+const BACKGROUND_CHECK_STATUSES = ["PASSED", "FAILED", "PENDING", "NOT_DONE"] as const;
 
 function parseDate(value: unknown): Date | null | undefined {
   if (value === undefined) return undefined;
@@ -85,6 +86,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "requiredDocuments must be an array" }, { status: 400 });
     }
     data.requiredDocuments = (body.requiredDocuments as unknown[]).filter((v): v is string => typeof v === "string");
+  }
+  if (body.backgroundCheckStatus !== undefined) {
+    const bcs = String(body.backgroundCheckStatus || "").toUpperCase();
+    if (!BACKGROUND_CHECK_STATUSES.includes(bcs as (typeof BACKGROUND_CHECK_STATUSES)[number])) {
+      return NextResponse.json({ error: "Invalid backgroundCheckStatus" }, { status: 400 });
+    }
+    data.backgroundCheckStatus = bcs;
   }
 
   try {

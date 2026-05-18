@@ -76,6 +76,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       <EmployeeDocumentsSection
         employeeId={employee.id}
         initialRequiredDocuments={requiredDocuments}
+        initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
         initialDocuments={employee.documents.map((d) => ({
           id: d.id,
           documentType: d.documentType,

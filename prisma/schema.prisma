@@ -358,6 +358,9 @@ model Employee {
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")
 
+  /// PASSED | FAILED | PENDING | NOT_DONE
+  backgroundCheckStatus String? @default("NOT_DONE")
+
   laborEntries LaborEntry[]
   documents EmployeeDocument[]
   laborAssignments LaborAssignment[]

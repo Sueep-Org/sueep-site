@@ -13,19 +13,31 @@ type DocumentRow = {
   notes: string | null;
 };
 
+type BackgroundCheckStatus = "PASSED" | "FAILED" | "PENDING" | "NOT_DONE";
+
+const BG_OPTIONS: { value: BackgroundCheckStatus; label: string; cls: string }[] = [
+  { value: "NOT_DONE",  label: "Not done",  cls: "border-gray-300 bg-gray-50 text-gray-600" },
+  { value: "PENDING",   label: "Pending",   cls: "border-yellow-300 bg-yellow-50 text-yellow-700" },
+  { value: "PASSED",    label: "Passed",    cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+  { value: "FAILED",    label: "Failed",    cls: "border-red-300 bg-red-50 text-red-700" },
+];
+
 type Props = {
   employeeId: string;
   initialDocuments: DocumentRow[];
   initialRequiredDocuments: string[];
+  initialBackgroundCheckStatus: BackgroundCheckStatus;
 };
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const labelCls = "block text-xs font-medium text-gray-600";
 
-export function EmployeeDocumentsSection({ employeeId, initialDocuments, initialRequiredDocuments }: Props) {
+export function EmployeeDocumentsSection({ employeeId, initialDocuments, initialRequiredDocuments, initialBackgroundCheckStatus }: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>(initialDocuments);
   const [required, setRequired] = useState<string[]>(initialRequiredDocuments);
+  const [bgStatus, setBgStatus] = useState<BackgroundCheckStatus>(initialBackgroundCheckStatus);
+  const [bgSaving, setBgSaving] = useState(false);
   const [newReq, setNewReq] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -42,6 +54,19 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
     () => required.filter((r) => presentTypes.has(r.toLowerCase())).length,
     [required, presentTypes],
   );
+
+  async function saveBgStatus(next: BackgroundCheckStatus) {
+    setBgSaving(true);
+    try {
+      await fetch(`/api/erp/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ backgroundCheckStatus: next }),
+      });
+    } finally {
+      setBgSaving(false);
+    }
+  }
 
   async function persistRequired(next: string[]) {
     setSavingReq(true);
@@ -155,6 +180,30 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
         <p className="text-xs text-gray-500">
           Define which document types this employee must have on file. Compliance is met when all are present.
         </p>
+
+        <div>
+          <p className="text-xs font-medium text-gray-600 mb-2">Background check</p>
+          <div className="flex flex-wrap gap-2">
+            {BG_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={bgSaving}
+                onClick={() => {
+                  setBgStatus(opt.value);
+                  void saveBgStatus(opt.value);
+                }}
+                className={[
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-opacity",
+                  bgStatus === opt.value ? opt.cls + " opacity-100 ring-2 ring-offset-1 ring-current" : "border-gray-200 bg-white text-gray-400 hover:border-gray-300",
+                  bgSaving ? "opacity-50 cursor-not-allowed" : "",
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {required.length > 0 && (
           <div>

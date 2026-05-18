@@ -44,8 +44,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     .map((e) => {
       const requiredDocs = parseRequiredDocuments(e.requiredDocuments);
       const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
-      const nextExpiry = e.documents.find((d) => d.expiresAt != null)?.expiresAt ?? null;
-      return { ...e, compliance, nextExpiry };
+      return { ...e, compliance };
     })
     .filter((e) => (complianceFilter ? e.compliance === complianceFilter : true));
 
@@ -184,14 +183,13 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-medium">Docs on file</th>
-                <th className="px-3 py-2 font-medium">Next expiry</th>
                 <th className="px-3 py-2 font-medium">Contact</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-300">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -213,7 +211,6 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-gray-900">{r.documents.length}</td>
-                    <td className="px-3 py-2 text-gray-900">{r.nextExpiry ? r.nextExpiry.toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>
                   </tr>
                 ))
