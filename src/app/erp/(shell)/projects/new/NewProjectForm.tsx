@@ -21,6 +21,42 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 
 const CLEANING_RATES = { 1: 185, 2: 255, 3: 385 } as const;
 const PAINTING_RATES = { 1: 340, 2: 400, 3: 450 } as const;
+const UNIT_FEATURE_OPTIONS = [
+  { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
+  { value: "2/1", label: "2/1", bedrooms: 2, bathrooms: 1 },
+  { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
+  { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
+  { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
+] as const;
+
+type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
+type UnitScope = {
+  id: string;
+  unitNumber: string;
+  features: UnitFeatureValue;
+  unitQuality: string;
+  fullPaint: boolean;
+  touchUpPaint: boolean;
+  lightWallTouchUps: boolean;
+  materialsAdditional: boolean;
+  fullClean: boolean;
+  carpetCleaning: boolean;
+};
+
+function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(2)}`): UnitScope {
+  return {
+    id,
+    unitNumber: "",
+    features: "1/1",
+    unitQuality: "",
+    fullPaint: false,
+    touchUpPaint: false,
+    lightWallTouchUps: false,
+    materialsAdditional: false,
+    fullClean: false,
+    carpetCleaning: false,
+  };
+}
 
 function normalizeBeds(value?: number | null): 1 | 2 | 3 {
   const beds = Number(value ?? 1);
@@ -35,17 +71,39 @@ function formatUsd(cents: number) {
   );
 }
 
-function parseUnitNumbers(raw: string) {
-  return raw
-    .split(/[,\n;]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
+function getUnitFeature(value: UnitFeatureValue) {
+  return UNIT_FEATURE_OPTIONS.find((option) => option.value === value) ?? UNIT_FEATURE_OPTIONS[0];
+}
+
+function unitScopeSummary(unit: UnitScope) {
+  const services = [
+    unit.fullClean ? "full clean" : null,
+    unit.fullPaint ? "full paint" : null,
+    unit.touchUpPaint ? "touch-up paint" : null,
+    unit.lightWallTouchUps ? "light wall touch-ups" : null,
+    unit.materialsAdditional ? "additional materials" : null,
+    unit.carpetCleaning ? "carpet cleaning" : null,
+  ].filter(Boolean);
+
+  return `${unit.unitNumber || "Unit"} (${unit.features})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+    services.length ? services.join(", ") : "no scope selected"
+  }`;
 }
 
 interface EmployeeOption {
   id: string;
   firstName: string;
   lastName: string;
+}
+
+interface ProjectOption {
+  id: string;
+  jobTitle: string;
+  description?: string | null;
+  supervisor?: string | null;
+  status?: string;
+  segment?: string;
+  hubspotPipelineId?: string | null;
 }
 
 export function NewProjectForm() {
@@ -59,6 +117,8 @@ export function NewProjectForm() {
   const [jobOptions, setJobOptions] = useState<string[]>([]);
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
+  const [activeJanitorialProjects, setActiveJanitorialProjects] = useState<ProjectOption[]>([]);
+  const [buildingProjectId, setBuildingProjectId] = useState("");
 
   const [requestType, setRequestType] = useState<"TURNOVER" | "REGULAR">("TURNOVER");
   const [buildingName, setBuildingName] = useState("");
@@ -66,17 +126,7 @@ export function NewProjectForm() {
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
-  const [unitNumbers, setUnitNumbers] = useState("");
-  const [unitQuality, setUnitQuality] = useState("");
-  const [bedrooms, setBedrooms] = useState(1);
-  const [bathrooms, setBathrooms] = useState<number | "">("");
-
-  const [fullPaint, setFullPaint] = useState(false);
-  const [touchUpPaint, setTouchUpPaint] = useState(false);
-  const [lightWallTouchUps, setLightWallTouchUps] = useState(false);
-  const [materialsAdditional, setMaterialsAdditional] = useState(false);
-  const [fullClean, setFullClean] = useState(false);
-  const [carpetCleaning, setCarpetCleaning] = useState(false);
+  const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -117,6 +167,22 @@ export function NewProjectForm() {
 
   useEffect(() => {
     let mounted = true;
+    fetch("/api/erp/projects?category=active-janitorial")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        if (!mounted) return;
+        setActiveJanitorialProjects(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (mounted) setActiveJanitorialProjects([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     fetch("/api/erp/employees")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
@@ -136,84 +202,99 @@ export function NewProjectForm() {
   const isCustomJob = jobTitle === "__custom__";
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
 
-  const selectedUnits = useMemo(() => parseUnitNumbers(unitNumbers), [unitNumbers]);
-  const unitCount = Math.max(1, selectedUnits.length);
-  const normalizedBeds = normalizeBeds(bedrooms ?? 1);
+  const unitCount = Math.max(1, unitScopes.length);
+  const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
+  const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
+  const normalizedBathrooms = firstUnitFeature.bathrooms;
+
+  function updateUnitScope(id: string, patch: Partial<UnitScope>) {
+    setUnitScopes((prev) => prev.map((unit) => (unit.id === id ? { ...unit, ...patch } : unit)));
+  }
+
+  function addUnitScope() {
+    setUnitScopes((prev) => [...prev, createUnitScope()]);
+  }
+
+  function removeUnitScope(id: string) {
+    setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
+  }
 
   const packagePricing = useMemo(() => {
-    const baseCleaning = CLEANING_RATES[normalizedBeds] * 100;
-    const basePainting = PAINTING_RATES[normalizedBeds] * 100;
-    let packageLabel = "No package selected";
-    let basePerUnit = 0;
-
-    if (fullClean && fullPaint) {
-      packageLabel = "Cleaning + painting";
-      basePerUnit = baseCleaning + basePainting;
-    } else if (fullPaint) {
-      packageLabel = "Painting only";
-      basePerUnit = basePainting;
-    } else if (fullClean) {
-      packageLabel = "Cleaning only";
-      basePerUnit = baseCleaning;
-    } else if (touchUpPaint) {
-      packageLabel = "Touch-up paint";
-      basePerUnit = 0;
-    }
-
-    let totalPrice = basePerUnit * unitCount;
+    let totalPrice = 0;
     const breakdown: string[] = [];
 
-    if (packageLabel !== "No package selected") {
-      breakdown.push(`${packageLabel} (${normalizedBeds}-bed) × ${unitCount} unit${unitCount === 1 ? "" : "s"}`);
-    }
+    unitScopes.forEach((unit, index) => {
+      const feature = getUnitFeature(unit.features);
+      const beds = normalizeBeds(feature.bedrooms);
+      const baseCleaning = CLEANING_RATES[beds] * 100;
+      const basePainting = PAINTING_RATES[beds] * 100;
+      let unitLabel = "No package selected";
+      let unitTotal = 0;
 
-    const touchUpTotal = touchUpPaint ? 12500 * unitCount : 0;
-    if (touchUpPaint) {
-      totalPrice += touchUpTotal;
-      breakdown.push(`Touch-up paint ${unitCount > 1 ? `× ${unitCount}` : ""}: ${formatUsd(touchUpTotal)}`);
-    }
+      if (unit.fullClean && unit.fullPaint) {
+        unitLabel = "Cleaning + painting";
+        unitTotal += baseCleaning + basePainting;
+      } else if (unit.fullPaint) {
+        unitLabel = "Painting only";
+        unitTotal += basePainting;
+      } else if (unit.fullClean) {
+        unitLabel = "Cleaning only";
+        unitTotal += baseCleaning;
+      } else if (unit.touchUpPaint) {
+        unitLabel = "Touch-up paint";
+      }
 
-    if (materialsAdditional) {
-      totalPrice += 8500;
-      breakdown.push("Additional materials: $85");
-    }
+      if (unit.touchUpPaint) unitTotal += 12500;
+      if (unit.materialsAdditional) unitTotal += 8500;
+      if (unit.carpetCleaning) unitTotal += unit.fullClean ? 8000 : 12500;
 
-    if (carpetCleaning) {
-      const carpetPrice = fullClean ? 8000 : 12500;
-      totalPrice += carpetPrice;
-      breakdown.push(`Carpet cleaning: ${formatUsd(carpetPrice)}`);
-    }
+      totalPrice += unitTotal;
+      if (unitTotal > 0) {
+        breakdown.push(`${unit.unitNumber || `Unit ${index + 1}`} (${unit.features}) - ${unitLabel}: ${formatUsd(unitTotal)}`);
+      }
+    });
 
     if (breakdown.length === 0) {
       breakdown.push("No priceable work selected yet.");
     }
 
     return {
-      packageLabel,
-      perUnitLabel: formatUsd(basePerUnit),
+      packageLabel: unitScopes.some((unit) => unit.fullClean || unit.fullPaint || unit.touchUpPaint)
+        ? "Per-unit scope"
+        : "No package selected",
+      perUnitLabel: "Varies by unit",
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
       unitCount,
     };
-  }, [normalizedBeds, unitCount, fullClean, fullPaint, touchUpPaint, materialsAdditional, carpetCleaning]);
+  }, [unitScopes, unitCount]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
     const fd = new FormData(e.currentTarget);
+    const unitDetails = unitScopes.map(unitScopeSummary);
+    const selectedBuildingProject = activeJanitorialProjects.find((project) => project.id === buildingProjectId);
+    const turnoverDescription = [
+      descriptionValue,
+      isTurnover && selectedBuildingProject ? `Building project: ${selectedBuildingProject.jobTitle}` : null,
+      isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const payload = {
       segment,
       jobTitle: finalJobTitle || fd.get("jobTitle") || undefined,
       supervisor: fd.get("supervisor") || undefined,
-      description: descriptionValue || undefined,
+      description: turnoverDescription || undefined,
       projectDate: fd.get("projectDate") || undefined,
       projectEndDate: fd.get("projectEndDate") || undefined,
       percentDone: fd.get("percentDone") || undefined,
       percentInvoiced: fd.get("percentInvoiced") || undefined,
-      contractValue: fd.get("contractValue") || undefined,
+      contractValue: fd.get("contractValue") || (isTurnover && packagePricing.totalPrice ? String(packagePricing.totalPrice / 100) : undefined),
       estMaterial: fd.get("estMaterial") || undefined,
       estTravel: fd.get("estTravel") || undefined,
       estLabor: fd.get("estLabor") || undefined,
@@ -222,21 +303,23 @@ export function NewProjectForm() {
       estHours: fd.get("estHours") || undefined,
       actualHours: fd.get("actualHours") || undefined,
       requestType,
+      buildingProjectId: buildingProjectId || undefined,
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
-      unitNumbers: unitNumbers.trim() || undefined,
-      unitQuality: unitQuality.trim() || undefined,
-      bedrooms: bedrooms || undefined,
-      bathrooms: bathrooms === "" ? undefined : bathrooms,
-      fullPaint,
-      touchUpPaint,
-      lightWallTouchUps,
-      materialsAdditional,
-      fullClean,
-      carpetCleaning,
+      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`).join(", ") || undefined,
+      unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
+      bedrooms: normalizedBeds || undefined,
+      bathrooms: normalizedBathrooms,
+      unitScopes,
+      fullPaint: unitScopes.some((unit) => unit.fullPaint),
+      touchUpPaint: unitScopes.some((unit) => unit.touchUpPaint),
+      lightWallTouchUps: unitScopes.some((unit) => unit.lightWallTouchUps),
+      materialsAdditional: unitScopes.some((unit) => unit.materialsAdditional),
+      fullClean: unitScopes.some((unit) => unit.fullClean),
+      carpetCleaning: unitScopes.some((unit) => unit.carpetCleaning),
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       laborerId: laborerId || undefined,
@@ -321,17 +404,36 @@ export function NewProjectForm() {
             <p className={sectionHeader}>Step 1 — Property & PM info</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={label} htmlFor="buildingName">
-                  Building name
+                <label className={label} htmlFor="buildingProjectId">
+                  Building
                 </label>
-                <input
-                  id="buildingName"
-                  name="buildingName"
+                <select
+                  id="buildingProjectId"
+                  name="buildingProjectId"
                   required
                   className={input}
-                  value={buildingName}
-                  onChange={(e) => setBuildingName(e.target.value)}
-                />
+                  value={buildingProjectId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const project = activeJanitorialProjects.find((option) => option.id === id);
+                    setBuildingProjectId(id);
+                    setBuildingName(project?.jobTitle || "");
+                    setPmName(project?.supervisor || "");
+                  }}
+                >
+                  <option value="">Select from active janitorial...</option>
+                  {activeJanitorialProjects.length === 0 ? (
+                    <option value="" disabled>
+                      No active janitorial projects found
+                    </option>
+                  ) : null}
+                  {activeJanitorialProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.jobTitle}
+                    </option>
+                  ))}
+                </select>
+                <input type="hidden" name="buildingName" value={buildingName} />
               </div>
               <div>
                 <label className={label} htmlFor="buildingAddress">
@@ -414,109 +516,94 @@ export function NewProjectForm() {
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 2 — Unit details</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="unitNumbers">
-                  Unit number(s)
-                </label>
-                <textarea
-                  id="unitNumbers"
-                  name="unitNumbers"
-                  rows={3}
-                  className={input}
-                  placeholder="Separate units with commas or line breaks"
-                  value={unitNumbers}
-                  onChange={(e) => setUnitNumbers(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="unitQuality">
-                  Quality of units
-                </label>
-                <input
-                  id="unitQuality"
-                  name="unitQuality"
-                  className={input}
-                  value={unitQuality}
-                  onChange={(e) => setUnitQuality(e.target.value)}
-                  placeholder="e.g. Vacant, light wear, heavy dust"
-                />
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className={sectionHeader}>Step 2 — Units & independent scope</p>
+              <button
+                type="button"
+                onClick={addUnitScope}
+                className="rounded-md border border-pink-200 bg-white px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-50"
+              >
+                Add unit
+              </button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="bedrooms">
-                  Bedrooms
-                </label>
-                <input
-                  id="bedrooms"
-                  name="bedrooms"
-                  type="number"
-                  min={1}
-                  max={10}
-                  className={input}
-                  value={bedrooms}
-                  onChange={(e) => setBedrooms(Number(e.target.value) || 1)}
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="bathrooms">
-                  Bathrooms
-                </label>
-                <input
-                  id="bathrooms"
-                  name="bathrooms"
-                  type="number"
-                  min={0}
-                  max={10}
-                  className={input}
-                  value={bathrooms}
-                  onChange={(e) => setBathrooms(e.target.value === "" ? "" : Number(e.target.value))}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className={sectionHeader}>Step 3 — Scope of work</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">Paint</p>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={fullPaint} onChange={(e) => setFullPaint(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Full paint</span>
-                </label>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={touchUpPaint} onChange={(e) => setTouchUpPaint(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Touch-up paint</span>
-                </label>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">Materials</p>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={lightWallTouchUps} onChange={(e) => setLightWallTouchUps(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Light wall touch-ups</span>
-                </label>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={materialsAdditional} onChange={(e) => setMaterialsAdditional(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Additional materials</span>
-                </label>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">Cleaning</p>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={fullClean} onChange={(e) => setFullClean(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Full clean</span>
-                </label>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">Add-ons</p>
-                <label className="flex items-center mt-3">
-                  <input type="checkbox" checked={carpetCleaning} onChange={(e) => setCarpetCleaning(e.target.checked)} className="h-4 w-4 text-pink-600" />
-                  <span className={checkboxLabel}>Carpet cleaning (Add-on)</span>
-                </label>
-              </div>
+            <div className="space-y-3">
+              {unitScopes.map((unit, index) => (
+                <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_120px_1.5fr_auto]">
+                    <div>
+                      <label className={label} htmlFor={`unit-${unit.id}`}>
+                        Unit number
+                      </label>
+                      <input
+                        id={`unit-${unit.id}`}
+                        className={input}
+                        value={unit.unitNumber}
+                        onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
+                        placeholder={`Unit ${index + 1}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor={`features-${unit.id}`}>
+                        Features
+                      </label>
+                      <select
+                        id={`features-${unit.id}`}
+                        className={input}
+                        value={unit.features}
+                        onChange={(e) => updateUnitScope(unit.id, { features: e.target.value as UnitFeatureValue })}
+                      >
+                        {UNIT_FEATURE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={label} htmlFor={`quality-${unit.id}`}>
+                        Unit quality
+                      </label>
+                      <input
+                        id={`quality-${unit.id}`}
+                        className={input}
+                        value={unit.unitQuality}
+                        onChange={(e) => updateUnitScope(unit.id, { unitQuality: e.target.value })}
+                        placeholder="e.g. Vacant, light wear, heavy dust"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => removeUnitScope(unit.id)}
+                        disabled={unitScopes.length <= 1}
+                        className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      ["fullClean", "Full clean"],
+                      ["fullPaint", "Full paint"],
+                      ["touchUpPaint", "Touch-up paint"],
+                      ["lightWallTouchUps", "Light wall touch-ups"],
+                      ["materialsAdditional", "Additional materials"],
+                      ["carpetCleaning", "Carpet cleaning"],
+                    ].map(([key, text]) => (
+                      <label key={key} className="flex items-center rounded-md border border-gray-200 bg-white px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(unit[key as keyof UnitScope])}
+                          onChange={(e) => updateUnitScope(unit.id, { [key]: e.target.checked } as Partial<UnitScope>)}
+                          className="h-4 w-4 text-pink-600"
+                        />
+                        <span className={checkboxLabel}>{text}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -556,7 +643,7 @@ export function NewProjectForm() {
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm text-gray-700">Selected package: <span className="font-semibold text-gray-900">{packagePricing.packageLabel}</span></p>
-              <p className="text-sm text-gray-700">Bedrooms: <span className="font-semibold text-gray-900">{normalizedBeds}</span></p>
+              <p className="text-sm text-gray-700">Primary unit: <span className="font-semibold text-gray-900">{unitScopes[0]?.features ?? "1/1"}</span></p>
               <p className="text-sm text-gray-700">Units: <span className="font-semibold text-gray-900">{unitCount}</span></p>
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900">{packagePricing.totalPriceLabel}</span></p>
               <div className="mt-3 space-y-1 text-xs text-gray-500">

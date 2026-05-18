@@ -1,18 +1,34 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
+import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegments";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 
-const SEGMENTS = ["COMMERCIAL", "RESIDENTIAL"] as const;
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const segment = searchParams.get("segment");
   const status = searchParams.get("status");
+  const category = searchParams.get("category");
+  const cfg = parseHubSpotPipelineStageMap();
+  const normalizedSegment = segment ? normalizeProjectSegment(segment) : null;
+  const activeJanitorialSegments = cfg?.janitorial.pipelineId
+    ? ["JANITORIAL_TURNOVER_REQUESTS"]
+    : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
   const projects = await prisma.project.findMany({
     where: {
-      ...(segment && SEGMENTS.includes(segment as (typeof SEGMENTS)[number]) ? { segment } : {}),
+      ...(category === "active-janitorial"
+        ? {
+            status: "ACTIVE",
+            OR: [
+              { segment: { in: activeJanitorialSegments } },
+              ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
+            ],
+          }
+        : {}),
+      ...(normalizedSegment && PROJECT_SEGMENTS.includes(normalizedSegment) ? { segment: normalizedSegment } : {}),
       ...(status && STATUSES.includes(status as (typeof STATUSES)[number]) ? { status } : {}),
     },
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
@@ -37,8 +53,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "jobTitle is required" }, { status: 400 });
   }
 
-  const segmentRaw = String(body.segment || "COMMERCIAL").toUpperCase();
-  const segment = SEGMENTS.includes(segmentRaw as (typeof SEGMENTS)[number]) ? segmentRaw : "COMMERCIAL";
+  const segment = normalizeProjectSegment(String(body.segment || "COMMERCIAL_CLEANING"));
 
   const projectDate =
     typeof body.projectDate === "string" && body.projectDate
