@@ -1,59 +1,22 @@
 import Link from "next/link";
 import ContactForm from "./components/ContactForm";
 import PartnersCarousel from "./components/PartnersCarousel";
+import { MarketingNav } from "./components/MarketingNav";
+
+const HOME_NAV_LINKS = [
+  { label: "About", href: "#about", anchor: true as const },
+  { label: "Services", href: "#services", anchor: true as const },
+  { label: "Projects", href: "#projects", anchor: true as const },
+  { label: "Contact", href: "#contact", anchor: true as const },
+  { label: "Referral program", href: "/referral", subtle: true },
+  { label: "Careers", href: "/careers", subtle: true },
+  { label: "Blog", href: "/blog", subtle: true },
+];
 
 export default function Home() {
   return (
     <main className="bg-white text-gray-900">
-      {/* Header */}
-      <header className="sticky top-0 bg-white border-b border-gray-200 z-50">
-        <div className="max-w-7xl mx-auto flex justify-between items-center px-6 h-16">
-          <Link href="/" className="flex items-center gap-3">
-            <img src="/sueeplogo.png" alt="Sueep logo" className="h-12 w-auto" />
-          </Link>
-          <nav className="hidden md:flex gap-8 text-sm font-medium items-center">
-            <a href="#about" className="hover:text-[#E73C6E]">About</a>
-            <a href="#services" className="hover:text-[#E73C6E]">Services</a>
-            <a href="#projects" className="hover:text-[#E73C6E]">Projects</a>
-            <a href="#contact" className="hover:text-[#E73C6E]">Contact</a>
-            <Link
-              href="/referral"
-              className="text-xs font-normal text-gray-500 hover:text-[#E73C6E]"
-            >
-              Referral program
-            </Link>
-            <Link href="/careers" className="text-xs font-normal text-gray-500 hover:text-[#E73C6E]">
-              Careers
-            </Link>
-            <Link
-              href="/blog"
-              className="text-xs font-normal text-gray-500 hover:text-[#E73C6E]"
-            >
-              Blog
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <Link
-              href="/referral"
-              className="md:hidden text-xs text-gray-500 hover:text-[#E73C6E] whitespace-nowrap"
-            >
-              Referral
-            </Link>
-            <Link href="/careers" className="md:hidden text-xs text-gray-500 hover:text-[#E73C6E] whitespace-nowrap">
-              Careers
-            </Link>
-            <Link
-              href="/blog"
-              className="md:hidden text-xs text-gray-500 hover:text-[#E73C6E] whitespace-nowrap"
-            >
-              Blog
-            </Link>
-            <a href="#contact" className="px-4 py-2 bg-[#E73C6E] text-white rounded-md text-sm font-medium hover:opacity-90">
-              Request a Quote
-            </a>
-          </div>
-        </div>
-      </header>
+      <MarketingNav links={HOME_NAV_LINKS} cta={{ label: "Request a Quote", href: "#contact" }} />
 
       {/* Hero */}
       <section className="relative h-[80vh] flex items-center justify-center text-center">
@@ -74,10 +37,12 @@ export default function Home() {
 
       {/* About */}
       <section id="about" className="max-w-7xl mx-auto px-6 py-20 text-center">
-        <h2 className="text-2xl md:text-3xl font-bold uppercase">About Sueep</h2>
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E]">Who we are</p>
+        <h2 className="mt-2 text-2xl md:text-3xl font-bold uppercase">About Sueep</h2>
+        <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#E73C6E]" />
         <p className="mt-6 text-gray-700 max-w-3xl mx-auto text-lg leading-relaxed">
-          For over two decades, Sueep has helped property managers and general contractors hit deadlines and handoffs.  
-          Our teams run predictable, large‑scale programs: construction final cleans, rapid unit turnovers, and daily janitorial.  
+          For over two decades, Sueep has helped property managers and general contractors hit deadlines and handoffs.
+          Our teams run predictable, large‑scale programs: construction final cleans, rapid unit turnovers, and daily janitorial.
           We focus on outcomes that matter—clear scopes, tight QC checklists, proactive communication, and crews sized to your schedule.
         </p>
       </section>
@@ -85,7 +50,9 @@ export default function Home() {
       {/* Services */}
       <section id="services" className="bg-gray-50 py-20">
         <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-2xl md:text-3xl font-bold uppercase text-center">Services</h2>
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E] text-center">What we do</p>
+          <h2 className="mt-2 text-2xl md:text-3xl font-bold uppercase text-center">Services</h2>
+          <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#E73C6E]" />
           <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
             {[
               {
@@ -105,7 +72,7 @@ export default function Home() {
                 desc: "Unit turns and occupied refreshes with consistent prep and clean edges.",
               },
             ].map((service) => (
-              <div key={service.title} className="p-6 border border-gray-200 bg-white hover:shadow-md transition">
+              <div key={service.title} className="border-t-4 border-[#E73C6E] p-6 border-x border-b border-gray-200 bg-white hover:shadow-md transition">
                 <h3 className="font-semibold text-lg">{service.title}</h3>
                 <p className="mt-3 text-sm text-gray-600">{service.desc}</p>
               </div>
@@ -116,18 +83,22 @@ export default function Home() {
 
       {/* Projects */}
       <section id="projects" className="max-w-7xl mx-auto px-6 py-20">
-        <h2 className="text-2xl md:text-3xl font-bold uppercase text-center">Featured Projects</h2>
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E] text-center">Our work</p>
+        <h2 className="mt-2 text-2xl md:text-3xl font-bold uppercase text-center">Featured Projects</h2>
+        <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#E73C6E]" />
         <div className="mt-12 grid md:grid-cols-3 gap-8">
           {[
             { img: "/projects/Vantage.jpg", name: "Vantage View Summer Turns", detail: "30+ workers • 5 years" },
             { img: "/projects/UDR.jpg", name: "UDR Portfolio – King of Prussia", detail: "500k+ sqft janitorial program" },
             { img: "/projects/Birchwood.jpg", name: "Birchwood", detail: "New development" },
           ].map((proj) => (
-            <div key={proj.name} className="overflow-hidden border border-gray-200">
-              <img src={proj.img} alt={proj.name} className="w-full h-56 object-cover transition" />
-              <div className="p-4">
+            <div key={proj.name} className="overflow-hidden border border-gray-200 group">
+              <div className="relative overflow-hidden">
+                <img src={proj.img} alt={proj.name} className="w-full h-56 object-cover transition duration-300 group-hover:scale-105" />
+              </div>
+              <div className="p-4 border-t-2 border-[#E73C6E]">
                 <h3 className="font-semibold">{proj.name}</h3>
-                <p className="text-sm text-gray-600">{proj.detail}</p>
+                <p className="text-sm text-gray-600 mt-1">{proj.detail}</p>
               </div>
             </div>
           ))}
@@ -136,9 +107,11 @@ export default function Home() {
 
       {/* Our Story */}
       <section id="story" className="bg-gray-50 py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-2xl md:text-3xl font-bold uppercase text-center">Our Story</h2>
-          <p className="mt-12 text-gray-700 text-lg leading-relaxed max-w-3xl mx-auto">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E]">Since 2018</p>
+          <h2 className="mt-2 text-2xl md:text-3xl font-bold uppercase">Our Story</h2>
+          <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#E73C6E]" />
+          <p className="mt-8 text-gray-700 text-lg leading-relaxed max-w-3xl mx-auto">
             Sueep started in 2018 as a family business in the residential cleaning space. Over time, it evolved to serve commercial clients and additional services. Sueep maintains its family approach investing in supervision, clear scopes, and quality control so projects hand off smoothly and portfolios stay consistent.
           </p>
         </div>
@@ -146,7 +119,9 @@ export default function Home() {
 
       {/* Partners */}
       <section className="max-w-7xl mx-auto px-6 py-20">
-        <h2 className="text-2xl md:text-3xl font-bold uppercase text-center">Companies We Service</h2>
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E] text-center">Trusted by</p>
+        <h2 className="mt-2 text-2xl md:text-3xl font-bold uppercase text-center">Companies We Service</h2>
+        <div className="mx-auto mt-4 h-1 w-12 rounded-full bg-[#E73C6E]" />
         <div className="mt-12">
           <PartnersCarousel
             intervalMs={2200}
@@ -167,7 +142,8 @@ export default function Home() {
             <ContactForm />
           </div>
           <div className="md:text-right md:pl-8">
-            <h3 className="font-semibold text-xl md:text-2xl">Sueep Headquarters</h3>
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E]">Get in touch</p>
+            <h3 className="mt-2 font-semibold text-xl md:text-2xl">Sueep Headquarters</h3>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">2 Bala Plaza, Suite 300<br />Bala Cynwyd, PA 19004</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">(267) 217-3596</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">contact@sueep.com</p>
