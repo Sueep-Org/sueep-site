@@ -13,17 +13,20 @@ export async function GET(req: Request) {
   const category = searchParams.get("category");
   const cfg = parseHubSpotPipelineStageMap();
   const normalizedSegment = segment ? normalizeProjectSegment(segment) : null;
-  const activeJanitorialSegments = cfg?.janitorial.pipelineId
+  const janitorialSegments = cfg?.janitorial.pipelineId
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+  const isJanitorialCategory = category === "active-janitorial" || category === "schedule-janitorial";
 
   const projects = await prisma.project.findMany({
     where: {
-      ...(category === "active-janitorial"
+      ...(isJanitorialCategory
         ? {
-            status: "ACTIVE",
+            ...(category === "active-janitorial"
+              ? { status: "ACTIVE" }
+              : { status: { notIn: ["COMPLETE", "ARCHIVED"] } }),
             OR: [
-              { segment: { in: activeJanitorialSegments } },
+              { segment: { in: janitorialSegments } },
               ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
             ],
           }

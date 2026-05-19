@@ -175,7 +175,7 @@ export function NewProjectForm() {
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/erp/projects?category=active-janitorial")
+    fetch("/api/erp/projects?category=schedule-janitorial")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
@@ -216,7 +216,15 @@ export function NewProjectForm() {
   const normalizedBathrooms = firstUnitFeature.bathrooms;
 
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
-    setUnitScopes((prev) => prev.map((unit) => (unit.id === id ? { ...unit, ...patch } : unit)));
+    setUnitScopes((prev) =>
+      prev.map((unit) => {
+        if (unit.id !== id) return unit;
+        const next = { ...unit, ...patch };
+        if (patch.fullPaint) next.touchUpPaint = false;
+        if (unit.fullPaint && patch.touchUpPaint) next.touchUpPaint = false;
+        return next;
+      })
+    );
   }
 
   function addUnitScope() {
@@ -435,10 +443,10 @@ export function NewProjectForm() {
                     setPmName(project?.supervisor || "");
                   }}
                 >
-                  <option value="">Select from active janitorial...</option>
+                  <option value="">Select from janitorial schedule...</option>
                   {activeJanitorialProjects.length === 0 ? (
                     <option value="" disabled>
-                      No active janitorial projects found
+                      No janitorial schedule projects found
                     </option>
                   ) : null}
                   {activeJanitorialProjects.map((project) => (
@@ -582,17 +590,18 @@ export function NewProjectForm() {
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {[
-                      ["fullClean", "Full clean"],
-                      ["fullPaint", "Full paint"],
-                      ["touchUpPaint", "Touch-up paint"],
-                      ["lightWallTouchUps", "Light wall touch-ups"],
-                      ["materialsAdditional", "Additional materials"],
-                      ["carpetCleaning", "Carpet cleaning"],
-                    ].map(([key, text]) => (
-                      <label key={key} className="flex items-center rounded-md border border-gray-200 bg-white px-3 py-2">
+                      { key: "fullClean", text: "Full clean" },
+                      { key: "fullPaint", text: "Full paint" },
+                      { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
+                      { key: "lightWallTouchUps", text: "Light wall touch-ups" },
+                      { key: "materialsAdditional", text: "Additional materials" },
+                      { key: "carpetCleaning", text: "Carpet cleaning" },
+                    ].map(({ key, text, disabled }) => (
+                      <label key={key} className={`flex items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(unit[key as keyof UnitScope])}
+                          disabled={disabled}
                           onChange={(e) => updateUnitScope(unit.id, { [key]: e.target.checked } as Partial<UnitScope>)}
                           className="h-4 w-4 text-pink-600"
                         />
