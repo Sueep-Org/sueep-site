@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { CollapsibleSection } from "./CollapsibleSection";
 import {
   addDays,
   dayKey,
@@ -91,38 +92,29 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
 
   const sameMonth = (a: Date, b: Date) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 
-  return (
-    <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Schedule</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Calendar and Gantt views of all projects. Bars use start / target end dates; without an end date, a{" "}
-          {14}-day window is assumed. Click a project to open the detail page.
-        </p>
-      </div>
+  const calendarNav = (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={prevMonth}
+        className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+      >
+        ← Prev
+      </button>
+      <span className="min-w-[140px] text-center text-sm font-semibold text-gray-800">{monthLabel(cursor)}</span>
+      <button
+        type="button"
+        onClick={nextMonth}
+        className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  );
 
-      {/* Calendar */}
-      <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Calendar</h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={prevMonth}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-            >
-              ← Prev
-            </button>
-            <span className="min-w-[160px] text-center text-sm font-medium text-gray-900">{monthLabel(cursor)}</span>
-            <button
-              type="button"
-              onClick={nextMonth}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
+  return (
+    <div className="space-y-6">
+      <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
             <div className="grid grid-cols-7 gap-px rounded-lg border border-gray-200 bg-gray-200 text-center text-[10px] font-medium uppercase text-gray-500">
@@ -165,11 +157,9 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
             </div>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      {/* Gantt */}
-      <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Gantt</h2>
+      <CollapsibleSection title="Gantt" description="Bars use start / end dates; without an end date a 14-day window is assumed.">
         {windows.length === 0 ? (
           <p className="text-sm text-gray-500">No projects yet. Create one in Projects → New project.</p>
         ) : (
@@ -241,7 +231,7 @@ export function SchedulePlanner({ projects }: { projects: ScheduleProject[] }) {
             </div>
           </div>
         )}
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }

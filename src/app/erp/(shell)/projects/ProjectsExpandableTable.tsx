@@ -80,8 +80,8 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
             </th>
           </tr>
           {/* Column header row */}
-          <tr className="bg-pink-400 text-white">
-            <th className="md:sticky md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-400 px-3 py-2 font-medium">Job</th>
+          <tr className="bg-pink-500 text-white">
+            <th className="md:sticky md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-500 px-3 py-2 font-medium">Job</th>
             <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
             <th className="border-r border-white px-3 py-2 font-medium">Segment</th>
             <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
