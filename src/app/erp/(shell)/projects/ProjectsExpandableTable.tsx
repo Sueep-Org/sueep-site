@@ -61,37 +61,37 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
   }
 
   return (
-    <div className="overflow-auto max-h-[calc(100svh-280px)] md:max-h-none rounded-lg border border-white">
+    <div className="overflow-x-auto rounded-lg border border-white">
       <table className="w-full min-w-[1600px] text-left text-sm">
         <thead className="border-b border-white text-xs uppercase">
-          {/* Group header row */}
+          {/* Group header row — no sticky here to avoid colSpan rendering bugs */}
           <tr>
-            <th colSpan={3} className="sticky top-0 z-30 border-b border-r border-white bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
+            <th colSpan={3} className="border-b border-r border-white bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
               Project Details
             </th>
-            <th colSpan={4} className="sticky top-0 z-30 border-b border-r border-white bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
+            <th colSpan={4} className="border-b border-r border-white bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
               Cost / Hours
             </th>
-            <th colSpan={2} className="sticky top-0 z-30 border-b border-r border-white bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
+            <th colSpan={2} className="border-b border-r border-white bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
               Progress
             </th>
-            <th colSpan={2} className="sticky top-0 z-30 border-b border-white bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
+            <th colSpan={2} className="border-b border-white bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
               Invoicing
             </th>
           </tr>
           {/* Column header row */}
-          <tr className="text-white">
-            <th className="sticky top-[30px] z-20 md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-400 px-3 py-2 font-medium">Job</th>
-            <th className="sticky top-[30px] z-20 w-[220px] min-w-[220px] border-r border-white bg-pink-400 px-3 py-2 font-medium">PM</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Segment</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Contract</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Material (Est / Act)</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Labor (Est / Act)</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Hours (Est / Act)</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Progress</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">Miles</th>
-            <th className="sticky top-[30px] z-20 border-r border-white bg-pink-400 px-3 py-2 font-medium">% Invoiced</th>
-            <th className="sticky top-[30px] z-20 bg-pink-400 px-3 py-2 font-medium">Billing Status</th>
+          <tr className="bg-pink-400 text-white">
+            <th className="md:sticky md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-400 px-3 py-2 font-medium">Job</th>
+            <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Segment</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Material (Est / Act)</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Labor (Est / Act)</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Hours (Est / Act)</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Progress</th>
+            <th className="border-r border-white px-3 py-2 font-medium">Miles</th>
+            <th className="border-r border-white px-3 py-2 font-medium">% Invoiced</th>
+            <th className="px-3 py-2 font-medium">Billing Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-300">
