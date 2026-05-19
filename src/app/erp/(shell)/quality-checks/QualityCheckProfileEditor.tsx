@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
+import { SignaturePadInput } from "./SignaturePadInput";
 
 type Props = {
   checkId: string;
@@ -98,14 +99,12 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
           />
         </label>
 
-        <label className="block text-xs font-medium text-gray-600">
-          Supervisor signature URL
-          <input
-            value={supervisorSignatureUrl}
-            onChange={(e) => setSupervisorSignatureUrl(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-          />
-        </label>
+        <div className="space-y-3">
+          <label className="block text-xs font-medium text-gray-600">
+            Supervisor signature
+          </label>
+          <SignaturePadInput value={supervisorSignatureUrl} onChange={setSupervisorSignatureUrl} />
+        </div>
 
         <label className="inline-flex items-center gap-2 text-sm text-gray-700">
           <input

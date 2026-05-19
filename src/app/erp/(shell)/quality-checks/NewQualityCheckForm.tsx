@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
+import { SignaturePadInput } from "./SignaturePadInput";
 
 export function NewQualityCheckForm() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export function NewQualityCheckForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pmApproval, setPmApproval] = useState(false);
+  const [supervisorSignature, setSupervisorSignature] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
@@ -39,7 +41,7 @@ export function NewQualityCheckForm() {
     const payload = {
       turnoverRequestId,
       supervisorName: fd.get("supervisorName"),
-      supervisorSignatureUrl: fd.get("supervisorSignatureUrl") || null,
+      supervisorSignatureUrl: supervisorSignature || null,
       pmApproval,
       evidencePhotos,
       notes: fd.get("notes") || null,
@@ -90,14 +92,6 @@ export function NewQualityCheckForm() {
                 placeholder="Supervisor name"
               />
             </label>
-            <label className="block text-xs font-medium text-gray-600">
-              Supervisor signature URL
-              <input
-                name="supervisorSignatureUrl"
-                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                placeholder="https://.../signature.png"
-              />
-            </label>
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
@@ -107,6 +101,13 @@ export function NewQualityCheckForm() {
               />
               PM approval
             </label>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-gray-600">
+              Supervisor signature
+            </label>
+            <SignaturePadInput value={supervisorSignature} onChange={setSupervisorSignature} />
           </div>
 
           <div className="space-y-3">
