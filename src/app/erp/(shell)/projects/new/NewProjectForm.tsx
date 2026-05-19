@@ -116,11 +116,34 @@ interface BuildingOption {
   pmPhone?: string | null;
 }
 
-interface NewProjectFormProps {
-  initialBuildings?: BuildingOption[];
+interface ScheduleBuildingOption {
+  id: string;
+  jobTitle: string;
+  description?: string | null;
+  supervisor?: string | null;
 }
 
-export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
+interface NewProjectFormProps {
+  initialBuildings?: BuildingOption[];
+  initialScheduleBuildings?: ScheduleBuildingOption[];
+}
+
+function normalizeBuildingName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | null) {
+  if (!project?.description) return "";
+  const addressLine = project.description
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^(building\s+address|property\s+address|address)\s*:/i.test(line));
+
+  if (!addressLine) return "";
+  return addressLine.replace(/^(building\s+address|property\s+address|address)\s*:\s*/i, "").trim();
+}
+
+export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [] }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -132,8 +155,9 @@ export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
   const [buildings, setBuildings] = useState<BuildingOption[]>(initialBuildings);
-  const [buildingsLoading, setBuildingsLoading] = useState(initialBuildings.length === 0);
-  const [buildingsError, setBuildingsError] = useState("");
+  const [scheduleBuildings, setScheduleBuildings] = useState<ScheduleBuildingOption[]>(initialScheduleBuildings);
+  const [scheduleBuildingsLoading, setScheduleBuildingsLoading] = useState(initialScheduleBuildings.length === 0);
+  const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
 
   const requestType = "TURNOVER";
@@ -177,24 +201,38 @@ export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
 
   useEffect(() => {
     let mounted = true;
-    setBuildingsLoading(initialBuildings.length === 0);
-    setBuildingsError("");
     fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
         if (Array.isArray(data)) setBuildings(data);
       })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    setScheduleBuildingsLoading(initialScheduleBuildings.length === 0);
+    setScheduleBuildingsError("");
+    fetch("/api/erp/projects?category=schedule-janitorial")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        if (!mounted) return;
+        if (Array.isArray(data)) setScheduleBuildings(data);
+      })
       .catch(() => {
-        if (mounted) setBuildingsError("Could not load buildings.");
+        if (mounted) setScheduleBuildingsError("Could not load janitorial schedule buildings.");
       })
       .finally(() => {
-        if (mounted) setBuildingsLoading(false);
+        if (mounted) setScheduleBuildingsLoading(false);
       });
     return () => {
       mounted = false;
     };
-  }, [initialBuildings.length]);
+  }, [initialScheduleBuildings.length]);
 
   const isCustomJob = jobTitle === "__custom__";
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
@@ -226,14 +264,18 @@ export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
     setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
   }
 
-  function applySelectedBuilding(id: string, fallback?: Partial<BuildingOption>) {
-    const building = buildings.find((option) => option.id === id);
+  function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
+    const scheduleBuilding = scheduleBuildings.find((option) => option.id === id);
+    const scheduleName = scheduleBuilding?.jobTitle || fallback?.jobTitle || "";
+    const matchedBuilding = buildings.find((building) => normalizeBuildingName(building.name) === normalizeBuildingName(scheduleName));
+    const extractedAddress = extractAddressFromScheduleProject(scheduleBuilding || null);
+
     setBuildingProjectId(id);
-    setBuildingName(building?.name || fallback?.name || "");
-    setBuildingAddress(building?.address || fallback?.address || "");
-    setPmName(building?.pmName || fallback?.pmName || "");
-    setPmEmail(building?.pmEmail || fallback?.pmEmail || "");
-    setPmPhone(building?.pmPhone || fallback?.pmPhone || "");
+    setBuildingName(scheduleName);
+    setBuildingAddress(extractedAddress || matchedBuilding?.address || fallback?.address || "");
+    setPmName(scheduleBuilding?.supervisor || matchedBuilding?.pmName || "");
+    setPmEmail(matchedBuilding?.pmEmail || "");
+    setPmPhone(matchedBuilding?.pmPhone || "");
   }
 
   const packagePricing = useMemo(() => {
@@ -293,16 +335,16 @@ export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
-    const selectedBuilding = buildings.find((building) => building.id === buildingProjectId);
+    const selectedBuilding = scheduleBuildings.find((building) => building.id === buildingProjectId);
     const turnoverUnitLabel = unitScopes
       .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
       .join(", ");
-    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.name || "Janitorial turnover"}${
+    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.jobTitle || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
-      isTurnover && selectedBuilding ? `Building: ${selectedBuilding.name}` : null,
+      isTurnover && selectedBuilding ? `Building: ${selectedBuilding.jobTitle}` : null,
       isTurnover && buildingAddress.trim() ? `Address: ${buildingAddress.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
     ]
@@ -434,39 +476,43 @@ export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
                   required
                   className={input}
                   value={buildingProjectId}
-                  disabled={buildingsLoading}
+                  disabled={scheduleBuildingsLoading}
                   onChange={(e) => {
                     const selected = e.currentTarget.selectedOptions[0];
-                    applySelectedBuilding(e.target.value, {
-                      name: selected?.dataset.name,
+                    applySelectedScheduleBuilding(e.target.value, {
+                      jobTitle: selected?.dataset.name,
+                      description: selected?.dataset.description,
+                      supervisor: selected?.dataset.supervisor,
                       address: selected?.dataset.address,
-                      pmName: selected?.dataset.pmName,
-                      pmEmail: selected?.dataset.pmEmail,
-                      pmPhone: selected?.dataset.pmPhone,
                     });
                   }}
                 >
-                  <option value="">{buildingsLoading ? "Loading buildings..." : "Select a building..."}</option>
-                  {!buildingsLoading && buildings.length === 0 ? (
+                  <option value="">{scheduleBuildingsLoading ? "Loading janitorial schedule..." : "Select a scheduled building..."}</option>
+                  {!scheduleBuildingsLoading && scheduleBuildings.length === 0 ? (
                     <option value="" disabled>
-                      No buildings found
+                      No janitorial schedule buildings found
                     </option>
                   ) : null}
-                  {buildings.map((building) => (
+                  {scheduleBuildings.map((building) => {
+                    const matchedBuilding = buildings.find(
+                      (savedBuilding) => normalizeBuildingName(savedBuilding.name) === normalizeBuildingName(building.jobTitle)
+                    );
+                    const address = extractAddressFromScheduleProject(building) || matchedBuilding?.address || "";
+                    return (
                     <option
                       key={building.id}
                       value={building.id}
-                      data-name={building.name}
-                      data-address={building.address}
-                      data-pm-name={building.pmName || ""}
-                      data-pm-email={building.pmEmail || ""}
-                      data-pm-phone={building.pmPhone || ""}
+                      data-name={building.jobTitle}
+                      data-description={building.description || ""}
+                      data-supervisor={building.supervisor || ""}
+                      data-address={address}
                     >
-                      {building.name}
+                      {building.jobTitle}
                     </option>
-                  ))}
+                    );
+                  })}
                 </select>
-                {buildingsError ? <p className="mt-1 text-xs text-red-500">{buildingsError}</p> : null}
+                {scheduleBuildingsError ? <p className="mt-1 text-xs text-red-500">{scheduleBuildingsError}</p> : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
               </div>
               <div>

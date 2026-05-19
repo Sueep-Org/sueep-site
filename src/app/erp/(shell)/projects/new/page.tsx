@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { NewProjectForm } from "./NewProjectForm";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function NewProjectPage() {
+  const cfg = parseHubSpotPipelineStageMap();
+  const janitorialSegments = cfg?.janitorial.pipelineId
+    ? ["JANITORIAL_TURNOVER_REQUESTS"]
+    : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+
   const buildings = await prisma.building.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -15,6 +21,22 @@ export default async function NewProjectPage() {
       pmName: true,
       pmEmail: true,
       pmPhone: true,
+    },
+  });
+  const scheduleBuildings = await prisma.project.findMany({
+    where: {
+      status: { notIn: ["COMPLETE", "ARCHIVED"] },
+      OR: [
+        { segment: { in: janitorialSegments } },
+        ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
+      ],
+    },
+    orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
+    select: {
+      id: true,
+      jobTitle: true,
+      description: true,
+      supervisor: true,
     },
   });
 
@@ -27,7 +49,7 @@ export default async function NewProjectPage() {
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">New project</h1>
         <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
       </div>
-      <NewProjectForm initialBuildings={buildings} />
+      <NewProjectForm initialBuildings={buildings} initialScheduleBuildings={scheduleBuildings} />
     </div>
   );
 }
