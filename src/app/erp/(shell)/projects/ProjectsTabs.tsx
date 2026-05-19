@@ -127,7 +127,21 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200">
+      {/* Mobile: dropdown */}
+      <select
+        value={activeTab}
+        onChange={(e) => setActiveTab(e.target.value as Tab)}
+        className="sm:hidden mb-3 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+      >
+        {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
+          <option key={tab.id} value={tab.id}>
+            {tab.label} ({countFor(tab.id)})
+          </option>
+        ))}
+      </select>
+
+      {/* Desktop: tab buttons */}
+      <div className="hidden sm:flex gap-1 border-b border-gray-200">
         {TABS.map((tab) => {
           const count = countFor(tab.id);
           if (count === 0 && tab.id !== "all") return null;
