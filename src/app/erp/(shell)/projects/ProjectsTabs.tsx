@@ -5,7 +5,7 @@ import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 
 type Tab = "all" | "post-construction" | "janitorial" | "residential" | "manual";
-type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED";
+type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
@@ -43,6 +43,13 @@ const LIFECYCLE_FILTERS: {
     badge: "border-gray-300 bg-gray-100 text-gray-700",
     activeBadge: "border-gray-500 bg-gray-500 text-white",
   },
+  {
+    id: "BILLING",
+    label: "Billing",
+    dot: "bg-blue-500",
+    badge: "border-blue-300 bg-blue-50 text-blue-700",
+    activeBadge: "border-blue-500 bg-blue-500 text-white",
+  },
 ];
 
 type Props = {
@@ -70,6 +77,11 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     return deriveProjectLifecycle(row.status, row.projectDate) as Lifecycle;
   }
 
+  function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {
+    if (lc === "BILLING") return row.billingStatus === "BILLING";
+    return getLifecycle(row) === lc;
+  }
+
   function toggleLifecycle(lc: Lifecycle) {
     setActiveLifecycle((prev) => (prev === lc ? null : lc));
   }
@@ -78,7 +90,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
 
   const filtered = rows.filter((r) => {
     if (activeTab !== "all" && getTab(r) !== activeTab) return false;
-    if (activeLifecycle && getLifecycle(r) !== activeLifecycle) return false;
+    if (activeLifecycle && !matchesLifecycle(r, activeLifecycle)) return false;
     if (query && !r.jobTitle.toLowerCase().includes(query)) return false;
     return true;
   });
@@ -115,7 +127,21 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200">
+      {/* Mobile: dropdown */}
+      <select
+        value={activeTab}
+        onChange={(e) => setActiveTab(e.target.value as Tab)}
+        className="sm:hidden mb-3 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+      >
+        {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
+          <option key={tab.id} value={tab.id}>
+            {tab.label} ({countFor(tab.id)})
+          </option>
+        ))}
+      </select>
+
+      {/* Desktop: tab buttons */}
+      <div className="hidden sm:flex gap-1 border-b border-gray-200">
         {TABS.map((tab) => {
           const count = countFor(tab.id);
           if (count === 0 && tab.id !== "all") return null;

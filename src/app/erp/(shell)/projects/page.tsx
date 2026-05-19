@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsTabs } from "./ProjectsTabs";
+import { HubSpotSyncButton } from "./HubSpotSyncButton";
 
 export const dynamic = "force-dynamic";
 
@@ -98,12 +99,15 @@ export default async function ErpProjectsPage() {
           <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
           <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
         </div>
-        <Link
-          href="/erp/projects/new"
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
-        >
-          New project
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/erp/projects/new"
+            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
+          >
+            New project
+          </Link>
+          <HubSpotSyncButton />
+        </div>
       </div>
 
       <hr className="border-pink-200" />

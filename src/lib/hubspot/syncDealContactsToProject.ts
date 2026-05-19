@@ -42,6 +42,13 @@ async function listAssociatedContactIds(dealId: string): Promise<string[]> {
   return Array.from(new Set(ids));
 }
 
+export class HubSpotScopesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HubSpotScopesError";
+  }
+}
+
 async function fetchContactsByIds(contactIds: string[]) {
   if (contactIds.length === 0) return [];
   const res = await hubspotFetch("/crm/v3/objects/contacts/batch/read", {
@@ -53,6 +60,12 @@ async function fetchContactsByIds(contactIds: string[]) {
   });
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 403) {
+      throw new HubSpotScopesError(
+        "Contact sync requires the crm.objects.contacts.read scope. " +
+        "Go to HubSpot → Settings → Integrations → Private Apps → your app → Scopes and add it, then regenerate the access token."
+      );
+    }
     throw new Error(`HubSpot contacts batch read failed (${res.status}): ${text}`);
   }
   const data = (await res.json()) as HubSpotContactBatchReadResult;
