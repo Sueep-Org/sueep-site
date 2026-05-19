@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
+import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 
 type Props = {
   checkId: string;
@@ -21,7 +22,9 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
   const [supervisorName, setSupervisorName] = useState(initial.supervisorName);
   const [supervisorSignatureUrl, setSupervisorSignatureUrl] = useState(initial.supervisorSignatureUrl ?? "");
   const [pmApproval, setPmApproval] = useState(initial.pmApproval);
-  const [evidencePhotos, setEvidencePhotos] = useState(initial.evidencePhotos.join("\n"));
+  const [evidencePhotos, setEvidencePhotos] = useState(initial.evidencePhotos);
+  const [newEvidenceFiles, setNewEvidenceFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [notes, setNotes] = useState(initial.notes ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,16 +35,28 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
     setError("");
     setSuccess("");
     setLoading(true);
+    setUploadProgress(null);
+
+    let uploadedEvidence: string[] = [];
+    try {
+      uploadedEvidence = await Promise.all(
+        newEvidenceFiles.map((file, index) =>
+          uploadQualityCheckEvidenceFile(`${checkId}-${index + 1}`, file, (pct) => setUploadProgress(pct))
+        )
+      );
+    } catch {
+      setError("Failed to upload evidence photo. Please try again.");
+      setLoading(false);
+      setUploadProgress(null);
+      return;
+    }
 
     const payload = {
       turnoverRequestId: initial.turnoverRequestId,
       supervisorName,
       supervisorSignatureUrl: supervisorSignatureUrl || null,
       pmApproval,
-      evidencePhotos: evidencePhotos
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
+      evidencePhotos: [...evidencePhotos, ...uploadedEvidence],
       notes: notes || null,
     };
 
@@ -55,6 +70,8 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
       if (!res.ok) {
         setError(data.error || "Failed to save quality check");
       } else {
+        setEvidencePhotos(payload.evidencePhotos);
+        setNewEvidenceFiles([]);
         setSuccess("Saved successfully.");
         router.refresh();
       }
@@ -102,15 +119,49 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
 
         <div className="space-y-3">
           <label className="block text-xs font-medium text-gray-600" htmlFor="evidencePhotos">
-            Evidence photo URLs (one per line)
+            Evidence photos
           </label>
-          <textarea
+          {evidencePhotos.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {evidencePhotos.map((url) => (
+                <div key={url} className="rounded-md border border-gray-200 bg-gray-50 p-2">
+                  <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded border border-gray-200 bg-white">
+                    <img src={url} alt="Quality check evidence" className="h-36 w-full object-cover" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setEvidencePhotos((prev) => prev.filter((item) => item !== url))}
+                    className="mt-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-500">
+              No evidence photos uploaded yet.
+            </p>
+          )}
+          <input
             id="evidencePhotos"
-            value={evidencePhotos}
-            onChange={(e) => setEvidencePhotos(e.target.value)}
-            rows={4}
+            type="file"
+            accept="image/*"
+            multiple
             className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            onChange={(e) => setNewEvidenceFiles(Array.from(e.target.files ?? []))}
           />
+          {newEvidenceFiles.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {newEvidenceFiles.map((file) => (
+                <div key={`${file.name}-${file.lastModified}`} className="rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-600">
+                  <p className="truncate font-medium text-gray-800">{file.name}</p>
+                  <p>{Math.round(file.size / 1024)} KB</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {uploadProgress !== null ? <p className="text-xs text-gray-500">Uploading evidence: {uploadProgress}%</p> : null}
         </div>
 
         <div className="space-y-3">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
+import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 
 export function NewQualityCheckForm() {
   const router = useRouter();
@@ -10,22 +11,37 @@ export function NewQualityCheckForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pmApproval, setPmApproval] = useState(false);
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setUploadProgress(null);
     const fd = new FormData(e.currentTarget);
+    const turnoverRequestId = String(fd.get("turnoverRequestId") || "");
+
+    let evidencePhotos: string[] = [];
+    try {
+      evidencePhotos = await Promise.all(
+        evidenceFiles.map((file, index) =>
+          uploadQualityCheckEvidenceFile(`${turnoverRequestId || "new"}-${index + 1}`, file, (pct) => setUploadProgress(pct))
+        )
+      );
+    } catch {
+      setError("Failed to upload evidence photo. Please try again.");
+      setLoading(false);
+      setUploadProgress(null);
+      return;
+    }
 
     const payload = {
-      turnoverRequestId: fd.get("turnoverRequestId"),
+      turnoverRequestId,
       supervisorName: fd.get("supervisorName"),
       supervisorSignatureUrl: fd.get("supervisorSignatureUrl") || null,
       pmApproval,
-      evidencePhotos: String(fd.get("evidencePhotos") || "")
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
+      evidencePhotos,
       notes: fd.get("notes") || null,
     };
 
@@ -42,6 +58,7 @@ export function NewQualityCheckForm() {
         return;
       }
       setOpen(false);
+      setEvidenceFiles([]);
       if (data.id) router.push(`/erp/quality-checks/${data.id}`);
       else router.refresh();
     } catch {
@@ -94,15 +111,27 @@ export function NewQualityCheckForm() {
 
           <div className="space-y-3">
             <label className="block text-xs font-medium text-gray-600" htmlFor="evidencePhotos">
-              Evidence photo URLs (one per line)
+              Evidence photos
             </label>
-            <textarea
+            <input
               id="evidencePhotos"
-              name="evidencePhotos"
-              rows={4}
+              type="file"
+              accept="image/*"
+              multiple
               className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-              placeholder="https://.../photo1.jpg\nhttps://.../photo2.jpg"
+              onChange={(e) => setEvidenceFiles(Array.from(e.target.files ?? []))}
             />
+            {evidenceFiles.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {evidenceFiles.map((file) => (
+                  <div key={`${file.name}-${file.lastModified}`} className="rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-600">
+                    <p className="truncate font-medium text-gray-800">{file.name}</p>
+                    <p>{Math.round(file.size / 1024)} KB</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {uploadProgress !== null ? <p className="text-xs text-gray-500">Uploading evidence: {uploadProgress}%</p> : null}
           </div>
 
           <div className="space-y-3">
