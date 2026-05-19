@@ -21,6 +21,10 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 
 const CLEANING_RATES = { 1: 185, 2: 255, 3: 385 } as const;
 const PAINTING_RATES = { 1: 340, 2: 400, 3: 450 } as const;
+const TOUCH_UP_PAINT_CENTS = 12500;
+const ADDITIONAL_MATERIALS_CENTS = 8500;
+const CARPET_WITH_CLEAN_CENTS = 8000;
+const CARPET_STANDALONE_CENTS = 12500;
 const UNIT_FEATURE_OPTIONS = [
   { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
   { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
@@ -309,29 +313,42 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       const beds = normalizeBeds(feature.bedrooms);
       const baseCleaning = CLEANING_RATES[beds] * 100;
       const basePainting = PAINTING_RATES[beds] * 100;
-      let unitLabel = "No package selected";
+      const unitLines: string[] = [];
       let unitTotal = 0;
 
-      if (unit.fullClean && unit.fullPaint) {
-        unitLabel = "Cleaning + painting";
-        unitTotal += baseCleaning + basePainting;
-      } else if (unit.fullPaint) {
-        unitLabel = "Painting only";
-        unitTotal += basePainting;
-      } else if (unit.fullClean) {
-        unitLabel = "Cleaning only";
+      if (unit.fullClean) {
         unitTotal += baseCleaning;
-      } else if (unit.touchUpPaint) {
-        unitLabel = "Touch-up paint";
+        unitLines.push(`cleaning ${formatUsd(baseCleaning)}`);
       }
 
-      if (unit.touchUpPaint) unitTotal += 12500;
-      if (unit.materialsAdditional) unitTotal += 8500;
-      if (unit.carpetCleaning) unitTotal += unit.fullClean ? 8000 : 12500;
+      if (unit.fullPaint) {
+        unitTotal += basePainting;
+        unitLines.push(`painting ${formatUsd(basePainting)}`);
+      } else if (unit.touchUpPaint) {
+        unitTotal += TOUCH_UP_PAINT_CENTS;
+        unitLines.push(`touch-up paint ${formatUsd(TOUCH_UP_PAINT_CENTS)}`);
+      }
+
+      if (unit.materialsAdditional) {
+        unitTotal += ADDITIONAL_MATERIALS_CENTS;
+        unitLines.push(`additional materials ${formatUsd(ADDITIONAL_MATERIALS_CENTS)}`);
+      }
+
+      if (unit.carpetCleaning) {
+        const carpetPrice = unit.fullClean ? CARPET_WITH_CLEAN_CENTS : CARPET_STANDALONE_CENTS;
+        unitTotal += carpetPrice;
+        unitLines.push(`carpet cleaning ${formatUsd(carpetPrice)}`);
+      }
+
+      if (unit.lightWallTouchUps) {
+        unitLines.push("light wall touch-ups not priced");
+      }
 
       totalPrice += unitTotal;
-      if (unitTotal > 0) {
-        breakdown.push(`${unit.unitNumber || `Unit ${index + 1}`} (${unit.features}) - ${unitLabel}: ${formatUsd(unitTotal)}`);
+      if (unitLines.length > 0) {
+        breakdown.push(
+          `${unit.unitNumber || `Unit ${index + 1}`} (${feature.label}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
+        );
       }
     });
 
@@ -340,10 +357,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     }
 
     return {
-      packageLabel: unitScopes.some((unit) => unit.fullClean || unit.fullPaint || unit.touchUpPaint)
-        ? "Per-unit scope"
-        : "No package selected",
-      perUnitLabel: "Varies by unit",
+      packageLabel: totalPrice > 0 ? "Per-unit estimate" : "No priced package selected",
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
@@ -737,36 +751,48 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="px-3 py-2">Package</th>
-                    <th className="px-3 py-2">1 Bed</th>
+                    <th className="px-3 py-2">Studio / 1 Bed</th>
                     <th className="px-3 py-2">2 Bed</th>
                     <th className="px-3 py-2">3 Bed/TH</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  <tr className={packagePricing.packageLabel === "Cleaning only" ? "bg-pink-50" : "bg-white"}>
+                  <tr className="bg-white">
                     <td className="px-3 py-2">Cleaning Only</td>
                     <td className="px-3 py-2">$185</td>
                     <td className="px-3 py-2">$255</td>
                     <td className="px-3 py-2">$385</td>
                   </tr>
-                  <tr className={packagePricing.packageLabel === "Painting only" ? "bg-pink-50" : "bg-white"}>
+                  <tr className="bg-white">
                     <td className="px-3 py-2">Painting Only</td>
                     <td className="px-3 py-2">$340</td>
                     <td className="px-3 py-2">$400</td>
                     <td className="px-3 py-2">$450</td>
                   </tr>
-                  <tr className={packagePricing.packageLabel === "Cleaning + painting" ? "bg-pink-50" : "bg-white"}>
+                  <tr className="bg-white">
                     <td className="px-3 py-2">Cleaning + Painting</td>
                     <td className="px-3 py-2">$525</td>
                     <td className="px-3 py-2">$655</td>
                     <td className="px-3 py-2">$835</td>
                   </tr>
+                  <tr className="bg-white">
+                    <td className="px-3 py-2">Touch-up paint</td>
+                    <td className="px-3 py-2" colSpan={3}>$125 per unit</td>
+                  </tr>
+                  <tr className="bg-white">
+                    <td className="px-3 py-2">Carpet cleaning</td>
+                    <td className="px-3 py-2" colSpan={3}>$80 with full clean / $125 standalone</td>
+                  </tr>
+                  <tr className="bg-white">
+                    <td className="px-3 py-2">Additional materials</td>
+                    <td className="px-3 py-2" colSpan={3}>$85 per unit</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm text-gray-700">Selected package: <span className="font-semibold text-gray-900">{packagePricing.packageLabel}</span></p>
-              <p className="text-sm text-gray-700">Primary unit: <span className="font-semibold text-gray-900">{unitScopes[0]?.features ?? "1/1"}</span></p>
+              <p className="text-sm text-gray-700">Pricing mode: <span className="font-semibold text-gray-900">{packagePricing.packageLabel}</span></p>
+              <p className="text-sm text-gray-700">Primary unit: <span className="font-semibold text-gray-900">{getUnitFeature(unitScopes[0]?.features ?? "1/1").label}</span></p>
               <p className="text-sm text-gray-700">Units: <span className="font-semibold text-gray-900">{unitCount}</span></p>
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900">{packagePricing.totalPriceLabel}</span></p>
               <div className="mt-3 space-y-1 text-xs text-gray-500">
