@@ -37,6 +37,14 @@ const UNIT_QUALITY_OPTIONS = [
   "Needs trash-out",
   "Needs maintenance",
 ] as const;
+const BUILDING_ADDRESS_OPTIONS = [
+  "751 Vandenburg Rd, King of Prussia, PA 19406 (Park Square)",
+  "580 S Goddard Blvd, King of Prussia, PA 19406 (The Smith)",
+  "140 Valley Green Ln, King of Prussia, PA 19406 (The George)",
+  "3000 Emily Lane Bulrington NJ 08016 (J Centra Burlington)",
+  "3029 W Glenwood Ave (Equinox)",
+  "200 University Dr, Schuylkill Haven, PA, 17972 (Nittany Apartments)",
+] as const;
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 type UnitScope = {
@@ -245,6 +253,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     return Array.from(
       new Set(
         [
+          ...BUILDING_ADDRESS_OPTIONS,
           ...buildings.map((building) => building.address),
           ...scheduleBuildings.map((building) => extractAddressFromScheduleProject(building)),
           buildingAddress,
