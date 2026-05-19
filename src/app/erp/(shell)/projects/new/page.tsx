@@ -41,7 +41,7 @@ export default async function NewProjectPage() {
   });
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-0">
       <div>
         <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
           ← Projects

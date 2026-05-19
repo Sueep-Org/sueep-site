@@ -453,9 +453,9 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-6">
+    <form onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div>
+        <div className="min-w-0">
           <label className={label} htmlFor="segment">
             Segment
           </label>
@@ -473,7 +473,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             ))}
           </select>
         </div>
-        <div>
+        <div className="min-w-0">
           <label className={label} htmlFor="projectDate">
             Start date
           </label>
@@ -484,7 +484,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             className={input}
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <label className={label} htmlFor="projectEndDate">
             Target end (optional)
           </label>
@@ -498,11 +498,11 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       </div>
 
       {isTurnover ? (
-        <div className="space-y-5 rounded-lg border border-pink-200 bg-white p-5">
+        <div className="space-y-5 rounded-lg border border-pink-200 bg-white p-4 sm:p-5">
           <div className="space-y-2">
             <p className={sectionHeader}>Step 1 — Property & PM info</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="buildingProjectId">
                   Building
                 </label>
@@ -551,7 +551,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                 {scheduleBuildingsError ? <p className="mt-1 text-xs text-red-500">{scheduleBuildingsError}</p> : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="buildingAddress">
                   Building address
                 </label>
@@ -578,7 +578,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="pmName">
                   PM name
                 </label>
@@ -591,7 +591,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                   onChange={(e) => setPmName(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="pmEmail">
                   PM email
                 </label>
@@ -605,7 +605,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                   onChange={(e) => setPmEmail(e.target.value)}
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="pmPhone">
                   PM phone
                 </label>
@@ -622,21 +622,21 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
           </div>
 
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className={sectionHeader}>Step 2 — Units & independent scope</p>
               <button
                 type="button"
                 onClick={addUnitScope}
-                className="rounded-md border border-pink-200 bg-white px-3 py-1.5 text-xs font-medium text-pink-700 hover:bg-pink-50"
+                className="w-full rounded-md border border-pink-200 bg-white px-3 py-2 text-xs font-medium text-pink-700 hover:bg-pink-50 sm:w-auto sm:py-1.5"
               >
                 Add unit
               </button>
             </div>
             <div className="space-y-3">
               {unitScopes.map((unit, index) => (
-                <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <div className="grid gap-3 lg:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
-                    <div>
+                <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
+                    <div className="min-w-0">
                       <label className={label} htmlFor={`unit-${unit.id}`}>
                         Unit number
                       </label>
@@ -648,7 +648,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                         placeholder={`Unit ${index + 1}`}
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className={label} htmlFor={`start-date-${unit.id}`}>
                         Start date
                       </label>
@@ -660,7 +660,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                         onChange={(e) => updateUnitScope(unit.id, { startDate: e.target.value })}
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className={label} htmlFor={`end-date-${unit.id}`}>
                         End date
                       </label>
@@ -672,7 +672,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                         onChange={(e) => updateUnitScope(unit.id, { endDate: e.target.value })}
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className={label} htmlFor={`features-${unit.id}`}>
                         Features
                       </label>
@@ -689,7 +689,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                         ))}
                       </select>
                     </div>
-                    <div>
+                    <div className="min-w-0 md:col-span-2 xl:col-span-1">
                       <label className={label} htmlFor={`quality-${unit.id}`}>
                         Unit quality
                       </label>
@@ -707,18 +707,18 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-end">
+                    <div className="flex items-end md:col-span-2 xl:col-span-1">
                       <button
                         type="button"
                         onClick={() => removeUnitScope(unit.id)}
                         disabled={unitScopes.length <= 1}
-                        className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40 xl:w-auto"
                       >
                         Remove
                       </button>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {[
                       { key: "fullClean", text: "Full clean" },
                       { key: "fullPaint", text: "Full paint", disabled: unit.touchUpPaint },
@@ -727,7 +727,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                       { key: "materialsAdditional", text: "Additional materials" },
                       { key: "carpetCleaning", text: "Carpet cleaning" },
                     ].map(({ key, text, disabled }) => (
-                      <label key={key} className={`flex items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>
+                      <label key={key} className={`flex min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(unit[key as keyof UnitScope])}
@@ -735,7 +735,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                           onChange={(e) => updateUnitScope(unit.id, { [key]: e.target.checked } as Partial<UnitScope>)}
                           className="h-4 w-4 text-pink-600"
                         />
-                        <span className={checkboxLabel}>{text}</span>
+                        <span className={`${checkboxLabel} break-words`}>{text}</span>
                       </label>
                     ))}
                   </div>
@@ -747,55 +747,55 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
           <div className="space-y-3">
             <p className={sectionHeader}>Step 3 — Pricing package</p>
             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-              <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
+              <table className="min-w-[620px] divide-y divide-gray-200 text-left text-xs sm:text-sm">
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
-                    <th className="px-3 py-2">Package</th>
-                    <th className="px-3 py-2">1 Bed</th>
-                    <th className="px-3 py-2">2 Bed</th>
-                    <th className="px-3 py-2">3 Bed/Townhome</th>
+                    <th className="px-2 py-2 sm:px-3">Package</th>
+                    <th className="px-2 py-2 sm:px-3">1 Bed</th>
+                    <th className="px-2 py-2 sm:px-3">2 Bed</th>
+                    <th className="px-2 py-2 sm:px-3">3 Bed/Townhome</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Cleaning Only</td>
-                    <td className="px-3 py-2">$185</td>
-                    <td className="px-3 py-2">$255</td>
-                    <td className="px-3 py-2">$385</td>
+                    <td className="px-2 py-2 sm:px-3">Cleaning Only</td>
+                    <td className="px-2 py-2 sm:px-3">$185</td>
+                    <td className="px-2 py-2 sm:px-3">$255</td>
+                    <td className="px-2 py-2 sm:px-3">$385</td>
                   </tr>
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Painting Only</td>
-                    <td className="px-3 py-2">$340</td>
-                    <td className="px-3 py-2">$400</td>
-                    <td className="px-3 py-2">$450</td>
+                    <td className="px-2 py-2 sm:px-3">Painting Only</td>
+                    <td className="px-2 py-2 sm:px-3">$340</td>
+                    <td className="px-2 py-2 sm:px-3">$400</td>
+                    <td className="px-2 py-2 sm:px-3">$450</td>
                   </tr>
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Cleaning + Painting</td>
-                    <td className="px-3 py-2">$525</td>
-                    <td className="px-3 py-2">$655</td>
-                    <td className="px-3 py-2">$835</td>
+                    <td className="px-2 py-2 sm:px-3">Cleaning + Painting</td>
+                    <td className="px-2 py-2 sm:px-3">$525</td>
+                    <td className="px-2 py-2 sm:px-3">$655</td>
+                    <td className="px-2 py-2 sm:px-3">$835</td>
                   </tr>
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Touch-up paint</td>
-                    <td className="px-3 py-2" colSpan={3}>$125 per unit</td>
+                    <td className="px-2 py-2 sm:px-3">Touch-up paint</td>
+                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$125 per unit</td>
                   </tr>
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Carpet cleaning</td>
-                    <td className="px-3 py-2" colSpan={3}>$80 with full clean / $125 standalone</td>
+                    <td className="px-2 py-2 sm:px-3">Carpet cleaning</td>
+                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$80 with full clean / $125 standalone</td>
                   </tr>
                   <tr className="bg-white">
-                    <td className="px-3 py-2">Additional materials</td>
-                    <td className="px-3 py-2" colSpan={3}>$85 per unit</td>
+                    <td className="px-2 py-2 sm:px-3">Additional materials</td>
+                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$85 per unit</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <p className="text-sm text-gray-700">Pricing mode: <span className="font-semibold text-gray-900">{packagePricing.packageLabel}</span></p>
               <p className="text-sm text-gray-700">Primary unit: <span className="font-semibold text-gray-900">{getUnitFeature(unitScopes[0]?.features ?? "1/1").label}</span></p>
               <p className="text-sm text-gray-700">Units: <span className="font-semibold text-gray-900">{unitCount}</span></p>
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900">{packagePricing.totalPriceLabel}</span></p>
-              <div className="mt-3 space-y-1 text-xs text-gray-500">
+              <div className="mt-3 space-y-1 break-words text-xs text-gray-500">
                 {packagePricing.breakdown.map((line) => (
                   <p key={line}>{line}</p>
                 ))}
@@ -875,7 +875,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
               </select>
             </div>
             {serviceType === "__other__" ? (
-              <div>
+              <div className="min-w-0">
                 <label className={label} htmlFor="customType">
                   Custom work type
                 </label>
@@ -980,7 +980,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
         >
           {loading ? "Saving…" : "Create project"}
         </button>
