@@ -19,14 +19,14 @@
 export type ErpSegment = "COMMERCIAL" | "RESIDENTIAL";
 
 /** Awarded/confirmed & WIP should appear on Schedule/Gantt; completed = done in ERP. */
-export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "OTHER";
+export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "OTHER";
 
 export type HubSpotPipelineStageMap = {
   /** Post-construction pipeline object id (string from HubSpot) */
-  postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
+  postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
   /** Janitorial pipeline */
   janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
-  /** Residential pipeline — “Confirmed” plays the same role as commercial “Quote approved” */
+  /** Residential pipeline — "Confirmed" plays the same role as commercial "Quote approved" */
   residential: { pipelineId: string; stages: { confirmed: string; workInProgress: string; workCompleted: string } };
 };
 
@@ -67,10 +67,11 @@ export function classifyHubSpotDealStage(
   }
 
   if (pipelineId === cfg.postConstruction.pipelineId) {
-    const { quoteApproved, workInProgress, workCompleted } = cfg.postConstruction.stages;
+    const { quoteApproved, workInProgress, workCompleted, billing } = cfg.postConstruction.stages;
     if (matches(quoteApproved)) return { segment: "COMMERCIAL", phase: "AWARDED" };
     if (matches(workInProgress)) return { segment: "COMMERCIAL", phase: "WIP" };
     if (matches(workCompleted)) return { segment: "COMMERCIAL", phase: "COMPLETED" };
+    if (billing && matches(billing)) return { segment: "COMMERCIAL", phase: "BILLING" };
     return { segment: "COMMERCIAL", phase: "OTHER" };
   }
 
@@ -87,12 +88,13 @@ export function classifyHubSpotDealStage(
 
 /** Stages that should create/update an ERP row for schedule & Gantt (not yet closed out). */
 export function shouldSyncDealToErp(phase: DealLifecyclePhase): boolean {
-  return phase === "AWARDED" || phase === "WIP";
+  return phase === "AWARDED" || phase === "WIP" || phase === "BILLING";
 }
 
 /** Maps lifecycle to existing ERP `Project.status` (extend later if you add finer states). */
-export function erpStatusFromPhase(phase: DealLifecyclePhase): "ACTIVE" | "COMPLETE" | "ON_HOLD" {
-  if (phase === "COMPLETED") return "COMPLETE";
+export function erpStatusFromPhase(phase: DealLifecyclePhase): "ACTIVE" | "UPCOMING" | "COMPLETE" | "ON_HOLD" {
+  if (phase === "COMPLETED" || phase === "BILLING") return "COMPLETE";
+  if (phase === "AWARDED") return "UPCOMING";
   if (phase === "OTHER") return "ON_HOLD";
   return "ACTIVE";
 }

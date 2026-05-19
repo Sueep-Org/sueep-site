@@ -53,6 +53,7 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
         reconciledJanitorial?: Array<{ hubspotDealId: string; projectId: string }>;
         errors?: string[];
         error?: string;
+        contactScopesError?: string;
       };
       if (!res.ok) {
         setError(data.error || `Request failed (${res.status})`);
@@ -69,6 +70,11 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
       setMessage(
         `Synced ${n} deal(s) into projects.${zeroHint}${r > 0 ? ` Marked ${r} janitorial project(s) complete (no longer in active HubSpot stages).` : ""}${errN > 0 ? ` ${errN} warning(s) — check browser devtools Network response for details.` : ""}`,
       );
+      if (data.contactScopesError) {
+        setError(`Contact sync disabled — missing HubSpot scope: ${data.contactScopesError}`);
+        setLoading(false);
+        return;
+      }
       await loadPreview();
       router.refresh();
     } catch {

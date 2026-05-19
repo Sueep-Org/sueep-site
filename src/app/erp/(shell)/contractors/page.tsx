@@ -21,7 +21,8 @@ export default async function ContractorsPage() {
         </div>
         <NewContractorForm />
       </div>
-              <hr className="border-pink-200" />
+      
+      <hr className="border-pink-200" />
 
       {contractors.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">

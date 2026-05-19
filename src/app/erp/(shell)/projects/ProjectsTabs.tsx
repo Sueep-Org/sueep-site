@@ -5,7 +5,7 @@ import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 
 type Tab = "all" | "post-construction" | "janitorial" | "residential" | "manual";
-type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED";
+type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
@@ -43,6 +43,13 @@ const LIFECYCLE_FILTERS: {
     badge: "border-gray-300 bg-gray-100 text-gray-700",
     activeBadge: "border-gray-500 bg-gray-500 text-white",
   },
+  {
+    id: "BILLING",
+    label: "Billing",
+    dot: "bg-blue-500",
+    badge: "border-blue-300 bg-blue-50 text-blue-700",
+    activeBadge: "border-blue-500 bg-blue-500 text-white",
+  },
 ];
 
 type Props = {
@@ -70,6 +77,11 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     return deriveProjectLifecycle(row.status, row.projectDate) as Lifecycle;
   }
 
+  function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {
+    if (lc === "BILLING") return row.billingStatus === "BILLING";
+    return getLifecycle(row) === lc;
+  }
+
   function toggleLifecycle(lc: Lifecycle) {
     setActiveLifecycle((prev) => (prev === lc ? null : lc));
   }
@@ -78,7 +90,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
 
   const filtered = rows.filter((r) => {
     if (activeTab !== "all" && getTab(r) !== activeTab) return false;
-    if (activeLifecycle && getLifecycle(r) !== activeLifecycle) return false;
+    if (activeLifecycle && !matchesLifecycle(r, activeLifecycle)) return false;
     if (query && !r.jobTitle.toLowerCase().includes(query)) return false;
     return true;
   });

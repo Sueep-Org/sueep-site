@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 
-const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
+const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };

@@ -7,7 +7,7 @@ import {
   type DealLifecyclePhase,
 } from "@/lib/hubspot/pipelineStages";
 import { searchDealsInConfiguredStages, type HubSpotDealRecord } from "@/lib/hubspot/dealSearch";
-import { syncDealContactsToProject } from "@/lib/hubspot/syncDealContactsToProject";
+import { syncDealContactsToProject, HubSpotScopesError } from "@/lib/hubspot/syncDealContactsToProject";
 import { hubspotFetch } from "@/lib/hubspot/client";
 
 function prop(r: HubSpotDealRecord, name: string): string | null {
@@ -61,6 +61,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
   const errors: string[] = [];
+  let contactScopesError: string | null = null;
 
   for (const deal of deals) {
     const pipelineId = prop(deal, "pipeline");
@@ -105,6 +106,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             ...(contractValueCents !== undefined ? { contractValueCents } : {}),
             projectDate,
             projectEndDate,
+            ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
           },
         });
         syncedProjectId = existing.id;
@@ -128,6 +130,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             contractValueCents: contractValueCents ?? null,
             projectDate,
             projectEndDate,
+            ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
           },
         });
         syncedProjectId = created.id;
@@ -144,11 +147,15 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       continue;
     }
 
-    if (syncedProjectId) {
+    if (syncedProjectId && !contactScopesError) {
       try {
         await syncDealContactsToProject(syncedProjectId, deal.id);
       } catch (e) {
-        console.warn(`Deal ${deal.id}: contact sync skipped —`, e instanceof Error ? e.message : e);
+        if (e instanceof HubSpotScopesError) {
+          contactScopesError = e.message;
+        } else {
+          console.warn(`Deal ${deal.id}: contact sync skipped —`, e instanceof Error ? e.message : e);
+        }
       }
     }
   }
@@ -204,5 +211,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     errors,
     ...(reconciledJanitorial.length > 0 ? { reconciledJanitorial } : {}),
     ...(removedLostDeals.length > 0 ? { removedLostDeals } : {}),
+    ...(contactScopesError ? { contactScopesError } : {}),
   };
 }
