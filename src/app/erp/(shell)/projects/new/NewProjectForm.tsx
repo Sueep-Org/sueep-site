@@ -751,9 +751,9 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="px-3 py-2">Package</th>
-                    <th className="px-3 py-2">Studio / 1 Bed</th>
+                    <th className="px-3 py-2">1 Bed</th>
                     <th className="px-3 py-2">2 Bed</th>
-                    <th className="px-3 py-2">3 Bed/TH</th>
+                    <th className="px-3 py-2">3 Bed/Townhome</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
