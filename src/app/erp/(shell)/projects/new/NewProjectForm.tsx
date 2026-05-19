@@ -241,6 +241,19 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
+  const addressOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          ...buildings.map((building) => building.address),
+          ...scheduleBuildings.map((building) => extractAddressFromScheduleProject(building)),
+          buildingAddress,
+        ]
+          .map((address) => address.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [buildings, scheduleBuildings, buildingAddress]);
 
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
     setUnitScopes((prev) =>
@@ -519,14 +532,26 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                 <label className={label} htmlFor="buildingAddress">
                   Building address
                 </label>
-                <input
+                <select
                   id="buildingAddress"
                   name="buildingAddress"
                   required
                   className={input}
                   value={buildingAddress}
                   onChange={(e) => setBuildingAddress(e.target.value)}
-                />
+                >
+                  <option value="">Select an address...</option>
+                  {addressOptions.length === 0 ? (
+                    <option value="" disabled>
+                      No addresses found
+                    </option>
+                  ) : null}
+                  {addressOptions.map((address) => (
+                    <option key={address} value={address}>
+                      {address}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
