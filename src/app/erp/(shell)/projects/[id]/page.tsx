@@ -8,8 +8,10 @@ import { ProjectDatesEditor } from "./ProjectDatesEditor";
 import { ProjectManagerEditor } from "./ProjectManagerEditor";
 import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
+import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
+import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +20,17 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees] = await Promise.all([
+  const [project, laborEmployees, contractors] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
         laborEntries: {
           orderBy: { workDate: "desc" },
           include: { employee: { select: { firstName: true, lastName: true } } },
+        },
+        contractorAssignments: {
+          orderBy: { createdAt: "desc" },
+          include: { contractor: { select: { id: true, name: true } } },
         },
       },
     }),
@@ -37,6 +43,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         hourlyPayCents: true,
         status: true,
       },
+    }),
+    prisma.contractor.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, status: true },
     }),
   ]);
   if (!project) notFound();
@@ -62,6 +72,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     hours: e.hours.toString(),
     hourlyRateCents: e.hourlyRateCents,
     taskDescription: e.taskDescription,
+  }));
+
+  const contractorRows = project.contractorAssignments.map((a) => ({
+    id: a.id,
+    contractorId: a.contractorId,
+    contractorName: a.contractor.name,
+    role: a.role,
+    assignedDate: a.assignedDate ? a.assignedDate.toISOString() : null,
+    startDate: a.startDate ? a.startDate.toISOString() : null,
+    endDate: a.endDate ? a.endDate.toISOString() : null,
+    notes: a.notes,
   }));
 
   const meta = [
@@ -95,9 +116,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         {project.description ? <p className="mt-2 text-sm text-gray-500">{project.description}</p> : null}
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Project details</h2>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <CollapsiblePanel title="Project Details">
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {meta.map((row) => (
             <div key={row.k}>
               <dt className="text-[10px] uppercase text-gray-500">{row.k}</dt>
@@ -105,39 +125,59 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             </div>
           ))}
         </dl>
-      </div>
+      </CollapsiblePanel>
 
-      <ProjectWorkflowEditor
-        projectId={project.id}
-        status={project.status}
-        projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
-        segment={project.segment}
-        hubspotPipelineId={project.hubspotPipelineId ?? null}
-        isManual={isManual}
-        pipelineOptions={pipelineOptions}
-      />
+      <CollapsiblePanel title="Workflow">
+        <ProjectWorkflowEditor
+          projectId={project.id}
+          status={project.status}
+          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+          segment={project.segment}
+          hubspotPipelineId={project.hubspotPipelineId ?? null}
+          isManual={isManual}
+          pipelineOptions={pipelineOptions}
+        />
+      </CollapsiblePanel>
 
-      <ProjectManagerEditor
-        projectId={project.id}
-        supervisor={project.supervisor}
-        employees={laborEmployees}
-      />
+      <CollapsiblePanel title="Manager" defaultOpen={false}>
+        <ProjectManagerEditor
+          projectId={project.id}
+          supervisor={project.supervisor}
+          employees={laborEmployees}
+        />
+      </CollapsiblePanel>
 
-      <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
+      <CollapsiblePanel title="Service Type" defaultOpen={false}>
+        <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
+      </CollapsiblePanel>
 
-      <ProjectBillingEditor
-        projectId={project.id}
-        percentInvoiced={project.percentInvoiced}
-        billingStatus={project.billingStatus}
-      />
+      <CollapsiblePanel title="Billing" defaultOpen={false}>
+        <ProjectBillingEditor
+          projectId={project.id}
+          percentInvoiced={project.percentInvoiced}
+          billingStatus={project.billingStatus}
+        />
+      </CollapsiblePanel>
 
-      <ProjectDatesEditor
-        projectId={project.id}
-        projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
-        projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
-      />
+      <CollapsiblePanel title="Dates" defaultOpen={false}>
+        <ProjectDatesEditor
+          projectId={project.id}
+          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+          projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
+        />
+      </CollapsiblePanel>
 
-      <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
+      <CollapsiblePanel title="Labor">
+        <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Contractors">
+        <ProjectContractorSection
+          projectId={project.id}
+          initialAssignments={contractorRows}
+          contractors={contractors}
+        />
+      </CollapsiblePanel>
     </div>
   );
 }

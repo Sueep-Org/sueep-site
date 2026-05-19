@@ -57,6 +57,7 @@ model Project {
   images ProjectImage[]
   changeOrders ProjectChangeOrder[]
   contacts ProjectContact[]
+  contractorAssignments ContractorAssignment[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -79,7 +80,8 @@ model Building {
   pmEmail String?
   pmPhone String?
 
-  turnoverRequests TurnoverRequest[]
+  turnoverRequests      TurnoverRequest[]
+  contractorAssignments ContractorAssignment[]
 
   @@index([name])
 }
@@ -127,8 +129,8 @@ model TurnoverRequest {
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
 
-  laborAssignments LaborAssignment[]
-  qualityChecks    QualityCheck[]
+  laborAssignments       LaborAssignment[]
+  qualityChecks          QualityCheck[]
 
   @@index([buildingId])
   @@index([status])
@@ -426,10 +428,38 @@ model Contractor {
   phone              String?
   hasInsurance       Boolean?
 
-  documents ContractorDocument[]
+  documents   ContractorDocument[]
+  assignments ContractorAssignment[]
 
   @@index([status])
   @@index([name])
+}
+
+model ContractorAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// Link to a building for site-level work (optional)
+  buildingId String?
+  building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+
+  /// Link to a project for project-level work (optional)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  role         String?
+  assignedDate DateTime?
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?
+
+  @@index([contractorId])
+  @@index([buildingId])
+  @@index([projectId])
 }
 
 model ContractorDocument {
