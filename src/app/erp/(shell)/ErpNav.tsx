@@ -16,6 +16,7 @@ const projectGroup = {
     { href: "/erp/projects", label: "Projects" },
     { href: "/erp/projects/new", label: "New Project" },
     { href: "/erp/labor-assignments", label: "Labor Assignments" },
+    { href: "/erp/contractor-assignments", label: "Contractor Assignments" },
     { href: "/erp/quality-checks", label: "Quality Checks" },
     { href: "/erp/schedule", label: "Schedule" },
   ],
