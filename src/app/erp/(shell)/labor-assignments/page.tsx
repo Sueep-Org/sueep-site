@@ -53,19 +53,19 @@ export default async function LaborAssignmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Labor assignments</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Track worker assignments connected to turnover requests.
-          </p>
+          <h1 className="text-2xl font-bold text-pink-600">Labor Assignments</h1>
+          <p className="mt-1 text-sm text-gray-500">Worker assignments connected to turnover requests.</p>
         </div>
         <NewLaborAssignmentForm />
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <hr className="border-pink-200" />
+
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] divide-y divide-gray-200 text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
+          <table className="w-full min-w-[960px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 bg-pink-50 text-xs font-semibold uppercase tracking-wide text-pink-700">
                 <th className="px-4 py-3">Laborer</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Request</th>
@@ -75,37 +75,41 @@ export default async function LaborAssignmentsPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-100">
               {assignments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
                     No labor assignments yet.
                   </td>
                 </tr>
               ) : (
                 assignments.map((assignment) => (
-                  <tr key={assignment.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-900">
-                      {assignment.laborer ? `${assignment.laborer.firstName} ${assignment.laborer.lastName}` : "—"}
+                  <tr key={assignment.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {assignment.laborer ? `${assignment.laborer.firstName} ${assignment.laborer.lastName}` : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-gray-900">{assignment.role || "—"}</td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {assignment.turnoverRequest.building.name} • {assignment.turnoverRequest.requestType}
-                      {assignment.turnoverRequest.unitNumber ? ` • ${assignment.turnoverRequest.unitNumber}` : ""}
+                    <td className="px-4 py-3 text-gray-600">{assignment.role || <span className="text-gray-400">—</span>}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <span className="font-medium">{assignment.turnoverRequest.building.name}</span>
+                      <span className="text-gray-400"> · </span>
+                      {assignment.turnoverRequest.requestType}
+                      {assignment.turnoverRequest.unitNumber ? (
+                        <><span className="text-gray-400"> · </span>{assignment.turnoverRequest.unitNumber}</>
+                      ) : null}
                     </td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {assignment.assignedDate ? assignment.assignedDate.toISOString().split("T")[0] : "—"}
+                    <td className="px-4 py-3 text-gray-600">
+                      {assignment.assignedDate ? assignment.assignedDate.toISOString().split("T")[0] : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {assignment.startDate ? assignment.startDate.toISOString().split("T")[0] : "—"}
+                    <td className="px-4 py-3 text-gray-600">
+                      {assignment.startDate ? assignment.startDate.toISOString().split("T")[0] : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : "—"}
+                    <td className="px-4 py-3 text-gray-600">
+                      {assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/erp/labor-assignments/${assignment.id}`}
-                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 transition-colors"
                       >
                         View
                       </Link>

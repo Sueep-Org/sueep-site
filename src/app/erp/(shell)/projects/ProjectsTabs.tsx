@@ -23,13 +23,6 @@ const LIFECYCLE_FILTERS: {
   activeBadge: string;
 }[] = [
   {
-    id: "ACTIVE",
-    label: "WIP",
-    dot: "bg-emerald-500",
-    badge: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    activeBadge: "border-emerald-500 bg-emerald-500 text-white",
-  },
-  {
     id: "UPCOMING",
     label: "Upcoming",
     dot: "bg-purple-500",
@@ -37,11 +30,11 @@ const LIFECYCLE_FILTERS: {
     activeBadge: "border-purple-500 bg-purple-500 text-white",
   },
   {
-    id: "COMPLETED",
-    label: "Completed",
-    dot: "bg-gray-500",
-    badge: "border-gray-300 bg-gray-100 text-gray-700",
-    activeBadge: "border-gray-500 bg-gray-500 text-white",
+    id: "ACTIVE",
+    label: "WIP",
+    dot: "bg-emerald-500",
+    badge: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    activeBadge: "border-emerald-500 bg-emerald-500 text-white",
   },
   {
     id: "BILLING",
@@ -49,6 +42,13 @@ const LIFECYCLE_FILTERS: {
     dot: "bg-blue-500",
     badge: "border-blue-300 bg-blue-50 text-blue-700",
     activeBadge: "border-blue-500 bg-blue-500 text-white",
+  },
+  {
+    id: "COMPLETED",
+    label: "Completed",
+    dot: "bg-gray-500",
+    badge: "border-gray-300 bg-gray-100 text-gray-700",
+    activeBadge: "border-gray-500 bg-gray-500 text-white",
   },
 ];
 

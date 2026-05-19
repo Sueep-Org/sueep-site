@@ -6,6 +6,7 @@ import { LaborTracker } from "./LaborTracker";
 import { WorkerTimeline } from "./WorkerTimeline";
 import { AddLaborEntryForm } from "./AddLaborEntryForm";
 import { LocationTracker } from "./LocationTracker";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -72,13 +73,11 @@ export default async function SchedulePage() {
   }));
 
   return (
-    <div className="space-y-10">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-gray-900">Schedule & Labor Tracking</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage project timelines, worker schedules, and labor hours.
-          </p>
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-pink-600">Schedule & Labor</h1>
+          <p className="mt-1 text-sm text-gray-500">Project timelines, worker schedules, and labor hours.</p>
         </div>
         <div className="flex items-center gap-3">
           <LocationTracker autoStart={true} />
@@ -86,30 +85,18 @@ export default async function SchedulePage() {
         </div>
       </div>
 
+      <hr className="border-pink-200" />
+
       {/* Project Schedule */}
       <SchedulePlanner projects={projects} />
 
-      {/* Labor Tracking */}
-      <section className="rounded-xl border border-gray-300 bg-gray-50 p-4">
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Labor Tracking</h2>
-          <p className="mt-1 text-xs text-gray-600">
-            Track worker hours, costs, and project labor allocation.
-          </p>
-        </div>
+      <CollapsibleSection title="Labor Tracking" description="Worker hours, costs, and project labor allocation.">
         <LaborTracker laborEntries={laborEntries} projects={projectsForTracking} />
-      </section>
+      </CollapsibleSection>
 
-      {/* Worker Timeline */}
-      <section className="rounded-xl border border-gray-300 bg-gray-50 p-4">
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-600">Worker Timeline</h2>
-          <p className="mt-1 text-xs text-gray-600">
-            View worker availability and project assignments over the next 14 days.
-          </p>
-        </div>
+      <CollapsibleSection title="Worker Timeline" description="Worker assignments over the next 14 days.">
         <WorkerTimeline laborEntries={laborEntries} projects={projectsForTracking} daysToShow={14} />
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }
