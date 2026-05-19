@@ -215,6 +215,16 @@ export function NewProjectForm() {
     setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
   }
 
+  function applySelectedBuilding(id: string, fallback?: Partial<BuildingOption>) {
+    const building = buildings.find((option) => option.id === id);
+    setBuildingProjectId(id);
+    setBuildingName(building?.name || fallback?.name || "");
+    setBuildingAddress(building?.address || fallback?.address || "");
+    setPmName(building?.pmName || fallback?.pmName || "");
+    setPmEmail(building?.pmEmail || fallback?.pmEmail || "");
+    setPmPhone(building?.pmPhone || fallback?.pmPhone || "");
+  }
+
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
@@ -306,6 +316,7 @@ export function NewProjectForm() {
       estHours: fd.get("estHours") || undefined,
       actualHours: fd.get("actualHours") || undefined,
       requestType,
+      buildingId: buildingProjectId || undefined,
       buildingProjectId: buildingProjectId || undefined,
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
@@ -413,14 +424,14 @@ export function NewProjectForm() {
                   className={input}
                   value={buildingProjectId}
                   onChange={(e) => {
-                    const id = e.target.value;
-                    const building = buildings.find((option) => option.id === id);
-                    setBuildingProjectId(id);
-                    setBuildingName(building?.name || "");
-                    setBuildingAddress(building?.address || "");
-                    setPmName(building?.pmName || "");
-                    setPmEmail(building?.pmEmail || "");
-                    setPmPhone(building?.pmPhone || "");
+                    const selected = e.currentTarget.selectedOptions[0];
+                    applySelectedBuilding(e.target.value, {
+                      name: selected?.dataset.name,
+                      address: selected?.dataset.address,
+                      pmName: selected?.dataset.pmName,
+                      pmEmail: selected?.dataset.pmEmail,
+                      pmPhone: selected?.dataset.pmPhone,
+                    });
                   }}
                 >
                   <option value="">Select a building...</option>
@@ -430,7 +441,15 @@ export function NewProjectForm() {
                     </option>
                   ) : null}
                   {buildings.map((building) => (
-                    <option key={building.id} value={building.id}>
+                    <option
+                      key={building.id}
+                      value={building.id}
+                      data-name={building.name}
+                      data-address={building.address}
+                      data-pm-name={building.pmName || ""}
+                      data-pm-email={building.pmEmail || ""}
+                      data-pm-phone={building.pmPhone || ""}
+                    >
                       {building.name}
                     </option>
                   ))}
