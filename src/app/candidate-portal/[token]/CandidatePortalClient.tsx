@@ -121,7 +121,17 @@ export function CandidatePortalClient({
           </div>
 
           <div className="border-t border-[#E73C6E]/20 pt-3">
-            <p className="font-semibold text-[#E73C6E] mb-1">W-4 Form</p>
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <p className="font-semibold text-[#E73C6E]">W-4 Form</p>
+              <a
+                href="https://www.irs.gov/pub/irs-pdf/fw4.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-[#E73C6E] px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity shrink-0"
+              >
+                ↓ Download W-4
+              </a>
+            </div>
             <ol className="list-decimal list-inside space-y-1 text-gray-600">
               <li>Complete <strong className="text-gray-800">Step 1</strong> — Personal Information.</li>
               <li>Complete <strong className="text-gray-800">Step 5</strong> — Signature and Date.</li>
@@ -130,7 +140,17 @@ export function CandidatePortalClient({
           </div>
 
           <div className="border-t border-[#E73C6E]/20 pt-3">
-            <p className="font-semibold text-[#E73C6E] mb-1">I-9 Form</p>
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <p className="font-semibold text-[#E73C6E]">I-9 Form</p>
+              <a
+                href="https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-[#E73C6E] px-3 py-1 text-xs font-medium text-white hover:opacity-90 transition-opacity shrink-0"
+              >
+                ↓ Download I-9
+              </a>
+            </div>
             <ol className="list-decimal list-inside space-y-1 text-gray-600">
               <li>Fill out <strong className="text-gray-800">Section 1 only</strong>.</li>
               <li>Check the box regarding your <strong className="text-gray-800">citizenship / immigration status</strong>.</li>
