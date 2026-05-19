@@ -22,6 +22,7 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 const CLEANING_RATES = { 1: 185, 2: 255, 3: 385 } as const;
 const PAINTING_RATES = { 1: 340, 2: 400, 3: 450 } as const;
 const UNIT_FEATURE_OPTIONS = [
+  { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
   { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
   { value: "2/1", label: "2/1", bedrooms: 2, bathrooms: 1 },
   { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
@@ -41,6 +42,8 @@ type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 type UnitScope = {
   id: string;
   unitNumber: string;
+  startDate: string;
+  endDate: string;
   features: UnitFeatureValue;
   unitQuality: string;
   fullPaint: boolean;
@@ -55,6 +58,8 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
   return {
     id,
     unitNumber: "",
+    startDate: "",
+    endDate: "",
     features: "1/1",
     unitQuality: "",
     fullPaint: false,
@@ -84,6 +89,10 @@ function getUnitFeature(value: UnitFeatureValue) {
 }
 
 function unitScopeSummary(unit: UnitScope) {
+  const dateRange =
+    unit.startDate || unit.endDate
+      ? `, dates: ${unit.startDate || "TBD"} to ${unit.endDate || "TBD"}`
+      : "";
   const services = [
     unit.fullClean ? "full clean" : null,
     unit.fullPaint ? "full paint" : null,
@@ -93,25 +102,18 @@ function unitScopeSummary(unit: UnitScope) {
     unit.carpetCleaning ? "carpet cleaning" : null,
   ].filter(Boolean);
 
-  return `${unit.unitNumber || "Unit"} (${unit.features})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+  return `${unit.unitNumber || "Unit"} (${unit.features}${dateRange})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
   }`;
 }
 
-interface EmployeeOption {
+interface BuildingOption {
   id: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface ProjectOption {
-  id: string;
-  jobTitle: string;
-  description?: string | null;
-  supervisor?: string | null;
-  status?: string;
-  segment?: string;
-  hubspotPipelineId?: string | null;
+  name: string;
+  address: string;
+  pmName?: string | null;
+  pmEmail?: string | null;
+  pmPhone?: string | null;
 }
 
 export function NewProjectForm() {
@@ -125,7 +127,7 @@ export function NewProjectForm() {
   const [jobOptions, setJobOptions] = useState<string[]>([]);
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
-  const [activeJanitorialProjects, setActiveJanitorialProjects] = useState<ProjectOption[]>([]);
+  const [buildings, setBuildings] = useState<BuildingOption[]>([]);
   const [buildingProjectId, setBuildingProjectId] = useState("");
 
   const requestType = "TURNOVER";
@@ -135,12 +137,6 @@ export function NewProjectForm() {
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
-
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [laborerId, setLaborerId] = useState("");
-  const [salesNotes, setSalesNotes] = useState("");
-  const [laborPool, setLaborPool] = useState<EmployeeOption[]>([]);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
@@ -175,32 +171,14 @@ export function NewProjectForm() {
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/erp/projects?category=schedule-janitorial")
+    fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
-        setActiveJanitorialProjects(Array.isArray(data) ? data : []);
+        setBuildings(Array.isArray(data) ? data : []);
       })
       .catch(() => {
-        if (mounted) setActiveJanitorialProjects([]);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    fetch("/api/erp/employees")
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((data) => {
-        if (!mounted) return;
-        if (Array.isArray(data)) {
-          setLaborPool(data.slice(0, 100));
-        }
-      })
-      .catch(() => {
-        if (!mounted) setLaborPool([]);
+        if (mounted) setBuildings([]);
       });
     return () => {
       mounted = false;
@@ -294,16 +272,17 @@ export function NewProjectForm() {
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
-    const selectedBuildingProject = activeJanitorialProjects.find((project) => project.id === buildingProjectId);
+    const selectedBuilding = buildings.find((building) => building.id === buildingProjectId);
     const turnoverUnitLabel = unitScopes
       .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
       .join(", ");
-    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuildingProject?.jobTitle || "Janitorial turnover"}${
+    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.name || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
-      isTurnover && selectedBuildingProject ? `Building project: ${selectedBuildingProject.jobTitle}` : null,
+      isTurnover && selectedBuilding ? `Building: ${selectedBuilding.name}` : null,
+      isTurnover && buildingAddress.trim() ? `Address: ${buildingAddress.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
     ]
       .filter(Boolean)
@@ -344,11 +323,7 @@ export function NewProjectForm() {
       materialsAdditional: unitScopes.some((unit) => unit.materialsAdditional),
       fullClean: unitScopes.some((unit) => unit.fullClean),
       carpetCleaning: unitScopes.some((unit) => unit.carpetCleaning),
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
-      laborerId: laborerId || undefined,
       supervisorSignOff: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
-      salesNotes: salesNotes.trim() || undefined,
       pricing: {
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
@@ -439,21 +414,24 @@ export function NewProjectForm() {
                   value={buildingProjectId}
                   onChange={(e) => {
                     const id = e.target.value;
-                    const project = activeJanitorialProjects.find((option) => option.id === id);
+                    const building = buildings.find((option) => option.id === id);
                     setBuildingProjectId(id);
-                    setBuildingName(project?.jobTitle || "");
-                    setPmName(project?.supervisor || "");
+                    setBuildingName(building?.name || "");
+                    setBuildingAddress(building?.address || "");
+                    setPmName(building?.pmName || "");
+                    setPmEmail(building?.pmEmail || "");
+                    setPmPhone(building?.pmPhone || "");
                   }}
                 >
-                  <option value="">Select from janitorial schedule...</option>
-                  {activeJanitorialProjects.length === 0 ? (
+                  <option value="">Select a building...</option>
+                  {buildings.length === 0 ? (
                     <option value="" disabled>
-                      No janitorial schedule projects found
+                      No buildings found
                     </option>
                   ) : null}
-                  {activeJanitorialProjects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.jobTitle}
+                  {buildings.map((building) => (
+                    <option key={building.id} value={building.id}>
+                      {building.name}
                     </option>
                   ))}
                 </select>
@@ -531,7 +509,7 @@ export function NewProjectForm() {
             <div className="space-y-3">
               {unitScopes.map((unit, index) => (
                 <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <div className="grid gap-3 lg:grid-cols-[1fr_120px_1.5fr_auto]">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
                     <div>
                       <label className={label} htmlFor={`unit-${unit.id}`}>
                         Unit number
@@ -542,6 +520,30 @@ export function NewProjectForm() {
                         value={unit.unitNumber}
                         onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
                         placeholder={`Unit ${index + 1}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor={`start-date-${unit.id}`}>
+                        Start date
+                      </label>
+                      <input
+                        id={`start-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.startDate}
+                        onChange={(e) => updateUnitScope(unit.id, { startDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor={`end-date-${unit.id}`}>
+                        End date
+                      </label>
+                      <input
+                        id={`end-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.endDate}
+                        onChange={(e) => updateUnitScope(unit.id, { endDate: e.target.value })}
                       />
                     </div>
                     <div>
@@ -663,73 +665,6 @@ export function NewProjectForm() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 — Scheduling & assignment</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="startDate">
-                  Start date
-                </label>
-                <input
-                  id="startDate"
-                  name="startDate"
-                  type="date"
-                  required
-                  className={input}
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="endDate">
-                  End date
-                </label>
-                <input
-                  id="endDate"
-                  name="endDate"
-                  type="date"
-                  required
-                  className={input}
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="laborerId">
-                  Assign laborer
-                </label>
-                <select
-                  id="laborerId"
-                  name="laborerId"
-                  className={input}
-                  value={laborerId}
-                  onChange={(e) => setLaborerId(e.target.value)}
-                >
-                  <option value="">— Select laborer —</option>
-                  {laborPool.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.firstName} {employee.lastName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={label} htmlFor="salesNotes">
-                  Sales / PM notes
-                </label>
-                <textarea
-                  id="salesNotes"
-                  name="salesNotes"
-                  rows={3}
-                  className={input}
-                  value={salesNotes}
-                  onChange={(e) => setSalesNotes(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
         </div>
       ) : null}
 
