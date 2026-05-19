@@ -221,7 +221,9 @@ export function NewProjectForm() {
         if (unit.id !== id) return unit;
         const next = { ...unit, ...patch };
         if (patch.fullPaint) next.touchUpPaint = false;
+        if (patch.touchUpPaint) next.fullPaint = false;
         if (unit.fullPaint && patch.touchUpPaint) next.touchUpPaint = false;
+        if (unit.touchUpPaint && patch.fullPaint) next.fullPaint = false;
         return next;
       })
     );
@@ -591,7 +593,7 @@ export function NewProjectForm() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {[
                       { key: "fullClean", text: "Full clean" },
-                      { key: "fullPaint", text: "Full paint" },
+                      { key: "fullPaint", text: "Full paint", disabled: unit.touchUpPaint },
                       { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
                       { key: "lightWallTouchUps", text: "Light wall touch-ups" },
                       { key: "materialsAdditional", text: "Additional materials" },
