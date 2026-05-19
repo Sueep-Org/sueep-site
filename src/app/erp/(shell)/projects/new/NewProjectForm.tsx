@@ -28,6 +28,14 @@ const UNIT_FEATURE_OPTIONS = [
   { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
   { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
 ] as const;
+const UNIT_QUALITY_OPTIONS = [
+  "Vacant",
+  "Occupied",
+  "Light wear",
+  "Heavy dust",
+  "Needs trash-out",
+  "Needs maintenance",
+] as const;
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 type UnitScope = {
@@ -120,7 +128,7 @@ export function NewProjectForm() {
   const [activeJanitorialProjects, setActiveJanitorialProjects] = useState<ProjectOption[]>([]);
   const [buildingProjectId, setBuildingProjectId] = useState("");
 
-  const [requestType, setRequestType] = useState<"TURNOVER" | "REGULAR">("TURNOVER");
+  const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
   const [buildingAddress, setBuildingAddress] = useState("");
   const [pmName, setPmName] = useState("");
@@ -277,8 +285,14 @@ export function NewProjectForm() {
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
     const selectedBuildingProject = activeJanitorialProjects.find((project) => project.id === buildingProjectId);
+    const turnoverUnitLabel = unitScopes
+      .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
+      .join(", ");
+    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuildingProject?.jobTitle || "Janitorial turnover"}${
+      turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
+    }`;
     const turnoverDescription = [
-      descriptionValue,
+      isTurnover ? null : descriptionValue,
       isTurnover && selectedBuildingProject ? `Building project: ${selectedBuildingProject.jobTitle}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
     ]
@@ -287,8 +301,8 @@ export function NewProjectForm() {
 
     const payload = {
       segment,
-      jobTitle: finalJobTitle || fd.get("jobTitle") || undefined,
-      supervisor: fd.get("supervisor") || undefined,
+      jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
+      supervisor: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
       description: turnoverDescription || undefined,
       projectDate: fd.get("projectDate") || undefined,
       projectEndDate: fd.get("projectEndDate") || undefined,
@@ -323,7 +337,7 @@ export function NewProjectForm() {
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       laborerId: laborerId || undefined,
-      supervisorSignOff: fd.get("supervisor") || undefined,
+      supervisorSignOff: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
       salesNotes: salesNotes.trim() || undefined,
       pricing: {
         packageLabel: packagePricing.packageLabel,
@@ -494,28 +508,6 @@ export function NewProjectForm() {
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Request type</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { value: "TURNOVER", label: "Turnover request" },
-                { value: "REGULAR", label: "Regular request" },
-              ].map((option) => (
-                <label key={option.value} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm hover:border-pink-500">
-                  <input
-                    type="radio"
-                    name="requestType"
-                    value={option.value}
-                    checked={requestType === option.value}
-                    onChange={() => setRequestType(option.value as "TURNOVER" | "REGULAR")}
-                    className="mr-2 h-4 w-4 text-pink-600"
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className={sectionHeader}>Step 2 — Units & independent scope</p>
               <button
@@ -563,13 +555,19 @@ export function NewProjectForm() {
                       <label className={label} htmlFor={`quality-${unit.id}`}>
                         Unit quality
                       </label>
-                      <input
+                      <select
                         id={`quality-${unit.id}`}
                         className={input}
                         value={unit.unitQuality}
                         onChange={(e) => updateUnitScope(unit.id, { unitQuality: e.target.value })}
-                        placeholder="e.g. Vacant, light wear, heavy dust"
-                      />
+                      >
+                        <option value="">Select quality...</option>
+                        {UNIT_QUALITY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="flex items-end">
                       <button
@@ -608,7 +606,7 @@ export function NewProjectForm() {
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 — Pricing package</p>
+            <p className={sectionHeader}>Step 3 — Pricing package</p>
             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
               <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
                 <thead className="bg-gray-50 text-gray-700">
@@ -655,7 +653,7 @@ export function NewProjectForm() {
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 5 — Scheduling & assignment</p>
+            <p className={sectionHeader}>Step 4 — Scheduling & assignment</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="startDate">
@@ -724,166 +722,170 @@ export function NewProjectForm() {
         </div>
       ) : null}
 
-      <div>
-        <label className={label} htmlFor="jobTitle">
-          Job title *
-        </label>
-        <select
-          id="jobTitle"
-          name="jobTitle"
-          required={!isCustomJob}
-          className={input}
-          value={jobTitle}
-          onChange={(e) => setJobTitle(e.target.value)}
-        >
-          <option value="">— Select from schedule —</option>
-          {jobOptions.map((title) => (
-            <option key={title} value={title}>
-              {title}
-            </option>
-          ))}
-          <option value="__custom__">Other / Enter custom job title…</option>
-        </select>
-        {isCustomJob ? (
-          <div className="mt-2">
-            <label className={label} htmlFor="customJobTitle">
-              Custom job title
+      {!isTurnover ? (
+        <>
+          <div>
+            <label className={label} htmlFor="jobTitle">
+              Job title *
             </label>
-            <input
-              id="customJobTitle"
-              name="customJobTitle"
-              required
+            <select
+              id="jobTitle"
+              name="jobTitle"
+              required={!isCustomJob}
               className={input}
-              value={customJobTitle}
-              onChange={(e) => setCustomJobTitle(e.target.value)}
-              placeholder="e.g. Special Event Setup — Main Hall"
-            />
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+            >
+              <option value="">— Select from schedule —</option>
+              {jobOptions.map((title) => (
+                <option key={title} value={title}>
+                  {title}
+                </option>
+              ))}
+              <option value="__custom__">Other / Enter custom job title…</option>
+            </select>
+            {isCustomJob ? (
+              <div className="mt-2">
+                <label className={label} htmlFor="customJobTitle">
+                  Custom job title
+                </label>
+                <input
+                  id="customJobTitle"
+                  name="customJobTitle"
+                  required
+                  className={input}
+                  value={customJobTitle}
+                  onChange={(e) => setCustomJobTitle(e.target.value)}
+                  placeholder="e.g. Special Event Setup — Main Hall"
+                />
+              </div>
+            ) : null}
+            <p className="mt-1 text-[10px] text-gray-500">Pulled from scheduled jobs. Add more via Schedule module.</p>
           </div>
-        ) : null}
-        <p className="mt-1 text-[10px] text-gray-500">Pulled from scheduled jobs. Add more via Schedule module.</p>
-      </div>
 
-      <div>
-        <label className={label} htmlFor="supervisor">
-          Supervisor / PM *
-        </label>
-        <input id="supervisor" name="supervisor" required={isTurnover} className={input} />
-      </div>
+          <div>
+            <label className={label} htmlFor="supervisor">
+              Supervisor / PM *
+            </label>
+            <input id="supervisor" name="supervisor" className={input} />
+          </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={label} htmlFor="serviceType">
-            Work type
-          </label>
-          <select
-            id="serviceType"
-            className={input}
-            value={serviceType}
-            onChange={(e) => setServiceType(e.target.value)}
-          >
-            <option value="">— Select —</option>
-            {SERVICE_TYPE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-            <option value="__other__">Other…</option>
-          </select>
-        </div>
-        {serviceType === "__other__" ? (
-          <div>
-            <label className={label} htmlFor="customType">
-              Custom work type
-            </label>
-            <input
-              id="customType"
-              type="text"
-              className={input}
-              value={customType}
-              onChange={(e) => setCustomType(e.target.value)}
-              placeholder="Describe the work"
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={label} htmlFor="serviceType">
+                Work type
+              </label>
+              <select
+                id="serviceType"
+                className={input}
+                value={serviceType}
+                onChange={(e) => setServiceType(e.target.value)}
+              >
+                <option value="">— Select —</option>
+                {SERVICE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+                <option value="__other__">Other…</option>
+              </select>
+            </div>
+            {serviceType === "__other__" ? (
+              <div>
+                <label className={label} htmlFor="customType">
+                  Custom work type
+                </label>
+                <input
+                  id="customType"
+                  type="text"
+                  className={input}
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  placeholder="Describe the work"
+                />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={label} htmlFor="percentDone">
-            % done
-          </label>
-          <input id="percentDone" name="percentDone" type="number" min={0} max={100} step={1} className={input} placeholder="0" />
-        </div>
-        <div>
-          <label className={label} htmlFor="percentInvoiced">
-            % invoiced
-          </label>
-          <input
-            id="percentInvoiced"
-            name="percentInvoiced"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            className={input}
-            placeholder="0"
-          />
-        </div>
-      </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={label} htmlFor="percentDone">
+                % done
+              </label>
+              <input id="percentDone" name="percentDone" type="number" min={0} max={100} step={1} className={input} placeholder="0" />
+            </div>
+            <div>
+              <label className={label} htmlFor="percentInvoiced">
+                % invoiced
+              </label>
+              <input
+                id="percentInvoiced"
+                name="percentInvoiced"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className={input}
+                placeholder="0"
+              />
+            </div>
+          </div>
 
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimates & actuals (USD)</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <div>
-            <label className={label} htmlFor="contractValue">
-              Contract value
-            </label>
-            <input id="contractValue" name="contractValue" className={input} placeholder="0.00" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimates & actuals (USD)</p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="contractValue">
+                  Contract value
+                </label>
+                <input id="contractValue" name="contractValue" className={input} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={label} htmlFor="estMaterial">
+                  Est. material
+                </label>
+                <input id="estMaterial" name="estMaterial" className={input} />
+              </div>
+              <div>
+                <label className={label} htmlFor="estTravel">
+                  Est. travel
+                </label>
+                <input id="estTravel" name="estTravel" className={input} />
+              </div>
+              <div>
+                <label className={label} htmlFor="estLabor">
+                  Est. labor
+                </label>
+                <input id="estLabor" name="estLabor" className={input} />
+              </div>
+              <div>
+                <label className={label} htmlFor="actualLabor">
+                  Actual labor
+                </label>
+                <input id="actualLabor" name="actualLabor" className={input} />
+              </div>
+              <div>
+                <label className={label} htmlFor="actualMaterial">
+                  Actual material
+                </label>
+                <input id="actualMaterial" name="actualMaterial" className={input} />
+              </div>
+              <div>
+                <label className={label} htmlFor="estHours">
+                  Est. hours
+                </label>
+                <input id="estHours" name="estHours" type="text" className={input} placeholder="e.g. 40" />
+              </div>
+              <div>
+                <label className={label} htmlFor="actualHours">
+                  Actual hours
+                </label>
+                <input id="actualHours" name="actualHours" type="text" className={input} />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className={label} htmlFor="estMaterial">
-              Est. material
-            </label>
-            <input id="estMaterial" name="estMaterial" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="estTravel">
-              Est. travel
-            </label>
-            <input id="estTravel" name="estTravel" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="estLabor">
-              Est. labor
-            </label>
-            <input id="estLabor" name="estLabor" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="actualLabor">
-              Actual labor
-            </label>
-            <input id="actualLabor" name="actualLabor" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="actualMaterial">
-              Actual material
-            </label>
-            <input id="actualMaterial" name="actualMaterial" className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="estHours">
-              Est. hours
-            </label>
-            <input id="estHours" name="estHours" type="text" className={input} placeholder="e.g. 40" />
-          </div>
-          <div>
-            <label className={label} htmlFor="actualHours">
-              Actual hours
-            </label>
-            <input id="actualHours" name="actualHours" type="text" className={input} />
-          </div>
-        </div>
-      </div>
+        </>
+      ) : null}
 
       {error ? (
         <p className="text-sm text-red-400" role="alert">
