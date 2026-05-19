@@ -116,7 +116,11 @@ interface BuildingOption {
   pmPhone?: string | null;
 }
 
-export function NewProjectForm() {
+interface NewProjectFormProps {
+  initialBuildings?: BuildingOption[];
+}
+
+export function NewProjectForm({ initialBuildings = [] }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -127,7 +131,9 @@ export function NewProjectForm() {
   const [jobOptions, setJobOptions] = useState<string[]>([]);
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
-  const [buildings, setBuildings] = useState<BuildingOption[]>([]);
+  const [buildings, setBuildings] = useState<BuildingOption[]>(initialBuildings);
+  const [buildingsLoading, setBuildingsLoading] = useState(initialBuildings.length === 0);
+  const [buildingsError, setBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
 
   const requestType = "TURNOVER";
@@ -171,19 +177,24 @@ export function NewProjectForm() {
 
   useEffect(() => {
     let mounted = true;
+    setBuildingsLoading(initialBuildings.length === 0);
+    setBuildingsError("");
     fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
-        setBuildings(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) setBuildings(data);
       })
       .catch(() => {
-        if (mounted) setBuildings([]);
+        if (mounted) setBuildingsError("Could not load buildings.");
+      })
+      .finally(() => {
+        if (mounted) setBuildingsLoading(false);
       });
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [initialBuildings.length]);
 
   const isCustomJob = jobTitle === "__custom__";
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
@@ -423,6 +434,7 @@ export function NewProjectForm() {
                   required
                   className={input}
                   value={buildingProjectId}
+                  disabled={buildingsLoading}
                   onChange={(e) => {
                     const selected = e.currentTarget.selectedOptions[0];
                     applySelectedBuilding(e.target.value, {
@@ -434,8 +446,8 @@ export function NewProjectForm() {
                     });
                   }}
                 >
-                  <option value="">Select a building...</option>
-                  {buildings.length === 0 ? (
+                  <option value="">{buildingsLoading ? "Loading buildings..." : "Select a building..."}</option>
+                  {!buildingsLoading && buildings.length === 0 ? (
                     <option value="" disabled>
                       No buildings found
                     </option>
@@ -454,6 +466,7 @@ export function NewProjectForm() {
                     </option>
                   ))}
                 </select>
+                {buildingsError ? <p className="mt-1 text-xs text-red-500">{buildingsError}</p> : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
               </div>
               <div>
