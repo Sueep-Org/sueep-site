@@ -139,10 +139,16 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           <h1 className="text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
           <ProjectDeleteButton projectId={project.id} />
         </div>
-        {project.description ? <p className="mt-2 text-sm text-gray-500">{project.description}</p> : null}
+        {project.description ? <p className="mt-2 whitespace-pre-line text-sm text-gray-500">{project.description}</p> : null}
       </div>
 
       <CollapsiblePanel title="Project Details">
+        {project.description ? (
+          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
+            <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+          </div>
+        ) : null}
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {meta.map((row) => (
             <div key={row.k}>
@@ -173,9 +179,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Service Type" defaultOpen={false}>
-        <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
-      </CollapsiblePanel>
+      {project.segment !== "JANITORIAL_TURNOVER_REQUESTS" ? (
+        <CollapsiblePanel title="Service Type" defaultOpen={false}>
+          <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
+        </CollapsiblePanel>
+      ) : null}
 
       <CollapsiblePanel title="Billing" defaultOpen={false}>
         <ProjectBillingEditor

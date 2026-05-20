@@ -101,6 +101,7 @@ function getUnitFeature(value: UnitFeatureValue) {
 }
 
 function unitScopeSummary(unit: UnitScope) {
+  const feature = getUnitFeature(unit.features);
   const dateRange =
     unit.startDate || unit.endDate
       ? `, dates: ${unit.startDate || "TBD"} to ${unit.endDate || "TBD"}`
@@ -114,9 +115,18 @@ function unitScopeSummary(unit: UnitScope) {
     unit.carpetCleaning ? "carpet cleaning" : null,
   ].filter(Boolean);
 
-  return `${unit.unitNumber || "Unit"} (${unit.features}${dateRange})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+  return `${unit.unitNumber || "Unit"} (${feature.label}${dateRange})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
   }`;
+}
+
+function minDateValue(values: string[]) {
+  return values.filter(Boolean).sort()[0] || "";
+}
+
+function maxDateValue(values: string[]) {
+  const sorted = values.filter(Boolean).sort();
+  return sorted[sorted.length - 1] || "";
 }
 
 interface BuildingOption {
@@ -444,11 +454,18 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.jobTitle || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
+    const turnoverStartDate = minDateValue(unitScopes.map((unit) => unit.startDate));
+    const turnoverEndDate = maxDateValue(unitScopes.map((unit) => unit.endDate));
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
-      isTurnover && selectedBuilding ? `Building: ${selectedBuilding.jobTitle}` : null,
+      isTurnover ? `Property: ${buildingName.trim() || selectedBuilding?.jobTitle || "Unspecified"}` : null,
       isTurnover && buildingAddress.trim() ? `Address: ${buildingAddress.trim()}` : null,
+      isTurnover && pmName.trim() ? `Property Manager/Maintenance Manager: ${pmName.trim()}` : null,
+      isTurnover && pmEmail.trim() ? `Manager Email: ${pmEmail.trim()}` : null,
+      isTurnover && pmPhone.trim() ? `Manager Phone: ${pmPhone.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
+      isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
+      isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -458,8 +475,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
       supervisor: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
       description: turnoverDescription || undefined,
-      projectDate: fd.get("projectDate") || undefined,
-      projectEndDate: fd.get("projectEndDate") || undefined,
+      projectDate: isTurnover ? turnoverStartDate || undefined : fd.get("projectDate") || undefined,
+      projectEndDate: isTurnover ? turnoverEndDate || undefined : fd.get("projectEndDate") || undefined,
       ...(isTurnover && janitorialPipelineId ? { hubspotPipelineId: janitorialPipelineId } : {}),
       percentDone: fd.get("percentDone") || undefined,
       percentInvoiced: fd.get("percentInvoiced") || undefined,
