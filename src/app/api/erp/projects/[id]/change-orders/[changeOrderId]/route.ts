@@ -28,6 +28,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.description !== undefined) data.description = body.description != null ? String(body.description).trim() || null : null;
   if (body.requestedBy !== undefined) data.requestedBy = body.requestedBy != null ? String(body.requestedBy).trim() || null : null;
+  if (body.supervisor !== undefined) data.supervisor = body.supervisor != null ? String(body.supervisor).trim() || null : null;
   if (body.reason !== undefined) data.reason = body.reason != null ? String(body.reason).trim() || null : null;
   if (body.resolutionNotes !== undefined) {
     data.resolutionNotes = body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null;
@@ -52,14 +53,51 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
+  const laborersRaw = Array.isArray(body.laborers)
+    ? (body.laborers as unknown[]).flatMap((l) => {
+        if (typeof l !== "object" || l === null) return [];
+        const lo = l as Record<string, unknown>;
+        const name = String(lo.name || "").trim();
+        if (!name) return [];
+        return [{ name, employeeId: lo.employeeId ? String(lo.employeeId) : null, role: lo.role ? String(lo.role).trim() || null : null }];
+      })
+    : null;
+
   try {
-    const updated = await prisma.projectChangeOrder.update({
-      where: { id: changeOrderId },
-      data,
+    const updated = await prisma.$transaction(async (tx) => {
+      if (laborersRaw !== null) {
+        await tx.projectChangeOrderLaborer.deleteMany({ where: { changeOrderId } });
+        if (laborersRaw.length) {
+          await tx.projectChangeOrderLaborer.createMany({
+            data: laborersRaw.map(({ name, employeeId, role }) => ({ changeOrderId, name, employeeId, role })),
+          });
+        }
+      }
+      return tx.projectChangeOrder.update({
+        where: { id: changeOrderId },
+        data,
+        include: { laborers: { orderBy: { createdAt: "asc" } } },
+      });
     });
     return NextResponse.json(updated);
   } catch (e) {
     console.error("PATCH project change order", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const { id, changeOrderId } = await ctx.params;
+  const existing = await prisma.projectChangeOrder.findFirst({
+    where: { id: changeOrderId, projectId: id },
+  });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  try {
+    await prisma.projectChangeOrder.delete({ where: { id: changeOrderId } });
+    return new NextResponse(null, { status: 204 });
+  } catch (e) {
+    console.error("DELETE project change order", e);
+    return NextResponse.json({ error: "Delete failed" }, { status: 500 });
   }
 }

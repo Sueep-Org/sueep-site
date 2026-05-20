@@ -11,6 +11,7 @@ import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
+import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -48,6 +49,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       orderBy: { name: "asc" },
       select: { id: true, name: true, status: true },
     }),
+    prisma.projectChangeOrder.findMany({
+      where: { projectId: id },
+      orderBy: { createdAt: "desc" },
+      include: { laborers: { orderBy: { createdAt: "asc" } } },
+    }),
   ]);
   if (!project) notFound();
 
@@ -72,6 +78,26 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     hours: e.hours.toString(),
     hourlyRateCents: e.hourlyRateCents,
     taskDescription: e.taskDescription,
+  }));
+
+  const changeOrderRows = changeOrders.map((co) => ({
+    id: co.id,
+    createdAt: co.createdAt.toISOString(),
+    title: co.title,
+    description: co.description,
+    requestedBy: co.requestedBy,
+    supervisor: co.supervisor,
+    status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID",
+    estimatedCostCents: co.estimatedCostCents,
+    estimatedDays: co.estimatedDays,
+    reason: co.reason,
+    resolutionNotes: co.resolutionNotes,
+    laborers: (co.laborers ?? []).map((l) => ({
+      id: l.id,
+      employeeId: l.employeeId,
+      name: l.name,
+      role: l.role,
+    })),
   }));
 
   const contractorRows = project.contractorAssignments.map((a) => ({
@@ -177,6 +203,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           initialAssignments={contractorRows}
           contractors={contractors}
         />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Change Orders" defaultOpen={false}>
+        <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} employees={laborEmployees} />
       </CollapsiblePanel>
     </div>
   );

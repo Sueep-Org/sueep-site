@@ -32,6 +32,21 @@ export type ProjectTableRow = {
   paintCents: number;
   miles: number;
   hubspotPipelineId: string | null;
+  changeOrders: {
+    id: string;
+    title: string;
+    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID";
+    estimatedCostCents: number | null;
+    estimatedDays: number | null;
+  }[];
+};
+
+const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID", string> = {
+  DRAFT: "bg-gray-200 text-gray-700",
+  SUBMITTED: "bg-blue-100 text-blue-700",
+  APPROVED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
+  VOID: "bg-amber-100 text-amber-700",
 };
 
 function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
@@ -176,6 +191,24 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                           </p>
                         </div>
                       </div>
+                      {p.changeOrders.length > 0 && (
+                        <div className="mt-3 border-t border-gray-200 pt-3">
+                          <p className="mb-2 text-[10px] uppercase text-gray-600">Change Orders</p>
+                          <div className="space-y-1">
+                            {p.changeOrders.map((co) => (
+                              <div key={co.id} className="flex items-center gap-2 text-sm">
+                                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${CO_STATUS_COLORS[co.status]}`}>
+                                  {co.status}
+                                </span>
+                                <span className="flex-1 text-gray-900">{co.title}</span>
+                                <span className="shrink-0 text-xs text-gray-500">
+                                  {centsToDollars(co.estimatedCostCents)} · {co.estimatedDays ?? 0}d
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-3 text-xs">
                         <Link href={`/erp/projects/${p.id}`} className="font-medium text-pink-600 hover:underline">
                           Open full project details →

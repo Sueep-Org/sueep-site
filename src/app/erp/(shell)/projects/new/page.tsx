@@ -12,17 +12,21 @@ export default async function NewProjectPage() {
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
-  const buildings = await prisma.building.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      address: true,
-      pmName: true,
-      pmEmail: true,
-      pmPhone: true,
-    },
-  });
+  const [buildings, allProjects, employees] = await Promise.all([
+    prisma.building.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
+    }),
+    prisma.project.findMany({
+      orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
+      select: { id: true, jobTitle: true },
+    }),
+    prisma.employee.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: { id: true, firstName: true, lastName: true },
+    }),
+  ]);
   const scheduleBuildings = await prisma.project.findMany({
     where: {
       status: { notIn: ["COMPLETE", "ARCHIVED"] },
@@ -49,7 +53,13 @@ export default async function NewProjectPage() {
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">New project</h1>
         <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
       </div>
-      <NewProjectForm initialBuildings={buildings} initialScheduleBuildings={scheduleBuildings} janitorialPipelineId={cfg?.janitorial.pipelineId || null} />
+      <NewProjectForm
+        initialBuildings={buildings}
+        initialScheduleBuildings={scheduleBuildings}
+        janitorialPipelineId={cfg?.janitorial.pipelineId || null}
+        allProjects={allProjects}
+        employees={employees}
+      />
     </div>
   );
 }

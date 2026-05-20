@@ -24,6 +24,10 @@ export default async function ErpProjectsPage() {
       },
       materialEntries: { select: { category: true, costCents: true } },
       distanceEntries: { select: { miles: true } },
+      changeOrders: {
+        select: { id: true, title: true, status: true, estimatedCostCents: true, estimatedDays: true },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
@@ -89,6 +93,13 @@ export default async function ErpProjectsPage() {
       paintCents,
       miles,
       hubspotPipelineId: p.hubspotPipelineId ?? null,
+      changeOrders: p.changeOrders.map((co) => ({
+        id: co.id,
+        title: co.title,
+        status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID",
+        estimatedCostCents: co.estimatedCostCents,
+        estimatedDays: co.estimatedDays,
+      })),
     };
   });
 

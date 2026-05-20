@@ -14,6 +14,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const entries = await prisma.projectChangeOrder.findMany({
     where: { projectId: id },
     orderBy: { createdAt: "desc" },
+    include: { laborers: { orderBy: { createdAt: "asc" } } },
   });
   return NextResponse.json(entries);
 }
@@ -44,6 +45,16 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "estimatedDays must be a non-negative number" }, { status: 400 });
   }
 
+  const laborersRaw = Array.isArray(body.laborers)
+    ? (body.laborers as unknown[]).flatMap((l) => {
+        if (typeof l !== "object" || l === null) return [];
+        const lo = l as Record<string, unknown>;
+        const name = String(lo.name || "").trim();
+        if (!name) return [];
+        return [{ name, employeeId: lo.employeeId ? String(lo.employeeId) : null, role: lo.role ? String(lo.role).trim() || null : null }];
+      })
+    : [];
+
   try {
     const entry = await prisma.projectChangeOrder.create({
       data: {
@@ -52,11 +63,16 @@ export async function POST(req: Request, ctx: Ctx) {
         status,
         description: body.description != null ? String(body.description).trim() || null : null,
         requestedBy: body.requestedBy != null ? String(body.requestedBy).trim() || null : null,
+        supervisor: body.supervisor != null ? String(body.supervisor).trim() || null : null,
         estimatedCostCents: inputToCents(body.estimatedCost) ?? undefined,
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,
+        laborers: laborersRaw.length
+          ? { create: laborersRaw.map(({ name, employeeId, role }) => ({ name, employeeId, role })) }
+          : undefined,
       },
+      include: { laborers: { orderBy: { createdAt: "asc" } } },
     });
     return NextResponse.json(entry);
   } catch (e) {
