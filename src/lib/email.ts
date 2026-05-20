@@ -183,6 +183,49 @@ export function buildContractorInfoEmail(params: {
   `;
 }
 
+export function buildChangeOrderNotificationEmail(params: {
+  recipientName: string;
+  projectTitle: string;
+  coTitle: string;
+  coStatus: string;
+  estimatedCost: string;
+  estimatedDays: number | null;
+  description: string | null;
+  reason: string | null;
+  requestedBy: string | null;
+  projectUrl: string | null;
+}) {
+  const projectLink = params.projectUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View project details</a></p>`
+    : "";
+  const description = params.description
+    ? `<p><strong>Description:</strong> ${escapeHtml(params.description)}</p>`
+    : "";
+  const reason = params.reason
+    ? `<p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p>`
+    : "";
+  const requestedBy = params.requestedBy
+    ? `<p><strong>Requested by:</strong> ${escapeHtml(params.requestedBy)}</p>`
+    : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Change Order Notification</h2>
+      <p>Hi ${escapeHtml(params.recipientName)},</p>
+      <p>A change order has been submitted for your review on the following project.</p>
+      <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
+      <p><strong>Change order:</strong> ${escapeHtml(params.coTitle)}</p>
+      <p><strong>Status:</strong> ${escapeHtml(params.coStatus)}</p>
+      <p><strong>Estimated cost:</strong> ${escapeHtml(params.estimatedCost)}</p>
+      <p><strong>Schedule impact:</strong> ${params.estimatedDays != null ? `${params.estimatedDays} day(s)` : "—"}</p>
+      ${requestedBy}
+      ${description}
+      ${reason}
+      ${projectLink}
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
