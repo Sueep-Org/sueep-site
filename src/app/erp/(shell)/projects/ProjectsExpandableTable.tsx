@@ -166,42 +166,65 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                 {isOpen ? (
                   <tr className={styles.detail}>
-                    <td colSpan={11} className="px-4 py-3">
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <div>
-                          <p className="text-[10px] uppercase text-gray-600">Team</p>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {p.employees.length ? p.employees.join(", ") : "No labor logs yet"}
-                          </p>
+                    <td colSpan={11} className="px-4 py-2">
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {/* Team */}
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {p.employees.length ? p.employees.map((name) => (
+                              <span key={name} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{name}</span>
+                            )) : <span className="text-xs text-gray-400">No labor logged</span>}
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] uppercase text-gray-600">Labor (Est / Act)</p>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {centsToDollars(p.estLaborCents)} / {centsToDollars(p.actualLaborCents)}
-                          </p>
-                          <p className="text-xs text-gray-600">Hours: {p.estHours ?? "—"} / {p.actualHours.toFixed(2)}</p>
+
+                        {/* Labor */}
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor</p>
+                          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                            <span className="text-gray-400">Est.</span><span className="font-medium text-gray-800">{centsToDollars(p.estLaborCents)}</span>
+                            <span className="text-gray-400">Actual</span><span className="font-medium text-gray-800">{centsToDollars(p.actualLaborCents)}</span>
+                            <span className="text-gray-400">Est. hrs</span><span className="font-medium text-gray-800">{p.estHours ?? "—"}</span>
+                            <span className="text-gray-400">Act. hrs</span><span className="font-medium text-gray-800">{p.actualHours.toFixed(1)}</span>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] uppercase text-gray-600">Materials (Est / Act)</p>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {centsToDollars(p.estMaterialCents)} / {centsToDollars(p.actualMaterialCents)}
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            Cleaning: {centsToDollars(p.cleaningCents)} · Paint: {centsToDollars(p.paintCents)} · Miles: {p.miles.toFixed(1)}
-                          </p>
+
+                        {/* Materials */}
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Materials</p>
+                          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                            <span className="text-gray-400">Est.</span><span className="font-medium text-gray-800">{centsToDollars(p.estMaterialCents)}</span>
+                            <span className="text-gray-400">Actual</span><span className="font-medium text-gray-800">{centsToDollars(p.actualMaterialCents)}</span>
+                            <span className="text-gray-400">Cleaning</span><span className="font-medium text-gray-800">{centsToDollars(p.cleaningCents)}</span>
+                            <span className="text-gray-400">Paint</span><span className="font-medium text-gray-800">{centsToDollars(p.paintCents)}</span>
+                          </div>
+                        </div>
+
+                        {/* Miles + link */}
+                        <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Distance</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-800">{p.miles.toFixed(1)} <span className="text-xs font-normal text-gray-400">mi</span></p>
+                          <Link
+                            href={`/erp/projects/${p.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-auto pt-2 text-xs font-medium text-pink-600 hover:underline"
+                          >
+                            Full details →
+                          </Link>
                         </div>
                       </div>
+
                       {p.changeOrders.length > 0 && (
-                        <div className="mt-3 border-t border-gray-200 pt-3">
-                          <p className="mb-2 text-[10px] uppercase text-gray-600">Change Orders</p>
-                          <div className="space-y-1">
+                        <div className="mt-2 rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Change Orders</p>
+                          <div className="divide-y divide-gray-100">
                             {p.changeOrders.map((co) => (
-                              <div key={co.id} className="flex items-center gap-2 text-sm">
+                              <div key={co.id} className="flex items-center gap-2 py-1 first:pt-0 last:pb-0">
                                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${CO_STATUS_COLORS[co.status]}`}>
                                   {co.status}
                                 </span>
-                                <span className="flex-1 text-gray-900">{co.title}</span>
-                                <span className="shrink-0 text-xs text-gray-500">
+                                <span className="flex-1 text-xs text-gray-800">{co.title}</span>
+                                <span className="shrink-0 text-xs tabular-nums text-gray-500">
                                   {centsToDollars(co.estimatedCostCents)} · {co.estimatedDays ?? 0}d
                                 </span>
                               </div>
@@ -209,11 +232,6 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                           </div>
                         </div>
                       )}
-                      <div className="mt-3 text-xs">
-                        <Link href={`/erp/projects/${p.id}`} className="font-medium text-pink-600 hover:underline">
-                          Open full project details →
-                        </Link>
-                      </div>
                     </td>
                   </tr>
                 ) : null}
