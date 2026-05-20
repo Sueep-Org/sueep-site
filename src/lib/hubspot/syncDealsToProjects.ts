@@ -103,7 +103,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             status,
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
-            ...(contractValueCents !== undefined ? { contractValueCents } : {}),
             projectDate,
             projectEndDate,
             ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),

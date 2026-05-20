@@ -13,6 +13,7 @@ import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
+import { ProjectContractEditor } from "./ProjectContractEditor";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
@@ -175,7 +176,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </dl>
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Workflow">
+      <CollapsiblePanel title="Workflow" defaultOpen={false}>
         <ProjectWorkflowEditor
           projectId={project.id}
           status={project.status}
@@ -201,6 +202,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </CollapsiblePanel>
       ) : null}
 
+      <CollapsiblePanel title="Contract" defaultOpen={false}>
+        <ProjectContractEditor projectId={project.id} contractValueCents={project.contractValueCents} />
+      </CollapsiblePanel>
+
       <CollapsiblePanel title="Billing" defaultOpen={false}>
         <ProjectBillingEditor
           projectId={project.id}
@@ -217,11 +222,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Labor">
+      <CollapsiblePanel title="Labor" defaultOpen={false}>
         <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Assign Laborers">
+      <CollapsiblePanel title="Assign Laborers" defaultOpen={false}>
         <ProjectLaborAssignmentsSection
           projectId={project.id}
           initialAssignments={laborAssignmentRows}
@@ -229,7 +234,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Contractors">
+      <CollapsiblePanel title="Contractors" defaultOpen={false}>
         <ProjectContractorSection
           projectId={project.id}
           initialAssignments={contractorRows}

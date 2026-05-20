@@ -55,24 +55,38 @@ export async function POST(req: Request, ctx: Ctx) {
       })
     : [];
 
+  const estimatedCostCents = inputToCents(body.estimatedCost) ?? null;
+
   try {
-    const entry = await prisma.projectChangeOrder.create({
-      data: {
-        projectId: id,
-        title,
-        status,
-        description: body.description != null ? String(body.description).trim() || null : null,
-        requestedBy: body.requestedBy != null ? String(body.requestedBy).trim() || null : null,
-        supervisor: body.supervisor != null ? String(body.supervisor).trim() || null : null,
-        estimatedCostCents: inputToCents(body.estimatedCost) ?? undefined,
-        estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
-        reason: body.reason != null ? String(body.reason).trim() || null : null,
-        resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,
-        laborers: laborersRaw.length
-          ? { create: laborersRaw.map(({ name, employeeId, role }) => ({ name, employeeId, role })) }
-          : undefined,
-      },
-      include: { laborers: { orderBy: { createdAt: "asc" } } },
+    const entry = await prisma.$transaction(async (tx) => {
+      const created = await tx.projectChangeOrder.create({
+        data: {
+          projectId: id,
+          title,
+          status,
+          description: body.description != null ? String(body.description).trim() || null : null,
+          requestedBy: body.requestedBy != null ? String(body.requestedBy).trim() || null : null,
+          supervisor: body.supervisor != null ? String(body.supervisor).trim() || null : null,
+          estimatedCostCents: estimatedCostCents ?? undefined,
+          estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
+          reason: body.reason != null ? String(body.reason).trim() || null : null,
+          resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,
+          laborers: laborersRaw.length
+            ? { create: laborersRaw.map(({ name, employeeId, role }) => ({ name, employeeId, role })) }
+            : undefined,
+        },
+        include: { laborers: { orderBy: { createdAt: "asc" } } },
+      });
+
+      if (estimatedCostCents != null && estimatedCostCents > 0) {
+        const proj = await tx.project.findUnique({ where: { id }, select: { contractValueCents: true } });
+        await tx.project.update({
+          where: { id },
+          data: { contractValueCents: (proj?.contractValueCents ?? 0) + estimatedCostCents },
+        });
+      }
+
+      return created;
     });
     return NextResponse.json(entry);
   } catch (e) {
