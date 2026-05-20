@@ -62,6 +62,46 @@ export function buildTurnoverRequestEmailHtml(params: {
   `;
 }
 
+export function buildJanitorialTurnoverProjectEmailHtml(params: {
+  projectTitle: string;
+  propertyName?: string | null;
+  propertyAddress?: string | null;
+  managerName?: string | null;
+  unitNumbers?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  estimatedTotal?: string | null;
+  details?: string | null;
+  projectUrl?: string | null;
+}) {
+  const details = params.details
+    ? `<div style="white-space:pre-line;margin-top:12px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">${escapeHtml(
+        params.details
+      )}</div>`
+    : "";
+  const projectLink = params.projectUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(
+        params.projectUrl
+      )}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View project details</a></p>`
+    : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">New Janitorial Turnover Submitted</h2>
+      <p>A new janitorial turnover project has been submitted for your review.</p>
+      <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
+      <p><strong>Property:</strong> ${escapeHtml(params.propertyName || "—")}</p>
+      <p><strong>Address:</strong> ${escapeHtml(params.propertyAddress || "—")}</p>
+      <p><strong>Property Manager/Maintenance Manager:</strong> ${escapeHtml(params.managerName || "—")}</p>
+      <p><strong>Units:</strong> ${escapeHtml(params.unitNumbers || "—")}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
+      <p><strong>Estimated total:</strong> ${escapeHtml(params.estimatedTotal || "—")}</p>
+      ${projectLink}
+      ${details}
+    </div>
+  `;
+}
+
 export function buildPaperworkUploadEmail(params: {
   fullName: string;
   uploadUrl: string;

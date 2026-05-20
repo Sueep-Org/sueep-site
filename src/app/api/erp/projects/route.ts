@@ -3,8 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegments";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { buildJanitorialTurnoverProjectEmailHtml, formatUsd, sendEmail } from "@/lib/email";
 
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function dateLabel(date: Date | null) {
+  return date ? date.toISOString().split("T")[0] : null;
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -106,6 +115,36 @@ export async function POST(req: Request) {
         hubspotPipelineId: body.hubspotPipelineId != null ? String(body.hubspotPipelineId).trim() || null : null,
       },
     });
+
+    if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
+      const pmEmail = stringValue(body.pmEmail);
+      if (pmEmail) {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(req.url).origin;
+        const projectUrl = `${siteUrl}/erp/projects/${project.id}`;
+        try {
+          await sendEmail({
+            to: pmEmail,
+            subject: `New Janitorial Turnover Submitted - ${project.jobTitle}`,
+            html: buildJanitorialTurnoverProjectEmailHtml({
+              projectTitle: project.jobTitle,
+              propertyName: stringValue(body.buildingName),
+              propertyAddress: stringValue(body.buildingAddress),
+              managerName: stringValue(body.pmName),
+              unitNumbers: stringValue(body.unitNumbers),
+              startDate: dateLabel(project.projectDate),
+              endDate: dateLabel(project.projectEndDate),
+              estimatedTotal:
+                project.contractValueCents != null ? formatUsd(project.contractValueCents) : null,
+              details: project.description,
+              projectUrl,
+            }),
+          });
+        } catch (emailError) {
+          console.error("Janitorial turnover PM notification failed", emailError);
+        }
+      }
+    }
+
     return NextResponse.json(project);
   } catch (e) {
     console.error("POST /api/erp/projects", e);
