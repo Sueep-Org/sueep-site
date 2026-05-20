@@ -26,6 +26,8 @@ const bottomNav = [
   { href: "/erp/employees", label: "Employees" },
   { href: "/erp/candidates", label: "Candidates" },
   { href: "/erp/contractors", label: "Contractor Verification" },
+  { href: "/erp/estimator", label: "AI Estimator" },
+
 ];
 
 function isGroupActive(pathname: string) {
