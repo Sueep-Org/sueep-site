@@ -103,6 +103,7 @@ export async function POST(req: Request) {
           body.actualHours != null && body.actualHours !== ""
             ? Number(body.actualHours)
             : undefined,
+        hubspotPipelineId: body.hubspotPipelineId != null ? String(body.hubspotPipelineId).trim() || null : null,
       },
     });
     return NextResponse.json(project);

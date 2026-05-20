@@ -49,7 +49,7 @@ export default async function NewProjectPage() {
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">New project</h1>
         <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
       </div>
-      <NewProjectForm initialBuildings={buildings} initialScheduleBuildings={scheduleBuildings} />
+      <NewProjectForm initialBuildings={buildings} initialScheduleBuildings={scheduleBuildings} janitorialPipelineId={cfg?.janitorial.pipelineId || null} />
     </div>
   );
 }

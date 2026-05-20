@@ -138,6 +138,7 @@ interface ScheduleBuildingOption {
 interface NewProjectFormProps {
   initialBuildings?: BuildingOption[];
   initialScheduleBuildings?: ScheduleBuildingOption[];
+  janitorialPipelineId?: string | null;
 }
 
 function normalizeBuildingName(value: string) {
@@ -155,7 +156,7 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
   return addressLine.replace(/^(building\s+address|property\s+address|address)\s*:\s*/i, "").trim();
 }
 
-export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [] }: NewProjectFormProps) {
+export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -387,13 +388,14 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       .filter(Boolean)
       .join("\n");
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       segment,
       jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
       supervisor: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
       description: turnoverDescription || undefined,
       projectDate: fd.get("projectDate") || undefined,
       projectEndDate: fd.get("projectEndDate") || undefined,
+      ...(isTurnover && janitorialPipelineId ? { hubspotPipelineId: janitorialPipelineId } : {}),
       percentDone: fd.get("percentDone") || undefined,
       percentInvoiced: fd.get("percentInvoiced") || undefined,
       contractValue: fd.get("contractValue") || (isTurnover && packagePricing.totalPrice ? String(packagePricing.totalPrice / 100) : undefined),
