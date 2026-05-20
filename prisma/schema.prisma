@@ -58,6 +58,7 @@ model Project {
   changeOrders ProjectChangeOrder[]
   contacts ProjectContact[]
   contractorAssignments ContractorAssignment[]
+  laborAssignments ProjectLaborAssignment[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -385,6 +386,7 @@ model Employee {
   laborEntries LaborEntry[]
   documents EmployeeDocument[]
   laborAssignments LaborAssignment[]
+  projectLaborAssignments ProjectLaborAssignment[]
   changeOrderAssignments ProjectChangeOrderLaborer[]
 
   @@index([status])
@@ -480,6 +482,28 @@ model ContractorAssignment {
   @@index([contractorId])
   @@index([buildingId])
   @@index([projectId])
+}
+
+model ProjectLaborAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  role         String?
+  assignedDate DateTime?
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?
+
+  @@index([projectId])
+  @@index([employeeId])
+  @@unique([projectId, employeeId])
 }
 
 model ContractorDocument {

@@ -8,6 +8,7 @@ import { ProjectDatesEditor } from "./ProjectDatesEditor";
 import { ProjectManagerEditor } from "./ProjectManagerEditor";
 import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
+import { ProjectLaborAssignmentsSection } from "./ProjectLaborAssignmentsSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
@@ -32,6 +33,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         contractorAssignments: {
           orderBy: { createdAt: "desc" },
           include: { contractor: { select: { id: true, name: true } } },
+        },
+        laborAssignments: {
+          orderBy: { createdAt: "desc" },
+          include: { employee: { select: { id: true, firstName: true, lastName: true, status: true } } },
         },
       },
     }),
@@ -104,6 +109,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     id: a.id,
     contractorId: a.contractorId,
     contractorName: a.contractor.name,
+    role: a.role,
+    assignedDate: a.assignedDate ? a.assignedDate.toISOString() : null,
+    startDate: a.startDate ? a.startDate.toISOString() : null,
+    endDate: a.endDate ? a.endDate.toISOString() : null,
+    notes: a.notes,
+  }));
+
+  const laborAssignmentRows = project.laborAssignments.map((a) => ({
+    id: a.id,
+    employeeId: a.employeeId,
+    employeeName: `${a.employee.firstName} ${a.employee.lastName}`.trim(),
     role: a.role,
     assignedDate: a.assignedDate ? a.assignedDate.toISOString() : null,
     startDate: a.startDate ? a.startDate.toISOString() : null,
@@ -203,6 +219,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
       <CollapsiblePanel title="Labor">
         <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Assign Laborers">
+        <ProjectLaborAssignmentsSection
+          projectId={project.id}
+          initialAssignments={laborAssignmentRows}
+          employees={laborEmployees}
+        />
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Contractors">
