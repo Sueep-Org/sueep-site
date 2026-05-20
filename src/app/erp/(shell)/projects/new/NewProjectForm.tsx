@@ -299,7 +299,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     setBuildingProjectId(id);
     setBuildingName(scheduleName);
     setBuildingAddress(extractedAddress || matchedBuilding?.address || fallback?.address || "");
-    setPmName(scheduleBuilding?.supervisor || matchedBuilding?.pmName || "");
+    setPmName("");
     setPmEmail(matchedBuilding?.pmEmail || "");
     setPmPhone(matchedBuilding?.pmPhone || "");
   }
@@ -443,8 +443,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
         setLoading(false);
         return;
       }
-      if (data.id) router.push(`/erp/projects/${data.id}`);
-      else router.push("/erp/projects");
+      router.push("/erp/projects");
     } catch {
       setError("Network error");
     } finally {
