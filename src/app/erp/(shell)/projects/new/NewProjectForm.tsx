@@ -505,7 +505,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       {isTurnover ? (
         <div className="space-y-5 rounded-lg border border-pink-200 bg-white p-4 sm:p-5">
           <div className="space-y-2">
-            <p className={sectionHeader}>Step 1 — Property & PM info</p>
+            <p className={sectionHeader}>Step 1 - Property and Property Manager/Maintenance Manager Info</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="buildingProjectId">
