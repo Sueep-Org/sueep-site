@@ -456,6 +456,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     }`;
     const turnoverStartDate = minDateValue(unitScopes.map((unit) => unit.startDate));
     const turnoverEndDate = maxDateValue(unitScopes.map((unit) => unit.endDate));
+    const turnoverComments = String(fd.get("turnoverComments") || "").trim();
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
       isTurnover ? `Property: ${buildingName.trim() || selectedBuilding?.jobTitle || "Unspecified"}` : null,
@@ -466,6 +467,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
+      isTurnover && turnoverComments ? `Comments: ${turnoverComments}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -928,6 +930,22 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             <p className={sectionHeader}>Step 3 — Estimated total</p>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className={sectionHeader}>Comments</p>
+            <div>
+              <label className={label} htmlFor="turnoverComments">
+                Additional comments
+              </label>
+              <textarea
+                id="turnoverComments"
+                name="turnoverComments"
+                rows={3}
+                className={input}
+                placeholder="Access notes, special instructions, timing details, or anything the PM should know"
+              />
             </div>
           </div>
 
