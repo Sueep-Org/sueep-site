@@ -135,10 +135,23 @@ interface ScheduleBuildingOption {
   supervisor?: string | null;
 }
 
+interface ProjectOption {
+  id: string;
+  jobTitle: string;
+}
+
+interface EmployeeOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface NewProjectFormProps {
   initialBuildings?: BuildingOption[];
   initialScheduleBuildings?: ScheduleBuildingOption[];
   janitorialPipelineId?: string | null;
+  allProjects?: ProjectOption[];
+  employees?: EmployeeOption[];
 }
 
 function normalizeBuildingName(value: string) {
@@ -156,11 +169,26 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
   return addressLine.replace(/^(building\s+address|property\s+address|address)\s*:\s*/i, "").trim();
 }
 
-export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null }: NewProjectFormProps) {
+const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+
+export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null, allProjects = [], employees = [] }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [segment, setSegment] = useState("COMMERCIAL_CLEANING");
+
+  // Change order state
+  const [coProjectId, setCoProjectId] = useState("");
+  const [coTitle, setCoTitle] = useState("");
+  const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
+  const [coRequestedBy, setCoRequestedBy] = useState("");
+  const [coSupervisor, setCoSupervisor] = useState("");
+  const [coLaborerIds, setCoLaborerIds] = useState<string[]>([]);
+  const [coEstCost, setCoEstCost] = useState("");
+  const [coEstDays, setCoEstDays] = useState("");
+  const [coDescription, setCoDescription] = useState("");
+  const [coReason, setCoReason] = useState("");
+  const [coResolutionNotes, setCoResolutionNotes] = useState("");
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");
 
@@ -184,6 +212,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const isChangeOrder = segment === "CHANGE_ORDER";
 
   useEffect(() => {
     let mounted = true;
@@ -366,6 +395,42 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     };
   }, [unitScopes, unitCount]);
 
+  async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    if (!coProjectId) { setError("Please select a project."); return; }
+    if (!coTitle.trim()) { setError("Title is required."); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/erp/projects/${coProjectId}/change-orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: coTitle.trim(),
+          status: coStatus,
+          requestedBy: coRequestedBy.trim() || undefined,
+          supervisor: coSupervisor.trim() || undefined,
+          estimatedCost: coEstCost.trim() || undefined,
+          estimatedDays: coEstDays.trim() || undefined,
+          description: coDescription.trim() || undefined,
+          reason: coReason.trim() || undefined,
+          resolutionNotes: coResolutionNotes.trim() || undefined,
+          laborers: coLaborerIds.map((eid) => {
+            const emp = employees.find((e) => e.id === eid);
+            return { employeeId: eid, name: emp ? `${emp.firstName} ${emp.lastName}`.trim() : eid };
+          }),
+        }),
+      });
+      const data = (await res.json()) as { id?: string; error?: string };
+      if (!res.ok) { setError(data.error || "Failed to create change order"); setLoading(false); return; }
+      router.push(`/erp/projects/${coProjectId}`);
+    } catch {
+      setError("Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -451,6 +516,100 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     } finally {
       setLoading(false);
     }
+  }
+
+  if (isChangeOrder) {
+    return (
+      <form onSubmit={onSubmitChangeOrder} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
+        <div>
+          <label className={label} htmlFor="co-segment">Segment</label>
+          <select id="co-segment" className={input} value={segment} onChange={(e) => setSegment(e.target.value)}>
+            {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className={label} htmlFor="co-project">Project *</label>
+          <select id="co-project" required className={input} value={coProjectId} onChange={(e) => setCoProjectId(e.target.value)}>
+            <option value="">— Select a project —</option>
+            {allProjects.map((p) => (
+              <option key={p.id} value={p.id}>{p.jobTitle}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className={label} htmlFor="co-title">Title *</label>
+            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. Add two extra prep coats in lobby" />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-status">Status</label>
+            <select id="co-status" className={input} value={coStatus} onChange={(e) => setCoStatus(e.target.value as typeof CO_STATUSES[number])}>
+              {CO_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={label} htmlFor="co-requested-by">Requested by</label>
+            <input id="co-requested-by" className={input} value={coRequestedBy} onChange={(e) => setCoRequestedBy(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
+            <select id="co-supervisor" className={input} value={coSupervisor} onChange={(e) => setCoSupervisor(e.target.value)}>
+              <option value="">— None —</option>
+              {employees.map((e) => {
+                const name = `${e.firstName} ${e.lastName}`.trim();
+                return <option key={e.id} value={name}>{name}</option>;
+              })}
+            </select>
+          </div>
+          <div>
+            <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
+            <input id="co-est-cost" className={input} placeholder="1250.00" value={coEstCost} onChange={(e) => setCoEstCost(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-est-days">Schedule impact (days)</label>
+            <input id="co-est-days" type="number" min={0} step={1} className={input} value={coEstDays} onChange={(e) => setCoEstDays(e.target.value)} />
+          </div>
+          <div className="sm:col-span-3">
+            <label className={label}>Laborers</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {employees.map((e) => {
+                const name = `${e.firstName} ${e.lastName}`.trim();
+                const checked = coLaborerIds.includes(e.id);
+                return (
+                  <label key={e.id} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+                    <input type="checkbox" className="accent-pink-600" checked={checked} onChange={() => setCoLaborerIds((prev) => checked ? prev.filter((id) => id !== e.id) : [...prev, e.id])} />
+                    {name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="sm:col-span-3">
+            <label className={label} htmlFor="co-description">Description</label>
+            <textarea id="co-description" rows={2} className={input} value={coDescription} onChange={(e) => setCoDescription(e.target.value)} />
+          </div>
+          <div className="sm:col-span-3">
+            <label className={label} htmlFor="co-reason">Reason</label>
+            <textarea id="co-reason" rows={2} className={input} value={coReason} onChange={(e) => setCoReason(e.target.value)} />
+          </div>
+          <div className="sm:col-span-3">
+            <label className={label} htmlFor="co-resolution-notes">Resolution notes</label>
+            <textarea id="co-resolution-notes" rows={2} className={input} value={coResolutionNotes} onChange={(e) => setCoResolutionNotes(e.target.value)} />
+          </div>
+        </div>
+
+        {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
+        <div className="flex gap-3">
+          <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto">
+            {loading ? "Saving…" : "Create change order"}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (
