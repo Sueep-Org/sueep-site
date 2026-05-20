@@ -473,28 +473,32 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             ))}
           </select>
         </div>
-        <div className="min-w-0">
-          <label className={label} htmlFor="projectDate">
-            Start date
-          </label>
-          <input
-            id="projectDate"
-            name="projectDate"
-            type="date"
-            className={input}
-          />
-        </div>
-        <div className="min-w-0">
-          <label className={label} htmlFor="projectEndDate">
-            Target end (optional)
-          </label>
-          <input
-            id="projectEndDate"
-            name="projectEndDate"
-            type="date"
-            className={input}
-          />
-        </div>
+        {!isTurnover && (
+          <>
+            <div className="min-w-0">
+              <label className={label} htmlFor="projectDate">
+                Start date
+              </label>
+              <input
+                id="projectDate"
+                name="projectDate"
+                type="date"
+                className={input}
+              />
+            </div>
+            <div className="min-w-0">
+              <label className={label} htmlFor="projectEndDate">
+                Target end (optional)
+              </label>
+              <input
+                id="projectEndDate"
+                name="projectEndDate"
+                type="date"
+                className={input}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {isTurnover ? (
@@ -723,7 +727,6 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                       { key: "fullClean", text: "Full clean" },
                       { key: "fullPaint", text: "Full paint", disabled: unit.touchUpPaint },
                       { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
-                      { key: "lightWallTouchUps", text: "Light wall touch-ups" },
                       { key: "materialsAdditional", text: "Additional materials" },
                       { key: "carpetCleaning", text: "Carpet cleaning" },
                     ].map(({ key, text, disabled }) => (
@@ -745,61 +748,9 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 3 — Pricing package</p>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-              <table className="min-w-[620px] divide-y divide-gray-200 text-left text-xs sm:text-sm">
-                <thead className="bg-gray-50 text-gray-700">
-                  <tr>
-                    <th className="px-2 py-2 sm:px-3">Package</th>
-                    <th className="px-2 py-2 sm:px-3">1 Bed</th>
-                    <th className="px-2 py-2 sm:px-3">2 Bed</th>
-                    <th className="px-2 py-2 sm:px-3">3 Bed/Townhome</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Cleaning Only</td>
-                    <td className="px-2 py-2 sm:px-3">$185</td>
-                    <td className="px-2 py-2 sm:px-3">$255</td>
-                    <td className="px-2 py-2 sm:px-3">$385</td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Painting Only</td>
-                    <td className="px-2 py-2 sm:px-3">$340</td>
-                    <td className="px-2 py-2 sm:px-3">$400</td>
-                    <td className="px-2 py-2 sm:px-3">$450</td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Cleaning + Painting</td>
-                    <td className="px-2 py-2 sm:px-3">$525</td>
-                    <td className="px-2 py-2 sm:px-3">$655</td>
-                    <td className="px-2 py-2 sm:px-3">$835</td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Touch-up paint</td>
-                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$125 per unit</td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Carpet cleaning</td>
-                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$80 with full clean / $125 standalone</td>
-                  </tr>
-                  <tr className="bg-white">
-                    <td className="px-2 py-2 sm:px-3">Additional materials</td>
-                    <td className="px-2 py-2 sm:px-3" colSpan={3}>$85 per unit</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <p className={sectionHeader}>Step 3 — Estimated total</p>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <p className="text-sm text-gray-700">Pricing mode: <span className="font-semibold text-gray-900">{packagePricing.packageLabel}</span></p>
-              <p className="text-sm text-gray-700">Primary unit: <span className="font-semibold text-gray-900">{getUnitFeature(unitScopes[0]?.features ?? "1/1").label}</span></p>
-              <p className="text-sm text-gray-700">Units: <span className="font-semibold text-gray-900">{unitCount}</span></p>
-              <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900">{packagePricing.totalPriceLabel}</span></p>
-              <div className="mt-3 space-y-1 break-words text-xs text-gray-500">
-                {packagePricing.breakdown.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
+              <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
             </div>
           </div>
 

@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-const DEFAULT_PM = "David Rodriguez";
-
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const labelCls = "block text-xs font-medium text-gray-600";
@@ -23,7 +21,7 @@ export function ProjectManagerEditor({ projectId, supervisor, employees }: Props
   const [loading, setLoading] = useState(false);
 
   const employeeNames = employees.map((e) => `${e.firstName} ${e.lastName}`.trim());
-  const effectiveSupervisor = supervisor || DEFAULT_PM;
+  const effectiveSupervisor = supervisor || "";
   const isKnown = employeeNames.includes(effectiveSupervisor);
 
   const [selected, setSelected] = useState(isKnown ? effectiveSupervisor : "__other__");
@@ -71,9 +69,6 @@ export function ProjectManagerEditor({ projectId, supervisor, employees }: Props
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
           >
-            {employeeNames.includes(DEFAULT_PM) ? null : (
-              <option value={DEFAULT_PM}>{DEFAULT_PM}</option>
-            )}
             {employeeNames.map((name) => (
               <option key={name} value={name}>
                 {name}
