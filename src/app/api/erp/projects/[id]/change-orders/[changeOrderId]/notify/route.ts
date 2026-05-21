@@ -16,52 +16,64 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const employeeId = body.employeeId ? String(body.employeeId) : null;
-  if (!employeeId) {
-    return NextResponse.json({ error: "employeeId is required" }, { status: 400 });
+  const raw = body.employeeIds;
+  const employeeIds: string[] =
+    Array.isArray(raw) ? raw.map(String).filter(Boolean) :
+    body.employeeId ? [String(body.employeeId)] : [];
+
+  if (employeeIds.length === 0) {
+    return NextResponse.json({ error: "At least one employeeId is required" }, { status: 400 });
   }
 
-  const [changeOrder, employee] = await Promise.all([
+  const [changeOrder, employees] = await Promise.all([
     prisma.projectChangeOrder.findUnique({
       where: { id: changeOrderId, projectId: id },
       include: { project: { select: { id: true, jobTitle: true } } },
     }),
-    prisma.employee.findUnique({
-      where: { id: employeeId },
-      select: { firstName: true, lastName: true, email: true },
+    prisma.employee.findMany({
+      where: { id: { in: employeeIds } },
+      select: { id: true, firstName: true, lastName: true, email: true },
     }),
   ]);
 
   if (!changeOrder) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-  if (!employee.email) return NextResponse.json({ error: "This employee has no email address on file" }, { status: 422 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const projectUrl = appUrl ? `${appUrl}/erp/projects/${id}` : null;
 
-  const html = buildChangeOrderNotificationEmail({
-    recipientName: `${employee.firstName} ${employee.lastName}`.trim(),
-    projectTitle: changeOrder.project.jobTitle,
-    coTitle: changeOrder.title,
-    coStatus: changeOrder.status,
-    estimatedCost: centsToDollars(changeOrder.estimatedCostCents),
-    estimatedDays: changeOrder.estimatedDays,
-    description: changeOrder.description,
-    reason: changeOrder.reason,
-    requestedBy: changeOrder.requestedBy,
-    projectUrl,
-  });
+  const results: { email: string; ok: boolean }[] = [];
 
-  try {
-    await sendEmail({
-      to: employee.email,
-      subject: `Change Order: ${changeOrder.title} — ${changeOrder.project.jobTitle}`,
-      html,
+  for (const employee of employees) {
+    if (!employee.email) continue;
+    const html = buildChangeOrderNotificationEmail({
+      recipientName: `${employee.firstName} ${employee.lastName}`.trim(),
+      projectTitle: changeOrder.project.jobTitle,
+      coTitle: changeOrder.title,
+      coStatus: changeOrder.status,
+      estimatedCost: centsToDollars(changeOrder.estimatedCostCents),
+      estimatedDays: changeOrder.estimatedDays,
+      description: changeOrder.description,
+      reason: changeOrder.reason,
+      requestedBy: changeOrder.requestedBy,
+      projectUrl,
     });
-  } catch (e) {
-    console.error("notify change order email", e);
-    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+    try {
+      await sendEmail({
+        to: employee.email,
+        subject: `Change Order: ${changeOrder.title} — ${changeOrder.project.jobTitle}`,
+        html,
+      });
+      results.push({ email: employee.email, ok: true });
+    } catch (e) {
+      console.error("notify change order email", e);
+      results.push({ email: employee.email, ok: false });
+    }
   }
 
-  return NextResponse.json({ ok: true, sentTo: employee.email });
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length === results.length && results.length > 0) {
+    return NextResponse.json({ error: "Failed to send all emails" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, sentTo: results.filter((r) => r.ok).map((r) => r.email) });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { centsToDollars } from "@/lib/erp/money";
 
@@ -34,6 +34,113 @@ export type ChangeOrderEmployeeOption = {
 };
 
 const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"];
+
+function LaborerMultiSelect({
+  employees,
+  selectedIds,
+  onChange,
+}: {
+  employees: ChangeOrderEmployeeOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = employees.filter((e) => {
+    const name = `${e.firstName} ${e.lastName}`.toLowerCase();
+    return name.includes(query.toLowerCase());
+  });
+
+  function toggle(id: string) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  }
+
+  function remove(id: string) {
+    onChange(selectedIds.filter((x) => x !== id));
+  }
+
+  const selectedEmployees = employees.filter((e) => selectedIds.includes(e.id));
+
+  return (
+    <div ref={containerRef} className="relative mt-1">
+      <div
+        className="min-h-[38px] w-full cursor-text rounded-md border border-gray-300 bg-white px-2 py-1.5 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500"
+        onClick={() => setOpen(true)}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {selectedEmployees.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <span
+                key={e.id}
+                className="flex items-center gap-1 rounded bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800"
+              >
+                {name}
+                <button
+                  type="button"
+                  onMouseDown={(ev) => { ev.stopPropagation(); remove(e.id); }}
+                  className="ml-0.5 text-pink-500 hover:text-pink-700"
+                  aria-label={`Remove ${name}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <input
+            type="text"
+            className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+            placeholder={selectedIds.length === 0 ? "Search laborers…" : ""}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+          />
+        </div>
+      </div>
+      {open && (
+        <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-gray-400">No results</li>
+          ) : (
+            filtered.map((e) => {
+              const name = `${e.firstName} ${e.lastName}`.trim();
+              const selected = selectedIds.includes(e.id);
+              return (
+                <li
+                  key={e.id}
+                  onMouseDown={(ev) => { ev.preventDefault(); toggle(e.id); setQuery(""); }}
+                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-pink-50 ${selected ? "font-medium text-pink-700" : "text-gray-800"}`}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-pink-500 bg-pink-500 text-white" : "border-gray-300"}`}>
+                    {selected && (
+                      <svg viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
+                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  {name}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -242,27 +349,11 @@ export function ProjectChangeOrdersSection({
           </div>
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={label}>Laborers</label>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {employees.map((e) => {
-                const name = `${e.firstName} ${e.lastName}`.trim();
-                const checked = newLaborerIds.includes(e.id);
-                return (
-                  <label key={e.id} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      className="accent-pink-600"
-                      checked={checked}
-                      onChange={() =>
-                        setNewLaborerIds((prev) =>
-                          checked ? prev.filter((id) => id !== e.id) : [...prev, e.id],
-                        )
-                      }
-                    />
-                    {name}
-                  </label>
-                );
-              })}
-            </div>
+            <LaborerMultiSelect
+              employees={employees}
+              selectedIds={newLaborerIds}
+              onChange={setNewLaborerIds}
+            />
           </div>
           <div>
             <label className={label} htmlFor="co-estimatedCost">
@@ -351,7 +442,7 @@ function ChangeOrderEditor({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [open, setOpen] = useState(false);
-  const [notifyEmployeeId, setNotifyEmployeeId] = useState("");
+  const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -472,27 +563,11 @@ function ChangeOrderEditor({
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
               <label className={label}>Laborers</label>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {employees.map((e) => {
-                  const name = `${e.firstName} ${e.lastName}`.trim();
-                  const checked = laborerIds.includes(e.id);
-                  return (
-                    <label key={e.id} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        className="accent-pink-600"
-                        checked={checked}
-                        onChange={() =>
-                          setLaborerIds((prev) =>
-                            checked ? prev.filter((id) => id !== e.id) : [...prev, e.id],
-                          )
-                        }
-                      />
-                      {name}
-                    </label>
-                  );
-                })}
-              </div>
+              <LaborerMultiSelect
+                employees={employees}
+                selectedIds={laborerIds}
+                onChange={setLaborerIds}
+              />
             </div>
             <div>
               <label className={label} htmlFor={`co-cost-${row.id}`}>
@@ -608,62 +683,58 @@ function ChangeOrderEditor({
             </button>
           )}
 
-          {/* Notify PM */}
+          {/* Notify by email */}
           <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notify PM by email</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notify by email</p>
             {notifiableEmployees.length === 0 ? (
               <p className="mt-2 text-xs text-gray-400">No employees with an email address on file.</p>
             ) : (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-                  value={notifyEmployeeId}
-                  onChange={(e) => { setNotifyEmployeeId(e.target.value); setNotifyResult(null); }}
-                >
-                  <option value="">— Select PM —</option>
-                  {notifiableEmployees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {`${e.firstName} ${e.lastName}`.trim()} ({e.email})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!notifyEmployeeId || notifyLoading}
-                  onClick={async () => {
-                    setNotifyLoading(true);
-                    setNotifyResult(null);
-                    try {
-                      const res = await fetch(
-                        `/api/erp/projects/${projectId}/change-orders/${row.id}/notify`,
-                        {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ employeeId: notifyEmployeeId }),
-                        },
-                      );
-                      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string; error?: string };
-                      if (res.ok) {
-                        setNotifyResult({ ok: true, msg: `Email sent to ${data.sentTo ?? "PM"}` });
-                        setNotifyEmployeeId("");
-                      } else {
-                        setNotifyResult({ ok: false, msg: data.error || "Failed to send email" });
+              <div className="mt-2 space-y-2">
+                <LaborerMultiSelect
+                  employees={notifiableEmployees}
+                  selectedIds={notifyEmployeeIds}
+                  onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={notifyEmployeeIds.length === 0 || notifyLoading}
+                    onClick={async () => {
+                      setNotifyLoading(true);
+                      setNotifyResult(null);
+                      try {
+                        const res = await fetch(
+                          `/api/erp/projects/${projectId}/change-orders/${row.id}/notify`,
+                          {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
+                          },
+                        );
+                        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string[]; error?: string };
+                        if (res.ok) {
+                          const sent = Array.isArray(data.sentTo) ? data.sentTo.join(", ") : (data.sentTo ?? "recipients");
+                          setNotifyResult({ ok: true, msg: `Email sent to ${sent}` });
+                          setNotifyEmployeeIds([]);
+                        } else {
+                          setNotifyResult({ ok: false, msg: data.error || "Failed to send email" });
+                        }
+                      } catch {
+                        setNotifyResult({ ok: false, msg: "Network error" });
+                      } finally {
+                        setNotifyLoading(false);
                       }
-                    } catch {
-                      setNotifyResult({ ok: false, msg: "Network error" });
-                    } finally {
-                      setNotifyLoading(false);
-                    }
-                  }}
-                  className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                >
-                  {notifyLoading ? "Sending…" : "Send notification"}
-                </button>
-                {notifyResult && (
-                  <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
-                    {notifyResult.msg}
-                  </span>
-                )}
+                    }}
+                    className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                  >
+                    {notifyLoading ? "Sending…" : "Send notification"}
+                  </button>
+                  {notifyResult && (
+                    <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
+                      {notifyResult.msg}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
