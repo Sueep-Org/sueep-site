@@ -67,6 +67,7 @@ export function buildJanitorialTurnoverProjectEmailHtml(params: {
   propertyName?: string | null;
   propertyAddress?: string | null;
   managerName?: string | null;
+  sueepPmName?: string | null;
   unitNumbers?: string | null;
   startDate?: string | null;
   endDate?: string | null;
@@ -93,6 +94,7 @@ export function buildJanitorialTurnoverProjectEmailHtml(params: {
       <p><strong>Property:</strong> ${escapeHtml(params.propertyName || "—")}</p>
       <p><strong>Address:</strong> ${escapeHtml(params.propertyAddress || "—")}</p>
       <p><strong>Property Manager/Maintenance Manager:</strong> ${escapeHtml(params.managerName || "—")}</p>
+      <p><strong>SUEEP PM:</strong> ${escapeHtml(params.sueepPmName || "—")}</p>
       <p><strong>Units:</strong> ${escapeHtml(params.unitNumbers || "—")}</p>
       <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
       <p><strong>Estimated total:</strong> ${escapeHtml(params.estimatedTotal || "—")}</p>

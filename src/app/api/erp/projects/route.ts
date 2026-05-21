@@ -117,19 +117,20 @@ export async function POST(req: Request) {
     });
 
     if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
-      const pmEmail = stringValue(body.pmEmail);
-      if (pmEmail) {
+      const sueepPmEmail = stringValue(body.sueepPmEmail);
+      if (sueepPmEmail) {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(req.url).origin;
         const projectUrl = `${siteUrl}/erp/projects/${project.id}`;
         try {
           await sendEmail({
-            to: pmEmail,
+            to: sueepPmEmail,
             subject: `New Janitorial Turnover Submitted - ${project.jobTitle}`,
             html: buildJanitorialTurnoverProjectEmailHtml({
               projectTitle: project.jobTitle,
               propertyName: stringValue(body.buildingName),
               propertyAddress: stringValue(body.buildingAddress),
               managerName: stringValue(body.pmName),
+              sueepPmName: stringValue(body.sueepPmName),
               unitNumbers: stringValue(body.unitNumbers),
               startDate: dateLabel(project.projectDate),
               endDate: dateLabel(project.projectEndDate),

@@ -217,6 +217,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
+  const [sueepPmName, setSueepPmName] = useState("");
+  const [sueepPmEmail, setSueepPmEmail] = useState("");
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
@@ -464,6 +466,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       isTurnover && pmName.trim() ? `Property Manager/Maintenance Manager: ${pmName.trim()}` : null,
       isTurnover && pmEmail.trim() ? `Manager Email: ${pmEmail.trim()}` : null,
       isTurnover && pmPhone.trim() ? `Manager Phone: ${pmPhone.trim()}` : null,
+      isTurnover && sueepPmName.trim() ? `SUEEP PM: ${sueepPmName.trim()}` : null,
+      isTurnover && sueepPmEmail.trim() ? `SUEEP PM Email: ${sueepPmEmail.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
@@ -498,6 +502,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
+      sueepPmName: sueepPmName.trim() || undefined,
+      sueepPmEmail: sueepPmEmail.trim() || undefined,
       unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`).join(", ") || undefined,
       unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
       bedrooms: normalizedBeds || undefined,
@@ -928,6 +934,35 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
 
           <div className="space-y-3">
             <p className={sectionHeader}>Step 3 — Estimated total</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label className={label} htmlFor="sueepPmName">
+                  SUEEP PM name
+                </label>
+                <input
+                  id="sueepPmName"
+                  name="sueepPmName"
+                  required
+                  className={input}
+                  value={sueepPmName}
+                  onChange={(e) => setSueepPmName(e.target.value)}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className={label} htmlFor="sueepPmEmail">
+                  SUEEP PM email
+                </label>
+                <input
+                  id="sueepPmEmail"
+                  name="sueepPmEmail"
+                  type="email"
+                  required
+                  className={input}
+                  value={sueepPmEmail}
+                  onChange={(e) => setSueepPmEmail(e.target.value)}
+                />
+              </div>
+            </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
             </div>
