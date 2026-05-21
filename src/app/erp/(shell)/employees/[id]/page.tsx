@@ -62,7 +62,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Bank Account Info">
+      <CollapsiblePanel title="Bank Account Info" defaultOpen={false}>
         <EmployeeBankAccountSection
           employeeId={employee.id}
           initial={{

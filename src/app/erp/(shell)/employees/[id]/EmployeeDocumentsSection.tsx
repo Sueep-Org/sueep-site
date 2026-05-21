@@ -176,7 +176,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
 
   return (
     <div className="space-y-4">
-      <CollapsiblePanel title="Required Documents">
+      <CollapsiblePanel title="Required Documents" defaultOpen={false}>
         <p className="text-xs text-gray-500">
           Define which document types this employee must have on file. Compliance is met when all are present.
         </p>
@@ -281,7 +281,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
         {reqOk ? <p className="text-xs text-emerald-600">Saved.</p> : null}
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Documents on File">
+      <CollapsiblePanel title="Documents on File" defaultOpen={false}>
         <p className="text-xs text-gray-500">Upload and manage this employee&apos;s documents.</p>
 
         <form onSubmit={addDoc} className="space-y-3">
