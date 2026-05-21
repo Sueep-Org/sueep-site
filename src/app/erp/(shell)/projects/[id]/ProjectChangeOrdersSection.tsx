@@ -30,6 +30,7 @@ export type ChangeOrderEmployeeOption = {
   id: string;
   firstName: string;
   lastName: string;
+  email?: string | null;
 };
 
 const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"];
@@ -184,6 +185,7 @@ export function ProjectChangeOrdersSection({
               <ChangeOrderEditor
                 key={entry.id}
                 row={entry}
+                projectId={projectId}
                 saving={savingId === entry.id}
                 onSave={onSave}
                 onDelete={onDelete}
@@ -320,12 +322,14 @@ const STATUS_COLORS: Record<ProjectChangeOrderRow["status"], string> = {
 
 function ChangeOrderEditor({
   row,
+  projectId,
   saving,
   onSave,
   onDelete,
   employees,
 }: {
   row: ProjectChangeOrderRow;
+  projectId: string;
   saving: boolean;
   onSave: (
     id: string,
@@ -347,6 +351,11 @@ function ChangeOrderEditor({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [open, setOpen] = useState(false);
+  const [notifyEmployeeId, setNotifyEmployeeId] = useState("");
+  const [notifyLoading, setNotifyLoading] = useState(false);
+  const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const notifiableEmployees = employees.filter((e) => e.email);
   const [title, setTitle] = useState(row.title);
   const [requestedBy, setRequestedBy] = useState(row.requestedBy || "");
   const [supervisor, setSupervisor] = useState(row.supervisor || "");
@@ -598,6 +607,66 @@ function ChangeOrderEditor({
               Delete
             </button>
           )}
+
+          {/* Notify PM */}
+          <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notify PM by email</p>
+            {notifiableEmployees.length === 0 ? (
+              <p className="mt-2 text-xs text-gray-400">No employees with an email address on file.</p>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                  value={notifyEmployeeId}
+                  onChange={(e) => { setNotifyEmployeeId(e.target.value); setNotifyResult(null); }}
+                >
+                  <option value="">— Select PM —</option>
+                  {notifiableEmployees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {`${e.firstName} ${e.lastName}`.trim()} ({e.email})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!notifyEmployeeId || notifyLoading}
+                  onClick={async () => {
+                    setNotifyLoading(true);
+                    setNotifyResult(null);
+                    try {
+                      const res = await fetch(
+                        `/api/erp/projects/${projectId}/change-orders/${row.id}/notify`,
+                        {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ employeeId: notifyEmployeeId }),
+                        },
+                      );
+                      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string; error?: string };
+                      if (res.ok) {
+                        setNotifyResult({ ok: true, msg: `Email sent to ${data.sentTo ?? "PM"}` });
+                        setNotifyEmployeeId("");
+                      } else {
+                        setNotifyResult({ ok: false, msg: data.error || "Failed to send email" });
+                      }
+                    } catch {
+                      setNotifyResult({ ok: false, msg: "Network error" });
+                    } finally {
+                      setNotifyLoading(false);
+                    }
+                  }}
+                  className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                >
+                  {notifyLoading ? "Sending…" : "Send notification"}
+                </button>
+                {notifyResult && (
+                  <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
+                    {notifyResult.msg}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

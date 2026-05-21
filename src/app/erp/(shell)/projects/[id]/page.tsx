@@ -49,6 +49,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         lastName: true,
         hourlyPayCents: true,
         status: true,
+        email: true,
       },
     }),
     prisma.contractor.findMany({
