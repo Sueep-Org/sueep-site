@@ -49,6 +49,8 @@ const BUILDING_ADDRESS_OPTIONS = [
   "3029 W Glenwood Ave (Equinox)",
   "200 University Dr, Schuylkill Haven, PA, 17972 (Nittany Apartments)",
 ] as const;
+const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
+const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 type UnitScope = {
@@ -210,6 +212,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const [scheduleBuildingsLoading, setScheduleBuildingsLoading] = useState(initialScheduleBuildings.length === 0);
   const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
+  const [isAddingBuilding, setIsAddingBuilding] = useState(false);
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
 
   const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
@@ -333,11 +337,25 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   }
 
   function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
+    if (id === ADD_NEW_BUILDING_VALUE) {
+      setIsAddingBuilding(true);
+      setBuildingProjectId(id);
+      setBuildingName("");
+      setBuildingAddress("");
+      setIsAddingAddress(true);
+      setPmName("");
+      setPmEmail("");
+      setPmPhone("");
+      return;
+    }
+
     const scheduleBuilding = scheduleBuildings.find((option) => option.id === id);
     const scheduleName = scheduleBuilding?.jobTitle || fallback?.jobTitle || "";
     const matchedBuilding = buildings.find((building) => normalizeBuildingName(building.name) === normalizeBuildingName(scheduleName));
     const extractedAddress = extractAddressFromScheduleProject(scheduleBuilding || null);
 
+    setIsAddingBuilding(false);
+    setIsAddingAddress(false);
     setBuildingProjectId(id);
     setBuildingName(scheduleName);
     setBuildingAddress(extractedAddress || matchedBuilding?.address || fallback?.address || "");
@@ -495,8 +513,8 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
       estHours: fd.get("estHours") || undefined,
       actualHours: fd.get("actualHours") || undefined,
       requestType,
-      buildingId: buildingProjectId || undefined,
-      buildingProjectId: buildingProjectId || undefined,
+      buildingId: isAddingBuilding ? undefined : buildingProjectId || undefined,
+      buildingProjectId: isAddingBuilding ? undefined : buildingProjectId || undefined,
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
       pmName: pmName.trim() || undefined,
@@ -736,8 +754,25 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                     </option>
                     );
                   })}
+                  <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>
                 </select>
                 {scheduleBuildingsError ? <p className="mt-1 text-xs text-red-500">{scheduleBuildingsError}</p> : null}
+                {isAddingBuilding ? (
+                  <div className="mt-2">
+                    <label className={label} htmlFor="newBuildingName">
+                      New building name
+                    </label>
+                    <input
+                      id="newBuildingName"
+                      name="newBuildingName"
+                      required
+                      className={input}
+                      value={buildingName}
+                      onChange={(e) => setBuildingName(e.target.value)}
+                      placeholder="Type the building name"
+                    />
+                  </div>
+                ) : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
               </div>
               <div className="min-w-0">
@@ -749,8 +784,16 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                   name="buildingAddress"
                   required
                   className={input}
-                  value={buildingAddress}
-                  onChange={(e) => setBuildingAddress(e.target.value)}
+                  value={isAddingAddress ? ADD_NEW_ADDRESS_VALUE : buildingAddress}
+                  onChange={(e) => {
+                    if (e.target.value === ADD_NEW_ADDRESS_VALUE) {
+                      setIsAddingAddress(true);
+                      setBuildingAddress("");
+                      return;
+                    }
+                    setIsAddingAddress(false);
+                    setBuildingAddress(e.target.value);
+                  }}
                 >
                   <option value="">Select an address...</option>
                   {addressOptions.length === 0 ? (
@@ -763,7 +806,24 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
                       {address}
                     </option>
                   ))}
+                  <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>
                 </select>
+                {isAddingAddress ? (
+                  <div className="mt-2">
+                    <label className={label} htmlFor="newBuildingAddress">
+                      New building address
+                    </label>
+                    <input
+                      id="newBuildingAddress"
+                      name="newBuildingAddress"
+                      required
+                      className={input}
+                      value={buildingAddress}
+                      onChange={(e) => setBuildingAddress(e.target.value)}
+                      placeholder="Type the building address"
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
