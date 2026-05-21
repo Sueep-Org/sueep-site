@@ -157,7 +157,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           <h1 className="text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
           <ProjectDeleteButton projectId={project.id} />
         </div>
-        {project.description ? <p className="mt-2 whitespace-pre-line text-sm text-gray-500">{project.description}</p> : null}
       </div>
 
       <CollapsiblePanel title="Project Details">
