@@ -37,6 +37,7 @@ export type ProjectTableRow = {
     title: string;
     status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING";
     billingStatus: string | null;
+    percentInvoiced: number;
     estimatedCostCents: number | null;
     estimatedDays: number | null;
     requestedBy: string | null;
@@ -223,11 +224,13 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                                 ? centsToDollars(co.laborCostCents)
                                 : <span className="text-gray-400">—</span>}
                             </td>
-                            {/* Hours, Progress, Miles, % Invoiced — not applicable */}
+                            {/* Hours, Progress, Miles — not applicable to COs */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
+                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-900">
+                              {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">—</span>}
+                            </td>
                             {/* Billing Status → CO billing status */}
                             <td className="px-3 py-1.5">{billingBadge(co.billingStatus)}</td>
                           </tr>
