@@ -33,8 +33,9 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     description: changeOrder.description,
     requestedBy: changeOrder.requestedBy,
     supervisor: changeOrder.supervisor,
-    status: changeOrder.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID",
+    status: changeOrder.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING",
     billingStatus: changeOrder.billingStatus,
+    percentInvoiced: changeOrder.percentInvoiced,
     estimatedCostCents: changeOrder.estimatedCostCents,
     estimatedDays: changeOrder.estimatedDays,
     laborers: changeOrder.laborers.map((l) => ({

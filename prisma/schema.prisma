@@ -230,6 +230,7 @@ model ProjectChangeOrder {
   supervisor         String?
   status             String   @default("DRAFT")
   billingStatus      String?
+  percentInvoiced    Int      @default(0)
   estimatedCostCents Int?
   estimatedDays      Int?
   reason             String?

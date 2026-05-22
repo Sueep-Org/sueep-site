@@ -4,7 +4,7 @@ import { inputToCents } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
 const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE"] as const;
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -51,6 +51,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
       }
       data.billingStatus = bs;
     }
+  }
+  if (body.percentInvoiced !== undefined) {
+    const n = Number(body.percentInvoiced);
+    data.percentInvoiced = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
   }
   if (body.estimatedCost !== undefined) data.estimatedCostCents = inputToCents(body.estimatedCost);
   if (body.estimatedDays !== undefined) {

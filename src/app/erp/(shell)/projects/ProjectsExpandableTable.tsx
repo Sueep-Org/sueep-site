@@ -35,7 +35,7 @@ export type ProjectTableRow = {
   changeOrders: {
     id: string;
     title: string;
-    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID";
+    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING";
     billingStatus: string | null;
     estimatedCostCents: number | null;
     estimatedDays: number | null;
@@ -47,12 +47,13 @@ export type ProjectTableRow = {
   }[];
 };
 
-const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID", string> = {
+const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
   DRAFT: "bg-gray-200 text-gray-700",
   SUBMITTED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
   VOID: "bg-amber-100 text-amber-700",
+  BILLING: "bg-emerald-100 text-emerald-700",
 };
 
 function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
@@ -64,7 +65,7 @@ function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string
 function billingBadge(status: string | null) {
   if (!status) return <span className="text-gray-400">—</span>;
   const map: Record<string, { label: string; cls: string }> = {
-    BILLING: { label: "Billing", cls: "bg-blue-100 text-blue-700" },
+    BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
     INVOICE_PAID: { label: "Invoice Paid", cls: "bg-emerald-100 text-emerald-700" },
     INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-600" },
   };
@@ -227,7 +228,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
-                            {/* Billing Status → CO billing status badge */}
+                            {/* Billing Status → CO billing status */}
                             <td className="px-3 py-1.5">{billingBadge(co.billingStatus)}</td>
                           </tr>
 

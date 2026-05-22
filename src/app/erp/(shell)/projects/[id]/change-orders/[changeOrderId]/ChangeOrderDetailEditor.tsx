@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
+import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -18,6 +19,7 @@ const STATUS_COLORS: Record<Status, string> = {
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
   VOID: "bg-amber-100 text-amber-700",
+  BILLING: "bg-emerald-100 text-emerald-700",
 };
 
 export type ChangeOrderDetailData = {
@@ -29,6 +31,7 @@ export type ChangeOrderDetailData = {
   supervisor: string | null;
   status: Status;
   billingStatus: string | null;
+  percentInvoiced: number;
   estimatedCostCents: number | null;
   estimatedDays: number | null;
   laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null }[];
@@ -177,7 +180,6 @@ export function ChangeOrderDetailEditor({
   const [estimatedDays, setEstimatedDays] = useState(
     data.estimatedDays != null ? String(data.estimatedDays) : "",
   );
-  const [billingStatus, setBillingStatus] = useState(data.billingStatus || "");
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -199,7 +201,6 @@ export function ChangeOrderDetailEditor({
           description: comments.trim() || null,
           estimatedCost: estimatedCost.trim() || null,
           estimatedDays: estimatedDays.trim() || null,
-          billingStatus: billingStatus || null,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -294,15 +295,6 @@ export function ChangeOrderDetailEditor({
             </select>
           </div>
           <div>
-            <label className={label} htmlFor="co-billing-status">Billing status</label>
-            <select id="co-billing-status" className={input} value={billingStatus} onChange={(e) => setBillingStatus(e.target.value)}>
-              <option value="">— None —</option>
-              <option value="BILLING">Billing</option>
-              <option value="INVOICE_PAID">Invoice Paid</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-          </div>
-          <div>
             <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
             <input id="co-est-cost" className={input} placeholder="1250.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
           </div>
@@ -356,6 +348,15 @@ export function ChangeOrderDetailEditor({
             </button>
           )}
         </div>
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Billing" defaultOpen={false}>
+        <ChangeOrderBillingEditor
+          projectId={projectId}
+          changeOrderId={data.id}
+          percentInvoiced={data.percentInvoiced}
+          billingStatus={data.billingStatus}
+        />
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Assign Laborers" defaultOpen={false}>
