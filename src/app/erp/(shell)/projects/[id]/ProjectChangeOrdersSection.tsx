@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 
 export type ChangeOrderLaborer = {
@@ -26,121 +27,9 @@ export type ProjectChangeOrderRow = {
   laborers: ChangeOrderLaborer[];
 };
 
-export type ChangeOrderEmployeeOption = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email?: string | null;
-};
 
 const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"];
 
-function LaborerMultiSelect({
-  employees,
-  selectedIds,
-  onChange,
-}: {
-  employees: ChangeOrderEmployeeOption[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filtered = employees.filter((e) => {
-    const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-    return name.includes(query.toLowerCase());
-  });
-
-  function toggle(id: string) {
-    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
-  }
-
-  function remove(id: string) {
-    onChange(selectedIds.filter((x) => x !== id));
-  }
-
-  const selectedEmployees = employees.filter((e) => selectedIds.includes(e.id));
-
-  return (
-    <div ref={containerRef} className="relative mt-1">
-      <div
-        className="min-h-[38px] w-full cursor-text rounded-md border border-gray-300 bg-white px-2 py-1.5 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500"
-        onClick={() => setOpen(true)}
-      >
-        <div className="flex flex-wrap gap-1.5">
-          {selectedEmployees.map((e) => {
-            const name = `${e.firstName} ${e.lastName}`.trim();
-            return (
-              <span
-                key={e.id}
-                className="flex items-center gap-1 rounded bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800"
-              >
-                {name}
-                <button
-                  type="button"
-                  onMouseDown={(ev) => { ev.stopPropagation(); remove(e.id); }}
-                  className="ml-0.5 text-pink-500 hover:text-pink-700"
-                  aria-label={`Remove ${name}`}
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
-          <input
-            type="text"
-            className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
-            placeholder={selectedIds.length === 0 ? "Search laborers…" : ""}
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-          />
-        </div>
-      </div>
-      {open && (
-        <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-gray-400">No results</li>
-          ) : (
-            filtered.map((e) => {
-              const name = `${e.firstName} ${e.lastName}`.trim();
-              const selected = selectedIds.includes(e.id);
-              return (
-                <li
-                  key={e.id}
-                  onMouseDown={(ev) => { ev.preventDefault(); toggle(e.id); setQuery(""); }}
-                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-pink-50 ${selected ? "font-medium text-pink-700" : "text-gray-800"}`}
-                >
-                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-pink-500 bg-pink-500 text-white" : "border-gray-300"}`}>
-                    {selected && (
-                      <svg viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
-                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                  {name}
-                </li>
-              );
-            })
-          )}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -149,19 +38,15 @@ const label = "block text-xs font-medium text-gray-600";
 export function ProjectChangeOrdersSection({
   projectId,
   initialEntries,
-  employees,
 }: {
   projectId: string;
   initialEntries: ProjectChangeOrderRow[];
-  employees: ChangeOrderEmployeeOption[];
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [newSupervisor, setNewSupervisor] = useState("");
-  const [newLaborerIds, setNewLaborerIds] = useState<string[]>([]);
 
   useEffect(() => {
     setEntries(initialEntries);
@@ -180,17 +65,8 @@ export function ProjectChangeOrdersSection({
         body: JSON.stringify({
           title: String(fd.get("title") || "").trim(),
           requestedBy: String(fd.get("requestedBy") || "").trim() || undefined,
-          supervisor: newSupervisor.trim() || undefined,
           status: String(fd.get("status") || "DRAFT"),
           description: String(fd.get("description") || "").trim() || undefined,
-          reason: String(fd.get("reason") || "").trim() || undefined,
-          estimatedCost: String(fd.get("estimatedCost") || "").trim() || undefined,
-          estimatedDays: String(fd.get("estimatedDays") || "").trim() || undefined,
-          resolutionNotes: String(fd.get("resolutionNotes") || "").trim() || undefined,
-          laborers: newLaborerIds.map((eid) => {
-            const emp = employees.find((e) => e.id === eid);
-            return { employeeId: eid, name: emp ? `${emp.firstName} ${emp.lastName}`.trim() : eid };
-          }),
         }),
       });
       const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
@@ -201,8 +77,6 @@ export function ProjectChangeOrdersSection({
       }
       setEntries((prev) => [data, ...prev]);
       e.currentTarget.reset();
-      setNewSupervisor("");
-      setNewLaborerIds([]);
       router.refresh();
     } catch {
       setError("Network error");
@@ -211,57 +85,14 @@ export function ProjectChangeOrdersSection({
     }
   }
 
-  async function onDelete(id: string) {
-    setError("");
-    try {
-      const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error || "Failed to delete change order");
-        return;
-      }
-      setEntries((prev) => prev.filter((row) => row.id !== id));
-      router.refresh();
-    } catch {
-      setError("Network error");
-    }
-  }
-
-  async function onSave(
-    id: string,
-    payload: {
-      title: string;
-      requestedBy: string;
-      supervisor: string;
-      status: ProjectChangeOrderRow["status"];
-      description: string;
-      reason: string;
-      estimatedCost: string;
-      estimatedDays: string;
-      resolutionNotes: string;
-      laborers: { employeeId: string | null; name: string }[];
-    },
-  ) {
+  async function onSave(id: string, status: ProjectChangeOrderRow["status"]) {
     setSavingId(id);
     setError("");
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: payload.title,
-          requestedBy: payload.requestedBy || null,
-          supervisor: payload.supervisor || null,
-          status: payload.status,
-          description: payload.description || null,
-          reason: payload.reason || null,
-          estimatedCost: payload.estimatedCost || null,
-          estimatedDays: payload.estimatedDays || null,
-          resolutionNotes: payload.resolutionNotes || null,
-          laborers: payload.laborers,
-        }),
+        body: JSON.stringify({ status }),
       });
       const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
       if (!res.ok) {
@@ -295,8 +126,6 @@ export function ProjectChangeOrdersSection({
                 projectId={projectId}
                 saving={savingId === entry.id}
                 onSave={onSave}
-                onDelete={onDelete}
-                employees={employees}
               />
             ))
           )}
@@ -330,60 +159,11 @@ export function ProjectChangeOrdersSection({
             </label>
             <input id="co-requestedBy" name="requestedBy" className={input} />
           </div>
-          <div>
-            <label className={label} htmlFor="co-supervisor">
-              Supervisor / PM
-            </label>
-            <select
-              id="co-supervisor"
-              className={input}
-              value={newSupervisor}
-              onChange={(e) => setNewSupervisor(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {employees.map((e) => {
-                const name = `${e.firstName} ${e.lastName}`.trim();
-                return <option key={e.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label}>Laborers</label>
-            <LaborerMultiSelect
-              employees={employees}
-              selectedIds={newLaborerIds}
-              onChange={setNewLaborerIds}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-estimatedCost">
-              Estimated cost (USD)
-            </label>
-            <input id="co-estimatedCost" name="estimatedCost" className={input} placeholder="1250.00" />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-estimatedDays">
-              Schedule impact (days)
-            </label>
-            <input id="co-estimatedDays" name="estimatedDays" type="number" min={0} step={1} className={input} />
-          </div>
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={label} htmlFor="co-description">
-              Description
+              Comments
             </label>
-            <textarea id="co-description" name="description" rows={2} className={input} />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label} htmlFor="co-reason">
-              Reason
-            </label>
-            <textarea id="co-reason" name="reason" rows={2} className={input} />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label} htmlFor="co-resolutionNotes">
-              Resolution notes
-            </label>
-            <textarea id="co-resolutionNotes" name="resolutionNotes" rows={2} className={input} />
+            <textarea id="co-description" name="description" rows={3} className={input} />
           </div>
         </div>
         {error ? (
@@ -416,64 +196,18 @@ function ChangeOrderEditor({
   projectId,
   saving,
   onSave,
-  onDelete,
-  employees,
 }: {
   row: ProjectChangeOrderRow;
   projectId: string;
   saving: boolean;
-  onSave: (
-    id: string,
-    payload: {
-      title: string;
-      requestedBy: string;
-      supervisor: string;
-      status: ProjectChangeOrderRow["status"];
-      description: string;
-      reason: string;
-      estimatedCost: string;
-      estimatedDays: string;
-      resolutionNotes: string;
-      laborers: { employeeId: string | null; name: string }[];
-    },
-  ) => void;
-  onDelete: (id: string) => void;
-  employees: ChangeOrderEmployeeOption[];
+  onSave: (id: string, status: ProjectChangeOrderRow["status"]) => void;
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [open, setOpen] = useState(false);
-  const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
-  const [notifyLoading, setNotifyLoading] = useState(false);
-  const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
-
-  const notifiableEmployees = employees.filter((e) => e.email);
-  const [title, setTitle] = useState(row.title);
-  const [requestedBy, setRequestedBy] = useState(row.requestedBy || "");
-  const [supervisor, setSupervisor] = useState(row.supervisor || "");
   const [status, setStatus] = useState<ProjectChangeOrderRow["status"]>(row.status);
-  const [description, setDescription] = useState(row.description || "");
-  const [reason, setReason] = useState(row.reason || "");
-  const [estimatedCost, setEstimatedCost] = useState(
-    row.estimatedCostCents != null ? (row.estimatedCostCents / 100).toFixed(2) : "",
-  );
-  const [estimatedDays, setEstimatedDays] = useState(row.estimatedDays != null ? String(row.estimatedDays) : "");
-  const [resolutionNotes, setResolutionNotes] = useState(row.resolutionNotes || "");
-  const [laborerIds, setLaborerIds] = useState<string[]>(
-    row.laborers.flatMap((l) => (l.employeeId ? [l.employeeId] : [])),
-  );
 
   useEffect(() => {
-    setTitle(row.title);
-    setRequestedBy(row.requestedBy || "");
-    setSupervisor(row.supervisor || "");
     setStatus(row.status);
-    setDescription(row.description || "");
-    setReason(row.reason || "");
-    setEstimatedCost(row.estimatedCostCents != null ? (row.estimatedCostCents / 100).toFixed(2) : "");
-    setEstimatedDays(row.estimatedDays != null ? String(row.estimatedDays) : "");
-    setResolutionNotes(row.resolutionNotes || "");
-    setLaborerIds(row.laborers.flatMap((l) => (l.employeeId ? [l.employeeId] : [])));
-  }, [row]);
+  }, [row.status]);
 
   return (
     <div className="rounded-md border border-gray-200 bg-white">
@@ -492,6 +226,13 @@ function ChangeOrderEditor({
           <span className="text-xs text-gray-500">
             {centsToDollars(row.estimatedCostCents)} &middot; {row.estimatedDays ?? 0}d
           </span>
+          <Link
+            href={`/erp/projects/${projectId}/change-orders/${row.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs font-medium text-pink-600 hover:underline"
+          >
+            View details
+          </Link>
           <svg
             className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
             viewBox="0 0 20 20"
@@ -508,235 +249,28 @@ function ChangeOrderEditor({
 
       {open && (
         <div className="border-t border-gray-200 px-4 pb-4 pt-3">
-          <p className="mb-3 text-xs text-gray-500">Created {new Date(row.createdAt).toLocaleString()}</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="sm:col-span-2">
-              <label className={label} htmlFor={`co-title-${row.id}`}>
-                Title
-              </label>
-              <input id={`co-title-${row.id}`} className={input} value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
+          <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className={label} htmlFor={`co-status-${row.id}`}>
-                Status
-              </label>
+              <label className={label} htmlFor={`co-status-${row.id}`}>Status</label>
               <select
                 id={`co-status-${row.id}`}
                 className={input}
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ProjectChangeOrderRow["status"])}
               >
-                {STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className={label} htmlFor={`co-requested-${row.id}`}>
-                Requested by
-              </label>
-              <input
-                id={`co-requested-${row.id}`}
-                className={input}
-                value={requestedBy}
-                onChange={(e) => setRequestedBy(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor={`co-supervisor-${row.id}`}>
-                Supervisor / PM
-              </label>
-              <select
-                id={`co-supervisor-${row.id}`}
-                className={input}
-                value={supervisor}
-                onChange={(e) => setSupervisor(e.target.value)}
-              >
-                <option value="">— None —</option>
-                {employees.map((e) => {
-                  const name = `${e.firstName} ${e.lastName}`.trim();
-                  return <option key={e.id} value={name}>{name}</option>;
-                })}
-              </select>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className={label}>Laborers</label>
-              <LaborerMultiSelect
-                employees={employees}
-                selectedIds={laborerIds}
-                onChange={setLaborerIds}
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor={`co-cost-${row.id}`}>
-                Estimated cost (USD)
-              </label>
-              <input
-                id={`co-cost-${row.id}`}
-                className={input}
-                value={estimatedCost}
-                onChange={(e) => setEstimatedCost(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor={`co-days-${row.id}`}>
-                Schedule impact (days)
-              </label>
-              <input
-                id={`co-days-${row.id}`}
-                type="number"
-                min={0}
-                step={1}
-                className={input}
-                value={estimatedDays}
-                onChange={(e) => setEstimatedDays(e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className={label} htmlFor={`co-description-${row.id}`}>
-                Description
-              </label>
-              <textarea
-                id={`co-description-${row.id}`}
-                rows={2}
-                className={input}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className={label} htmlFor={`co-reason-${row.id}`}>
-                Reason
-              </label>
-              <textarea
-                id={`co-reason-${row.id}`}
-                rows={2}
-                className={input}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className={label} htmlFor={`co-resolution-${row.id}`}>
-                Resolution notes
-              </label>
-              <textarea
-                id={`co-resolution-${row.id}`}
-                rows={2}
-                className={input}
-                value={resolutionNotes}
-                onChange={(e) => setResolutionNotes(e.target.value)}
-              />
-            </div>
-          </div>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() =>
-              onSave(row.id, {
-                title: title.trim(),
-                requestedBy: requestedBy.trim(),
-                supervisor: supervisor.trim(),
-                status,
-                description: description.trim(),
-                reason: reason.trim(),
-                estimatedCost: estimatedCost.trim(),
-                estimatedDays: estimatedDays.trim(),
-                resolutionNotes: resolutionNotes.trim(),
-                laborers: laborerIds.map((eid) => {
-                  const emp = employees.find((e) => e.id === eid);
-                  return { employeeId: eid, name: emp ? `${emp.firstName} ${emp.lastName}`.trim() : eid };
-                }),
-              })
-            }
-            className="mt-3 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save changes"}
-          </button>
-          {confirmDelete ? (
-            <span className="mt-3 inline-flex items-center gap-2">
-              <span className="text-sm text-gray-600">Delete this change order?</span>
-              <button
-                type="button"
-                onClick={() => onDelete(row.id)}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
-              >
-                Yes, delete
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-            </span>
-          ) : (
             <button
               type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="mt-3 rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              disabled={saving || status === row.status}
+              onClick={() => onSave(row.id, status)}
+              className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              Delete
+              {saving ? "Saving…" : "Save"}
             </button>
-          )}
-
-          {/* Notify by email */}
-          <div className="mt-5 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notify by email</p>
-            {notifiableEmployees.length === 0 ? (
-              <p className="mt-2 text-xs text-gray-400">No employees with an email address on file.</p>
-            ) : (
-              <div className="mt-2 space-y-2">
-                <LaborerMultiSelect
-                  employees={notifiableEmployees}
-                  selectedIds={notifyEmployeeIds}
-                  onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={notifyEmployeeIds.length === 0 || notifyLoading}
-                    onClick={async () => {
-                      setNotifyLoading(true);
-                      setNotifyResult(null);
-                      try {
-                        const res = await fetch(
-                          `/api/erp/projects/${projectId}/change-orders/${row.id}/notify`,
-                          {
-                            method: "POST",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
-                          },
-                        );
-                        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string[]; error?: string };
-                        if (res.ok) {
-                          const sent = Array.isArray(data.sentTo) ? data.sentTo.join(", ") : (data.sentTo ?? "recipients");
-                          setNotifyResult({ ok: true, msg: `Email sent to ${sent}` });
-                          setNotifyEmployeeIds([]);
-                        } else {
-                          setNotifyResult({ ok: false, msg: data.error || "Failed to send email" });
-                        }
-                      } catch {
-                        setNotifyResult({ ok: false, msg: "Network error" });
-                      } finally {
-                        setNotifyLoading(false);
-                      }
-                    }}
-                    className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                  >
-                    {notifyLoading ? "Sending…" : "Send notification"}
-                  </button>
-                  {notifyResult && (
-                    <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
-                      {notifyResult.msg}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

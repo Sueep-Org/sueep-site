@@ -194,13 +194,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const [coTitle, setCoTitle] = useState("");
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
-  const [coSupervisor, setCoSupervisor] = useState("");
-  const [coLaborerIds, setCoLaborerIds] = useState<string[]>([]);
-  const [coEstCost, setCoEstCost] = useState("");
-  const [coEstDays, setCoEstDays] = useState("");
-  const [coDescription, setCoDescription] = useState("");
-  const [coReason, setCoReason] = useState("");
-  const [coResolutionNotes, setCoResolutionNotes] = useState("");
+  const [coComments, setCoComments] = useState("");
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");
 
@@ -439,16 +433,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
           title: coTitle.trim(),
           status: coStatus,
           requestedBy: coRequestedBy.trim() || undefined,
-          supervisor: coSupervisor.trim() || undefined,
-          estimatedCost: coEstCost.trim() || undefined,
-          estimatedDays: coEstDays.trim() || undefined,
-          description: coDescription.trim() || undefined,
-          reason: coReason.trim() || undefined,
-          resolutionNotes: coResolutionNotes.trim() || undefined,
-          laborers: coLaborerIds.map((eid) => {
-            const emp = employees.find((e) => e.id === eid);
-            return { employeeId: eid, name: emp ? `${emp.firstName} ${emp.lastName}`.trim() : eid };
-          }),
+          description: coComments.trim() || undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -598,50 +583,9 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             <label className={label} htmlFor="co-requested-by">Requested by</label>
             <input id="co-requested-by" className={input} value={coRequestedBy} onChange={(e) => setCoRequestedBy(e.target.value)} />
           </div>
-          <div>
-            <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
-            <select id="co-supervisor" className={input} value={coSupervisor} onChange={(e) => setCoSupervisor(e.target.value)}>
-              <option value="">— None —</option>
-              {employees.map((e) => {
-                const name = `${e.firstName} ${e.lastName}`.trim();
-                return <option key={e.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
-          <div>
-            <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
-            <input id="co-est-cost" className={input} placeholder="1250.00" value={coEstCost} onChange={(e) => setCoEstCost(e.target.value)} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-est-days">Schedule impact (days)</label>
-            <input id="co-est-days" type="number" min={0} step={1} className={input} value={coEstDays} onChange={(e) => setCoEstDays(e.target.value)} />
-          </div>
           <div className="sm:col-span-3">
-            <label className={label}>Laborers</label>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {employees.map((e) => {
-                const name = `${e.firstName} ${e.lastName}`.trim();
-                const checked = coLaborerIds.includes(e.id);
-                return (
-                  <label key={e.id} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-                    <input type="checkbox" className="accent-pink-600" checked={checked} onChange={() => setCoLaborerIds((prev) => checked ? prev.filter((id) => id !== e.id) : [...prev, e.id])} />
-                    {name}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-          <div className="sm:col-span-3">
-            <label className={label} htmlFor="co-description">Description</label>
-            <textarea id="co-description" rows={2} className={input} value={coDescription} onChange={(e) => setCoDescription(e.target.value)} />
-          </div>
-          <div className="sm:col-span-3">
-            <label className={label} htmlFor="co-reason">Reason</label>
-            <textarea id="co-reason" rows={2} className={input} value={coReason} onChange={(e) => setCoReason(e.target.value)} />
-          </div>
-          <div className="sm:col-span-3">
-            <label className={label} htmlFor="co-resolution-notes">Resolution notes</label>
-            <textarea id="co-resolution-notes" rows={2} className={input} value={coResolutionNotes} onChange={(e) => setCoResolutionNotes(e.target.value)} />
+            <label className={label} htmlFor="co-comments">Comments</label>
+            <textarea id="co-comments" rows={3} className={input} value={coComments} onChange={(e) => setCoComments(e.target.value)} />
           </div>
         </div>
 

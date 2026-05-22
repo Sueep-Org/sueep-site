@@ -5,6 +5,7 @@ import { inputToCents } from "@/lib/erp/money";
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
 const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE"] as const;
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, changeOrderId } = await ctx.params;
@@ -39,6 +40,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
+  }
+  if (body.billingStatus !== undefined) {
+    if (body.billingStatus === null || body.billingStatus === "") {
+      data.billingStatus = null;
+    } else {
+      const bs = String(body.billingStatus).toUpperCase();
+      if (!BILLING_STATUSES.includes(bs as (typeof BILLING_STATUSES)[number])) {
+        return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
+      }
+      data.billingStatus = bs;
+    }
   }
   if (body.estimatedCost !== undefined) data.estimatedCostCents = inputToCents(body.estimatedCost);
   if (body.estimatedDays !== undefined) {

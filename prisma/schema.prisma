@@ -229,6 +229,7 @@ model ProjectChangeOrder {
   requestedBy        String?
   supervisor         String?
   status             String   @default("DRAFT")
+  billingStatus      String?
   estimatedCostCents Int?
   estimatedDays      Int?
   reason             String?
@@ -250,8 +251,13 @@ model ProjectChangeOrderLaborer {
   employeeId String?
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
-  name String
-  role String?
+  name            String
+  role            String?
+  workDate        DateTime @default(now())
+  hours           Float    @default(0)
+  /// Cents per hour (e.g. $28.84/hr → 2884)
+  hourlyRateCents Int      @default(0)
+  taskDescription String?
 
   @@index([changeOrderId])
 }

@@ -65,6 +65,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   if (!project) notFound();
 
   const isManual = !project.hubspotDealId;
+  const isPostConstruction = cfg?.postConstruction.pipelineId
+    ? project.hubspotPipelineId === cfg.postConstruction.pipelineId
+    : true;
   const pipelineOptions = cfg
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
@@ -242,9 +245,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Change Orders" defaultOpen={false}>
-        <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} employees={laborEmployees} />
-      </CollapsiblePanel>
+      {isPostConstruction ? (
+        <CollapsiblePanel title="Change Orders" defaultOpen={false}>
+          <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} />
+        </CollapsiblePanel>
+      ) : null}
     </div>
   );
 }
