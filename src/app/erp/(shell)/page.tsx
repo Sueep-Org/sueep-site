@@ -110,11 +110,6 @@ export default async function ErpDashboardPage() {
       gray:    { card: "border-gray-200 bg-gray-50",        value: "text-gray-800",    badge: "bg-gray-100 text-gray-600" },
     };
 
-    function lifecycleDot(lc: string) {
-      if (lc === "ACTIVE") return "bg-emerald-500";
-      if (lc === "UPCOMING") return "bg-purple-500";
-      return "bg-gray-400";
-    }
 
     return (
       <div className="space-y-8">

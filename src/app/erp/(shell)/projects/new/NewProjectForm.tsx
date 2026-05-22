@@ -183,7 +183,7 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
 
-export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null, allProjects = [], employees = [] }: NewProjectFormProps) {
+export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null, allProjects = [] }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
