@@ -7,6 +7,7 @@ import { ProjectBillingEditor } from "./ProjectBillingEditor";
 import { ProjectDatesEditor } from "./ProjectDatesEditor";
 import { ProjectManagerEditor } from "./ProjectManagerEditor";
 import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
+import { ProjectPricePackageEditor } from "./ProjectPricePackageEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectLaborAssignmentsSection } from "./ProjectLaborAssignmentsSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
@@ -163,6 +164,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       </div>
 
       <CollapsiblePanel title="Project Details">
+        <ProjectPricePackageEditor
+          projectId={project.id}
+          description={project.description}
+          contractValueCents={project.contractValueCents}
+        />
         {project.description ? (
           <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
             <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
