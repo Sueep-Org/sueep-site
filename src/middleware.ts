@@ -15,11 +15,16 @@ function hasStaticExtension(pathname: string): boolean {
   return /\.(ico|png|jpg|jpeg|gif|webp|svg|txt|xml|json|js|css|map|woff2?|ttf)$/i.test(base);
 }
 
+function isPublicAppPath(pathname: string): boolean {
+  return pathname === "/janitorial-turnover" || pathname.startsWith("/janitorial-turnover/");
+}
+
 /** Browser URL path → internal app route (same as rewrite target). */
 function logicalErpPath(pathname: string, host: string): string {
   if (!isAppSubdomain(host)) return pathname;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return pathname;
   if (hasStaticExtension(pathname)) return pathname;
+  if (isPublicAppPath(pathname)) return pathname;
   if (pathname === "/" || pathname === "") return "/erp";
   if (pathname === "/login") return "/erp/login";
   if (!pathname.startsWith("/erp")) return `/erp${pathname}`;

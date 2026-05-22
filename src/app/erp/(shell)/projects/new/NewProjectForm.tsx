@@ -164,6 +164,12 @@ interface NewProjectFormProps {
   janitorialPipelineId?: string | null;
   allProjects?: ProjectOption[];
   employees?: EmployeeOption[];
+  initialSegment?: string;
+  lockedSegment?: boolean;
+  allowErpDataFetch?: boolean;
+  submitEndpoint?: string;
+  successMessage?: string;
+  submitLabel?: string;
 }
 
 function normalizeBuildingName(value: string) {
@@ -183,11 +189,23 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
 
-export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings = [], janitorialPipelineId = null, allProjects = [] }: NewProjectFormProps) {
+export function NewProjectForm({
+  initialBuildings = [],
+  initialScheduleBuildings = [],
+  janitorialPipelineId = null,
+  allProjects = [],
+  initialSegment = "COMMERCIAL_CLEANING",
+  lockedSegment = false,
+  allowErpDataFetch = true,
+  submitEndpoint = "/api/erp/projects",
+  successMessage,
+  submitLabel = "Create project",
+}: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [segment, setSegment] = useState("COMMERCIAL_CLEANING");
+  const [submitted, setSubmitted] = useState(false);
+  const [segment, setSegment] = useState(initialSegment);
 
   // Change order state
   const [coProjectId, setCoProjectId] = useState("");
@@ -225,6 +243,10 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
   const isChangeOrder = segment === "CHANGE_ORDER";
 
   useEffect(() => {
+    if (!allowErpDataFetch) {
+      setJobOptions(fallbackJobTitles);
+      return;
+    }
     let mounted = true;
     fetch("/api/erp/projects")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
@@ -249,9 +271,10 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [allowErpDataFetch]);
 
   useEffect(() => {
+    if (!allowErpDataFetch) return;
     let mounted = true;
     fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
@@ -263,9 +286,13 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [allowErpDataFetch]);
 
   useEffect(() => {
+    if (!allowErpDataFetch) {
+      setScheduleBuildingsLoading(false);
+      return;
+    }
     let mounted = true;
     setScheduleBuildingsLoading(initialScheduleBuildings.length === 0);
     setScheduleBuildingsError("");
@@ -284,7 +311,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     return () => {
       mounted = false;
     };
-  }, [initialScheduleBuildings.length]);
+  }, [allowErpDataFetch, initialScheduleBuildings.length]);
 
   const isCustomJob = jobTitle === "__custom__";
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
@@ -527,7 +554,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
     };
 
     try {
-      const res = await fetch("/api/erp/projects", {
+      const res = await fetch(submitEndpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -538,7 +565,11 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
         setLoading(false);
         return;
       }
-      router.push("/erp/projects");
+      if (successMessage) {
+        setSubmitted(true);
+      } else {
+        router.push("/erp/projects");
+      }
     } catch {
       setError("Network error");
     } finally {
@@ -601,25 +632,32 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
 
   return (
     <form onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="min-w-0">
-          <label className={label} htmlFor="segment">
-            Segment
-          </label>
-          <select
-            id="segment"
-            name="segment"
-            className={input}
-            value={segment}
-            onChange={(e) => setSegment(e.target.value)}
-          >
-            {PROJECT_SEGMENT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+      {submitted && successMessage ? (
+        <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">
+          {successMessage}
         </div>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {!lockedSegment ? (
+          <div className="min-w-0">
+            <label className={label} htmlFor="segment">
+              Segment
+            </label>
+            <select
+              id="segment"
+              name="segment"
+              className={input}
+              value={segment}
+              onChange={(e) => setSegment(e.target.value)}
+            >
+              {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         {!isTurnover && (
           <>
             <div className="min-w-0">
@@ -1175,7 +1213,7 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
           disabled={loading}
           className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
         >
-          {loading ? "Saving…" : "Create project"}
+          {loading ? "Saving…" : submitLabel}
         </button>
       </div>
     </form>

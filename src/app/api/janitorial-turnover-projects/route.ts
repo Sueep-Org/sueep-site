@@ -1,0 +1,32 @@
+import { NextResponse } from "next/server";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { createProjectFromPayload } from "@/lib/erp/createProject";
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const cfg = parseHubSpotPipelineStageMap();
+  const payload = {
+    ...body,
+    segment: "JANITORIAL_TURNOVER_REQUESTS",
+    ...(cfg?.janitorial.pipelineId ? { hubspotPipelineId: cfg.janitorial.pipelineId } : {}),
+  };
+
+  try {
+    const result = await createProjectFromPayload(payload, req);
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    return NextResponse.json({ id: result.project.id });
+  } catch (e) {
+    console.error("POST /api/janitorial-turnover-projects", e);
+    return NextResponse.json({ error: "Create failed" }, { status: 500 });
+  }
+}

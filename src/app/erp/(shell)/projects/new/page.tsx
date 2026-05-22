@@ -55,8 +55,20 @@ export default async function NewProjectPage() {
         <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
           ← Projects
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">New project</h1>
-        <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">New project</h1>
+            <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
+          </div>
+          <Link
+            href="/janitorial-turnover"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-md border border-pink-200 bg-white px-3 py-2 text-sm font-medium text-pink-700 hover:bg-pink-50 sm:w-auto"
+          >
+            Open external janitorial link
+          </Link>
+        </div>
       </div>
       <NewProjectForm
         initialBuildings={buildings}
