@@ -969,6 +969,14 @@ export function NewProjectForm({ initialBuildings = [], initialScheduleBuildings
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+              <div className="mt-3 border-t border-gray-200 pt-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
+                <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                  {packagePricing.breakdown.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
 
