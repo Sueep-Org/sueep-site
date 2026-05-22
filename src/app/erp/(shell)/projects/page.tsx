@@ -16,11 +16,15 @@ export default async function ErpProjectsPage() {
     include: {
       laborEntries: {
         select: {
+          workDate: true,
           workerName: true,
+          role: true,
           hours: true,
           hourlyRateCents: true,
+          taskDescription: true,
           employee: { select: { firstName: true, lastName: true } },
         },
+        orderBy: { workDate: "asc" },
       },
       materialEntries: { select: { category: true, costCents: true } },
       distanceEntries: { select: { miles: true } },
@@ -36,7 +40,10 @@ export default async function ErpProjectsPage() {
           requestedBy: true,
           supervisor: true,
           description: true,
-          laborers: { select: { name: true, hours: true, hourlyRateCents: true }, orderBy: { createdAt: "asc" } },
+          laborers: {
+            select: { name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true },
+            orderBy: { workDate: "asc" },
+          },
         },
         orderBy: { createdAt: "desc" },
       },
@@ -59,15 +66,6 @@ export default async function ErpProjectsPage() {
   });
 
   const rows = projects.map((p) => {
-    const employees = [
-      ...new Set(
-        p.laborEntries
-          .map((e) =>
-            e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() : e.workerName.trim(),
-          )
-          .filter(Boolean),
-      ),
-    ];
     const totalHours = p.laborEntries.reduce((s, e) => s + e.hours, 0);
     const laborCents = p.laborEntries.reduce((s, e) => s + Math.round(e.hours * e.hourlyRateCents), 0);
     const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
@@ -79,6 +77,14 @@ export default async function ErpProjectsPage() {
     const actualLaborCents = p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0);
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
+    const laborEntries = p.laborEntries.map((e) => ({
+      date: e.workDate.toISOString(),
+      role: e.role ?? null,
+      name: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() : e.workerName.trim(),
+      hours: e.hours,
+      hourlyRateCents: e.hourlyRateCents,
+      description: e.taskDescription ?? null,
+    }));
     return {
       id: p.id,
       jobTitle: p.jobTitle,
@@ -91,7 +97,7 @@ export default async function ErpProjectsPage() {
       percentInvoiced: p.percentInvoiced,
       billingStatus: p.billingStatus ?? null,
       contractValueCents: p.contractValueCents,
-      employees,
+      laborEntries,
       totalHours,
       laborCents,
       materialCents,
@@ -116,7 +122,14 @@ export default async function ErpProjectsPage() {
         requestedBy: co.requestedBy,
         supervisor: co.supervisor,
         description: co.description,
-        laborers: co.laborers.map((l) => l.name),
+        laborers: co.laborers.map((l) => ({
+          date: l.workDate.toISOString(),
+          role: l.role ?? null,
+          name: l.name,
+          hours: l.hours,
+          hourlyRateCents: l.hourlyRateCents,
+          description: l.taskDescription ?? null,
+        })),
         laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
       })),
     };

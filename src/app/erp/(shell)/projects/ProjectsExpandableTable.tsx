@@ -18,7 +18,7 @@ export type ProjectTableRow = {
   percentInvoiced: number;
   billingStatus: string | null;
   contractValueCents: number | null;
-  employees: string[];
+  laborEntries: { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null }[];
   totalHours: number;
   laborCents: number;
   materialCents: number;
@@ -43,7 +43,7 @@ export type ProjectTableRow = {
     requestedBy: string | null;
     supervisor: string | null;
     description: string | null;
-    laborers: string[];
+    laborers: { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null }[];
     laborCostCents: number;
   }[];
 };
@@ -61,6 +61,43 @@ function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string
   if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
   if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
   return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
+}
+
+type LaborRow = { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null };
+
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+function LaborTable({ entries }: { entries: LaborRow[] }) {
+  if (!entries.length) return <p className="text-xs text-gray-400">No labor logged</p>;
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <th className="pb-1 pr-3 text-left font-semibold">Date</th>
+          <th className="pb-1 pr-3 text-left font-semibold">Job Title</th>
+          <th className="pb-1 pr-3 text-left font-semibold">Name</th>
+          <th className="pb-1 pr-3 text-right font-semibold">Hours</th>
+          <th className="pb-1 pr-3 text-right font-semibold">Rate/hr</th>
+          <th className="pb-1 text-left font-semibold">Description</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {entries.map((e, i) => (
+          <tr key={i} className="text-gray-700">
+            <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+            <td className="py-1 pr-3">{e.role ?? <span className="text-gray-400">—</span>}</td>
+            <td className="py-1 pr-3 font-medium whitespace-nowrap">{e.name}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
+            <td className="py-1 text-gray-500">{e.description ?? <span className="text-gray-400">—</span>}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 function billingBadge(status: string | null) {
@@ -109,7 +146,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
             </th>
           </tr>
           <tr className="bg-pink-500 text-white">
-            <th className="md:sticky md:left-0 md:z-40 w-[420px] min-w-[420px] border-r border-white bg-pink-500 px-3 py-2 font-medium">Job</th>
+            <th className="w-[420px] min-w-[420px] border-r border-white bg-pink-500 px-3 py-2 font-medium">Job</th>
             <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
             <th className="border-r border-white px-3 py-2 font-medium">Segment</th>
             <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
@@ -136,7 +173,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse" : "Expand"}
                 >
-                  <td className={`md:sticky md:left-0 md:z-30 w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
+                  <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -184,7 +221,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                             aria-expanded={isCoOpen}
                           >
                             {/* Job → CO title + status */}
-                            <td className={`md:sticky md:left-0 md:z-30 w-[420px] min-w-[420px] border-r border-gray-200 bg-pink-50 px-3 py-1.5`}>
+                            <td className="w-[420px] min-w-[420px] border-r border-gray-200 bg-pink-50 px-3 py-1.5">
                               <div className="flex items-center gap-2 pl-4">
                                 <span className="shrink-0 text-gray-300">↳</span>
                                 <span className="shrink-0 rounded bg-pink-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pink-800">CO</span>
@@ -239,22 +276,11 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
                               <td colSpan={11} className="bg-pink-50 px-6 py-2 pb-3">
-                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
-                                    <div className="mt-1 flex flex-wrap gap-1">
-                                      {co.laborers.length ? (
-                                        co.laborers.map((name) => (
-                                          <span key={name} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                                            {name}
-                                          </span>
-                                        ))
-                                      ) : (
-                                        <span className="text-xs text-gray-400">None assigned</span>
-                                      )}
-                                    </div>
-                                  </div>
-
+                                <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+                                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
+                                  <LaborTable entries={co.laborers} />
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-3">
                                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
                                     <p className="mt-1 text-xs text-gray-700 line-clamp-3">
@@ -295,50 +321,21 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                       );
                     })}
 
-                    {/* Project summary cards */}
+                    {/* Project team table */}
                     <tr className={styles.detail}>
                       <td colSpan={11} className="px-4 py-2">
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {p.employees.length ? p.employees.map((name) => (
-                                <span key={name} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{name}</span>
-                              )) : <span className="text-xs text-gray-400">No labor logged</span>}
-                            </div>
-                          </div>
-
-                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor</p>
-                            <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                              <span className="text-gray-400">Est.</span><span className="font-medium text-gray-800">{centsToDollars(p.estLaborCents)}</span>
-                              <span className="text-gray-400">Actual</span><span className="font-medium text-gray-800">{centsToDollars(p.actualLaborCents)}</span>
-                              <span className="text-gray-400">Est. hrs</span><span className="font-medium text-gray-800">{p.estHours ?? "—"}</span>
-                              <span className="text-gray-400">Act. hrs</span><span className="font-medium text-gray-800">{p.actualHours.toFixed(1)}</span>
-                            </div>
-                          </div>
-
-                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Materials</p>
-                            <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                              <span className="text-gray-400">Est.</span><span className="font-medium text-gray-800">{centsToDollars(p.estMaterialCents)}</span>
-                              <span className="text-gray-400">Actual</span><span className="font-medium text-gray-800">{centsToDollars(p.actualMaterialCents)}</span>
-                              <span className="text-gray-400">Cleaning</span><span className="font-medium text-gray-800">{centsToDollars(p.cleaningCents)}</span>
-                              <span className="text-gray-400">Paint</span><span className="font-medium text-gray-800">{centsToDollars(p.paintCents)}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Distance</p>
-                            <p className="mt-1 text-sm font-semibold text-gray-800">{p.miles.toFixed(1)} <span className="text-xs font-normal text-gray-400">mi</span></p>
-                            <Link
-                              href={`/erp/projects/${p.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-auto pt-2 text-xs font-medium text-pink-600 hover:underline"
-                            >
-                              Full details →
-                            </Link>
-                          </div>
+                        <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
+                          <LaborTable entries={p.laborEntries} />
+                        </div>
+                        <div className="mt-1 flex justify-end">
+                          <Link
+                            href={`/erp/projects/${p.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-medium text-pink-600 hover:underline"
+                          >
+                            Full details →
+                          </Link>
                         </div>
                       </td>
                     </tr>
