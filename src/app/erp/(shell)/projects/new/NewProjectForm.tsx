@@ -58,6 +58,9 @@ type UnitScope = {
   unitNumber: string;
   startDate: string;
   endDate: string;
+  paintDate: string;
+  cleanDate: string;
+  moveOutDate: string;
   features: UnitFeatureValue;
   unitQuality: string;
   fullPaint: boolean;
@@ -74,6 +77,9 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     unitNumber: "",
     startDate: "",
     endDate: "",
+    paintDate: "",
+    cleanDate: "",
+    moveOutDate: "",
     features: "1/1",
     unitQuality: "",
     fullPaint: false,
@@ -108,6 +114,11 @@ function unitScopeSummary(unit: UnitScope) {
     unit.startDate || unit.endDate
       ? `, dates: ${unit.startDate || "TBD"} to ${unit.endDate || "TBD"}`
       : "";
+  const scheduledDates = [
+    unit.moveOutDate ? `move-out: ${unit.moveOutDate}` : null,
+    unit.paintDate ? `paint: ${unit.paintDate}` : null,
+    unit.cleanDate ? `clean: ${unit.cleanDate}` : null,
+  ].filter(Boolean);
   const services = [
     unit.fullClean ? "full clean" : null,
     unit.fullPaint ? "full paint" : null,
@@ -117,7 +128,9 @@ function unitScopeSummary(unit: UnitScope) {
     unit.carpetCleaning ? "carpet cleaning" : null,
   ].filter(Boolean);
 
-  return `${unit.unitNumber || "Unit"} (${feature.label}${dateRange})${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+  return `${unit.unitNumber || "Unit"} (${feature.label}${dateRange}${
+    scheduledDates.length ? `, ${scheduledDates.join(", ")}` : ""
+  })${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
   }`;
 }
@@ -486,8 +499,15 @@ export function NewProjectForm({
     const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.jobTitle || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
-    const turnoverStartDate = minDateValue(unitScopes.map((unit) => unit.startDate));
-    const turnoverEndDate = maxDateValue(unitScopes.map((unit) => unit.endDate));
+    const turnoverScheduleDates = unitScopes.flatMap((unit) => [
+      unit.startDate,
+      unit.endDate,
+      unit.moveOutDate,
+      unit.paintDate,
+      unit.cleanDate,
+    ]);
+    const turnoverStartDate = minDateValue(turnoverScheduleDates);
+    const turnoverEndDate = maxDateValue(turnoverScheduleDates);
     const turnoverComments = String(fd.get("turnoverComments") || "").trim();
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
@@ -536,6 +556,9 @@ export function NewProjectForm({
       sueepPmEmail: sueepPmEmail.trim() || undefined,
       unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`).join(", ") || undefined,
       unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
+      moveOutDates: unitScopes.map((unit) => unit.moveOutDate).filter(Boolean).join(", ") || undefined,
+      paintDates: unitScopes.map((unit) => unit.paintDate).filter(Boolean).join(", ") || undefined,
+      cleanDates: unitScopes.map((unit) => unit.cleanDate).filter(Boolean).join(", ") || undefined,
       bedrooms: normalizedBeds || undefined,
       bathrooms: normalizedBathrooms,
       unitScopes,
@@ -947,6 +970,44 @@ export function NewProjectForm({
                       >
                         Remove
                       </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`move-out-date-${unit.id}`}>
+                        Move-out day (optional)
+                      </label>
+                      <input
+                        id={`move-out-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.moveOutDate}
+                        onChange={(e) => updateUnitScope(unit.id, { moveOutDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`paint-date-${unit.id}`}>
+                        Paint date
+                      </label>
+                      <input
+                        id={`paint-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.paintDate}
+                        onChange={(e) => updateUnitScope(unit.id, { paintDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`clean-date-${unit.id}`}>
+                        Clean date
+                      </label>
+                      <input
+                        id={`clean-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.cleanDate}
+                        onChange={(e) => updateUnitScope(unit.id, { cleanDate: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
