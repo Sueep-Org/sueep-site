@@ -31,7 +31,7 @@ export default async function ContractorsPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full min-w-[500px] text-left text-sm">
-            <thead className="border-b border-pink-400 bg-pink-400 text-xs uppercase text-white">
+            <thead className="border-b border-pink-400 bg-pink-600 text-xs uppercase text-white">
               <tr>
                 <th className="px-4 py-2 font-medium">Name</th>
                 <th className="px-4 py-2 font-medium">Email</th>
