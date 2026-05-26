@@ -9,6 +9,7 @@ const labelCls = "block text-xs font-medium text-gray-600";
 
 type Props = {
   projectId: string;
+  contractValueCents: number | null;
   percentDone: number;
   estMaterialCents: number | null;
   estTravelCents: number | null;
@@ -26,6 +27,7 @@ function centsToInput(cents: number | null): string {
 
 export function ProjectFinancialsEditor({
   projectId,
+  contractValueCents,
   percentDone,
   estMaterialCents,
   estTravelCents,
@@ -36,6 +38,7 @@ export function ProjectFinancialsEditor({
   actualHours,
 }: Props) {
   const router = useRouter();
+  const [contractValue, setContractValue] = useState(centsToInput(contractValueCents));
   const [pctDone, setPctDone] = useState(percentDone === 0 ? "" : String(percentDone));
   const [estMat, setEstMat] = useState(centsToInput(estMaterialCents));
   const [estTravel, setEstTravel] = useState(centsToInput(estTravelCents));
@@ -56,6 +59,7 @@ export function ProjectFinancialsEditor({
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          contractValue: contractValue === "" ? null : Number(contractValue),
           percentDone: pctDone === "" ? 0 : Number(pctDone),
           estMaterial: estMat === "" ? null : Number(estMat),
           estTravel: estTravel === "" ? null : Number(estTravel),
@@ -83,6 +87,21 @@ export function ProjectFinancialsEditor({
     <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Financials &amp; Hours</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <label className={labelCls} htmlFor="fin-contract">
+            Contract value ($)
+          </label>
+          <input
+            id="fin-contract"
+            type="number"
+            min={0}
+            step={0.01}
+            className={inputCls}
+            value={contractValue}
+            onChange={(e) => setContractValue(e.target.value)}
+            placeholder="0.00"
+          />
+        </div>
         <div>
           <label className={labelCls} htmlFor="fin-pct-done">
             % Done

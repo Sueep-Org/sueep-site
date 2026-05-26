@@ -14,7 +14,6 @@ import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
-import { ProjectContractEditor } from "./ProjectContractEditor";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
@@ -213,13 +212,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </CollapsiblePanel>
       ) : null}
 
-      <CollapsiblePanel title="Contract" defaultOpen={false}>
-        <ProjectContractEditor projectId={project.id} contractValueCents={project.contractValueCents} />
-      </CollapsiblePanel>
-
       <CollapsiblePanel title="Financials" defaultOpen={false}>
         <ProjectFinancialsEditor
           projectId={project.id}
+          contractValueCents={project.contractValueCents}
           percentDone={project.percentDone}
           estMaterialCents={project.estMaterialCents}
           estTravelCents={project.estTravelCents}
