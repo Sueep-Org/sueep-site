@@ -20,7 +20,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     }),
     prisma.employee.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: { id: true, firstName: true, lastName: true, email: true, status: true, hourlyPayCents: true },
+      select: { id: true, firstName: true, lastName: true, email: true, status: true, hourlyPayCents: true, role: true },
     }),
   ]);
 
