@@ -44,6 +44,7 @@ export function buildTurnoverRequestEmailHtml(params: {
   endDate?: string | null;
   priceLabel: string;
   createdBy?: string | null;
+  sueepPmName?: string | null;
 }) {
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
@@ -57,6 +58,7 @@ export function buildTurnoverRequestEmailHtml(params: {
       <p><strong>Services:</strong> ${escapeHtml(params.services.join(", "))}</p>
       <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
       <p><strong>Price:</strong> ${escapeHtml(params.priceLabel)}</p>
+      <p><strong>SUEEP PM:</strong> ${escapeHtml(params.sueepPmName || "N/A")}</p>
       <p><strong>Created by:</strong> ${escapeHtml(params.createdBy || "system")}</p>
     </div>
   `;

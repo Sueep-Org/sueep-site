@@ -21,6 +21,10 @@ function parseIntValue(value: unknown): number | null | undefined {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 }
 
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function GET() {
   const requests = await prisma.turnoverRequest.findMany({
     orderBy: [{ createdAt: "desc" }],
@@ -63,6 +67,8 @@ export async function POST(req: Request) {
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
   const createdBy = body.createdBy != null ? String(body.createdBy).trim() : null;
+  const sueepPmName = stringValue(body.sueepPmName);
+  const sueepPmEmail = stringValue(body.sueepPmEmail);
 
   const pricing = computeTurnoverPricing({
     requestType,
@@ -107,14 +113,16 @@ export async function POST(req: Request) {
       endDate: endDate ? endDate.toISOString().split("T")[0] : null,
       priceLabel: pricing.priceLabel,
       createdBy,
+      sueepPmName,
     });
 
-    await sendEmail({
-      to: recipient,
+    const recipients = Array.from(new Set([recipient, sueepPmEmail].filter((to): to is string => Boolean(to))));
+    await Promise.all(recipients.map((to) => sendEmail({
+      to,
       subject: `New Turnover Request Created — ${building.name}`,
       html: emailHtml,
       replyTo: createdBy || undefined,
-    });
+    })));
 
     return NextResponse.json(request);
   } catch (e) {

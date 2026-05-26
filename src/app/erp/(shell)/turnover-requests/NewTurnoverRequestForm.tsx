@@ -46,6 +46,8 @@ export function NewTurnoverRequestForm() {
       materialsAdditional: formData.get("materialsAdditional") === "on",
       startDate: formData.get("startDate") || undefined,
       endDate: formData.get("endDate") || undefined,
+      sueepPmName: formData.get("sueepPmName") || undefined,
+      sueepPmEmail: formData.get("sueepPmEmail") || undefined,
       createdBy: currentUser?.email || currentUser?.uid || undefined,
     };
 
@@ -196,6 +198,21 @@ Sueep Operations
               End date
               <input name="endDate" type="date" className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
             </label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              name="sueepPmName"
+              placeholder="SUEEP PM name"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+            <input
+              name="sueepPmEmail"
+              type="email"
+              required
+              placeholder="SUEEP PM email"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
           </div>
 
           {error ? <p className="text-xs text-red-500">{error}</p> : null}
