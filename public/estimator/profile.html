@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Profile</title></head><body style="font-family:system-ui;margin:2rem">
+  <h1>Profile</h1>
+  <pre id="me">Loading…</pre>
+  <p><a href="/">← Back</a></p>
+  <script>
+    (async () => {
+      const r = await fetch('/.auth/me', { credentials:'include' });
+      const j = r.ok ? await r.json() : { error: r.status };
+      document.getElementById('me').textContent = JSON.stringify(j, null, 2);
+    })();
+  </script>
+</body></html> 

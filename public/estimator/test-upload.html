@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Upload Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Direct File Input</h2>
+        <input type="file" id="directFileInput" accept=".pdf,.jpg,.jpeg,.png">
+        <div id="directLog" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: Button Triggered File Input</h2>
+        <input type="file" id="buttonFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+        <button onclick="triggerFileInput()">Select File</button>
+        <div id="buttonLog" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Upload to Server</h2>
+        <button onclick="testUpload()">Test Upload</button>
+        <div id="uploadLog" class="log"></div>
+    </div>
+    
+    <script>
+        function log(elementId, message) {
+            const logElement = document.getElementById(elementId);
+            logElement.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+        }
+        
+        // Test 1: Direct file input
+        document.getElementById('directFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                log('directLog', `File selected: ${file.name} (${file.size} bytes, ${file.type})`);
+            } else {
+                log('directLog', 'No file selected');
+            }
+        });
+        
+        // Test 2: Button triggered file input
+        function triggerFileInput() {
+            log('buttonLog', 'Button clicked');
+            const fileInput = document.getElementById('buttonFileInput');
+            if (fileInput) {
+                log('buttonLog', 'File input found, triggering click');
+                fileInput.click();
+            } else {
+                log('buttonLog', 'File input not found');
+            }
+        }
+        
+        document.getElementById('buttonFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                log('buttonLog', `File selected: ${file.name} (${file.size} bytes, ${file.type})`);
+            } else {
+                log('buttonLog', 'No file selected');
+            }
+        });
+        
+        // Test 3: Upload to server
+        async function testUpload() {
+            const fileInput = document.getElementById('directFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                log('uploadLog', 'No file selected for upload');
+                return;
+            }
+            
+            log('uploadLog', `Starting upload for: ${file.name}`);
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                log('uploadLog', 'FormData created, sending request...');
+                
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                log('uploadLog', `Response status: ${response.status}`);
+                
+                const result = await response.json();
+                log('uploadLog', `Upload result: ${JSON.stringify(result)}`);
+                
+            } catch (error) {
+                log('uploadLog', `Upload error: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html> 
