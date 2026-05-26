@@ -45,6 +45,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         firstName: true,
         lastName: true,
         hourlyPayCents: true,
+        role: true,
         status: true,
         email: true,
       },
