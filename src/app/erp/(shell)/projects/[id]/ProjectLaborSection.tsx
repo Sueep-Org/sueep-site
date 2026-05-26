@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 
 export type LaborRow = {
@@ -41,6 +41,84 @@ function employeeLabel(e: LaborEmployeeOption): string {
   return e.status === "INACTIVE" ? `${name} (inactive)` : name;
 }
 
+function EmployeeCombobox({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: LaborEmployeeOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selected = value === OTHER_VALUE ? null : employees.find((e) => e.id === value);
+  const displayName = value === OTHER_VALUE ? "Other (not in roster)" : selected ? employeeLabel(selected) : "";
+
+  const filtered = query.trim()
+    ? employees.filter((e) => employeeLabel(e).toLowerCase().includes(query.toLowerCase()))
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        if (!value) setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [value]);
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setQuery(e.target.value);
+    setOpen(true);
+    if (value) onChange("");
+  }
+
+  function handleSelect(id: string) {
+    onChange(id);
+    setQuery(id === OTHER_VALUE ? "Other (not in roster)" : employeeLabel(employees.find((e) => e.id === id)!));
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={displayName || "Type to search…"}
+        value={open ? query : displayName}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={handleInputChange}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(displayName); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.map((emp) => (
+            <li
+              key={emp.id}
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(emp.id); }}
+              className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+            >
+              {employeeLabel(emp)}
+            </li>
+          ))}
+          <li
+            onMouseDown={(e) => { e.preventDefault(); handleSelect(OTHER_VALUE); }}
+            className="cursor-pointer border-t border-gray-100 px-3 py-2 text-gray-500 hover:bg-pink-50 hover:text-pink-700"
+          >
+            Other (not in roster — type name)
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ProjectLaborSection({
   projectId,
   initialEntries,
@@ -73,6 +151,15 @@ export function ProjectLaborSection({
       setHourlyRateStr("");
     }
   }, [employeePick, employees]);
+
+  async function onDelete(entryId: string) {
+    if (!confirm("Delete this labor entry?")) return;
+    const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, { method: "DELETE" });
+    if (res.ok) {
+      setEntries((prev) => prev.filter((e) => e.id !== entryId));
+      router.refresh();
+    }
+  }
 
   async function onAddLabor(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -182,13 +269,14 @@ export function ProjectLaborSection({
                 <th className="py-2 pr-2 font-medium">Hours</th>
                 <th className="py-2 pr-2 font-medium">Rate</th>
                 <th className="py-2 pr-2 font-medium">Line $</th>
-                <th className="py-2 font-medium">Task</th>
+                <th className="py-2 pr-2 font-medium">Task</th>
+                <th className="py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {entries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-gray-500">
+                  <td colSpan={8} className="py-6 text-center text-gray-500">
                     No labor entries yet.
                   </td>
                 </tr>
@@ -206,7 +294,16 @@ export function ProjectLaborSection({
                     <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
                     <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
                     <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
-                    <td className="py-2 text-gray-500">{r.taskDescription || "—"}</td>
+                    <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
+                    <td className="py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onDelete(r.id)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -232,23 +329,11 @@ export function ProjectLaborSection({
             <label className={label} htmlFor="l-employee">
               Employee *
             </label>
-            <select
-              id="l-employee"
-              required
-              className={input}
+            <EmployeeCombobox
+              employees={employees}
               value={employeePick}
-              onChange={(ev) => setEmployeePick(ev.target.value)}
-            >
-              <option value="" disabled>
-                Select employee…
-              </option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {employeeLabel(emp)}
-                </option>
-              ))}
-              <option value={OTHER_VALUE}>Other (not in roster — type name)</option>
-            </select>
+              onChange={setEmployeePick}
+            />
           </div>
           {employeePick === OTHER_VALUE ? (
             <div className="sm:col-span-2 lg:col-span-3">

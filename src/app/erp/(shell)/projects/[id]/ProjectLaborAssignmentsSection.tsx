@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ProjectLaborAssignmentRow = {
   id: string;
@@ -33,6 +33,98 @@ function displayDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString() : "-";
 }
 
+function EmployeeCombobox({
+  employees,
+  disabledIds,
+  value,
+  onChange,
+}: {
+  employees: ProjectLaborAssignmentEmployeeOption[];
+  disabledIds: Set<string>;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedEmployee = employees.find((e) => e.id === value);
+  const displayName = selectedEmployee ? employeeName(selectedEmployee) : "";
+
+  const filtered = query.trim()
+    ? employees.filter((e) =>
+        employeeName(e).toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        if (!value) setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [value]);
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setQuery(e.target.value);
+    setOpen(true);
+    if (value) onChange("");
+  }
+
+  function handleSelect(emp: ProjectLaborAssignmentEmployeeOption) {
+    if (disabledIds.has(emp.id)) return;
+    onChange(emp.id);
+    setQuery(employeeName(emp));
+    setOpen(false);
+  }
+
+  function handleFocus() {
+    setQuery("");
+    setOpen(true);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={displayName || "Type to search..."}
+        value={open ? query : displayName}
+        onFocus={handleFocus}
+        onChange={handleInputChange}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { setOpen(false); setQuery(displayName); }
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.map((emp) => {
+            const disabled = disabledIds.has(emp.id);
+            return (
+              <li
+                key={emp.id}
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(emp); }}
+                className={`cursor-pointer px-3 py-2 ${
+                  disabled
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+                }`}
+              >
+                {employeeName(emp)}
+                {disabled ? <span className="ml-1 text-xs">(already assigned)</span> : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ProjectLaborAssignmentsSection({
   projectId,
   initialAssignments,
@@ -44,6 +136,7 @@ export function ProjectLaborAssignmentsSection({
 }) {
   const router = useRouter();
   const [assignments, setAssignments] = useState(initialAssignments);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +149,7 @@ export function ProjectLaborAssignmentsSection({
     setError("");
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const employeeId = String(fd.get("employeeId") || "");
+    const employeeId = selectedEmployeeId;
     if (!employeeId) {
       setError("Select a laborer.");
       setLoading(false);
@@ -108,6 +201,7 @@ export function ProjectLaborAssignmentsSection({
         notes: data.notes ?? null,
       };
       setAssignments((prev) => [row, ...prev]);
+      setSelectedEmployeeId("");
       e.currentTarget.reset();
       router.refresh();
     } catch {
@@ -185,17 +279,12 @@ export function ProjectLaborAssignmentsSection({
             <label className={label} htmlFor="pla-employee">
               Laborer *
             </label>
-            <select id="pla-employee" name="employeeId" required className={input}>
-              <option value="" disabled>
-                Select laborer...
-              </option>
-              {activeEmployees.map((employee) => (
-                <option key={employee.id} value={employee.id} disabled={assignedEmployeeIds.has(employee.id)}>
-                  {employeeName(employee)}
-                  {assignedEmployeeIds.has(employee.id) ? " (already assigned)" : ""}
-                </option>
-              ))}
-            </select>
+            <EmployeeCombobox
+              employees={activeEmployees}
+              disabledIds={assignedEmployeeIds}
+              value={selectedEmployeeId}
+              onChange={setSelectedEmployeeId}
+            />
           </div>
           <div>
             <label className={label} htmlFor="pla-role">
