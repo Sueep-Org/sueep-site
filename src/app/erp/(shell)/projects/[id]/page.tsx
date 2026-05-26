@@ -15,6 +15,8 @@ import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectContractEditor } from "./ProjectContractEditor";
+import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
+import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
@@ -158,7 +160,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           ← Projects
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">{project.jobTitle}</h1>
+          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} />
           <ProjectDeleteButton projectId={project.id} />
         </div>
       </div>
@@ -213,6 +215,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
       <CollapsiblePanel title="Contract" defaultOpen={false}>
         <ProjectContractEditor projectId={project.id} contractValueCents={project.contractValueCents} />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Financials" defaultOpen={false}>
+        <ProjectFinancialsEditor
+          projectId={project.id}
+          percentDone={project.percentDone}
+          estMaterialCents={project.estMaterialCents}
+          estTravelCents={project.estTravelCents}
+          estLaborCents={project.estLaborCents}
+          actualLaborCents={project.actualLaborCents}
+          actualMaterialCents={project.actualMaterialCents}
+          estHours={project.estHours}
+          actualHours={project.actualHours}
+        />
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Billing" defaultOpen={false}>
