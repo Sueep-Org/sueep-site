@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Debug</title>
+    <style>
+        .hidden { display: none; }
+        .drop-zone { 
+            border: 2px dashed #ccc; 
+            padding: 20px; 
+            text-align: center; 
+            margin: 20px;
+            cursor: pointer;
+        }
+        .drop-zone:hover { border-color: #007bff; }
+    </style>
+</head>
+<body>
+    <h1>File Upload Debug Test</h1>
+    
+    <div class="drop-zone" id="dropZone">
+        <p>Click here to select a file</p>
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" class="hidden">
+    </div>
+    
+    <div id="status"></div>
+    
+    <script>
+        console.log('Debug script loaded');
+        
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        
+        console.log('Elements found:', {
+            dropZone: !!dropZone,
+            fileInput: !!fileInput,
+            status: !!status
+        });
+        
+        // Test 1: Direct file input click
+        dropZone.addEventListener('click', function(e) {
+            console.log('Drop zone clicked');
+            e.preventDefault();
+            fileInput.click();
+        });
+        
+        // Test 2: File selection
+        fileInput.addEventListener('change', function(e) {
+            console.log('File input change event');
+            const file = e.target.files[0];
+            if (file) {
+                console.log('File selected:', file.name, file.size, file.type);
+                status.innerHTML = `File selected: ${file.name} (${file.size} bytes)`;
+                
+                // Test upload
+                uploadFile(file);
+            }
+        });
+        
+        // Test 3: Drag and drop
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.style.borderColor = '#007bff';
+        });
+        
+        dropZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+        });
+        
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                console.log('File dropped:', files[0].name);
+                uploadFile(files[0]);
+            }
+        });
+        
+        async function uploadFile(file) {
+            console.log('Starting upload for:', file.name);
+            status.innerHTML = 'Uploading...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                console.log('Upload result:', result);
+                
+                if (result.status === 'success') {
+                    status.innerHTML = `Upload successful! Project: ${result.project_name}`;
+                } else {
+                    status.innerHTML = `Upload failed: ${result.detail}`;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                status.innerHTML = `Upload error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 

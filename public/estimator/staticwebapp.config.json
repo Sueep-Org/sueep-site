@@ -1,0 +1,29 @@
+{
+  "auth": {
+    "identityProviders": {
+      "customOpenIdConnectProviders": {
+        "google": {
+          "registration": {
+            "clientIdSettingName": "GOOGLE_CLIENT_ID",
+            "clientSecretSettingName": "GOOGLE_CLIENT_SECRET",
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://accounts.google.com/.well-known/openid-configuration"
+            }
+          },
+          "login": { "name": "Google" }
+        }
+      }
+    }
+  },
+  "routes": [
+    { "route": "/api/chat", "rewrite": "https://aiestimatorapi.azurewebsites.net/chat" },
+    { "route": "/api/upload", "rewrite": "https://aiestimatorapi.azurewebsites.net/upload" },
+    { "route": "/api/render/*", "rewrite": "https://aiestimatorapi.azurewebsites.net/render/*" },
+    { "route": "/api/analyze", "rewrite": "https://aiestimatorapi.azurewebsites.net/analyze" },
+    { "route": "/api/*", "rewrite": "https://aiestimatorapi.azurewebsites.net/api/*" }
+  ],
+  "navigationFallback": { "rewrite": "/index.html", "exclude": ["/api/*", "/.auth/*"] },
+  "responseOverrides": {
+    "401": { "statusCode": 302, "redirect": "/.auth/login/google" }
+  }
+} 

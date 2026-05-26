@@ -1,0 +1,5 @@
+.tree { font-size: 13px; user-select: none; }
+.tree .node { display:flex; align-items:center; gap:.5rem; width:100%; padding:.25rem .5rem; border-radius:.375rem; }
+.tree .node:hover { background: rgba(55,65,81,.1); }
+.tree .node.active { background: rgba(55,65,81,.2); outline: 1px solid rgba(75,85,99,.8); }
+.tree .children { margin-left: 1rem; border-left: 1px solid rgba(55,65,81,.3); padding-left: .5rem; } 
