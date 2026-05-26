@@ -29,6 +29,8 @@ const OTHER_VALUE = "__other__";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const editInput =
+  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
 function lineCostCents(hours: string, rateCents: number): number {
@@ -138,6 +140,8 @@ export function ProjectLaborSection({
   const [roleStr, setRoleStr] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterLaborer, setFilterLaborer] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
 
   useEffect(() => {
     setEntries(initialEntries);
@@ -159,6 +163,45 @@ export function ProjectLaborSection({
     const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, { method: "DELETE" });
     if (res.ok) {
       setEntries((prev) => prev.filter((e) => e.id !== entryId));
+      router.refresh();
+    }
+  }
+
+  function startEdit(r: LaborRow) {
+    setEditingId(r.id);
+    setEditFields({
+      workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+      workerName: r.workerName,
+      role: r.role ?? "",
+      hours: r.hours,
+      hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
+      taskDescription: r.taskDescription ?? "",
+    });
+  }
+
+  async function onSaveEdit(entryId: string) {
+    const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workDate: editFields.workDate,
+        workerName: editFields.workerName,
+        role: editFields.role || null,
+        hours: Number(editFields.hours),
+        hourlyRate: editFields.hourlyRate,
+        taskDescription: editFields.taskDescription || null,
+      }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; hourlyRateCents: number; taskDescription: string | null };
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === entryId
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
+            : e,
+        ),
+      );
+      setEditingId(null);
       router.refresh();
     }
   }
@@ -426,33 +469,56 @@ export function ProjectLaborSection({
                   </td>
                 </tr>
               ) : (
-                visibleEntries.map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-2 pr-2 text-gray-600">
-                      {new Date(r.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}
-                    </td>
-                    <td className="py-2 pr-2 text-gray-900">
-                      {r.employeeName || r.workerName}
-                      {r.employeeName && r.employeeName !== r.workerName ? (
-                        <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
-                    <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
-                    <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
-                    <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
-                    <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
-                    <td className="py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => onDelete(r.id)}
-                        className="text-xs text-red-500 hover:text-red-700"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                visibleEntries.map((r) =>
+                  editingId === r.id ? (
+                    <tr key={r.id} className="bg-yellow-50">
+                      <td className="py-1 pr-2">
+                        <input type="date" className={editInput} value={editFields.workDate} onChange={(e) => setEditFields((f) => ({ ...f, workDate: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} value={editFields.workerName} onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(editFields.hours, Number(editFields.hourlyRate) * 100))}</td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                      </td>
+                      <td className="py-1 text-right whitespace-nowrap">
+                        <button type="button" onClick={() => onSaveEdit(r.id)} className="text-xs font-medium text-pink-600 hover:text-pink-800">Save</button>
+                        <button type="button" onClick={() => setEditingId(null)} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={r.id}>
+                      <td className="py-2 pr-2 text-gray-600">
+                        {new Date(r.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}
+                      </td>
+                      <td className="py-2 pr-2 text-gray-900">
+                        {r.employeeName || r.workerName}
+                        {r.employeeName && r.employeeName !== r.workerName ? (
+                          <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
+                      <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
+                      <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
+                      <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                        <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>
+                      </td>
+                    </tr>
+                  )
+                )
               )}
             </tbody>
           </table>

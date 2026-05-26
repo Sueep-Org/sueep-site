@@ -1,20 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { centsToDollars } from "@/lib/erp/money";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { ProjectBillingEditor } from "./ProjectBillingEditor";
-import { ProjectDatesEditor } from "./ProjectDatesEditor";
-import { ProjectManagerEditor } from "./ProjectManagerEditor";
-import { ProjectServiceTypeEditor } from "./ProjectServiceTypeEditor";
 import { ProjectPricePackageEditor } from "./ProjectPricePackageEditor";
+import { ProjectSetupEditor } from "./ProjectSetupEditor";
+import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
-import { ProjectWorkflowEditor } from "./ProjectWorkflowEditor";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
-import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
@@ -40,15 +35,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }),
     prisma.employee.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        hourlyPayCents: true,
-        role: true,
-        status: true,
-        email: true,
-      },
+      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true, email: true },
     }),
     prisma.contractor.findMany({
       orderBy: { name: "asc" },
@@ -77,9 +64,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const laborRows = project.laborEntries.map((e) => ({
     id: e.id,
     employeeId: e.employeeId,
-    employeeName: e.employee
-      ? `${e.employee.firstName} ${e.employee.lastName}`.trim() || null
-      : null,
+    employeeName: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() || null : null,
     workDate: e.workDate.toISOString(),
     workerName: e.workerName,
     role: e.role,
@@ -100,12 +85,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     estimatedDays: co.estimatedDays,
     reason: co.reason,
     resolutionNotes: co.resolutionNotes,
-    laborers: (co.laborers ?? []).map((l) => ({
-      id: l.id,
-      employeeId: l.employeeId,
-      name: l.name,
-      role: l.role,
-    })),
+    laborers: (co.laborers ?? []).map((l) => ({ id: l.id, employeeId: l.employeeId, name: l.name, role: l.role })),
   }));
 
   const contractorRows = project.contractorAssignments.map((a) => ({
@@ -118,24 +98,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     endDate: a.endDate ? a.endDate.toISOString() : null,
     notes: a.notes,
   }));
-
-  const meta = [
-    { k: "Segment", v: project.segment },
-    { k: "Status", v: project.status },
-    { k: "Supervisor", v: project.supervisor || "—" },
-    { k: "Start date", v: project.projectDate ? project.projectDate.toLocaleDateString() : "—" },
-    { k: "Target end", v: project.projectEndDate ? project.projectEndDate.toLocaleDateString() : "—" },
-    { k: "% done", v: `${project.percentDone}%` },
-    { k: "% invoiced", v: `${project.percentInvoiced}%` },
-    { k: "Contract", v: centsToDollars(project.contractValueCents) },
-    { k: "Est. material", v: centsToDollars(project.estMaterialCents) },
-    { k: "Est. travel", v: centsToDollars(project.estTravelCents) },
-    { k: "Est. labor", v: centsToDollars(project.estLaborCents) },
-    { k: "Actual labor", v: centsToDollars(project.actualLaborCents) },
-    { k: "Actual material", v: centsToDollars(project.actualMaterialCents) },
-    { k: "Est. hours", v: project.estHours?.toString() ?? "—" },
-    { k: "Actual hours", v: project.actualHours?.toString() ?? "—" },
-  ];
 
   return (
     <div className="space-y-8">
@@ -161,47 +123,32 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
           </div>
         ) : null}
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {meta.map((row) => (
-            <div key={row.k}>
-              <dt className="text-[10px] uppercase text-gray-500">{row.k}</dt>
-              <dd className="text-sm text-gray-800">{row.v}</dd>
-            </div>
-          ))}
-        </dl>
       </CollapsiblePanel>
 
-      <CollapsiblePanel title="Workflow" defaultOpen={false}>
-        <ProjectWorkflowEditor
+      <CollapsiblePanel title="Project Setup" defaultOpen={false}>
+        <ProjectSetupEditor
           projectId={project.id}
           status={project.status}
-          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
           segment={project.segment}
           hubspotPipelineId={project.hubspotPipelineId ?? null}
           isManual={isManual}
           pipelineOptions={pipelineOptions}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Manager" defaultOpen={false}>
-        <ProjectManagerEditor
-          projectId={project.id}
           supervisor={project.supervisor}
           employees={laborEmployees}
+          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+          projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
+          description={project.description}
+          showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS"}
         />
       </CollapsiblePanel>
 
-      {project.segment !== "JANITORIAL_TURNOVER_REQUESTS" ? (
-        <CollapsiblePanel title="Service Type" defaultOpen={false}>
-          <ProjectServiceTypeEditor projectId={project.id} description={project.description} />
-        </CollapsiblePanel>
-      ) : null}
-
-      <CollapsiblePanel title="Financials" defaultOpen={false}>
+      <CollapsiblePanel title="Money" defaultOpen={false}>
         <ProjectFinancialsEditor
           projectId={project.id}
           contractValueCents={project.contractValueCents}
           percentDone={project.percentDone}
+          percentInvoiced={project.percentInvoiced}
+          billingStatus={project.billingStatus}
           estMaterialCents={project.estMaterialCents}
           estTravelCents={project.estTravelCents}
           estLaborCents={project.estLaborCents}
@@ -209,22 +156,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           actualMaterialCents={project.actualMaterialCents}
           estHours={project.estHours}
           actualHours={project.actualHours}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Billing" defaultOpen={false}>
-        <ProjectBillingEditor
-          projectId={project.id}
-          percentInvoiced={project.percentInvoiced}
-          billingStatus={project.billingStatus}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Dates" defaultOpen={false}>
-        <ProjectDatesEditor
-          projectId={project.id}
-          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
-          projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
         />
       </CollapsiblePanel>
 
