@@ -1,5 +1,8 @@
+import { getTurnoverPricingPackage, normalizePricingBedrooms } from "@/lib/turnoverPricingPackages";
+
 export type TurnoverPricingInput = {
   requestType: "TURNOVER" | "REGULAR";
+  buildingName?: string | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
   fullPaint: boolean;
@@ -16,16 +19,6 @@ export type TurnoverPricingResult = {
   breakdown: string[];
 };
 
-const CLEANING_RATES = { 1: 185, 2: 255, 3: 385 } as const;
-const PAINTING_RATES = { 1: 340, 2: 400, 3: 450 } as const;
-
-function normalizeBeds(value?: number | null): 1 | 2 | 3 {
-  const beds = Number(value ?? 1);
-  if (!Number.isFinite(beds) || beds < 1) return 1;
-  if (beds >= 3) return 3;
-  return beds === 2 ? 2 : 1;
-}
-
 function formatUsd(cents: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     cents / 100
@@ -33,20 +26,21 @@ function formatUsd(cents: number): string {
 }
 
 export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPricingResult {
-  const beds = normalizeBeds(input.bedrooms);
+  const beds = normalizePricingBedrooms(input.bedrooms);
+  const pricingPackage = getTurnoverPricingPackage(input.buildingName);
   const services: string[] = [];
   const breakdown: string[] = [];
   let priceCents = 0;
 
   if (input.fullClean) {
-    const cleaningPrice = CLEANING_RATES[beds] * 100;
+    const cleaningPrice = pricingPackage.cleaningRates[beds] * 100;
     services.push("Full cleaning");
     priceCents += cleaningPrice;
     breakdown.push(`Cleaning price for ${beds}-bed unit: ${formatUsd(cleaningPrice)}`);
   }
 
   if (input.fullPaint) {
-    const paintingPrice = PAINTING_RATES[beds] * 100;
+    const paintingPrice = pricingPackage.paintingRates[beds] * 100;
     services.push("Full painting");
     priceCents += paintingPrice;
     breakdown.push(`Painting price for ${beds}-bed unit: ${formatUsd(paintingPrice)}`);

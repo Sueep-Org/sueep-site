@@ -40,7 +40,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const existing = await prisma.turnoverRequest.findUnique({ where: { id } });
+  const existing = await prisma.turnoverRequest.findUnique({ where: { id }, include: { building: true } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const data: Record<string, unknown> = {};
@@ -82,8 +82,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
+  let pricingBuildingName = existing.building.name;
+  if (typeof data.buildingId === "string" && data.buildingId !== existing.buildingId) {
+    const nextBuilding = await prisma.building.findUnique({ where: { id: data.buildingId } });
+    if (!nextBuilding) return NextResponse.json({ error: "Building not found" }, { status: 400 });
+    pricingBuildingName = nextBuilding.name;
+  }
+
   const pricingInput = {
     requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
+    buildingName: pricingBuildingName,
     bedrooms: body.bedrooms !== undefined ? parseIntValue(body.bedrooms) : existing.bedrooms,
     bathrooms: body.bathrooms !== undefined ? parseIntValue(body.bathrooms) : existing.bathrooms,
     fullPaint: data.fullPaint !== undefined ? Boolean(data.fullPaint) : existing.fullPaint,

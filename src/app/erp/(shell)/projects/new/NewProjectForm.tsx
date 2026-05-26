@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
+import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -19,8 +20,6 @@ const fallbackJobTitles = [
 const checkboxLabel = "ml-2 text-sm text-gray-700";
 const sectionHeader = "text-sm font-semibold text-gray-900";
 
-const CLEANING_RATES = { 1: 185, 2: 255, 3: 385 } as const;
-const PAINTING_RATES = { 1: 340, 2: 400, 3: 450 } as const;
 const TOUCH_UP_PAINT_CENTS = 12500;
 const ADDITIONAL_MATERIALS_CENTS = 8500;
 const CARPET_WITH_CLEAN_CENTS = 8000;
@@ -48,6 +47,8 @@ const BUILDING_ADDRESS_OPTIONS = [
   "3000 Emily Lane Bulrington NJ 08016 (J Centra Burlington)",
   "3029 W Glenwood Ave (Equinox)",
   "200 University Dr, Schuylkill Haven, PA, 17972 (Nittany Apartments)",
+  "456 N. 5th Street, Philadelphia, PA 19123 (The Block at SONO)",
+  "2630 W Girard Ave, Philadelphia PA 19130 (The Gio Apartments)",
 ] as const;
 const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
 const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
@@ -401,12 +402,13 @@ export function NewProjectForm({
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
+    const pricingPackage = getTurnoverPricingPackage(buildingName);
 
     unitScopes.forEach((unit, index) => {
       const feature = getUnitFeature(unit.features);
       const beds = normalizeBeds(feature.bedrooms);
-      const baseCleaning = CLEANING_RATES[beds] * 100;
-      const basePainting = PAINTING_RATES[beds] * 100;
+      const baseCleaning = pricingPackage.cleaningRates[beds] * 100;
+      const basePainting = pricingPackage.paintingRates[beds] * 100;
       const unitLines: string[] = [];
       let unitTotal = 0;
 
@@ -457,7 +459,7 @@ export function NewProjectForm({
       breakdown,
       unitCount,
     };
-  }, [unitScopes, unitCount]);
+  }, [buildingName, unitScopes, unitCount]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
