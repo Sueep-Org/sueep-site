@@ -1,15 +1,23 @@
 // =========================
-// ✅ LOCAL BACKEND
+// ENV-AWARE BACKEND (FIXED)
 // =========================
-export const API_BASE = "http://localhost:8000";
+
+// Auto-switch between local + production
+const isLocal =
+  location.hostname === "localhost" ||
+  location.hostname === "127.0.0.1";
+
+export const API_BASE = isLocal
+  ? "http://localhost:8000"
+  : "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
 
 console.log("API_BASE =", API_BASE);
 
 // =========================
-// ✅ ACTIVE ENDPOINTS (MATCH BACKEND)
+// ACTIVE ENDPOINTS (MATCH BACKEND)
 // =========================
 
-// ✅ THIS is your main working endpoint
+// THIS is your main working endpoint
 export const API_UPLOAD = `${API_BASE}/api/upload`;
 
 //  NOT IMPLEMENTED IN BACKEND (kept but disabled)
@@ -19,7 +27,7 @@ export const API_ANALYZE = `${API_BASE}/api/analyze`;
 */
 
 // =========================
-//  FILE SYSTEM ENDPOINTS 
+// FILE SYSTEM ENDPOINTS 
 // =========================
 
 export const API_LIST_FILES = `${API_BASE}/api/files/list-all`;
