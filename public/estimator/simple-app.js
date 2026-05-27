@@ -101,8 +101,24 @@ async function refreshDrawer(){
       dlBtn.title = 'Download analysis result';
       dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;text-decoration:none;color:#333;flex-shrink:0;';
 
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Delete';
+      delBtn.style.cssText = 'padding:.4rem .5rem;border:1px solid #fca5a5;border-radius:8px;background:white;cursor:pointer;font-size:12px;flex-shrink:0;';
+      delBtn.onclick = async ()=>{
+        if (!confirm(`Delete "${label}"?`)) return;
+        try{
+          await deleteSaved(full);
+          row.remove();
+          toast('Deleted', 'success');
+        }catch(e){
+          toast('Delete failed: ' + e.message, 'error');
+        }
+      };
+
       row.appendChild(nameEl);
       row.appendChild(dlBtn);
+      row.appendChild(delBtn);
       savedSec.appendChild(row);
     });
 
