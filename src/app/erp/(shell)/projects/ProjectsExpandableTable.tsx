@@ -231,7 +231,15 @@ function billingBadge(status: string | null) {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${opt.cls}`}>{opt.label}</span>;
 }
 
-export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
+function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string | null) {
+  return (
+    row.segment === "JANITORIAL_TURNOVER_REQUESTS" ||
+    row.segment === "COMMERCIAL_CLEANING" ||
+    (Boolean(janitorialPipelineId) && row.hubspotPipelineId === janitorialPipelineId)
+  );
+}
+
+export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: ProjectTableRow[]; janitorialPipelineId: string | null }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
@@ -281,6 +289,7 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
         <tbody className="divide-y divide-gray-300">
           {rows.map((p) => {
             const isOpen = openSet.has(p.id);
+            const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = stateClasses(state);
             return (
@@ -329,10 +338,17 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                 {isOpen ? (
                   <>
-                    {/* Project pricing */}
+                    {/* Project detail */}
                     <tr className={styles.detail}>
                       <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        <TurnoverPricingSummary project={p} />
+                        {isJanitorial ? (
+                          <TurnoverPricingSummary project={p} />
+                        ) : (
+                          <div className="overflow-x-auto bg-white px-3 py-2">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+                            <LaborTable entries={p.laborEntries} />
+                          </div>
+                        )}
                       </td>
                     </tr>
 

@@ -177,7 +177,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
             {query ? `No projects matching "${search}".` : "No projects in this category."}
           </p>
         ) : (
-          <ProjectsExpandableTable rows={filtered} />
+          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} />
         )}
       </div>
     </div>
