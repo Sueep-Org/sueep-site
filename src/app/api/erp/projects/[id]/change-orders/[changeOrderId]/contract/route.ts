@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { SignJWT } from "jose";
 import { prisma } from "@/lib/prisma";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
@@ -41,7 +40,6 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
   }
 
-  // Save the PDF first so the file-serving route can serve it to DocuSeal
   try {
     await prisma.projectChangeOrder.update({
       where: { id: changeOrderId },
@@ -60,40 +58,25 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to save contract to database" }, { status: 500 });
   }
 
-  // Generate a short-lived signed token so DocuSeal can fetch the PDF
-  let fileToken: string;
-  try {
-    const secret = new TextEncoder().encode(process.env.ERP_SESSION_SECRET!);
-    fileToken = await new SignJWT({ coId: changeOrderId })
-      .setProtectedHeader({ alg: "HS256" })
-      .setExpirationTime("15m")
-      .sign(secret);
-  } catch (e) {
-    console.error("Failed to sign file token:", e);
-    return NextResponse.json({ error: "Failed to generate secure file link" }, { status: 500 });
-  }
-
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-  if (!appUrl) {
-    console.error("NEXT_PUBLIC_APP_URL is not set");
-    return NextResponse.json({ error: "App URL not configured — set NEXT_PUBLIC_APP_URL in .env.local" }, { status: 500 });
-  }
-
-  const fileUrl = `${appUrl}/api/erp/projects/${id}/change-orders/${changeOrderId}/contract/file?token=${fileToken}`;
-  console.log("DocuSeal file URL:", fileUrl);
+  // Upload PDF bytes directly to DocuSeal via multipart (URL-based JSON returns 404)
+  const docusealForm = new FormData();
+  docusealForm.append("name", co.title);
+  docusealForm.append("documents[][name]", file.name);
+  docusealForm.append(
+    "documents[][file]",
+    new Blob([bytes], { type: "application/pdf" }),
+    file.name
+  );
 
   let docusealRes: Response;
   try {
     docusealRes = await fetch(`${process.env.DOCUSEAL_API_URL}/templates`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         "X-Auth-Token": process.env.DOCUSEAL_API_KEY!,
+        // No Content-Type — fetch sets multipart/form-data with boundary automatically
       },
-      body: JSON.stringify({
-        name: co.title,
-        documents: [{ name: file.name, url: fileUrl }],
-      }),
+      body: docusealForm,
     });
   } catch (e) {
     console.error("DocuSeal fetch failed:", e);
