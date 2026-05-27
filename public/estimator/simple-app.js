@@ -94,12 +94,30 @@ async function refreshDrawer(){
       nameEl.title = display;
       nameEl.style.cssText = 'flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;';
 
-      const dlBtn = document.createElement('a');
-      dlBtn.href = downloadUrl;
-      dlBtn.download = display;
+      const dlBtn = document.createElement('button');
       dlBtn.textContent = '⬇ JSON';
       dlBtn.title = 'Download analysis result';
-      dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;text-decoration:none;color:#333;flex-shrink:0;';
+      dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;color:#333;flex-shrink:0;';
+      dlBtn.onclick = async ()=>{
+        try{
+          dlBtn.textContent = '⏳';
+          dlBtn.disabled = true;
+          const resp = await fetch(downloadUrl, withAnon({ credentials: 'include' }));
+          if (!resp.ok) throw new Error(`${resp.status}`);
+          const blob = await resp.blob();
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = display;
+          a.click();
+          URL.revokeObjectURL(a.href);
+          dlBtn.textContent = '⬇ JSON';
+          dlBtn.disabled = false;
+        }catch(e){
+          dlBtn.textContent = '⬇ JSON';
+          dlBtn.disabled = false;
+          toast('Download failed: ' + e.message, 'error');
+        }
+      };
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '🗑';
@@ -159,13 +177,15 @@ function closeSidebar(){
 document.addEventListener('click', (e)=>{
 
   if(e.target.closest('[data-open-sidebar]')){
-
     openSidebar();
   }
 
   if(e.target.closest('[data-close-sidebar]')){
-
     closeSidebar();
+  }
+
+  if(e.target.closest('#refreshDrawerBtn')){
+    refreshDrawer();
   }
 });
 
