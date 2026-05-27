@@ -257,7 +257,42 @@ export function ChangeOrderLaborersSection({
     }
   }
 
+  const [filterDate, setFilterDate] = useState("");
+  const [filterLaborer, setFilterLaborer] = useState("");
+  const [sortField, setSortField] = useState<"date" | "name" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function handleSort(field: "date" | "name") {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
+
   const totalCents = laborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
+
+  let visibleLaborers = laborers.filter((l) => {
+    if (filterDate) {
+      const rowDate = new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+      if (rowDate !== filterDate) return false;
+    }
+    if (filterLaborer && !l.name.toLowerCase().includes(filterLaborer.toLowerCase())) return false;
+    return true;
+  });
+
+  if (sortField === "date") {
+    visibleLaborers = [...visibleLaborers].sort((a, b) =>
+      sortDir === "asc" ? a.workDate.localeCompare(b.workDate) : b.workDate.localeCompare(a.workDate)
+    );
+  } else if (sortField === "name") {
+    visibleLaborers = [...visibleLaborers].sort((a, b) =>
+      sortDir === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+    );
+  }
+
+  const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
 
   return (
     <div className="space-y-6">
@@ -309,15 +344,66 @@ export function ChangeOrderLaborersSection({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
           <p className="text-sm text-gray-700">
-            Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span>
+            {filterDate || filterLaborer ? (
+              <>
+                Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
+              </>
+            ) : (
+              <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
+            )}
           </p>
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[140px]">
+            <label className={label} htmlFor="co-filter-date">Filter by date</label>
+            <input
+              id="co-filter-date"
+              type="date"
+              className={input}
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className={label} htmlFor="co-filter-laborer">Filter by laborer</label>
+            <input
+              id="co-filter-laborer"
+              type="text"
+              className={input}
+              placeholder="Name…"
+              value={filterLaborer}
+              onChange={(e) => setFilterLaborer(e.target.value)}
+            />
+          </div>
+          {(filterDate || filterLaborer) && (
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
+                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
               <tr>
-                <th className="py-2 pr-2 font-medium">Date</th>
-                <th className="py-2 pr-2 font-medium">Worker</th>
+                <th className="py-2 pr-2 font-medium">
+                  <button type="button" onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-gray-800">
+                    Date {sortField === "date" ? (sortDir === "asc" ? "▲" : "▼") : <span className="text-gray-300">⇅</span>}
+                  </button>
+                </th>
+                <th className="py-2 pr-2 font-medium">
+                  <button type="button" onClick={() => handleSort("name")} className="flex items-center gap-1 hover:text-gray-800">
+                    Worker {sortField === "name" ? (sortDir === "asc" ? "▲" : "▼") : <span className="text-gray-300">⇅</span>}
+                  </button>
+                </th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
                 <th className="py-2 pr-2 font-medium">Rate</th>
@@ -327,12 +413,14 @@ export function ChangeOrderLaborersSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {laborers.length === 0 ? (
+              {visibleLaborers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-gray-500">No labor entries yet.</td>
+                  <td colSpan={8} className="py-6 text-center text-gray-500">
+                    {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
+                  </td>
                 </tr>
               ) : (
-                laborers.map((l) =>
+                visibleLaborers.map((l) =>
                   editingId === l.id ? (
                     <tr key={l.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">

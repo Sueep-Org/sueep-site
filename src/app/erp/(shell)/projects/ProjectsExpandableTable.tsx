@@ -225,6 +225,25 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                 {isOpen ? (
                   <>
+                    {/* Project team table */}
+                    <tr className={styles.detail}>
+                      <td colSpan={11} className="px-4 py-2">
+                        <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
+                          <LaborTable entries={p.laborEntries} />
+                        </div>
+                        <div className="mt-1 flex justify-end">
+                          <Link
+                            href={`/erp/projects/${p.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-medium text-pink-600 hover:underline"
+                          >
+                            Full details →
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+
                     {/* Change order rows — inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
@@ -336,24 +355,6 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                       );
                     })}
 
-                    {/* Project team table */}
-                    <tr className={styles.detail}>
-                      <td colSpan={11} className="px-4 py-2">
-                        <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
-                          <LaborTable entries={p.laborEntries} />
-                        </div>
-                        <div className="mt-1 flex justify-end">
-                          <Link
-                            href={`/erp/projects/${p.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs font-medium text-pink-600 hover:underline"
-                          >
-                            Full details →
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
                   </>
                 ) : null}
               </Fragment>
