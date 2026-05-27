@@ -50,13 +50,11 @@ export async function middleware(request: NextRequest) {
   const logical = logicalErpPath(pathname, host);
 
   const allowLoginApi = pathname === "/api/erp/auth/login" && request.method === "POST";
-  // Contract file route is public — secured by its own short-lived JWT token in the query string
-  const allowContractFile = /^\/api\/erp\/projects\/[^/]+\/change-orders\/[^/]+\/contract\/file$/.test(pathname);
   // DocuSeal webhook — called by DocuSeal's servers, no ERP session cookie
   const allowDocusealWebhook = pathname === "/api/erp/webhooks/docuseal" && request.method === "POST";
   const needsErpAuth =
     (logical.startsWith("/erp") && !logical.startsWith("/erp/login")) ||
-    (pathname.startsWith("/api/erp/") && !allowLoginApi && !allowContractFile && !allowDocusealWebhook);
+    (pathname.startsWith("/api/erp/") && !allowLoginApi && !allowDocusealWebhook);
 
   if (needsErpAuth) {
     const token = request.cookies.get(erpSessionCookieName)?.value;
