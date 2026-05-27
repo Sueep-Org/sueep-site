@@ -198,7 +198,7 @@ export function ChangeOrderSigningSection({
             <div className="flex items-center gap-3">
               {state.docusealTemplateId && (
                 <a
-                  href={`https://app.docuseal.com/templates/${state.docusealTemplateId}`}
+                  href={`https://docuseal.com/templates/${state.docusealTemplateId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
