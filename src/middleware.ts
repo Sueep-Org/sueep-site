@@ -50,9 +50,11 @@ export async function middleware(request: NextRequest) {
   const logical = logicalErpPath(pathname, host);
 
   const allowLoginApi = pathname === "/api/erp/auth/login" && request.method === "POST";
+  // Contract file route is public — secured by its own short-lived JWT token in the query string
+  const allowContractFile = /^\/api\/erp\/projects\/[^/]+\/change-orders\/[^/]+\/contract\/file$/.test(pathname);
   const needsErpAuth =
     (logical.startsWith("/erp") && !logical.startsWith("/erp/login")) ||
-    (pathname.startsWith("/api/erp/") && !allowLoginApi);
+    (pathname.startsWith("/api/erp/") && !allowLoginApi && !allowContractFile);
 
   if (needsErpAuth) {
     const token = request.cookies.get(erpSessionCookieName)?.value;
