@@ -88,6 +88,7 @@ async function refreshDrawer(){
 
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
+      row.dataset.filename = display;
 
       const nameEl = document.createElement('span');
       nameEl.textContent = label;
@@ -102,7 +103,7 @@ async function refreshDrawer(){
         try{
           dlBtn.textContent = '⏳';
           dlBtn.disabled = true;
-          const resp = await fetch(downloadUrl, withAnon({ credentials: 'include' }));
+          const resp = await fetch(downloadUrl, { credentials: 'include' });
           if (!resp.ok) throw new Error(`${resp.status}`);
           const blob = await resp.blob();
           const a = document.createElement('a');
@@ -682,14 +683,35 @@ async function initApp(){
       console.log('==============================');
 
       toast(
-        'Upload + analysis complete',
+        'Uploaded! Analysis running — sidebar will auto-refresh',
         'success'
       );
 
-      if (drawerLoaded){
-
-        await refreshDrawer();
-      }
+      // Auto-poll: refresh sidebar every 30s for up to 10 min
+      // so user sees the JSON file appear without manually clicking 🔄
+      const uploadedBase = (data.file || '').replace(/\.pdf$/i, '');
+      let pollCount = 0;
+      const maxPolls = 20; // 20 × 30s = 10 min
+      const pollTimer = setInterval(async () => {
+        pollCount++;
+        // Only refresh if sidebar has been initialized
+        if (drawerLoaded) {
+          await refreshDrawer();
+          // Stop once we find the matching analysis JSON
+          const items = document.querySelectorAll('#savedSection [data-filename]');
+          const found = Array.from(items).some(el =>
+            el.dataset.filename.includes(uploadedBase)
+          );
+          if (found) {
+            clearInterval(pollTimer);
+            toast('✅ Analysis ready — check sidebar', 'success');
+            return;
+          }
+        }
+        if (pollCount >= maxPolls) {
+          clearInterval(pollTimer);
+        }
+      }, 30000);
 
     } catch (err) {
 
