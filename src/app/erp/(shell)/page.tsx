@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,8 +22,20 @@ function centsToDollarsShort(cents: number | null): string {
 
 export default async function ErpDashboardPage() {
   try {
+    const cfg = parseHubSpotPipelineStageMap();
+    const janitorialSegments = cfg?.janitorial.pipelineId
+      ? ["JANITORIAL_TURNOVER_REQUESTS"]
+      : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+    const janitorialProjectWhere = {
+      OR: [
+        { segment: { in: janitorialSegments } },
+        ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
+      ],
+    };
+
     const [projects, employees, candidates, contractors] = await Promise.all([
       prisma.project.findMany({
+        where: janitorialProjectWhere,
         orderBy: [{ projectDate: "asc" }, { updatedAt: "desc" }],
         take: 300,
         select: {
@@ -93,8 +106,8 @@ export default async function ErpDashboardPage() {
     const wipDisplay = wip.slice(0, 8);
 
     const kpis = [
-      { label: "WIP Projects", value: wip.length, href: "/erp/projects", color: "emerald" },
-      { label: "Upcoming", value: upcoming.length, href: "/erp/projects", color: "purple" },
+      { label: "Janitorial WIP", value: wip.length, href: "/erp/projects", color: "emerald" },
+      { label: "Janitorial Upcoming", value: upcoming.length, href: "/erp/projects", color: "purple" },
       { label: "Active Employees", value: activeEmployees.length, href: "/erp/employees", color: "blue" },
       { label: "Non-Compliant", value: nonCompliant.length, href: "/erp/employees?compliance=NON_COMPLIANT", color: nonCompliant.length > 0 ? "red" : "gray" },
       { label: "Pending Candidates", value: pendingCandidates, href: "/erp/candidates", color: "orange" },
@@ -116,14 +129,14 @@ export default async function ErpDashboardPage() {
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Janitorial PM Dashboard</h1>
             <p className="mt-1 text-sm text-gray-500">
-              {now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              ERP-backed janitorial projects only - {now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Link href="/erp/projects/new" className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700">
-              + New project
+            <Link href="/janitorial-turnover" className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700">
+              + New janitorial request
             </Link>
             <Link href="/erp/schedule" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
               Schedule
@@ -153,7 +166,7 @@ export default async function ErpDashboardPage() {
           <div className="rounded-lg border border-pink-200 bg-pink-50 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-pink-800 font-medium">
               <span className="text-2xl font-bold text-pink-700">{centsToDollarsShort(wipValue)}</span>
-              <span className="ml-2 text-pink-600">total contract value across {wip.length} WIP project{wip.length !== 1 ? "s" : ""}</span>
+              <span className="ml-2 text-pink-600">total contract value across {wip.length} janitorial WIP project{wip.length !== 1 ? "s" : ""}</span>
             </p>
             <Link href="/erp/projects" className="text-xs font-medium text-pink-700 hover:underline">View all →</Link>
           </div>
@@ -163,11 +176,11 @@ export default async function ErpDashboardPage() {
           {/* WIP Projects */}
           <div className="rounded-lg border border-gray-200 bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">WIP Projects</h2>
+              <h2 className="text-sm font-semibold text-gray-900">Janitorial WIP Projects</h2>
               <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
             </div>
             {wipDisplay.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-gray-400 text-center">No active projects.</p>
+              <p className="px-4 py-6 text-sm text-gray-400 text-center">No active janitorial projects.</p>
             ) : (
               <ul className="divide-y divide-gray-100">
                 {wipDisplay.map((p) => (
@@ -197,11 +210,11 @@ export default async function ErpDashboardPage() {
             {/* Upcoming soon */}
             <div className="rounded-lg border border-gray-200 bg-white">
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Starting within 30 days</h2>
+                <h2 className="text-sm font-semibold text-gray-900">Janitorial starting within 30 days</h2>
                 <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
               </div>
               {soonProjects.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">No projects starting soon.</p>
+                <p className="px-4 py-6 text-sm text-gray-400 text-center">No janitorial projects starting soon.</p>
               ) : (
                 <ul className="divide-y divide-gray-100">
                   {soonProjects.map((p) => (
