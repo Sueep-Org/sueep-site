@@ -70,45 +70,89 @@ function fmtDate(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-function LaborTable({ entries }: { entries: LaborRow[] }) {
+function EmptyValue() {
+  return <span className="text-gray-400">-</span>;
+}
+
+function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (!entries.length) return <p className="text-xs text-gray-400">No labor logged</p>;
+
+  const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
+  const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
+
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-          <th className="pb-1 pr-3 text-left font-semibold">Date</th>
-          <th className="pb-1 pr-3 text-left font-semibold">Job Title</th>
-          <th className="pb-1 pr-3 text-left font-semibold">Name</th>
-          <th className="pb-1 pr-3 text-right font-semibold">Hours</th>
-          <th className="pb-1 pr-3 text-right font-semibold">Rate/hr</th>
-          <th className="pb-1 text-left font-semibold">Description</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100">
-        {entries.map((e, i) => (
-          <tr key={i} className="text-gray-700">
-            <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-            <td className="py-1 pr-3">{e.role ?? <span className="text-gray-400">—</span>}</td>
-            <td className="py-1 pr-3 font-medium whitespace-nowrap">{e.name}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
-            <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
-            <td className="py-1 text-gray-500">{e.description ?? <span className="text-gray-400">—</span>}</td>
+    <div>
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[12%]" />
+          <col className="w-[26%]" />
+          <col className="w-[29%]" />
+          <col className="w-[9%]" />
+          <col className="w-[13%]" />
+          <col className="w-[11%]" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <th className="pb-1.5 pr-3 text-left font-semibold">Date</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
+            <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
+            <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>
+            <th className="pb-1.5 text-left font-semibold">Description</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {visibleEntries.map((e, i) => (
+            <tr key={`${e.date}-${e.name}-${i}`} className="text-slate-900">
+              <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+              <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
+              <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
+              <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
+              <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
+              <td className="py-1 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAll(true);
+          }}
+          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+        >
+          Show {hiddenCount} more
+        </button>
+      ) : showAll && entries.length > initialVisible ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAll(false);
+          }}
+          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+        >
+          Show fewer
+        </button>
+      ) : null}
+    </div>
   );
 }
 
 function billingBadge(status: string | null) {
-  if (!status) return <span className="text-gray-400">—</span>;
+  if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
     BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
     INVOICE_PAID: { label: "Invoice Paid", cls: "bg-emerald-100 text-emerald-700" },
     INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-600" },
   };
   const opt = map[status];
-  if (!opt) return <span className="text-gray-400">—</span>;
+  if (!opt) return <EmptyValue />;
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${opt.cls}`}>{opt.label}</span>;
 }
 
@@ -197,20 +241,20 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                     <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
                   </td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {p.estHours ?? "—"}{" "}
+                    <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
                     <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
-                    {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">—</span>}
+                    {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
                 </tr>
 
                 {isOpen ? (
                   <>
-                    {/* Change order rows — inline in the same table, same columns */}
+                    {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
                       return (
@@ -220,10 +264,10 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                             onClick={(e) => toggleCo(co.id, e)}
                             aria-expanded={isCoOpen}
                           >
-                            {/* Job → CO title + status */}
+                            {/* Job -> CO title + status */}
                             <td className="w-[420px] min-w-[420px] border-r border-gray-200 bg-pink-50 px-3 py-1.5">
                               <div className="flex items-center gap-2 pl-4">
-                                <span className="shrink-0 text-gray-300">↳</span>
+                                <span className="shrink-0 text-gray-300">&gt;</span>
                                 <span className="shrink-0 rounded bg-pink-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pink-800">CO</span>
                                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${CO_STATUS_COLORS[co.status]}`}>
                                   {co.status}
@@ -237,38 +281,38 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                                 </Link>
                               </div>
                             </td>
-                            {/* PM → Requested by */}
+                            {/* PM -> Requested by */}
                             <td className="w-[220px] min-w-[220px] border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
-                              {co.requestedBy || <span className="text-gray-400">—</span>}
+                              {co.requestedBy || <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Segment → "Change Order" label */}
+                            {/* Segment -> "Change Order" label */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-sm font-medium text-pink-700">
                               Change Order
                             </td>
-                            {/* Contract → Est. Cost */}
+                            {/* Contract -> Est. Cost */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {centsToDollars(co.estimatedCostCents)}
                             </td>
-                            {/* Material → Schedule days */}
+                            {/* Material -> Schedule days */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
                               {co.estimatedDays != null
                                 ? <>{co.estimatedDays}d</>
-                                : <span className="text-gray-400">—</span>}
+                                : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Labor → labor cost */}
+                            {/* Labor -> labor cost */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.laborCostCents > 0
                                 ? centsToDollars(co.laborCostCents)
-                                : <span className="text-gray-400">—</span>}
+                                : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Hours, Progress, Miles — not applicable to COs */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">—</td>
+                            {/* Hours, Progress, Miles - not applicable to COs */}
+                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
+                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
+                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-900">
-                              {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">—</span>}
+                              {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Billing Status → CO billing status */}
+                            {/* Billing Status -> CO billing status */}
                             <td className="px-3 py-1.5">{billingBadge(co.billingStatus)}</td>
                           </tr>
 
@@ -295,22 +339,22 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                                       <span className="font-medium text-gray-800">{centsToDollars(co.estimatedCostCents)}</span>
                                       <span className="text-gray-400">Schedule</span>
                                       <span className="font-medium text-gray-800">
-                                        {co.estimatedDays != null ? `${co.estimatedDays} day${co.estimatedDays !== 1 ? "s" : ""}` : "—"}
+                                        {co.estimatedDays != null ? `${co.estimatedDays} day${co.estimatedDays !== 1 ? "s" : ""}` : "-"}
                                       </span>
                                       <span className="text-gray-400">Requested by</span>
-                                      <span className="font-medium text-gray-800">{co.requestedBy || "—"}</span>
+                                      <span className="font-medium text-gray-800">{co.requestedBy || "-"}</span>
                                     </div>
                                   </div>
 
                                   <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
                                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-                                    <p className="mt-1 text-sm font-semibold text-gray-800">{co.supervisor || "—"}</p>
+                                    <p className="mt-1 text-sm font-semibold text-gray-800">{co.supervisor || "-"}</p>
                                     <Link
                                       href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                                       onClick={(e) => e.stopPropagation()}
                                       className="mt-auto pt-2 text-xs font-medium text-pink-600 hover:underline"
                                     >
-                                      Full details →
+                                      Full details {"->"}
                                     </Link>
                                   </div>
                                 </div>
@@ -323,19 +367,10 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                     {/* Project team table */}
                     <tr className={styles.detail}>
-                      <td colSpan={11} className="px-4 py-2">
-                        <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Team</p>
+                      <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="overflow-x-auto bg-white px-3 py-2">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
                           <LaborTable entries={p.laborEntries} />
-                        </div>
-                        <div className="mt-1 flex justify-end">
-                          <Link
-                            href={`/erp/projects/${p.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs font-medium text-pink-600 hover:underline"
-                          >
-                            Full details →
-                          </Link>
                         </div>
                       </td>
                     </tr>
