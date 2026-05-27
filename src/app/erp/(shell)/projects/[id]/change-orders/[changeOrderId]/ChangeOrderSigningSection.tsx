@@ -51,7 +51,9 @@ export function ChangeOrderSigningSection({
         `/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contract`,
         { method: "POST", body: fd }
       );
-      const data = (await res.json()) as { templateId?: number; error?: string };
+      const text = await res.text();
+      let data: { templateId?: number; error?: string } = {};
+      try { data = JSON.parse(text); } catch { setUploadError(`Server error: ${text.slice(0, 200)}`); return; }
       if (!res.ok) { setUploadError(data.error ?? "Upload failed"); return; }
       setState((s) => ({
         ...s,

@@ -33,48 +33,77 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "File must be 10 MB or smaller" }, { status: 413 });
   }
 
-  const bytes = Buffer.from(await file.arrayBuffer());
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(await file.arrayBuffer());
+  } catch (e) {
+    console.error("Failed to read file buffer:", e);
+    return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
+  }
 
   // Save the PDF first so the file-serving route can serve it to DocuSeal
-  await prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
-    data: {
-      contractPdfData: bytes,
-      contractPdfFilename: file.name,
-      docusealTemplateId: null,
-      signingStatus: "UPLOADED",
-      docusealSubmissionId: null,
-      signedAt: null,
-      signedDocumentUrl: null,
-    },
-  });
+  try {
+    await prisma.projectChangeOrder.update({
+      where: { id: changeOrderId },
+      data: {
+        contractPdfData: bytes,
+        contractPdfFilename: file.name,
+        docusealTemplateId: null,
+        signingStatus: "UPLOADED",
+        docusealSubmissionId: null,
+        signedAt: null,
+        signedDocumentUrl: null,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to save PDF to database:", e);
+    return NextResponse.json({ error: "Failed to save contract to database" }, { status: 500 });
+  }
 
   // Generate a short-lived signed token so DocuSeal can fetch the PDF
-  const secret = new TextEncoder().encode(process.env.ERP_SESSION_SECRET!);
-  const fileToken = await new SignJWT({ coId: changeOrderId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("15m")
-    .sign(secret);
+  let fileToken: string;
+  try {
+    const secret = new TextEncoder().encode(process.env.ERP_SESSION_SECRET!);
+    fileToken = await new SignJWT({ coId: changeOrderId })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("15m")
+      .sign(secret);
+  } catch (e) {
+    console.error("Failed to sign file token:", e);
+    return NextResponse.json({ error: "Failed to generate secure file link" }, { status: 500 });
+  }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!.replace(/\/$/, "");
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  if (!appUrl) {
+    console.error("NEXT_PUBLIC_APP_URL is not set");
+    return NextResponse.json({ error: "App URL not configured — set NEXT_PUBLIC_APP_URL in .env.local" }, { status: 500 });
+  }
+
   const fileUrl = `${appUrl}/api/erp/projects/${id}/change-orders/${changeOrderId}/contract/file?token=${fileToken}`;
+  console.log("DocuSeal file URL:", fileUrl);
 
-  const docusealRes = await fetch(`${process.env.DOCUSEAL_API_URL}/templates`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Auth-Token": process.env.DOCUSEAL_API_KEY!,
-    },
-    body: JSON.stringify({
-      name: co.title,
-      documents: [{ name: file.name, url: fileUrl }],
-    }),
-  });
+  let docusealRes: Response;
+  try {
+    docusealRes = await fetch(`${process.env.DOCUSEAL_API_URL}/templates`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Auth-Token": process.env.DOCUSEAL_API_KEY!,
+      },
+      body: JSON.stringify({
+        name: co.title,
+        documents: [{ name: file.name, url: fileUrl }],
+      }),
+    });
+  } catch (e) {
+    console.error("DocuSeal fetch failed:", e);
+    return NextResponse.json({ error: "Could not reach DocuSeal API" }, { status: 502 });
+  }
 
   if (!docusealRes.ok) {
     const err = await docusealRes.text();
     console.error(`DocuSeal create template error [${docusealRes.status}]:`, err);
-    return NextResponse.json({ error: "Failed to create DocuSeal template" }, { status: 502 });
+    return NextResponse.json({ error: `DocuSeal error ${docusealRes.status}: ${err}` }, { status: 502 });
   }
 
   const template = (await docusealRes.json()) as { id: number };
