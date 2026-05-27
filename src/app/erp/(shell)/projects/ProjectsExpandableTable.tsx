@@ -74,6 +74,81 @@ function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
 
+function getDetailLine(description: string | null, label: string) {
+  const prefix = `${label}:`;
+  return (
+    (description || "")
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
+      .trim() || ""
+  );
+}
+
+function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
+  const property = getDetailLine(project.description, "Property");
+  const units = getDetailLine(project.description, "Units");
+  const total = getDetailLine(project.description, "Estimated Turnover Total");
+  const standardBreakdown = getDetailLine(project.description, "Pricing Breakdown");
+  const specialPackage = getDetailLine(project.description, "Special Pricing Package");
+  const breakdownLines = standardBreakdown ? standardBreakdown.split(/\s+\|\s+/).filter(Boolean) : [];
+
+  return (
+    <div className="overflow-x-auto bg-white px-3 py-2">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover pricing</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p>
+          {units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
+        </div>
+        <div className="text-left sm:text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">{total || centsToDollars(project.contractValueCents)}</p>
+        </div>
+      </div>
+
+      {breakdownLines.length > 0 ? (
+        <table className="w-full table-fixed text-xs">
+          <thead>
+            <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <th className="w-[24%] pb-1.5 pr-3 text-left font-semibold">Unit</th>
+              <th className="w-[56%] pb-1.5 pr-3 text-left font-semibold">Pricing</th>
+              <th className="w-[20%] pb-1.5 text-right font-semibold">Line Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {breakdownLines.map((line, index) => {
+              const [unitPart, rest = ""] = line.split(": ");
+              const totalMatch = rest.match(/=\s*([^=]+)$/);
+              const lineTotal = totalMatch?.[1]?.trim() || "-";
+              const pricing = totalMatch ? rest.replace(/\s*=\s*[^=]+$/, "").trim() : rest;
+
+              return (
+                <tr key={`${unitPart}-${index}`} className="text-slate-900">
+                  <td className="py-1 pr-3 align-top font-medium">{unitPart || `Unit ${index + 1}`}</td>
+                  <td className="py-1 pr-3 align-top text-slate-600">{pricing || line}</td>
+                  <td className="py-1 text-right align-top font-medium tabular-nums">{lineTotal}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ) : (
+        <p className="border-t border-gray-100 pt-2 text-xs text-slate-500">
+          No turnover pricing breakdown is saved on this project yet.
+        </p>
+      )}
+
+      {specialPackage ? (
+        <div className="mt-3 border-t border-gray-100 pt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Special pricing package</p>
+          <p className="mt-1 whitespace-pre-line text-xs text-slate-700">{specialPackage}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -254,13 +329,10 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                 {isOpen ? (
                   <>
-                    {/* Project team table */}
+                    {/* Project pricing */}
                     <tr className={styles.detail}>
                       <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="overflow-x-auto bg-white px-3 py-2">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                          <LaborTable entries={p.laborEntries} />
-                        </div>
+                        <TurnoverPricingSummary project={p} />
                       </td>
                     </tr>
 
