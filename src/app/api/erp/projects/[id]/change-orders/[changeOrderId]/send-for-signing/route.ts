@@ -43,14 +43,14 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to create signing request" }, { status: 502 });
   }
 
-  const submitters = (await docusealRes.json()) as { id: number; slug: string }[];
+  const submitters = (await docusealRes.json()) as { id: number; submission_id: number; slug: string }[];
   const submitter = submitters[0];
 
   await prisma.projectChangeOrder.update({
     where: { id: changeOrderId },
     data: {
       customerEmail: email,
-      docusealSubmissionId: submitter.id,
+      docusealSubmissionId: submitter.submission_id,
       signingStatus: "SENT",
     },
   });
