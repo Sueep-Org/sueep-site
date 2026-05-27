@@ -21,6 +21,7 @@ export type LaborEmployeeOption = {
   firstName: string;
   lastName: string;
   hourlyPayCents: number | null;
+  role: string | null;
   status: string;
 };
 
@@ -28,6 +29,8 @@ const OTHER_VALUE = "__other__";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const editInput =
+  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
 function lineCostCents(hours: string, rateCents: number): number {
@@ -134,6 +137,11 @@ export function ProjectLaborSection({
   const [loading, setLoading] = useState(false);
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
+  const [roleStr, setRoleStr] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+  const [filterLaborer, setFilterLaborer] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
 
   useEffect(() => {
     setEntries(initialEntries);
@@ -142,14 +150,12 @@ export function ProjectLaborSection({
   useEffect(() => {
     if (!employeePick || employeePick === OTHER_VALUE) {
       setHourlyRateStr("");
+      setRoleStr("");
       return;
     }
     const e = employees.find((x) => x.id === employeePick);
-    if (e?.hourlyPayCents != null) {
-      setHourlyRateStr((e.hourlyPayCents / 100).toFixed(2));
-    } else {
-      setHourlyRateStr("");
-    }
+    setHourlyRateStr(e?.hourlyPayCents != null ? (e.hourlyPayCents / 100).toFixed(2) : "");
+    setRoleStr(e?.role ?? "");
   }, [employeePick, employees]);
 
   async function onDelete(entryId: string) {
@@ -157,6 +163,45 @@ export function ProjectLaborSection({
     const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, { method: "DELETE" });
     if (res.ok) {
       setEntries((prev) => prev.filter((e) => e.id !== entryId));
+      router.refresh();
+    }
+  }
+
+  function startEdit(r: LaborRow) {
+    setEditingId(r.id);
+    setEditFields({
+      workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+      workerName: r.workerName,
+      role: r.role ?? "",
+      hours: r.hours,
+      hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
+      taskDescription: r.taskDescription ?? "",
+    });
+  }
+
+  async function onSaveEdit(entryId: string) {
+    const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workDate: editFields.workDate,
+        workerName: editFields.workerName,
+        role: editFields.role || null,
+        hours: Number(editFields.hours),
+        hourlyRate: editFields.hourlyRate,
+        taskDescription: editFields.taskDescription || null,
+      }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; hourlyRateCents: number; taskDescription: string | null };
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === entryId
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
+            : e,
+        ),
+      );
+      setEditingId(null);
       router.refresh();
     }
   }
@@ -171,7 +216,7 @@ export function ProjectLaborSection({
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const workDate = String(fd.get("workDate") || "");
-    const role = String(fd.get("role") || "").trim();
+    const role = roleStr.trim();
     const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const taskDescription = String(fd.get("taskDescription") || "").trim();
@@ -239,6 +284,7 @@ export function ProjectLaborSection({
       e.currentTarget.reset();
       setEmployeePick("");
       setHourlyRateStr("");
+      setRoleStr("");
       router.refresh();
     } catch {
       setError("Network error");
@@ -249,69 +295,22 @@ export function ProjectLaborSection({
 
   const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
 
+  const visibleEntries = entries.filter((r) => {
+    if (filterDate) {
+      const rowDate = new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+      if (rowDate !== filterDate) return false;
+    }
+    if (filterLaborer) {
+      const name = (r.employeeName || r.workerName).toLowerCase();
+      if (!name.includes(filterLaborer.toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
+
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          <p className="text-sm text-gray-700">
-            Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span>
-          </p>
-        </div>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="py-2 pr-2 font-medium">Date</th>
-                <th className="py-2 pr-2 font-medium">Worker</th>
-                <th className="py-2 pr-2 font-medium">Role</th>
-                <th className="py-2 pr-2 font-medium">Hours</th>
-                <th className="py-2 pr-2 font-medium">Rate</th>
-                <th className="py-2 pr-2 font-medium">Line $</th>
-                <th className="py-2 pr-2 font-medium">Task</th>
-                <th className="py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {entries.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-6 text-center text-gray-500">
-                    No labor entries yet.
-                  </td>
-                </tr>
-              ) : (
-                entries.map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-2 pr-2 text-gray-600">{new Date(r.workDate).toLocaleDateString()}</td>
-                    <td className="py-2 pr-2 text-gray-900">
-                      {r.employeeName || r.workerName}
-                      {r.employeeName && r.employeeName !== r.workerName ? (
-                        <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
-                    <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
-                    <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
-                    <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
-                    <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
-                    <td className="py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => onDelete(r.id)}
-                        className="text-xs text-red-500 hover:text-red-700"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
@@ -347,7 +346,14 @@ export function ProjectLaborSection({
             <label className={label} htmlFor="l-role">
               Role
             </label>
-            <input id="l-role" name="role" className={input} placeholder="PM, Cleaner…" />
+            <input
+              id="l-role"
+              name="role"
+              className={input}
+              placeholder="PM, Cleaner…"
+              value={roleStr}
+              onChange={(e) => setRoleStr(e.target.value)}
+            />
           </div>
           <div>
             <label className={label} htmlFor="l-hours">
@@ -390,6 +396,134 @@ export function ProjectLaborSection({
           {loading ? "Adding…" : "Add entry"}
         </button>
       </form>
+
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
+          <p className="text-sm text-gray-700">
+            {filterDate || filterLaborer ? (
+              <>
+                Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalLaborCents)})</span>
+              </>
+            ) : (
+              <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span></>
+            )}
+          </p>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          <div className="flex-1 min-w-[140px]">
+            <label className={label} htmlFor="filter-date">Filter by date</label>
+            <input
+              id="filter-date"
+              type="date"
+              className={input}
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className={label} htmlFor="filter-laborer">Filter by laborer</label>
+            <input
+              id="filter-laborer"
+              type="text"
+              className={input}
+              placeholder="Name…"
+              value={filterLaborer}
+              onChange={(e) => setFilterLaborer(e.target.value)}
+            />
+          </div>
+          {(filterDate || filterLaborer) && (
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
+                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="py-2 pr-2 font-medium">Date</th>
+                <th className="py-2 pr-2 font-medium">Worker</th>
+                <th className="py-2 pr-2 font-medium">Role</th>
+                <th className="py-2 pr-2 font-medium">Hours</th>
+                <th className="py-2 pr-2 font-medium">Rate</th>
+                <th className="py-2 pr-2 font-medium">Line $</th>
+                <th className="py-2 pr-2 font-medium">Task</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visibleEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-6 text-center text-gray-500">
+                    {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
+                  </td>
+                </tr>
+              ) : (
+                visibleEntries.map((r) =>
+                  editingId === r.id ? (
+                    <tr key={r.id} className="bg-yellow-50">
+                      <td className="py-1 pr-2">
+                        <input type="date" className={editInput} value={editFields.workDate} onChange={(e) => setEditFields((f) => ({ ...f, workDate: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} value={editFields.workerName} onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(editFields.hours, Number(editFields.hourlyRate) * 100))}</td>
+                      <td className="py-1 pr-2">
+                        <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                      </td>
+                      <td className="py-1 text-right whitespace-nowrap">
+                        <button type="button" onClick={() => onSaveEdit(r.id)} className="text-xs font-medium text-pink-600 hover:text-pink-800">Save</button>
+                        <button type="button" onClick={() => setEditingId(null)} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={r.id}>
+                      <td className="py-2 pr-2 text-gray-600">
+                        {new Date(r.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}
+                      </td>
+                      <td className="py-2 pr-2 text-gray-900">
+                        {r.employeeName || r.workerName}
+                        {r.employeeName && r.employeeName !== r.workerName ? (
+                          <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
+                      <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
+                      <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
+                      <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                        <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>
+                      </td>
+                    </tr>
+                  )
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

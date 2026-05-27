@@ -45,7 +45,7 @@ export async function POST(req: Request, ctx: Ctx) {
   if (typeof workDateRaw !== "string" || !workDateRaw) {
     return NextResponse.json({ error: "workDate is required" }, { status: 400 });
   }
-  const workDate = new Date(workDateRaw);
+  const workDate = new Date(`${workDateRaw}T00:00:00-05:00`);
   if (Number.isNaN(workDate.getTime())) {
     return NextResponse.json({ error: "Invalid workDate" }, { status: 400 });
   }

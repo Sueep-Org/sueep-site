@@ -254,6 +254,16 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
 
                 {isOpen ? (
                   <>
+                    {/* Project team table */}
+                    <tr className={styles.detail}>
+                      <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="overflow-x-auto bg-white px-3 py-2">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+                          <LaborTable entries={p.laborEntries} />
+                        </div>
+                      </td>
+                    </tr>
+
                     {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
@@ -365,15 +375,6 @@ export function ProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
                       );
                     })}
 
-                    {/* Project team table */}
-                    <tr className={styles.detail}>
-                      <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="overflow-x-auto bg-white px-3 py-2">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                          <LaborTable entries={p.laborEntries} />
-                        </div>
-                      </td>
-                    </tr>
                   </>
                 ) : null}
               </Fragment>

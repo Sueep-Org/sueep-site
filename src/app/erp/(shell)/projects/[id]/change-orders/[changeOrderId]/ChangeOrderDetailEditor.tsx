@@ -44,6 +44,7 @@ export type EmployeeOption = {
   email?: string | null;
   status: string;
   hourlyPayCents: number | null;
+  role: string | null;
 };
 
 function LaborerMultiSelect({
