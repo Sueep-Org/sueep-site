@@ -279,7 +279,7 @@ export function ChangeOrderSigningSection({
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Upload Contract</h2>
         <p className="mt-1 text-xs text-gray-500">
-          Upload the contract PDF, place the customer's signature field, then send it for signing via email.
+          Upload the contract PDF, place the customer&apos;s signature field, then send it for signing via email.
         </p>
         <div className="mt-4">
           <label
