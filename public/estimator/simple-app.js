@@ -78,41 +78,30 @@ async function refreshDrawer(){
       const full = item.name || item.key || '';
       const display = full.split('/').pop();
 
-      const isPdf = display.toLowerCase().endsWith('.pdf');
+      // Only show analysis JSON files — PDFs are already on user's local machine
+      if (!display.toLowerCase().endsWith('.json')) return;
+
       const downloadUrl = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
+
+      // Show a clean label: strip ".analysis.json" suffix if present
+      const label = display.replace(/\.analysis\.json$/i, '') || display;
 
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
 
-      // File name button — PDF opens in viewer, JSON just highlights
-      const btn = document.createElement('button');
-      btn.textContent = display;
-      btn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      const nameEl = document.createElement('span');
+      nameEl.textContent = label;
+      nameEl.title = display;
+      nameEl.style.cssText = 'flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;';
 
-      btn.onclick = async ()=>{
-        if (isPdf){
-          try{
-            const resp = await fetch(downloadUrl);
-            const blob = await resp.blob();
-            const file = new File([blob], display);
-            await window.__handleFile?.(file);
-            closeSidebar();
-          }catch(e){
-            console.error(e);
-            toast(e.message, 'error');
-          }
-        }
-      };
-
-      // Download button — works for both PDF and JSON
       const dlBtn = document.createElement('a');
       dlBtn.href = downloadUrl;
       dlBtn.download = display;
-      dlBtn.textContent = '⬇';
-      dlBtn.title = 'Download';
-      dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;text-decoration:none;color:#333;flex-shrink:0;';
+      dlBtn.textContent = '⬇ JSON';
+      dlBtn.title = 'Download analysis result';
+      dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;text-decoration:none;color:#333;flex-shrink:0;';
 
-      row.appendChild(btn);
+      row.appendChild(nameEl);
       row.appendChild(dlBtn);
       savedSec.appendChild(row);
     });
