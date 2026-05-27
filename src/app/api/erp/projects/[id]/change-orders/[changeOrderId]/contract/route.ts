@@ -58,25 +58,19 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to save contract to database" }, { status: 500 });
   }
 
-  // Upload PDF bytes directly to DocuSeal via multipart (URL-based JSON returns 404)
-  const docusealForm = new FormData();
-  docusealForm.append("name", co.title);
-  docusealForm.append("documents[][name]", file.name);
-  docusealForm.append(
-    "documents[][file]",
-    new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
-    file.name
-  );
-
+  // POST /templates/pdf accepts JSON with base64-encoded file content
   let docusealRes: Response;
   try {
-    docusealRes = await fetch(`${process.env.DOCUSEAL_API_URL}/templates`, {
+    docusealRes = await fetch(`${process.env.DOCUSEAL_API_URL}/templates/pdf`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "X-Auth-Token": process.env.DOCUSEAL_API_KEY!,
-        // No Content-Type — fetch sets multipart/form-data with boundary automatically
       },
-      body: docusealForm,
+      body: JSON.stringify({
+        name: co.title,
+        documents: [{ name: file.name, file: bytes.toString("base64") }],
+      }),
     });
   } catch (e) {
     console.error("DocuSeal fetch failed:", e);
