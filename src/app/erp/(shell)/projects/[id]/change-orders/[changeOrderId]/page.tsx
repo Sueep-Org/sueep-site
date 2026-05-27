@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
+import { ChangeOrderSigningSection } from "./ChangeOrderSigningSection";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     prisma.projectChangeOrder.findFirst({
       where: { id: changeOrderId, projectId: id },
       include: { laborers: { orderBy: { createdAt: "asc" } } },
+      // contractPdfData is excluded — we don't send binary to the client
     }),
     prisma.project.findUnique({
       where: { id },
@@ -50,6 +52,15 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     })),
   };
 
+  const signingState = {
+    signingStatus: changeOrder.signingStatus,
+    contractPdfFilename: changeOrder.contractPdfFilename,
+    docusealTemplateId: changeOrder.docusealTemplateId,
+    customerEmail: changeOrder.customerEmail,
+    signedAt: changeOrder.signedAt?.toISOString() ?? null,
+    signedDocumentUrl: changeOrder.signedDocumentUrl,
+  };
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 sm:px-0">
       <ChangeOrderDetailEditor
@@ -57,6 +68,11 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         projectTitle={project.jobTitle}
         data={data}
         employees={employees}
+      />
+      <ChangeOrderSigningSection
+        projectId={id}
+        changeOrderId={changeOrderId}
+        initial={signingState}
       />
     </div>
   );
