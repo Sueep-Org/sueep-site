@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { DocusealBuilder } from "@docuseal/react";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export type SigningState = {
@@ -33,8 +32,6 @@ export function ChangeOrderSigningSection({
   const [state, setState] = useState<SigningState>(initial);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [builderToken, setBuilderToken] = useState<string | null>(null);
-  const [showBuilder, setShowBuilder] = useState(false);
   const [sendEmail, setSendEmail] = useState(state.customerEmail ?? "");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -80,21 +77,8 @@ export function ChangeOrderSigningSection({
     );
     if (res.ok) {
       setState({ signingStatus: null, contractPdfFilename: null, docusealTemplateId: null, customerEmail: null, signedAt: null, signedDocumentUrl: null });
-      setShowBuilder(false);
-      setBuilderToken(null);
       router.refresh();
     }
-  }
-
-  async function handleOpenBuilder() {
-    if (builderToken) { setShowBuilder((v) => !v); return; }
-    const res = await fetch(
-      `/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contract/builder-token`
-    );
-    const data = (await res.json()) as { token?: string; error?: string };
-    if (!res.ok || !data.token) { alert(data.error ?? "Could not load builder"); return; }
-    setBuilderToken(data.token);
-    setShowBuilder(true);
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -202,7 +186,7 @@ export function ChangeOrderSigningSection({
     );
   }
 
-  // ── UPLOADED (place fields + send) ───────────────────────────────────────
+  // ── UPLOADED (place fields in DocuSeal + send) ────────────────────────────
   if (state.signingStatus === "UPLOADED") {
     return (
       <CollapsiblePanel title="Contract Signing" defaultOpen>
@@ -212,13 +196,16 @@ export function ChangeOrderSigningSection({
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-gray-800">{state.contractPdfFilename}</p>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleOpenBuilder}
-                className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
-              >
-                {showBuilder ? "Hide Field Editor" : "Place Signature Fields"}
-              </button>
+              {state.docusealTemplateId && (
+                <a
+                  href={`https://app.docuseal.com/templates/${state.docusealTemplateId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+                >
+                  Place Signature Fields →
+                </a>
+              )}
               <button
                 type="button"
                 onClick={handleRemoveContract}
@@ -229,20 +216,9 @@ export function ChangeOrderSigningSection({
             </div>
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            Open the field editor to drag a signature field onto the contract, then send it to the customer below.
+            Open DocuSeal to drag a signature field onto the contract, then send it to the customer below.
           </p>
         </div>
-
-        {/* Inline DocuSeal builder */}
-        {showBuilder && builderToken && (
-          <div className="overflow-hidden rounded-lg border border-gray-200">
-            <DocusealBuilder
-              token={builderToken}
-              onSave={() => setShowBuilder(false)}
-              className="min-h-[600px] w-full"
-            />
-          </div>
-        )}
 
         {/* Send form */}
         <form onSubmit={handleSend} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -281,7 +257,7 @@ export function ChangeOrderSigningSection({
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Upload Contract</h2>
         <p className="mt-1 text-xs text-gray-500">
-          Upload the contract PDF, place the customer&apos;s signature field, then send it for signing via email.
+          Upload the contract PDF, place the customer&apos;s signature field in DocuSeal, then send it for signing via email.
         </p>
         <div className="mt-4">
           <label
