@@ -234,7 +234,6 @@ function billingBadge(status: string | null) {
 function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string | null) {
   return (
     row.segment === "JANITORIAL_TURNOVER_REQUESTS" ||
-    row.segment === "COMMERCIAL_CLEANING" ||
     (Boolean(janitorialPipelineId) && row.hubspotPipelineId === janitorialPipelineId)
   );
 }
