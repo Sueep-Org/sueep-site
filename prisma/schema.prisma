@@ -236,16 +236,8 @@ model ProjectChangeOrder {
   reason             String?
   resolutionNotes    String?
 
-  contractPdfData      Bytes?
-  contractPdfFilename  String?
-  docusealTemplateId   Int?
-  signingStatus        String?
-  customerEmail        String?
-  docusealSubmissionId Int?
-  signedAt             DateTime?
-  signedDocumentUrl    String?
-
-  laborers ProjectChangeOrderLaborer[]
+  laborers  ProjectChangeOrderLaborer[]
+  contracts ChangeOrderContract[]
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -270,6 +262,25 @@ model ProjectChangeOrderLaborer {
   taskDescription String?
 
   @@index([changeOrderId])
+}
+
+model ChangeOrderContract {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+
+  changeOrderId String
+  changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  contractPdfFilename  String?
+  docusealTemplateId   Int?
+  signingStatus        String?
+  customerEmail        String?
+  docusealSubmissionId Int?
+  signedAt             DateTime?
+  signedDocumentUrl    String?
+
+  @@index([changeOrderId])
+  @@index([docusealSubmissionId])
 }
 
 model ProjectContact {

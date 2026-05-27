@@ -40,23 +40,14 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
   }
 
-  try {
-    await prisma.projectChangeOrder.update({
-      where: { id: changeOrderId },
-      data: {
-        contractPdfData: bytes,
-        contractPdfFilename: file.name,
-        docusealTemplateId: null,
-        signingStatus: "UPLOADED",
-        docusealSubmissionId: null,
-        signedAt: null,
-        signedDocumentUrl: null,
-      },
-    });
-  } catch (e) {
-    console.error("Failed to save PDF to database:", e);
-    return NextResponse.json({ error: "Failed to save contract to database" }, { status: 500 });
-  }
+  // Create a contract record first so we have an ID
+  const contract = await prisma.changeOrderContract.create({
+    data: {
+      changeOrderId,
+      contractPdfFilename: file.name,
+      signingStatus: "UPLOADED",
+    },
+  });
 
   // POST /templates/pdf accepts JSON with base64-encoded file content
   let docusealRes: Response;
@@ -74,47 +65,23 @@ export async function POST(req: Request, ctx: Ctx) {
     });
   } catch (e) {
     console.error("DocuSeal fetch failed:", e);
+    await prisma.changeOrderContract.delete({ where: { id: contract.id } });
     return NextResponse.json({ error: "Could not reach DocuSeal API" }, { status: 502 });
   }
 
   if (!docusealRes.ok) {
     const err = await docusealRes.text();
     console.error(`DocuSeal create template error [${docusealRes.status}]:`, err);
+    await prisma.changeOrderContract.delete({ where: { id: contract.id } });
     return NextResponse.json({ error: `DocuSeal error ${docusealRes.status}: ${err}` }, { status: 502 });
   }
 
   const template = (await docusealRes.json()) as { id: number };
 
-  await prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
+  await prisma.changeOrderContract.update({
+    where: { id: contract.id },
     data: { docusealTemplateId: template.id },
   });
 
-  return NextResponse.json({ templateId: template.id });
-}
-
-export async function DELETE(_req: Request, ctx: Ctx) {
-  const { id, changeOrderId } = await ctx.params;
-
-  const co = await prisma.projectChangeOrder.findFirst({
-    where: { id: changeOrderId, projectId: id },
-    select: { id: true, signingStatus: true },
-  });
-  if (!co) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (co.signingStatus === "SENT" || co.signingStatus === "SIGNED") {
-    return NextResponse.json({ error: "Cannot remove contract after it has been sent" }, { status: 409 });
-  }
-
-  await prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
-    data: {
-      contractPdfData: null,
-      contractPdfFilename: null,
-      docusealTemplateId: null,
-      signingStatus: null,
-      customerEmail: null,
-    },
-  });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ contractId: contract.id, templateId: template.id });
 }

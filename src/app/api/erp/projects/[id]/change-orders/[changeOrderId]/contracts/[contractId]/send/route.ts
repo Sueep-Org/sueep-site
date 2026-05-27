@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
+type Ctx = { params: Promise<{ id: string; changeOrderId: string; contractId: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
-  const { id, changeOrderId } = await ctx.params;
+  const { changeOrderId, contractId } = await ctx.params;
 
-  const co = await prisma.projectChangeOrder.findFirst({
-    where: { id: changeOrderId, projectId: id },
+  const contract = await prisma.changeOrderContract.findFirst({
+    where: { id: contractId, changeOrderId },
     select: { id: true, docusealTemplateId: true, signingStatus: true },
   });
-  if (!co) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!co.docusealTemplateId) {
+  if (!contract) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!contract.docusealTemplateId) {
     return NextResponse.json({ error: "Upload and configure the contract first" }, { status: 400 });
   }
-  if (co.signingStatus === "SIGNED") {
+  if (contract.signingStatus === "SIGNED") {
     return NextResponse.json({ error: "Contract already signed" }, { status: 409 });
   }
 
@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: Ctx) {
       "X-Auth-Token": process.env.DOCUSEAL_API_KEY!,
     },
     body: JSON.stringify({
-      template_id: co.docusealTemplateId,
+      template_id: contract.docusealTemplateId,
       send_email: true,
       submitters: [{ email, role: "First Party" }],
     }),
@@ -46,8 +46,8 @@ export async function POST(req: Request, ctx: Ctx) {
   const submitters = (await docusealRes.json()) as { id: number; submission_id: number; slug: string }[];
   const submitter = submitters[0];
 
-  await prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
+  await prisma.changeOrderContract.update({
+    where: { id: contractId },
     data: {
       customerEmail: email,
       docusealSubmissionId: submitter.submission_id,
@@ -55,5 +55,5 @@ export async function POST(req: Request, ctx: Ctx) {
     },
   });
 
-  return NextResponse.json({ ok: true, signingUrl: `https://docuseal.com/s/${submitter.slug}` });
+  return NextResponse.json({ ok: true });
 }

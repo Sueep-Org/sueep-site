@@ -27,23 +27,19 @@ export async function POST(req: Request) {
   const submission = payload.data?.submission;
   if (!submission?.id) return NextResponse.json({ ok: true });
 
-  const co = await prisma.projectChangeOrder.findFirst({
+  const contract = await prisma.changeOrderContract.findFirst({
     where: { docusealSubmissionId: submission.id },
     select: { id: true },
   });
-  if (!co) return NextResponse.json({ ok: true });
+  if (!contract) return NextResponse.json({ ok: true });
 
   const signedDocumentUrl = submission.documents?.[0]?.url ?? null;
   const completedAt = submission.submitters?.[0]?.completed_at;
   const signedAt = completedAt ? new Date(completedAt) : new Date();
 
-  await prisma.projectChangeOrder.update({
-    where: { id: co.id },
-    data: {
-      signingStatus: "SIGNED",
-      signedAt,
-      signedDocumentUrl,
-    },
+  await prisma.changeOrderContract.update({
+    where: { id: contract.id },
+    data: { signingStatus: "SIGNED", signedAt, signedDocumentUrl },
   });
 
   return NextResponse.json({ ok: true });
