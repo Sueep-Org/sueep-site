@@ -64,7 +64,7 @@ export async function POST(req: Request, ctx: Ctx) {
   docusealForm.append("documents[][name]", file.name);
   docusealForm.append(
     "documents[][file]",
-    new Blob([bytes], { type: "application/pdf" }),
+    new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
     file.name
   );
 
