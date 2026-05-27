@@ -4,32 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Drawing Analyzer</title>
+
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
     <script>
       try {
         if (window.pdfjsLib) {
           pdfjsLib.GlobalWorkerOptions.workerSrc =
             'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-      } catch(e) { console.error(e); }
+      } catch(e) {
+        console.error(e);
+      }
     </script>
 
+    <!-- Lucide -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
     <style>
-        .hidden { display: none !important; }
+
+        .hidden {
+            display: none !important;
+        }
+
+        body {
+            overflow-x: hidden;
+        }
+
+        /*
+        =========================
+        PDF VIEWER
+        =========================
+        */
 
         #pdfContainer {
             position: relative;
-            overflow: auto;
+            overflow: hidden;
             background: #f8f9fa;
             border-radius: 0 0 8px 8px;
             width: 100%;
             height: 600px;
             min-height: 600px;
+            cursor: grab;
+        }
+
+        #pdfContainer:active {
+            cursor: grabbing;
         }
 
         #pdfWrapper {
@@ -42,76 +65,349 @@
         #pdfCanvas {
             display: block;
             position: absolute;
+            top: 0;
+            left: 0;
             margin: 0;
             max-width: none;
             height: auto;
+            transform-origin: top left;
         }
 
-        #toolbar { position: relative; z-index: 5; }
-        .mini-btn { padding: 4px 8px; font-size: 12px; border-radius: 6px; }
-        #measureToggle.active { background: #bfdbfe; }
+        /*
+        =========================
+        TOOLBAR
+        =========================
+        */
+
+        #toolbar {
+            position: relative;
+            z-index: 5;
+        }
+
+        .mini-btn {
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            background: white;
+            cursor: pointer;
+        }
+
+        .mini-btn:hover {
+            background: #f3f4f6;
+        }
+
+        #measureToggle.active {
+            background: #bfdbfe;
+        }
+
+        /*
+        =========================
+        SIDEBAR
+        =========================
+        */
+
+        #sidebarRoot {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 320px;
+            height: 100vh;
+            background: white;
+            border-right: 1px solid #ddd;
+            z-index: 9999;
+            transform: translateX(-100%);
+            transition: transform .2s ease;
+            overflow-y: auto;
+            box-shadow: 0 0 20px rgba(0,0,0,.08);
+        }
+
+        #sidebarRoot[data-open="true"] {
+            transform: translateX(0);
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 10000;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.1);
+            cursor: pointer;
+        }
+
+        /*
+        =========================
+        SIDEBAR HEADER
+        =========================
+        */
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 5;
+        }
+
+        .sidebar-close-btn {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 4px 10px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .sidebar-close-btn:hover {
+            background: #f3f4f6;
+        }
+
+        /*
+        =========================
+        ZOOM BUTTONS
+        =========================
+        */
+
+        .zoom-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        #zoomLabel {
+            min-width: 60px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
     </style>
 </head>
 
 <body class="bg-gray-50 min-h-screen">
 
-<button class="icon-btn sidebar-toggle" data-open-sidebar>☰</button>
+<!-- ========================= -->
+<!-- SIDEBAR TOGGLE -->
+<!-- ========================= -->
 
-<div id="appCanvas">
-<div id="appError" style="display:none;color:#b00;font-size:12px;"></div>
-
-<header style="display:flex;justify-content:flex-end;padding:.5rem 1rem;">
-  <div id="auth-slot">
-    <a id="login-link" href="/.auth/login/google">Sign in with Google</a>
-    <a id="logout-link" href="/.auth/logout" style="display:none">Sign out</a>
-  </div>
-</header>
-
-<div class="container mx-auto px-4 py-8 max-w-7xl">
-<h1 class="text-4xl font-bold text-center mb-8 text-gray-800">
-AI Drawing Analyzer
-</h1>
-
-<!-- UPLOAD -->
-<div class="bg-white rounded-lg shadow-md p-6 mb-6">
-<h2 class="text-xl font-semibold mb-4">Upload Your Drawing</h2>
-
-<div id="dropZone"
-class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400">
-
-<input type="file" id="fileInput"
-accept=".pdf,.jpg,.jpeg,.png"
-class="sr-only">
-
-<p>Drag and drop OR click below</p>
-
-<button id="selectFileBtn"
-class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">
-Select file
+<button
+    class="icon-btn sidebar-toggle"
+    data-open-sidebar
+>
+    ☰
 </button>
 
-</div>
+<!-- ========================= -->
+<!-- SIDEBAR -->
+<!-- ========================= -->
+
+<div id="sidebarRoot">
+
+    <div class="sidebar-header">
+
+        <strong>Library</strong>
+
+        <button
+            class="sidebar-close-btn"
+            data-close-sidebar
+        >
+            ✕
+        </button>
+
+    </div>
+
+    <div id="libraryMount"></div>
+
 </div>
 
-<!-- MAIN -->
-<div id="mainContent" class="hidden">
+<!-- ========================= -->
+<!-- APP -->
+<!-- ========================= -->
 
-<div class="bg-white rounded-lg shadow-md p-6 mb-6">
-<h2 class="text-xl font-semibold mb-2">PDF Preview</h2>
+<div id="appCanvas">
 
-<div id="pdfContainer">
-<div id="pdfWrapper">
-<canvas id="pdfCanvas"></canvas>
-</div>
-</div>
+    <!-- APP ERROR -->
+    <div
+        id="appError"
+        style="display:none;color:#b00;font-size:12px;"
+    ></div>
+
+    <!-- HEADER -->
+    <header
+        style="
+            display:flex;
+            justify-content:flex-end;
+            padding:.5rem 1rem;
+        "
+    >
+
+        <div id="auth-slot">
+
+            <a
+                id="login-link"
+                href="/.auth/login/google"
+            >
+                Sign in with Google
+            </a>
+
+            <a
+                id="logout-link"
+                href="/.auth/logout"
+                style="display:none"
+            >
+                Sign out
+            </a>
+
+        </div>
+
+    </header>
+
+    <!-- MAIN -->
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+
+        <!-- TITLE -->
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">
+            AI Drawing Analyzer
+        </h1>
+
+        <!-- ========================= -->
+        <!-- UPLOAD -->
+        <!-- ========================= -->
+
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+
+            <h2 class="text-xl font-semibold mb-4">
+                Upload Your Drawing
+            </h2>
+
+            <div
+                id="dropZone"
+                class="
+                    border-2
+                    border-dashed
+                    border-gray-300
+                    rounded-lg
+                    p-8
+                    text-center
+                    hover:border-blue-400
+                "
+            >
+
+                <input
+                    type="file"
+                    id="fileInput"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    class="sr-only"
+                >
+
+                <p>Drag and drop OR click below</p>
+
+                <button
+                    id="selectFileBtn"
+                    class="
+                        mt-4
+                        px-4
+                        py-2
+                        bg-blue-600
+                        text-white
+                        rounded
+                    "
+                >
+                    Select file
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- ========================= -->
+        <!-- PDF VIEWER -->
+        <!-- ========================= -->
+
+        <div id="mainContent" class="hidden">
+
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+
+                <!-- TOOLBAR -->
+                <div
+                    id="toolbar"
+                    class="flex items-center gap-2 mb-4 flex-wrap"
+                >
+
+                    <!-- Measure -->
+                    <button
+                        id="measureToggle"
+                        class="mini-btn"
+                    >
+                        Measure
+                    </button>
+
+                    <!-- Zoom Controls -->
+                    <div class="zoom-group">
+
+                        <button
+                            id="zoomOutBtn"
+                            class="mini-btn"
+                        >
+                            −
+                        </button>
+
+                        <div id="zoomLabel">
+                            100%
+                        </div>
+
+                        <button
+                            id="zoomInBtn"
+                            class="mini-btn"
+                        >
+                            +
+                        </button>
+
+                        <button
+                            id="zoomResetBtn"
+                            class="mini-btn"
+                        >
+                            Reset
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <h2 class="text-xl font-semibold mb-2">
+                    PDF Preview
+                </h2>
+
+                <!-- PDF CONTAINER -->
+                <div id="pdfContainer">
+
+                    <div id="pdfWrapper">
+
+                        <canvas id="pdfCanvas"></canvas>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
 
 </div>
-</div>
 
-</div>
-</div>
+<!-- ========================= -->
+<!-- MAIN APP SCRIPT -->
+<!-- ========================= -->
 
-<!-- ✅ ONLY SCRIPT YOU NEED -->
 <script type="module" src="./simple-app.js"></script>
 
 </body>
