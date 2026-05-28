@@ -12,6 +12,8 @@ type DocusealWebhookPayload = {
   };
 };
 
+const COMPLETED_EVENTS = new Set(["submission.completed", "form.completed"]);
+
 export async function POST(req: Request) {
   let payload: DocusealWebhookPayload;
   try {
@@ -20,7 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  if (payload.event_type !== "submission.completed") {
+  console.log("DocuSeal webhook received:", payload.event_type);
+
+  if (!COMPLETED_EVENTS.has(payload.event_type)) {
     return NextResponse.json({ ok: true });
   }
 
@@ -29,9 +33,9 @@ export async function POST(req: Request) {
 
   const contract = await prisma.changeOrderContract.findFirst({
     where: { docusealSubmissionId: submission.id },
-    select: { id: true },
+    select: { id: true, signingStatus: true },
   });
-  if (!contract) return NextResponse.json({ ok: true });
+  if (!contract || contract.signingStatus === "SIGNED") return NextResponse.json({ ok: true });
 
   const signedDocumentUrl = submission.documents?.[0]?.url ?? null;
   const completedAt = submission.submitters?.[0]?.completed_at;

@@ -19,6 +19,7 @@ export type ProjectTableRow = {
   billingStatus: string | null;
   contractValueCents: number | null;
   laborEntries: { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null }[];
+  materialEntries: { date: string; category: string; itemName: string; quantity: number | null; unit: string | null; costCents: number; notes: string | null }[];
   totalHours: number;
   laborCents: number;
   materialCents: number;
@@ -219,6 +220,80 @@ function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; init
   );
 }
 
+type MaterialRow = { date: string; category: string; itemName: string; quantity: number | null; unit: string | null; costCents: number; notes: string | null };
+
+function categoryLabel(cat: string) {
+  if (cat === "PAINT") return "Paint";
+  if (cat === "CLEANING_PRODUCTS") return "Cleaning";
+  return cat;
+}
+
+function MaterialTable({ entries, initialVisible = 5 }: { entries: MaterialRow[]; initialVisible?: number }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (!entries.length) return <p className="text-xs text-gray-400">No materials logged</p>;
+
+  const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
+  const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
+
+  return (
+    <div>
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[12%]" />
+          <col className="w-[14%]" />
+          <col className="w-[28%]" />
+          <col className="w-[12%]" />
+          <col className="w-[14%]" />
+          <col className="w-[20%]" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <th className="pb-1.5 pr-3 text-left font-semibold">Date</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Category</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Item</th>
+            <th className="pb-1.5 pr-3 text-right font-semibold">Qty</th>
+            <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
+            <th className="pb-1.5 text-left font-semibold">Notes</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {visibleEntries.map((e, i) => (
+            <tr key={`${e.date}-${e.itemName}-${i}`} className="text-slate-900">
+              <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+              <td className="py-1 pr-3">{categoryLabel(e.category)}</td>
+              <td className="py-1 pr-3 truncate font-medium">{e.itemName}</td>
+              <td className="py-1 pr-3 text-right tabular-nums">
+                {e.quantity != null ? `${e.quantity}${e.unit ? ` ${e.unit}` : ""}` : <EmptyValue />}
+              </td>
+              <td className="py-1 pr-3 text-right tabular-nums">{centsToDollars(e.costCents)}</td>
+              <td className="py-1 truncate text-slate-500">{e.notes ?? <EmptyValue />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowAll(true); }}
+          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+        >
+          Show {hiddenCount} more
+        </button>
+      ) : showAll && entries.length > initialVisible ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowAll(false); }}
+          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+        >
+          Show fewer
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function billingBadge(status: string | null) {
   if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
@@ -343,9 +418,15 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                         {isJanitorial ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
-                          <div className="overflow-x-auto bg-white px-3 py-2">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                            <LaborTable entries={p.laborEntries} />
+                          <div className="space-y-3">
+                            <div className="overflow-x-auto bg-white px-3 py-2">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+                              <LaborTable entries={p.laborEntries} />
+                            </div>
+                            <div className="overflow-x-auto bg-white px-3 py-2">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Materials</p>
+                              <MaterialTable entries={p.materialEntries} />
+                            </div>
                           </div>
                         )}
                       </td>

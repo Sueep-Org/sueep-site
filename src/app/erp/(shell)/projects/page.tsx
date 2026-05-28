@@ -26,7 +26,10 @@ export default async function ErpProjectsPage() {
         },
         orderBy: { workDate: "asc" },
       },
-      materialEntries: { select: { category: true, costCents: true } },
+      materialEntries: {
+        select: { usedOn: true, category: true, itemName: true, quantity: true, unit: true, costCents: true, notes: true },
+        orderBy: { usedOn: "asc" },
+      },
       distanceEntries: { select: { miles: true } },
       changeOrders: {
         select: {
@@ -85,6 +88,15 @@ export default async function ErpProjectsPage() {
       hourlyRateCents: e.hourlyRateCents,
       description: e.taskDescription ?? null,
     }));
+    const materialEntries = p.materialEntries.map((e) => ({
+      date: e.usedOn.toISOString(),
+      category: e.category,
+      itemName: e.itemName,
+      quantity: e.quantity ?? null,
+      unit: e.unit ?? null,
+      costCents: e.costCents,
+      notes: e.notes ?? null,
+    }));
     return {
       id: p.id,
       jobTitle: p.jobTitle,
@@ -98,6 +110,7 @@ export default async function ErpProjectsPage() {
       billingStatus: p.billingStatus ?? null,
       contractValueCents: p.contractValueCents,
       laborEntries,
+      materialEntries,
       totalHours,
       laborCents,
       materialCents,
