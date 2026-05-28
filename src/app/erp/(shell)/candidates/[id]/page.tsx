@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
 import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
 
 export const dynamic = "force-dynamic";
@@ -50,87 +50,99 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Link href="/erp/candidates" className="text-zinc-500 hover:text-pink-500">
+      <div>
+        <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
           ← Candidates
         </Link>
-      </div>
-
-      <div>
-        <h1 className="text-2xl font-semibold text-white">{row.fullName}</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
+        <p className="mt-1 text-sm text-gray-500">
           Applied{" "}
           {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
         </p>
       </div>
 
-      <CollapsiblePanel title="Pipeline">
-        <CandidateApplicationEditor
-          initial={{
-            id: row.id,
-            status: row.status,
-            internalNotes: row.internalNotes,
-            paperwork: row.paperwork as { label: string; url: string }[] | null,
-            bankAccountRequired: row.bankAccountRequired,
-          }}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Paperwork upload link" defaultOpen={row.status === "ONBOARDING"}>
-        <CandidatePaperworkPanel
-          id={row.id}
-          email={row.email}
-          status={row.status}
-          paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
-          paperworkUploadToken={row.paperworkUploadToken}
-          paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
-          resendConfigured={Boolean(process.env.RESEND_API_KEY)}
-          siteUrl={siteUrl}
-        />
-      </CollapsiblePanel>
-
-      <FinishOnboardingPanel
-        id={row.id}
-        fullName={row.fullName}
-        status={row.status}
-        paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
-      />
-
-      <CollapsiblePanel title="Submission" defaultOpen={false}>
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-pink-500">Email</dt>
-            <dd className="mt-0.5 text-pink-500">
-              <a href={`mailto:${row.email}`} className="text-[#E73C6E] hover:underline">
-                {row.email}
-              </a>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-pink-500">Phone</dt>
-            <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-pink-500">Position interest</dt>
-            <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-pink-500">Has vehicle</dt>
-            <dd className="mt-0.5 text-zinc-500">
-              {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-pink-500">Cleaning experience</dt>
-            <dd className="mt-0.5 text-zinc-500">{cleaningExpLabel}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-pink-500">Additional comments</dt>
-            <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
-          </div>
-        </dl>
-        <p className="text-xs text-zinc-600 font-mono">id: {row.id}</p>
-      </CollapsiblePanel>
+      <DetailTabs tabs={[
+        {
+          label: "Pipeline",
+          content: (
+            <CandidateApplicationEditor
+              initial={{
+                id: row.id,
+                status: row.status,
+                internalNotes: row.internalNotes,
+                paperwork: row.paperwork as { label: string; url: string }[] | null,
+                bankAccountRequired: row.bankAccountRequired,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Paperwork",
+          content: (
+            <CandidatePaperworkPanel
+              id={row.id}
+              email={row.email}
+              status={row.status}
+              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+              paperworkUploadToken={row.paperworkUploadToken}
+              paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
+              resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+              siteUrl={siteUrl}
+            />
+          ),
+        },
+        {
+          label: "Onboarding",
+          content: (
+            <FinishOnboardingPanel
+              id={row.id}
+              fullName={row.fullName}
+              status={row.status}
+              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+            />
+          ),
+        },
+        {
+          label: "Submission",
+          content: (
+            <>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-pink-500">Email</dt>
+                  <dd className="mt-0.5 text-pink-500">
+                    <a href={`mailto:${row.email}`} className="text-[#E73C6E] hover:underline">
+                      {row.email}
+                    </a>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-pink-500">Phone</dt>
+                  <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-pink-500">Position interest</dt>
+                  <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-pink-500">Has vehicle</dt>
+                  <dd className="mt-0.5 text-zinc-500">
+                    {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-pink-500">Cleaning experience</dt>
+                  <dd className="mt-0.5 text-zinc-500">{cleaningExpLabel}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-pink-500">Additional comments</dt>
+                  <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
+                </div>
+              </dl>
+              <p className="mt-4 text-xs text-zinc-600 font-mono">id: {row.id}</p>
+            </>
+          ),
+        },
+      ]} />
     </div>
   );
 }

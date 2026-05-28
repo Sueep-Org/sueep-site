@@ -11,7 +11,7 @@ import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
-import { ProjectDetailTabs } from "./ProjectDetailTabs";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -215,7 +215,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <ProjectDetailTabs tabs={tabs} />
+      <DetailTabs tabs={tabs} />
     </div>
   );
 }

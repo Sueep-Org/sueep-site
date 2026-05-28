@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ProjectDetailTabs } from "../../ProjectDetailTabs";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
 import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
 
@@ -270,7 +270,7 @@ export function ChangeOrderDetailEditor({
         </div>
       </div>
 
-      <ProjectDetailTabs tabs={[
+      <DetailTabs tabs={[
         {
           label: "Details",
           content: (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoPanel } from "./ContractorInfoPanel";
@@ -42,52 +42,61 @@ export default async function ContractorDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <CollapsiblePanel title="General Information">
-        <ContractorProfileEditor
-          contractorId={contractor.id}
-          initial={{
-            name: contractor.name,
-            email: contractor.email,
-            status: contractor.status,
-          }}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Document Upload">
-        <ContractorPaperworkPanel
-          id={contractor.id}
-          email={contractor.email}
-          paperwork={paperwork}
-          paperworkUploadToken={contractor.paperworkUploadToken}
-          paperworkUploadTokenExpiry={
-            contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
-          }
-          resendConfigured={resendConfigured}
-          siteUrl={siteUrl}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Contractor Information Form">
-        <ContractorInfoPanel
-          id={contractor.id}
-          email={contractor.email}
-          infoToken={contractor.infoToken}
-          infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
-          resendConfigured={resendConfigured}
-          siteUrl={siteUrl}
-          collectedInfo={{
-            contractorFullName: contractor.contractorFullName,
-            address: contractor.address,
-            dateOfBirth: contractor.dateOfBirth,
-            ssn: contractor.ssn,
-            bankAccountType: contractor.bankAccountType,
-            bankAccountNumber: contractor.bankAccountNumber,
-            bankRoutingNumber: contractor.bankRoutingNumber,
-            phone: contractor.phone,
-            hasInsurance: contractor.hasInsurance,
-          }}
-        />
-      </CollapsiblePanel>
+      <DetailTabs tabs={[
+        {
+          label: "General Info",
+          content: (
+            <ContractorProfileEditor
+              contractorId={contractor.id}
+              initial={{
+                name: contractor.name,
+                email: contractor.email,
+                status: contractor.status,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Documents",
+          content: (
+            <ContractorPaperworkPanel
+              id={contractor.id}
+              email={contractor.email}
+              paperwork={paperwork}
+              paperworkUploadToken={contractor.paperworkUploadToken}
+              paperworkUploadTokenExpiry={
+                contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
+              }
+              resendConfigured={resendConfigured}
+              siteUrl={siteUrl}
+            />
+          ),
+        },
+        {
+          label: "Info Form",
+          content: (
+            <ContractorInfoPanel
+              id={contractor.id}
+              email={contractor.email}
+              infoToken={contractor.infoToken}
+              infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
+              resendConfigured={resendConfigured}
+              siteUrl={siteUrl}
+              collectedInfo={{
+                contractorFullName: contractor.contractorFullName,
+                address: contractor.address,
+                dateOfBirth: contractor.dateOfBirth,
+                ssn: contractor.ssn,
+                bankAccountType: contractor.bankAccountType,
+                bankAccountNumber: contractor.bankAccountNumber,
+                bankRoutingNumber: contractor.bankRoutingNumber,
+                phone: contractor.phone,
+                hasInsurance: contractor.hasInsurance,
+              }}
+            />
+          ),
+        },
+      ]} />
     </div>
   );
 }

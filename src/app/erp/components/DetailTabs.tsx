@@ -11,7 +11,7 @@ type Props = {
   tabs: Tab[];
 };
 
-export function ProjectDetailTabs({ tabs }: Props) {
+export function DetailTabs({ tabs }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   return (
