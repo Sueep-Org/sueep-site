@@ -49,7 +49,7 @@ export type ProjectTableRow = {
   }[];
 };
 
-export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
+const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
   DRAFT: "bg-gray-200 text-gray-700",
   SUBMITTED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-green-100 text-green-700",
@@ -58,7 +58,7 @@ export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJE
   BILLING: "bg-emerald-100 text-emerald-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
+function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
   if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
   if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
   return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
@@ -71,7 +71,7 @@ function fmtDate(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-export function EmptyValue() {
+function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
 
@@ -86,7 +86,7 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-export function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
+function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
   const property = getDetailLine(project.description, "Property");
   const units = getDetailLine(project.description, "Units");
   const total = getDetailLine(project.description, "Estimated Turnover Total");
@@ -150,7 +150,7 @@ export function TurnoverPricingSummary({ project }: { project: ProjectTableRow }
   );
 }
 
-export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
+function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
   const [showAll, setShowAll] = useState(false);
 
   if (!entries.length) return <p className="text-xs text-gray-400">No labor logged</p>;
@@ -220,81 +220,7 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
   );
 }
 
-type MaterialRow = { date: string; category: string; itemName: string; quantity: number | null; unit: string | null; costCents: number; notes: string | null };
-
-function categoryLabel(cat: string) {
-  if (cat === "PAINT") return "Paint";
-  if (cat === "CLEANING_PRODUCTS") return "Cleaning";
-  return cat;
-}
-
-function MaterialTable({ entries, initialVisible = 5 }: { entries: MaterialRow[]; initialVisible?: number }) {
-  const [showAll, setShowAll] = useState(false);
-
-  if (!entries.length) return <p className="text-xs text-gray-400">No materials logged</p>;
-
-  const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
-  const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
-
-  return (
-    <div>
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-[12%]" />
-          <col className="w-[14%]" />
-          <col className="w-[28%]" />
-          <col className="w-[12%]" />
-          <col className="w-[14%]" />
-          <col className="w-[20%]" />
-        </colgroup>
-        <thead>
-          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            <th className="pb-1.5 pr-3 text-left font-semibold">Date</th>
-            <th className="pb-1.5 pr-3 text-left font-semibold">Category</th>
-            <th className="pb-1.5 pr-3 text-left font-semibold">Item</th>
-            <th className="pb-1.5 pr-3 text-right font-semibold">Qty</th>
-            <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
-            <th className="pb-1.5 text-left font-semibold">Notes</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {visibleEntries.map((e, i) => (
-            <tr key={`${e.date}-${e.itemName}-${i}`} className="text-slate-900">
-              <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-              <td className="py-1 pr-3">{categoryLabel(e.category)}</td>
-              <td className="py-1 pr-3 truncate font-medium">{e.itemName}</td>
-              <td className="py-1 pr-3 text-right tabular-nums">
-                {e.quantity != null ? `${e.quantity}${e.unit ? ` ${e.unit}` : ""}` : <EmptyValue />}
-              </td>
-              <td className="py-1 pr-3 text-right tabular-nums">{centsToDollars(e.costCents)}</td>
-              <td className="py-1 truncate text-slate-500">{e.notes ?? <EmptyValue />}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setShowAll(true); }}
-          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
-        >
-          Show {hiddenCount} more
-        </button>
-      ) : showAll && entries.length > initialVisible ? (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setShowAll(false); }}
-          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
-        >
-          Show fewer
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-export function billingBadge(status: string | null) {
+function billingBadge(status: string | null) {
   if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
     BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
@@ -331,33 +257,33 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
   return (
     <div className="overflow-x-auto rounded-lg border border-white">
       <table className="w-full min-w-[1600px] text-left text-sm">
-        <thead className="border-b border-white text-xs uppercase">
+        <thead className="border-b border-gray-300 text-xs uppercase">
           <tr>
-            <th colSpan={3} className="border-b border-r border-white bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
+            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
               Project Details
             </th>
-            <th colSpan={4} className="border-b border-r border-white bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
+            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
               Cost / Hours
             </th>
-            <th colSpan={2} className="border-b border-r border-white bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
+            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
               Progress
             </th>
-            <th colSpan={2} className="border-b border-white bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
+            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
               Invoicing
             </th>
           </tr>
-          <tr className="bg-pink-500 text-white">
-            <th className="w-[420px] min-w-[420px] border-r border-white bg-pink-500 px-3 py-2 font-medium">Job</th>
-            <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Segment</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Material (Est / Act)</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Labor (Est / Act)</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Hours (Est / Act)</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Progress</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Miles</th>
-            <th className="border-r border-white px-3 py-2 font-medium">% Invoiced</th>
-            <th className="px-3 py-2 font-medium">Billing Status</th>
+          <tr className="bg-gray-100 text-pink-700">
+            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Job</th>
+            <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Segment</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Material (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Labor (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Hours (Est / Act)</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Progress</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Miles</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">% Invoiced</th>
+            <th className="px-3 py-2 font-semibold">Billing Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-300">
@@ -365,7 +291,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
             const isOpen = openSet.has(p.id);
             const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
-            const styles = projectStateClasses(state);
+            const styles = stateClasses(state);
             return (
               <Fragment key={p.id}>
                 {/* Project row */}
@@ -418,15 +344,9 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                         {isJanitorial ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
-                          <div className="space-y-3">
-                            <div className="overflow-x-auto bg-white px-3 py-2">
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                              <LaborTable entries={p.laborEntries} />
-                            </div>
-                            <div className="overflow-x-auto bg-white px-3 py-2">
-                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Materials</p>
-                              <MaterialTable entries={p.materialEntries} />
-                            </div>
+                          <div className="overflow-x-auto bg-white px-3 py-2">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+                            <LaborTable entries={p.laborEntries} />
                           </div>
                         )}
                       </td>
