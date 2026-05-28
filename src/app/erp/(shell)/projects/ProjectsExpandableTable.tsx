@@ -49,7 +49,7 @@ export type ProjectTableRow = {
   }[];
 };
 
-const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
+export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
   DRAFT: "bg-gray-200 text-gray-700",
   SUBMITTED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-green-100 text-green-700",
@@ -58,7 +58,7 @@ const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" |
   BILLING: "bg-emerald-100 text-emerald-700",
 };
 
-function stateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
+export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
   if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
   if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
   return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
@@ -71,7 +71,7 @@ function fmtDate(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-function EmptyValue() {
+export function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
 
@@ -86,7 +86,7 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
+export function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
   const property = getDetailLine(project.description, "Property");
   const units = getDetailLine(project.description, "Units");
   const total = getDetailLine(project.description, "Estimated Turnover Total");
@@ -150,7 +150,7 @@ function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
   );
 }
 
-function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
+export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
   const [showAll, setShowAll] = useState(false);
 
   if (!entries.length) return <p className="text-xs text-gray-400">No labor logged</p>;
@@ -220,7 +220,7 @@ function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; init
   );
 }
 
-function billingBadge(status: string | null) {
+export function billingBadge(status: string | null) {
   if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
     BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
@@ -291,7 +291,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
             const isOpen = openSet.has(p.id);
             const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
-            const styles = stateClasses(state);
+            const styles = projectStateClasses(state);
             return (
               <Fragment key={p.id}>
                 {/* Project row */}
