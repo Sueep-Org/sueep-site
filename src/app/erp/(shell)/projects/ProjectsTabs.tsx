@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
+import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
 type Tab = "all" | "post-construction" | "janitorial" | "residential" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
@@ -176,6 +177,8 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
           <p className="py-8 text-center text-sm text-gray-500">
             {query ? `No projects matching "${search}".` : "No projects in this category."}
           </p>
+        ) : activeTab === "janitorial" ? (
+          <JanitorialProjectsExpandableTable rows={filtered} />
         ) : (
           <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} />
         )}
