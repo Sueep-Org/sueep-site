@@ -52,14 +52,14 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
   return (
     <div className="space-y-3">
       <div className="grid gap-2 lg:grid-cols-[1.1fr_1fr]">
-        <div className="rounded border border-emerald-100 bg-white px-3 py-2">
+        <div className="rounded border border-gray-200 bg-white px-3 py-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Approved turnover</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Approved turnover</p>
               <p className="mt-1 text-sm font-semibold text-gray-900">{project.jobTitle}</p>
               <p className="mt-0.5 text-xs text-gray-500">{building}</p>
             </div>
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
               Approved
             </span>
           </div>
@@ -176,23 +176,23 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
             return (
               <Fragment key={group.building}>
                 <tr
-                  className="cursor-pointer border-t border-emerald-200 bg-emerald-100 text-emerald-950 hover:bg-emerald-200"
+                  className="cursor-pointer border-t border-gray-300 bg-gray-100 text-pink-700 hover:bg-gray-200"
                   onClick={() => toggleBuilding(group.building)}
                   aria-expanded={!isGroupClosed}
                 >
-                  <td className="w-[420px] min-w-[420px] border-r border-emerald-200 px-3 py-2 font-semibold">
-                    <span className="mr-2 text-emerald-500">{isGroupClosed ? ">" : "v"}</span>
+                  <td className="w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 font-semibold">
+                    <span className="mr-2 text-gray-400">{isGroupClosed ? ">" : "v"}</span>
                     {group.building}
-                    <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <span className="ml-2 rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-semibold text-pink-700">
                       {group.projects.length} turnover{group.projects.length !== 1 ? "s" : ""}
                     </span>
                   </td>
-                  <td className="w-[220px] min-w-[220px] border-r border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-800">
+                  <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-xs font-medium text-gray-700">
                     {group.activeCount} WIP
                   </td>
-                  <td className="border-r border-emerald-200 px-3 py-2 text-xs text-emerald-800">Building</td>
-                  <td className="border-r border-emerald-200 px-3 py-2 font-semibold tabular-nums text-emerald-950">{centsToDollars(group.contractCents)}</td>
-                  <td className="border-r border-emerald-200 px-3 py-2 text-emerald-800" colSpan={7}>
+                  <td className="border-r border-gray-300 px-3 py-2 text-xs text-gray-700">Building</td>
+                  <td className="border-r border-gray-300 px-3 py-2 font-semibold tabular-nums text-gray-900">{centsToDollars(group.contractCents)}</td>
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-700" colSpan={7}>
                     Grouped by building name
                   </td>
                 </tr>
@@ -204,15 +204,23 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                       const styles = projectStateClasses(state);
                       return (
                         <Fragment key={p.id}>
+                          {/* Approved turnover rows - inline in the same table, same columns */}
                           <tr
                             className={`${styles.row} cursor-pointer`}
                             onClick={() => toggle(p.id)}
                             aria-expanded={isOpen}
                             title={isOpen ? "Collapse" : "Expand"}
                           >
-                            <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
-                              <div className="flex items-start gap-2">
-                                <span className="mt-0.5 shrink-0 pl-3 text-gray-400">{isOpen ? "v" : ">"}</span>
+                            {/* Building / Turnover -> approved turnover title + status */}
+                            <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-1.5 ${styles.sticky}`}>
+                              <div className="flex items-center gap-2 pl-4">
+                                <span className="shrink-0 text-gray-400">{isOpen ? "v" : ">"}</span>
+                                <span className="shrink-0 rounded bg-pink-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pink-800">
+                                  Turn
+                                </span>
+                                <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-green-700">
+                                  Approved
+                                </span>
                                 <div className="min-w-0">
                                   <Link
                                     href={`/erp/projects/${p.id}`}
@@ -221,39 +229,46 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                                   >
                                     {p.jobTitle}
                                   </Link>
-                                  {getUnitSummary(p) ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{getUnitSummary(p)}</p> : null}
                                 </div>
                               </div>
+                              {getUnitSummary(p) ? <p className="mt-1 pl-4 text-xs text-gray-500 line-clamp-1">{getUnitSummary(p)}</p> : null}
                             </td>
-                            <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900">
+                            {/* PM -> assigned/requesting manager */}
+                            <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-1.5 text-sm text-gray-700">
                               {p.supervisor || <span className="text-gray-400">Unassigned</span>}
                             </td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900 tabular-nums">{fmtShortDate(p.projectDate)}</td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                            {/* Start -> turnover start date */}
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm tabular-nums text-gray-800">{fmtShortDate(p.projectDate)}</td>
+                            {/* Contract -> approved turnover total */}
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm tabular-nums text-gray-800">{centsToDollars(p.contractValueCents)}</td>
+                            {/* Materials */}
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-800">
                               <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
                               <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
                             </td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                            {/* Labor */}
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-800">
                               <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
                               <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
                             </td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                            {/* Hours */}
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-800">
                               <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
                               <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                             </td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
-                            <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-800">{p.percentDone}%</td>
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-800">{p.miles.toFixed(1)}</td>
+                            <td className="border-r border-gray-300 px-3 py-1.5 text-sm text-gray-900">
                               {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
-                            <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
+                            <td className="px-3 py-1.5">{billingBadge(p.billingStatus)}</td>
                           </tr>
 
                           {isOpen ? (
                             <>
+                              {/* Expanded approved turnover detail */}
                               <tr className={styles.detail}>
-                                <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                                <td colSpan={11} className="px-6 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                                   <JanitorialProjectDetails project={p} />
                                 </td>
                               </tr>
