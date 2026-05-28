@@ -16,12 +16,15 @@ export default async function ErpProjectsPage() {
     include: {
       laborEntries: {
         select: {
+          id: true,
           workDate: true,
           workerName: true,
           role: true,
           hours: true,
           hourlyRateCents: true,
           taskDescription: true,
+          qualityRating: true,
+          qualityNotes: true,
           employee: { select: { firstName: true, lastName: true } },
         },
         orderBy: { workDate: "asc" },
@@ -44,7 +47,7 @@ export default async function ErpProjectsPage() {
           supervisor: true,
           description: true,
           laborers: {
-            select: { name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true },
+            select: { id: true, name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
             orderBy: { workDate: "asc" },
           },
         },
@@ -81,12 +84,16 @@ export default async function ErpProjectsPage() {
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
     const laborEntries = p.laborEntries.map((e) => ({
+      id: e.id,
+      updatePath: `/api/erp/projects/${p.id}/labor/${e.id}`,
       date: e.workDate.toISOString(),
       role: e.role ?? null,
       name: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() : e.workerName.trim(),
       hours: e.hours,
       hourlyRateCents: e.hourlyRateCents,
       description: e.taskDescription ?? null,
+      qualityRating: e.qualityRating ?? null,
+      qualityNotes: e.qualityNotes ?? null,
     }));
     const materialEntries = p.materialEntries.map((e) => ({
       date: e.usedOn.toISOString(),
@@ -136,12 +143,16 @@ export default async function ErpProjectsPage() {
         supervisor: co.supervisor,
         description: co.description,
         laborers: co.laborers.map((l) => ({
+          id: l.id,
+          updatePath: `/api/erp/change-order-laborers/${l.id}`,
           date: l.workDate.toISOString(),
           role: l.role ?? null,
           name: l.name,
           hours: l.hours,
           hourlyRateCents: l.hourlyRateCents,
           description: l.taskDescription ?? null,
+          qualityRating: l.qualityRating ?? null,
+          qualityNotes: l.qualityNotes ?? null,
         })),
         laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
       })),

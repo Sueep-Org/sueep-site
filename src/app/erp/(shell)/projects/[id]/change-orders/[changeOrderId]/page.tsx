@@ -61,6 +61,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
       hours: l.hours,
       hourlyRateCents: l.hourlyRateCents,
       taskDescription: l.taskDescription,
+      qualityRating: l.qualityRating ?? null,
+      qualityNotes: l.qualityNotes ?? null,
     })),
   };
 
