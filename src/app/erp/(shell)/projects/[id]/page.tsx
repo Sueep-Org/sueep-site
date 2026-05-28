@@ -10,6 +10,7 @@ import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
+import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -45,6 +46,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       where: { projectId: id },
       orderBy: { createdAt: "desc" },
       include: { laborers: { orderBy: { createdAt: "asc" } } },
+    }),
+    prisma.materialEntry.findMany({
+      where: { projectId: id },
+      orderBy: { usedOn: "desc" },
     }),
   ]);
   if (!project) notFound();
@@ -168,6 +173,22 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           projectId={project.id}
           initialAssignments={contractorRows}
           contractors={contractors}
+        />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Materials" defaultOpen={false}>
+        <ProjectMaterialsSection
+          projectId={project.id}
+          initialEntries={materialEntries.map((e) => ({
+            id: e.id,
+            usedOn: e.usedOn.toISOString(),
+            category: e.category as "CLEANING_PRODUCTS" | "PAINT",
+            itemName: e.itemName,
+            quantity: e.quantity,
+            unit: e.unit,
+            costCents: e.costCents,
+            notes: e.notes,
+          }))}
         />
       </CollapsiblePanel>
 
