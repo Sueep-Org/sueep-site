@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 export type ContractItem = {
   id: string;
@@ -268,47 +267,42 @@ export function ChangeOrderSigningSection({
     }
   }
 
-  const defaultOpen = contracts.length > 0;
-
   return (
-    <CollapsiblePanel title="Contract Signing" defaultOpen={defaultOpen}>
-      <div className="space-y-3">
-        {contracts.map((contract) => (
-          <ContractRow
-            key={contract.id}
-            contract={contract}
-            projectId={projectId}
-            changeOrderId={changeOrderId}
-            onUpdate={updateContract}
-            onRemove={removeContract}
-          />
-        ))}
+    <div className="space-y-3">
+      {contracts.map((contract) => (
+        <ContractRow
+          key={contract.id}
+          contract={contract}
+          projectId={projectId}
+          changeOrderId={changeOrderId}
+          onUpdate={updateContract}
+          onRemove={removeContract}
+        />
+      ))}
 
-        {/* Upload button */}
-        <div className={contracts.length > 0 ? "pt-1" : ""}>
-          {contracts.length === 0 && (
-            <p className="mb-3 text-xs text-gray-500">
-              Upload a contract PDF, place the customer&apos;s signature field in DocuSeal, then send it for signing via email.
-            </p>
-          )}
-          <label
-            htmlFor="co-contract-upload"
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-          >
-            {uploading ? "Uploading…" : contracts.length > 0 ? "+ Upload Another Contract" : "Upload PDF"}
-          </label>
-          <input
-            id="co-contract-upload"
-            ref={fileRef}
-            type="file"
-            accept="application/pdf"
-            className="sr-only"
-            disabled={uploading}
-            onChange={handleUpload}
-          />
-          {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
-        </div>
+      <div className={contracts.length > 0 ? "pt-1" : ""}>
+        {contracts.length === 0 && (
+          <p className="mb-3 text-xs text-gray-500">
+            Upload a contract PDF, place the customer&apos;s signature field in DocuSeal, then send it for signing via email.
+          </p>
+        )}
+        <label
+          htmlFor="co-contract-upload"
+          className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+        >
+          {uploading ? "Uploading…" : contracts.length > 0 ? "+ Upload Another Contract" : "Upload PDF"}
+        </label>
+        <input
+          id="co-contract-upload"
+          ref={fileRef}
+          type="file"
+          accept="application/pdf"
+          className="sr-only"
+          disabled={uploading}
+          onChange={handleUpload}
+        />
+        {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
       </div>
-    </CollapsiblePanel>
+    </div>
   );
 }

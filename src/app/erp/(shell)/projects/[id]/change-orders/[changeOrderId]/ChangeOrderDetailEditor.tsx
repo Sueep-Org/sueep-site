@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { ProjectDetailTabs } from "../../ProjectDetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
 import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
 
@@ -158,11 +158,13 @@ export function ChangeOrderDetailEditor({
   projectTitle,
   data,
   employees,
+  signingContent,
 }: {
   projectId: string;
   projectTitle: string;
   data: ChangeOrderDetailData;
   employees: EmployeeOption[];
+  signingContent?: React.ReactNode;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -268,157 +270,171 @@ export function ChangeOrderDetailEditor({
         </div>
       </div>
 
-      {/* Edit form */}
-      <CollapsiblePanel title="Details">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="sm:col-span-2">
-            <label className={label} htmlFor="co-title">Title *</label>
-            <input id="co-title" required className={input} value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-status">Status</label>
-            <select id="co-status" className={input} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={label} htmlFor="co-requested-by">Requested by</label>
-            <input id="co-requested-by" className={input} value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
-            <select id="co-supervisor" className={input} value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
-              <option value="">— None —</option>
-              {employees.map((e) => {
-                const name = `${e.firstName} ${e.lastName}`.trim();
-                return <option key={e.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
-          <div>
-            <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
-            <input id="co-est-cost" className={input} placeholder="1250.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-est-days">Schedule impact (days)</label>
-            <input id="co-est-days" type="number" min={0} step={1} className={input} value={estimatedDays} onChange={(e) => setEstimatedDays(e.target.value)} />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label} htmlFor="co-comments">Comments</label>
-            <textarea id="co-comments" rows={4} className={input} value={comments} onChange={(e) => setComments(e.target.value)} />
-          </div>
-        </div>
+      <ProjectDetailTabs tabs={[
+        {
+          label: "Details",
+          content: (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className={label} htmlFor="co-title">Title *</label>
+                  <input id="co-title" required className={input} value={title} onChange={(e) => setTitle(e.target.value)} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-status">Status</label>
+                  <select id="co-status" className={input} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-requested-by">Requested by</label>
+                  <input id="co-requested-by" className={input} value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
+                  <select id="co-supervisor" className={input} value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
+                    <option value="">— None —</option>
+                    {employees.map((e) => {
+                      const name = `${e.firstName} ${e.lastName}`.trim();
+                      return <option key={e.id} value={name}>{name}</option>;
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
+                  <input id="co-est-cost" className={input} placeholder="1250.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-est-days">Schedule impact (days)</label>
+                  <input id="co-est-days" type="number" min={0} step={1} className={input} value={estimatedDays} onChange={(e) => setEstimatedDays(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <label className={label} htmlFor="co-comments">Comments</label>
+                  <textarea id="co-comments" rows={4} className={input} value={comments} onChange={(e) => setComments(e.target.value)} />
+                </div>
+              </div>
 
-        {error ? <p className="mt-3 text-sm text-red-600" role="alert">{error}</p> : null}
+              {error ? <p className="mt-3 text-sm text-red-600" role="alert">{error}</p> : null}
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleSave}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-          {confirmDelete ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="text-sm text-gray-600">Delete this change order?</span>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={handleDelete}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Yes, delete"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Billing" defaultOpen={false}>
-        <ChangeOrderBillingEditor
-          projectId={projectId}
-          changeOrderId={data.id}
-          percentInvoiced={data.percentInvoiced}
-          billingStatus={data.billingStatus}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Assign Laborers" defaultOpen={false}>
-        <ChangeOrderLaborersSection
-          projectId={projectId}
-          changeOrderId={data.id}
-          initialLaborers={data.laborers}
-          employees={employees}
-        />
-      </CollapsiblePanel>
-
-      {/* Notify by email */}
-      {notifiableEmployees.length > 0 && (
-        <CollapsiblePanel title="Notify by email" defaultOpen={false}>
-          <LaborerMultiSelect
-            employees={notifiableEmployees}
-            selectedIds={notifyEmployeeIds}
-            onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={notifyEmployeeIds.length === 0 || notifyLoading}
-              onClick={async () => {
-                setNotifyLoading(true);
-                setNotifyResult(null);
-                try {
-                  const res = await fetch(
-                    `/api/erp/projects/${projectId}/change-orders/${data.id}/notify`,
-                    {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
-                    },
-                  );
-                  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string[]; error?: string };
-                  if (res.ok) {
-                    const sent = Array.isArray(json.sentTo) ? json.sentTo.join(", ") : (json.sentTo ?? "recipients");
-                    setNotifyResult({ ok: true, msg: `Email sent to ${sent}` });
-                    setNotifyEmployeeIds([]);
-                  } else {
-                    setNotifyResult({ ok: false, msg: json.error || "Failed to send email" });
-                  }
-                } catch {
-                  setNotifyResult({ ok: false, msg: "Network error" });
-                } finally {
-                  setNotifyLoading(false);
-                }
-              }}
-              className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
-              {notifyLoading ? "Sending…" : "Send notification"}
-            </button>
-            {notifyResult && (
-              <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
-                {notifyResult.msg}
-              </span>
-            )}
-          </div>
-        </CollapsiblePanel>
-      )}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleSave}
+                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+                {confirmDelete ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Delete this change order?</span>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={handleDelete}
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      {deleting ? "Deleting…" : "Yes, delete"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </>
+          ),
+        },
+        {
+          label: "Billing",
+          content: (
+            <ChangeOrderBillingEditor
+              projectId={projectId}
+              changeOrderId={data.id}
+              percentInvoiced={data.percentInvoiced}
+              billingStatus={data.billingStatus}
+            />
+          ),
+        },
+        {
+          label: "Laborers",
+          content: (
+            <ChangeOrderLaborersSection
+              projectId={projectId}
+              changeOrderId={data.id}
+              initialLaborers={data.laborers}
+              employees={employees}
+            />
+          ),
+        },
+        ...(notifiableEmployees.length > 0
+          ? [{
+              label: "Notify",
+              content: (
+                <>
+                  <LaborerMultiSelect
+                    employees={notifiableEmployees}
+                    selectedIds={notifyEmployeeIds}
+                    onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+                  />
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={notifyEmployeeIds.length === 0 || notifyLoading}
+                      onClick={async () => {
+                        setNotifyLoading(true);
+                        setNotifyResult(null);
+                        try {
+                          const res = await fetch(
+                            `/api/erp/projects/${projectId}/change-orders/${data.id}/notify`,
+                            {
+                              method: "POST",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
+                            },
+                          );
+                          const json = (await res.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string[]; error?: string };
+                          if (res.ok) {
+                            const sent = Array.isArray(json.sentTo) ? json.sentTo.join(", ") : (json.sentTo ?? "recipients");
+                            setNotifyResult({ ok: true, msg: `Email sent to ${sent}` });
+                            setNotifyEmployeeIds([]);
+                          } else {
+                            setNotifyResult({ ok: false, msg: json.error || "Failed to send email" });
+                          }
+                        } catch {
+                          setNotifyResult({ ok: false, msg: "Network error" });
+                        } finally {
+                          setNotifyLoading(false);
+                        }
+                      }}
+                      className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                    >
+                      {notifyLoading ? "Sending…" : "Send notification"}
+                    </button>
+                    {notifyResult && (
+                      <span className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`}>
+                        {notifyResult.msg}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ),
+            }]
+          : []),
+        ...(signingContent ? [{ label: "Signing", content: signingContent }] : []),
+      ]} />
     </div>
   );
 }

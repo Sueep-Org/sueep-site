@@ -143,7 +143,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       <table className="w-full min-w-[1420px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
           <tr>
-            <th colSpan={3} className="border-b border-r border-gray-300 bg-emerald-100 px-3 py-1.5 text-center font-semibold text-emerald-700">
+            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
               Janitorial Details
             </th>
             <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">

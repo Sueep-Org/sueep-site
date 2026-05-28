@@ -81,11 +81,13 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         projectTitle={project.jobTitle}
         data={data}
         employees={employees}
-      />
-      <ChangeOrderSigningSection
-        projectId={id}
-        changeOrderId={changeOrderId}
-        initialContracts={initialContracts}
+        signingContent={
+          <ChangeOrderSigningSection
+            projectId={id}
+            changeOrderId={changeOrderId}
+            initialContracts={initialContracts}
+          />
+        }
       />
     </div>
   );
