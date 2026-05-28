@@ -139,35 +139,35 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-white">
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full min-w-[1420px] text-left text-sm">
-        <thead className="border-b border-white text-xs uppercase">
+        <thead className="border-b border-gray-300 text-xs uppercase">
           <tr>
-            <th colSpan={3} className="border-b border-r border-white bg-emerald-100 px-3 py-1.5 text-center font-semibold text-emerald-700">
+            <th colSpan={3} className="border-b border-r border-gray-300 bg-emerald-100 px-3 py-1.5 text-center font-semibold text-emerald-700">
               Janitorial Details
             </th>
-            <th colSpan={4} className="border-b border-r border-white bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
+            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
               Turnover Budget
             </th>
-            <th colSpan={2} className="border-b border-r border-white bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
+            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
               Progress
             </th>
-            <th colSpan={2} className="border-b border-white bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
+            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
               Invoicing
             </th>
           </tr>
-          <tr className="bg-pink-500 text-white">
-            <th className="w-[420px] min-w-[420px] border-r border-white bg-pink-500 px-3 py-2 font-medium">Building / Turnover</th>
-            <th className="w-[220px] min-w-[220px] border-r border-white px-3 py-2 font-medium">PM</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Start</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Contract</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Materials</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Labor</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Hours</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Progress</th>
-            <th className="border-r border-white px-3 py-2 font-medium">Miles</th>
-            <th className="border-r border-white px-3 py-2 font-medium">% Invoiced</th>
-            <th className="px-3 py-2 font-medium">Billing Status</th>
+          <tr className="bg-gray-100 text-pink-700">
+            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Building / Turnover</th>
+            <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Start</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Materials</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Labor</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Hours</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Progress</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Miles</th>
+            <th className="border-r border-gray-300 px-3 py-2 font-semibold">% Invoiced</th>
+            <th className="px-3 py-2 font-semibold">Billing Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-300">

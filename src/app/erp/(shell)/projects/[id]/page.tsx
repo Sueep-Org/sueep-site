@@ -11,7 +11,7 @@ import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { ProjectDetailTabs } from "./ProjectDetailTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -104,33 +104,28 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     notes: a.notes,
   }));
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
-          ← Projects
-        </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} />
-          <ProjectDeleteButton projectId={project.id} />
-        </div>
-      </div>
-
-      <CollapsiblePanel title="Project Details">
-        <ProjectPricePackageEditor
-          projectId={project.id}
-          description={project.description}
-          contractValueCents={project.contractValueCents}
-        />
-        {project.description ? (
-          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-            <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
-            <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
-          </div>
-        ) : null}
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Project Setup" defaultOpen={false}>
+  const tabs = [
+    {
+      label: "Details",
+      content: (
+        <>
+          <ProjectPricePackageEditor
+            projectId={project.id}
+            description={project.description}
+            contractValueCents={project.contractValueCents}
+          />
+          {project.description ? (
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+            </div>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      label: "Setup",
+      content: (
         <ProjectSetupEditor
           projectId={project.id}
           status={project.status}
@@ -145,9 +140,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           description={project.description}
           showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS"}
         />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Money" defaultOpen={false}>
+      ),
+    },
+    {
+      label: "Money",
+      content: (
         <ProjectFinancialsEditor
           projectId={project.id}
           contractValueCents={project.contractValueCents}
@@ -162,21 +159,25 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           estHours={project.estHours}
           actualHours={project.actualHours}
         />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Labor" defaultOpen={false}>
-        <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Contractors" defaultOpen={false}>
+      ),
+    },
+    {
+      label: "Labor",
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />,
+    },
+    {
+      label: "Contractors",
+      content: (
         <ProjectContractorSection
           projectId={project.id}
           initialAssignments={contractorRows}
           contractors={contractors}
         />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Materials" defaultOpen={false}>
+      ),
+    },
+    {
+      label: "Materials",
+      content: (
         <ProjectMaterialsSection
           projectId={project.id}
           initialEntries={materialEntries.map((e) => ({
@@ -190,13 +191,31 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             notes: e.notes,
           }))}
         />
-      </CollapsiblePanel>
+      ),
+    },
+    ...(isPostConstruction
+      ? [
+          {
+            label: "Change Orders",
+            content: <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} />,
+          },
+        ]
+      : []),
+  ];
 
-      {isPostConstruction ? (
-        <CollapsiblePanel title="Change Orders" defaultOpen={false}>
-          <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} />
-        </CollapsiblePanel>
-      ) : null}
+  return (
+    <div className="space-y-6">
+      <div>
+        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
+          ← Projects
+        </Link>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} />
+          <ProjectDeleteButton projectId={project.id} />
+        </div>
+      </div>
+
+      <ProjectDetailTabs tabs={tabs} />
     </div>
   );
 }
