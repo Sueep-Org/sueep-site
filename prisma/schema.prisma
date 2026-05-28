@@ -415,6 +415,7 @@ model Employee {
   laborAssignments LaborAssignment[]
   projectLaborAssignments ProjectLaborAssignment[]
   changeOrderAssignments ProjectChangeOrderLaborer[]
+  contracts EmployeeContract[]
 
   @@index([status])
   @@index([defaultProject])
@@ -479,6 +480,7 @@ model Contractor {
 
   documents   ContractorDocument[]
   assignments ContractorAssignment[]
+  contracts   ContractorContract[]
 
   @@index([status])
   @@index([name])
@@ -588,7 +590,8 @@ model CandidateApplication {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
-  documents CandidateDocument[]
+  documents  CandidateDocument[]
+  contracts  CandidateContract[]
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
   questionnaireToken String? @unique
@@ -615,4 +618,61 @@ model CandidateDocument {
   data     Bytes
 
   @@index([candidateApplicationId])
+}
+
+model EmployeeContract {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  contractPdfFilename  String?
+  docusealTemplateId   Int?
+  signingStatus        String?
+  signerEmail          String?
+  docusealSubmissionId Int?
+  signedAt             DateTime?
+  signedDocumentUrl    String?
+
+  @@index([employeeId])
+  @@index([docusealSubmissionId])
+}
+
+model ContractorContract {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  contractPdfFilename  String?
+  docusealTemplateId   Int?
+  signingStatus        String?
+  signerEmail          String?
+  docusealSubmissionId Int?
+  signedAt             DateTime?
+  signedDocumentUrl    String?
+
+  @@index([contractorId])
+  @@index([docusealSubmissionId])
+}
+
+model CandidateContract {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+
+  candidateId String
+  candidate   CandidateApplication @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  contractPdfFilename  String?
+  docusealTemplateId   Int?
+  signingStatus        String?
+  signerEmail          String?
+  docusealSubmissionId Int?
+  signedAt             DateTime?
+  signedDocumentUrl    String?
+
+  @@index([candidateId])
+  @@index([docusealSubmissionId])
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoPanel } from "./ContractorInfoPanel";
@@ -13,7 +14,10 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ContractorDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const contractor = await prisma.contractor.findUnique({ where: { id } });
+  const contractor = await prisma.contractor.findUnique({
+    where: { id },
+    include: { contracts: { orderBy: { createdAt: "asc" } } },
+  });
   if (!contractor) notFound();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
@@ -93,6 +97,23 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 phone: contractor.phone,
                 hasInsurance: contractor.hasInsurance,
               }}
+            />
+          ),
+        },
+        {
+          label: "Signing",
+          content: (
+            <ContractSigningSection
+              apiBasePath={`/api/erp/contractors/${contractor.id}`}
+              initialContracts={contractor.contracts.map((c) => ({
+                id: c.id,
+                contractPdfFilename: c.contractPdfFilename,
+                docusealTemplateId: c.docusealTemplateId,
+                signingStatus: c.signingStatus,
+                signerEmail: c.signerEmail,
+                signedAt: c.signedAt?.toISOString() ?? null,
+                signedDocumentUrl: c.signedDocumentUrl,
+              }))}
             />
           ),
         },

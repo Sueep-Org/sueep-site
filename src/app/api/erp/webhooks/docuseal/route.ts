@@ -31,20 +31,27 @@ export async function POST(req: Request) {
   const submission = payload.data?.submission;
   if (!submission?.id) return NextResponse.json({ ok: true });
 
-  const contract = await prisma.changeOrderContract.findFirst({
-    where: { docusealSubmissionId: submission.id },
-    select: { id: true, signingStatus: true },
-  });
-  if (!contract || contract.signingStatus === "SIGNED") return NextResponse.json({ ok: true });
-
   const signedDocumentUrl = submission.documents?.[0]?.url ?? null;
   const completedAt = submission.submitters?.[0]?.completed_at;
   const signedAt = completedAt ? new Date(completedAt) : new Date();
+  const updateData = { signingStatus: "SIGNED", signedAt, signedDocumentUrl };
 
-  await prisma.changeOrderContract.update({
-    where: { id: contract.id },
-    data: { signingStatus: "SIGNED", signedAt, signedDocumentUrl },
-  });
+  const [coContract, empContract, contractorContract, candidateContract] = await Promise.all([
+    prisma.changeOrderContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
+    prisma.employeeContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
+    prisma.contractorContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
+    prisma.candidateContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
+  ]);
+
+  if (coContract && coContract.signingStatus !== "SIGNED") {
+    await prisma.changeOrderContract.update({ where: { id: coContract.id }, data: updateData });
+  } else if (empContract && empContract.signingStatus !== "SIGNED") {
+    await prisma.employeeContract.update({ where: { id: empContract.id }, data: updateData });
+  } else if (contractorContract && contractorContract.signingStatus !== "SIGNED") {
+    await prisma.contractorContract.update({ where: { id: contractorContract.id }, data: updateData });
+  } else if (candidateContract && candidateContract.signingStatus !== "SIGNED") {
+    await prisma.candidateContract.update({ where: { id: candidateContract.id }, data: updateData });
+  }
 
   return NextResponse.json({ ok: true });
 }

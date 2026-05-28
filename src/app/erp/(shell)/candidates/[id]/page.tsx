@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CandidateApplicationEditor } from "./CandidateApplicationEditor";
 import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       bankAccountRequired: true,
       paperworkUploadToken: true,
       paperworkUploadTokenExpiry: true,
+      contracts: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!row) notFound();
@@ -140,6 +142,23 @@ export default async function CandidateDetailPage({ params }: PageProps) {
               </dl>
               <p className="mt-4 text-xs text-zinc-600 font-mono">id: {row.id}</p>
             </>
+          ),
+        },
+        {
+          label: "Signing",
+          content: (
+            <ContractSigningSection
+              apiBasePath={`/api/erp/candidates/${row.id}`}
+              initialContracts={row.contracts.map((c) => ({
+                id: c.id,
+                contractPdfFilename: c.contractPdfFilename,
+                docusealTemplateId: c.docusealTemplateId,
+                signingStatus: c.signingStatus,
+                signerEmail: c.signerEmail,
+                signedAt: c.signedAt?.toISOString() ?? null,
+                signedDocumentUrl: c.signedDocumentUrl,
+              }))}
+            />
           ),
         },
       ]} />
