@@ -99,25 +99,8 @@ async function refreshDrawer(){
       dlBtn.textContent = '⬇ JSON';
       dlBtn.title = 'Download analysis result';
       dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;color:#333;flex-shrink:0;';
-      dlBtn.onclick = async ()=>{
-        try{
-          dlBtn.textContent = '⏳';
-          dlBtn.disabled = true;
-          const resp = await fetch(downloadUrl, { credentials: 'include' });
-          if (!resp.ok) throw new Error(`${resp.status}`);
-          const blob = await resp.blob();
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = display;
-          a.click();
-          URL.revokeObjectURL(a.href);
-          dlBtn.textContent = '⬇ JSON';
-          dlBtn.disabled = false;
-        }catch(e){
-          dlBtn.textContent = '⬇ JSON';
-          dlBtn.disabled = false;
-          toast('Download failed: ' + e.message, 'error');
-        }
+      dlBtn.onclick = ()=>{
+        window.open(downloadUrl, '_blank');
       };
 
       const delBtn = document.createElement('button');
