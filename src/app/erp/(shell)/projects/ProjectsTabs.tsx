@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
@@ -67,8 +68,12 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
 
   function getTab(row: ProjectTableRow): Tab {
     const pid = row.hubspotPipelineId;
-    if (!pid) return "manual";
-    if (pid === janitorialPipelineId) return "janitorial";
+    const segment = normalizeProjectSegment(row.segment);
+    const looksLikeTurnoverRequest =
+      segment === "JANITORIAL_TURNOVER_REQUESTS" ||
+      Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im));
+
+    if (pid === janitorialPipelineId || looksLikeTurnoverRequest) return "janitorial";
     if (pid === residentialPipelineId) return "residential";
     if (pid === postConstructionPipelineId) return "post-construction";
     return "manual";
