@@ -397,7 +397,6 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Labor (Est / Act)</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Hours (Est / Act)</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Progress</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Miles</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">% Invoiced</th>
             <th className="px-3 py-2 font-semibold">Billing Status</th>
           </tr>
@@ -445,7 +444,6 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
                   <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
                     {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                   </td>
@@ -456,7 +454,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                   <>
                     {/* Project detail */}
                     <tr className={styles.detail}>
-                      <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {isJanitorial ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
@@ -519,8 +517,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                                 ? centsToDollars(co.laborCostCents)
                                 : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Hours, Progress, Miles - not applicable to COs */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
+                            {/* Hours, Progress - not applicable to COs */}
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
                             <td className="border-r border-gray-200 px-3 py-1.5 text-gray-900">
@@ -533,7 +530,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={11} className="bg-gray-50 px-6 py-2 pb-3">
+                              <td colSpan={10} className="bg-gray-50 px-6 py-2 pb-3">
                                 <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
                                   <LaborTable entries={co.laborers} />

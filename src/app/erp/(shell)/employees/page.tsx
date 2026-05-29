@@ -142,24 +142,17 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={`/erp/employees?sortBy=defaultProject&sortDir=${sortBy === "defaultProject" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
-                    Default project
-                  </Link>
-                </th>
-                <th className="px-3 py-2 font-semibold">Start date</th>
-                <th className="px-3 py-2 font-semibold">
                   <Link href={`/erp/employees?sortBy=compliance&sortDir=${sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
                     Compliance
                   </Link>
                 </th>
-                <th className="px-3 py-2 font-semibold">Docs on file</th>
                 <th className="px-3 py-2 font-semibold">Contact</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -173,14 +166,11 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
                     <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>
-                    <td className="px-3 py-2 text-gray-900">{r.defaultProject || "—"}</td>
-                    <td className="px-3 py-2 text-gray-900">{r.hireDate ? new Date(r.hireDate).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(r.compliance)}`}>
                         {complianceLabel(r.compliance)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-900">{r.documents.length}</td>
                     <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>
                   </tr>
                 ))
