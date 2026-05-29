@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { verifyHubSpotWebhookPost } from "@/lib/hubspot/signature";
 import { handleHubSpotWebhookEvents, parseHubSpotWebhookBody } from "@/lib/hubspot/webhookEvents";
@@ -37,12 +38,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  try {
-    handleHubSpotWebhookEvents(events);
-  } catch (e) {
-    console.error("hubspot webhook handler", e);
-    return NextResponse.json({ error: "Handler failed" }, { status: 500 });
-  }
+  // Respond immediately so HubSpot doesn't retry; sync runs after the response.
+  after(() => handleHubSpotWebhookEvents(events));
 
   return NextResponse.json({ received: events.length });
 }
