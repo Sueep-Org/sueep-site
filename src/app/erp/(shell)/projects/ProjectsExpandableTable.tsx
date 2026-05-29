@@ -64,17 +64,17 @@ export type ProjectTableRow = {
 
 export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
   DRAFT: "bg-gray-200 text-gray-600",
-  SUBMITTED: "bg-gray-200 text-gray-700",
-  APPROVED: "bg-gray-300 text-gray-800",
-  REJECTED: "bg-gray-200 text-gray-500",
+  SUBMITTED: "bg-blue-100 text-blue-700",
+  APPROVED: "bg-emerald-100 text-emerald-700",
+  REJECTED: "bg-red-100 text-red-600",
   VOID: "bg-gray-100 text-gray-500",
-  BILLING: "bg-pink-100 text-pink-700",
+  BILLING: "bg-purple-100 text-purple-700",
 };
 
 export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {
-  if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-gray-500 hover:underline" };
-  if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-purple-600 hover:underline" };
-  return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-emerald-600 hover:underline" };
+  if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-gray-500 hover:underline" };
+  if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-purple-600 hover:underline" };
+  return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-emerald-600 hover:underline" };
 }
 
 type LaborRow = LaborRowBase;
@@ -172,18 +172,25 @@ export function TurnoverPricingSummary({
 }
 
 const QUALITY_OPTIONS = [
-  { value: "", label: "—" },
-  { value: "EXCELLENT", label: "Excellent" },
-  { value: "GOOD", label: "Good" },
-  { value: "FAIR", label: "Fair" },
-  { value: "POOR", label: "Poor" },
+  { value: "", label: "—", score: null },
+  { value: "POOR", label: "Poor", score: 1 },
+  { value: "FAIR", label: "Fair", score: 2 },
+  { value: "GOOD", label: "Good", score: 3 },
+  { value: "EXCELLENT", label: "Excellent", score: 4 },
 ];
 
+const QUALITY_SCORE: Record<string, number> = {
+  POOR: 1,
+  FAIR: 2,
+  GOOD: 3,
+  EXCELLENT: 4,
+};
+
 const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-pink-600",
+  EXCELLENT: "text-emerald-600",
   GOOD: "text-gray-800",
   FAIR: "text-gray-500",
-  POOR: "text-gray-400",
+  POOR: "text-red-400",
 };
 
 export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
@@ -261,16 +268,25 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
                   <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
                   <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3">
-                    <select
-                      value={quality}
-                      onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
-                      onClick={(ev) => ev.stopPropagation()}
-                      className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                    >
-                      {QUALITY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1">
+                      {quality ? (
+                        <span className={`shrink-0 text-xs font-bold tabular-nums ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
+                          {QUALITY_SCORE[quality]}
+                        </span>
+                      ) : null}
+                      <select
+                        value={quality}
+                        onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
+                        onClick={(ev) => ev.stopPropagation()}
+                        className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-300 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                      >
+                        {QUALITY_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.score != null ? `${opt.score} – ${opt.label}` : opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </td>
                   <td className="py-1">
                     <button
@@ -385,39 +401,39 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-white">
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full min-w-[1600px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
-            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-200 px-3 py-2 font-semibold">Job</th>
-            <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Segment</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Material (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Labor (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Hours (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Progress</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Miles</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">% Invoiced</th>
+            <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
+            <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>
+            <th className="px-3 py-2 font-semibold">Segment</th>
+            <th className="px-3 py-2 font-semibold">Contract</th>
+            <th className="px-3 py-2 font-semibold">Material (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Labor (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Hours (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Progress</th>
+            <th className="px-3 py-2 font-semibold">% Invoiced</th>
             <th className="px-3 py-2 font-semibold">Billing Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-300">
-          {rows.map((p) => {
+        <tbody>
+          {rows.map((p, i) => {
             const isOpen = openSet.has(p.id);
             const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
+            const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             return (
               <Fragment key={p.id}>
                 {/* Project row */}
                 <tr
-                  className={`${styles.row} cursor-pointer`}
+                  className={`${rowBg} cursor-pointer transition-colors`}
                   onClick={() => toggle(p.id)}
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse" : "Expand"}
                 >
-                  <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
+                  <td className="w-[420px] min-w-[420px] px-3 py-2">
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -427,26 +443,25 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     </Link>
                     {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
                   </td>
-                  <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
                     <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
                     <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
                     <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.miles.toFixed(1)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                  <td className="px-3 py-2 text-gray-900">
                     {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
@@ -456,7 +471,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                   <>
                     {/* Project detail */}
                     <tr className={styles.detail}>
-                      <td colSpan={11} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {isJanitorial ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
@@ -474,56 +489,55 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                       return (
                         <Fragment key={co.id}>
                           <tr
-                            className="cursor-pointer bg-pink-50 hover:bg-pink-100"
+                            className="cursor-pointer bg-gray-50 hover:bg-gray-100"
                             onClick={(e) => toggleCo(co.id, e)}
                             aria-expanded={isCoOpen}
                           >
                             {/* Job -> CO title + status */}
-                            <td className="w-[420px] min-w-[420px] border-r border-gray-200 bg-pink-50 px-3 py-1.5">
+                            <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
                               <div className="flex items-center gap-2 pl-4">
                                 <span className="shrink-0 text-gray-300">&gt;</span>
-                                <span className="shrink-0 rounded bg-pink-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pink-800">CO</span>
+                                <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">CO</span>
                                 <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${CO_STATUS_COLORS[co.status]}`}>
                                   {co.status}
                                 </span>
                                 <Link
                                   href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="truncate text-sm font-medium text-pink-600 hover:underline"
+                                  className="truncate text-sm font-medium text-gray-700 hover:underline"
                                 >
                                   {co.title}
                                 </Link>
                               </div>
                             </td>
                             {/* PM -> Requested by */}
-                            <td className="w-[220px] min-w-[220px] border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
+                            <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
                               {co.requestedBy || <span className="text-gray-400">-</span>}
                             </td>
                             {/* Segment -> "Change Order" label */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm font-medium text-pink-700">
+                            <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
                               Change Order
                             </td>
                             {/* Contract -> Est. Cost */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {centsToDollars(co.estimatedCostCents)}
                             </td>
                             {/* Material -> Schedule days */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
+                            <td className="px-3 py-1.5 text-sm text-gray-700">
                               {co.estimatedDays != null
                                 ? <>{co.estimatedDays}d</>
                                 : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Labor -> labor cost */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.laborCostCents > 0
                                 ? centsToDollars(co.laborCostCents)
                                 : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Hours, Progress, Miles - not applicable to COs */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-900">
+                            {/* Hours, Progress - not applicable to COs */}
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Billing Status -> CO billing status */}
@@ -533,7 +547,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={11} className="bg-pink-50 px-6 py-2 pb-3">
+                              <td colSpan={10} className="bg-gray-50 px-6 py-2 pb-3">
                                 <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
                                   <LaborTable entries={co.laborers} />
@@ -566,7 +580,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                                     <Link
                                       href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                                       onClick={(e) => e.stopPropagation()}
-                                      className="mt-auto pt-2 text-xs font-medium text-pink-600 hover:underline"
+                                      className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
                                     >
                                       Full details {"->"}
                                     </Link>

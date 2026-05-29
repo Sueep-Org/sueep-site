@@ -24,7 +24,7 @@ export default async function ContractorAssignmentDetailPage({ params }: PagePro
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/erp/contractor-assignments" className="text-xs text-pink-600 hover:underline">
+        <Link href="/erp/contractor-assignments" className="text-xs text-gray-500 hover:underline">
           ← Contractor assignments
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">
@@ -66,7 +66,7 @@ export default async function ContractorAssignmentDetailPage({ params }: PagePro
               <div>
                 <dt className="font-semibold text-gray-600">Project</dt>
                 <dd>
-                  <Link href={`/erp/projects/${assignment.project.id}`} className="text-pink-600 hover:underline">
+                  <Link href={`/erp/projects/${assignment.project.id}`} className="text-gray-600 hover:underline">
                     {assignment.project.jobTitle}
                   </Link>
                 </dd>
@@ -95,7 +95,7 @@ export default async function ContractorAssignmentDetailPage({ params }: PagePro
             <div className="pt-2">
               <dt className="font-semibold text-gray-600">Contractor profile</dt>
               <dd className="mt-1">
-                <Link href={`/erp/contractors/${assignment.contractorId}`} className="text-pink-600 hover:underline">
+                <Link href={`/erp/contractors/${assignment.contractorId}`} className="text-gray-600 hover:underline">
                   View contractor →
                 </Link>
               </dd>

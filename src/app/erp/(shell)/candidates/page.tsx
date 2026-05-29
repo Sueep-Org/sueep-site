@@ -25,10 +25,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
-        <p className="mt-1 text-sm text-gray-500">{candidates.length} application{candidates.length !== 1 ? "s" : ""}</p>
       </div>
-
-       <hr className="border-pink-200" />
 
       <CandidatesFilters search={search} status={statusFilter} />
 
@@ -39,21 +36,21 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-pink-400 bg-pink-600 text-xs uppercase text-white">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs uppercase text-gray-700">
               <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Phone</th>
-                <th className="px-4 py-2 font-medium">Position Interest</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Applied</th>
+                <th className="px-4 py-2 font-semibold">Name</th>
+                <th className="px-4 py-2 font-semibold">Email</th>
+                <th className="px-4 py-2 font-semibold">Phone</th>
+                <th className="px-4 py-2 font-semibold">Position Interest</th>
+                <th className="px-4 py-2 font-semibold">Status</th>
+                <th className="px-4 py-2 font-semibold">Applied</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {candidates.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
+            <tbody>
+              {candidates.map((c, i) => (
+                <tr key={c.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    <Link href={`/erp/candidates/${c.id}`} className="hover:text-[#E73C6E] hover:underline">
+                    <Link href={`/erp/candidates/${c.id}`} className="text-gray-800 hover:underline">
                       {c.fullName}
                     </Link>
                   </td>

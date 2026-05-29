@@ -47,16 +47,15 @@ export default async function QualityChecksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Quality checks</h1>
-          <p className="mt-1 text-sm text-gray-600">Record inspection signoff and evidence for turnover requests.</p>
+          <h1 className="text-2xl font-semibold text-pink-600">Quality checks</h1>
         </div>
         <NewQualityCheckForm />
       </div>
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] divide-y divide-gray-200 text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <table className="w-full min-w-[960px] text-left text-sm">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
                 <th className="px-4 py-3">Request</th>
                 <th className="px-4 py-3">Supervisor</th>
@@ -66,7 +65,7 @@ export default async function QualityChecksPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody>
               {checks.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
@@ -74,8 +73,8 @@ export default async function QualityChecksPage() {
                   </td>
                 </tr>
               ) : (
-                checks.map((check) => (
-                  <tr key={check.id} className="hover:bg-gray-50">
+                checks.map((check, i) => (
+                  <tr key={check.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                     <td className="px-4 py-3 text-gray-900">
                       {check.turnoverRequest.building.name} • {check.turnoverRequest.requestType}
                       {check.turnoverRequest.unitNumber ? ` • ${check.turnoverRequest.unitNumber}` : ""}
@@ -87,7 +86,7 @@ export default async function QualityChecksPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/erp/quality-checks/${check.id}`}
-                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+                        className="rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
                       >
                         View
                       </Link>

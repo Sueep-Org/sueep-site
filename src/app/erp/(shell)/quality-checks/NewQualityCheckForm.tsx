@@ -74,7 +74,7 @@ export function NewQualityCheckForm() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
+        className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
       >
         {open ? "Close" : "New quality check"}
       </button>
@@ -97,7 +97,7 @@ export function NewQualityCheckForm() {
                 type="checkbox"
                 checked={pmApproval}
                 onChange={(e) => setPmApproval(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-pink-600"
+                className="h-4 w-4 rounded border-gray-300 text-gray-600"
               />
               PM approval
             </label>
@@ -153,7 +153,7 @@ export function NewQualityCheckForm() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
+            className="rounded-md bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300 disabled:opacity-50"
           >
             {loading ? "Saving…" : "Create quality check"}
           </button>

@@ -128,7 +128,7 @@ export function LaborAssignmentProfileEditor({ assignmentId, initial }: Props) {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
         >
           {loading ? "Saving…" : "Save assignment"}
         </button>

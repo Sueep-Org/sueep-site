@@ -70,70 +70,9 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     return an.localeCompare(bn);
   });
 
-  const compliantCount = rows.filter((r) => r.compliance === "COMPLIANT").length;
-  const nonCompliantCount = rows.filter((r) => r.compliance === "NON_COMPLIANT").length;
-  const notConfiguredCount = rows.filter((r) => r.compliance === "NOT_CONFIGURED").length;
-
-  const inactiveCount = employees.filter((e) => e.status === "INACTIVE").length;
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-pink-600">Employees</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Track compliance completion, documentation, and general employee information.
-        </p>
-      </div>
-
-      <hr className="border-pink-200" />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          href="/erp/employees"
-          className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
-        >
-          <span className="h-2 w-2 rounded-full bg-gray-400" />
-          <span className="font-medium text-gray-700">{rows.length}</span>
-          <span className="text-gray-400 text-xs">total</span>
-        </Link>
-        <Link
-          href="/erp/employees?compliance=COMPLIANT"
-          className="flex items-center gap-2.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm hover:bg-emerald-100 transition-colors"
-        >
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="font-medium text-emerald-700">{compliantCount}</span>
-          <span className="text-emerald-600 text-xs">compliant</span>
-        </Link>
-        <Link
-          href="/erp/employees?compliance=NON_COMPLIANT"
-          className="flex items-center gap-2.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm hover:bg-red-100 transition-colors"
-        >
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          <span className="font-medium text-red-700">{nonCompliantCount}</span>
-          <span className="text-red-600 text-xs">non-compliant</span>
-        </Link>
-        <Link
-          href="/erp/employees?compliance=NOT_CONFIGURED"
-          className="flex items-center gap-2.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm hover:bg-amber-100 transition-colors"
-        >
-          <span className="h-2 w-2 rounded-full bg-amber-400" />
-          <span className="font-medium text-amber-700">{notConfiguredCount}</span>
-          <span className="text-amber-600 text-xs">not configured</span>
-        </Link>
-        {inactiveCount > 0 && (
-          <Link
-            href="/erp/employees?compliance=INACTIVE"
-            className="flex items-center gap-2.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm hover:bg-gray-100 transition-colors"
-          >
-            <span className="h-2 w-2 rounded-full bg-gray-300" />
-            <span className="font-medium text-gray-500">{inactiveCount}</span>
-            <span className="text-gray-400 text-xs">inactive</span>
-          </Link>
-        )}
-        <NewEmployeeForm />
-      </div>
-
-      <hr className="border-pink-200" />
+      <NewEmployeeForm title={<h1 className="text-2xl font-bold text-pink-600">Employees</h1>} />
 
       <section className="rounded-lg">
         <form className="flex flex-wrap items-end gap-2">
@@ -189,59 +128,49 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
         </form>
         <div className="mt-4 overflow-x-auto rounded-lg border border-gray-300">
           <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead className="border-b border-pink-300 bg-pink-600 text-xs uppercase text-white">
+            <thead className="border-b border-gray-300 bg-gray-100 text-xs font-semibold uppercase text-gray-500">
               <tr>
-                <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
+                <th className="px-3 py-2 font-semibold">
+                  <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
                     Name
                   </Link>
                 </th>
-                <th className="px-3 py-2 font-medium">Role</th>
-                <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=hourlyPay&sortDir=${sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
+                <th className="px-3 py-2 font-semibold">Role</th>
+                <th className="px-3 py-2 font-semibold">
+                  <Link href={`/erp/employees?sortBy=hourlyPay&sortDir=${sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
                     Hourly pay
                   </Link>
                 </th>
-                <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=defaultProject&sortDir=${sortBy === "defaultProject" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
-                    Default project
-                  </Link>
-                </th>
-                <th className="px-3 py-2 font-medium">Start date</th>
-                <th className="px-3 py-2 font-medium">
-                  <Link href={`/erp/employees?sortBy=compliance&sortDir=${sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-900">
+                <th className="px-3 py-2 font-semibold">
+                  <Link href={`/erp/employees?sortBy=compliance&sortDir=${sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
                     Compliance
                   </Link>
                 </th>
-                <th className="px-3 py-2 font-medium">Docs on file</th>
-                <th className="px-3 py-2 font-medium">Contact</th>
+                <th className="px-3 py-2 font-semibold">Contact</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="even:bg-gray-50 odd:bg-white hover:bg-pink-50 transition-colors">
+                  <tr key={r.id} className="even:bg-gray-50 odd:bg-white hover:bg-gray-100 transition-colors">
                     <td className="px-3 py-2">
-                      <Link href={`/erp/employees/${r.id}`} className="font-medium text-pink-600 hover:underline">
+                      <Link href={`/erp/employees/${r.id}`} className="font-medium text-gray-800 hover:underline">
                         {r.firstName} {r.lastName}
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
                     <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>
-                    <td className="px-3 py-2 text-gray-900">{r.defaultProject || "—"}</td>
-                    <td className="px-3 py-2 text-gray-900">{r.hireDate ? new Date(r.hireDate).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(r.compliance)}`}>
                         {complianceLabel(r.compliance)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-900">{r.documents.length}</td>
                     <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>
                   </tr>
                 ))
