@@ -172,18 +172,25 @@ export function TurnoverPricingSummary({
 }
 
 const QUALITY_OPTIONS = [
-  { value: "", label: "—" },
-  { value: "EXCELLENT", label: "Excellent" },
-  { value: "GOOD", label: "Good" },
-  { value: "FAIR", label: "Fair" },
-  { value: "POOR", label: "Poor" },
+  { value: "", label: "—", score: null },
+  { value: "POOR", label: "Poor", score: 1 },
+  { value: "FAIR", label: "Fair", score: 2 },
+  { value: "GOOD", label: "Good", score: 3 },
+  { value: "EXCELLENT", label: "Excellent", score: 4 },
 ];
 
+const QUALITY_SCORE: Record<string, number> = {
+  POOR: 1,
+  FAIR: 2,
+  GOOD: 3,
+  EXCELLENT: 4,
+};
+
 const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-pink-600",
+  EXCELLENT: "text-emerald-600",
   GOOD: "text-gray-800",
   FAIR: "text-gray-500",
-  POOR: "text-gray-400",
+  POOR: "text-red-400",
 };
 
 export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
@@ -261,16 +268,25 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
                   <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
                   <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3">
-                    <select
-                      value={quality}
-                      onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
-                      onClick={(ev) => ev.stopPropagation()}
-                      className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                    >
-                      {QUALITY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1">
+                      {quality ? (
+                        <span className={`shrink-0 text-xs font-bold tabular-nums ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
+                          {QUALITY_SCORE[quality]}
+                        </span>
+                      ) : null}
+                      <select
+                        value={quality}
+                        onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
+                        onClick={(ev) => ev.stopPropagation()}
+                        className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-300 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                      >
+                        {QUALITY_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.score != null ? `${opt.score} – ${opt.label}` : opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </td>
                   <td className="py-1">
                     <button
