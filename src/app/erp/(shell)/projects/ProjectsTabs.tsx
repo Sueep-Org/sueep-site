@@ -11,7 +11,7 @@ type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "post-construction", label: "Post-Construction" },
+  { id: "post-construction", label: "Post-Const" },
   { id: "janitorial", label: "Janitorial" },
   { id: "residential", label: "Residential" },
   { id: "manual", label: "Manual" },
@@ -75,68 +75,83 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <input
-          type="search"
-          placeholder="Search projects…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 sm:max-w-xs"
-        />
+      {/* Mobile */}
+      <div className="flex flex-col gap-2 md:hidden mb-3">
         <select
-          value={activeLifecycle ?? ""}
-          onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          value={activeTab}
+          onChange={(e) => setActiveTab(e.target.value as Tab)}
+          className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         >
-          <option value="">All statuses</option>
-          {LIFECYCLE_FILTERS.map((lc) => (
-            <option key={lc.id} value={lc.id}>{lc.label}</option>
+          {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
+            <option key={tab.id} value={tab.id}>{tab.label} ({countFor(tab.id)})</option>
           ))}
         </select>
+        <div className="flex gap-2">
+          <input
+            type="search"
+            placeholder="Search projects…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
+          <select
+            value={activeLifecycle ?? ""}
+            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          >
+            <option value="">All statuses</option>
+            {LIFECYCLE_FILTERS.map((lc) => (
+              <option key={lc.id} value={lc.id}>{lc.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Mobile: dropdown */}
-      <select
-        value={activeTab}
-        onChange={(e) => setActiveTab(e.target.value as Tab)}
-        className="sm:hidden mb-3 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-      >
-        {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
-          <option key={tab.id} value={tab.id}>
-            {tab.label} ({countFor(tab.id)})
-          </option>
-        ))}
-      </select>
-
-      {/* Desktop: tab buttons */}
-      <div className="hidden sm:flex gap-1 border-b border-gray-200">
-        {TABS.map((tab) => {
-          const count = countFor(tab.id);
-          if (count === 0 && tab.id !== "all") return null;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={[
-                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-                isActive
-                  ? "border-pink-600 text-pink-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-              ].join(" ")}
-            >
-              {tab.label}
-              <span
+      {/* Desktop: tabs + search/filter on one line */}
+      <div className="hidden md:flex items-center justify-between border-b border-gray-200">
+        <div className="flex gap-1">
+          {TABS.map((tab) => {
+            const count = countFor(tab.id);
+            if (count === 0 && tab.id !== "all") return null;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={[
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                  isActive ? "bg-pink-100 text-pink-700" : "bg-gray-100 text-gray-500",
+                  "flex items-center gap-1 px-2 py-2 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                  isActive
+                    ? "border-pink-600 text-pink-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
                 ].join(" ")}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                {tab.label}
+                <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold", isActive ? "bg-pink-100 text-pink-700" : "bg-gray-100 text-gray-500"].join(" ")}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 pb-1">
+          <input
+            type="search"
+            placeholder="Search projects…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 w-48"
+          />
+          <select
+            value={activeLifecycle ?? ""}
+            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          >
+            <option value="">All statuses</option>
+            {LIFECYCLE_FILTERS.map((lc) => (
+              <option key={lc.id} value={lc.id}>{lc.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="mt-4">
