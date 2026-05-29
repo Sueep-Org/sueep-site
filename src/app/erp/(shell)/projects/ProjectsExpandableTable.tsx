@@ -388,35 +388,36 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full min-w-[1600px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
-          <tr className="bg-gray-100 text-gray-700">
-            <th className="w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 font-semibold">Job</th>
-            <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Segment</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Material (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Labor (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Hours (Est / Act)</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">Progress</th>
-            <th className="border-r border-gray-300 px-3 py-2 font-semibold">% Invoiced</th>
+          <tr className="bg-gray-200 text-gray-700">
+            <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
+            <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>
+            <th className="px-3 py-2 font-semibold">Segment</th>
+            <th className="px-3 py-2 font-semibold">Contract</th>
+            <th className="px-3 py-2 font-semibold">Material (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Labor (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Hours (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Progress</th>
+            <th className="px-3 py-2 font-semibold">% Invoiced</th>
             <th className="px-3 py-2 font-semibold">Billing Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-300">
-          {rows.map((p) => {
+        <tbody>
+          {rows.map((p, i) => {
             const isOpen = openSet.has(p.id);
             const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
+            const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             return (
               <Fragment key={p.id}>
                 {/* Project row */}
                 <tr
-                  className={`${styles.row} cursor-pointer`}
+                  className={`${rowBg} cursor-pointer transition-colors`}
                   onClick={() => toggle(p.id)}
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse" : "Expand"}
                 >
-                  <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 ${styles.sticky}`}>
+                  <td className="w-[420px] min-w-[420px] px-3 py-2">
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -426,25 +427,25 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     </Link>
                     {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
                   </td>
-                  <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
                     <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
                     <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">
                     <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
                     <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-900">
+                  <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                  <td className="px-3 py-2 text-gray-900">
                     {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
@@ -477,7 +478,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                             aria-expanded={isCoOpen}
                           >
                             {/* Job -> CO title + status */}
-                            <td className="w-[420px] min-w-[420px] border-r border-gray-200 bg-gray-50 px-3 py-1.5">
+                            <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
                               <div className="flex items-center gap-2 pl-4">
                                 <span className="shrink-0 text-gray-300">&gt;</span>
                                 <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">CO</span>
@@ -494,33 +495,33 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                               </div>
                             </td>
                             {/* PM -> Requested by */}
-                            <td className="w-[220px] min-w-[220px] border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
+                            <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
                               {co.requestedBy || <span className="text-gray-400">-</span>}
                             </td>
                             {/* Segment -> "Change Order" label */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-500">
+                            <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
                               Change Order
                             </td>
                             {/* Contract -> Est. Cost */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {centsToDollars(co.estimatedCostCents)}
                             </td>
                             {/* Material -> Schedule days */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm text-gray-700">
+                            <td className="px-3 py-1.5 text-sm text-gray-700">
                               {co.estimatedDays != null
                                 ? <>{co.estimatedDays}d</>
                                 : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Labor -> labor cost */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.laborCostCents > 0
                                 ? centsToDollars(co.laborCostCents)
                                 : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Hours, Progress - not applicable to COs */}
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-400">-</td>
-                            <td className="border-r border-gray-200 px-3 py-1.5 text-gray-900">
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Billing Status -> CO billing status */}
