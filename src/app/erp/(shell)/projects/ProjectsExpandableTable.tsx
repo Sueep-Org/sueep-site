@@ -99,7 +99,15 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-export function TurnoverPricingSummary({ project, showPropertyTitle = true }: { project: ProjectTableRow; showPropertyTitle?: boolean }) {
+export function TurnoverPricingSummary({
+  project,
+  showPropertyTitle = true,
+  showUnitsSummary = true,
+}: {
+  project: ProjectTableRow;
+  showPropertyTitle?: boolean;
+  showUnitsSummary?: boolean;
+}) {
   const property = getDetailLine(project.description, "Property");
   const units = getDetailLine(project.description, "Units");
   const total = getDetailLine(project.description, "Estimated Turnover Total");
@@ -113,7 +121,7 @@ export function TurnoverPricingSummary({ project, showPropertyTitle = true }: { 
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover pricing</p>
           {showPropertyTitle ? <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p> : null}
-          {units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
+          {showUnitsSummary && units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
         </div>
         <div className="text-left sm:text-right">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</p>

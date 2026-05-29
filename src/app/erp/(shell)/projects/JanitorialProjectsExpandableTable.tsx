@@ -43,10 +43,31 @@ function getProjectComments(project: ProjectTableRow) {
   return getDetailLine(project.description, "Comments");
 }
 
+function compactUnitSummary(units: string) {
+  return units.replace(/\s*,?\s*dates?:.*?\)/i, ")").trim();
+}
+
+function getTurnoverLabel(project: ProjectTableRow) {
+  const units = getUnitSummary(project);
+  if (units) return compactUnitSummary(units).split(/\s+-\s+/)[0]?.trim() || units;
+
+  const building = getBuildingName(project);
+  const prefix = `${building} - `;
+  return project.jobTitle.toLowerCase().startsWith(prefix.toLowerCase())
+    ? project.jobTitle.slice(prefix.length).trim()
+    : project.jobTitle;
+}
+
+function getScopeSummary(project: ProjectTableRow) {
+  const units = getUnitSummary(project);
+  return units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim() || units;
+}
+
 function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
   const address = getDetailLine(project.description, "Address");
   const units = getUnitSummary(project);
   const comments = getProjectComments(project);
+  const turnoverLabel = getTurnoverLabel(project);
 
   return (
     <div className="space-y-3">
@@ -55,7 +76,7 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Approved turnover</p>
-              <p className="mt-1 text-sm font-semibold text-gray-900">{project.jobTitle}</p>
+              <p className="mt-1 text-sm font-semibold text-gray-900">{turnoverLabel}</p>
             </div>
             <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
               Approved
@@ -95,7 +116,7 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
         </div>
       </div>
 
-      <TurnoverPricingSummary project={project} showPropertyTitle={false} />
+      <TurnoverPricingSummary project={project} showPropertyTitle={false} showUnitsSummary={false} />
     </div>
   );
 }
@@ -172,11 +193,9 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                   <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 text-xs font-medium text-gray-700">
                     {group.activeCount} WIP
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-xs text-gray-700">Building</td>
+                  <td className="border-r border-gray-300 px-3 py-2 text-xs text-gray-400">-</td>
                   <td className="border-r border-gray-300 px-3 py-2 font-semibold tabular-nums text-gray-900">{centsToDollars(group.contractCents)}</td>
-                  <td className="border-r border-gray-300 px-3 py-2 text-gray-700" colSpan={7}>
-                    Grouped by building name
-                  </td>
+                  <td className="border-r border-gray-300 px-3 py-2 text-gray-400" colSpan={7}>-</td>
                 </tr>
 
                 {!isGroupClosed
@@ -184,6 +203,8 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                       const isOpen = openSet.has(p.id);
                       const state = deriveProjectLifecycle(p.status, p.projectDate);
                       const styles = projectStateClasses(state);
+                      const turnoverLabel = getTurnoverLabel(p);
+                      const scopeSummary = getScopeSummary(p);
                       return (
                         <Fragment key={p.id}>
                           {/* Approved turnover rows - inline in the same table, same columns */}
@@ -207,13 +228,13 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                                   <Link
                                     href={`/erp/projects/${p.id}`}
                                     onClick={(e) => e.stopPropagation()}
-                                    className={`font-medium ${styles.titleLink}`}
+                                    className="font-medium text-pink-600 hover:underline"
                                   >
-                                    {p.jobTitle}
+                                    {turnoverLabel}
                                   </Link>
                                 </div>
                               </div>
-                              {getUnitSummary(p) ? <p className="mt-1 pl-4 text-xs text-gray-500 line-clamp-1">{getUnitSummary(p)}</p> : null}
+                              {scopeSummary ? <p className="mt-1 pl-4 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
                             </td>
                             {/* PM -> assigned/requesting manager */}
                             <td className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-1.5 text-sm text-gray-700">
