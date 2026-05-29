@@ -19,9 +19,9 @@ export function evaluateEmployeeCompliance(
 }
 
 export function complianceBadgeClasses(state: EmployeeComplianceState): string {
-  if (state === "COMPLIANT") return "bg-emerald-100 text-emerald-800 border border-emerald-300";
-  if (state === "NON_COMPLIANT") return "bg-red-100 text-red-800 border border-red-300";
-  return "bg-gray-100 text-gray-600 border border-gray-300";
+  if (state === "COMPLIANT") return "bg-gray-200 text-gray-800 border border-gray-300";
+  if (state === "NON_COMPLIANT") return "bg-gray-200 text-gray-600 border border-gray-300";
+  return "bg-gray-100 text-gray-500 border border-gray-200";
 }
 
 export function complianceLabel(state: EmployeeComplianceState): string {

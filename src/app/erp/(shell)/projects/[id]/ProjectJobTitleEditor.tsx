@@ -42,16 +42,13 @@ export function ProjectJobTitleEditor({ projectId, jobTitle }: Props) {
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-start gap-2">
-        <h1 className="text-2xl font-semibold text-gray-900">{jobTitle}</h1>
-        <button
-          onClick={() => { setValue(jobTitle); setEditing(true); }}
-          className="mt-1 rounded px-2 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Edit job title"
-        >
-          Edit
-        </button>
-      </div>
+      <h1
+        className="text-2xl font-semibold text-gray-900 cursor-pointer hover:text-gray-600"
+        onClick={() => { setValue(jobTitle); setEditing(true); }}
+        title="Click to edit"
+      >
+        {jobTitle}
+      </h1>
     );
   }
 

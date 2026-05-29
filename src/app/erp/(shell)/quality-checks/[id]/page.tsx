@@ -25,7 +25,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/erp/quality-checks" className="text-xs text-pink-600 hover:underline">
+        <Link href="/erp/quality-checks" className="text-xs text-gray-500 hover:underline">
           ← Quality checks
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">Quality check for {check.turnoverRequest.building.name}</h1>
@@ -66,7 +66,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
               <dt className="font-semibold text-gray-600">Signature</dt>
               <dd>
                 {check.supervisorSignatureUrl ? (
-                  <a href={check.supervisorSignatureUrl} target="_blank" rel="noreferrer" className="text-pink-600 hover:underline">
+                  <a href={check.supervisorSignatureUrl} target="_blank" rel="noreferrer" className="text-gray-600 hover:underline">
                     View signature
                   </a>
                 ) : (

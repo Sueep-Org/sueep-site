@@ -254,19 +254,14 @@ export function ChangeOrderDetailEditor({
               {status}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Project</span>
+          <div className="mt-1">
             <a
               href={`/erp/projects/${projectId}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700 hover:bg-pink-100"
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
             >
-              <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm0 6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9zm8 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V9z" />
-              </svg>
               {projectTitle}
             </a>
           </div>
-          <p className="mt-2 text-xs text-gray-400">Created {new Date(data.createdAt).toLocaleString()}</p>
         </div>
       </div>
 

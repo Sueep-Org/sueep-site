@@ -54,18 +54,14 @@ export default async function LaborAssignmentsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-pink-600">Labor Assignments</h1>
-          <p className="mt-1 text-sm text-gray-500">Worker assignments connected to turnover requests.</p>
         </div>
         <NewLaborAssignmentForm />
       </div>
-
-      <hr className="border-pink-200" />
-
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-pink-50 text-xs font-semibold uppercase tracking-wide text-pink-700">
+              <tr className="border-b border-gray-200 bg-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <th className="px-4 py-3">Laborer</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Request</th>
@@ -109,7 +105,7 @@ export default async function LaborAssignmentsPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/erp/labor-assignments/${assignment.id}`}
-                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 transition-colors"
+                        className="rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 transition-colors"
                       >
                         View
                       </Link>

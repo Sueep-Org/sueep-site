@@ -24,7 +24,7 @@ export function DetailTabs({ tabs }: Props) {
             onClick={() => setActiveIndex(i)}
             className={
               i === activeIndex
-                ? "rounded-full bg-[#E73C6E] px-4 py-1.5 text-sm font-semibold text-white"
+                ? "rounded-full bg-gray-200 px-4 py-1.5 text-sm font-semibold text-gray-800"
                 : "rounded-full px-4 py-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
             }
           >

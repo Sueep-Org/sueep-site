@@ -47,8 +47,7 @@ export default async function QualityChecksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Quality checks</h1>
-          <p className="mt-1 text-sm text-gray-600">Record inspection signoff and evidence for turnover requests.</p>
+          <h1 className="text-2xl font-semibold text-pink-600">Quality checks</h1>
         </div>
         <NewQualityCheckForm />
       </div>
@@ -87,7 +86,7 @@ export default async function QualityChecksPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/erp/quality-checks/${check.id}`}
-                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+                        className="rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
                       >
                         View
                       </Link>

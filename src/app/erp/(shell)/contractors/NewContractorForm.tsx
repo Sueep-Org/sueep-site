@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
-export function NewContractorForm() {
+type Props = { title: ReactNode };
+
+export function NewContractorForm({ title }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,13 +43,17 @@ export function NewContractorForm() {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
-      >
-        {open ? "Close" : "Add contractor"}
-      </button>
+      <div className="flex items-center justify-between gap-4">
+        {title}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="rounded-md bg-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
+        >
+          {open ? "Close" : "Add contractor"}
+        </button>
+      </div>
+
       {open && (
         <form
           onSubmit={onSubmit}
@@ -71,7 +77,7 @@ export function NewContractorForm() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-pink-600 px-3 py-2 text-xs font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
+            className="rounded-md bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-300 disabled:opacity-50"
           >
             {loading ? "Saving…" : "Save contractor"}
           </button>

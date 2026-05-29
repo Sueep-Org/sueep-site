@@ -25,10 +25,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
-        <p className="mt-1 text-sm text-gray-500">{candidates.length} application{candidates.length !== 1 ? "s" : ""}</p>
       </div>
-
-       <hr className="border-pink-200" />
 
       <CandidatesFilters search={search} status={statusFilter} />
 
@@ -39,14 +36,14 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-pink-400 bg-pink-600 text-xs uppercase text-white">
+            <thead className="border-b border-gray-200 bg-gray-100 text-xs uppercase text-gray-500">
               <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Phone</th>
-                <th className="px-4 py-2 font-medium">Position Interest</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Applied</th>
+                <th className="px-4 py-2 font-semibold">Name</th>
+                <th className="px-4 py-2 font-semibold">Email</th>
+                <th className="px-4 py-2 font-semibold">Phone</th>
+                <th className="px-4 py-2 font-semibold">Position Interest</th>
+                <th className="px-4 py-2 font-semibold">Status</th>
+                <th className="px-4 py-2 font-semibold">Applied</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
