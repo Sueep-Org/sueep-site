@@ -63,18 +63,18 @@ export type ProjectTableRow = {
 };
 
 export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
-  DRAFT: "bg-gray-200 text-gray-700",
-  SUBMITTED: "bg-blue-100 text-blue-700",
-  APPROVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  VOID: "bg-amber-100 text-amber-700",
-  BILLING: "bg-emerald-100 text-emerald-700",
+  DRAFT: "bg-gray-200 text-gray-600",
+  SUBMITTED: "bg-gray-200 text-gray-700",
+  APPROVED: "bg-gray-300 text-gray-800",
+  REJECTED: "bg-gray-200 text-gray-500",
+  VOID: "bg-gray-100 text-gray-500",
+  BILLING: "bg-pink-100 text-pink-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
-  if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
-  if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
-  return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
+export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {
+  if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-gray-500 hover:underline" };
+  if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-purple-600 hover:underline" };
+  return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-emerald-600 hover:underline" };
 }
 
 type LaborRow = LaborRowBase;
@@ -172,10 +172,10 @@ const QUALITY_OPTIONS = [
 ];
 
 const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-emerald-600",
-  GOOD: "text-blue-600",
-  FAIR: "text-amber-600",
-  POOR: "text-red-600",
+  EXCELLENT: "text-pink-600",
+  GOOD: "text-gray-800",
+  FAIR: "text-gray-500",
+  POOR: "text-gray-400",
 };
 
 export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
@@ -345,9 +345,9 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
 export function billingBadge(status: string | null) {
   if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
-    BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
-    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-emerald-100 text-emerald-700" },
-    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-600" },
+    BILLING: { label: "Billing", cls: "bg-pink-100 text-pink-700" },
+    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-gray-200 text-gray-700" },
+    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-500" },
   };
   const opt = map[status];
   if (!opt) return <EmptyValue />;
@@ -380,22 +380,8 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
     <div className="overflow-x-auto rounded-lg border border-white">
       <table className="w-full min-w-[1600px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
-          <tr>
-            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
-              Project Details
-            </th>
-            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
-              Cost / Hours
-            </th>
-            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
-              Progress
-            </th>
-            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
-              Invoicing
-            </th>
-          </tr>
-          <tr className="bg-gray-100 text-pink-700">
-            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Job</th>
+          <tr className="bg-gray-200 text-gray-700">
+            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-200 px-3 py-2 font-semibold">Job</th>
             <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Segment</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
@@ -427,7 +413,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-medium text-pink-600 hover:underline"
+                      className={`font-medium ${styles.titleLink}`}
                     >
                       {p.jobTitle}
                     </Link>

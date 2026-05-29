@@ -142,22 +142,8 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full min-w-[1420px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
-          <tr>
-            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
-              Janitorial Details
-            </th>
-            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
-              Turnover Budget
-            </th>
-            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
-              Progress
-            </th>
-            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
-              Invoicing
-            </th>
-          </tr>
-          <tr className="bg-gray-100 text-pink-700">
-            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Building / Turnover</th>
+          <tr className="bg-gray-200 text-gray-700">
+            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-200 px-3 py-2 font-semibold">Building / Turnover</th>
             <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Start</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
@@ -176,14 +162,14 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
             return (
               <Fragment key={group.building}>
                 <tr
-                  className="cursor-pointer border-t border-gray-300 bg-gray-100 text-pink-700 hover:bg-gray-200"
+                  className="cursor-pointer border-t border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200"
                   onClick={() => toggleBuilding(group.building)}
                   aria-expanded={!isGroupClosed}
                 >
                   <td className="w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-2 font-semibold">
                     <span className="mr-2 text-gray-400">{isGroupClosed ? ">" : "v"}</span>
                     {group.building}
-                    <span className="ml-2 rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-semibold text-pink-700">
+                    <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                       {group.projects.length} turnover{group.projects.length !== 1 ? "s" : ""}
                     </span>
                   </td>
@@ -215,7 +201,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                             <td className={`w-[420px] min-w-[420px] border-r border-gray-300 px-3 py-1.5 ${styles.sticky}`}>
                               <div className="flex items-center gap-2 pl-4">
                                 <span className="shrink-0 text-gray-400">{isOpen ? "v" : ">"}</span>
-                                <span className="shrink-0 rounded bg-pink-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-pink-800">
+                                <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
                                   Turn
                                 </span>
                                 <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-green-700">
@@ -225,7 +211,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                                   <Link
                                     href={`/erp/projects/${p.id}`}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="font-medium text-pink-600 hover:underline"
+                                    className={`font-medium ${styles.titleLink}`}
                                   >
                                     {p.jobTitle}
                                   </Link>

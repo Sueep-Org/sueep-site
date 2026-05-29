@@ -164,21 +164,17 @@ export default async function ErpProjectsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
-          <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/erp/projects/new"
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
+            className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
           >
             New project
           </Link>
           <HubSpotSyncButton />
         </div>
       </div>
-
-      <hr className="border-pink-200" />
-
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
