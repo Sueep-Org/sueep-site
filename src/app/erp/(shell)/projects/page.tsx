@@ -16,12 +16,15 @@ export default async function ErpProjectsPage() {
     include: {
       laborEntries: {
         select: {
+          id: true,
           workDate: true,
           workerName: true,
           role: true,
           hours: true,
           hourlyRateCents: true,
           taskDescription: true,
+          qualityRating: true,
+          qualityNotes: true,
           employee: { select: { firstName: true, lastName: true } },
         },
         orderBy: { workDate: "asc" },
@@ -44,7 +47,7 @@ export default async function ErpProjectsPage() {
           supervisor: true,
           description: true,
           laborers: {
-            select: { name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true },
+            select: { id: true, name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
             orderBy: { workDate: "asc" },
           },
         },
@@ -81,12 +84,16 @@ export default async function ErpProjectsPage() {
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
     const laborEntries = p.laborEntries.map((e) => ({
+      id: e.id,
+      updatePath: `/api/erp/projects/${p.id}/labor/${e.id}`,
       date: e.workDate.toISOString(),
       role: e.role ?? null,
       name: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() : e.workerName.trim(),
       hours: e.hours,
       hourlyRateCents: e.hourlyRateCents,
       description: e.taskDescription ?? null,
+      qualityRating: e.qualityRating ?? null,
+      qualityNotes: e.qualityNotes ?? null,
     }));
     const materialEntries = p.materialEntries.map((e) => ({
       date: e.usedOn.toISOString(),
@@ -136,12 +143,16 @@ export default async function ErpProjectsPage() {
         supervisor: co.supervisor,
         description: co.description,
         laborers: co.laborers.map((l) => ({
+          id: l.id,
+          updatePath: `/api/erp/change-order-laborers/${l.id}`,
           date: l.workDate.toISOString(),
           role: l.role ?? null,
           name: l.name,
           hours: l.hours,
           hourlyRateCents: l.hourlyRateCents,
           description: l.taskDescription ?? null,
+          qualityRating: l.qualityRating ?? null,
+          qualityNotes: l.qualityNotes ?? null,
         })),
         laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
       })),
@@ -149,25 +160,19 @@ export default async function ErpProjectsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
-          <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
-        </div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
         <div className="flex items-center gap-2">
           <Link
             href="/erp/projects/new"
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
+            className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
           >
             New project
           </Link>
           <HubSpotSyncButton />
         </div>
       </div>
-
-      <hr className="border-pink-200" />
-
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">

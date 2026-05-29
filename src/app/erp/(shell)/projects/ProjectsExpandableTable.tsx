@@ -6,6 +6,19 @@ import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 
+type LaborRowBase = {
+  id: string;
+  updatePath: string;
+  date: string;
+  role: string | null;
+  name: string;
+  hours: number;
+  hourlyRateCents: number;
+  description: string | null;
+  qualityRating: string | null;
+  qualityNotes: string | null;
+};
+
 export type ProjectTableRow = {
   id: string;
   jobTitle: string;
@@ -18,7 +31,7 @@ export type ProjectTableRow = {
   percentInvoiced: number;
   billingStatus: string | null;
   contractValueCents: number | null;
-  laborEntries: { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null }[];
+  laborEntries: LaborRowBase[];
   materialEntries: { date: string; category: string; itemName: string; quantity: number | null; unit: string | null; costCents: number; notes: string | null }[];
   totalHours: number;
   laborCents: number;
@@ -44,27 +57,27 @@ export type ProjectTableRow = {
     requestedBy: string | null;
     supervisor: string | null;
     description: string | null;
-    laborers: { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null }[];
+    laborers: LaborRowBase[];
     laborCostCents: number;
   }[];
 };
 
 export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
-  DRAFT: "bg-gray-200 text-gray-700",
-  SUBMITTED: "bg-blue-100 text-blue-700",
-  APPROVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  VOID: "bg-amber-100 text-amber-700",
-  BILLING: "bg-emerald-100 text-emerald-700",
+  DRAFT: "bg-gray-200 text-gray-600",
+  SUBMITTED: "bg-gray-200 text-gray-700",
+  APPROVED: "bg-gray-300 text-gray-800",
+  REJECTED: "bg-gray-200 text-gray-500",
+  VOID: "bg-gray-100 text-gray-500",
+  BILLING: "bg-pink-100 text-pink-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string } {
-  if (state === "COMPLETED") return { row: "bg-gray-100 hover:bg-gray-200", detail: "bg-gray-50", sticky: "bg-gray-200" };
-  if (state === "UPCOMING") return { row: "bg-purple-50 hover:bg-purple-100", detail: "bg-purple-50", sticky: "bg-purple-100" };
-  return { row: "bg-emerald-50 hover:bg-emerald-100", detail: "bg-emerald-50", sticky: "bg-emerald-100" };
+export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {
+  if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-gray-500 hover:underline" };
+  if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-purple-600 hover:underline" };
+  return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-gray-50", titleLink: "text-emerald-600 hover:underline" };
 }
 
-type LaborRow = { date: string; role: string | null; name: string; hours: number; hourlyRateCents: number; description: string | null };
+type LaborRow = LaborRowBase;
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -150,82 +163,191 @@ export function TurnoverPricingSummary({ project, showPropertyTitle = true }: { 
   );
 }
 
+const QUALITY_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "EXCELLENT", label: "Excellent" },
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
+];
+
+const QUALITY_COLORS: Record<string, string> = {
+  EXCELLENT: "text-pink-600",
+  GOOD: "text-gray-800",
+  FAIR: "text-gray-500",
+  POOR: "text-gray-400",
+};
+
 export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
   const [showAll, setShowAll] = useState(false);
+  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(entries.map((e) => [e.id, e.qualityRating ?? ""]))
+  );
+  const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(entries.map((e) => [e.id, e.qualityNotes ?? ""]))
+  );
+  const [popup, setPopup] = useState<{ id: string; updatePath: string; draft: string } | null>(null);
 
   if (!entries.length) return <p className="text-xs text-gray-400">No labor logged</p>;
 
   const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
   const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
 
-  return (
-    <div>
-      <table className="w-full table-fixed text-xs">
-        <colgroup>
-          <col className="w-[12%]" />
-          <col className="w-[26%]" />
-          <col className="w-[29%]" />
-          <col className="w-[9%]" />
-          <col className="w-[13%]" />
-          <col className="w-[11%]" />
-        </colgroup>
-        <thead>
-          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            <th className="pb-1.5 pr-3 text-left font-semibold">Date</th>
-            <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
-            <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
-            <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
-            <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>
-            <th className="pb-1.5 text-left font-semibold">Description</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {visibleEntries.map((e, i) => (
-            <tr key={`${e.date}-${e.name}-${i}`} className="text-slate-900">
-              <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
-              <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
-              <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
-              <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
-              <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
-              <td className="py-1 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  function handleQualityChange(entry: LaborRow, value: string) {
+    setQualityMap((prev) => ({ ...prev, [entry.id]: value }));
+    fetch(entry.updatePath, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qualityRating: value || null }),
+    }).catch(() => {});
+  }
 
-      {hiddenCount > 0 ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAll(true);
-          }}
-          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+  function handleNotesSave() {
+    if (!popup) return;
+    const { id, updatePath, draft } = popup;
+    setNotesMap((prev) => ({ ...prev, [id]: draft }));
+    setPopup(null);
+    fetch(updatePath, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qualityNotes: draft || null }),
+    }).catch(() => {});
+  }
+
+  return (
+    <>
+      <div>
+        <table className="w-full table-fixed text-xs">
+          <colgroup>
+            <col className="w-[9%]" />
+            <col className="w-[20%]" />
+            <col className="w-[21%]" />
+            <col className="w-[8%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[16%]" />
+            <col className="w-[6%]" />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <th className="pb-1.5 pr-3 text-left font-semibold">Date</th>
+              <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
+              <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
+              <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
+              <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>
+              <th className="pb-1.5 pr-3 text-left font-semibold">Description</th>
+              <th className="pb-1.5 pr-3 text-left font-semibold">Quality</th>
+              <th className="pb-1.5 text-left font-semibold">Notes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {visibleEntries.map((e, i) => {
+              const quality = qualityMap[e.id] ?? "";
+              const notes = notesMap[e.id] ?? "";
+              return (
+                <tr key={`${e.date}-${e.name}-${i}`} className="text-slate-900">
+                  <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{fmtDate(e.date)}</td>
+                  <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
+                  <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
+                  <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
+                  <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
+                  <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
+                  <td className="py-1 pr-3">
+                    <select
+                      value={quality}
+                      onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
+                      onClick={(ev) => ev.stopPropagation()}
+                      className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                    >
+                      {QUALITY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-1">
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); setPopup({ id: e.id, updatePath: e.updatePath, draft: notes }); }}
+                      title={notes || "Add quality notes"}
+                      className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                        <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {hiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowAll(true); }}
+            className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+          >
+            Show {hiddenCount} more
+          </button>
+        ) : showAll && entries.length > initialVisible ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowAll(false); }}
+            className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
+          >
+            Show fewer
+          </button>
+        ) : null}
+      </div>
+
+      {popup ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setPopup(null)}
         >
-          Show {hiddenCount} more
-        </button>
-      ) : showAll && entries.length > initialVisible ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAll(false);
-          }}
-          className="mt-2 text-xs font-medium text-pink-600 hover:text-pink-700 hover:underline"
-        >
-          Show fewer
-        </button>
+          <div
+            className="w-80 rounded-xl bg-white p-5 shadow-2xl"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+            <textarea
+              autoFocus
+              rows={4}
+              value={popup.draft}
+              onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
+              placeholder="Add notes about work quality..."
+              className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPopup(null)}
+                className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleNotesSave}
+                className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
 export function billingBadge(status: string | null) {
   if (!status) return <EmptyValue />;
   const map: Record<string, { label: string; cls: string }> = {
-    BILLING: { label: "Billing", cls: "bg-emerald-100 text-emerald-700" },
-    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-emerald-100 text-emerald-700" },
-    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-600" },
+    BILLING: { label: "Billing", cls: "bg-pink-100 text-pink-700" },
+    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-gray-200 text-gray-700" },
+    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-500" },
   };
   const opt = map[status];
   if (!opt) return <EmptyValue />;
@@ -258,22 +380,8 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
     <div className="overflow-x-auto rounded-lg border border-white">
       <table className="w-full min-w-[1600px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
-          <tr>
-            <th colSpan={3} className="border-b border-r border-gray-300 bg-blue-100 px-3 py-1.5 text-center font-semibold text-blue-700">
-              Project Details
-            </th>
-            <th colSpan={4} className="border-b border-r border-gray-300 bg-orange-100 px-3 py-1.5 text-center font-semibold text-orange-700">
-              Cost / Hours
-            </th>
-            <th colSpan={2} className="border-b border-r border-gray-300 bg-cyan-100 px-3 py-1.5 text-center font-semibold text-cyan-700">
-              Progress
-            </th>
-            <th colSpan={2} className="border-b border-gray-300 bg-green-100 px-3 py-1.5 text-center font-semibold text-green-700">
-              Invoicing
-            </th>
-          </tr>
-          <tr className="bg-gray-100 text-pink-700">
-            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Job</th>
+          <tr className="bg-gray-200 text-gray-700">
+            <th className="w-[420px] min-w-[420px] border-r border-gray-300 bg-gray-200 px-3 py-2 font-semibold">Job</th>
             <th className="w-[220px] min-w-[220px] border-r border-gray-300 px-3 py-2 font-semibold">PM</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Segment</th>
             <th className="border-r border-gray-300 px-3 py-2 font-semibold">Contract</th>
@@ -305,7 +413,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     <Link
                       href={`/erp/projects/${p.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="font-medium text-pink-600 hover:underline"
+                      className={`font-medium ${styles.titleLink}`}
                     >
                       {p.jobTitle}
                     </Link>

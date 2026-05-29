@@ -12,7 +12,7 @@ function isAppSubdomain(host: string): boolean {
 
 function hasStaticExtension(pathname: string): boolean {
   const base = pathname.split("/").pop() || "";
-  return /\.(ico|png|jpg|jpeg|gif|webp|svg|txt|xml|json|js|css|map|woff2?|ttf)$/i.test(base);
+  return /\.(ico|png|jpg|jpeg|gif|webp|svg|txt|xml|json|js|css|map|woff2?|ttf|html)$/i.test(base);
 }
 
 function isPublicAppPath(pathname: string): boolean {

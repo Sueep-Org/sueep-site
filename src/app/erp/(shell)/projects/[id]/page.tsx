@@ -76,6 +76,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     hours: e.hours.toString(),
     hourlyRateCents: e.hourlyRateCents,
     taskDescription: e.taskDescription,
+    qualityRating: e.qualityRating ?? null,
+    qualityNotes: e.qualityNotes ?? null,
   }));
 
   const changeOrderRows = changeOrders.map((co) => ({

@@ -34,7 +34,7 @@ export type ChangeOrderDetailData = {
   percentInvoiced: number;
   estimatedCostCents: number | null;
   estimatedDays: number | null;
-  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null }[];
+  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null }[];
 };
 
 export type EmployeeOption = {

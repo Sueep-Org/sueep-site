@@ -261,6 +261,9 @@ model ProjectChangeOrderLaborer {
   hourlyRateCents Int      @default(0)
   taskDescription String?
 
+  qualityRating String?
+  qualityNotes  String?
+
   @@index([changeOrderId])
 }
 
@@ -328,6 +331,9 @@ model LaborEntry {
   hourlyRateCents Int
 
   taskDescription String?
+
+  qualityRating String?
+  qualityNotes  String?
 
   /// Location when entry was created (latitude)
   locationLatitude  Float?
