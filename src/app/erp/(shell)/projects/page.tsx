@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsTabs } from "./ProjectsTabs";
-import { HubSpotSyncButton } from "./HubSpotSyncButton";
 
 export const dynamic = "force-dynamic";
 
@@ -170,7 +169,6 @@ export default async function ErpProjectsPage() {
           >
             New project
           </Link>
-          <HubSpotSyncButton />
         </div>
       </div>
 
