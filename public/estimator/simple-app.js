@@ -78,50 +78,46 @@ async function refreshDrawer(){
       const full = item.name || item.key || '';
       const display = full.split('/').pop();
 
-      // Only show analysis JSON files — PDFs are already on user's local machine
-      if (!display.toLowerCase().endsWith('.json')) return;
+      const btn = document.createElement('button');
 
-      const downloadUrl = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
+      btn.textContent = display;
 
-      // Show a clean label: strip ".analysis.json" suffix if present
-      const label = display.replace(/\.analysis\.json$/i, '') || display;
+      btn.style.display = 'block';
+      btn.style.width = '100%';
+      btn.style.textAlign = 'left';
+      btn.style.padding = '.5rem';
+      btn.style.marginBottom = '.5rem';
+      btn.style.border = '1px solid #ddd';
+      btn.style.borderRadius = '8px';
+      btn.style.background = 'white';
+      btn.style.cursor = 'pointer';
 
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
-      row.dataset.filename = display;
+      btn.onclick = async ()=>{
 
-      const nameEl = document.createElement('span');
-      nameEl.textContent = label;
-      nameEl.title = display;
-      nameEl.style.cssText = 'flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;';
-
-      const dlBtn = document.createElement('button');
-      dlBtn.textContent = '⬇ JSON';
-      dlBtn.title = 'Download analysis result';
-      dlBtn.style.cssText = 'padding:.4rem .6rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:12px;color:#333;flex-shrink:0;';
-      dlBtn.onclick = ()=>{
-        window.open(downloadUrl, '_blank');
-      };
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
-      delBtn.title = 'Delete';
-      delBtn.style.cssText = 'padding:.4rem .5rem;border:1px solid #fca5a5;border-radius:8px;background:white;cursor:pointer;font-size:12px;flex-shrink:0;';
-      delBtn.onclick = async ()=>{
-        if (!confirm(`Delete "${label}"?`)) return;
         try{
-          await deleteSaved(full);
-          row.remove();
-          toast('Deleted', 'success');
+
+          const url =
+            `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
+
+          const resp = await fetch(url);
+
+          const blob = await resp.blob();
+
+          const file = new File([blob], display);
+
+          await window.__handleFile?.(file);
+
+          closeSidebar();
+
         }catch(e){
-          toast('Delete failed: ' + e.message, 'error');
+
+          console.error(e);
+
+          toast(e.message, 'error');
         }
       };
 
-      row.appendChild(nameEl);
-      row.appendChild(dlBtn);
-      row.appendChild(delBtn);
-      savedSec.appendChild(row);
+      savedSec.appendChild(btn);
     });
 
   }catch(e){
@@ -161,15 +157,13 @@ function closeSidebar(){
 document.addEventListener('click', (e)=>{
 
   if(e.target.closest('[data-open-sidebar]')){
+
     openSidebar();
   }
 
   if(e.target.closest('[data-close-sidebar]')){
-    closeSidebar();
-  }
 
-  if(e.target.closest('#refreshDrawerBtn')){
-    refreshDrawer();
+    closeSidebar();
   }
 });
 
@@ -210,7 +204,14 @@ async function initApp(){
   const zoomResetBtn = $('zoomResetBtn');
 
   const zoomLabel = $('zoomLabel');
-
+  const prevPageBtn = $('prevPageBtn');
+  const nextPageBtn = $('nextPageBtn');
+  const pageInfo = $('pageInfo');
+  const vectorLineInfo = $('vectorLineInfo');
+  const measurementList = $('measurementList');
+  const measurementScaleInfo = $('measurementScaleInfo');
+  const changeScaleBtn = $('changeScaleBtn');
+  const doubleSideToggle = $('doubleSideToggle');
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -253,7 +254,8 @@ async function initApp(){
   const overlay = new CanvasOverlay({
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
-    store: highlightsStore
+    store: highlightsStore,
+    onMeasurementsChanged: updateMeasurementList
   });
 
   overlay.attach();
@@ -295,6 +297,55 @@ async function initApp(){
       zoomLabel.textContent =
         `${Math.round(zoom * 100)}%`;
     }
+  }
+
+  function updateVectorLineInfo(){
+    if (!vectorLineInfo) return;
+    const lines = highlightsStore.getLines(currentPage) || [];
+    if (lines.length === 0) {
+      vectorLineInfo.textContent = 'No vector lines detected on this page';
+      vectorLineInfo.style.color = '#ef4444';
+    } else {
+      vectorLineInfo.textContent = `Vector lines detected: ${lines.length}`;
+      vectorLineInfo.style.color = '#047857';
+    }
+  }
+
+  function updateMeasurementList(){
+    if (!measurementList) return;
+    const measurements = highlightsStore.listMeasurements(currentPage) || [];
+    const scale = highlightsStore.getScale(currentPage);
+    if (measurementScaleInfo) {
+      if (scale && scale.factor) {
+        const pxPerInch = 1 / scale.factor;
+        measurementScaleInfo.textContent = `Scale set: 1 in = ${pxPerInch.toFixed(1)} px`;
+      } else {
+        measurementScaleInfo.textContent = 'Scale not set';
+      }
+    }
+    if (!measurements.length) {
+      measurementList.innerHTML = 'No saved measurements';
+      return;
+    }
+    measurementList.innerHTML = measurements.map(m => {
+      const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
+      const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(double-sided)</span>' : '';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+          <span>${label}${badge}</span>
+          <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 6px;min-width:auto;">X</button>
+        </div>
+      `;
+    }).join('');
+    measurementList.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+      btn.onclick = () => {
+        const id = btn.dataset.measurementId;
+        highlightsStore.removeMeasurement(currentPage, id);
+        updateMeasurementList();
+        overlay.redraw();
+        toast('Measurement removed', 'info');
+      };
+    });
   }
 
   // ======================================================
@@ -361,6 +412,61 @@ async function initApp(){
     syncOverlayTransform();
 
     updateZoomLabel();
+    // update page UI
+    if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${pdfDoc.numPages}`;
+    if (prevPageBtn) {
+      prevPageBtn.disabled = currentPage <= 1;
+      prevPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
+    }
+    if (nextPageBtn) {
+      nextPageBtn.disabled = currentPage >= pdfDoc.numPages;
+      nextPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
+    }
+    updateVectorLineInfo();
+    updateMeasurementList();
+  }
+
+  function parseMeasurementToInches(str) {
+    if (!str) return null;
+    str = String(str).trim().toLowerCase();
+    str = str.replace(',', '.');
+    const m = str.match(/^([0-9]+\/[0-9]+|[0-9]*\.?[0-9]+)\s*(in|inch|inches|ft|feet|cm|mm|m)?$/i);
+    if (!m) return null;
+    const val = m[1];
+    let num = 0;
+    if (val.indexOf('/') >= 0) {
+      const parts = val.split('/').map(Number);
+      if (!parts[1]) return null;
+      num = parts[0] / parts[1];
+    } else {
+      num = parseFloat(val);
+    }
+    const unit = (m[2] || 'in').toLowerCase();
+    switch (unit) {
+      case 'ft': case 'feet': return num * 12;
+      case 'cm': return num / 2.54;
+      case 'mm': return num / 25.4;
+      case 'm': return num * 39.3700787;
+      default: return num;
+    }
+  }
+
+  function computeScaleFactorFromExpression(str, pxPerPt) {
+    if (!str) return null;
+    const parts = str.split('=');
+    if (parts.length === 2) {
+      const left = parts[0].trim();
+      const right = parts[1].trim();
+      const leftInches = parseMeasurementToInches(left);
+      const rightInches = parseMeasurementToInches(right);
+      if (!leftInches || !rightInches) return null;
+      if (pxPerPt && pxPerPt > 0) {
+        const pixelsPerInch = pxPerPt * 72;
+        return (rightInches / leftInches) * (1 / pixelsPerInch);
+      }
+      return null;
+    }
+    return null;
   }
 
   // ======================================================
@@ -447,6 +553,29 @@ async function initApp(){
     await renderPage();
   }
 
+  // PAGE NAV
+  if (prevPageBtn) {
+    prevPageBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pdfDoc) return;
+      if (currentPage > 1) {
+        currentPage -= 1;
+        await renderPage();
+      }
+    };
+  }
+
+  if (nextPageBtn) {
+    nextPageBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pdfDoc) return;
+      if (currentPage < pdfDoc.numPages) {
+        currentPage += 1;
+        await renderPage();
+      }
+    };
+  }
+
   // ======================================================
   // MOUSE WHEEL ZOOM
   // ======================================================
@@ -457,14 +586,19 @@ async function initApp(){
 
       if (!pdfDoc) return;
 
+      // if user is actively drawing a measure, do not zoom
+      try {
+        if (overlay && overlay._isDraggingMeasure) {
+          e.preventDefault();
+          return;
+        }
+      } catch (err) {}
+
       e.preventDefault();
 
       if (e.deltaY < 0){
-
         await zoomIn();
-
-      }else{
-
+      } else {
         await zoomOut();
       }
 
@@ -533,6 +667,11 @@ async function initApp(){
       ){
         return;
       }
+
+      // do not start panning if overlay is active and measuring
+      try {
+        if (overlay && overlay.tool === 'measure' && overlay._isDraggingMeasure) return;
+      } catch (err) {}
 
       if (!pdfDoc) return;
 
@@ -665,36 +804,60 @@ async function initApp(){
       console.log('FULL RESULT:', data.result);
       console.log('==============================');
 
+      // If backend returned vector lines per page, try to load them into the overlay store.
+      try {
+        const pages = data.result && (data.result.pages || data.result);
+        if (pages) {
+          // pages may be an array or an object keyed by page number
+          const pageEntries = Array.isArray(pages) ? pages.map((p, i) => ({ page: i + 1, data: p })) : Object.keys(pages).map(k => ({ page: Number(k), data: pages[k] }));
+
+          for (const pe of pageEntries) {
+            const p = pe.data || {};
+            const pageNum = pe.page || p.page || 1;
+            if (!p.lines || !Array.isArray(p.lines)) continue;
+
+            const normLines = p.lines.map((ln, idx) => {
+              // expected formats: { x1,y1,x2,y2 } either normalized (0..1) or absolute pixels/points
+              const x1 = Number(ln.x1 ?? ln.x ?? ln.x0 ?? 0);
+              const y1 = Number(ln.y1 ?? ln.y ?? ln.y0 ?? 0);
+              const x2 = Number(ln.x2 ?? ln.x ?? 0);
+              const y2 = Number(ln.y2 ?? ln.y ?? 0);
+
+              // if coordinates look normalized (<=1), keep. Otherwise attempt to normalize using current canvas size
+              const normalize = (v, dim) => (v > 1 ? (dim && dim > 0 ? v / dim : v) : v);
+
+              const dimW = pdfCanvas?.width || 0;
+              const dimH = pdfCanvas?.height || 0;
+
+              const nx1 = normalize(x1, dimW);
+              const ny1 = normalize(y1, dimH);
+              const nx2 = normalize(x2, dimW);
+              const ny2 = normalize(y2, dimH);
+
+              return { id: ln.id || idx + 1, x1: nx1, y1: ny1, x2: nx2, y2: ny2 };
+            });
+
+            highlightsStore.setLines(pageNum, normLines);
+            console.log(`Loaded ${normLines.length} vector lines for page ${pageNum}`);
+          }
+
+          // redraw overlay for current page
+          overlay.redraw();
+          updateVectorLineInfo();
+          }
+      } catch (e) {
+        console.warn('Failed to parse vector lines from backend result', e);
+      }
+
       toast(
-        'Uploaded! Analysis running — sidebar will auto-refresh',
+        'Upload + analysis complete',
         'success'
       );
 
-      // Auto-poll: refresh sidebar every 30s for up to 10 min
-      // so user sees the JSON file appear without manually clicking 🔄
-      const uploadedBase = (data.file || '').replace(/\.pdf$/i, '');
-      let pollCount = 0;
-      const maxPolls = 20; // 20 × 30s = 10 min
-      const pollTimer = setInterval(async () => {
-        pollCount++;
-        // Only refresh if sidebar has been initialized
-        if (drawerLoaded) {
-          await refreshDrawer();
-          // Stop once we find the matching analysis JSON
-          const items = document.querySelectorAll('#savedSection [data-filename]');
-          const found = Array.from(items).some(el =>
-            el.dataset.filename.includes(uploadedBase)
-          );
-          if (found) {
-            clearInterval(pollTimer);
-            toast('✅ Analysis ready — check sidebar', 'success');
-            return;
-          }
-        }
-        if (pollCount >= maxPolls) {
-          clearInterval(pollTimer);
-        }
-      }, 30000);
+      if (drawerLoaded){
+
+        await refreshDrawer();
+      }
 
     } catch (err) {
 
@@ -758,6 +921,35 @@ async function initApp(){
       overlay.setTool(
         isOn ? 'measure' : 'area'
       );
+    };
+  }
+
+  if (changeScaleBtn) {
+    changeScaleBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const entry = window.prompt('Enter page scale (example: "1/16 in = 1 ft"). This must contain "=".');
+      if (!entry || !entry.trim()) return;
+      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), overlay._pxPerPt);
+      if (!scaleFactor || scaleFactor <= 0) {
+        toast('Invalid scale expression', 'error');
+        return;
+      }
+      highlightsStore.setScale(currentPage, { factor: scaleFactor, unit: 'in' });
+      updateMeasurementList();
+      overlay.redraw();
+      toast('Page scale updated', 'success');
+    };
+  }
+
+  if (doubleSideToggle) {
+    doubleSideToggle.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isDouble = !doubleSideToggle.classList.contains('active');
+      doubleSideToggle.classList.toggle('active', isDouble);
+      doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
+      overlay.setDoubleSided(isDouble);
     };
   }
 
