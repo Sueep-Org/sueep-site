@@ -86,7 +86,7 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-export function TurnoverPricingSummary({ project }: { project: ProjectTableRow }) {
+export function TurnoverPricingSummary({ project, showPropertyTitle = true }: { project: ProjectTableRow; showPropertyTitle?: boolean }) {
   const property = getDetailLine(project.description, "Property");
   const units = getDetailLine(project.description, "Units");
   const total = getDetailLine(project.description, "Estimated Turnover Total");
@@ -99,7 +99,7 @@ export function TurnoverPricingSummary({ project }: { project: ProjectTableRow }
       <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover pricing</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p>
+          {showPropertyTitle ? <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p> : null}
           {units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
         </div>
         <div className="text-left sm:text-right">

@@ -44,7 +44,6 @@ function getProjectComments(project: ProjectTableRow) {
 }
 
 function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
-  const building = getBuildingName(project);
   const address = getDetailLine(project.description, "Address");
   const units = getUnitSummary(project);
   const comments = getProjectComments(project);
@@ -57,7 +56,6 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Approved turnover</p>
               <p className="mt-1 text-sm font-semibold text-gray-900">{project.jobTitle}</p>
-              <p className="mt-0.5 text-xs text-gray-500">{building}</p>
             </div>
             <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
               Approved
@@ -86,8 +84,6 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
         <div className="rounded border border-gray-200 bg-white px-3 py-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Project details</p>
           <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <span className="text-gray-400">Building</span>
-            <span className="font-medium text-gray-800">{building}</span>
             <span className="text-gray-400">Address</span>
             <span className="font-medium text-gray-800">{address || "-"}</span>
             <span className="text-gray-400">Units</span>
@@ -99,7 +95,7 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
         </div>
       </div>
 
-      <TurnoverPricingSummary project={project} />
+      <TurnoverPricingSummary project={project} showPropertyTitle={false} />
     </div>
   );
 }
