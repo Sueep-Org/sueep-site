@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 type DocusealWebhookPayload = {
   event_type: string;
-  data: {
-    submission?: {
-      id: number;
-      documents?: { url: string }[];
+  data: Record<string, unknown> & {
+    submission?: Record<string, unknown> & {
+      id?: number;
+      documents?: { url?: string; combined_document_url?: string }[];
       submitters?: { completed_at?: string | null }[];
+      combined_document_url?: string;
     };
   };
 };
@@ -22,17 +23,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  console.log("DocuSeal webhook received:", payload.event_type);
+  console.log("DocuSeal webhook received:", payload.event_type, JSON.stringify(payload.data));
 
   if (!COMPLETED_EVENTS.has(payload.event_type)) {
     return NextResponse.json({ ok: true });
   }
 
-  const submission = payload.data?.submission;
+  // DocuSeal payload can nest the submission under data.submission or directly in data
+  const submission = payload.data?.submission ?? (payload.data as Record<string, unknown> | undefined);
   if (!submission?.id) return NextResponse.json({ ok: true });
 
-  const signedDocumentUrl = submission.documents?.[0]?.url ?? null;
-  const completedAt = submission.submitters?.[0]?.completed_at;
+  // Try multiple locations where DocuSeal may put the signed document URL
+  const sub = submission as Record<string, unknown>;
+  const documents = (sub.documents as { url?: string; combined_document_url?: string }[] | undefined);
+  const signedDocumentUrl =
+    documents?.[0]?.url ??
+    documents?.[0]?.combined_document_url ??
+    (sub.combined_document_url as string | undefined) ??
+    null;
+
+  console.log("DocuSeal signed document URL resolved:", signedDocumentUrl);
+  const completedAt = sub.submitters
+    ? (sub.submitters as { completed_at?: string | null }[])[0]?.completed_at
+    : null;
   const signedAt = completedAt ? new Date(completedAt) : new Date();
   const updateData = { signingStatus: "SIGNED", signedAt, signedDocumentUrl };
 
