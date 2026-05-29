@@ -63,6 +63,62 @@ function getScopeSummary(project: ProjectTableRow) {
   return units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim() || units;
 }
 
+const QUALITY_LABELS: Record<string, string> = {
+  EXCELLENT: "Excellent",
+  GOOD: "Good",
+  FAIR: "Fair",
+  POOR: "Poor",
+};
+
+function JanitorialQualitySection({ project }: { project: ProjectTableRow }) {
+  const reviewedEntries = project.laborEntries.filter((entry) => Boolean(entry.qualityRating));
+  const noteCount = project.laborEntries.filter((entry) => Boolean(entry.qualityNotes?.trim())).length;
+  const unreviewedCount = project.laborEntries.length - reviewedEntries.length;
+  const ratingCounts = reviewedEntries.reduce<Record<string, number>>((counts, entry) => {
+    if (!entry.qualityRating) return counts;
+    counts[entry.qualityRating] = (counts[entry.qualityRating] || 0) + 1;
+    return counts;
+  }, {});
+
+  return (
+    <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quality</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">Janitorial labor review</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-700">
+            {reviewedEntries.length}/{project.laborEntries.length} reviewed
+          </span>
+          {unreviewedCount > 0 ? (
+            <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+              {unreviewedCount} open
+            </span>
+          ) : null}
+          {noteCount > 0 ? (
+            <span className="rounded bg-pink-50 px-2 py-0.5 font-medium text-pink-700">
+              {noteCount} note{noteCount !== 1 ? "s" : ""}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {reviewedEntries.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+          {Object.entries(ratingCounts).map(([rating, count]) => (
+            <span key={rating} className="rounded bg-gray-50 px-2 py-0.5 font-medium text-gray-700">
+              {QUALITY_LABELS[rating] || rating}: {count}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <LaborTable entries={project.laborEntries} initialVisible={4} />
+    </div>
+  );
+}
+
 function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
   const address = getDetailLine(project.description, "Address");
   const units = getUnitSummary(project);
@@ -115,6 +171,8 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
           {comments ? <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">{comments}</p> : null}
         </div>
       </div>
+
+      <JanitorialQualitySection project={project} />
 
       <TurnoverPricingSummary project={project} showPropertyTitle={false} showUnitsSummary={false} />
     </div>
