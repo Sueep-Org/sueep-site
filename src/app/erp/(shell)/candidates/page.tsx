@@ -36,7 +36,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-100 text-xs uppercase text-gray-500">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs uppercase text-gray-700">
               <tr>
                 <th className="px-4 py-2 font-semibold">Name</th>
                 <th className="px-4 py-2 font-semibold">Email</th>
@@ -46,11 +46,11 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                 <th className="px-4 py-2 font-semibold">Applied</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {candidates.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
+            <tbody>
+              {candidates.map((c, i) => (
+                <tr key={c.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
-                    <Link href={`/erp/candidates/${c.id}`} className="hover:text-[#E73C6E] hover:underline">
+                    <Link href={`/erp/candidates/${c.id}`} className="text-gray-800 hover:underline">
                       {c.fullName}
                     </Link>
                   </td>

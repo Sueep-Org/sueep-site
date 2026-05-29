@@ -47,7 +47,7 @@ export default async function ContractorAssignmentsPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase tracking-wide text-gray-700">
                 <th className="px-4 py-3">Contractor</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Location / Project</th>
@@ -57,7 +57,7 @@ export default async function ContractorAssignmentsPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {assignments.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
@@ -65,8 +65,8 @@ export default async function ContractorAssignmentsPage() {
                   </td>
                 </tr>
               ) : (
-                assignments.map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50 transition-colors">
+                assignments.map((a, i) => (
+                  <tr key={a.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                     <td className="px-4 py-3 font-medium text-gray-900">{a.contractor.name}</td>
                     <td className="px-4 py-3 text-gray-600">{a.role || <span className="text-gray-400">—</span>}</td>
                     <td className="px-4 py-3 text-gray-700">

@@ -54,8 +54,8 @@ export default async function QualityChecksPage() {
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] divide-y divide-gray-200 text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <table className="w-full min-w-[960px] text-left text-sm">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
                 <th className="px-4 py-3">Request</th>
                 <th className="px-4 py-3">Supervisor</th>
@@ -65,7 +65,7 @@ export default async function QualityChecksPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody>
               {checks.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
@@ -73,8 +73,8 @@ export default async function QualityChecksPage() {
                   </td>
                 </tr>
               ) : (
-                checks.map((check) => (
-                  <tr key={check.id} className="hover:bg-gray-50">
+                checks.map((check, i) => (
+                  <tr key={check.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                     <td className="px-4 py-3 text-gray-900">
                       {check.turnoverRequest.building.name} • {check.turnoverRequest.requestType}
                       {check.turnoverRequest.unitNumber ? ` • ${check.turnoverRequest.unitNumber}` : ""}

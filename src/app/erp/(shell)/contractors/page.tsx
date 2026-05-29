@@ -21,7 +21,7 @@ export default async function ContractorsPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full min-w-[500px] text-left text-sm">
-            <thead className="border-b border-gray-300 bg-gray-100 text-xs font-semibold uppercase text-gray-700">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Email</th>
@@ -29,9 +29,9 @@ export default async function ContractorsPage() {
                 <th className="px-4 py-2">Added</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {contractors.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
+            <tbody>
+              {contractors.map((c, i) => (
+                <tr key={c.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <Link
                       href={`/erp/contractors/${c.id}`}
