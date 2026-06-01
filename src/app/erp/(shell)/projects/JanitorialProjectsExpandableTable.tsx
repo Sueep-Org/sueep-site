@@ -144,6 +144,7 @@ function QualityCheckPill({ check }: { check: UnitQualityCheckRow }) {
 
 function JanitorialUnitQualityChecks({ project }: { project: ProjectTableRow }) {
   const unitRows = parseUnitRows(project);
+  const [unitQualityMap, setUnitQualityMap] = useState<Record<string, string>>({});
   const matchedCheckCount = unitRows.reduce((count, unit) => count + unit.checks.length, 0);
   const approvedCount = unitRows.reduce(
     (count, unit) => count + unit.checks.filter((check) => check.pmApproval).length,
@@ -173,6 +174,7 @@ function JanitorialUnitQualityChecks({ project }: { project: ProjectTableRow }) 
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {unitRows.map((unit) => {
             const latestCheck = unit.checks[0];
+            const quality = unitQualityMap[unit.unitNumber] ?? "";
             return (
               <div key={unit.unitNumber} className="rounded border border-gray-200 bg-white p-2">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -191,6 +193,26 @@ function JanitorialUnitQualityChecks({ project }: { project: ProjectTableRow }) 
                   >
                     {latestCheck ? (latestCheck.pmApproval ? "Approved" : "In QC") : "No QC"}
                   </span>
+                </div>
+                <div className="mt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quality</p>
+                  <select
+                    aria-label={`Quality for ${unit.unitNumber}`}
+                    name={`quality-${unit.unitNumber}`}
+                    value={quality}
+                    onChange={(event) => {
+                      event.stopPropagation();
+                      setUnitQualityMap((current) => ({ ...current, [unit.unitNumber]: event.target.value }));
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`mt-1 w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-normal normal-case tracking-normal focus:outline-none focus:ring-1 focus:ring-gray-300 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                  >
+                    {QUALITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {unit.scope ? <p className="mt-2 line-clamp-2 text-xs text-gray-700">{unit.scope}</p> : null}
                 <div className="mt-2 space-y-1.5">
