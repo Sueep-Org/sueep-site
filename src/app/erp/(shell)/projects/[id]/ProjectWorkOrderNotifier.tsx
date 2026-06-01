@@ -79,14 +79,6 @@ function formatContacts(contacts: ContactRow[]): string {
     .join("\n");
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  } catch {
-    return iso.slice(0, 10);
-  }
-}
 
 function resolveServiceTypeState(st: string | null): { selected: string; custom: string } {
   const val = st ?? "";
