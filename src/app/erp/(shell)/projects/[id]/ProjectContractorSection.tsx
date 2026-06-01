@@ -46,7 +46,8 @@ export function ProjectContractorSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const contractorId = String(fd.get("contractorId") || "");
     if (!contractorId) {
       setError("Select a contractor.");
@@ -94,7 +95,7 @@ export function ProjectContractorSection({
         notes: data.notes ?? null,
       };
       setAssignments((prev) => [row, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

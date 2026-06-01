@@ -205,7 +205,8 @@ export function ChangeOrderLaborersSection({
       return;
     }
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
@@ -248,7 +249,7 @@ export function ChangeOrderLaborersSection({
         qualityNotes: null,
       };
       setLaborers((prev) => [row, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");

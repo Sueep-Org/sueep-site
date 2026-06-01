@@ -255,13 +255,14 @@ export function ProjectLaborSection({
 
   async function onAddLabor(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
+    const form = e.currentTarget;
+    setError(“”);
     if (!employeePick) {
-      setError("Choose an employee from the list, or “Other” if they are not in the roster.");
+      setError(“Choose an employee from the list, or “Other” if they are not in the roster.”);
       return;
     }
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
     const hours = Number(fd.get("hours"));
@@ -330,7 +331,7 @@ export function ProjectLaborSection({
         qualityNotes: null,
       };
       setEntries((prev) => [row, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
