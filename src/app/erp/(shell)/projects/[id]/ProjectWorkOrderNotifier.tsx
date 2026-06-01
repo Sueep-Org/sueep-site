@@ -23,13 +23,26 @@ type EmployeeRow = {
   status: string;
 };
 
+export type WorkOrderRecord = {
+  projectName: string;
+  siteAddress: string | null;
+  contacts: string | null;
+  startDate: string | null;
+  serviceType: string | null;
+  notes: string | null;
+  lastSentToName: string | null;
+  lastSentAt: string | null;
+};
+
 type Props = {
   projectId: string;
+  // Fallback defaults (used only if no saved record exists)
   jobTitle: string;
   description: string | null;
   projectDateIso: string | null;
   contacts: ContactRow[];
   employees: EmployeeRow[];
+  savedRecord: WorkOrderRecord | null;
 };
 
 function getDetailLine(description: string | null, label: string) {
@@ -75,6 +88,13 @@ function formatDate(iso: string | null): string {
   }
 }
 
+function resolveServiceTypeState(st: string | null): { selected: string; custom: string } {
+  const val = st ?? "";
+  if (!val) return { selected: "", custom: "" };
+  if ((SERVICE_TYPE_OPTIONS as readonly string[]).includes(val)) return { selected: val, custom: "" };
+  return { selected: "__other__", custom: val };
+}
+
 function empLabel(emp: EmployeeRow) {
   return `${emp.firstName} ${emp.lastName}`.trim();
 }
@@ -96,7 +116,11 @@ function EmployeeSearchDropdown({
   const displayName = selected ? empLabel(selected) : "";
 
   const filtered = query.trim()
-    ? employees.filter((e) => empLabel(e).toLowerCase().includes(query.toLowerCase()) || (e.email || "").toLowerCase().includes(query.toLowerCase()))
+    ? employees.filter(
+        (e) =>
+          empLabel(e).toLowerCase().includes(query.toLowerCase()) ||
+          (e.email || "").toLowerCase().includes(query.toLowerCase()),
+      )
     : employees;
 
   useEffect(() => {
@@ -124,9 +148,21 @@ function EmployeeSearchDropdown({
         className={inputCls}
         placeholder={displayName || "Search by name or email…"}
         value={open ? query : displayName}
-        onFocus={() => { setQuery(""); setOpen(true); }}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
-        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+        onFocus={() => {
+          setQuery("");
+          setOpen(true);
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          if (value) onChange("");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setOpen(false);
+            setQuery("");
+          }
+        }}
       />
       {open && (
         <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
@@ -136,11 +172,14 @@ function EmployeeSearchDropdown({
             filtered.map((emp) => (
               <li
                 key={emp.id}
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(emp.id); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(emp.id);
+                }}
                 className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
               >
                 <span className="font-medium">{empLabel(emp)}</span>
-                {emp.email && <span className="ml-2 text-gray-400 text-xs">{emp.email}</span>}
+                {emp.email && <span className="ml-2 text-xs text-gray-400">{emp.email}</span>}
               </li>
             ))
           )}
@@ -157,87 +196,136 @@ export function ProjectWorkOrderNotifier({
   projectDateIso,
   contacts,
   employees,
+  savedRecord,
 }: Props) {
-  const initialAddress = useMemo(() => getDetailLine(description, "Address"), [description]);
-  const initialServiceType = useMemo(() => extractServiceType(description), [description]);
-  const initialContacts = useMemo(() => formatContacts(contacts), [contacts]);
-  const initialStartDate = useMemo(() => formatDate(projectDateIso), [projectDateIso]);
+  // Derive fallback values from project fields (used when no saved record exists)
+  const fallbackAddress = useMemo(() => getDetailLine(description, "Address"), [description]);
+  const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
+  const fallbackContacts = useMemo(() => formatContacts(contacts), [contacts]);
+  // Keep as YYYY-MM-DD for the date picker — no formatting
+  const fallbackStartDate = projectDateIso ? projectDateIso.slice(0, 10) : null;
 
-  const isKnownServiceType = (SERVICE_TYPE_OPTIONS as readonly string[]).includes(initialServiceType);
+  // Prefer saved record, fall back to derived values
+  const initName = savedRecord?.projectName ?? jobTitle;
+  const initAddress = savedRecord?.siteAddress ?? fallbackAddress;
+  const initContacts = savedRecord?.contacts ?? fallbackContacts;
+  const initStartDateRaw = savedRecord?.startDate ?? fallbackStartDate;
+  // If stored value is YYYY-MM-DD it's a precise date; anything else is "other"
+  const initStartIsDate = initStartDateRaw ? /^\d{4}-\d{2}-\d{2}$/.test(initStartDateRaw) : true;
+  const initServiceType = savedRecord?.serviceType ?? fallbackServiceType;
+  const initNotes = savedRecord?.notes ?? "";
 
-  const [projectName, setProjectName] = useState(jobTitle);
-  const [siteAddress, setSiteAddress] = useState(initialAddress);
-  const [contactsText, setContactsText] = useState(initialContacts);
-  const [startDate, setStartDate] = useState(initialStartDate);
-  const [serviceTypeSelected, setServiceTypeSelected] = useState(
-    initialServiceType && isKnownServiceType ? initialServiceType : initialServiceType ? "__other__" : "",
+  const { selected: initSelected, custom: initCustom } = useMemo(
+    () => resolveServiceTypeState(initServiceType),
+    [initServiceType],
   );
-  const [serviceTypeCustom, setServiceTypeCustom] = useState(
-    initialServiceType && !isKnownServiceType ? initialServiceType : "",
-  );
-  const [notes, setNotes] = useState("");
+
+  const [projectName, setProjectName] = useState(initName);
+  const [siteAddress, setSiteAddress] = useState(initAddress);
+  const [contactsText, setContactsText] = useState(initContacts);
+  const [startDateMode, setStartDateMode] = useState<"date" | "other">(initStartIsDate ? "date" : "other");
+  const [startDateValue, setStartDateValue] = useState(initStartIsDate ? (initStartDateRaw ?? "") : "");
+  const [startDateOther, setStartDateOther] = useState(!initStartIsDate ? (initStartDateRaw ?? "") : "");
+  const [serviceTypeSelected, setServiceTypeSelected] = useState(initSelected);
+  const [serviceTypeCustom, setServiceTypeCustom] = useState(initCustom);
+  const [notes, setNotes] = useState(initNotes);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+  const [lastSentToName, setLastSentToName] = useState(savedRecord?.lastSentToName ?? null);
+  const [lastSentAt, setLastSentAt] = useState(savedRecord?.lastSentAt ?? null);
 
-  const activeEmployeesWithEmail = employees.filter(
-    (e) => e.status !== "INACTIVE" && e.email,
-  );
+  const activeEmployeesWithEmail = employees.filter((e) => e.status !== "INACTIVE" && e.email);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function currentServiceType() {
+    return serviceTypeSelected === "__other__" ? serviceTypeCustom.trim() : serviceTypeSelected;
+  }
+
+  function getStartDate() {
+    return startDateMode === "date" ? (startDateValue || null) : (startDateOther.trim() || null);
+  }
+
+  function payload() {
+    return {
+      projectName,
+      siteAddress,
+      contacts: contactsText,
+      startDate: getStartDate(),
+      serviceType: currentServiceType(),
+      notes,
+    };
+  }
+
+  async function onSave(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setSuccess(false);
-
-    if (!selectedEmployeeId) {
-      setError("Please select an employee to notify.");
-      return;
-    }
-
-    setLoading(true);
+    setSaveSuccess(false);
+    setSaving(true);
     try {
-      const serviceType = serviceTypeSelected === "__other__" ? serviceTypeCustom.trim() : serviceTypeSelected;
-      const res = await fetch(`/api/erp/projects/${projectId}/send-work-order-email`, {
-        method: "POST",
+      const res = await fetch(`/api/erp/projects/${projectId}/work-order-record`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          employeeId: selectedEmployeeId,
-          projectName,
-          siteAddress,
-          contacts: contactsText,
-          startDate,
-          serviceType,
-          notes,
-        }),
+        body: JSON.stringify(payload()),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setError(data.error || "Failed to send email");
-        return;
-      }
-      setSuccess(true);
+      if (!res.ok) { setError(data.error || "Save failed"); return; }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
       setError("Network error");
     } finally {
-      setLoading(false);
+      setSaving(false);
+    }
+  }
+
+  async function onSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedEmployeeId) { setError("Select an employee to notify."); return; }
+    setError("");
+    setSendSuccess(false);
+    setSending(true);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/send-work-order-email`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ employeeId: selectedEmployeeId, ...payload() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setError(data.error || "Failed to send"); return; }
+      const emp = activeEmployeesWithEmail.find((e) => e.id === selectedEmployeeId);
+      if (emp) {
+        setLastSentToName(empLabel(emp));
+        setLastSentAt(new Date().toISOString());
+      }
+      setSendSuccess(true);
+      setTimeout(() => setSendSuccess(false), 4000);
+    } catch {
+      setError("Network error");
+    } finally {
+      setSending(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
+    <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Work Order</h2>
-        {success && (
-          <span className="text-xs font-medium text-green-600">Work order sent successfully.</span>
+        {lastSentToName && lastSentAt && (
+          <span className="text-xs text-gray-400">
+            Last sent to <span className="font-medium text-gray-600">{lastSentToName}</span>{" "}
+            on {new Date(lastSentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </span>
         )}
       </div>
 
+      {/* Work order fields */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelCls} htmlFor="wo-project-name">
-            Project Name
-          </label>
+          <label className={labelCls} htmlFor="wo-project-name">Project Name</label>
           <input
             id="wo-project-name"
             type="text"
@@ -249,9 +337,7 @@ export function ProjectWorkOrderNotifier({
         </div>
 
         <div>
-          <label className={labelCls} htmlFor="wo-address">
-            Project Site Address
-          </label>
+          <label className={labelCls} htmlFor="wo-address">Project Site Address</label>
           <input
             id="wo-address"
             type="text"
@@ -263,23 +349,38 @@ export function ProjectWorkOrderNotifier({
         </div>
 
         <div>
-          <label className={labelCls} htmlFor="wo-start-date">
-            Starting Date (Estimated)
-          </label>
-          <input
-            id="wo-start-date"
-            type="text"
-            className={inputCls}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            placeholder="e.g. June 15, 2025"
-          />
+          <div className="flex items-center justify-between">
+            <label className={labelCls} htmlFor="wo-start-date">Starting Date (Estimated)</label>
+            <button
+              type="button"
+              onClick={() => setStartDateMode((m) => m === "date" ? "other" : "date")}
+              className="text-[11px] text-pink-500 hover:underline"
+            >
+              {startDateMode === "date" ? "Other / TBD" : "Use exact date"}
+            </button>
+          </div>
+          {startDateMode === "date" ? (
+            <input
+              id="wo-start-date"
+              type="date"
+              className={inputCls}
+              value={startDateValue}
+              onChange={(e) => setStartDateValue(e.target.value)}
+            />
+          ) : (
+            <input
+              id="wo-start-date"
+              type="text"
+              className={inputCls}
+              value={startDateOther}
+              onChange={(e) => setStartDateOther(e.target.value)}
+              placeholder="e.g. Early July, TBD, Q3 2026"
+            />
+          )}
         </div>
 
         <div>
-          <label className={labelCls} htmlFor="wo-service-type">
-            Service Type
-          </label>
+          <label className={labelCls} htmlFor="wo-service-type">Service Type</label>
           <select
             id="wo-service-type"
             className={inputCls}
@@ -304,9 +405,7 @@ export function ProjectWorkOrderNotifier({
         </div>
 
         <div className="sm:col-span-2">
-          <label className={labelCls} htmlFor="wo-contacts">
-            Main Point of Contacts
-          </label>
+          <label className={labelCls} htmlFor="wo-contacts">Main Point of Contacts</label>
           <textarea
             id="wo-contacts"
             rows={3}
@@ -318,9 +417,7 @@ export function ProjectWorkOrderNotifier({
         </div>
 
         <div className="sm:col-span-2">
-          <label className={labelCls} htmlFor="wo-notes">
-            Project Details / Notes for Project Manager
-          </label>
+          <label className={labelCls} htmlFor="wo-notes">Project Details / Notes for Project Manager</label>
           <textarea
             id="wo-notes"
             rows={4}
@@ -332,38 +429,45 @@ export function ProjectWorkOrderNotifier({
         </div>
       </div>
 
-      <div className="border-t border-gray-200 pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
-          Notify Employee
-        </h3>
+      {/* Save bar */}
+      <div className="flex items-center gap-3 border-t border-gray-200 pt-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-md bg-gray-200 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {saveSuccess && <span className="text-xs text-green-600">Saved.</span>}
+      </div>
+
+      {/* Send section */}
+      <div className="border-t border-gray-200 pt-4 space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Send to Employee</h3>
         <div className="grid gap-4 sm:grid-cols-2 items-end">
           <div>
-            <label className={labelCls}>
-              Select employee to email
-            </label>
+            <label className={labelCls}>Employee</label>
             <EmployeeSearchDropdown
               employees={activeEmployeesWithEmail}
               value={selectedEmployeeId}
               onChange={setSelectedEmployeeId}
             />
           </div>
-
-          <div>
-            {error && (
-              <p className="mb-2 text-xs text-red-500" role="alert">
-                {error}
-              </p>
-            )}
+          <div className="flex flex-col gap-2">
+            {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
+            {sendSuccess && <p className="text-xs text-green-600">Work order sent.</p>}
             <button
-              type="submit"
-              disabled={loading || !selectedEmployeeId}
-              className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+              type="button"
+              onClick={onSend}
+              disabled={sending || !selectedEmployeeId}
+              className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              {loading ? "Sending…" : "Send Work Order"}
+              {sending ? "Sending…" : "Send Work Order"}
             </button>
           </div>
         </div>
       </div>
-    </form>
+    </div>
   );
 }

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildWorkOrderNotificationEmailHtml } from "@/lib/email";
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function formatDateForEmail(value: string): string {
+  if (!ISO_DATE.test(value)) return value;
+  return new Date(value + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+}
+
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
@@ -34,17 +43,17 @@ export async function POST(req: Request, ctx: Ctx) {
   const startDate = String(body.startDate || "").trim();
   const serviceType = String(body.serviceType || "").trim();
   const notes = String(body.notes || "").trim();
+  const recipientName = `${employee.firstName} ${employee.lastName}`.trim();
 
   const origin = req.headers.get("origin") || req.headers.get("host") || "";
   const projectUrl = origin ? `${origin}/erp/projects/${id}` : null;
 
-  const recipientName = `${employee.firstName} ${employee.lastName}`.trim();
   const html = buildWorkOrderNotificationEmailHtml({
     recipientName,
     projectName,
     siteAddress,
     contacts,
-    startDate,
+    startDate: startDate ? formatDateForEmail(startDate) : "",
     serviceType,
     notes,
     projectUrl,
@@ -56,9 +65,35 @@ export async function POST(req: Request, ctx: Ctx) {
       subject: `Work Order: ${projectName}`,
       html,
     });
-    return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("send-work-order-email", e);
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
+
+  const projectDate = startDate && ISO_DATE.test(startDate) ? new Date(startDate) : null;
+  const recordData = {
+    projectName,
+    siteAddress: siteAddress || null,
+    contacts: contacts || null,
+    startDate: startDate || null,
+    serviceType: serviceType || null,
+    notes: notes || null,
+    lastSentToName: recipientName,
+    lastSentAt: new Date(),
+  };
+
+  // Persist the work order record and sync project start date in one transaction
+  await prisma.$transaction([
+    prisma.projectWorkOrderRecord.upsert({
+      where: { projectId: id },
+      create: { projectId: id, ...recordData },
+      update: recordData,
+    }),
+    prisma.project.update({
+      where: { id },
+      data: { projectDate },
+    }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

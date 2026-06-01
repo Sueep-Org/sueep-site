@@ -60,6 +60,7 @@ model Project {
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
   checklistItems ProjectChecklistItem[]
+  workOrderRecord ProjectWorkOrderRecord?
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -216,6 +217,27 @@ model ProjectChecklistItem {
   notes     String?
 
   @@index([projectId, date])
+}
+
+/// One persistent work order record per project — editable, resendable
+model ProjectWorkOrderRecord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  projectName String
+  siteAddress String?
+  contacts    String?
+  startDate   String?
+  serviceType String?
+  notes       String?
+
+  /// Denormalized for display — set when email is sent
+  lastSentToName String?
+  lastSentAt     DateTime?
 }
 
 model ProjectImage {

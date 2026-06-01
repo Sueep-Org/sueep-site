@@ -22,7 +22,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -61,6 +61,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       where: { projectId: id },
       orderBy: [{ date: "desc" }, { createdAt: "asc" }],
     }),
+    prisma.projectWorkOrderRecord.findUnique({ where: { projectId: id } }),
   ]);
   if (!project) notFound();
 
@@ -128,6 +129,16 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
             contacts={project.contacts}
             employees={laborEmployees}
+            savedRecord={workOrderRecord ? {
+              projectName: workOrderRecord.projectName,
+              siteAddress: workOrderRecord.siteAddress,
+              contacts: workOrderRecord.contacts,
+              startDate: workOrderRecord.startDate,
+              serviceType: workOrderRecord.serviceType,
+              notes: workOrderRecord.notes,
+              lastSentToName: workOrderRecord.lastSentToName,
+              lastSentAt: workOrderRecord.lastSentAt ? workOrderRecord.lastSentAt.toISOString() : null,
+            } : null}
           />
           <ProjectPricePackageEditor
             projectId={project.id}
