@@ -1,9 +1,116 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
+
+type EmployeeNotifyOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+};
+
+function NotifyMultiSelect({
+  employees,
+  selectedIds,
+  onChange,
+}: {
+  employees: EmployeeNotifyOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  const filtered = employees.filter((e) =>
+    `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  function toggle(id: string) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  }
+
+  const selected = employees.filter((e) => selectedIds.includes(e.id));
+
+  return (
+    <div ref={containerRef} className="relative mt-1">
+      <div
+        className="min-h-[38px] w-full cursor-text rounded-md border border-gray-300 bg-white px-2 py-1.5 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500"
+        onClick={() => setOpen(true)}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <span key={e.id} className="flex items-center gap-1 rounded bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800">
+                {name}
+                <button
+                  type="button"
+                  onMouseDown={(ev) => { ev.stopPropagation(); toggle(e.id); }}
+                  className="ml-0.5 text-pink-500 hover:text-pink-700"
+                  aria-label={`Remove ${name}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <input
+            type="text"
+            className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+            placeholder={selectedIds.length === 0 ? "Search employees…" : ""}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+          />
+        </div>
+      </div>
+      {open && (
+        <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-gray-400">No results</li>
+          ) : (
+            filtered.map((e) => {
+              const name = `${e.firstName} ${e.lastName}`.trim();
+              const isSelected = selectedIds.includes(e.id);
+              return (
+                <li
+                  key={e.id}
+                  onMouseDown={(ev) => { ev.preventDefault(); toggle(e.id); setQuery(""); }}
+                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-pink-50 ${isSelected ? "font-medium text-pink-700" : "text-gray-800"}`}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected ? "border-pink-500 bg-pink-500 text-white" : "border-gray-300"}`}>
+                    {isSelected && (
+                      <svg viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
+                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span>{name}</span>
+                  {e.email && <span className="ml-auto text-xs text-gray-400">{e.email}</span>}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export type ChangeOrderLaborer = {
   id: string;
@@ -38,15 +145,33 @@ const label = "block text-xs font-medium text-gray-600";
 export function ProjectChangeOrdersSection({
   projectId,
   initialEntries,
+  employees = [],
 }: {
   projectId: string;
   initialEntries: ProjectChangeOrderRow[];
+  employees?: EmployeeNotifyOption[];
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  const notifiableEmployees = employees.filter((e) => e.email);
+
+  const defaultNotifyIds = useState(() => {
+    const ids: string[] = [];
+    for (const e of notifiableEmployees) {
+      const name = `${e.firstName} ${e.lastName}`.toLowerCase();
+      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio") {
+        ids.push(e.id);
+      }
+    }
+    return ids;
+  })[0];
+
+  const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(defaultNotifyIds);
+  const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     setEntries(initialEntries);
@@ -56,6 +181,7 @@ export function ProjectChangeOrdersSection({
     e.preventDefault();
     const form = e.currentTarget;
     setError("");
+    setNotifyResult(null);
     setLoading(true);
     const fd = new FormData(form);
 
@@ -78,6 +204,38 @@ export function ProjectChangeOrdersSection({
       }
       setEntries((prev) => [data, ...prev]);
       form.reset();
+
+      // Send notifications to selected employees
+      if (notifyEmployeeIds.length > 0) {
+        try {
+          const notifyRes = await fetch(
+            `/api/erp/projects/${projectId}/change-orders/${data.id}/notify`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
+            },
+          );
+          const notifyJson = (await notifyRes.json().catch(() => ({}))) as { ok?: boolean; sentTo?: string[]; error?: string };
+          if (notifyRes.ok) {
+            const names = notifyEmployeeIds
+              .map((id) => {
+                const emp = notifiableEmployees.find((e) => e.id === id);
+                return emp ? `${emp.firstName} ${emp.lastName}`.trim() : null;
+              })
+              .filter(Boolean)
+              .join(", ");
+            setNotifyResult({ ok: true, msg: `Notified: ${names}` });
+          } else {
+            setNotifyResult({ ok: false, msg: notifyJson.error || "Created, but notification failed" });
+          }
+        } catch {
+          setNotifyResult({ ok: false, msg: "Created, but notification failed" });
+        }
+      }
+
+      // Reset notify selection back to defaults
+      setNotifyEmployeeIds(defaultNotifyIds);
       router.refresh();
     } catch {
       setError("Network error");
@@ -167,11 +325,26 @@ export function ProjectChangeOrdersSection({
             <textarea id="co-description" name="description" rows={3} className={input} />
           </div>
         </div>
+        {notifiableEmployees.length > 0 && (
+          <div className="mt-4 border-t border-gray-200 pt-4">
+            <label className="block text-xs font-medium text-gray-600">Notify employees</label>
+            <NotifyMultiSelect
+              employees={notifiableEmployees}
+              selectedIds={notifyEmployeeIds}
+              onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+            />
+          </div>
+        )}
         {error ? (
           <p className="mt-3 text-sm text-red-600" role="alert">
             {error}
           </p>
         ) : null}
+        {notifyResult && (
+          <p className={`mt-2 text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`} role="status">
+            {notifyResult.msg}
+          </p>
+        )}
         <button
           type="submit"
           disabled={loading}

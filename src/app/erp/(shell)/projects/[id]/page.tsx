@@ -244,7 +244,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       ? [
           {
             label: "Change Orders",
-            content: <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} />,
+            content: (
+              <ProjectChangeOrdersSection
+                projectId={project.id}
+                initialEntries={changeOrderRows}
+                employees={laborEmployees.map((e) => ({
+                  id: e.id,
+                  firstName: e.firstName,
+                  lastName: e.lastName,
+                  email: e.email ?? null,
+                }))}
+              />
+            ),
           },
         ]
       : []),

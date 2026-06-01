@@ -197,10 +197,10 @@ export function buildChangeOrderNotificationEmail(params: {
   description: string | null;
   reason: string | null;
   requestedBy: string | null;
-  projectUrl: string | null;
+  changeOrderUrl: string | null;
 }) {
-  const projectLink = params.projectUrl
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View project details</a></p>`
+  const projectLink = params.changeOrderUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.changeOrderUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View change order details</a></p>`
     : "";
   const description = params.description
     ? `<p><strong>Description:</strong> ${escapeHtml(params.description)}</p>`

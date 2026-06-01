@@ -29,7 +29,7 @@ export default async function NewProjectPage() {
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, email: true },
     }),
   ]);
   const scheduleBuildings = await prisma.project.findMany({
