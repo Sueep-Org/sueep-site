@@ -37,7 +37,8 @@ export function ProjectImagesSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
 
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/images`, {
@@ -57,7 +58,7 @@ export function ProjectImagesSection({
         return;
       }
       setEntries((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

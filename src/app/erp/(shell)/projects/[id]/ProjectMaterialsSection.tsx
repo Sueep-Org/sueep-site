@@ -51,7 +51,8 @@ export function ProjectMaterialsSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/materials`, {
         method: "POST",
@@ -69,7 +70,7 @@ export function ProjectMaterialsSection({
       const data = (await res.json()) as MaterialRow & { error?: string };
       if (!res.ok) { setError(data.error || "Failed to add material"); return; }
       setEntries((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

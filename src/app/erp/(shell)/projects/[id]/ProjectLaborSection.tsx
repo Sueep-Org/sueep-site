@@ -255,13 +255,14 @@ export function ProjectLaborSection({
 
   async function onAddLabor(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError("");
     if (!employeePick) {
-      setError("Choose an employee from the list, or “Other” if they are not in the roster.");
+      setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
     const hours = Number(fd.get("hours"));
@@ -330,7 +331,7 @@ export function ProjectLaborSection({
         qualityNotes: null,
       };
       setEntries((prev) => [row, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
@@ -365,7 +366,7 @@ export function ProjectLaborSection({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
-          “Other” only when the worker is not in the list.
+          "Other" only when the worker is not in the list.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>

@@ -144,7 +144,8 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
     e.preventDefault();
     setAddError("");
     setAddLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
 
     try {
       const res = await fetch(`/api/erp/employees/${employeeId}/documents`, {
@@ -158,7 +159,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
         return;
       }
       setDocs((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setSelectedFileName(null);
     } catch {
       setAddError("Network error");
