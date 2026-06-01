@@ -11,7 +11,6 @@ import {
   EmptyValue,
   LaborTable,
   projectStateClasses,
-  TurnoverPricingSummary,
   type ProjectTableRow,
   type UnitQualityCheckRow,
 } from "./ProjectsExpandableTable";
@@ -39,10 +38,6 @@ function getBuildingName(project: ProjectTableRow) {
 
 function getUnitSummary(project: ProjectTableRow) {
   return getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-}
-
-function getProjectComments(project: ProjectTableRow) {
-  return getDetailLine(project.description, "Comments");
 }
 
 function compactUnitSummary(units: string) {
@@ -379,63 +374,43 @@ function JanitorialQualitySection({ project }: { project: ProjectTableRow }) {
 }
 
 function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
-  const address = getDetailLine(project.description, "Address");
-  const units = getUnitSummary(project);
-  const comments = getProjectComments(project);
   const turnoverLabel = getTurnoverLabel(project);
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 lg:grid-cols-[1.1fr_1fr]">
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Approved turnover</p>
-              <p className="mt-1 text-sm font-semibold text-gray-900">{turnoverLabel}</p>
-            </div>
-            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-              Approved
-            </span>
+      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Approved turnover</p>
+            <p className="mt-1 text-sm font-semibold text-gray-900">{turnoverLabel}</p>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-            <div>
-              <p className="font-semibold uppercase tracking-wide text-gray-400">Start</p>
-              <p className="mt-0.5 font-medium text-gray-900">{fmtShortDate(project.projectDate)}</p>
-            </div>
-            <div>
-              <p className="font-semibold uppercase tracking-wide text-gray-400">PM</p>
-              <p className="mt-0.5 font-medium text-gray-900">{project.supervisor || "Unassigned"}</p>
-            </div>
-            <div>
-              <p className="font-semibold uppercase tracking-wide text-gray-400">Contract</p>
-              <p className="mt-0.5 font-medium text-gray-900">{centsToDollars(project.contractValueCents)}</p>
-            </div>
-            <div>
-              <p className="font-semibold uppercase tracking-wide text-gray-400">Progress</p>
-              <p className="mt-0.5 font-medium text-gray-900">{project.percentDone}%</p>
-            </div>
-          </div>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+            Approved
+          </span>
         </div>
-
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Project details</p>
-          <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <span className="text-gray-400">Address</span>
-            <span className="font-medium text-gray-800">{address || "-"}</span>
-            <span className="text-gray-400">Units</span>
-            <span className="font-medium text-gray-800">{units || "-"}</span>
-            <span className="text-gray-400">Billing</span>
-            <span>{billingBadge(project.billingStatus)}</span>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div>
+            <p className="font-semibold uppercase tracking-wide text-gray-400">Start</p>
+            <p className="mt-0.5 font-medium text-gray-900">{fmtShortDate(project.projectDate)}</p>
           </div>
-          {comments ? <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">{comments}</p> : null}
+          <div>
+            <p className="font-semibold uppercase tracking-wide text-gray-400">PM</p>
+            <p className="mt-0.5 font-medium text-gray-900">{project.supervisor || "Unassigned"}</p>
+          </div>
+          <div>
+            <p className="font-semibold uppercase tracking-wide text-gray-400">Contract</p>
+            <p className="mt-0.5 font-medium text-gray-900">{centsToDollars(project.contractValueCents)}</p>
+          </div>
+          <div>
+            <p className="font-semibold uppercase tracking-wide text-gray-400">Progress</p>
+            <p className="mt-0.5 font-medium text-gray-900">{project.percentDone}%</p>
+          </div>
         </div>
       </div>
 
       <JanitorialUnitQualityChecks project={project} />
 
       <JanitorialQualitySection project={project} />
-
-      <TurnoverPricingSummary project={project} showPropertyTitle={false} showUnitsSummary={false} />
     </div>
   );
 }
