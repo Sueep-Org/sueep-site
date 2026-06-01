@@ -12,6 +12,7 @@ import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         contractorAssignments: {
           orderBy: { createdAt: "desc" },
           include: { contractor: { select: { id: true, name: true } } },
+        },
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+          select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
       },
     }),
@@ -111,6 +116,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       label: "Details",
       content: (
         <>
+          <ProjectWorkOrderNotifier
+            projectId={project.id}
+            jobTitle={project.jobTitle}
+            description={project.description}
+            projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+            contacts={project.contacts}
+            employees={laborEmployees}
+          />
           <ProjectPricePackageEditor
             projectId={project.id}
             description={project.description}

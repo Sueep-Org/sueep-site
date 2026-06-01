@@ -230,6 +230,43 @@ export function buildChangeOrderNotificationEmail(params: {
   `;
 }
 
+export function buildWorkOrderNotificationEmailHtml(params: {
+  recipientName: string;
+  projectName: string;
+  siteAddress: string;
+  contacts: string;
+  startDate: string;
+  serviceType: string;
+  notes: string;
+  projectUrl: string | null;
+}) {
+  const projectLink = params.projectUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View Project</a></p>`
+    : "";
+  const notesBlock = params.notes
+    ? `<div style="margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;white-space:pre-line">${escapeHtml(params.notes)}</div>`
+    : "";
+  const contactsBlock = params.contacts
+    ? `<p><strong>Main Point of Contacts:</strong></p><div style="margin-left:16px;white-space:pre-line">${escapeHtml(params.contacts)}</div>`
+    : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Work Order Created</h2>
+      <p>Hi ${escapeHtml(params.recipientName)},</p>
+      <p>A work order has been created for the following project and assigned to you for review.</p>
+      <p><strong>Project Name:</strong> ${escapeHtml(params.projectName)}</p>
+      <p><strong>Site Address:</strong> ${escapeHtml(params.siteAddress || "—")}</p>
+      ${contactsBlock}
+      <p><strong>Starting Date (Estimated):</strong> ${escapeHtml(params.startDate || "—")}</p>
+      <p><strong>Service Type:</strong> ${escapeHtml(params.serviceType || "—")}</p>
+      ${notesBlock}
+      ${projectLink}
+      <p style="font-size:12px;color:#888;margin-top:24px">Please log in to the project portal to review the full details.</p>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
