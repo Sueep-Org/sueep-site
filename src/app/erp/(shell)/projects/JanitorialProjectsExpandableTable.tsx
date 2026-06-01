@@ -13,6 +13,7 @@ import {
   projectStateClasses,
   TurnoverPricingSummary,
   type ProjectTableRow,
+  type UnitQualityCheckRow,
 } from "./ProjectsExpandableTable";
 
 function fmtShortDate(iso: string | null) {
@@ -64,6 +65,33 @@ function getScopeSummary(project: ProjectTableRow) {
   return units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim() || units;
 }
 
+function normalizeUnitValue(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase();
+}
+
+function parseUnitRows(project: ProjectTableRow) {
+  const units = getUnitSummary(project);
+  if (!units) return [];
+
+  return units
+    .split(/\s+\|\s+/)
+    .map((unit, index) => {
+      const unitNumber = unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || `Unit ${index + 1}`;
+      const scope = unit.match(/:\s*(.+)$/)?.[1]?.trim() || "";
+      const details = unit.replace(/:\s*.+$/, "").trim();
+      const checks = project.unitQualityChecks.filter(
+        (check) => normalizeUnitValue(check.unitNumber) === normalizeUnitValue(unitNumber)
+      );
+
+      return {
+        unitNumber,
+        details,
+        scope,
+        checks,
+      };
+    });
+}
+
 const QUALITY_LABELS: Record<string, string> = {
   EXCELLENT: "Excellent",
   GOOD: "Good",
@@ -85,6 +113,110 @@ const QUALITY_COLORS: Record<string, string> = {
   FAIR: "text-gray-500",
   POOR: "text-red-400",
 };
+
+function fmtQualityCheckDate(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+function QualityCheckPill({ check }: { check: UnitQualityCheckRow }) {
+  return (
+    <Link
+      href={`/erp/quality-checks/${check.id}`}
+      onClick={(event) => event.stopPropagation()}
+      className="block rounded border border-gray-200 bg-gray-50 px-2 py-1.5 hover:border-pink-200 hover:bg-pink-50"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold text-gray-800">{fmtQualityCheckDate(check.createdAt)}</span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            check.pmApproval ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+          }`}
+        >
+          {check.pmApproval ? "PM approved" : "QC open"}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-gray-600">
+        {check.supervisorName}{" "}
+        {check.evidencePhotoCount > 0 ? (
+          <span className="text-gray-400">- {check.evidencePhotoCount} photo{check.evidencePhotoCount !== 1 ? "s" : ""}</span>
+        ) : null}
+      </p>
+      {check.notes ? <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{check.notes}</p> : null}
+    </Link>
+  );
+}
+
+function JanitorialUnitQualityChecks({ project }: { project: ProjectTableRow }) {
+  const unitRows = parseUnitRows(project);
+  const matchedCheckCount = unitRows.reduce((count, unit) => count + unit.checks.length, 0);
+  const approvedCount = unitRows.reduce(
+    (count, unit) => count + unit.checks.filter((check) => check.pmApproval).length,
+    0
+  );
+
+  return (
+    <div className="overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quality checks</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">Per unit inspection status</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-700">
+            {matchedCheckCount} check{matchedCheckCount !== 1 ? "s" : ""}
+          </span>
+          {approvedCount > 0 ? (
+            <span className="rounded bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+              {approvedCount} approved
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {unitRows.length ? (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {unitRows.map((unit) => {
+            const latestCheck = unit.checks[0];
+            return (
+              <div key={unit.unitNumber} className="rounded border border-gray-200 bg-white p-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{unit.unitNumber}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[11px] text-gray-500">{unit.details}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      latestCheck
+                        ? latestCheck.pmApproval
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {latestCheck ? (latestCheck.pmApproval ? "Approved" : "In QC") : "No QC"}
+                  </span>
+                </div>
+                {unit.scope ? <p className="mt-2 line-clamp-2 text-xs text-gray-700">{unit.scope}</p> : null}
+                <div className="mt-2 space-y-1.5">
+                  {unit.checks.length ? (
+                    unit.checks.map((check) => <QualityCheckPill key={check.id} check={check} />)
+                  ) : (
+                    <p className="rounded border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-400">
+                      No quality check sent for this unit yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400">No unit breakdown saved for this janitorial project.</p>
+      )}
+    </div>
+  );
+}
 
 function JanitorialQualitySection({ project }: { project: ProjectTableRow }) {
   const reviewedEntries = project.laborEntries.filter((entry) => Boolean(entry.qualityRating));
@@ -298,6 +430,8 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
           {comments ? <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">{comments}</p> : null}
         </div>
       </div>
+
+      <JanitorialUnitQualityChecks project={project} />
 
       <JanitorialQualitySection project={project} />
 

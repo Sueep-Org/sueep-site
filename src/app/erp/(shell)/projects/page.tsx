@@ -6,6 +6,31 @@ import { ProjectsTabs } from "./ProjectsTabs";
 
 export const dynamic = "force-dynamic";
 
+function getProjectDetailLine(description: string | null, label: string) {
+  const prefix = `${label}:`;
+  return (
+    (description || "")
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
+      .trim() || ""
+  );
+}
+
+function normalizeMatchValue(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase();
+}
+
+function parseProjectUnitNumbers(description: string | null) {
+  const units = getProjectDetailLine(description, "Units") || getProjectDetailLine(description, "Unit Numbers");
+  if (!units) return [];
+
+  return units
+    .split(/\s+\|\s+|,/)
+    .map((unit) => unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || "")
+    .filter(Boolean);
+}
+
 export default async function ErpProjectsPage() {
   const cfg = parseHubSpotPipelineStageMap();
 
@@ -51,6 +76,18 @@ export default async function ErpProjectsPage() {
           },
         },
         orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  const qualityChecks = await prisma.qualityCheck.findMany({
+    orderBy: [{ createdAt: "desc" }],
+    include: {
+      turnoverRequest: {
+        select: {
+          unitNumber: true,
+          building: { select: { name: true } },
+        },
       },
     },
   });
@@ -130,6 +167,28 @@ export default async function ErpProjectsPage() {
       paintCents,
       miles,
       hubspotPipelineId: p.hubspotPipelineId ?? null,
+      unitQualityChecks: qualityChecks
+        .filter((check) => {
+          const buildingName = getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim() || "";
+          const unitNumbers = parseProjectUnitNumbers(p.description).map(normalizeMatchValue);
+          const checkBuilding = normalizeMatchValue(check.turnoverRequest.building.name);
+          const checkUnit = normalizeMatchValue(check.turnoverRequest.unitNumber);
+
+          return (
+            normalizeMatchValue(buildingName) === checkBuilding &&
+            Boolean(checkUnit) &&
+            unitNumbers.includes(checkUnit)
+          );
+        })
+        .map((check) => ({
+          id: check.id,
+          createdAt: check.createdAt.toISOString(),
+          unitNumber: check.turnoverRequest.unitNumber ?? null,
+          supervisorName: check.supervisorName,
+          pmApproval: check.pmApproval,
+          evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
+          notes: check.notes ?? null,
+        })),
       changeOrders: p.changeOrders.map((co) => ({
         id: co.id,
         title: co.title,

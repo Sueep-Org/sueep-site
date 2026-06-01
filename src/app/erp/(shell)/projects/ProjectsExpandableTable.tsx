@@ -19,6 +19,16 @@ type LaborRowBase = {
   qualityNotes: string | null;
 };
 
+export type UnitQualityCheckRow = {
+  id: string;
+  createdAt: string;
+  unitNumber: string | null;
+  supervisorName: string;
+  pmApproval: boolean;
+  evidencePhotoCount: number;
+  notes: string | null;
+};
+
 export type ProjectTableRow = {
   id: string;
   jobTitle: string;
@@ -46,6 +56,7 @@ export type ProjectTableRow = {
   paintCents: number;
   miles: number;
   hubspotPipelineId: string | null;
+  unitQualityChecks: UnitQualityCheckRow[];
   changeOrders: {
     id: string;
     title: string;
