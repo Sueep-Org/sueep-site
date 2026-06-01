@@ -54,9 +54,10 @@ export function ProjectChangeOrdersSection({
 
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(form);
 
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/change-orders`, {
@@ -76,7 +77,7 @@ export function ProjectChangeOrdersSection({
         return;
       }
       setEntries((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");
