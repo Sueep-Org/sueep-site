@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
@@ -203,11 +203,80 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
 
+function SupervisorSearchDropdown({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) =>
+        `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={value || "Search by name…"}
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No employees found</li>
+          ) : (
+            filtered.map((emp) => (
+              <li
+                key={emp.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(`${emp.firstName} ${emp.lastName}`.trim());
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                {emp.firstName} {emp.lastName}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function NewProjectForm({
   initialBuildings = [],
   initialScheduleBuildings = [],
   janitorialPipelineId = null,
   allProjects = [],
+  employees = [],
   initialSegment = "COMMERCIAL_CLEANING",
   lockedSegment = false,
   allowErpDataFetch = true,
@@ -244,6 +313,12 @@ export function NewProjectForm({
   const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
   const [buildingAddress, setBuildingAddress] = useState("");
+  const [supervisorName, setSupervisorName] = useState(() => {
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david ? `${david.firstName} ${david.lastName}` : "";
+  });
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
@@ -531,7 +606,7 @@ export function NewProjectForm({
     const payload: Record<string, unknown> = {
       segment,
       jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
-      supervisor: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
+      supervisor: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
       description: turnoverDescription || undefined,
       projectDate: isTurnover ? turnoverStartDate || undefined : fd.get("projectDate") || undefined,
       projectEndDate: isTurnover ? turnoverEndDate || undefined : fd.get("projectEndDate") || undefined,
@@ -570,7 +645,7 @@ export function NewProjectForm({
       materialsAdditional: unitScopes.some((unit) => unit.materialsAdditional),
       fullClean: unitScopes.some((unit) => unit.fullClean),
       carpetCleaning: unitScopes.some((unit) => unit.carpetCleaning),
-      supervisorSignOff: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
+      supervisorSignOff: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
       pricing: {
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
@@ -1142,10 +1217,12 @@ export function NewProjectForm({
           </div>
 
           <div>
-            <label className={label} htmlFor="supervisor">
-              Supervisor / PM *
-            </label>
-            <input id="supervisor" name="supervisor" className={input} />
+            <label className={label}>Supervisor / PM</label>
+            <SupervisorSearchDropdown
+              employees={employees}
+              value={supervisorName}
+              onChange={setSupervisorName}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
