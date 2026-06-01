@@ -13,6 +13,7 @@ import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
+import { ProjectChecklistSection } from "./ProjectChecklistSection";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -55,6 +56,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     prisma.materialEntry.findMany({
       where: { projectId: id },
       orderBy: { usedOn: "desc" },
+    }),
+    prisma.projectChecklistItem.findMany({
+      where: { projectId: id },
+      orderBy: [{ date: "desc" }, { createdAt: "asc" }],
     }),
   ]);
   if (!project) notFound();
@@ -204,6 +209,22 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             unit: e.unit,
             costCents: e.costCents,
             notes: e.notes,
+          }))}
+        />
+      ),
+    },
+    {
+      label: "Checklist",
+      content: (
+        <ProjectChecklistSection
+          projectId={project.id}
+          initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({
+            id: item.id,
+            createdAt: item.createdAt.toISOString(),
+            date: item.date.toISOString(),
+            title: item.title,
+            completed: item.completed,
+            notes: item.notes,
           }))}
         />
       ),

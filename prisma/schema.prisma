@@ -59,6 +59,7 @@ model Project {
   contacts ProjectContact[]
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
+  checklistItems ProjectChecklistItem[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -198,6 +199,23 @@ model ProjectWorkOrder {
   @@index([projectId, createdAt])
   @@index([priority])
   @@index([dueDate])
+}
+
+model ProjectChecklistItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// The calendar date this item belongs to (stored as midnight UTC)
+  date      DateTime
+  title     String
+  completed Boolean  @default(false)
+  notes     String?
+
+  @@index([projectId, date])
 }
 
 model ProjectImage {
