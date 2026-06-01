@@ -6,6 +6,9 @@ export class HighlightsStore {
     this._pageToStrokes = new Map();
     this._pageToRedo = new Map();
     this._pageToProposed = new Map();
+    this._pageToLines = new Map(); // vector lines per page
+    this._pageToScale = new Map(); // per-page scale factors (real_units_per_px)
+    this._pageToMeasurements = new Map(); // per-page saved manual measurements
     this._version = 1;
   }
 
@@ -13,6 +16,9 @@ export class HighlightsStore {
     if (!this._pageToStrokes.has(page)) this._pageToStrokes.set(page, []);
     if (!this._pageToRedo.has(page)) this._pageToRedo.set(page, []);
     if (!this._pageToProposed.has(page)) this._pageToProposed.set(page, []);
+    if (!this._pageToLines.has(page)) this._pageToLines.set(page, []);
+    if (!this._pageToScale.has(page)) this._pageToScale.set(page, null);
+    if (!this._pageToMeasurements.has(page)) this._pageToMeasurements.set(page, []);
   }
 
   getPage(page) {
@@ -52,12 +58,18 @@ export class HighlightsStore {
     this._pageToStrokes.set(page, []);
     this._pageToRedo.set(page, []);
     this._pageToProposed.set(page, []);
+    this._pageToLines.set(page, []);
+    this._pageToScale.set(page, null);
+    this._pageToMeasurements.set(page, []);
   }
 
   clearAll() {
     this._pageToStrokes.clear();
     this._pageToRedo.clear();
     this._pageToProposed.clear();
+    this._pageToLines.clear();
+    this._pageToScale.clear();
+    this._pageToMeasurements.clear();
   }
 
   exportJSON() {
@@ -80,6 +92,9 @@ export class HighlightsStore {
         this._pageToStrokes.set(pageNum, arr);
         this._pageToRedo.set(pageNum, []);
         this._pageToProposed.set(pageNum, []);
+        this._pageToLines.set(pageNum, []);
+        this._pageToScale.set(pageNum, null);
+        this._pageToMeasurements.set(pageNum, []);
       }
       return true;
     } catch (e) {
@@ -96,6 +111,24 @@ export class HighlightsStore {
   listAccepted(page) { this._ensure(page); return this._pageToStrokes.get(page); }
   toggleProposedSelection(page, id) { this._ensure(page); const arr=this._pageToProposed.get(page); const idx=arr.findIndex(p=>p.__id===id); if(idx>=0){ const p=arr[idx]; arr.splice(idx,1); const acc=this._pageToStrokes.get(page); acc.push({ points:p.points, areaPx:p.areaPx, areaUnits:p.areaUnits, unit:p.unit }); this._pageToRedo.set(page, []); } }
   acceptAllProposed(page) { this._ensure(page); const arr=this._pageToProposed.get(page); const acc=this._pageToStrokes.get(page); arr.forEach(p=>{ acc.push({ points:p.points, areaPx:p.areaPx, areaUnits:p.areaUnits, unit:p.unit }); }); this._pageToProposed.set(page, []); this._pageToRedo.set(page, []); }
+
+  // Vector line API
+  setLines(page, lines){ this._ensure(page); // expected: [{ id, x1,y1,x2,y2 } with normalized coords 0..1]
+    this._pageToLines.set(page, Array.isArray(lines)?lines.slice():[]);
+  }
+
+  getLines(page){ this._ensure(page); return this._pageToLines.get(page); }
+
+  clearLines(page){ this._ensure(page); this._pageToLines.set(page, []); }
+
+  // Scale API (real_units per pixel). unit is a string like 'in' or 'ft'
+  setScale(page, scaleObj){ this._ensure(page); this._pageToScale.set(page, scaleObj); }
+  getScale(page){ this._ensure(page); return this._pageToScale.get(page); }
+
+  // Measurements
+  addMeasurement(page, m){ this._ensure(page); const arr=this._pageToMeasurements.get(page); arr.push(m); }
+  removeMeasurement(page, id){ this._ensure(page); const arr=this._pageToMeasurements.get(page); const idx = arr.findIndex(m=>m.id===id); if (idx >= 0) arr.splice(idx, 1); }
+  listMeasurements(page){ this._ensure(page); return this._pageToMeasurements.get(page); }
 }
 
 

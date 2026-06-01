@@ -210,6 +210,13 @@ async function initApp(){
   const zoomResetBtn = $('zoomResetBtn');
 
   const zoomLabel = $('zoomLabel');
+  const prevPageBtn = $('prevPageBtn');
+  const nextPageBtn = $('nextPageBtn');
+  const pageInfo = $('pageInfo');
+  const measurementList = $('measurementList');
+  const measurementScaleInfo = $('measurementScaleInfo');
+  const changeScaleBtn = $('changeScaleBtn');
+  const doubleSideToggle = $('doubleSideToggle');
 
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
@@ -250,10 +257,42 @@ async function initApp(){
 
   const highlightsStore = new HighlightsStore();
 
+  function updateMeasurementList(){
+    if (!measurementList) return;
+    const measurements = highlightsStore.listMeasurements(currentPage) || [];
+    const scale = highlightsStore.getScale(currentPage);
+    if (measurementScaleInfo) {
+      measurementScaleInfo.textContent = (scale && scale.factor)
+        ? `Scale set: 1 in = ${(1 / scale.factor).toFixed(1)} px`
+        : 'Scale not set';
+    }
+    if (!measurements.length) {
+      measurementList.innerHTML = 'No saved measurements';
+      return;
+    }
+    measurementList.innerHTML = measurements.map(m => {
+      const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
+      const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(double-sided)</span>' : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+        <span>${label}${badge}</span>
+        <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 6px;min-width:auto;">X</button>
+      </div>`;
+    }).join('');
+    measurementList.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+      btn.onclick = () => {
+        highlightsStore.removeMeasurement(currentPage, btn.dataset.measurementId);
+        updateMeasurementList();
+        overlay.redraw();
+        toast('Measurement removed', 'info');
+      };
+    });
+  }
+
   const overlay = new CanvasOverlay({
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
-    store: highlightsStore
+    store: highlightsStore,
+    onMeasurementsChanged: updateMeasurementList
   });
 
   overlay.attach();
@@ -361,6 +400,15 @@ async function initApp(){
     syncOverlayTransform();
 
     updateZoomLabel();
+    if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${pdfDoc.numPages}`;
+    if (prevPageBtn) {
+      prevPageBtn.disabled = currentPage <= 1;
+      prevPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
+    }
+    if (nextPageBtn) {
+      nextPageBtn.disabled = currentPage >= pdfDoc.numPages;
+      nextPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
+    }
   }
 
   // ======================================================
@@ -445,6 +493,67 @@ async function initApp(){
     };
 
     await renderPage();
+  }
+
+  // SCALE HELPER
+  function computeScaleFactorFromExpression(str, pxPerPt) {
+    if (!str) return null;
+    const parts = str.split('=');
+    if (parts.length !== 2) return null;
+    const leftInches = parseMeasurementToInches(parts[0].trim());
+    const rightInches = parseMeasurementToInches(parts[1].trim());
+    if (!leftInches || !rightInches) return null;
+    if (pxPerPt && pxPerPt > 0) {
+      return (rightInches / leftInches) * (1 / (pxPerPt * 72));
+    }
+    return null;
+  }
+
+  // CHANGE SCALE BUTTON
+  if (changeScaleBtn) {
+    changeScaleBtn.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const entry = window.prompt('Enter page scale (example: "1/16 in = 1 ft"). Must contain "=".');
+      if (!entry || !entry.trim()) return;
+      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), overlay._pxPerPt);
+      if (!scaleFactor || scaleFactor <= 0) {
+        toast('Invalid scale expression', 'error');
+        return;
+      }
+      highlightsStore.setScale(currentPage, { factor: scaleFactor, unit: 'in' });
+      updateMeasurementList();
+      overlay.redraw();
+      toast('Page scale updated', 'success');
+    };
+  }
+
+  // DOUBLE SIDED TOGGLE
+  if (doubleSideToggle) {
+    doubleSideToggle.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const isDouble = !doubleSideToggle.classList.contains('active');
+      doubleSideToggle.classList.toggle('active', isDouble);
+      doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
+      overlay.setDoubleSided(isDouble);
+    };
+  }
+
+  // PAGE NAVIGATION
+  if (prevPageBtn) {
+    prevPageBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pdfDoc || currentPage <= 1) return;
+      currentPage -= 1;
+      await renderPage();
+    };
+  }
+  if (nextPageBtn) {
+    nextPageBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!pdfDoc || currentPage >= pdfDoc.numPages) return;
+      currentPage += 1;
+      await renderPage();
+    };
   }
 
   // ======================================================
@@ -533,6 +642,9 @@ async function initApp(){
       ){
         return;
       }
+
+      // do not start panning when overlay is active in measure mode
+      if (overlay && overlay.active && overlay.tool === 'measure') return;
 
       if (!pdfDoc) return;
 
