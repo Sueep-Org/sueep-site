@@ -204,6 +204,74 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
 
+function ProjectSearchDropdown({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: ProjectOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selected = projects.find((p) => p.id === value);
+
+  const filtered = query.trim()
+    ? projects.filter((p) => p.jobTitle.toLowerCase().includes(query.toLowerCase()))
+    : projects;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative mt-1">
+      <input
+        type="text"
+        autoComplete="off"
+        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        placeholder={selected ? selected.jobTitle : "Search projects…"}
+        value={open ? query : (selected?.jobTitle ?? "")}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No projects found</li>
+          ) : (
+            filtered.map((p) => (
+              <li
+                key={p.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(p.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className={`cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700 ${p.id === value ? "font-medium text-pink-700" : "text-gray-900"}`}
+              >
+                {p.jobTitle}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function NotifyMultiSelect({
   employees,
   selectedIds,
@@ -817,13 +885,12 @@ export function NewProjectForm({
         </div>
 
         <div>
-          <label className={label} htmlFor="co-project">Project *</label>
-          <select id="co-project" required className={input} value={coProjectId} onChange={(e) => setCoProjectId(e.target.value)}>
-            <option value="">— Select a project —</option>
-            {allProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.jobTitle}</option>
-            ))}
-          </select>
+          <label className={label}>Project *</label>
+          <ProjectSearchDropdown
+            projects={allProjects}
+            value={coProjectId}
+            onChange={setCoProjectId}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
