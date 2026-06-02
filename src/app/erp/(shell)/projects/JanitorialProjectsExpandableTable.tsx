@@ -526,14 +526,11 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                   title={isBuildingOpen ? "Collapse building" : "Expand building"}
                 >
                   <td className="w-[420px] min-w-[420px] px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 text-gray-400">{isBuildingOpen ? "v" : ">"}</span>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-gray-900">{group.building}</p>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {group.rows.length} project{group.rows.length !== 1 ? "s" : ""} in this building
-                        </p>
-                      </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">{group.building}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {group.rows.length} project{group.rows.length !== 1 ? "s" : ""} in this building
+                      </p>
                     </div>
                   </td>
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
