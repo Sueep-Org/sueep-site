@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
@@ -241,13 +242,12 @@ export function ChangeOrderDetailEditor({
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <button
-            type="button"
-            onClick={() => router.back()}
+          <Link
+            href={`/erp/projects/${projectId}`}
             className="flex items-center gap-1 text-xs text-pink-600 hover:underline"
           >
-            ← Back
-          </button>
+            ← Project details
+          </Link>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
             <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_COLORS[status]}`}>
