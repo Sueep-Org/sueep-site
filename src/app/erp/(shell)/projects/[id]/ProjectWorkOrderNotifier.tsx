@@ -295,6 +295,8 @@ export function ProjectWorkOrderNotifier({
       }
       setSendSuccess(true);
       setTimeout(() => setSendSuccess(false), 4000);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
     } catch {
       setError("Network error");
     } finally {

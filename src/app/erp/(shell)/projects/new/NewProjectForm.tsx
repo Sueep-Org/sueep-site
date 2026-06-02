@@ -948,24 +948,38 @@ export function NewProjectForm({
       ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
         {!lockedSegment ? (
-          <div className="min-w-0">
-            <label className={label} htmlFor="segment">
-              Segment
-            </label>
-            <select
-              id="segment"
-              name="segment"
-              className={input}
-              value={segment}
-              onChange={(e) => setSegment(e.target.value)}
-            >
-              {PROJECT_SEGMENT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <>
+            <div className="min-w-0">
+              <label className={label} htmlFor="segment">
+                Segment
+              </label>
+              <select
+                id="segment"
+                name="segment"
+                className={input}
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+              >
+                {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {isTurnover && (
+              <div className="flex items-end sm:col-start-3 sm:justify-end">
+                <a
+                  href="/janitorial-turnover"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-md border border-pink-200 bg-white px-3 py-2 text-sm font-medium text-pink-700 hover:bg-pink-50"
+                >
+                  External link
+                </a>
+              </div>
+            )}
+          </>
         ) : null}
         {!isTurnover && (
           <>

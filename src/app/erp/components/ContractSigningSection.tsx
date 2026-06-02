@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ContractItem = {
   id: string;
@@ -213,6 +213,13 @@ export function ContractSigningSection({
   const [contracts, setContracts] = useState<ContractItem[]>(initialContracts);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  const hasPending = contracts.some((c) => c.signingStatus === "SENT");
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => router.refresh(), 10000);
+    return () => clearInterval(id);
+  }, [hasPending, router]);
 
   function updateContract(id: string, patch: Partial<ContractItem>) {
     setContracts((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
