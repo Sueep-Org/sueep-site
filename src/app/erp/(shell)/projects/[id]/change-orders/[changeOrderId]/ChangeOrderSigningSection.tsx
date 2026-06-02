@@ -43,6 +43,7 @@ function ContractRow({
   const [sendEmail, setSendEmail] = useState(contract.customerEmail ?? "");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [removeError, setRemoveError] = useState("");
   const [showSendForm, setShowSendForm] = useState(false);
 
   const base = `/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contracts/${contract.id}`;
@@ -89,8 +90,14 @@ function ContractRow({
 
   async function handleRemove() {
     if (!confirm("Remove this contract?")) return;
+    setRemoveError("");
     const res = await fetch(base, { method: "DELETE" });
-    if (res.ok) onRemove(contract.id);
+    if (res.ok) {
+      onRemove(contract.id);
+    } else {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      setRemoveError(d.error ?? "Failed to remove contract");
+    }
   }
 
   return (
@@ -160,6 +167,7 @@ function ContractRow({
           </button>
         </div>
       </div>
+      {removeError && <p className="text-xs text-red-500" role="alert">{removeError}</p>}
 
       {/* Inline send form */}
       {showSendForm && contract.signingStatus === "UPLOADED" && (
