@@ -519,92 +519,102 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
 
             return (
               <Fragment key={group.building}>
-              <tr
-                className="cursor-pointer border-t border-gray-300 bg-gray-100 transition-colors hover:bg-gray-200"
-                onClick={() => toggleBuilding(group.building)}
-                aria-expanded={isBuildingOpen}
-                title={isBuildingOpen ? "Collapse building" : "Expand building"}
-              >
-                <td colSpan={10} className="px-3 py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                <tr
+                  className="cursor-pointer border-t border-gray-300 bg-white transition-colors hover:bg-gray-100"
+                  onClick={() => toggleBuilding(group.building)}
+                  aria-expanded={isBuildingOpen}
+                  title={isBuildingOpen ? "Collapse building" : "Expand building"}
+                >
+                  <td className="w-[420px] min-w-[420px] px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 text-xs font-semibold text-gray-500">
-                        {isBuildingOpen ? "v" : ">"}
-                      </span>
+                      <span className="shrink-0 text-gray-400">{isBuildingOpen ? "v" : ">"}</span>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Build</p>
-                        <p className="truncate text-sm font-semibold text-gray-900">{group.building}</p>
+                        <p className="truncate font-semibold text-gray-900">{group.building}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {group.rows.length} project{group.rows.length !== 1 ? "s" : ""} in this building
+                        </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                      <span className="rounded bg-white px-2 py-0.5 font-medium text-gray-700">
-                        {group.rows.length} project{group.rows.length !== 1 ? "s" : ""}
-                      </span>
-                      <span className="rounded bg-white px-2 py-0.5 font-medium text-gray-700">
-                        {centsToDollars(group.contractValueCents)} contract
-                      </span>
-                    </div>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                  <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
+                    <span className="text-gray-500">Building group</span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-900">Janitorial</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(group.contractValueCents)}</td>
+                  <td className="px-3 py-2 text-gray-400">-</td>
+                  <td className="px-3 py-2 text-gray-400">-</td>
+                  <td className="px-3 py-2 text-gray-400">-</td>
+                  <td className="px-3 py-2 text-gray-900">
+                    {isBuildingOpen ? "Open" : "Closed"}
+                  </td>
+                  <td className="px-3 py-2 text-gray-400">-</td>
+                  <td className="px-3 py-2">
+                    <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">
+                      Building
+                    </span>
+                  </td>
+                </tr>
 
-              {isBuildingOpen ? group.rows.map((p, i) => {
-                const isOpen = openSet.has(p.id);
-                const state = deriveProjectLifecycle(p.status, p.projectDate);
-                const styles = projectStateClasses(state);
-                const building = getBuildingName(p);
-                const turnoverLabel = getTurnoverLabel(p);
-                const scopeSummary = getScopeSummary(p);
-                const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
-                return (
-                  <Fragment key={p.id}>
-                    <tr
-                      className={`${rowBg} cursor-pointer transition-colors`}
-                      onClick={() => toggle(p.id)}
-                      aria-expanded={isOpen}
-                      title={isOpen ? "Collapse" : "Expand"}
-                    >
-                      <td className="w-[420px] min-w-[420px] px-3 py-2">
-                        <Link
-                          href={`/erp/projects/${p.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`font-medium ${styles.titleLink}`}
-                        >
-                          {building} - {turnoverLabel}
-                        </Link>
-                        {scopeSummary ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
-                      </td>
-                      <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
-                        {p.supervisor || <span className="text-gray-400">Unassigned</span>}
-                      </td>
-                      <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                      <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                      <td className="px-3 py-2 text-gray-900">
-                        <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
-                        <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
-                      </td>
-                      <td className="px-3 py-2 text-gray-900">
-                        <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
-                        <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
-                      </td>
-                      <td className="px-3 py-2 text-gray-900">
-                        <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
-                        <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                      <td className="px-3 py-2 text-gray-900">
-                        {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
-                      </td>
-                      <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
-                    </tr>
+                {isBuildingOpen
+                  ? group.rows.map((p, i) => {
+                      const isOpen = openSet.has(p.id);
+                      const state = deriveProjectLifecycle(p.status, p.projectDate);
+                      const styles = projectStateClasses(state);
+                      const building = getBuildingName(p);
+                      const turnoverLabel = getTurnoverLabel(p);
+                      const scopeSummary = getScopeSummary(p);
+                      const rowBg = i % 2 === 0 ? "bg-gray-50 hover:bg-gray-100" : "bg-white hover:bg-gray-100";
+                      return (
+                        <Fragment key={p.id}>
+                          <tr
+                            className={`${rowBg} cursor-pointer transition-colors`}
+                            onClick={() => toggle(p.id)}
+                            aria-expanded={isOpen}
+                            title={isOpen ? "Collapse" : "Expand"}
+                          >
+                            <td className="w-[420px] min-w-[420px] px-3 py-2">
+                              <div className="pl-6">
+                                <Link
+                                  href={`/erp/projects/${p.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`font-medium ${styles.titleLink}`}
+                                >
+                                  {building} - {turnoverLabel}
+                                </Link>
+                                {scopeSummary ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
+                              </div>
+                            </td>
+                            <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
+                              {p.supervisor || <span className="text-gray-400">Unassigned</span>}
+                            </td>
+                            <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                            <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                            <td className="px-3 py-2 text-gray-900">
+                              <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
+                              <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-900">
+                              <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
+                              <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-900">
+                              <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
+                              <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
+                            </td>
+                            <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                            <td className="px-3 py-2 text-gray-900">
+                              {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
+                            </td>
+                            <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
+                          </tr>
 
-                    {isOpen ? (
-                      <>
-                        <tr className={styles.detail}>
-                          <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                            <JanitorialProjectDetails project={p} />
-                          </td>
-                        </tr>
+                          {isOpen ? (
+                            <>
+                              <tr className={styles.detail}>
+                                <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                                  <JanitorialProjectDetails project={p} />
+                                </td>
+                              </tr>
 
                         {p.changeOrders.map((co) => {
                           const isCoOpen = openCoSet.has(co.id);
