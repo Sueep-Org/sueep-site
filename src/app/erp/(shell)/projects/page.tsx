@@ -102,9 +102,7 @@ export default async function ErpProjectsPage() {
   projects.sort((a, b) => {
     const rankDelta = lifecycleRank(a) - lifecycleRank(b);
     if (rankDelta !== 0) return rankDelta;
-    return a.projectDate?.getTime() === b.projectDate?.getTime()
-      ? b.updatedAt.getTime() - a.updatedAt.getTime()
-      : (b.projectDate?.getTime() ?? 0) - (a.projectDate?.getTime() ?? 0);
+    return a.jobTitle.localeCompare(b.jobTitle);
   });
 
   const rows = projects.map((p) => {
