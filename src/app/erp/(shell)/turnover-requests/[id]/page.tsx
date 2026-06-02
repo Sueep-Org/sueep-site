@@ -35,6 +35,7 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
             requestId={request.id}
             initial={{
               buildingId: request.buildingId,
+              buildingName: request.building.name,
               requestType: request.requestType,
               unitNumber: request.unitNumber,
               bedrooms: request.bedrooms,

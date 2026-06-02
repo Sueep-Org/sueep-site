@@ -1,4 +1,8 @@
-import { getTurnoverPricingPackage, normalizePricingBedrooms } from "@/lib/turnoverPricingPackages";
+import {
+  getTurnoverCleaningRate,
+  getTurnoverPaintingRate,
+  getTurnoverPricingPackage,
+} from "@/lib/turnoverPricingPackages";
 
 export type TurnoverPricingInput = {
   requestType: "TURNOVER" | "REGULAR";
@@ -26,24 +30,25 @@ function formatUsd(cents: number): string {
 }
 
 export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPricingResult {
-  const beds = normalizePricingBedrooms(input.bedrooms);
   const pricingPackage = getTurnoverPricingPackage(input.buildingName);
   const services: string[] = [];
   const breakdown: string[] = [];
   let priceCents = 0;
 
   if (input.fullClean) {
-    const cleaningPrice = pricingPackage.cleaningRates[beds] * 100;
+    const cleaningRate = getTurnoverCleaningRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const cleaningPrice = cleaningRate.dollars * 100;
     services.push("Full cleaning");
     priceCents += cleaningPrice;
-    breakdown.push(`Cleaning price for ${beds}-bed unit: ${formatUsd(cleaningPrice)}`);
+    breakdown.push(`Cleaning price for ${cleaningRate.layout}: ${formatUsd(cleaningPrice)}`);
   }
 
   if (input.fullPaint) {
-    const paintingPrice = pricingPackage.paintingRates[beds] * 100;
+    const paintingRate = getTurnoverPaintingRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const paintingPrice = paintingRate.dollars * 100;
     services.push("Full painting");
     priceCents += paintingPrice;
-    breakdown.push(`Painting price for ${beds}-bed unit: ${formatUsd(paintingPrice)}`);
+    breakdown.push(`Painting price for ${paintingRate.layout}: ${formatUsd(paintingPrice)}`);
   }
 
   if (input.touchUpPaint > 0 && !input.fullPaint) {

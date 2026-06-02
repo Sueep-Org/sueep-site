@@ -458,14 +458,14 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
 
     if (group) {
       group.rows.push(row);
-      group.contractValueCents += row.contractValueCents;
+      group.contractValueCents += row.contractValueCents ?? 0;
       return;
     }
 
     groups.set(building, {
       building,
       rows: [row],
-      contractValueCents: row.contractValueCents,
+      contractValueCents: row.contractValueCents ?? 0,
     });
   });
 

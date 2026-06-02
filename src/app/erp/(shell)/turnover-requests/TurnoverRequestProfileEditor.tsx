@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
+import { TurnoverPricingPackageQuestions } from "./TurnoverPricingPackageQuestions";
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "QUALITY_CHECK", "APPROVED"] as const;
@@ -11,6 +12,7 @@ interface RequestEditorProps {
   requestId: string;
   initial: {
     buildingId: string;
+    buildingName: string;
     requestType: string;
     unitNumber: string | null;
     bedrooms: number | null;
@@ -30,6 +32,7 @@ interface RequestEditorProps {
 export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEditorProps) {
   const router = useRouter();
   const [buildingId, setBuildingId] = useState(initial.buildingId);
+  const [buildingName, setBuildingName] = useState(initial.buildingName);
   const [requestType, setRequestType] = useState(initial.requestType);
   const [unitNumber, setUnitNumber] = useState(initial.unitNumber ?? "");
   const [bedrooms, setBedrooms] = useState(initial.bedrooms?.toString() ?? "");
@@ -112,7 +115,12 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   return (
     <form onSubmit={onSubmit} className="space-y-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="grid gap-3 sm:grid-cols-2">
-        <BuildingSelect value={buildingId} onChange={setBuildingId} required />
+        <BuildingSelect
+          value={buildingId}
+          onChange={setBuildingId}
+          onSelectedBuildingChange={(building) => setBuildingName(building?.name ?? initial.buildingName)}
+          required
+        />
         <label className="block text-xs font-medium text-gray-600">
           Request type
           <select
@@ -133,22 +141,6 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
           placeholder="Unit number"
           className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
         />
-        <input
-          value={bedrooms}
-          onChange={(e) => setBedrooms(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Bedrooms"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
-        <input
-          value={bathrooms}
-          onChange={(e) => setBathrooms(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Bathrooms"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
         <label className="block text-xs font-medium text-gray-600">
           Status
           <select
@@ -165,52 +157,23 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         </label>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={fullPaint}
-            onChange={(e) => setFullPaint(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Full paint
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={fullClean}
-            onChange={(e) => setFullClean(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Full clean
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={carpetCleaning}
-            onChange={(e) => setCarpetCleaning(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Carpet cleaning
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={materialsAdditional}
-            onChange={(e) => setMaterialsAdditional(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Additional materials
-        </label>
-        <input
-          value={touchUpPaint}
-          onChange={(e) => setTouchUpPaint(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Touch-up paint qty"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
-      </div>
+      <TurnoverPricingPackageQuestions
+        buildingName={buildingName}
+        bedrooms={bedrooms}
+        bathrooms={bathrooms}
+        fullPaint={fullPaint}
+        touchUpPaint={touchUpPaint}
+        fullClean={fullClean}
+        carpetCleaning={carpetCleaning}
+        materialsAdditional={materialsAdditional}
+        setBedrooms={setBedrooms}
+        setBathrooms={setBathrooms}
+        setFullPaint={setFullPaint}
+        setTouchUpPaint={setTouchUpPaint}
+        setFullClean={setFullClean}
+        setCarpetCleaning={setCarpetCleaning}
+        setMaterialsAdditional={setMaterialsAdditional}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-medium text-gray-600">
