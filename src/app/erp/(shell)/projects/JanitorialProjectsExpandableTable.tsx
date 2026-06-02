@@ -527,7 +527,16 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                 >
                   <td className="w-[420px] min-w-[420px] px-3 py-2">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-gray-900">{group.building}</p>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleBuilding(group.building);
+                        }}
+                        className="truncate text-left font-semibold text-gray-900 hover:underline"
+                      >
+                        {group.building}
+                      </button>
                       <p className="mt-0.5 text-xs text-gray-500">
                         {group.rows.length} project{group.rows.length !== 1 ? "s" : ""} in this building
                       </p>
