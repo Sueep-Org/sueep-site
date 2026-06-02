@@ -33,7 +33,13 @@ function getDetailLine(description: string | null, label: string) {
 }
 
 function getBuildingName(project: ProjectTableRow) {
-  return getDetailLine(project.description, "Property") || project.jobTitle.split(" - ")[0]?.trim() || project.jobTitle;
+  return (
+    getDetailLine(project.description, "Property") ||
+    getDetailLine(project.description, "Building") ||
+    getDetailLine(project.description, "Build") ||
+    project.jobTitle.split(" - ")[0]?.trim() ||
+    project.jobTitle
+  );
 }
 
 function getUnitSummary(project: ProjectTableRow) {
@@ -437,11 +443,43 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
   );
 }
 
+type JanitorialProjectGroup = {
+  building: string;
+  rows: ProjectTableRow[];
+  contractValueCents: number;
+};
+
+function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGroup[] {
+  const groups = new Map<string, JanitorialProjectGroup>();
+
+  rows.forEach((row) => {
+    const building = getBuildingName(row);
+    const group = groups.get(building);
+
+    if (group) {
+      group.rows.push(row);
+      group.contractValueCents += row.contractValueCents;
+      return;
+    }
+
+    groups.set(building, {
+      building,
+      rows: [row],
+      contractValueCents: row.contractValueCents,
+    });
+  });
+
+  return Array.from(groups.values()).sort((a, b) => a.building.localeCompare(b.building));
+}
+
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
+  const [closedBuildingKeys, setClosedBuildingKeys] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
+  const closedBuildingSet = useMemo(() => new Set(closedBuildingKeys), [closedBuildingKeys]);
+  const projectGroups = useMemo(() => groupProjectsByBuilding(rows), [rows]);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -450,6 +488,12 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
   function toggleCo(coId: string, e: MouseEvent) {
     e.stopPropagation();
     setOpenCoIds((prev) => (prev.includes(coId) ? prev.filter((x) => x !== coId) : [...prev, coId]));
+  }
+
+  function toggleBuilding(building: string) {
+    setClosedBuildingKeys((prev) =>
+      prev.includes(building) ? prev.filter((key) => key !== building) : [...prev, building]
+    );
   }
 
   return (
@@ -470,69 +514,103 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
           </tr>
         </thead>
         <tbody>
-          {rows.map((p, i) => {
-            const isOpen = openSet.has(p.id);
-            const state = deriveProjectLifecycle(p.status, p.projectDate);
-            const styles = projectStateClasses(state);
-            const building = getBuildingName(p);
-            const turnoverLabel = getTurnoverLabel(p);
-            const scopeSummary = getScopeSummary(p);
-            const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
-            return (
-              <Fragment key={p.id}>
-                <tr
-                  className={`${rowBg} cursor-pointer transition-colors`}
-                  onClick={() => toggle(p.id)}
-                  aria-expanded={isOpen}
-                  title={isOpen ? "Collapse" : "Expand"}
-                >
-                  <td className="w-[420px] min-w-[420px] px-3 py-2">
-                    <Link
-                      href={`/erp/projects/${p.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`font-medium ${styles.titleLink}`}
-                    >
-                      {building} - {turnoverLabel}
-                    </Link>
-                    {scopeSummary ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
-                  </td>
-                  <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
-                    {p.supervisor || <span className="text-gray-400">Unassigned</span>}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
-                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
-                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
-                    <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
-                  <td className="px-3 py-2 text-gray-900">
-                    {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
-                  </td>
-                  <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
-                </tr>
+          {projectGroups.map((group) => {
+            const isBuildingOpen = !closedBuildingSet.has(group.building);
 
-                {isOpen ? (
-                  <>
-                    <tr className={styles.detail}>
-                      <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        <JanitorialProjectDetails project={p} />
+            return (
+              <Fragment key={group.building}>
+              <tr
+                className="cursor-pointer border-t border-gray-300 bg-gray-100 transition-colors hover:bg-gray-200"
+                onClick={() => toggleBuilding(group.building)}
+                aria-expanded={isBuildingOpen}
+                title={isBuildingOpen ? "Collapse building" : "Expand building"}
+              >
+                <td colSpan={10} className="px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-xs font-semibold text-gray-500">
+                        {isBuildingOpen ? "v" : ">"}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Build</p>
+                        <p className="truncate text-sm font-semibold text-gray-900">{group.building}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="rounded bg-white px-2 py-0.5 font-medium text-gray-700">
+                        {group.rows.length} project{group.rows.length !== 1 ? "s" : ""}
+                      </span>
+                      <span className="rounded bg-white px-2 py-0.5 font-medium text-gray-700">
+                        {centsToDollars(group.contractValueCents)} contract
+                      </span>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              {isBuildingOpen ? group.rows.map((p, i) => {
+                const isOpen = openSet.has(p.id);
+                const state = deriveProjectLifecycle(p.status, p.projectDate);
+                const styles = projectStateClasses(state);
+                const building = getBuildingName(p);
+                const turnoverLabel = getTurnoverLabel(p);
+                const scopeSummary = getScopeSummary(p);
+                const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
+                return (
+                  <Fragment key={p.id}>
+                    <tr
+                      className={`${rowBg} cursor-pointer transition-colors`}
+                      onClick={() => toggle(p.id)}
+                      aria-expanded={isOpen}
+                      title={isOpen ? "Collapse" : "Expand"}
+                    >
+                      <td className="w-[420px] min-w-[420px] px-3 py-2">
+                        <Link
+                          href={`/erp/projects/${p.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`font-medium ${styles.titleLink}`}
+                        >
+                          {building} - {turnoverLabel}
+                        </Link>
+                        {scopeSummary ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
                       </td>
+                      <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
+                        {p.supervisor || <span className="text-gray-400">Unassigned</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                      <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
+                      <td className="px-3 py-2 text-gray-900">
+                        <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
+                        <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-900">
+                        <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
+                        <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-900">
+                        <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
+                        <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
+                      <td className="px-3 py-2 text-gray-900">
+                        {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-3 py-2">{billingBadge(p.billingStatus)}</td>
                     </tr>
 
-                    {p.changeOrders.map((co) => {
-                      const isCoOpen = openCoSet.has(co.id);
-                      return (
-                        <Fragment key={co.id}>
-                          <tr className="cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors" onClick={(e) => toggleCo(co.id, e)} aria-expanded={isCoOpen}>
+                    {isOpen ? (
+                      <>
+                        <tr className={styles.detail}>
+                          <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                            <JanitorialProjectDetails project={p} />
+                          </td>
+                        </tr>
+
+                        {p.changeOrders.map((co) => {
+                          const isCoOpen = openCoSet.has(co.id);
+                          return (
+                            <Fragment key={co.id}>
+                              <tr className="cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors" onClick={(e) => toggleCo(co.id, e)} aria-expanded={isCoOpen}>
                             <td className="w-[420px] min-w-[420px] px-3 py-1.5">
                               <div className="flex items-center gap-2 pl-4">
                                 <span className="shrink-0 text-gray-300">&gt;</span>
@@ -619,6 +697,9 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                     })}
                   </>
                 ) : null}
+                  </Fragment>
+                );
+              }) : null}
               </Fragment>
             );
           })}
