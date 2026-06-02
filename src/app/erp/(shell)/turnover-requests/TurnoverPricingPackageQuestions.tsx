@@ -85,28 +85,24 @@ export function TurnoverPricingPackageQuestions({
         </span>
       </div>
 
-      <div className="mt-4">
-        <p className="text-xs font-semibold text-gray-700">What unit type is it?</p>
-        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {UNIT_LAYOUTS.map((layout) => {
-            const isSelected = selectedLayout === layout.label;
-            return (
-              <button
-                key={layout.label}
-                type="button"
-                onClick={() => selectLayout(layout)}
-                className={`rounded-md border px-2 py-2 text-xs font-semibold transition-colors ${
-                  isSelected
-                    ? "border-pink-500 bg-pink-50 text-pink-700"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                {layout.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <label className="mt-4 block text-xs font-medium text-gray-600">
+        Unit type
+        <select
+          value={selectedLayout ?? ""}
+          onChange={(event) => {
+            const layout = UNIT_LAYOUTS.find((option) => option.label === event.target.value);
+            if (layout) selectLayout(layout);
+          }}
+          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+        >
+          <option value="">Select unit type...</option>
+          {UNIT_LAYOUTS.map((layout) => (
+            <option key={layout.label} value={layout.label}>
+              {layout.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-medium text-gray-600">
