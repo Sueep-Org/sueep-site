@@ -6,9 +6,10 @@ import { useState } from "react";
 type Props = {
   projectId: string;
   jobTitle: string;
+  hubspotDealId: string | null;
 };
 
-export function ProjectJobTitleEditor({ projectId, jobTitle }: Props) {
+export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(jobTitle);
@@ -42,13 +43,18 @@ export function ProjectJobTitleEditor({ projectId, jobTitle }: Props) {
 
   if (!editing) {
     return (
-      <h1
-        className="text-2xl font-semibold text-gray-900 cursor-pointer hover:text-gray-600"
-        onClick={() => { setValue(jobTitle); setEditing(true); }}
-        title="Click to edit"
-      >
-        {jobTitle}
-      </h1>
+      <div>
+        <h1
+          className="text-2xl font-semibold text-gray-900 cursor-pointer hover:text-gray-600"
+          onClick={() => { setValue(jobTitle); setEditing(true); }}
+          title="Click to edit"
+        >
+          {jobTitle}
+        </h1>
+        <p className="mt-0.5 text-xs text-gray-400">
+          {hubspotDealId ? "Synced from HubSpot" : "Manually created"}
+        </p>
+      </div>
     );
   }
 

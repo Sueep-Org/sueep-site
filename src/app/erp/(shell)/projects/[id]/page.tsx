@@ -268,7 +268,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           ← Projects
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} />
+          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
           <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />
         </div>
       </div>
