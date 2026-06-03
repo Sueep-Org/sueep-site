@@ -7,6 +7,7 @@ import {
 export type TurnoverPricingInput = {
   requestType: "TURNOVER" | "REGULAR";
   buildingName?: string | null;
+  pricingPackage?: unknown;
   bedrooms?: number | null;
   bathrooms?: number | null;
   fullPaint: boolean;
@@ -30,7 +31,7 @@ function formatUsd(cents: number): string {
 }
 
 export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPricingResult {
-  const pricingPackage = getTurnoverPricingPackage(input.buildingName);
+  const pricingPackage = getTurnoverPricingPackage(input.buildingName, input.pricingPackage);
   const services: string[] = [];
   const breakdown: string[] = [];
   let priceCents = 0;

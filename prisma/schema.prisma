@@ -78,10 +78,12 @@ model Building {
   updatedAt DateTime @updatedAt
 
   name    String
+  builder String?
   address String
   pmName  String?
   pmEmail String?
   pmPhone String?
+  pricingPackage Json?
 
   turnoverRequests      TurnoverRequest[]
   contractorAssignments ContractorAssignment[]
@@ -125,6 +127,9 @@ model TurnoverRequest {
   startDate DateTime?
   endDate   DateTime?
   priceCents Int?
+  approvedPriceCents Int?
+  pmSignatureUrl String?
+  pmSignedAt DateTime?
   completedAt DateTime?
   invoiceGeneratedAt DateTime?
   invoiceUrl String?

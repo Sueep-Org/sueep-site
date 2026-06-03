@@ -6,6 +6,14 @@ import { auth } from "@/lib/firebase";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
 import { TurnoverPricingPackageQuestions } from "./TurnoverPricingPackageQuestions";
 
+type SelectedBuilding = {
+  id: string;
+  name: string;
+  builder?: string | null;
+  address?: string | null;
+  pricingPackage?: unknown;
+};
+
 type CreatedRequest = {
   id?: string;
   unitNumber?: string;
@@ -27,6 +35,7 @@ export function NewTurnoverRequestForm() {
   const [error, setError] = useState("");
   const [createdRequest, setCreatedRequest] = useState<CreatedRequest | null>(null);
   const [selectedBuildingName, setSelectedBuildingName] = useState<string | null>(null);
+  const [selectedBuildingPricingPackage, setSelectedBuildingPricingPackage] = useState<unknown>(null);
   const [bedrooms, setBedrooms] = useState("");
   const [bathrooms, setBathrooms] = useState("");
   const [fullPaint, setFullPaint] = useState(false);
@@ -141,7 +150,11 @@ Sueep Operations
           <div className="grid gap-3 sm:grid-cols-2">
             <BuildingSelect
               required
-              onSelectedBuildingChange={(building) => setSelectedBuildingName(building?.name ?? null)}
+              onSelectedBuildingChange={(building) => {
+                const selected = building as SelectedBuilding | null;
+                setSelectedBuildingName(selected?.name ?? null);
+                setSelectedBuildingPricingPackage(selected?.pricingPackage ?? null);
+              }}
             />
             <label className="block text-xs font-medium text-gray-600">
               Request type
@@ -163,6 +176,7 @@ Sueep Operations
 
           <TurnoverPricingPackageQuestions
             buildingName={selectedBuildingName}
+            pricingPackage={selectedBuildingPricingPackage}
             bedrooms={bedrooms}
             bathrooms={bathrooms}
             fullPaint={fullPaint}

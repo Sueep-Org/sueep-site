@@ -4,6 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
 import { TurnoverPricingPackageQuestions } from "./TurnoverPricingPackageQuestions";
+import { SignaturePadInput } from "@/app/erp/(shell)/quality-checks/SignaturePadInput";
+
+type SelectedBuilding = {
+  id: string;
+  name: string;
+  pricingPackage?: unknown;
+};
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "QUALITY_CHECK", "APPROVED"] as const;
@@ -13,6 +20,7 @@ interface RequestEditorProps {
   initial: {
     buildingId: string;
     buildingName: string;
+    pricingPackage?: unknown;
     requestType: string;
     unitNumber: string | null;
     bedrooms: number | null;
@@ -26,6 +34,10 @@ interface RequestEditorProps {
     endDate: string | null;
     createdBy: string | null;
     status: string;
+    priceCents: number | null;
+    approvedPriceCents: number | null;
+    pmSignatureUrl: string | null;
+    pmSignedAt: string | null;
   };
 }
 
@@ -33,6 +45,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   const router = useRouter();
   const [buildingId, setBuildingId] = useState(initial.buildingId);
   const [buildingName, setBuildingName] = useState(initial.buildingName);
+  const [pricingPackage, setPricingPackage] = useState<unknown>(initial.pricingPackage ?? null);
   const [requestType, setRequestType] = useState(initial.requestType);
   const [unitNumber, setUnitNumber] = useState(initial.unitNumber ?? "");
   const [bedrooms, setBedrooms] = useState(initial.bedrooms?.toString() ?? "");
@@ -45,6 +58,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   const [startDate, setStartDate] = useState(initial.startDate ?? "");
   const [endDate, setEndDate] = useState(initial.endDate ?? "");
   const [status, setStatus] = useState(initial.status);
+  const [pmSignatureUrl, setPmSignatureUrl] = useState(initial.pmSignatureUrl ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -69,6 +83,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
       startDate: startDate || null,
       endDate: endDate || null,
       status,
+      pmSignatureUrl: pmSignatureUrl || null,
     };
 
     try {
@@ -118,7 +133,11 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         <BuildingSelect
           value={buildingId}
           onChange={setBuildingId}
-          onSelectedBuildingChange={(building) => setBuildingName(building?.name ?? initial.buildingName)}
+          onSelectedBuildingChange={(building) => {
+            const selected = building as SelectedBuilding | null;
+            setBuildingName(selected?.name ?? initial.buildingName);
+            setPricingPackage(selected?.pricingPackage ?? initial.pricingPackage ?? null);
+          }}
           required
         />
         <label className="block text-xs font-medium text-gray-600">
@@ -159,6 +178,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
 
       <TurnoverPricingPackageQuestions
         buildingName={buildingName}
+        pricingPackage={pricingPackage}
         bedrooms={bedrooms}
         bathrooms={bathrooms}
         fullPaint={fullPaint}
@@ -174,6 +194,33 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         setCarpetCleaning={setCarpetCleaning}
         setMaterialsAdditional={setMaterialsAdditional}
       />
+
+      <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">PM signature</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Property manager signs the request and approved price.
+            </p>
+          </div>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${initial.pmSignedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            {initial.pmSignedAt ? "Signed" : "Pending signature"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+          <div>
+            <span className="font-semibold text-gray-700">Current price: </span>
+            {initial.priceCents != null ? `$${(initial.priceCents / 100).toFixed(0)}` : "-"}
+          </div>
+          <div>
+            <span className="font-semibold text-gray-700">Approved price: </span>
+            {initial.approvedPriceCents != null ? `$${(initial.approvedPriceCents / 100).toFixed(0)}` : "Captured on signature"}
+          </div>
+        </div>
+        <div className="mt-4">
+          <SignaturePadInput value={pmSignatureUrl} onChange={setPmSignatureUrl} />
+        </div>
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-medium text-gray-600">

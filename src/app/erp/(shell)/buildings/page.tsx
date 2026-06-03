@@ -26,7 +26,7 @@ export default async function BuildingsPage() {
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Address</th>
+                <th className="px-4 py-3">Builder / Address</th>
                 <th className="px-4 py-3">PM name</th>
                 <th className="px-4 py-3">PM email</th>
                 <th className="px-4 py-3">PM phone</th>
@@ -43,8 +43,11 @@ export default async function BuildingsPage() {
               ) : (
                 buildings.map((building) => (
                   <tr key={building.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-900">{building.name}</td>
-                    <td className="px-4 py-3 text-gray-900">{building.address}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{building.name}</td>
+                    <td className="px-4 py-3 text-gray-900">
+                      <div>{building.builder || "Builder not set"}</div>
+                      <div className="mt-0.5 text-xs text-gray-500">{building.address}</div>
+                    </td>
                     <td className="px-4 py-3 text-gray-900">{building.pmName || "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{building.pmEmail || "—"}</td>
                     <td className="px-4 py-3 text-gray-900">{building.pmPhone || "—"}</td>

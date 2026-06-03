@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
@@ -40,6 +40,18 @@ function getBuildingName(project: ProjectTableRow) {
     project.jobTitle.split(" - ")[0]?.trim() ||
     project.jobTitle
   );
+}
+
+function getBuildingAddress(project: ProjectTableRow) {
+  return getDetailLine(project.description, "Address");
+}
+
+function getBuilderName(project: ProjectTableRow) {
+  return getDetailLine(project.description, "Builder") || getDetailLine(project.description, "Build");
+}
+
+function getBuildingTitle(project: ProjectTableRow) {
+  return [getBuildingName(project), getBuilderName(project), getBuildingAddress(project)].filter(Boolean).join(" - ");
 }
 
 function getUnitSummary(project: ProjectTableRow) {
@@ -445,6 +457,7 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
 
 type JanitorialProjectGroup = {
   building: string;
+  title: string;
   rows: ProjectTableRow[];
   contractValueCents: number;
 };
@@ -464,6 +477,7 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
 
     groups.set(building, {
       building,
+      title: getBuildingTitle(row),
       rows: [row],
       contractValueCents: row.contractValueCents ?? 0,
     });
@@ -473,13 +487,17 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
-  const [openIds, setOpenIds] = useState<string[]>([]);
+  const [openIds, setOpenIds] = useState<string[]>(() => rows.map((row) => row.id));
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
   const [closedBuildingKeys, setClosedBuildingKeys] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const closedBuildingSet = useMemo(() => new Set(closedBuildingKeys), [closedBuildingKeys]);
   const projectGroups = useMemo(() => groupProjectsByBuilding(rows), [rows]);
+
+  useEffect(() => {
+    setOpenIds((current) => Array.from(new Set([...current, ...rows.map((row) => row.id)])));
+  }, [rows]);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -535,7 +553,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                         }}
                         className="truncate text-left font-semibold text-gray-900 hover:underline"
                       >
-                        {group.building}
+                        {group.title}
                       </button>
                       <p className="mt-0.5 text-xs text-gray-500">
                         {group.rows.length} project{group.rows.length !== 1 ? "s" : ""} in this building
@@ -566,7 +584,6 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                       const isOpen = openSet.has(p.id);
                       const state = deriveProjectLifecycle(p.status, p.projectDate);
                       const styles = projectStateClasses(state);
-                      const building = getBuildingName(p);
                       const turnoverLabel = getTurnoverLabel(p);
                       const scopeSummary = getScopeSummary(p);
                       const rowBg = i % 2 === 0 ? "bg-gray-50 hover:bg-gray-100" : "bg-white hover:bg-gray-100";
@@ -585,7 +602,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                                   onClick={(e) => e.stopPropagation()}
                                   className={`font-medium ${styles.titleLink}`}
                                 >
-                                  {building} - {turnoverLabel}
+                                  {turnoverLabel}
                                 </Link>
                                 {scopeSummary ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{scopeSummary}</p> : null}
                               </div>
