@@ -299,22 +299,26 @@ export class CanvasOverlay {
 
     let scaleFactor = this.store.getScale(this.currentPage)?.factor;
     if (!scaleFactor) {
-      const entry = window.prompt('Enter page scale for this line (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to cancel:');
-      if (!entry || !entry.trim()) { this.redraw(); return; }
-
-      scaleFactor = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
-      if (!scaleFactor || !(scaleFactor > 0)) {
-        toast('Failed to parse scale expression', 'error');
-        this.redraw();
-        return;
+      const entry = window.prompt('Enter page scale (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to measure in raw inches:');
+      if (entry && entry.trim()) {
+        const parsed = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
+        if (!parsed || !(parsed > 0)) {
+          toast('Could not parse scale — saving in raw inches', 'info');
+        } else {
+          scaleFactor = parsed;
+          this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
+          toast('Scale saved for this page', 'success');
+        }
       }
-
-      this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
-      toast('Scale saved for this page', 'success');
     }
 
     // compute the real-world inches for this drawn line
-    const realInchesForLine = pixelLength * scaleFactor;
+    // if no scale set, fall back to raw PDF inches (pixelLength / pxPerPt / 72)
+    const rawInches = (pixelLength / this._pxPerPt) / 72;
+    let realInchesForLine = scaleFactor ? pixelLength * scaleFactor : rawInches;
+    if (this.doubleSided) {
+      realInchesForLine *= 2;
+    }
 
     // store measurement record (normalized coordinates)
     const label = formatInches(realInchesForLine);
@@ -444,7 +448,10 @@ export class CanvasOverlay {
       toast('Scale saved for this page', 'success');
     }
 
-    const measuredInches = pixelLength * scaleFactor;
+    let measuredInches = pixelLength * scaleFactor;
+    if (this.doubleSided) {
+      measuredInches *= 2;
+    }
     if (measuredInches !== null) {
       const txt = formatInches(measuredInches);
       toast(`Length: ${txt}`, 'info');
@@ -458,7 +465,7 @@ export class CanvasOverlay {
       });
       this.onMeasurementsChanged?.();
     } else {
-      toast(`Length (px): ${pixelLength.toFixed(1)} px`, 'info');
+      toast(`Length: ${((pixelLength / this._pxPerPt) / 72).toFixed(2)} in`, 'info');
     }
 
     this.redraw();
@@ -469,9 +476,12 @@ export class CanvasOverlay {
     this.overlay.width = this.canvasEl.width;
     this.overlay.height = this.canvasEl.height;
     // match CSS size so the overlay covers the visible canvas
+    // use width/height attributes (not clientWidth) to avoid 0 when parent is display:none
     try {
-      this.overlay.style.width = `${this.canvasEl.clientWidth}px`;
-      this.overlay.style.height = `${this.canvasEl.clientHeight}px`;
+      const w = this.canvasEl.width || this.canvasEl.clientWidth;
+      const h = this.canvasEl.height || this.canvasEl.clientHeight;
+      if (w > 0) this.overlay.style.width = `${w}px`;
+      if (h > 0) this.overlay.style.height = `${h}px`;
     } catch (err) {}
     // ensure overlay is on top and not interfering when inactive
     this.overlay.style.zIndex = 20;
@@ -520,7 +530,7 @@ export class CanvasOverlay {
           const txt = formatInches(inches);
           drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
         } else {
-          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${pxLen.toFixed(1)} px`);
+          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`);
         }
       }
     }
@@ -557,7 +567,7 @@ export class CanvasOverlay {
       // show pixel length while dragging
       const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
       const scale = this.store.getScale(this.currentPage);
-      const labelTxt = (scale && scale.factor) ? formatInches(pxLen * scale.factor) : `${pxLen.toFixed(1)} px`;
+      const labelTxt = (scale && scale.factor) ? formatInches(pxLen * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
       drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, labelTxt);
     }
   }
