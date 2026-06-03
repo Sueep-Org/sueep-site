@@ -32,11 +32,41 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeTitlePart(value: string) {
+  return normalizeWhitespace(value)
+    .replace(/\s*\/\s*/g, " / ")
+    .replace(/\s*-\s*/g, " - ");
+}
+
+function dedupeRepeatedName(value: string) {
+  const cleaned = normalizeTitlePart(value);
+  const slashParts = cleaned.split(/\s+\/\s+/).filter(Boolean);
+  if (slashParts.length > 1 && slashParts.every((part) => part.toLowerCase() === slashParts[0].toLowerCase())) {
+    return slashParts[0];
+  }
+  return cleaned;
+}
+
+function uniqueTitleParts(parts: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  return parts
+    .map((part) => dedupeRepeatedName(part || ""))
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (!part || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function getBuildingName(project: ProjectTableRow) {
-  return (
+  return dedupeRepeatedName(
     getDetailLine(project.description, "Property") ||
     getDetailLine(project.description, "Building") ||
-    getDetailLine(project.description, "Build") ||
     project.jobTitle.split(" - ")[0]?.trim() ||
     project.jobTitle
   );
@@ -47,11 +77,11 @@ function getBuildingAddress(project: ProjectTableRow) {
 }
 
 function getBuilderName(project: ProjectTableRow) {
-  return getDetailLine(project.description, "Builder") || getDetailLine(project.description, "Build");
+  return dedupeRepeatedName(getDetailLine(project.description, "Builder"));
 }
 
 function getBuildingTitle(project: ProjectTableRow) {
-  return [getBuildingName(project), getBuilderName(project), getBuildingAddress(project)].filter(Boolean).join(" - ");
+  return uniqueTitleParts([getBuildingName(project), getBuilderName(project), getBuildingAddress(project)]).join(" - ");
 }
 
 function getUnitSummary(project: ProjectTableRow) {
@@ -456,6 +486,7 @@ function JanitorialProjectDetails({ project }: { project: ProjectTableRow }) {
 }
 
 type JanitorialProjectGroup = {
+  key: string;
   building: string;
   title: string;
   rows: ProjectTableRow[];
@@ -467,7 +498,9 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
 
   rows.forEach((row) => {
     const building = getBuildingName(row);
-    const group = groups.get(building);
+    const address = getBuildingAddress(row);
+    const groupKey = uniqueTitleParts([building, address]).join(" - ").toLowerCase();
+    const group = groups.get(groupKey);
 
     if (group) {
       group.rows.push(row);
@@ -475,7 +508,8 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
       return;
     }
 
-    groups.set(building, {
+    groups.set(groupKey, {
+      key: groupKey,
       building,
       title: getBuildingTitle(row),
       rows: [row],
@@ -483,7 +517,7 @@ function groupProjectsByBuilding(rows: ProjectTableRow[]): JanitorialProjectGrou
     });
   });
 
-  return Array.from(groups.values()).sort((a, b) => a.building.localeCompare(b.building));
+  return Array.from(groups.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
@@ -533,13 +567,13 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
         </thead>
         <tbody>
           {projectGroups.map((group) => {
-            const isBuildingOpen = !closedBuildingSet.has(group.building);
+            const isBuildingOpen = !closedBuildingSet.has(group.key);
 
             return (
-              <Fragment key={group.building}>
+              <Fragment key={group.key}>
                 <tr
                   className="cursor-pointer border-t border-gray-300 bg-white transition-colors hover:bg-gray-100"
-                  onClick={() => toggleBuilding(group.building)}
+                  onClick={() => toggleBuilding(group.key)}
                   aria-expanded={isBuildingOpen}
                   title={isBuildingOpen ? "Collapse building" : "Expand building"}
                 >
@@ -549,7 +583,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          toggleBuilding(group.building);
+                          toggleBuilding(group.key);
                         }}
                         className="truncate text-left font-semibold text-gray-900 hover:underline"
                       >
