@@ -115,6 +115,9 @@ export function ErpNav() {
             <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
           ))}
           <div className="mt-2 border-t border-gray-200 pt-2">
+            <NavLink href="/erp/help" label="Help Center" pathname={pathname} />
+          </div>
+          <div className="mt-1 border-t border-gray-200 pt-2">
             <ErpLogoutButton />
           </div>
         </nav>
@@ -156,7 +159,8 @@ export function ErpNav() {
                 <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
               ))}
             </nav>
-            <div className="border-t border-gray-200 p-3">
+            <div className="border-t border-gray-200 p-3 flex flex-col gap-1">
+              <NavLink href="/erp/help" label="Help Center" pathname={pathname} />
               <ErpLogoutButton />
             </div>
           </div>
