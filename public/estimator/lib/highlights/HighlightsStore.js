@@ -129,6 +129,7 @@ export class HighlightsStore {
   addMeasurement(page, m){ this._ensure(page); const arr=this._pageToMeasurements.get(page); arr.push(m); }
   removeMeasurement(page, id){ this._ensure(page); const arr=this._pageToMeasurements.get(page); const idx = arr.findIndex(m=>m.id===id); if (idx >= 0) arr.splice(idx, 1); }
   listMeasurements(page){ this._ensure(page); return this._pageToMeasurements.get(page); }
+  listMeasurementsAllPages(){ const out=[]; for (const [page, arr] of this._pageToMeasurements.entries()){ out.push({ page, measurements: arr.slice() }); } return out; }
 }
 
 
