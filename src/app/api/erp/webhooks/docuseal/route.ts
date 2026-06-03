@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+type Submitter = { email?: string; completed_at?: string | null };
+type Submission = {
+  id?: number;
+  template?: { id?: number };
+  documents?: { url?: string; combined_document_url?: string }[];
+  submitters?: Submitter[];
+  combined_document_url?: string;
+};
+
 type DocusealWebhookPayload = {
   event_type: string;
-  data: Record<string, unknown> & {
-    submission?: Record<string, unknown> & {
-      id?: number;
-      documents?: { url?: string; combined_document_url?: string }[];
-      submitters?: { completed_at?: string | null }[];
-      combined_document_url?: string;
-    };
-  };
+  data: Record<string, unknown> & { submission?: Submission };
 };
 
 const COMPLETED_EVENTS = new Set(["submission.completed", "form.completed"]);
+const CREATED_EVENTS = new Set(["submission.created"]);
 
 export async function POST(req: Request) {
   let payload: DocusealWebhookPayload;
@@ -25,27 +28,52 @@ export async function POST(req: Request) {
 
   console.log("DocuSeal webhook received:", payload.event_type, JSON.stringify(payload.data));
 
+  const submission = payload.data?.submission ?? (payload.data as Submission | undefined);
+  if (!submission?.id) return NextResponse.json({ ok: true });
+
+  if (CREATED_EVENTS.has(payload.event_type)) {
+    const templateId = submission.template?.id;
+    if (!templateId) return NextResponse.json({ ok: true });
+
+    const signerEmail = submission.submitters?.[0]?.email ?? null;
+    const updateData = {
+      signingStatus: "SENT",
+      docusealSubmissionId: submission.id,
+    };
+
+    const [coContract, empContract, contractorContract, candidateContract] = await Promise.all([
+      prisma.changeOrderContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
+      prisma.employeeContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
+      prisma.contractorContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
+      prisma.candidateContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
+    ]);
+
+    if (coContract) {
+      await prisma.changeOrderContract.update({ where: { id: coContract.id }, data: { ...updateData, customerEmail: signerEmail } });
+    } else if (empContract) {
+      await prisma.employeeContract.update({ where: { id: empContract.id }, data: { ...updateData, signerEmail } });
+    } else if (contractorContract) {
+      await prisma.contractorContract.update({ where: { id: contractorContract.id }, data: { ...updateData, signerEmail } });
+    } else if (candidateContract) {
+      await prisma.candidateContract.update({ where: { id: candidateContract.id }, data: { ...updateData, signerEmail } });
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   if (!COMPLETED_EVENTS.has(payload.event_type)) {
     return NextResponse.json({ ok: true });
   }
 
-  // DocuSeal payload can nest the submission under data.submission or directly in data
-  const submission = payload.data?.submission ?? (payload.data as Record<string, unknown> | undefined);
-  if (!submission?.id) return NextResponse.json({ ok: true });
-
-  // Try multiple locations where DocuSeal may put the signed document URL
-  const sub = submission as Record<string, unknown>;
-  const documents = (sub.documents as { url?: string; combined_document_url?: string }[] | undefined);
+  const documents = submission.documents;
   const signedDocumentUrl =
     documents?.[0]?.url ??
     documents?.[0]?.combined_document_url ??
-    (sub.combined_document_url as string | undefined) ??
+    (submission.combined_document_url as string | undefined) ??
     null;
 
   console.log("DocuSeal signed document URL resolved:", signedDocumentUrl);
-  const completedAt = sub.submitters
-    ? (sub.submitters as { completed_at?: string | null }[])[0]?.completed_at
-    : null;
+  const completedAt = submission.submitters?.[0]?.completed_at;
   const signedAt = completedAt ? new Date(completedAt) : new Date();
   const updateData = { signingStatus: "SIGNED", signedAt, signedDocumentUrl };
 

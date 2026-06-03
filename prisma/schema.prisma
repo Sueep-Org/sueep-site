@@ -324,6 +324,7 @@ model ChangeOrderContract {
 
   @@index([changeOrderId])
   @@index([docusealSubmissionId])
+  @@index([docusealTemplateId])
 }
 
 model ProjectContact {
@@ -683,6 +684,7 @@ model EmployeeContract {
 
   @@index([employeeId])
   @@index([docusealSubmissionId])
+  @@index([docusealTemplateId])
 }
 
 model ContractorContract {
@@ -702,6 +704,7 @@ model ContractorContract {
 
   @@index([contractorId])
   @@index([docusealSubmissionId])
+  @@index([docusealTemplateId])
 }
 
 model CandidateContract {
@@ -721,4 +724,5 @@ model CandidateContract {
 
   @@index([candidateId])
   @@index([docusealSubmissionId])
+  @@index([docusealTemplateId])
 }

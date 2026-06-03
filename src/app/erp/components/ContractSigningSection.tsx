@@ -13,10 +13,6 @@ export type ContractItem = {
   signedDocumentUrl: string | null;
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
-
 function StatusBadge({ status }: { status: string | null }) {
   if (status === "SIGNED")
     return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-green-100 text-green-700">Signed</span>;
@@ -30,60 +26,13 @@ function StatusBadge({ status }: { status: string | null }) {
 function ContractRow({
   contract,
   apiBasePath,
-  onUpdate,
   onRemove,
 }: {
   contract: ContractItem;
   apiBasePath: string;
-  onUpdate: (id: string, patch: Partial<ContractItem>) => void;
   onRemove: (id: string) => void;
 }) {
-  const [sendEmail, setSendEmail] = useState(contract.signerEmail ?? "");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState("");
-  const [showSendForm, setShowSendForm] = useState(false);
-
   const base = `${apiBasePath}/contracts/${contract.id}`;
-
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    setSendError("");
-    setSending(true);
-    try {
-      const res = await fetch(`${base}/send`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ signerEmail: sendEmail }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) { setSendError(data.error ?? "Failed to send"); return; }
-      onUpdate(contract.id, { signingStatus: "SENT", signerEmail: sendEmail });
-      setShowSendForm(false);
-    } catch {
-      setSendError("Network error — please try again");
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleResend() {
-    if (!confirm("Resend the signing request?")) return;
-    setSending(true);
-    setSendError("");
-    try {
-      const res = await fetch(`${base}/send`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ signerEmail: contract.signerEmail }),
-      });
-      if (!res.ok) {
-        const d = (await res.json()) as { error?: string };
-        setSendError(d.error ?? "Resend failed");
-      }
-    } finally {
-      setSending(false);
-    }
-  }
 
   async function handleRemove() {
     if (!confirm("Remove this contract?")) return;
@@ -92,7 +41,7 @@ function ContractRow({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={contract.signingStatus} />
@@ -118,34 +67,15 @@ function ContractRow({
               Download →
             </a>
           )}
-          {contract.signingStatus === "UPLOADED" && contract.docusealTemplateId && (
+          {contract.signingStatus !== "SIGNED" && contract.docusealTemplateId && (
             <a
               href={`https://docuseal.com/templates/${contract.docusealTemplateId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
             >
-              Place Signature Fields →
+              Open in DocuSeal →
             </a>
-          )}
-          {contract.signingStatus === "UPLOADED" && (
-            <button
-              type="button"
-              onClick={() => setShowSendForm((v) => !v)}
-              className="rounded-md border border-pink-200 px-3 py-1.5 text-xs font-medium text-pink-600 hover:bg-pink-50"
-            >
-              Send for Signing
-            </button>
-          )}
-          {contract.signingStatus === "SENT" && (
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={sending}
-              className="text-xs font-medium text-pink-600 hover:underline disabled:opacity-50"
-            >
-              {sending ? "Sending…" : "Resend"}
-            </button>
           )}
           {contract.signingStatus !== "SIGNED" && (
             <button
@@ -158,44 +88,6 @@ function ContractRow({
           )}
         </div>
       </div>
-
-      {showSendForm && contract.signingStatus === "UPLOADED" && (
-        <form onSubmit={handleSend} className="border-t border-gray-200 pt-3 space-y-3">
-          <div>
-            <label className={label} htmlFor={`email-${contract.id}`}>Signer email *</label>
-            <input
-              id={`email-${contract.id}`}
-              type="email"
-              required
-              className={input}
-              placeholder="signer@example.com"
-              value={sendEmail}
-              onChange={(e) => setSendEmail(e.target.value)}
-            />
-          </div>
-          {sendError && <p className="text-xs text-red-400" role="alert">{sendError}</p>}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={sending}
-              className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
-              {sending ? "Sending…" : "Send"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSendForm(false)}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {sendError && contract.signingStatus === "SENT" && (
-        <p className="text-xs text-red-400" role="alert">{sendError}</p>
-      )}
     </div>
   );
 }
@@ -217,13 +109,9 @@ export function ContractSigningSection({
   const hasPending = contracts.some((c) => c.signingStatus === "SENT");
   useEffect(() => {
     if (!hasPending) return;
-    const id = setInterval(() => router.refresh(), 10000);
+    const id = setInterval(() => router.refresh(), 15000);
     return () => clearInterval(id);
   }, [hasPending, router]);
-
-  function updateContract(id: string, patch: Partial<ContractItem>) {
-    setContracts((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  }
 
   function removeContract(id: string) {
     setContracts((cs) => cs.filter((c) => c.id !== id));
@@ -271,7 +159,6 @@ export function ContractSigningSection({
           key={contract.id}
           contract={contract}
           apiBasePath={apiBasePath}
-          onUpdate={updateContract}
           onRemove={removeContract}
         />
       ))}
@@ -279,7 +166,7 @@ export function ContractSigningSection({
       <div className={contracts.length > 0 ? "pt-1" : ""}>
         {contracts.length === 0 && (
           <p className="mb-3 text-xs text-gray-500">
-            Upload a contract PDF, place the signer&apos;s signature field in DocuSeal, then send it for signing via email.
+            Upload a contract PDF, then handle field placement and sending directly in DocuSeal. Status updates here automatically.
           </p>
         )}
         <label
