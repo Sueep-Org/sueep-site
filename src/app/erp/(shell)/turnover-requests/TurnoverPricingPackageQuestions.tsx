@@ -13,6 +13,7 @@ const UNIT_LAYOUTS = [
 
 type TurnoverPricingPackageQuestionsProps = {
   buildingName?: string | null;
+  pricingPackage?: unknown;
   bedrooms: string;
   bathrooms: string;
   fullPaint: boolean;
@@ -37,6 +38,7 @@ function parseNullableNumber(value: string) {
 
 export function TurnoverPricingPackageQuestions({
   buildingName,
+  pricingPackage: storedPricingPackage,
   bedrooms,
   bathrooms,
   fullPaint,
@@ -52,10 +54,11 @@ export function TurnoverPricingPackageQuestions({
   setCarpetCleaning,
   setMaterialsAdditional,
 }: TurnoverPricingPackageQuestionsProps) {
-  const pricingPackage = getTurnoverPricingPackage(buildingName);
+  const pricingPackage = getTurnoverPricingPackage(buildingName, storedPricingPackage);
   const pricing = computeTurnoverPricing({
     requestType: "TURNOVER",
     buildingName,
+    pricingPackage: storedPricingPackage,
     bedrooms: parseNullableNumber(bedrooms),
     bathrooms: parseNullableNumber(bathrooms),
     fullPaint,

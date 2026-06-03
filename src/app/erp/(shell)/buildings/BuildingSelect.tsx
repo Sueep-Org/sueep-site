@@ -15,6 +15,9 @@ interface BuildingSelectProps {
 interface BuildingOption {
   id: string;
   name: string;
+  builder?: string | null;
+  address?: string | null;
+  pricingPackage?: unknown;
 }
 
 export function BuildingSelect({
@@ -75,7 +78,7 @@ export function BuildingSelect({
         <option value="">Select a building...</option>
         {buildings.map((building) => (
           <option key={building.id} value={building.id}>
-            {building.name}
+            {[building.name, building.builder, building.address].filter(Boolean).join(" - ")}
           </option>
         ))}
       </select>

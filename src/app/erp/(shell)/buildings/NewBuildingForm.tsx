@@ -17,6 +17,7 @@ export function NewBuildingForm() {
     const formData = new FormData(e.currentTarget);
     const payload = {
       name: formData.get("name"),
+      builder: formData.get("builder") || undefined,
       address: formData.get("address"),
       pmName: formData.get("pmName") || undefined,
       pmEmail: formData.get("pmEmail") || undefined,
@@ -70,6 +71,11 @@ export function NewBuildingForm() {
               name="address"
               required
               placeholder="Address *"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+            <input
+              name="builder"
+              placeholder="Builder"
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
             />
             <input

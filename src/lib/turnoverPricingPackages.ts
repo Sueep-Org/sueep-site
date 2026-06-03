@@ -8,6 +8,8 @@ export type TurnoverPricingPackage = {
 
 export type TurnoverUnitLayout = "1/1" | "2/1" | "2/2" | "3/1" | "3/2";
 
+export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["1/1", "2/1", "2/2", "3/1", "3/2"];
+
 export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
   label: "Standard turnover pricing",
   cleaningRates: { 1: 185, 2: 255, 3: 385 },
@@ -66,6 +68,48 @@ function normalizeBuildingName(value: string | null | undefined) {
     .trim();
 }
 
+function readNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
+}
+
+function readLayoutRates(value: unknown): Partial<Record<TurnoverUnitLayout, number>> {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as Record<string, unknown>;
+  return Object.fromEntries(
+    TURNOVER_UNIT_LAYOUTS.flatMap((layout) => {
+      const rate = readNumber(raw[layout]);
+      return rate == null ? [] : [[layout, rate]];
+    })
+  ) as Partial<Record<TurnoverUnitLayout, number>>;
+}
+
+export function sanitizeTurnoverPricingPackage(
+  value: unknown,
+  fallback: TurnoverPricingPackage = DEFAULT_TURNOVER_PRICING_PACKAGE
+): TurnoverPricingPackage {
+  if (!value || typeof value !== "object") return fallback;
+  const raw = value as Record<string, unknown>;
+  const cleaningLayoutRates = { ...fallback.cleaningLayoutRates, ...readLayoutRates(raw.cleaningLayoutRates) };
+  const paintingLayoutRates = { ...fallback.paintingLayoutRates, ...readLayoutRates(raw.paintingLayoutRates) };
+
+  return {
+    label: String(raw.label || fallback.label).trim() || fallback.label,
+    cleaningRates: {
+      1: cleaningLayoutRates["1/1"] ?? fallback.cleaningRates[1],
+      2: cleaningLayoutRates["2/2"] ?? cleaningLayoutRates["2/1"] ?? fallback.cleaningRates[2],
+      3: cleaningLayoutRates["3/2"] ?? cleaningLayoutRates["3/1"] ?? fallback.cleaningRates[3],
+    },
+    paintingRates: {
+      1: paintingLayoutRates["1/1"] ?? fallback.paintingRates[1],
+      2: paintingLayoutRates["2/2"] ?? paintingLayoutRates["2/1"] ?? fallback.paintingRates[2],
+      3: paintingLayoutRates["3/2"] ?? paintingLayoutRates["3/1"] ?? fallback.paintingRates[3],
+    },
+    cleaningLayoutRates,
+    paintingLayoutRates,
+  };
+}
+
 export function normalizePricingBedrooms(value?: number | null): 1 | 2 | 3 {
   const beds = Number(value ?? 1);
   if (!Number.isFinite(beds) || beds < 1) return 1;
@@ -108,7 +152,11 @@ export function getTurnoverPaintingRate(
   };
 }
 
-export function getTurnoverPricingPackage(buildingName?: string | null): TurnoverPricingPackage {
+export function getTurnoverPricingPackage(
+  buildingName?: string | null,
+  storedPackage?: unknown
+): TurnoverPricingPackage {
+  if (storedPackage) return sanitizeTurnoverPricingPackage(storedPackage);
   const normalized = normalizeBuildingName(buildingName);
   const match = BUILDING_PRICING_PACKAGES.find((entry) =>
     entry.match.some((name) => normalized === name || normalized.includes(name)),

@@ -7,6 +7,7 @@ interface BuildingProfileEditorProps {
   buildingId: string;
   initial: {
     name: string;
+    builder: string | null;
     address: string;
     pmName: string | null;
     pmEmail: string | null;
@@ -17,6 +18,7 @@ interface BuildingProfileEditorProps {
 export function BuildingProfileEditor({ buildingId, initial }: BuildingProfileEditorProps) {
   const router = useRouter();
   const [name, setName] = useState(initial.name);
+  const [builder, setBuilder] = useState(initial.builder ?? "");
   const [address, setAddress] = useState(initial.address);
   const [pmName, setPmName] = useState(initial.pmName ?? "");
   const [pmEmail, setPmEmail] = useState(initial.pmEmail ?? "");
@@ -33,6 +35,7 @@ export function BuildingProfileEditor({ buildingId, initial }: BuildingProfileEd
 
     const payload = {
       name,
+      builder: builder || null,
       address,
       pmName: pmName || null,
       pmEmail: pmEmail || null,
@@ -100,6 +103,14 @@ export function BuildingProfileEditor({ buildingId, initial }: BuildingProfileEd
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             required
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600">Builder</label>
+          <input
+            value={builder}
+            onChange={(e) => setBuilder(e.target.value)}
             className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
           />
         </div>
