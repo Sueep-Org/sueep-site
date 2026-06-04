@@ -350,24 +350,6 @@ async function initApp(){
       }
     }
 
-    // Update page aggregate for the viewed page
-    const pageTotalInches = measurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
-    if (measurementPageAggregateInfo) {
-      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)}`;
-    }
-
-    // Update all pages total aggregate at bottom
-    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
-    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
-      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
-    }, 0);
-    if (measurementTotalAggregateInfo) {
-      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)}`;
-    }
-    if (allPagesTotalContainer) {
-      allPagesTotalContainer.style.display = 'block';
-    }
-
     // Update page label
     if (measurementPageLabel) {
       measurementPageLabel.textContent = `Page ${measurementViewPage}`;
