@@ -251,7 +251,7 @@ function SubRowTitleCell({
   href,
   title,
 }: {
-  badge: string;
+  badge?: string;
   status: string;
   statusClass: string;
   href: string;
@@ -261,9 +261,11 @@ function SubRowTitleCell({
     <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
       <div className="flex items-center gap-2 pl-4">
         <span className="shrink-0 text-gray-300">&gt;</span>
-        <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
-          {badge}
-        </span>
+        {badge ? (
+          <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
+            {badge}
+          </span>
+        ) : null}
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${statusClass}`}>
           {status}
         </span>
@@ -615,7 +617,6 @@ export function ProjectsExpandableTable({
                           aria-expanded={isTurnoverOpen}
                         >
                           <SubRowTitleCell
-                            badge="CO"
                             status="APPROVED"
                             statusClass={CO_STATUS_COLORS.APPROVED}
                             href={`/erp/projects/${p.id}`}
