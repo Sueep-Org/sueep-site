@@ -596,7 +596,7 @@ export function ProjectsExpandableTable({
                     {/* Project detail */}
                     <tr className={styles.detail}>
                       <td colSpan={13} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        {showTurnoverPricing ? (
+                        {janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId) ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
                           <div className="overflow-x-auto bg-white px-3 py-2">
