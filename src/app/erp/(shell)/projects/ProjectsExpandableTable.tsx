@@ -244,6 +244,41 @@ function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
   );
 }
 
+function SubRowTitleCell({
+  badge,
+  status,
+  statusClass,
+  href,
+  title,
+}: {
+  badge: string;
+  status: string;
+  statusClass: string;
+  href: string;
+  title: string;
+}) {
+  return (
+    <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
+      <div className="flex items-center gap-2 pl-4">
+        <span className="shrink-0 text-gray-300">&gt;</span>
+        <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
+          {badge}
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${statusClass}`}>
+          {status}
+        </span>
+        <Link
+          href={href}
+          onClick={(e) => e.stopPropagation()}
+          className="truncate text-sm font-medium text-gray-700 hover:underline"
+        >
+          {title}
+        </Link>
+      </div>
+    </td>
+  );
+}
+
 const QUALITY_OPTIONS = [
   { value: "", label: "—", score: null },
   { value: "POOR", label: "Poor", score: 1 },
@@ -454,6 +489,7 @@ export function billingBadge(status: string | null) {
 function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string | null) {
   return (
     row.segment === "JANITORIAL_TURNOVER_REQUESTS" ||
+    Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im)) ||
     (Boolean(janitorialPipelineId) && row.hubspotPipelineId === janitorialPipelineId)
   );
 }
@@ -508,8 +544,8 @@ export function ProjectsExpandableTable({
         <tbody>
           {rows.map((p, i) => {
             const isOpen = openSet.has(p.id);
-            const showTurnoverPricing = janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId);
-            const showTurnoverDropdown = janitorialDetailMode === "team";
+            const isJanitorialRow = janitorialDetailMode === "team" || isJanitorialProject(p, janitorialPipelineId);
+            const showTurnoverDropdown = isJanitorialRow;
             const isTurnoverOpen = openTurnoverSet.has(p.id);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
@@ -563,14 +599,10 @@ export function ProjectsExpandableTable({
                     {/* Project detail */}
                     <tr className={styles.detail}>
                       <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        {showTurnoverPricing ? (
-                          <TurnoverPricingSummary project={p} />
-                        ) : (
-                          <div className="overflow-x-auto bg-white px-3 py-2">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                            <LaborTable entries={p.laborEntries} />
-                          </div>
-                        )}
+                        <div className="overflow-x-auto bg-white px-3 py-2">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+                          <LaborTable entries={p.laborEntries} />
+                        </div>
                       </td>
                     </tr>
 
@@ -581,22 +613,13 @@ export function ProjectsExpandableTable({
                           onClick={(e) => toggleTurnover(p.id, e)}
                           aria-expanded={isTurnoverOpen}
                         >
-                          <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
-                            <div className="flex items-center gap-2 pl-4">
-                              <span className="shrink-0 text-gray-300">&gt;</span>
-                              <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">TO</span>
-                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
-                                APPROVED
-                              </span>
-                              <Link
-                                href={`/erp/projects/${p.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="truncate text-sm font-medium text-gray-700 hover:underline"
-                              >
-                                {turnoverDropdownTitle}
-                              </Link>
-                            </div>
-                          </td>
+                          <SubRowTitleCell
+                            badge="CO"
+                            status="APPROVED"
+                            statusClass={CO_STATUS_COLORS.APPROVED}
+                            href={`/erp/projects/${p.id}`}
+                            title={turnoverDropdownTitle}
+                          />
                           <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
                             {p.supervisor || <span className="text-gray-400">-</span>}
                           </td>
@@ -637,22 +660,13 @@ export function ProjectsExpandableTable({
                             aria-expanded={isCoOpen}
                           >
                             {/* Job -> CO title + status */}
-                            <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
-                              <div className="flex items-center gap-2 pl-4">
-                                <span className="shrink-0 text-gray-300">&gt;</span>
-                                <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">CO</span>
-                                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${CO_STATUS_COLORS[co.status]}`}>
-                                  {co.status}
-                                </span>
-                                <Link
-                                  href={`/erp/projects/${p.id}/change-orders/${co.id}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="truncate text-sm font-medium text-gray-700 hover:underline"
-                                >
-                                  {co.title}
-                                </Link>
-                              </div>
-                            </td>
+                            <SubRowTitleCell
+                              badge="CO"
+                              status={co.status}
+                              statusClass={CO_STATUS_COLORS[co.status]}
+                              href={`/erp/projects/${p.id}/change-orders/${co.id}`}
+                              title={co.title}
+                            />
                             {/* PM -> Requested by */}
                             <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
                               {co.requestedBy || <span className="text-gray-400">-</span>}
