@@ -78,46 +78,55 @@ async function refreshDrawer(){
       const full = item.name || item.key || '';
       const display = full.split('/').pop();
 
+      // skip json analysis files
+      if (display.endsWith('.json')) return;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
+
       const btn = document.createElement('button');
-
       btn.textContent = display;
-
-      btn.style.display = 'block';
-      btn.style.width = '100%';
-      btn.style.textAlign = 'left';
-      btn.style.padding = '.5rem';
-      btn.style.marginBottom = '.5rem';
-      btn.style.border = '1px solid #ddd';
-      btn.style.borderRadius = '8px';
-      btn.style.background = 'white';
-      btn.style.cursor = 'pointer';
+      btn.style.cssText = `flex:1;text-align:left;padding:.5rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;`;
 
       btn.onclick = async ()=>{
-
         try{
-
-          const url =
-            `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
-
+          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
           const resp = await fetch(url);
-
           const blob = await resp.blob();
-
           const file = new File([blob], display);
-
           await window.__handleFile?.(file);
-
           closeSidebar();
-
         }catch(e){
-
           console.error(e);
-
           toast(e.message, 'error');
         }
       };
 
-      savedSec.appendChild(btn);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Delete';
+      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
+
+      delBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        if (!confirm(`Delete "${display}"?`)) return;
+        try{
+          const res = await fetch(`${API_BASE}/api/files/delete`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: full })
+          });
+          if (!res.ok) throw new Error('Delete failed');
+          row.remove();
+          toast(`Deleted ${display}`, 'info');
+        }catch(e){
+          toast(e.message, 'error');
+        }
+      };
+
+      row.appendChild(btn);
+      row.appendChild(delBtn);
+      savedSec.appendChild(row);
     });
 
   }catch(e){
@@ -144,6 +153,9 @@ function openSidebar(){
 
   sidebarRoot.dataset.open = 'true';
 
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = 'none';
+
   ensureDrawer();
 }
 
@@ -152,6 +164,9 @@ function closeSidebar(){
   if (!sidebarRoot) return;
 
   sidebarRoot.dataset.open = 'false';
+
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = '';
 }
 
 document.addEventListener('click', (e)=>{
