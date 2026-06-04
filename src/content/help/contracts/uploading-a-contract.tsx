@@ -35,64 +35,64 @@ export function UploadingAContract() {
         <div id="CO-Details-Nav">
         <Step n={3} title="Navigating to Change Order Details">
           Click on the desired project you want to send change order contracts on:
-          <Img src="/help/co_details_1.png" alt="Projects page" />
+          <Img src="/help/contracts/co_details_1.png" alt="Projects page" />
           Navigate to “Change Orders” tab under your desired project and click view details
-          <Img src="/help/co_details_2.png" alt="Project details page" />
+          <Img src="/help/contracts/co_details_2.png" alt="Project details page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
-          <Img src="/help/co_details_3.png" alt="Change order details page" />
+          <Img src="/help/contracts/co_details_3.png" alt="Change order details page" />
         </Step>
         </div>
 
         <div id="Employee-Details-Nav">
         <Step n={4} title="Navigating to Employee Details">
           Navigate to the employees tab and click on the name of the employee you want to send a contract
-          <Img src="/help/employee_details_1.png" alt="Employees page" />
+          <Img src="/help/contracts/employee_details_1.png" alt="Employees page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
-          <Img src="/help/employee_details_2.png" alt="Employee details page" />
+          <Img src="/help/contracts/employee_details_2.png" alt="Employee details page" />
         </Step>
         </div>
 
         <div id="Contractor-Details-Nav">
         <Step n={5} title="Navigating to Contractor Details">
           Navigate to the contractor verification tab and click on the name of the contractor you want to send a contract
-          <Img src="/help/contractor_details_1.png" alt="Contractors page" />
+          <Img src="/help/contracts/contractor_details_1.png" alt="Contractors page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
-          <Img src="/help/contractor_details_2.png" alt="Contractor details page" />
+          <Img src="/help/contracts/contractor_details_2.png" alt="Contractor details page" />
         </Step>
         </div>
 
         <div id="Candidate-Details-Nav">
         <Step n={5} title="Navigating to Candidate Details">
           Navigate to the contractor verification tab and click on the name of the contractor you want to send a contract
-          <Img src="/help/candidate_details_1.png" alt="Candidate page" />
+          <Img src="/help/contracts/candidate_details_1.png" alt="Candidate page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
-          <Img src="/help/candidate_details_2.png" alt="Candidate details page" />
+          <Img src="/help/contracts/candidate_details_2.png" alt="Candidate details page" />
         </Step>
         </div>
 
         <div id="Contract-Signing-How">
         <Step n={6} title="Contract Signing">
           Click upload PDF to upload you contract.
-          <Img src="/help/contract_1.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_1.png" alt="Candidate page" />
           Once you chose your file we want to click on Open in docuseal 
-          <Img src="/help/contract_2.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_2.png" alt="Candidate page" />
           This is where you will land on Docuseal. We want to click edit
-          <Img src="/help/contract_3.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_3.png" alt="Candidate page" />
           On this page we can place a variety of input boxes for our recipient
-          <Img src="/help/contract_4.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_4.png" alt="Candidate page" />
           For example I place a signature and date field.
-          <Img src="/help/contract_5.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_5.png" alt="Candidate page" />
           Now we can send it off
-          <Img src="/help/contract_6.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_6.png" alt="Candidate page" />
           This pops up when we hit send. Add the email of the recipient and click “Add Recipients” and it will send it off!
-          <Img src="/help/contract_7.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_7.png" alt="Candidate page" />
           It will now indicate we are awaiting signing from the recipient.
-          <Img src="/help/contract_8.png" alt="Candidate page" />
-          <Img src="/help/contract_9.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_8.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_9.png" alt="Candidate page" />
           Once they sign refresh and you’ll see it’s status changed!
-          <Img src="/help/contract_10.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_10.png" alt="Candidate page" />
           You can also view and download the contract on Docuseal
-          <Img src="/help/contract_11.png" alt="Candidate page" />
+          <Img src="/help/contracts/contract_11.png" alt="Candidate page" />
 
         </Step>
         </div>

@@ -4,6 +4,7 @@ import { CreatingAProject } from "./projects/creating-a-project";
 import { HubSpotSync } from "./projects/hubspot-sync";
 import { CreatingATurnoverRequest } from "./turnover/creating-a-request";
 import { OnboardingNewEmployee } from "./sops/onboarding-new-employee";
+import {CreatingAChangeOrder} from "./projects/creating-a-change-order";
 
 export type ArticleEntry = {
   slug: string;
@@ -36,7 +37,7 @@ export const registry: ArticleEntry[] = [
     title: "HubSpot Sync",
     category: "Projects",
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
-    order: 2,
+    order: 3,
     component: HubSpotSync,
   },
   {
@@ -54,5 +55,13 @@ export const registry: ArticleEntry[] = [
     description: "Standard process for onboarding a new employee into the ERP.",
     order: 1,
     component: OnboardingNewEmployee,
+  },
+  {
+    slug: "projects/creating-a-change-order",
+    title: "Creating a Change Order",
+    category: "Projects",
+    description: "How to create a change order for a post-construction project in the ERP",
+    order: 2,
+    component: CreatingAChangeOrder,
   },
 ];
