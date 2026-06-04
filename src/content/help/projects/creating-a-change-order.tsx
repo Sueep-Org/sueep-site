@@ -5,7 +5,10 @@ export function CreatingAChangeOrder() {
     <>
         <H2>Overview</H2>
         <P>
-          This guide walks you through creating and managing change orders in the ERP. Change orders are used to document additional scope, cost, or schedule adjustments on a post-construction project. There are two ways to create one: from the New Project button or directly from a project&apos;s details page. This tutorial covers both methods as well as how to view, update, and navigate the change order details page.
+          This guide walks you through creating and managing change orders in the ERP. 
+          Change orders are used to document additional scope, cost, or schedule adjustments on a post-construction project.
+           There are two ways to create one: from the New Project button or directly from a project&apos;s details page.
+            This tutorial covers both methods as well as how to view, update, and navigate the change order details page.
         </P>
         <H2>Steps</H2>
         <Steps>
