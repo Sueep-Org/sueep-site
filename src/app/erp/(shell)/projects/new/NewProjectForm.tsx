@@ -23,7 +23,13 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 const TOUCH_UP_PAINT_CENTS = 12500;
 const ADDITIONAL_MATERIALS_CENTS = 8500;
 const CARPET_WITH_CLEAN_CENTS = 8000;
-const CARPET_STANDALONE_CENTS = 12500;
+const PRICING_FIELD_LABELS = {
+  fullClean: "Full clean",
+  fullPaint: "Full paint",
+  touchUpPaint: "Touch-up paint",
+  additionalMaterials: "Additional materials",
+  carpetCleaning: "Carpet cleaning",
+} as const;
 const UNIT_FEATURE_OPTIONS = [
   { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
   { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
@@ -59,6 +65,8 @@ const GEOTRACKING_CHECK_MODE_OPTIONS = [
 ] as const;
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
+type PricingField = keyof typeof PRICING_FIELD_LABELS;
+type PricePackageValues = Record<PricingField, string>;
 type UnitScope = {
   id: string;
   unitNumber: string;
@@ -108,6 +116,17 @@ function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     cents / 100
   );
+}
+
+function centsToDollarInput(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
+function dollarsToCents(value: string) {
+  const normalized = value.replace(/[$,\s]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100);
 }
 
 function getUnitFeature(value: UnitFeatureValue) {
@@ -595,6 +614,19 @@ export function NewProjectForm({
   const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
+  const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
+  const defaultPricePackageValues = useMemo<PricePackageValues>(
+    () => ({
+      fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
+      fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
+      touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
+      additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
+      carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
+    }),
+    [normalizedBeds, pricingPackage]
+  );
+  const [pricePackageValues, setPricePackageValues] = useState<PricePackageValues>(() => defaultPricePackageValues);
+  const [pricePackageTouched, setPricePackageTouched] = useState(false);
   const addressOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -609,6 +641,12 @@ export function NewProjectForm({
       )
     ).sort((a, b) => a.localeCompare(b));
   }, [buildings, scheduleBuildings, buildingAddress]);
+
+  useEffect(() => {
+    if (!pricePackageTouched) {
+      setPricePackageValues(defaultPricePackageValues);
+    }
+  }, [defaultPricePackageValues, pricePackageTouched]);
 
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
     setUnitScopes((prev) =>
@@ -663,38 +701,40 @@ export function NewProjectForm({
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
-    const pricingPackage = getTurnoverPricingPackage(buildingName);
+    const pricePackageCents = {
+      fullClean: dollarsToCents(pricePackageValues.fullClean),
+      fullPaint: dollarsToCents(pricePackageValues.fullPaint),
+      touchUpPaint: dollarsToCents(pricePackageValues.touchUpPaint),
+      additionalMaterials: dollarsToCents(pricePackageValues.additionalMaterials),
+      carpetCleaning: dollarsToCents(pricePackageValues.carpetCleaning),
+    };
 
     unitScopes.forEach((unit, index) => {
       const feature = getUnitFeature(unit.features);
-      const beds = normalizeBeds(feature.bedrooms);
-      const baseCleaning = pricingPackage.cleaningRates[beds] * 100;
-      const basePainting = pricingPackage.paintingRates[beds] * 100;
       const unitLines: string[] = [];
       let unitTotal = 0;
 
       if (unit.fullClean) {
-        unitTotal += baseCleaning;
-        unitLines.push(`cleaning ${formatUsd(baseCleaning)}`);
+        unitTotal += pricePackageCents.fullClean;
+        unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
       }
 
       if (unit.fullPaint) {
-        unitTotal += basePainting;
-        unitLines.push(`painting ${formatUsd(basePainting)}`);
+        unitTotal += pricePackageCents.fullPaint;
+        unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
       } else if (unit.touchUpPaint) {
-        unitTotal += TOUCH_UP_PAINT_CENTS;
-        unitLines.push(`touch-up paint ${formatUsd(TOUCH_UP_PAINT_CENTS)}`);
+        unitTotal += pricePackageCents.touchUpPaint;
+        unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
       }
 
       if (unit.materialsAdditional) {
-        unitTotal += ADDITIONAL_MATERIALS_CENTS;
-        unitLines.push(`additional materials ${formatUsd(ADDITIONAL_MATERIALS_CENTS)}`);
+        unitTotal += pricePackageCents.additionalMaterials;
+        unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
       }
 
       if (unit.carpetCleaning) {
-        const carpetPrice = unit.fullClean ? CARPET_WITH_CLEAN_CENTS : CARPET_STANDALONE_CENTS;
-        unitTotal += carpetPrice;
-        unitLines.push(`carpet cleaning ${formatUsd(carpetPrice)}`);
+        unitTotal += pricePackageCents.carpetCleaning;
+        unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
       }
 
       if (unit.lightWallTouchUps) {
@@ -718,9 +758,10 @@ export function NewProjectForm({
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
+      pricePackageCents,
       unitCount,
     };
-  }, [buildingName, unitScopes, unitCount]);
+  }, [pricePackageValues, unitScopes, unitCount]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -801,6 +842,9 @@ export function NewProjectForm({
       isTurnover && sueepPmName.trim() ? `SUEEP PM: ${sueepPmName.trim()}` : null,
       isTurnover && sueepPmEmail.trim() ? `SUEEP PM Email: ${sueepPmEmail.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
+      isTurnover
+        ? `Price Package: ${PRICING_FIELD_LABELS.fullClean} ${formatUsd(packagePricing.pricePackageCents.fullClean)} | ${PRICING_FIELD_LABELS.fullPaint} ${formatUsd(packagePricing.pricePackageCents.fullPaint)} | ${PRICING_FIELD_LABELS.touchUpPaint} ${formatUsd(packagePricing.pricePackageCents.touchUpPaint)} | ${PRICING_FIELD_LABELS.additionalMaterials} ${formatUsd(packagePricing.pricePackageCents.additionalMaterials)} | ${PRICING_FIELD_LABELS.carpetCleaning} ${formatUsd(packagePricing.pricePackageCents.carpetCleaning)}`
+        : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
       isTurnover ? `Geotracking: ${geotrackingEnabled ? "Enabled" : "Disabled"}` : null,
@@ -865,6 +909,8 @@ export function NewProjectForm({
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
         totalPrice: packagePricing.totalPrice,
+        pricePackageCents: packagePricing.pricePackageCents,
+        pricePackageDollars: pricePackageValues,
       },
     };
 
@@ -1356,7 +1402,53 @@ export function NewProjectForm({
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 3 - Geotracking</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className={sectionHeader}>Step 3 - Price package</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setPricePackageValues(defaultPricePackageValues);
+                  setPricePackageTouched(false);
+                }}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
+              >
+                Reset prices
+              </button>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
+                  <div key={field} className="min-w-0">
+                    <label className={label} htmlFor={`price-${field}`}>
+                      {PRICING_FIELD_LABELS[field]}
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                        $
+                      </span>
+                      <input
+                        id={`price-${field}`}
+                        name={`pricePackage-${field}`}
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        inputMode="decimal"
+                        className={`${input} pl-7`}
+                        value={pricePackageValues[field]}
+                        onChange={(e) => {
+                          setPricePackageTouched(true);
+                          setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className={sectionHeader}>Step 4 - Geotracking</p>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <label className="flex items-start rounded-md border border-gray-200 bg-white px-3 py-2">
                 <input
@@ -1429,7 +1521,7 @@ export function NewProjectForm({
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 — Estimated total</p>
+            <p className={sectionHeader}>Step 5 - Estimated total</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="sueepPmName">
