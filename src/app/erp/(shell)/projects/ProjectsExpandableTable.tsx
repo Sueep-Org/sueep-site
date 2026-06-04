@@ -196,6 +196,11 @@ function getTurnoverDropdownTitle(project: ProjectTableRow) {
 function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
   const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
+  const geotracking = getDetailLine(project.description, "Geotracking");
+  const expectedLocation = getDetailLine(project.description, "Expected Worker Location");
+  const geofenceRadius = getDetailLine(project.description, "Geofence Radius");
+  const locationChecks = getDetailLine(project.description, "Location Checks");
+  const geotrackingNotes = getDetailLine(project.description, "Geotracking Notes");
 
   return (
     <>
@@ -208,7 +213,7 @@ function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
         <TurnoverPricingSummary project={project} />
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded border border-gray-200 bg-white px-3 py-2">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover scope</p>
           <p className="mt-1 text-xs text-gray-700 line-clamp-3">
@@ -226,6 +231,21 @@ function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
             <span className="text-gray-400">Est. hours</span>
             <span className="font-medium text-gray-800">{project.estHours ?? "-"}</span>
           </div>
+        </div>
+
+        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Geotracking</p>
+          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+            <span className="text-gray-400">Status</span>
+            <span className="font-medium text-gray-800">{geotracking || "Disabled"}</span>
+            <span className="text-gray-400">Location</span>
+            <span className="font-medium text-gray-800">{expectedLocation || "-"}</span>
+            <span className="text-gray-400">Radius</span>
+            <span className="font-medium text-gray-800">{geofenceRadius || "-"}</span>
+            <span className="text-gray-400">Checks</span>
+            <span className="font-medium text-gray-800">{locationChecks || "-"}</span>
+          </div>
+          {geotrackingNotes ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{geotrackingNotes}</p> : null}
         </div>
 
         <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
