@@ -78,46 +78,55 @@ async function refreshDrawer(){
       const full = item.name || item.key || '';
       const display = full.split('/').pop();
 
+      // skip json analysis files
+      if (display.endsWith('.json')) return;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
+
       const btn = document.createElement('button');
-
       btn.textContent = display;
-
-      btn.style.display = 'block';
-      btn.style.width = '100%';
-      btn.style.textAlign = 'left';
-      btn.style.padding = '.5rem';
-      btn.style.marginBottom = '.5rem';
-      btn.style.border = '1px solid #ddd';
-      btn.style.borderRadius = '8px';
-      btn.style.background = 'white';
-      btn.style.cursor = 'pointer';
+      btn.style.cssText = `flex:1;text-align:left;padding:.5rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;`;
 
       btn.onclick = async ()=>{
-
         try{
-
-          const url =
-            `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
-
+          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
           const resp = await fetch(url);
-
           const blob = await resp.blob();
-
           const file = new File([blob], display);
-
           await window.__handleFile?.(file);
-
           closeSidebar();
-
         }catch(e){
-
           console.error(e);
-
           toast(e.message, 'error');
         }
       };
 
-      savedSec.appendChild(btn);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Delete';
+      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
+
+      delBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        if (!confirm(`Delete "${display}"?`)) return;
+        try{
+          const res = await fetch(`${API_BASE}/api/files/delete`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: full })
+          });
+          if (!res.ok) throw new Error('Delete failed');
+          row.remove();
+          toast(`Deleted ${display}`, 'info');
+        }catch(e){
+          toast(e.message, 'error');
+        }
+      };
+
+      row.appendChild(btn);
+      row.appendChild(delBtn);
+      savedSec.appendChild(row);
     });
 
   }catch(e){
@@ -144,6 +153,9 @@ function openSidebar(){
 
   sidebarRoot.dataset.open = 'true';
 
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = 'none';
+
   ensureDrawer();
 }
 
@@ -152,6 +164,9 @@ function closeSidebar(){
   if (!sidebarRoot) return;
 
   sidebarRoot.dataset.open = 'false';
+
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = '';
 }
 
 document.addEventListener('click', (e)=>{
@@ -195,6 +210,7 @@ async function initApp(){
   // ======================================================
 
   const measureToggle = $('measureToggle');
+  const drawRectBtn = $('drawRectBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -208,10 +224,18 @@ async function initApp(){
   const nextPageBtn = $('nextPageBtn');
   const pageInfo = $('pageInfo');
   const vectorLineInfo = $('vectorLineInfo');
-  const measurementList = $('measurementList');
   const measurementScaleInfo = $('measurementScaleInfo');
+  const measurementPageAggregateInfo = $('measurementPageAggregateInfo');
+  const measurementTotalAggregateInfo = $('measurementTotalAggregateInfo');
   const changeScaleBtn = $('changeScaleBtn');
   const doubleSideToggle = $('doubleSideToggle');
+  const measurementListLeft = $('measurementListLeft');
+  const measurementListRight = $('measurementListRight');
+  const measurementPageInput = $('measurementPageInput');
+  const measurementPageLabel = $('measurementPageLabel');
+  const measurementPrevPageBtn = $('measurementPrevPageBtn');
+  const measurementNextPageBtn = $('measurementNextPageBtn');
+  const allPagesTotalContainer = $('allPagesTotalContainer');
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -226,6 +250,7 @@ async function initApp(){
   let pdfDoc = null;
 
   let currentPage = 1;
+  let measurementViewPage = 1;
 
   let zoom = 1;
 
@@ -303,18 +328,19 @@ async function initApp(){
     if (!vectorLineInfo) return;
     const lines = highlightsStore.getLines(currentPage) || [];
     if (lines.length === 0) {
-      vectorLineInfo.textContent = 'No vector lines detected on this page';
-      vectorLineInfo.style.color = '#ef4444';
+      vectorLineInfo.textContent = '';
     } else {
-      vectorLineInfo.textContent = `Vector lines detected: ${lines.length}`;
+      vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
     }
   }
 
   function updateMeasurementList(){
-    if (!measurementList) return;
-    const measurements = highlightsStore.listMeasurements(currentPage) || [];
-    const scale = highlightsStore.getScale(currentPage);
+    // Get measurements for the viewed page (not current PDF page)
+    const measurements = highlightsStore.listMeasurements(measurementViewPage) || [];
+    const scale = highlightsStore.getScale(measurementViewPage);
+    
+    // Update scale info based on viewed page
     if (measurementScaleInfo) {
       if (scale && scale.factor) {
         const pxPerInch = 1 / scale.factor;
@@ -323,29 +349,87 @@ async function initApp(){
         measurementScaleInfo.textContent = 'Scale not set';
       }
     }
-    if (!measurements.length) {
-      measurementList.innerHTML = 'No saved measurements';
-      return;
+
+    // Update page label
+    if (measurementPageLabel) {
+      measurementPageLabel.textContent = `Page ${measurementViewPage}`;
     }
-    measurementList.innerHTML = measurements.map(m => {
-      const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
-      const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(double-sided)</span>' : '';
-      return `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
-          <span>${label}${badge}</span>
-          <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 6px;min-width:auto;">X</button>
-        </div>
-      `;
-    }).join('');
-    measurementList.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
-      btn.onclick = () => {
-        const id = btn.dataset.measurementId;
-        highlightsStore.removeMeasurement(currentPage, id);
-        updateMeasurementList();
-        overlay.redraw();
-        toast('Measurement removed', 'info');
-      };
-    });
+
+    // Split measurements into line (length) and area measurements
+    const lineMeasurements = measurements.filter(m => m.area == null);
+    const areaMeasurements = measurements.filter(m => m.area != null);
+
+    // Left column: line measurements
+    if (measurementListLeft) {
+      if (!lineMeasurements.length) {
+        measurementListLeft.innerHTML = 'No measurements';
+      } else {
+        measurementListLeft.innerHTML = lineMeasurements.map(m => {
+          const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
+          const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(2x)</span>' : '';
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+              <span style="font-size:11px;">${label}${badge}</span>
+              <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
+            </div>
+          `;
+        }).join('');
+        measurementListLeft.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.dataset.measurementId;
+            highlightsStore.removeMeasurement(measurementViewPage, id);
+            updateMeasurementList();
+            overlay.redraw();
+            toast('Measurement removed', 'info');
+          };
+        });
+      }
+    }
+
+    // Right column: surface area measurements
+    if (measurementListRight) {
+      if (!areaMeasurements.length) {
+        measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
+      } else {
+        measurementListRight.innerHTML = areaMeasurements.map(m => {
+          const label = m.areaLabel || `${(m.area || 0).toFixed(2)} sq`;
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+              <span style="font-size:11px;">${label}</span>
+              <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
+            </div>
+          `;
+        }).join('');
+        measurementListRight.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.dataset.measurementId;
+            highlightsStore.removeMeasurement(measurementViewPage, id);
+            updateMeasurementList();
+            overlay.redraw();
+            toast('Measurement removed', 'info');
+          };
+        });
+      }
+    }
+
+    // Page totals: include both length and area
+    const pageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
+    const pageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+    if (measurementPageAggregateInfo) {
+      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
+    }
+
+    // All pages totals including area
+    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
+    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
+    }, 0);
+    const allTotalArea = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
+    }, 0);
+    if (measurementTotalAggregateInfo) {
+      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
+    }
   }
 
   // ======================================================
@@ -422,6 +506,10 @@ async function initApp(){
       nextPageBtn.disabled = currentPage >= pdfDoc.numPages;
       nextPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
     }
+    // Sync measurement page input with current view
+    if (measurementPageInput) {
+      measurementPageInput.value = measurementViewPage;
+    }
     updateVectorLineInfo();
     updateMeasurementList();
   }
@@ -449,6 +537,14 @@ async function initApp(){
       case 'm': return num * 39.3700787;
       default: return num;
     }
+  }
+
+  function formatInches(inches) {
+    const total = Number(inches) || 0;
+    const feet = Math.floor(total / 12);
+    const rem = Math.round((total - feet * 12) * 10) / 10;
+    if (feet > 0) return `${feet} ft ${rem}"`;
+    return `${rem}"`;
   }
 
   function computeScaleFactorFromExpression(str, pxPerPt) {
@@ -486,6 +582,7 @@ async function initApp(){
       }).promise;
 
       currentPage = 1;
+      measurementViewPage = 1;
 
       zoom = 1;
 
@@ -499,6 +596,10 @@ async function initApp(){
       if (mainContent){
 
         mainContent.classList.remove('hidden');
+        // resizeToMatchCanvas was called during renderPage while mainContent was hidden
+        // (clientWidth=0). Re-call now that the element is visible so the overlay
+        // canvas gets the correct CSS dimensions and can receive pointer events.
+        overlay.resizeToMatchCanvas();
       }
 
     }catch(e){
@@ -560,6 +661,7 @@ async function initApp(){
       if (!pdfDoc) return;
       if (currentPage > 1) {
         currentPage -= 1;
+        measurementViewPage = currentPage;
         await renderPage();
       }
     };
@@ -571,6 +673,7 @@ async function initApp(){
       if (!pdfDoc) return;
       if (currentPage < pdfDoc.numPages) {
         currentPage += 1;
+        measurementViewPage = currentPage;
         await renderPage();
       }
     };
@@ -668,10 +771,8 @@ async function initApp(){
         return;
       }
 
-      // do not start panning if overlay is active and measuring
-      try {
-        if (overlay && overlay.tool === 'measure' && overlay._isDraggingMeasure) return;
-      } catch (err) {}
+      // do not start panning when measure mode is active
+      if (overlay && overlay.active && overlay.tool === 'measure') return;
 
       if (!pdfDoc) return;
 
@@ -921,8 +1022,31 @@ async function initApp(){
       overlay.setTool(
         isOn ? 'measure' : 'area'
       );
+
+      if (pdfContainer) {
+        pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      }
     };
   }
+
+    if (drawRectBtn) {
+      drawRectBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawRectBtn.classList.contains('active');
+
+        // turn off measure toggle if active
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+
+        drawRectBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'rect' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
 
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
@@ -951,6 +1075,46 @@ async function initApp(){
       doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
       overlay.setDoubleSided(isDouble);
     };
+  }
+
+  // ======================================================
+  // MEASUREMENT PAGE NAVIGATION
+  // ======================================================
+
+  if (measurementPrevPageBtn) {
+    measurementPrevPageBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (measurementViewPage > 1) {
+        measurementViewPage -= 1;
+        if (measurementPageInput) measurementPageInput.value = measurementViewPage;
+        updateMeasurementList();
+      }
+    };
+  }
+
+  if (measurementNextPageBtn) {
+    measurementNextPageBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (measurementViewPage < (pdfDoc?.numPages || 999)) {
+        measurementViewPage += 1;
+        if (measurementPageInput) measurementPageInput.value = measurementViewPage;
+        updateMeasurementList();
+      }
+    };
+  }
+
+  if (measurementPageInput) {
+    measurementPageInput.addEventListener('change', (e) => {
+      const pageNum = parseInt(e.target.value, 10);
+      if (pageNum && pageNum >= 1 && pageNum <= (pdfDoc?.numPages || 999)) {
+        measurementViewPage = pageNum;
+        updateMeasurementList();
+      } else {
+        e.target.value = measurementViewPage;
+      }
+    });
   }
 
   updateZoomLabel();

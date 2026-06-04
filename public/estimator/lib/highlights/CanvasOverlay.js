@@ -205,8 +205,8 @@ export class CanvasOverlay {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // if user is dragging a measure line, update preview and skip hover logic
-    if (this.tool === 'measure' && this._isDraggingMeasure && this._measureStart) {
+    // if user is dragging a measure line or rect, update preview and skip hover logic
+    if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
       this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
       this.redraw();
       return;
@@ -262,7 +262,7 @@ export class CanvasOverlay {
 
   _onPointerDown = (e) => {
     if (!this.active) return;
-    if (this.tool !== 'measure') return;
+    if (this.tool !== 'measure' && this.tool !== 'rect') return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -277,7 +277,7 @@ export class CanvasOverlay {
 
   _onPointerUp = (e) => {
     if (!this.active) return;
-    if (this.tool !== 'measure') return;
+    if ((this.tool !== 'measure' && this.tool !== 'rect')) return;
 
     if (!this._isDraggingMeasure || !this._measureStart) return;
 
@@ -294,43 +294,92 @@ export class CanvasOverlay {
     this._measurePreview = null;
     try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
 
-    const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
-    if (pixelLength <= 2) { this.redraw(); return; }
+    if (this.tool === 'measure') {
+      const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
+      if (pixelLength <= 2) { this.redraw(); return; }
 
-    let scaleFactor = this.store.getScale(this.currentPage)?.factor;
-    if (!scaleFactor) {
-      const entry = window.prompt('Enter page scale for this line (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to cancel:');
-      if (!entry || !entry.trim()) { this.redraw(); return; }
-
-      scaleFactor = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
-      if (!scaleFactor || !(scaleFactor > 0)) {
-        toast('Failed to parse scale expression', 'error');
-        this.redraw();
-        return;
+      let scaleFactor = this.store.getScale(this.currentPage)?.factor;
+      if (!scaleFactor) {
+        const entry = window.prompt('Enter page scale (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to measure in raw inches:');
+        if (entry && entry.trim()) {
+          const parsed = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
+          if (!parsed || !(parsed > 0)) {
+            toast('Could not parse scale — saving in raw inches', 'info');
+          } else {
+            scaleFactor = parsed;
+            this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
+            toast('Scale saved for this page', 'success');
+          }
+        }
       }
 
-      this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
-      toast('Scale saved for this page', 'success');
+      // compute the real-world inches for this drawn line
+      // if no scale set, fall back to raw PDF inches (pixelLength / pxPerPt / 72)
+      const rawInches = (Math.hypot(end.x - start.x, end.y - start.y) / this._pxPerPt) / 72;
+      let realInchesForLine = scaleFactor ? (Math.hypot(end.x - start.x, end.y - start.y) * scaleFactor) : rawInches;
+      if (this.doubleSided) {
+        realInchesForLine *= 2;
+      }
+
+      // store measurement record (normalized coordinates)
+      const label = formatInches(realInchesForLine);
+      this.store.addMeasurement(this.currentPage, {
+        id: `drag-${Date.now()}`,
+        inches: realInchesForLine,
+        label,
+        at: Date.now(),
+        doubleSided: this.doubleSided,
+        pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
+      });
+
+      this.onMeasurementsChanged?.();
+      toast(`Measured: ${label}`, 'success');
+
+      this.redraw();
+      return;
     }
 
-    // compute the real-world inches for this drawn line
-    const realInchesForLine = pixelLength * scaleFactor;
+    if (this.tool === 'rect') {
+      const pixelWidth = Math.abs(end.x - start.x);
+      const pixelHeight = Math.abs(end.y - start.y);
+      const pixelArea = pixelWidth * pixelHeight;
+      if (pixelArea <= 4) { this.redraw(); return; }
 
-    // store measurement record (normalized coordinates)
-    const label = formatInches(realInchesForLine);
-    this.store.addMeasurement(this.currentPage, {
-      id: `drag-${Date.now()}`,
-      inches: realInchesForLine,
-      label,
-      at: Date.now(),
-      doubleSided: this.doubleSided,
-      pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
-    });
+      // convert area from pixels to scaled units using same helper
+      const areaScaled = applyScale(pixelArea, this._pxPerPt);
 
-    this.onMeasurementsChanged?.();
-    toast(`Measured: ${label}`, 'success');
+      // normalized rectangle polygon
+      const left = Math.min(start.x, end.x);
+      const top = Math.min(start.y, end.y);
+      const right = Math.max(start.x, end.x);
+      const bottom = Math.max(start.y, end.y);
 
-    this.redraw();
+      const norm = [
+        { x: left / this.overlay.width, y: top / this.overlay.height },
+        { x: right / this.overlay.width, y: top / this.overlay.height },
+        { x: right / this.overlay.width, y: bottom / this.overlay.height },
+        { x: left / this.overlay.width, y: bottom / this.overlay.height }
+      ];
+
+      // save polygon for visualization
+      this.store.addPolygon(this.currentPage, { points: norm });
+
+      // save area measurement record
+      this.store.addMeasurement(this.currentPage, {
+        id: `rect-${Date.now()}`,
+        area: areaScaled,
+        areaPx: pixelArea,
+        areaLabel: `${areaScaled.toFixed(2)} sq`,
+        at: Date.now(),
+        pts: [{ x1: left / this.overlay.width, y1: top / this.overlay.height, x2: right / this.overlay.width, y2: bottom / this.overlay.height }]
+      });
+
+      this.onMeasurementsChanged?.();
+      toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
+
+      this.redraw();
+      return;
+    }
   };
 
   _onPointerCancel = (e) => {
@@ -444,7 +493,10 @@ export class CanvasOverlay {
       toast('Scale saved for this page', 'success');
     }
 
-    const measuredInches = pixelLength * scaleFactor;
+    let measuredInches = pixelLength * scaleFactor;
+    if (this.doubleSided) {
+      measuredInches *= 2;
+    }
     if (measuredInches !== null) {
       const txt = formatInches(measuredInches);
       toast(`Length: ${txt}`, 'info');
@@ -458,7 +510,7 @@ export class CanvasOverlay {
       });
       this.onMeasurementsChanged?.();
     } else {
-      toast(`Length (px): ${pixelLength.toFixed(1)} px`, 'info');
+      toast(`Length: ${((pixelLength / this._pxPerPt) / 72).toFixed(2)} in`, 'info');
     }
 
     this.redraw();
@@ -469,9 +521,12 @@ export class CanvasOverlay {
     this.overlay.width = this.canvasEl.width;
     this.overlay.height = this.canvasEl.height;
     // match CSS size so the overlay covers the visible canvas
+    // use width/height attributes (not clientWidth) to avoid 0 when parent is display:none
     try {
-      this.overlay.style.width = `${this.canvasEl.clientWidth}px`;
-      this.overlay.style.height = `${this.canvasEl.clientHeight}px`;
+      const w = this.canvasEl.width || this.canvasEl.clientWidth;
+      const h = this.canvasEl.height || this.canvasEl.clientHeight;
+      if (w > 0) this.overlay.style.width = `${w}px`;
+      if (h > 0) this.overlay.style.height = `${h}px`;
     } catch (err) {}
     // ensure overlay is on top and not interfering when inactive
     this.overlay.style.zIndex = 20;
@@ -520,7 +575,7 @@ export class CanvasOverlay {
           const txt = formatInches(inches);
           drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
         } else {
-          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${pxLen.toFixed(1)} px`);
+          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`);
         }
       }
     }
@@ -551,14 +606,24 @@ export class CanvasOverlay {
       drawHint(this.ctx, 10, 30, hint);
     }
     // draw measure preview if user is dragging
-    if (this.tool === 'measure' && this._measurePreview) {
+    if (this._measurePreview) {
       const p = this._measurePreview;
-      drawPreviewLine(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
-      // show pixel length while dragging
-      const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
-      const scale = this.store.getScale(this.currentPage);
-      const labelTxt = (scale && scale.factor) ? formatInches(pxLen * scale.factor) : `${pxLen.toFixed(1)} px`;
-      drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, labelTxt);
+      if (this.tool === 'measure') {
+        drawPreviewLine(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
+        // show pixel length while dragging
+        const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
+        const scale = this.store.getScale(this.currentPage);
+        const labelTxt = (scale && scale.factor) ? formatInches(pxLen * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
+        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, labelTxt);
+      }
+      if (this.tool === 'rect') {
+        drawPreviewRect(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
+        const pxW = Math.abs(p.x2 - p.x1);
+        const pxH = Math.abs(p.y2 - p.y1);
+        const pxArea = pxW * pxH;
+        const areaScaled = applyScale(pxArea, this._pxPerPt);
+        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${areaScaled.toFixed(2)} sq`);
+      }
     }
   }
 }
@@ -711,6 +776,21 @@ function drawPreviewLine(ctx, a, b) {
   ctx.lineWidth = 3;
   ctx.setLineDash([6, 6]);
   ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPreviewRect(ctx, a, b) {
+  ctx.save();
+  const left = Math.min(a.x, b.x);
+  const top = Math.min(a.y, b.y);
+  const w = Math.abs(b.x - a.x);
+  const h = Math.abs(b.y - a.y);
+  ctx.beginPath();
+  ctx.rect(left, top, w, h);
+  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6,6]);
   ctx.stroke();
   ctx.restore();
 }
