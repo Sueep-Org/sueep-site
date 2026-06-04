@@ -8,7 +8,6 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       rows={rows}
       janitorialPipelineId={null}
       janitorialDetailMode="team"
-      organizeByBuilding
     />
   );
 }
