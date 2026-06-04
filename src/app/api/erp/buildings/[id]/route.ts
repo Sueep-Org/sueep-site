@@ -57,7 +57,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.pricingPackage !== undefined) {
     if (!isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-      return NextResponse.json({ error: "Only Nick, Dave, or Edwin can edit pricing packages" }, { status: 403 });
+      return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
     }
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);

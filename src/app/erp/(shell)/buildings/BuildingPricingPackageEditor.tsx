@@ -91,7 +91,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Pricing package</h2>
-          <p className="mt-1 text-xs text-gray-500">Editable by Nick, Dave, and Edwin.</p>
+          <p className="mt-1 text-xs text-gray-500">Editable by approved pricing admins.</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
           {canEdit ? "Admin editable" : "View only"}
