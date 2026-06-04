@@ -56,7 +56,7 @@ export function CreatingAChangeOrder() {
 
 
             <Step n={6} title="Details Page Overview">
-                Below is a overview of the details tab: All editable just click “Save Changes” if you don't nothing will save!!
+                Below is an overview of the details tab. Click “Save Changes” after edits, otherwise nothing will save.
                 <Img src="/help/change_order/details_1.png" alt="Project details page" />                
                 Billing tab
                 <Img src="/help/change_order/details_2.png" alt="Project details page" />
