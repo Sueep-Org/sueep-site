@@ -497,9 +497,12 @@ export function ProjectsExpandableTable({
             <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>
             <th className="px-3 py-2 font-semibold">Segment</th>
             <th className="px-3 py-2 font-semibold">Contract</th>
-            <th className="px-3 py-2 font-semibold">Material (Est / Act)</th>
-            <th className="px-3 py-2 font-semibold">Labor (Est / Act)</th>
-            <th className="px-3 py-2 font-semibold">Hours (Est / Act)</th>
+            <th className="px-3 py-2 font-semibold">Est. Material</th>
+            <th className="px-3 py-2 font-semibold">Act. Material</th>
+            <th className="px-3 py-2 font-semibold">Est. Labor</th>
+            <th className="px-3 py-2 font-semibold">Act. Labor</th>
+            <th className="px-3 py-2 font-semibold">Est. Hours</th>
+            <th className="px-3 py-2 font-semibold">Act. Hours</th>
             <th className="px-3 py-2 font-semibold">Progress</th>
             <th className="px-3 py-2 font-semibold">% Invoiced</th>
             <th className="px-3 py-2 font-semibold">Billing Status</th>
@@ -539,18 +542,12 @@ export function ProjectsExpandableTable({
                   </td>
                   <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {centsToDollars(p.estMaterialCents)}{" "}
-                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualMaterialCents)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {centsToDollars(p.estLaborCents)}{" "}
-                    <span className="text-gray-500">/ A:</span> {centsToDollars(p.actualLaborCents)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900">
-                    <span className="text-gray-500">E:</span> {p.estHours ?? "-"}{" "}
-                    <span className="text-gray-500">/ A:</span> {p.actualHours.toFixed(2)}
-                  </td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estMaterialCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualMaterialCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estLaborCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualLaborCents)}</td>
+                  <td className="px-3 py-2 text-gray-900">{p.estHours ?? <span className="text-gray-400">-</span>}</td>
+                  <td className="px-3 py-2 text-gray-900">{p.actualHours.toFixed(2)}</td>
                   <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
                   <td className="px-3 py-2 text-gray-900">
                     {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
@@ -562,7 +559,7 @@ export function ProjectsExpandableTable({
                   <>
                     {/* Project detail */}
                     <tr className={styles.detail}>
-                      <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={13} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {showTurnoverPricing ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
@@ -609,6 +606,9 @@ export function ProjectsExpandableTable({
                           <td className="px-3 py-1.5 text-gray-400">-</td>
                           <td className="px-3 py-1.5 text-gray-400">-</td>
                           <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
                           <td className="px-3 py-1.5 text-gray-900">{p.percentDone}%</td>
                           <td className="px-3 py-1.5 text-gray-900">
                             {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
@@ -618,7 +618,7 @@ export function ProjectsExpandableTable({
 
                         {isTurnoverOpen ? (
                           <tr onClick={(e) => e.stopPropagation()}>
-                            <td colSpan={10} className="bg-gray-50 px-6 py-2 pb-3">
+                            <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
                               <JanitorialTurnoverDetail project={p} />
                             </td>
                           </tr>
@@ -680,6 +680,8 @@ export function ProjectsExpandableTable({
                             {/* Hours, Progress - not applicable to COs */}
                             <td className="px-3 py-1.5 text-gray-400">-</td>
                             <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            <td className="px-3 py-1.5 text-gray-400">-</td>
                             <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
@@ -690,7 +692,7 @@ export function ProjectsExpandableTable({
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={10} className="bg-gray-50 px-6 py-2 pb-3">
+                              <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
                                 <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
                                   <LaborTable entries={co.laborers} />
