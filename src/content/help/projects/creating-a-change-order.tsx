@@ -1,4 +1,4 @@
-import { H2, P, Steps, Step, Img, SkipTo } from "@/app/erp/components/help/HelpComponents";
+import { H2, P, Steps, Step, Img, SkipTo, A } from "@/app/erp/components/help/HelpComponents";
 
 export function CreatingAChangeOrder() {
   return (
@@ -42,10 +42,33 @@ export function CreatingAChangeOrder() {
 
             </Step>
             </div>
+
+            <Step n={5} title="Viewing your change order">
+                Navigate to the change orders tab under your desired project.
+                <Img src="/help/change_order/co_1.png" alt="Project details page" />
+                A simple click on any of the grey area will drop down and allows you to quickly change the status of the order
+                <Img src="/help/change_order/co_2.png" alt="Project details page" />
+                Click on the pink “View Details” text to view all details of the change order and add to it.
+                <Img src="/help/change_order/co_3.png" alt="Project details page" />
+                This will bring you to the details page 
+                <Img src="/help/change_order/co_4.png" alt="Project details page" />
+            </Step>
+
+
+            <Step n={6} title="Details Page Overview">
+                Below is a overview of the details tab: All editable just click “Save Changes” if you don't nothing will save!!
+                <Img src="/help/change_order/details_1.png" alt="Project details page" />                
+                Billing tab
+                <Img src="/help/change_order/details_2.png" alt="Project details page" />
+                Laborers tab
+                <Img src="/help/change_order/details_3.png" alt="Project details page" />
+                Laborers table
+                <Img src="/help/change_order/details_4.png" alt="Project details page" />
+                Contracts tab: for more on contracts navigate to <A href="/erp/help/contracts/uploading-a-contract">Contract Signing</A> tutorial
+                <Img src="/help/change_order/details_5.png" alt="Project details page" />
+
+            </Step>
         </Steps>
-
-    
-
     </>
   );
 }
