@@ -37,7 +37,7 @@ export function CreatingAProject() {
           You can enter further information on estimated costs and percents.
           <Img src="/help/projects/projects_8.png" alt="New Projects form locations" />
           <Callout type="info">
-            Note all this information can be edited later so if you do not have it or want to change it don't worry!
+            Note all this information can be edited later so if you do not have it or want to change it do not worry!
           </Callout>
         </Step>
         <Step n={3} title="Save">
