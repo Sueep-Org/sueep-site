@@ -78,46 +78,55 @@ async function refreshDrawer(){
       const full = item.name || item.key || '';
       const display = full.split('/').pop();
 
+      // skip json analysis files
+      if (display.endsWith('.json')) return;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
+
       const btn = document.createElement('button');
-
       btn.textContent = display;
-
-      btn.style.display = 'block';
-      btn.style.width = '100%';
-      btn.style.textAlign = 'left';
-      btn.style.padding = '.5rem';
-      btn.style.marginBottom = '.5rem';
-      btn.style.border = '1px solid #ddd';
-      btn.style.borderRadius = '8px';
-      btn.style.background = 'white';
-      btn.style.cursor = 'pointer';
+      btn.style.cssText = `flex:1;text-align:left;padding:.5rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;`;
 
       btn.onclick = async ()=>{
-
         try{
-
-          const url =
-            `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
-
+          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
           const resp = await fetch(url);
-
           const blob = await resp.blob();
-
           const file = new File([blob], display);
-
           await window.__handleFile?.(file);
-
           closeSidebar();
-
         }catch(e){
-
           console.error(e);
-
           toast(e.message, 'error');
         }
       };
 
-      savedSec.appendChild(btn);
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Delete';
+      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
+
+      delBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        if (!confirm(`Delete "${display}"?`)) return;
+        try{
+          const res = await fetch(`${API_BASE}/api/files/delete`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: full })
+          });
+          if (!res.ok) throw new Error('Delete failed');
+          row.remove();
+          toast(`Deleted ${display}`, 'info');
+        }catch(e){
+          toast(e.message, 'error');
+        }
+      };
+
+      row.appendChild(btn);
+      row.appendChild(delBtn);
+      savedSec.appendChild(row);
     });
 
   }catch(e){
@@ -144,6 +153,9 @@ function openSidebar(){
 
   sidebarRoot.dataset.open = 'true';
 
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = 'none';
+
   ensureDrawer();
 }
 
@@ -152,6 +164,9 @@ function closeSidebar(){
   if (!sidebarRoot) return;
 
   sidebarRoot.dataset.open = 'false';
+
+  const toggle = document.querySelector('.sidebar-toggle');
+  if (toggle) toggle.style.display = '';
 }
 
 document.addEventListener('click', (e)=>{
@@ -195,6 +210,7 @@ async function initApp(){
   // ======================================================
 
   const measureToggle = $('measureToggle');
+  const drawRectBtn = $('drawRectBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -334,35 +350,21 @@ async function initApp(){
       }
     }
 
-    // Update page aggregate for the viewed page
-    const pageTotalInches = measurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
-    if (measurementPageAggregateInfo) {
-      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)}`;
-    }
-
-    // Update all pages total aggregate at bottom
-    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
-    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
-      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
-    }, 0);
-    if (measurementTotalAggregateInfo) {
-      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)}`;
-    }
-    if (allPagesTotalContainer) {
-      allPagesTotalContainer.style.display = 'block';
-    }
-
     // Update page label
     if (measurementPageLabel) {
       measurementPageLabel.textContent = `Page ${measurementViewPage}`;
     }
 
+    // Split measurements into line (length) and area measurements
+    const lineMeasurements = measurements.filter(m => m.area == null);
+    const areaMeasurements = measurements.filter(m => m.area != null);
+
     // Left column: line measurements
     if (measurementListLeft) {
-      if (!measurements.length) {
+      if (!lineMeasurements.length) {
         measurementListLeft.innerHTML = 'No measurements';
       } else {
-        measurementListLeft.innerHTML = measurements.map(m => {
+        measurementListLeft.innerHTML = lineMeasurements.map(m => {
           const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
           const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(2x)</span>' : '';
           return `
@@ -384,9 +386,49 @@ async function initApp(){
       }
     }
 
-    // Right column: surface area (placeholder for now)
+    // Right column: surface area measurements
     if (measurementListRight) {
-      measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">(Coming soon)</span>';
+      if (!areaMeasurements.length) {
+        measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
+      } else {
+        measurementListRight.innerHTML = areaMeasurements.map(m => {
+          const label = m.areaLabel || `${(m.area || 0).toFixed(2)} sq`;
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+              <span style="font-size:11px;">${label}</span>
+              <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
+            </div>
+          `;
+        }).join('');
+        measurementListRight.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.dataset.measurementId;
+            highlightsStore.removeMeasurement(measurementViewPage, id);
+            updateMeasurementList();
+            overlay.redraw();
+            toast('Measurement removed', 'info');
+          };
+        });
+      }
+    }
+
+    // Page totals: include both length and area
+    const pageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
+    const pageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+    if (measurementPageAggregateInfo) {
+      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
+    }
+
+    // All pages totals including area
+    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
+    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
+    }, 0);
+    const allTotalArea = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
+    }, 0);
+    if (measurementTotalAggregateInfo) {
+      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
     }
   }
 
@@ -986,6 +1028,25 @@ async function initApp(){
       }
     };
   }
+
+    if (drawRectBtn) {
+      drawRectBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawRectBtn.classList.contains('active');
+
+        // turn off measure toggle if active
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+
+        drawRectBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'rect' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
 
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
