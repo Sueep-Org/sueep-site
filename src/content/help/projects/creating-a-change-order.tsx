@@ -52,25 +52,25 @@ export function CreatingAChangeOrder() {
                 Navigate to the change orders tab under your desired project.
                 <Img src="/help/change_order/co_1.png" alt="Project details page" />
                 A simple click on any of the grey area will drop down and allows you to quickly change the status of the order
-                <Img src="/help/change_order/co_2.png" alt="Project details page" />
-                Click on the pink “View Details” text to view all details of the change order and add to it.
-                <Img src="/help/change_order/co_3.png" alt="Project details page" />
+                <Img src="/help/change_order/co_2.png" alt="Change order status" />
+                Click on the pink &ldquo;View Details&rdquo; text to view all details of the change order and add to it.
+                <Img src="/help/change_order/co_3.png" alt="Change order details" />
                 This will bring you to the details page 
-                <Img src="/help/change_order/co_4.png" alt="Project details page" />
+                <Img src="/help/change_order/co_4.png" alt="Change order details" />
             </Step>
 
 
             <Step n={6} title="Details Page Overview">
                 Below is an overview of the details tab. Click “Save Changes” after edits, otherwise nothing will save.
-                <Img src="/help/change_order/details_1.png" alt="Project details page" />                
+                <Img src="/help/change_order/details_1.png" alt="Details Tab" />                
                 Billing tab
-                <Img src="/help/change_order/details_2.png" alt="Project details page" />
+                <Img src="/help/change_order/details_2.png" alt="Billing tab" />
                 Laborers tab
-                <Img src="/help/change_order/details_3.png" alt="Project details page" />
+                <Img src="/help/change_order/details_3.png" alt="laborers tab" />
                 Laborers table
-                <Img src="/help/change_order/details_4.png" alt="Project details page" />
+                <Img src="/help/change_order/details_4.png" alt="labor table" />
                 Contracts tab: for more on contracts navigate to <A href="/erp/help/contracts/uploading-a-contract">Contract Signing</A> tutorial
-                <Img src="/help/change_order/details_5.png" alt="Project details page" />
+                <Img src="/help/change_order/details_5.png" alt="contracts tab" />
 
             </Step>
         </Steps>
