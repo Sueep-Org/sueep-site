@@ -396,7 +396,15 @@ function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string 
   );
 }
 
-export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: ProjectTableRow[]; janitorialPipelineId: string | null }) {
+export function ProjectsExpandableTable({
+  rows,
+  janitorialPipelineId,
+  janitorialDetailMode = "pricing",
+}: {
+  rows: ProjectTableRow[];
+  janitorialPipelineId: string | null;
+  janitorialDetailMode?: "pricing" | "team";
+}) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
@@ -431,7 +439,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
         <tbody>
           {rows.map((p, i) => {
             const isOpen = openSet.has(p.id);
-            const isJanitorial = isJanitorialProject(p, janitorialPipelineId);
+            const showTurnoverPricing = janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
@@ -483,7 +491,7 @@ export function ProjectsExpandableTable({ rows, janitorialPipelineId }: { rows: 
                     {/* Project detail */}
                     <tr className={styles.detail}>
                       <td colSpan={10} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
-                        {isJanitorial ? (
+                        {showTurnoverPricing ? (
                           <TurnoverPricingSummary project={p} />
                         ) : (
                           <div className="overflow-x-auto bg-white px-3 py-2">
