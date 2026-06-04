@@ -193,7 +193,29 @@ function getTurnoverDropdownTitle(project: ProjectTableRow) {
   return "Turnover";
 }
 
+function getJanitorialBuildingTitle(project: ProjectTableRow) {
+  return (
+    getDetailLine(project.description, "Property") ||
+    getDetailLine(project.description, "Building") ||
+    project.jobTitle.split(" - ")[0]?.trim() ||
+    project.jobTitle
+  );
+}
+
+function getJanitorialRowTitle(project: ProjectTableRow) {
+  const building = getJanitorialBuildingTitle(project);
+  const prefix = `${building} - `;
+
+  if (project.jobTitle.toLowerCase().startsWith(prefix.toLowerCase())) {
+    const title = project.jobTitle.slice(prefix.length).trim();
+    if (title) return title;
+  }
+
+  return getTurnoverDropdownTitle(project);
+}
+
 function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
+  const building = getJanitorialBuildingTitle(project);
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
   const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
 
@@ -210,9 +232,10 @@ function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
 
       <div className="grid gap-2 sm:grid-cols-3">
         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover scope</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Building / units</p>
           <p className="mt-1 text-xs text-gray-700 line-clamp-3">
-            {comments || units || <span className="text-gray-400">No turnover notes</span>}
+            {building}
+            {units ? <span className="text-gray-500"> - {units}</span> : null}
           </p>
         </div>
 
@@ -229,8 +252,10 @@ function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
         </div>
 
         <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-          <p className="mt-1 text-sm font-semibold text-gray-800">{project.supervisor || "-"}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover notes</p>
+          <p className="mt-1 text-xs text-gray-700 line-clamp-3">
+            {comments || <span className="text-gray-400">No turnover notes</span>}
+          </p>
           <Link
             href={`/erp/projects/${project.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -571,9 +596,9 @@ export function ProjectsExpandableTable({
                       onClick={(e) => e.stopPropagation()}
                       className={`font-medium ${styles.titleLink}`}
                     >
-                      {p.jobTitle}
+                      {janitorialDetailMode === "team" ? getJanitorialRowTitle(p) : p.jobTitle}
                     </Link>
-                    {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
+                    {p.description && janitorialDetailMode !== "team" ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
                   </td>
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}
