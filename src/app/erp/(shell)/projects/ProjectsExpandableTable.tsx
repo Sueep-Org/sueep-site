@@ -182,6 +182,68 @@ export function TurnoverPricingSummary({
   );
 }
 
+function getTurnoverDropdownTitle(project: ProjectTableRow) {
+  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
+
+  if (units) {
+    const scope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
+    if (scope) return scope;
+  }
+
+  return "Turnover";
+}
+
+function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
+  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
+  const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
+
+  return (
+    <>
+      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
+        <LaborTable entries={project.laborEntries} />
+      </div>
+
+      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white">
+        <TurnoverPricingSummary project={project} />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover scope</p>
+          <p className="mt-1 text-xs text-gray-700 line-clamp-3">
+            {comments || units || <span className="text-gray-400">No turnover notes</span>}
+          </p>
+        </div>
+
+        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
+          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+            <span className="text-gray-400">Contract</span>
+            <span className="font-medium text-gray-800">{centsToDollars(project.contractValueCents)}</span>
+            <span className="text-gray-400">Start</span>
+            <span className="font-medium text-gray-800">{project.projectDate ? fmtDate(project.projectDate) : "-"}</span>
+            <span className="text-gray-400">Est. hours</span>
+            <span className="font-medium text-gray-800">{project.estHours ?? "-"}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
+          <p className="mt-1 text-sm font-semibold text-gray-800">{project.supervisor || "-"}</p>
+          <Link
+            href={`/erp/projects/${project.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
+          >
+            Full details {"->"}
+          </Link>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const QUALITY_OPTIONS = [
   { value: "", label: "—", score: null },
   { value: "POOR", label: "Poor", score: 1 },
@@ -407,8 +469,10 @@ export function ProjectsExpandableTable({
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
+  const [openTurnoverIds, setOpenTurnoverIds] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
+  const openTurnoverSet = useMemo(() => new Set(openTurnoverIds), [openTurnoverIds]);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -417,6 +481,11 @@ export function ProjectsExpandableTable({
   function toggleCo(coId: string, e: React.MouseEvent) {
     e.stopPropagation();
     setOpenCoIds((prev) => (prev.includes(coId) ? prev.filter((x) => x !== coId) : [...prev, coId]));
+  }
+
+  function toggleTurnover(projectId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setOpenTurnoverIds((prev) => (prev.includes(projectId) ? prev.filter((x) => x !== projectId) : [...prev, projectId]));
   }
 
   return (
@@ -440,9 +509,12 @@ export function ProjectsExpandableTable({
           {rows.map((p, i) => {
             const isOpen = openSet.has(p.id);
             const showTurnoverPricing = janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId);
+            const showTurnoverDropdown = janitorialDetailMode === "team";
+            const isTurnoverOpen = openTurnoverSet.has(p.id);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
+            const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
             return (
               <Fragment key={p.id}>
                 {/* Project row */}
@@ -501,6 +573,58 @@ export function ProjectsExpandableTable({
                         )}
                       </td>
                     </tr>
+
+                    {showTurnoverDropdown ? (
+                      <>
+                        <tr
+                          className="cursor-pointer bg-gray-50 hover:bg-gray-100"
+                          onClick={(e) => toggleTurnover(p.id, e)}
+                          aria-expanded={isTurnoverOpen}
+                        >
+                          <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
+                            <div className="flex items-center gap-2 pl-4">
+                              <span className="shrink-0 text-gray-300">&gt;</span>
+                              <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">TO</span>
+                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
+                                APPROVED
+                              </span>
+                              <Link
+                                href={`/erp/projects/${p.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="truncate text-sm font-medium text-gray-700 hover:underline"
+                              >
+                                {turnoverDropdownTitle}
+                              </Link>
+                            </div>
+                          </td>
+                          <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
+                            {p.supervisor || <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
+                            Turnover
+                          </td>
+                          <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                            {centsToDollars(p.contractValueCents)}
+                          </td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-400">-</td>
+                          <td className="px-3 py-1.5 text-gray-900">{p.percentDone}%</td>
+                          <td className="px-3 py-1.5 text-gray-900">
+                            {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-3 py-1.5">{billingBadge(p.billingStatus)}</td>
+                        </tr>
+
+                        {isTurnoverOpen ? (
+                          <tr onClick={(e) => e.stopPropagation()}>
+                            <td colSpan={10} className="bg-gray-50 px-6 py-2 pb-3">
+                              <JanitorialTurnoverDetail project={p} />
+                            </td>
+                          </tr>
+                        ) : null}
+                      </>
+                    ) : null}
 
                     {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
