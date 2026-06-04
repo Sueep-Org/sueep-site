@@ -193,6 +193,28 @@ function getTurnoverDropdownTitle(project: ProjectTableRow) {
   return "Turnover";
 }
 
+function getBuildingTitle(project: ProjectTableRow) {
+  return (
+    getDetailLine(project.description, "Property") ||
+    getDetailLine(project.description, "Building") ||
+    project.jobTitle.split(" - ")[0]?.trim() ||
+    "Unassigned building"
+  );
+}
+
+function getProjectDisplayTitle(project: ProjectTableRow, omitBuilding: boolean) {
+  if (!omitBuilding) return project.jobTitle;
+
+  const building = getBuildingTitle(project);
+  const prefix = `${building} - `;
+  if (project.jobTitle.toLowerCase().startsWith(prefix.toLowerCase())) {
+    const title = project.jobTitle.slice(prefix.length).trim();
+    if (title) return title;
+  }
+
+  return getTurnoverDropdownTitle(project);
+}
+
 function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
   const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
@@ -498,10 +520,12 @@ export function ProjectsExpandableTable({
   rows,
   janitorialPipelineId,
   janitorialDetailMode = "pricing",
+  organizeByBuilding = false,
 }: {
   rows: ProjectTableRow[];
   janitorialPipelineId: string | null;
   janitorialDetailMode?: "pricing" | "team";
+  organizeByBuilding?: boolean;
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
@@ -509,6 +533,21 @@ export function ProjectsExpandableTable({
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const openTurnoverSet = useMemo(() => new Set(openTurnoverIds), [openTurnoverIds]);
+  const displayRows = useMemo(() => {
+    if (!organizeByBuilding) return rows;
+    return [...rows].sort((a, b) => {
+      const buildingDelta = getBuildingTitle(a).localeCompare(getBuildingTitle(b));
+      return buildingDelta || getProjectDisplayTitle(a, true).localeCompare(getProjectDisplayTitle(b, true));
+    });
+  }, [organizeByBuilding, rows]);
+  const buildingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    displayRows.forEach((row) => {
+      const building = getBuildingTitle(row);
+      counts.set(building, (counts.get(building) || 0) + 1);
+    });
+    return counts;
+  }, [displayRows]);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -545,7 +584,7 @@ export function ProjectsExpandableTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((p, i) => {
+          {displayRows.map((p, i) => {
             const isOpen = openSet.has(p.id);
             const isJanitorialRow = janitorialDetailMode === "team" || isJanitorialProject(p, janitorialPipelineId);
             const showTurnoverDropdown = isJanitorialRow;
@@ -554,8 +593,23 @@ export function ProjectsExpandableTable({
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
+            const buildingTitle = getBuildingTitle(p);
+            const previousBuildingTitle = i > 0 ? getBuildingTitle(displayRows[i - 1]) : null;
+            const showBuildingHeader = organizeByBuilding && buildingTitle !== previousBuildingTitle;
             return (
               <Fragment key={p.id}>
+                {showBuildingHeader ? (
+                  <tr className="border-t border-gray-300 bg-gray-100">
+                    <td colSpan={13} className="px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">{buildingTitle}</p>
+                        <span className="rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                          {buildingCounts.get(buildingTitle) || 0} project{buildingCounts.get(buildingTitle) === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
                 {/* Project row */}
                 <tr
                   className={`${rowBg} cursor-pointer transition-colors`}
@@ -569,7 +623,7 @@ export function ProjectsExpandableTable({
                       onClick={(e) => e.stopPropagation()}
                       className={`font-medium ${styles.titleLink}`}
                     >
-                      {p.jobTitle}
+                      {getProjectDisplayTitle(p, organizeByBuilding)}
                     </Link>
                     {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
                   </td>
