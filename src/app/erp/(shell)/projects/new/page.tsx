@@ -19,7 +19,7 @@ export default async function NewProjectPage() {
   const [buildings, allProjects, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
+      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, pricingPackage: true },
     }),
     prisma.project.findMany({
       where: postConstructionFilter,

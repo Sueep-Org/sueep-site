@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "name and address are required" }, { status: 400 });
   }
   if (body.pricingPackage !== undefined && !isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-    return NextResponse.json({ error: "Only Nick, Dave, or Edwin can edit pricing packages" }, { status: 403 });
+    return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
   }
 
   try {

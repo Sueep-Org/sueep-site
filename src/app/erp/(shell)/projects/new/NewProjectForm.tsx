@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/authContext";
+import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
@@ -176,6 +178,7 @@ interface BuildingOption {
   pmName?: string | null;
   pmEmail?: string | null;
   pmPhone?: string | null;
+  pricingPackage?: unknown;
 }
 
 interface ScheduleBuildingOption {
@@ -478,6 +481,7 @@ export function NewProjectForm({
   submitLabel = "Create project",
 }: NewProjectFormProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -530,11 +534,13 @@ export function NewProjectForm({
   const [sueepPmName, setSueepPmName] = useState("");
   const [sueepPmEmail, setSueepPmEmail] = useState("");
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
+  const [selectedBuildingPricingPackage, setSelectedBuildingPricingPackage] = useState<unknown>(null);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
   const isChangeOrder = segment === "CHANGE_ORDER";
+  const canEditPricePackage = isTurnoverPricingAdmin(user?.email);
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -614,7 +620,10 @@ export function NewProjectForm({
   const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
-  const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
+  const pricingPackage = useMemo(
+    () => getTurnoverPricingPackage(buildingName, selectedBuildingPricingPackage),
+    [buildingName, selectedBuildingPricingPackage]
+  );
   const defaultPricePackageValues = useMemo<PricePackageValues>(
     () => ({
       fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
@@ -680,6 +689,8 @@ export function NewProjectForm({
       setPmName("");
       setPmEmail("");
       setPmPhone("");
+      setSelectedBuildingPricingPackage(null);
+      setPricePackageTouched(false);
       return;
     }
 
@@ -696,6 +707,8 @@ export function NewProjectForm({
     setPmName("");
     setPmEmail(matchedBuilding?.pmEmail || "");
     setPmPhone(matchedBuilding?.pmPhone || "");
+    setSelectedBuildingPricingPackage(matchedBuilding?.pricingPackage ?? null);
+    setPricePackageTouched(false);
   }
 
   const packagePricing = useMemo(() => {
@@ -1401,9 +1414,10 @@ export function NewProjectForm({
             </div>
           </div>
 
+          {canEditPricePackage ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className={sectionHeader}>Step 3 - Price package</p>
+              <p className={sectionHeader}>Step 3 - Price package admin</p>
               <button
                 type="button"
                 onClick={() => {
@@ -1446,9 +1460,10 @@ export function NewProjectForm({
               </div>
             </div>
           </div>
+          ) : null}
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 - Geotracking</p>
+            <p className={sectionHeader}>{canEditPricePackage ? "Step 4 - Geotracking" : "Step 3 - Geotracking"}</p>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <label className="flex items-start rounded-md border border-gray-200 bg-white px-3 py-2">
                 <input
@@ -1521,7 +1536,7 @@ export function NewProjectForm({
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 5 - Estimated total</p>
+            <p className={sectionHeader}>{canEditPricePackage ? "Step 5 - Estimated total" : "Step 4 - Estimated total"}</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="sueepPmName">
