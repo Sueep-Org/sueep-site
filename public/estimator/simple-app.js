@@ -195,6 +195,7 @@ async function initApp(){
   // ======================================================
 
   const measureToggle = $('measureToggle');
+  const drawRectBtn = $('drawRectBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -357,12 +358,16 @@ async function initApp(){
       measurementPageLabel.textContent = `Page ${measurementViewPage}`;
     }
 
+    // Split measurements into line (length) and area measurements
+    const lineMeasurements = measurements.filter(m => m.area == null);
+    const areaMeasurements = measurements.filter(m => m.area != null);
+
     // Left column: line measurements
     if (measurementListLeft) {
-      if (!measurements.length) {
+      if (!lineMeasurements.length) {
         measurementListLeft.innerHTML = 'No measurements';
       } else {
-        measurementListLeft.innerHTML = measurements.map(m => {
+        measurementListLeft.innerHTML = lineMeasurements.map(m => {
           const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
           const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(2x)</span>' : '';
           return `
@@ -384,9 +389,49 @@ async function initApp(){
       }
     }
 
-    // Right column: surface area (placeholder for now)
+    // Right column: surface area measurements
     if (measurementListRight) {
-      measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">(Coming soon)</span>';
+      if (!areaMeasurements.length) {
+        measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
+      } else {
+        measurementListRight.innerHTML = areaMeasurements.map(m => {
+          const label = m.areaLabel || `${(m.area || 0).toFixed(2)} sq`;
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+              <span style="font-size:11px;">${label}</span>
+              <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
+            </div>
+          `;
+        }).join('');
+        measurementListRight.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.dataset.measurementId;
+            highlightsStore.removeMeasurement(measurementViewPage, id);
+            updateMeasurementList();
+            overlay.redraw();
+            toast('Measurement removed', 'info');
+          };
+        });
+      }
+    }
+
+    // Page totals: include both length and area
+    const pageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
+    const pageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+    if (measurementPageAggregateInfo) {
+      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
+    }
+
+    // All pages totals including area
+    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
+    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
+    }, 0);
+    const allTotalArea = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
+    }, 0);
+    if (measurementTotalAggregateInfo) {
+      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
     }
   }
 
@@ -986,6 +1031,25 @@ async function initApp(){
       }
     };
   }
+
+    if (drawRectBtn) {
+      drawRectBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawRectBtn.classList.contains('active');
+
+        // turn off measure toggle if active
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+
+        drawRectBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'rect' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
 
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
