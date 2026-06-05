@@ -4,7 +4,9 @@ export function AddingEmployees() {
     return(
         <>
         <H2>Overview</H2>
-        <P>Fill out at end</P>
+        <P>
+            The employees section lets you manage everyone working in the system. Employees can be added manually or brought in through the candidate onboarding process. Each employee has a details page where you can manage their general info, banking details, required documents, and contract signing. Employee compliance is tracked through the documents tab: an employee is considered compliant once every required document has a matching file uploaded on file. You can search and filter the employees table by name, default project, or compliance status.
+        </P>
 
         <H2>Steps</H2>
         <Steps>

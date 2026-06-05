@@ -8,6 +8,7 @@ import {CreatingAChangeOrder} from "./projects/creating-a-change-order";
 import { ProjectsOverview } from "./projects/projects-overview";
 import { InputtingLaborLogs } from "./workers/labor-logs";
 import { AddingEmployees } from "./workers/adding-employees";
+import { MaterialsLog } from "./projects/material-logs";
 
 export type ArticleEntry = {
   slug: string;
@@ -40,7 +41,7 @@ export const registry: ArticleEntry[] = [
     title: "HubSpot Sync",
     category: "Projects",
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
-    order: 5,
+    order: 6,
     component: HubSpotSync,
   },
   {
@@ -91,5 +92,13 @@ export const registry: ArticleEntry[] = [
     description: "How to enter employees into the system and manage their documentation",
     order: 1,
     component: AddingEmployees,
+  },
+  {
+    slug: "projects/material-logs",
+    title: "Logging Materials",
+    category: "Projects",
+    description: "How to log materials bought on projects",
+    order: 5,
+    component: MaterialsLog,
   }
 ];
