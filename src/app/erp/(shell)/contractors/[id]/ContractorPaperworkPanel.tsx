@@ -46,6 +46,8 @@ export function ContractorPaperworkPanel({
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const savedLabels = new Set(initial.map((p) => p.label));
+
   const uploadLink = paperworkUploadToken
     ? `${siteUrl.replace(/\/$/, "")}/contractor-portal/${paperworkUploadToken}`
     : null;
@@ -145,14 +147,18 @@ export function ContractorPaperworkPanel({
                         View file
                       </a>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => fileInputRefs.current[item.label]?.click()}
-                      disabled={uploadingLabel === item.label}
-                      className="text-xs text-gray-500 hover:text-[#E73C6E] disabled:opacity-50"
-                    >
-                      {uploadingLabel === item.label ? "Uploading…" : item.url ? "Replace" : "Upload"}
-                    </button>
+                    {savedLabels.has(item.label) ? (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRefs.current[item.label]?.click()}
+                        disabled={uploadingLabel === item.label}
+                        className="text-xs text-gray-500 hover:text-[#E73C6E] disabled:opacity-50"
+                      >
+                        {uploadingLabel === item.label ? "Uploading…" : item.url ? "Replace" : "Upload"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-amber-500">Save requirements first</span>
+                    )}
                     <input
                       ref={(el) => { fileInputRefs.current[item.label] = el; }}
                       type="file"

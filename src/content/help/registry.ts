@@ -6,6 +6,7 @@ import { CreatingATurnoverRequest } from "./turnover/creating-a-request";
 import { OnboardingNewEmployee } from "./sops/onboarding-new-employee";
 import {CreatingAChangeOrder} from "./projects/creating-a-change-order";
 import { ProjectsOverview } from "./projects/projects-overview";
+import { InputtingLaborLogs } from "./projects/labor-logs";
 
 export type ArticleEntry = {
   slug: string;
@@ -38,7 +39,7 @@ export const registry: ArticleEntry[] = [
     title: "HubSpot Sync",
     category: "Projects",
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
-    order: 4,
+    order: 5,
     component: HubSpotSync,
   },
   {
@@ -74,4 +75,12 @@ export const registry: ArticleEntry[] = [
     component: ProjectsOverview,
 
   },
+  {
+    slug: "projects/labor-logs",
+    title: "Inputting Labor Logs",
+    category: "Projects",
+    description: "How to enter, edit, and sort through labor logs on projects and change orders",
+    order: 4,
+    component: InputtingLaborLogs,
+  }
 ];

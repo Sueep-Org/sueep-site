@@ -65,7 +65,7 @@ export function ProjectsOverview() {
                 <br></br><br></br>
                 For more information on change orders view the <A href="/erp/help/projects/creating-a-change-order">change orders</A> tutorial page.
                 <br></br><br></br>
-                Thats all! For any more information check out the other help center articles or message the tech dev team!
+                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
             </Step>
         </Steps>
         </>
