@@ -80,7 +80,6 @@ export default function EstimatorPage() {
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           {/* UPLOAD */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Upload Your Drawing</h2>
             <div
               id="dropZone"
               className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400"
@@ -99,6 +98,10 @@ export default function EstimatorPage() {
                 Select file
               </button>
             </div>
+            <div id="uploadCollapsed" style={{ display: "none" }} className="flex items-center gap-3">
+              <span id="uploadedFileName" className="text-sm text-gray-700 font-medium flex-1 truncate"></span>
+              <button id="changeFileBtn" className="mini-btn">Change file</button>
+            </div>
           </div>
 
           {/* PDF VIEWER */}
@@ -114,6 +117,9 @@ export default function EstimatorPage() {
                 </button>
                 <button id="drawRectBtn" className="mini-btn">
                   Draw Rect
+                </button>
+                <button id="toggleSidebarBtn" className="mini-btn">
+                  Measurements
                 </button>
 
                 <button id="doubleSideToggle" className="mini-btn">
@@ -195,10 +201,14 @@ export default function EstimatorPage() {
                 <aside id="measurementSidebar" className="w-full lg:w-80">
                   <div className="bg-white rounded-lg shadow-md p-4 mb-4">
                     <div className="mb-3">
-                      <h3 className="text-lg font-semibold mb-2">
-                        Measurements
-                      </h3>
-                      <div
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold mb-2">Measurements</h3>
+                        <button id="toggleMeasurementsBtn" className="mini-btn">▼</button>
+                      </div>
+                    </div>
+                    <div id="measurementsContent">
+                    <div className="mb-3">
+                        <div
                         id="measurementScaleInfo"
                         style={{ fontSize: "12px", color: "#6b7280" }}
                       >
@@ -327,6 +337,7 @@ export default function EstimatorPage() {
                         </div>
                       </div>
                     </div>
+                    </div>{/* measurementsContent */}
                   </div>
                 </aside>
               </div>
