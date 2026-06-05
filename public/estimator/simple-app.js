@@ -602,6 +602,14 @@ async function initApp(){
         overlay.resizeToMatchCanvas();
       }
 
+      // collapse upload zone, show file name
+      const dropZone = document.getElementById('dropZone');
+      const uploadCollapsed = document.getElementById('uploadCollapsed');
+      const uploadedFileName = document.getElementById('uploadedFileName');
+      if (dropZone) dropZone.style.display = 'none';
+      if (uploadedFileName) uploadedFileName.textContent = file.name;
+      if (uploadCollapsed) uploadCollapsed.style.display = 'flex';
+
     }catch(e){
 
       showAppError(e);
@@ -828,6 +836,16 @@ async function initApp(){
     });
   }
 
+  const changeFileBtn = $('changeFileBtn');
+  if (changeFileBtn) {
+    changeFileBtn.addEventListener('click', () => {
+      const uploadCollapsed = document.getElementById('uploadCollapsed');
+      if (dropZone) dropZone.style.display = '';
+      if (uploadCollapsed) uploadCollapsed.style.display = 'none';
+      fileInput.click();
+    });
+  }
+
   // ======================================================
   // DRAG + DROP
   // ======================================================
@@ -1048,6 +1066,25 @@ async function initApp(){
       };
     }
 
+    const toggleSidebarBtn = $('toggleSidebarBtn');
+    if (toggleSidebarBtn) {
+      toggleSidebarBtn.onclick = () => {
+        const sidebar = document.getElementById('measurementSidebar');
+        const isHidden = sidebar.style.display === 'none';
+        sidebar.style.display = isHidden ? '' : 'none';
+        toggleSidebarBtn.classList.toggle('active', isHidden);
+      };
+    }
+
+    const toggleMeasurementsBtn = $('toggleMeasurementsBtn');
+    if (toggleMeasurementsBtn) {
+      toggleMeasurementsBtn.onclick = () => {
+        const content = document.getElementById('measurementsContent');
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? '' : 'none';
+        toggleMeasurementsBtn.textContent = isHidden ? '▼' : '▶';
+    };
+}
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
       e.preventDefault();
