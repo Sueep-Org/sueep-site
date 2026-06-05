@@ -6,7 +6,8 @@ import { CreatingATurnoverRequest } from "./turnover/creating-a-request";
 import { OnboardingNewEmployee } from "./sops/onboarding-new-employee";
 import {CreatingAChangeOrder} from "./projects/creating-a-change-order";
 import { ProjectsOverview } from "./projects/projects-overview";
-import { InputtingLaborLogs } from "./projects/labor-logs";
+import { InputtingLaborLogs } from "./workers/labor-logs";
+import { AddingEmployees } from "./workers/adding-employees";
 
 export type ArticleEntry = {
   slug: string;
@@ -76,11 +77,19 @@ export const registry: ArticleEntry[] = [
 
   },
   {
-    slug: "projects/labor-logs",
+    slug: "workers/labor-logs",
     title: "Inputting Labor Logs",
-    category: "Projects",
-    description: "How to enter, edit, and sort through labor logs on projects and change orders",
-    order: 4,
+    category: "Workers",
+    description: "How to enter, edit, and sort through labor logs on projects and change orders.",
+    order: 2,
     component: InputtingLaborLogs,
+  },
+  {
+    slug: "workers/adding-employees",
+    title: "Adding and Managing Employees",
+    category: "Workers",
+    description: "How to enter employees into the system and manage their documentation",
+    order: 1,
+    component: AddingEmployees,
   }
 ];

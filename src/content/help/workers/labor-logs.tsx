@@ -4,7 +4,9 @@ export function InputtingLaborLogs() {
     return(
         <>
         <H2>Overview</H2>
-        <P>Fill in later</P>
+        <P>
+            Labor logs let you track time worked on any project or change order. For each entry you record the date, employee, hours worked, role, hourly rate, and task. Once saved, logs appear in a table where you can filter by date or search by employee name, edit or delete entries, and rate the quality of work. You can also get a quick summary of recent logs directly from the main projects table without opening the project.
+        </P>
         <Steps>
             <Step n={1} title= "Navigating to the labor log">
                 There are two places we can add labor logs to.
