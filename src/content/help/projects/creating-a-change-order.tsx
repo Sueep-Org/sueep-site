@@ -71,6 +71,7 @@ export function CreatingAChangeOrder() {
                 <Img src="/help/change_order/details_4.png" alt="labor table" />
                 Contracts tab: for more on contracts navigate to <A href="/erp/help/contracts/uploading-a-contract">Contract Signing</A> tutorial
                 <Img src="/help/change_order/details_5.png" alt="contracts tab" />
+                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
 
             </Step>
         </Steps>
