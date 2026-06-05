@@ -50,6 +50,25 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.status = v;
   }
 
+  const INFO_FIELDS = [
+    "contractorFullName",
+    "address",
+    "dateOfBirth",
+    "ssn",
+    "bankAccountType",
+    "bankAccountNumber",
+    "bankRoutingNumber",
+    "phone",
+  ] as const;
+  for (const field of INFO_FIELDS) {
+    if (body[field] !== undefined) {
+      data[field] = typeof body[field] === "string" ? (body[field] as string).trim() || null : null;
+    }
+  }
+  if (body.hasInsurance !== undefined) {
+    data.hasInsurance = typeof body.hasInsurance === "boolean" ? body.hasInsurance : null;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
