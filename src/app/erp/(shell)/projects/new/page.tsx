@@ -12,8 +12,14 @@ export default async function NewProjectPage() {
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
-  const postConstructionFilter = cfg?.postConstruction.pipelineId
-    ? { hubspotPipelineId: cfg.postConstruction.pipelineId }
+  const changeOrderProjectFilter = cfg
+    ? {
+        OR: [
+          { hubspotPipelineId: cfg.postConstruction.pipelineId },
+          { hubspotPipelineId: cfg.janitorial.pipelineId },
+          { segment: { in: janitorialSegments } },
+        ],
+      }
     : {};
 
   const [buildings, allProjects, employees] = await Promise.all([
@@ -22,7 +28,7 @@ export default async function NewProjectPage() {
       select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, pricingPackage: true },
     }),
     prisma.project.findMany({
-      where: postConstructionFilter,
+      where: changeOrderProjectFilter,
       orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
       select: { id: true, jobTitle: true },
     }),

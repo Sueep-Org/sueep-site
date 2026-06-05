@@ -229,6 +229,7 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 }
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+const JANITORIAL_CO_REQUEST_TYPES = ["UDR", "Pool", "Grill Cleaning"] as const;
 
 function ProjectSearchDropdown({
   projects,
@@ -487,6 +488,7 @@ export function NewProjectForm({
 
   // Change order state
   const [coProjectId, setCoProjectId] = useState("");
+  const [coRequestType, setCoRequestType] = useState("");
   const [coTitle, setCoTitle] = useState("");
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
@@ -930,6 +932,8 @@ export function NewProjectForm({
       }
       if (successMessage) {
         setSubmitted(true);
+      } else if (isTurnover) {
+        router.push("/erp/turnover-requests");
       } else {
         router.push("/erp/projects");
       }
@@ -962,9 +966,29 @@ export function NewProjectForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="sm:col-span-2">
+          <div>
+            <label className={label} htmlFor="co-request-type">Request type</label>
+            <select
+              id="co-request-type"
+              className={input}
+              value={coRequestType}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCoRequestType(next);
+                if (next && (!coTitle.trim() || JANITORIAL_CO_REQUEST_TYPES.includes(coTitle as typeof JANITORIAL_CO_REQUEST_TYPES[number]))) {
+                  setCoTitle(next);
+                }
+              }}
+            >
+              <option value="">Custom</option>
+              {JANITORIAL_CO_REQUEST_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className={label} htmlFor="co-title">Title *</label>
-            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. Add two extra prep coats in lobby" />
+            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. UDR" />
           </div>
           <div>
             <label className={label} htmlFor="co-status">Status</label>

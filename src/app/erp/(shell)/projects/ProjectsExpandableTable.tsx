@@ -193,6 +193,38 @@ function getTurnoverDropdownTitle(project: ProjectTableRow) {
   return "Turnover";
 }
 
+function getJanitorialBuildingName(project: ProjectTableRow) {
+  return getDetailLine(project.description, "Property") || project.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || project.jobTitle;
+}
+
+function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow }) {
+  const building = getJanitorialBuildingName(project);
+  const address = getDetailLine(project.description, "Address");
+  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
+
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto bg-white px-3 py-2">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Building</p>
+        <Link href={`/erp/projects/${project.id}`} className="text-sm font-semibold text-emerald-600 hover:underline">
+          {building}
+        </Link>
+        {address ? <p className="mt-1 text-xs text-gray-500">{address}</p> : null}
+        {units ? (
+          <Link href={`/erp/projects/${project.id}`} className="mt-2 block text-xs text-emerald-600 hover:underline">
+            <span className="font-semibold text-gray-500">Units: </span>
+            {units}
+          </Link>
+        ) : null}
+      </div>
+      <div className="overflow-x-auto bg-white px-3 py-2">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
+        <LaborTable entries={project.laborEntries} />
+      </div>
+    </div>
+  );
+}
+
 function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
   const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
@@ -520,17 +552,27 @@ export function ProjectsExpandableTable({
   rows,
   janitorialPipelineId,
   janitorialDetailMode = "pricing",
+  groupTitleForRow,
+  collapsibleGroups = false,
+  rowTitleForRow,
+  rowDescriptionForRow,
 }: {
   rows: ProjectTableRow[];
   janitorialPipelineId: string | null;
   janitorialDetailMode?: "pricing" | "team";
+  groupTitleForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
+  collapsibleGroups?: boolean;
+  rowTitleForRow?: (row: ProjectTableRow) => string;
+  rowDescriptionForRow?: (row: ProjectTableRow) => string | null;
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
   const [openTurnoverIds, setOpenTurnoverIds] = useState<string[]>([]);
+  const [openGroupTitles, setOpenGroupTitles] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const openTurnoverSet = useMemo(() => new Set(openTurnoverIds), [openTurnoverIds]);
+  const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -544,6 +586,10 @@ export function ProjectsExpandableTable({
   function toggleTurnover(projectId: string, e: React.MouseEvent) {
     e.stopPropagation();
     setOpenTurnoverIds((prev) => (prev.includes(projectId) ? prev.filter((x) => x !== projectId) : [...prev, projectId]));
+  }
+
+  function toggleGroup(title: string) {
+    setOpenGroupTitles((prev) => (prev.includes(title) ? prev.filter((x) => x !== title) : [...prev, title]));
   }
 
   return (
@@ -568,6 +614,14 @@ export function ProjectsExpandableTable({
         </thead>
         <tbody>
           {rows.map((p, i) => {
+            const currentGroupTitle = groupTitleForRow?.(p, i, rows) || null;
+            const previousGroupTitle = i > 0 ? groupTitleForRow?.(rows[i - 1], i - 1, rows) || null : null;
+            const groupTitle = currentGroupTitle !== previousGroupTitle ? currentGroupTitle : null;
+            const groupIsOpen = currentGroupTitle ? openGroupSet.has(currentGroupTitle) : true;
+            const rowIsVisible = !collapsibleGroups || !currentGroupTitle || groupIsOpen;
+            const groupCount = groupTitle
+              ? rows.filter((row, index) => groupTitleForRow?.(row, index, rows) === groupTitle).length
+              : 0;
             const isOpen = openSet.has(p.id);
             const isJanitorialRow = janitorialDetailMode === "team" || isJanitorialProject(p, janitorialPipelineId);
             const showTurnoverDropdown = isJanitorialRow;
@@ -576,8 +630,47 @@ export function ProjectsExpandableTable({
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
+            const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
+            const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
             return (
               <Fragment key={p.id}>
+                {groupTitle ? (
+                  <tr
+                    className={`border-y border-gray-200 bg-gray-100 ${collapsibleGroups ? "cursor-pointer hover:bg-gray-200" : ""}`}
+                    onClick={() => {
+                      if (collapsibleGroups) toggleGroup(groupTitle);
+                    }}
+                    aria-expanded={collapsibleGroups ? groupIsOpen : undefined}
+                  >
+                    <td className="w-[420px] min-w-[420px] px-3 py-2">
+                      <span className="font-semibold text-emerald-600">
+                        {groupTitle}
+                      </span>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {groupCount} unit{groupCount !== 1 ? "s" : ""}
+                      </p>
+                    </td>
+                    <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-400">
+                      -
+                    </td>
+                    <td className="px-3 py-2 text-gray-900">
+                      Building
+                    </td>
+                    {Array.from({ length: 9 }).map((_, emptyIndex) => (
+                      <td
+                        key={emptyIndex}
+                        className="px-3 py-2 text-gray-400"
+                      >
+                        -
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 font-semibold text-emerald-600">
+                      {collapsibleGroups ? (groupIsOpen ? "v" : ">") : "-"}
+                    </td>
+                  </tr>
+                ) : null}
+                {rowIsVisible ? (
+                  <>
                 {/* Project row */}
                 <tr
                   className={`${rowBg} cursor-pointer transition-colors`}
@@ -591,9 +684,9 @@ export function ProjectsExpandableTable({
                       onClick={(e) => e.stopPropagation()}
                       className={`font-medium ${styles.titleLink}`}
                     >
-                      {p.jobTitle}
+                      {rowTitle}
                     </Link>
-                    {p.description ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{p.description}</p> : null}
+                    {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
                   </td>
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}
@@ -620,6 +713,8 @@ export function ProjectsExpandableTable({
                       <td colSpan={13} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId) ? (
                           <TurnoverPricingSummary project={p} />
+                        ) : janitorialDetailMode === "team" ? (
+                          <JanitorialProjectDropdownDetail project={p} />
                         ) : (
                           <div className="overflow-x-auto bg-white px-3 py-2">
                             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
@@ -777,6 +872,8 @@ export function ProjectsExpandableTable({
                       );
                     })}
 
+                  </>
+                ) : null}
                   </>
                 ) : null}
               </Fragment>
