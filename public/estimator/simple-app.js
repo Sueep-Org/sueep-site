@@ -779,8 +779,8 @@ async function initApp(){
         return;
       }
 
-      // do not start panning when measure mode is active
-      if (overlay && overlay.active && overlay.tool === 'measure') return;
+      // do not start panning when measure or rect mode is active
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
 
       if (!pdfDoc) return;
 

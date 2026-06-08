@@ -345,8 +345,21 @@ export class CanvasOverlay {
       const pixelArea = pixelWidth * pixelHeight;
       if (pixelArea <= 4) { this.redraw(); return; }
 
-      // convert area from pixels to scaled units using same helper
-      const areaScaled = applyScale(pixelArea, this._pxPerPt);
+      // use user scale factor (same as measure tool) for real-world area
+      const scaleFactor = this.store.getScale(this.currentPage)?.factor;
+      let areaScaled, areaUnit;
+      if (scaleFactor) {
+        const realWidthIn = pixelWidth * scaleFactor;
+        const realHeightIn = pixelHeight * scaleFactor;
+        areaScaled = (realWidthIn * realHeightIn) / 144; // sq in → sq ft
+        areaUnit = 'sq ft';
+      } else {
+        // fall back to raw PDF sq inches
+        const rawWidth = (pixelWidth / this._pxPerPt) / 72;
+        const rawHeight = (pixelHeight / this._pxPerPt) / 72;
+        areaScaled = rawWidth * rawHeight;
+        areaUnit = 'sq in';
+      }
 
       // normalized rectangle polygon
       const left = Math.min(start.x, end.x);
@@ -369,13 +382,13 @@ export class CanvasOverlay {
         id: `rect-${Date.now()}`,
         area: areaScaled,
         areaPx: pixelArea,
-        areaLabel: `${areaScaled.toFixed(2)} sq`,
+        areaLabel: `${areaScaled.toFixed(2)} ${areaUnit}`,
         at: Date.now(),
         pts: [{ x1: left / this.overlay.width, y1: top / this.overlay.height, x2: right / this.overlay.width, y2: bottom / this.overlay.height }]
       });
 
       this.onMeasurementsChanged?.();
-      toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
+      toast(`Area: ${areaScaled.toFixed(2)} ${areaUnit}`, 'success');
 
       this.redraw();
       return;
@@ -586,15 +599,24 @@ export class CanvasOverlay {
       if (!m.pts || !m.pts.length) continue;
       const isHover = this._hoverMeasurementId === m.id;
       const isSelected = this._selectedMeasurementId === m.id;
-      for (const seg of m.pts) {
-        const a = { x: seg.x1 * w, y: seg.y1 * h };
-        const b = { x: seg.x2 * w, y: seg.y2 * h };
-        drawMeasurementLine(this.ctx, a, b, { hover: isHover, selected: isSelected });
+
+      if (m.area != null) {
+        // rect area measurement — polygon already drawn above, just show label at center
+        const midX = ((m.pts[0].x1 + m.pts[0].x2) / 2) * w;
+        const midY = ((m.pts[0].y1 + m.pts[0].y2) / 2) * h;
+        drawLabel(this.ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq in`);
+      } else {
+        // line measurement
+        for (const seg of m.pts) {
+          const a = { x: seg.x1 * w, y: seg.y1 * h };
+          const b = { x: seg.x2 * w, y: seg.y2 * h };
+          drawMeasurementLine(this.ctx, a, b, { hover: isHover, selected: isSelected });
+        }
+        const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
+        const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
+        const labelText = m.label || formatInches(m.inches || 0);
+        drawLabel(this.ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText);
       }
-      const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
-      const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
-      const labelText = m.label || formatInches(m.inches || 0);
-      drawLabel(this.ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText);
     }
 
     // draw measure mode hint
@@ -620,9 +642,16 @@ export class CanvasOverlay {
         drawPreviewRect(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
         const pxW = Math.abs(p.x2 - p.x1);
         const pxH = Math.abs(p.y2 - p.y1);
-        const pxArea = pxW * pxH;
-        const areaScaled = applyScale(pxArea, this._pxPerPt);
-        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${areaScaled.toFixed(2)} sq`);
+        const scaleFactor = this.store.getScale(this.currentPage)?.factor;
+        let previewArea, previewUnit;
+        if (scaleFactor) {
+          previewArea = (pxW * scaleFactor) * (pxH * scaleFactor) / 144;
+          previewUnit = 'sq ft';
+        } else {
+          previewArea = ((pxW / this._pxPerPt) / 72) * ((pxH / this._pxPerPt) / 72);
+          previewUnit = 'sq in';
+        }
+        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${previewArea.toFixed(2)} ${previewUnit}`);
       }
     }
   }
