@@ -788,6 +788,8 @@ function drawPreviewRect(ctx, a, b) {
   const h = Math.abs(b.y - a.y);
   ctx.beginPath();
   ctx.rect(left, top, w, h);
+  ctx.fillStyle = 'rgba(0,120,212,0.18)';
+  ctx.fill();
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 3;
   ctx.setLineDash([6,6]);
