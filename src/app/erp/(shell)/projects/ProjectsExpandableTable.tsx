@@ -33,6 +33,7 @@ export type ProjectTableRow = {
   id: string;
   jobTitle: string;
   description: string | null;
+  buildingId?: string | null;
   segment: string;
   status: string;
   projectDate: string | null;
@@ -211,14 +212,19 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
   const building = getJanitorialBuildingName(project);
   const address = getDetailLine(project.description, "Address");
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
+  const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}` : null;
 
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto bg-white px-3 py-2">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Building</p>
-        <Link href={`/erp/projects/${project.id}`} className="text-sm font-semibold text-emerald-600 hover:underline">
-          {building}
-        </Link>
+        {buildingHref ? (
+          <Link href={buildingHref} className="font-medium text-emerald-600 hover:underline">
+            {building}
+          </Link>
+        ) : (
+          <span className="font-medium text-gray-900">{building}</span>
+        )}
         {address ? <p className="mt-1 text-xs text-gray-500">{address}</p> : null}
         {units ? (
           <Link href={`/erp/projects/${project.id}`} className="mt-2 block text-xs text-emerald-600 hover:underline">
@@ -563,6 +569,7 @@ export function ProjectsExpandableTable({
   janitorialPipelineId,
   janitorialDetailMode = "pricing",
   groupTitleForRow,
+  groupHrefForRow,
   collapsibleGroups = false,
   rowTitleForRow,
   rowDescriptionForRow,
@@ -571,6 +578,7 @@ export function ProjectsExpandableTable({
   janitorialPipelineId: string | null;
   janitorialDetailMode?: "pricing" | "team";
   groupTitleForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
+  groupHrefForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   collapsibleGroups?: boolean;
   rowTitleForRow?: (row: ProjectTableRow) => string;
   rowDescriptionForRow?: (row: ProjectTableRow) => string | null;
@@ -642,6 +650,7 @@ export function ProjectsExpandableTable({
             const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
             const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
+            const groupHref = groupTitle ? groupHrefForRow?.(p, i, rows) || null : null;
             return (
               <Fragment key={p.id}>
                 {groupTitle ? (
@@ -653,9 +662,19 @@ export function ProjectsExpandableTable({
                     aria-expanded={collapsibleGroups ? groupIsOpen : undefined}
                   >
                     <td className="w-[420px] min-w-[420px] px-3 py-2">
-                      <span className="font-semibold text-emerald-600">
-                        {groupTitle}
-                      </span>
+                      {groupHref ? (
+                        <Link
+                          href={groupHref}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-medium text-emerald-600 hover:underline"
+                        >
+                          {groupTitle}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-emerald-600">
+                          {groupTitle}
+                        </span>
+                      )}
                       <p className="mt-0.5 text-xs text-gray-500">
                         {groupCount} unit{groupCount !== 1 ? "s" : ""}
                       </p>

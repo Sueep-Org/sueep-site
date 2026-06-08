@@ -101,6 +101,10 @@ export default async function ErpProjectsPage() {
       },
     },
   });
+  const buildings = await prisma.building.findMany({
+    select: { id: true, name: true },
+  });
+  const buildingIdByName = new Map(buildings.map((building) => [normalizeMatchValue(building.name), building.id]));
 
   const lifecycleRank = (p: (typeof projects)[number]) => {
     const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null);
@@ -152,6 +156,10 @@ export default async function ErpProjectsPage() {
       id: p.id,
       jobTitle: p.jobTitle,
       description: p.description,
+      buildingId:
+        buildingIdByName.get(
+          normalizeMatchValue(getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim())
+        ) ?? null,
       segment: p.segment,
       status: p.status,
       projectDate: p.projectDate ? p.projectDate.toISOString() : null,

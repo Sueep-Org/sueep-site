@@ -38,6 +38,10 @@ function janitorialBuildingTitle(row: ProjectTableRow) {
   return getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
 }
 
+function janitorialBuildingHref(row: ProjectTableRow) {
+  return row.buildingId ? `/erp/buildings/${row.buildingId}` : null;
+}
+
 function janitorialRowDescription(row: ProjectTableRow) {
   const description = row.description?.trim();
   const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
@@ -66,6 +70,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       janitorialPipelineId={null}
       janitorialDetailMode="team"
       groupTitleForRow={janitorialBuildingTitle}
+      groupHrefForRow={janitorialBuildingHref}
       collapsibleGroups
       rowTitleForRow={janitorialRowTitle}
       rowDescriptionForRow={janitorialRowDescription}
