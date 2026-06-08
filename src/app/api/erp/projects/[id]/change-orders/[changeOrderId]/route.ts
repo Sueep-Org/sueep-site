@@ -66,6 +66,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.actualLabor !== undefined) data.actualLaborCents = inputToCents(body.actualLabor);
   if (body.actualMaterial !== undefined) data.actualMaterialCents = inputToCents(body.actualMaterial);
   if (body.actualTravel !== undefined) data.actualTravelCents = inputToCents(body.actualTravel);
+  if (body.estHours !== undefined) {
+    data.estHours = body.estHours === null || body.estHours === "" ? null : Number(body.estHours);
+  }
+  if (body.actualHours !== undefined) {
+    data.actualHours = body.actualHours === null || body.actualHours === "" ? null : Number(body.actualHours);
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;

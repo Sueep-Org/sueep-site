@@ -10,7 +10,7 @@ type PageProps = { params: Promise<{ id: string; changeOrderId: string }> };
 export default async function ChangeOrderDetailPage({ params }: PageProps) {
   const { id, changeOrderId } = await params;
 
-  const [changeOrder, project, employees, contracts] = await Promise.all([
+  const [changeOrder, project, employees, contracts, materialEntries] = await Promise.all([
     prisma.projectChangeOrder.findFirst({
       where: { id: changeOrderId, projectId: id },
       include: { laborers: { orderBy: { createdAt: "asc" } } },
@@ -36,9 +36,19 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         signedDocumentUrl: true,
       },
     }),
+    prisma.changeOrderMaterialEntry.findMany({
+      where: { changeOrderId },
+      orderBy: { usedOn: "desc" },
+    }),
   ]);
 
   if (!changeOrder || !project) notFound();
+
+  const computedLaborCents = changeOrder.laborers.reduce(
+    (s, l) => s + Math.round(l.hours * l.hourlyRateCents),
+    0,
+  );
+  const computedMaterialCents = materialEntries.reduce((s, e) => s + e.costCents, 0);
 
   const data = {
     id: changeOrder.id,
@@ -59,6 +69,20 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     actualLaborCents: changeOrder.actualLaborCents,
     actualMaterialCents: changeOrder.actualMaterialCents,
     actualTravelCents: changeOrder.actualTravelCents,
+    estHours: changeOrder.estHours,
+    actualHours: changeOrder.actualHours,
+    computedLaborCents,
+    computedMaterialCents,
+    materialEntries: materialEntries.map((e) => ({
+      id: e.id,
+      usedOn: e.usedOn.toISOString(),
+      category: e.category,
+      itemName: e.itemName,
+      quantity: e.quantity,
+      unit: e.unit,
+      costCents: e.costCents,
+      notes: e.notes,
+    })),
     laborers: changeOrder.laborers.map((l) => ({
       id: l.id,
       employeeId: l.employeeId,

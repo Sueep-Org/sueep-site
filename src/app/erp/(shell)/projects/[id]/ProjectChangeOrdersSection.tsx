@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
@@ -131,6 +131,13 @@ export type ProjectChangeOrderRow = {
   estimatedDays: number | null;
   reason: string | null;
   resolutionNotes: string | null;
+  contractValueCents: number | null;
+  estMaterialCents: number | null;
+  estTravelCents: number | null;
+  estLaborCents: number | null;
+  actualLaborCents: number | null;
+  actualMaterialCents: number | null;
+  actualTravelCents: number | null;
   laborers: ChangeOrderLaborer[];
 };
 
@@ -423,7 +430,7 @@ function ChangeOrderEditor({
       </button>
 
       {open && (
-        <div className="border-t border-gray-200 px-4 pb-4 pt-3">
+        <div className="border-t border-gray-200 px-4 pb-4 pt-3 space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className={label} htmlFor={`co-status-${row.id}`}>Status</label>
@@ -446,6 +453,36 @@ function ChangeOrderEditor({
             >
               {saving ? "Saving…" : "Save"}
             </button>
+          </div>
+
+          {/* Cost breakdown */}
+          <div className="rounded-md border border-gray-100 bg-gray-50 p-3">
+            {row.contractValueCents != null && (
+              <div className="mb-3 flex justify-between text-xs">
+                <span className="font-medium text-gray-500 uppercase tracking-wide">Contract value</span>
+                <span className="font-semibold text-gray-800">{centsToDollars(row.contractValueCents)}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Estimated</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Actual</p>
+              {[
+                { label: "Labor", est: row.estLaborCents, act: row.actualLaborCents },
+                { label: "Material", est: row.estMaterialCents, act: row.actualMaterialCents },
+                { label: "Travel", est: row.estTravelCents, act: row.actualTravelCents },
+              ].map(({ label: rowLabel, est, act }) => (
+                <React.Fragment key={rowLabel}>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-gray-500">{rowLabel}</span>
+                    <span className="text-gray-800">{centsToDollars(est)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-gray-500">{rowLabel}</span>
+                    <span className="text-gray-800">{centsToDollars(act)}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
       )}

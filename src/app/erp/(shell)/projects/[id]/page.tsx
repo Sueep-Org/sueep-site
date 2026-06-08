@@ -103,6 +103,13 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     estimatedDays: co.estimatedDays,
     reason: co.reason,
     resolutionNotes: co.resolutionNotes,
+    contractValueCents: co.contractValueCents,
+    estMaterialCents: co.estMaterialCents,
+    estTravelCents: co.estTravelCents,
+    estLaborCents: co.estLaborCents,
+    actualLaborCents: co.actualLaborCents,
+    actualMaterialCents: co.actualMaterialCents,
+    actualTravelCents: co.actualTravelCents,
     laborers: (co.laborers ?? []).map((l) => ({ id: l.id, employeeId: l.employeeId, name: l.name, role: l.role })),
   }));
 

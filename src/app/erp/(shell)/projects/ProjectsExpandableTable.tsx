@@ -68,8 +68,18 @@ export type ProjectTableRow = {
     requestedBy: string | null;
     supervisor: string | null;
     description: string | null;
+    contractValueCents: number | null;
+    estMaterialCents: number | null;
+    estTravelCents: number | null;
+    estLaborCents: number | null;
+    actualLaborCents: number | null;
+    actualMaterialCents: number | null;
+    actualTravelCents: number | null;
+    estHours: number | null;
+    actualHours: number | null;
     laborers: LaborRowBase[];
     laborCostCents: number;
+    materialCostCents: number;
   }[];
 };
 
@@ -795,27 +805,34 @@ export function ProjectsExpandableTable({
                             <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
                               Change Order
                             </td>
-                            {/* Contract -> Est. Cost */}
+                            {/* Contract -> contract value */}
                             <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.estimatedCostCents)}
+                              {centsToDollars(co.contractValueCents)}
                             </td>
-                            {/* Material -> Schedule days */}
-                            <td className="px-3 py-1.5 text-sm text-gray-700">
-                              {co.estimatedDays != null
-                                ? <>{co.estimatedDays}d</>
-                                : <span className="text-gray-400">-</span>}
-                            </td>
-                            {/* Labor -> labor cost */}
+                            {/* Est. Material */}
                             <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {co.laborCostCents > 0
-                                ? centsToDollars(co.laborCostCents)
-                                : <span className="text-gray-400">-</span>}
+                              {centsToDollars(co.estMaterialCents)}
                             </td>
-                            {/* Hours, Progress - not applicable to COs */}
-                            <td className="px-3 py-1.5 text-gray-400">-</td>
-                            <td className="px-3 py-1.5 text-gray-400">-</td>
-                            <td className="px-3 py-1.5 text-gray-400">-</td>
-                            <td className="px-3 py-1.5 text-gray-400">-</td>
+                            {/* Act. Material — from materials log */}
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}
+                            </td>
+                            {/* Est. Labor */}
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {centsToDollars(co.estLaborCents)}
+                            </td>
+                            {/* Act. Labor — from laborers log */}
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}
+                            </td>
+                            {/* Est. Hours */}
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {co.estHours != null ? co.estHours : <span className="text-gray-400">-</span>}
+                            </td>
+                            {/* Act. Hours */}
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {co.actualHours != null ? co.actualHours : <span className="text-gray-400">-</span>}
+                            </td>
                             <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
@@ -842,6 +859,8 @@ export function ProjectsExpandableTable({
                                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
                                     <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                                      <span className="text-gray-400">Contract</span>
+                                      <span className="font-medium text-gray-800">{centsToDollars(co.contractValueCents)}</span>
                                       <span className="text-gray-400">Est. cost</span>
                                       <span className="font-medium text-gray-800">{centsToDollars(co.estimatedCostCents)}</span>
                                       <span className="text-gray-400">Schedule</span>
@@ -850,6 +869,34 @@ export function ProjectsExpandableTable({
                                       </span>
                                       <span className="text-gray-400">Requested by</span>
                                       <span className="font-medium text-gray-800">{co.requestedBy || "-"}</span>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-2 gap-x-4 border-t border-gray-100 pt-2">
+                                      <div>
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Estimated</p>
+                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                                          <span className="text-gray-400">Labor</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.estLaborCents)}</span>
+                                          <span className="text-gray-400">Material</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.estMaterialCents)}</span>
+                                          <span className="text-gray-400">Travel</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.estTravelCents)}</span>
+                                          <span className="text-gray-400">Hours</span>
+                                          <span className="font-medium text-gray-800">{co.estHours ?? "-"}</span>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Actual</p>
+                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+                                          <span className="text-gray-400">Labor</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}</span>
+                                          <span className="text-gray-400">Material</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}</span>
+                                          <span className="text-gray-400">Travel</span>
+                                          <span className="font-medium text-gray-800">{centsToDollars(co.actualTravelCents)}</span>
+                                          <span className="text-gray-400">Hours</span>
+                                          <span className="font-medium text-gray-800">{co.actualHours ?? "-"}</span>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
 

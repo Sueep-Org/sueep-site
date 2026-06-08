@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
 import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
+import { ChangeOrderMaterialsSection, type CoMaterialRow } from "./ChangeOrderMaterialsSection";
+import { centsToDollars } from "@/lib/erp/money";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -42,6 +44,11 @@ export type ChangeOrderDetailData = {
   actualLaborCents: number | null;
   actualMaterialCents: number | null;
   actualTravelCents: number | null;
+  estHours: number | null;
+  actualHours: number | null;
+  computedLaborCents: number;
+  computedMaterialCents: number;
+  materialEntries: CoMaterialRow[];
   laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null }[];
 };
 
@@ -212,6 +219,9 @@ export function ChangeOrderDetailEditor({
   const [actualTravel, setActualTravel] = useState(
     data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
   );
+  const [estHours, setEstHours] = useState(data.estHours != null ? String(data.estHours) : "");
+  const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
+  const [liveMaterialCents, setLiveMaterialCents] = useState(data.computedMaterialCents);
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -240,6 +250,8 @@ export function ChangeOrderDetailEditor({
           actualLabor: actualLabor.trim() || null,
           actualMaterial: actualMaterial.trim() || null,
           actualTravel: actualTravel.trim() || null,
+          estHours: estHours.trim() || null,
+          actualHours: actualHours.trim() || null,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -423,6 +435,10 @@ export function ChangeOrderDetailEditor({
                       <label className={label} htmlFor="co-est-travel">Travel ($)</label>
                       <input id="co-est-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estTravel} onChange={(e) => setEstTravel(e.target.value)} />
                     </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-hours">Hours</label>
+                      <input id="co-est-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={estHours} onChange={(e) => setEstHours(e.target.value)} />
+                    </div>
                   </div>
                 </div>
 
@@ -430,16 +446,26 @@ export function ChangeOrderDetailEditor({
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className={label} htmlFor="co-actual-labor">Labor ($)</label>
-                      <input id="co-actual-labor" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualLabor} onChange={(e) => setActualLabor(e.target.value)} />
+                      <p className={label}>Labor ($)</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {centsToDollars(data.computedLaborCents)}
+                        <span className="ml-2 text-xs text-gray-400">from laborers log</span>
+                      </p>
                     </div>
                     <div>
-                      <label className={label} htmlFor="co-actual-material">Material ($)</label>
-                      <input id="co-actual-material" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualMaterial} onChange={(e) => setActualMaterial(e.target.value)} />
+                      <p className={label}>Material ($)</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {centsToDollars(liveMaterialCents)}
+                        <span className="ml-2 text-xs text-gray-400">from materials log</span>
+                      </p>
                     </div>
                     <div>
                       <label className={label} htmlFor="co-actual-travel">Travel ($)</label>
                       <input id="co-actual-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualTravel} onChange={(e) => setActualTravel(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-actual-hours">Hours</label>
+                      <input id="co-actual-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={actualHours} onChange={(e) => setActualHours(e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -461,17 +487,6 @@ export function ChangeOrderDetailEditor({
           ),
         },
         {
-          label: "Billing",
-          content: (
-            <ChangeOrderBillingEditor
-              projectId={projectId}
-              changeOrderId={data.id}
-              percentInvoiced={data.percentInvoiced}
-              billingStatus={data.billingStatus}
-            />
-          ),
-        },
-        {
           label: "Laborers",
           content: (
             <ChangeOrderLaborersSection
@@ -479,6 +494,28 @@ export function ChangeOrderDetailEditor({
               changeOrderId={data.id}
               initialLaborers={data.laborers}
               employees={employees}
+            />
+          ),
+        },
+        {
+          label: "Materials",
+          content: (
+            <ChangeOrderMaterialsSection
+              projectId={projectId}
+              changeOrderId={data.id}
+              initialEntries={data.materialEntries}
+              onTotalChange={setLiveMaterialCents}
+            />
+          ),
+        },
+        {
+          label: "Billing",
+          content: (
+            <ChangeOrderBillingEditor
+              projectId={projectId}
+              changeOrderId={data.id}
+              percentInvoiced={data.percentInvoiced}
+              billingStatus={data.billingStatus}
             />
           ),
         },

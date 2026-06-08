@@ -287,9 +287,12 @@ model ProjectChangeOrder {
   actualLaborCents    Int?
   actualMaterialCents Int?
   actualTravelCents   Int?
+  estHours            Float?
+  actualHours         Float?
 
-  laborers  ProjectChangeOrderLaborer[]
-  contracts ChangeOrderContract[]
+  laborers        ProjectChangeOrderLaborer[]
+  contracts       ChangeOrderContract[]
+  materialEntries ChangeOrderMaterialEntry[]
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -737,4 +740,24 @@ model CandidateContract {
   @@index([candidateId])
   @@index([docusealSubmissionId])
   @@index([docusealTemplateId])
+}
+
+model ChangeOrderMaterialEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  changeOrderId String
+  changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  usedOn    DateTime
+  category  String
+  itemName  String
+  quantity  Float?
+  unit      String?
+  costCents Int
+  notes     String?
+
+  @@index([changeOrderId])
+  @@index([usedOn])
 }
