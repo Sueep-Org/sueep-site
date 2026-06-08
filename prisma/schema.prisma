@@ -471,6 +471,9 @@ model Employee {
   bankAccountNumber String?
   bankRoutingNumber String?
 
+  /// ADP Run employee file number for payroll export
+  adpFileNumber String?
+
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")
 

@@ -65,6 +65,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 status: employee.status,
                 hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
                 notes: employee.notes,
+                adpFileNumber: employee.adpFileNumber ?? null,
               }}
             />
           ),
