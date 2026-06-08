@@ -61,6 +61,7 @@ model Project {
   laborAssignments ProjectLaborAssignment[]
   checklistItems ProjectChecklistItem[]
   workOrderRecord ProjectWorkOrderRecord?
+  qualityChecks QualityCheck[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -172,8 +173,11 @@ model QualityCheck {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  turnoverRequestId    String
-  turnoverRequest      TurnoverRequest @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+  turnoverRequestId    String?
+  turnoverRequest      TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+
+  projectId            String?
+  project              Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   supervisorName       String
   supervisorSignatureUrl String?
@@ -182,6 +186,7 @@ model QualityCheck {
   notes                String?
 
   @@index([turnoverRequestId])
+  @@index([projectId])
 }
 
 model ProjectWorkOrder {

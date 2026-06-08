@@ -13,6 +13,7 @@ export async function GET() {
     orderBy: [{ createdAt: "desc" }],
     include: {
       turnoverRequest: { include: { building: true } },
+      project: { select: { id: true, jobTitle: true } },
     },
   });
   return NextResponse.json(checks);
@@ -26,9 +27,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const turnoverRequestId = String(body.turnoverRequestId || "").trim();
-  if (!turnoverRequestId) {
-    return NextResponse.json({ error: "turnoverRequestId is required" }, { status: 400 });
+  const turnoverRequestId = String(body.turnoverRequestId || "").trim() || null;
+  const projectId = String(body.projectId || "").trim() || null;
+
+  if (!turnoverRequestId && !projectId) {
+    return NextResponse.json({ error: "Either turnoverRequestId or projectId is required" }, { status: 400 });
   }
 
   const supervisorName = String(body.supervisorName || "").trim();
@@ -45,6 +48,7 @@ export async function POST(req: Request) {
     const check = await prisma.qualityCheck.create({
       data: {
         turnoverRequestId,
+        projectId,
         supervisorName,
         supervisorSignatureUrl: supervisorSignatureUrl || null,
         pmApproval,
@@ -53,10 +57,12 @@ export async function POST(req: Request) {
       },
     });
 
-    await prisma.turnoverRequest.update({
-      where: { id: turnoverRequestId },
-      data: { status: pmApproval ? "APPROVED" : "QUALITY_CHECK" },
-    });
+    if (turnoverRequestId) {
+      await prisma.turnoverRequest.update({
+        where: { id: turnoverRequestId },
+        data: { status: pmApproval ? "APPROVED" : "QUALITY_CHECK" },
+      });
+    }
 
     return NextResponse.json(check);
   } catch (e) {

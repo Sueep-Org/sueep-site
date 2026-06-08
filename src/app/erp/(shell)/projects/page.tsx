@@ -185,6 +185,7 @@ export default async function ErpProjectsPage() {
       hubspotPipelineId: p.hubspotPipelineId ?? null,
       unitQualityChecks: qualityChecks
         .filter((check) => {
+          if (!check.turnoverRequest) return false;
           const buildingName = getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim() || "";
           const unitNumbers = parseProjectUnitNumbers(p.description).map(normalizeMatchValue);
           const checkBuilding = normalizeMatchValue(check.turnoverRequest.building.name);
@@ -199,7 +200,7 @@ export default async function ErpProjectsPage() {
         .map((check) => ({
           id: check.id,
           createdAt: check.createdAt.toISOString(),
-          unitNumber: check.turnoverRequest.unitNumber ?? null,
+          unitNumber: check.turnoverRequest?.unitNumber ?? null,
           supervisorName: check.supervisorName,
           pmApproval: check.pmApproval,
           evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,

@@ -9,7 +9,9 @@ import { SignaturePadInput } from "./SignaturePadInput";
 type Props = {
   checkId: string;
   initial: {
-    turnoverRequestId: string;
+    turnoverRequestId: string | null;
+    projectId: string | null;
+    projectName: string | null;
     supervisorName: string;
     supervisorSignatureUrl: string | null;
     pmApproval: boolean;
@@ -53,7 +55,8 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
     }
 
     const payload = {
-      turnoverRequestId: initial.turnoverRequestId,
+      ...(initial.turnoverRequestId ? { turnoverRequestId: initial.turnoverRequestId } : {}),
+      ...(initial.projectId ? { projectId: initial.projectId } : {}),
       supervisorName,
       supervisorSignatureUrl: supervisorSignatureUrl || null,
       pmApproval,
@@ -87,7 +90,16 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
     <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <h2 className="text-sm font-semibold text-gray-800">Quality check details</h2>
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <TurnoverRequestSelect value={initial.turnoverRequestId} required disabled />
+        {initial.turnoverRequestId ? (
+          <TurnoverRequestSelect value={initial.turnoverRequestId} required disabled />
+        ) : (
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-600">Project</label>
+            <div className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {initial.projectName ?? "—"}
+            </div>
+          </div>
+        )}
 
         <label className="block text-xs font-medium text-gray-600">
           Supervisor name

@@ -17,10 +17,17 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
   const { id } = await params;
   const check = await prisma.qualityCheck.findUnique({
     where: { id },
-    include: { turnoverRequest: { include: { building: true } } },
+    include: {
+      turnoverRequest: { include: { building: true } },
+      project: { select: { id: true, jobTitle: true } },
+    },
   });
 
   if (!check) notFound();
+
+  const displayName = check.turnoverRequest
+    ? check.turnoverRequest.building.name
+    : check.project?.jobTitle ?? "Unknown";
 
   return (
     <div className="space-y-6">
@@ -28,7 +35,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
         <Link href="/erp/quality-checks" className="text-xs text-gray-500 hover:underline">
           ← Quality checks
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">Quality check for {check.turnoverRequest.building.name}</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-gray-900">Quality check for {displayName}</h1>
         <p className="mt-1 text-sm text-gray-600">Review supervisor signoff, approval, and evidence photos.</p>
       </div>
 
@@ -37,7 +44,9 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
           <QualityCheckProfileEditor
             checkId={check.id}
             initial={{
-              turnoverRequestId: check.turnoverRequestId,
+              turnoverRequestId: check.turnoverRequestId ?? null,
+              projectId: check.projectId ?? null,
+              projectName: check.project?.jobTitle ?? null,
               supervisorName: check.supervisorName,
               supervisorSignatureUrl: check.supervisorSignatureUrl,
               pmApproval: check.pmApproval,
@@ -51,8 +60,14 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
           <h2 className="text-sm font-semibold text-gray-900">Check summary</h2>
           <dl className="mt-4 space-y-3 text-sm">
             <div>
-              <dt className="font-semibold text-gray-600">Turnover request</dt>
-              <dd>{check.turnoverRequest.building.name} • {check.turnoverRequest.requestType}</dd>
+              <dt className="font-semibold text-gray-600">
+                {check.turnoverRequest ? "Turnover request" : "Project"}
+              </dt>
+              <dd>
+                {check.turnoverRequest
+                  ? `${check.turnoverRequest.building.name} • ${check.turnoverRequest.requestType}`
+                  : (check.project?.jobTitle ?? "—")}
+              </dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-600">Supervisor</dt>
