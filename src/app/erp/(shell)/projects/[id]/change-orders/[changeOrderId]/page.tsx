@@ -52,6 +52,13 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     percentInvoiced: changeOrder.percentInvoiced,
     estimatedCostCents: changeOrder.estimatedCostCents,
     estimatedDays: changeOrder.estimatedDays,
+    contractValueCents: changeOrder.contractValueCents,
+    estMaterialCents: changeOrder.estMaterialCents,
+    estTravelCents: changeOrder.estTravelCents,
+    estLaborCents: changeOrder.estLaborCents,
+    actualLaborCents: changeOrder.actualLaborCents,
+    actualMaterialCents: changeOrder.actualMaterialCents,
+    actualTravelCents: changeOrder.actualTravelCents,
     laborers: changeOrder.laborers.map((l) => ({
       id: l.id,
       employeeId: l.employeeId,

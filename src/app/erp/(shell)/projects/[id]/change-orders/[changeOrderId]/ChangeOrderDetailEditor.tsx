@@ -35,6 +35,13 @@ export type ChangeOrderDetailData = {
   percentInvoiced: number;
   estimatedCostCents: number | null;
   estimatedDays: number | null;
+  contractValueCents: number | null;
+  estMaterialCents: number | null;
+  estTravelCents: number | null;
+  estLaborCents: number | null;
+  actualLaborCents: number | null;
+  actualMaterialCents: number | null;
+  actualTravelCents: number | null;
   laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null }[];
 };
 
@@ -184,6 +191,27 @@ export function ChangeOrderDetailEditor({
   const [estimatedDays, setEstimatedDays] = useState(
     data.estimatedDays != null ? String(data.estimatedDays) : "",
   );
+  const [contractValue, setContractValue] = useState(
+    data.contractValueCents != null ? (data.contractValueCents / 100).toFixed(2) : "",
+  );
+  const [estMaterial, setEstMaterial] = useState(
+    data.estMaterialCents != null ? (data.estMaterialCents / 100).toFixed(2) : "",
+  );
+  const [estTravel, setEstTravel] = useState(
+    data.estTravelCents != null ? (data.estTravelCents / 100).toFixed(2) : "",
+  );
+  const [estLabor, setEstLabor] = useState(
+    data.estLaborCents != null ? (data.estLaborCents / 100).toFixed(2) : "",
+  );
+  const [actualLabor, setActualLabor] = useState(
+    data.actualLaborCents != null ? (data.actualLaborCents / 100).toFixed(2) : "",
+  );
+  const [actualMaterial, setActualMaterial] = useState(
+    data.actualMaterialCents != null ? (data.actualMaterialCents / 100).toFixed(2) : "",
+  );
+  const [actualTravel, setActualTravel] = useState(
+    data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
+  );
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -205,6 +233,13 @@ export function ChangeOrderDetailEditor({
           description: comments.trim() || null,
           estimatedCost: estimatedCost.trim() || null,
           estimatedDays: estimatedDays.trim() || null,
+          contractValue: contractValue.trim() || null,
+          estMaterial: estMaterial.trim() || null,
+          estTravel: estTravel.trim() || null,
+          estLabor: estLabor.trim() || null,
+          actualLabor: actualLabor.trim() || null,
+          actualMaterial: actualMaterial.trim() || null,
+          actualTravel: actualTravel.trim() || null,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -297,7 +332,10 @@ export function ChangeOrderDetailEditor({
                 </div>
                 <div>
                   <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
-                  <input id="co-est-cost" className={input} placeholder="1250.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                    <input id="co-est-cost" type="number" min={0} step="0.01" inputMode="decimal" className={`${input} pl-7`} placeholder="1250.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
+                  </div>
                 </div>
                 <div>
                   <label className={label} htmlFor="co-est-days">Schedule impact (days)</label>
@@ -348,6 +386,76 @@ export function ChangeOrderDetailEditor({
                     Delete
                   </button>
                 )}
+              </div>
+            </>
+          ),
+        },
+        {
+          label: "Costs",
+          content: (
+            <>
+              {/* Contract value — standalone at top */}
+              <div className="mb-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contract value (USD)</h3>
+                <div className="mt-3 max-w-xs">
+                  <label className={label} htmlFor="co-contract-value">Contract value</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                    <input id="co-contract-value" type="number" min={0} step="0.01" inputMode="decimal" className={`${input} pl-7`} placeholder="0.00" value={contractValue} onChange={(e) => setContractValue(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Estimated vs Actual columns */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Estimated</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={label} htmlFor="co-est-labor">Labor ($)</label>
+                      <input id="co-est-labor" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estLabor} onChange={(e) => setEstLabor(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-material">Material ($)</label>
+                      <input id="co-est-material" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estMaterial} onChange={(e) => setEstMaterial(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-travel">Travel ($)</label>
+                      <input id="co-est-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estTravel} onChange={(e) => setEstTravel(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={label} htmlFor="co-actual-labor">Labor ($)</label>
+                      <input id="co-actual-labor" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualLabor} onChange={(e) => setActualLabor(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-actual-material">Material ($)</label>
+                      <input id="co-actual-material" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualMaterial} onChange={(e) => setActualMaterial(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-actual-travel">Travel ($)</label>
+                      <input id="co-actual-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={actualTravel} onChange={(e) => setActualTravel(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {error ? <p className="mt-3 text-sm text-red-600" role="alert">{error}</p> : null}
+
+              <div className="mt-6">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleSave}
+                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
               </div>
             </>
           ),

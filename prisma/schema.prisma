@@ -276,10 +276,17 @@ model ProjectChangeOrder {
   status             String   @default("DRAFT")
   billingStatus      String?
   percentInvoiced    Int      @default(0)
-  estimatedCostCents Int?
-  estimatedDays      Int?
-  reason             String?
-  resolutionNotes    String?
+  estimatedCostCents  Int?
+  estimatedDays       Int?
+  reason              String?
+  resolutionNotes     String?
+  contractValueCents  Int?
+  estMaterialCents    Int?
+  estTravelCents      Int?
+  estLaborCents       Int?
+  actualLaborCents    Int?
+  actualMaterialCents Int?
+  actualTravelCents   Int?
 
   laborers  ProjectChangeOrderLaborer[]
   contracts ChangeOrderContract[]

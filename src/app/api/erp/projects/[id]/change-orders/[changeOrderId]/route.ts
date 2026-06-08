@@ -59,6 +59,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.percentInvoiced = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
   }
   if (body.estimatedCost !== undefined) data.estimatedCostCents = inputToCents(body.estimatedCost);
+  if (body.contractValue !== undefined) data.contractValueCents = inputToCents(body.contractValue);
+  if (body.estMaterial !== undefined) data.estMaterialCents = inputToCents(body.estMaterial);
+  if (body.estTravel !== undefined) data.estTravelCents = inputToCents(body.estTravel);
+  if (body.estLabor !== undefined) data.estLaborCents = inputToCents(body.estLabor);
+  if (body.actualLabor !== undefined) data.actualLaborCents = inputToCents(body.actualLabor);
+  if (body.actualMaterial !== undefined) data.actualMaterialCents = inputToCents(body.actualMaterial);
+  if (body.actualTravel !== undefined) data.actualTravelCents = inputToCents(body.actualTravel);
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;
