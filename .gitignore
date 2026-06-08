@@ -22,6 +22,7 @@
 
 # misc
 .DS_Store
+.claude
 *.pem
 
 # debug
@@ -46,3 +47,5 @@ yarn-error.log*
 next-env.d.ts
 DEPLOYMENT_CHECKLIST.md
 FIREBASE_VERCEL_SETUP.md
+.next-dev-3002.log
+.next-dev-3002.err.log

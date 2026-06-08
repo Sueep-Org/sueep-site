@@ -3,9 +3,33 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { ProjectsTabs } from "./ProjectsTabs";
-import { HubSpotSyncButton } from "./HubSpotSyncButton";
 
 export const dynamic = "force-dynamic";
+
+function getProjectDetailLine(description: string | null, label: string) {
+  const prefix = `${label}:`;
+  return (
+    (description || "")
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
+      .trim() || ""
+  );
+}
+
+function normalizeMatchValue(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase();
+}
+
+function parseProjectUnitNumbers(description: string | null) {
+  const units = getProjectDetailLine(description, "Units") || getProjectDetailLine(description, "Unit Numbers");
+  if (!units) return [];
+
+  return units
+    .split(/\s+\|\s+|,/)
+    .map((unit) => unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || "")
+    .filter(Boolean);
+}
 
 export default async function ErpProjectsPage() {
   const cfg = parseHubSpotPipelineStageMap();
@@ -16,17 +40,23 @@ export default async function ErpProjectsPage() {
     include: {
       laborEntries: {
         select: {
+          id: true,
           workDate: true,
           workerName: true,
           role: true,
           hours: true,
           hourlyRateCents: true,
           taskDescription: true,
+          qualityRating: true,
+          qualityNotes: true,
           employee: { select: { firstName: true, lastName: true } },
         },
         orderBy: { workDate: "asc" },
       },
-      materialEntries: { select: { category: true, costCents: true } },
+      materialEntries: {
+        select: { usedOn: true, category: true, itemName: true, quantity: true, unit: true, costCents: true, notes: true },
+        orderBy: { usedOn: "asc" },
+      },
       distanceEntries: { select: { miles: true } },
       changeOrders: {
         select: {
@@ -40,8 +70,18 @@ export default async function ErpProjectsPage() {
           requestedBy: true,
           supervisor: true,
           description: true,
+          contractValueCents: true,
+          estMaterialCents: true,
+          estTravelCents: true,
+          estLaborCents: true,
+          actualLaborCents: true,
+          actualMaterialCents: true,
+          actualTravelCents: true,
+          estHours: true,
+          actualHours: true,
+          materialEntries: { select: { costCents: true } },
           laborers: {
-            select: { name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true },
+            select: { id: true, name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
             orderBy: { workDate: "asc" },
           },
         },
@@ -49,6 +89,22 @@ export default async function ErpProjectsPage() {
       },
     },
   });
+
+  const qualityChecks = await prisma.qualityCheck.findMany({
+    orderBy: [{ createdAt: "desc" }],
+    include: {
+      turnoverRequest: {
+        select: {
+          unitNumber: true,
+          building: { select: { name: true } },
+        },
+      },
+    },
+  });
+  const buildings = await prisma.building.findMany({
+    select: { id: true, name: true },
+  });
+  const buildingIdByName = new Map(buildings.map((building) => [normalizeMatchValue(building.name), building.id]));
 
   const lifecycleRank = (p: (typeof projects)[number]) => {
     const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null);
@@ -60,9 +116,7 @@ export default async function ErpProjectsPage() {
   projects.sort((a, b) => {
     const rankDelta = lifecycleRank(a) - lifecycleRank(b);
     if (rankDelta !== 0) return rankDelta;
-    return a.projectDate?.getTime() === b.projectDate?.getTime()
-      ? b.updatedAt.getTime() - a.updatedAt.getTime()
-      : (b.projectDate?.getTime() ?? 0) - (a.projectDate?.getTime() ?? 0);
+    return a.jobTitle.localeCompare(b.jobTitle);
   });
 
   const rows = projects.map((p) => {
@@ -78,17 +132,34 @@ export default async function ErpProjectsPage() {
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
     const laborEntries = p.laborEntries.map((e) => ({
+      id: e.id,
+      updatePath: `/api/erp/projects/${p.id}/labor/${e.id}`,
       date: e.workDate.toISOString(),
       role: e.role ?? null,
       name: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() : e.workerName.trim(),
       hours: e.hours,
       hourlyRateCents: e.hourlyRateCents,
       description: e.taskDescription ?? null,
+      qualityRating: e.qualityRating ?? null,
+      qualityNotes: e.qualityNotes ?? null,
+    }));
+    const materialEntries = p.materialEntries.map((e) => ({
+      date: e.usedOn.toISOString(),
+      category: e.category,
+      itemName: e.itemName,
+      quantity: e.quantity ?? null,
+      unit: e.unit ?? null,
+      costCents: e.costCents,
+      notes: e.notes ?? null,
     }));
     return {
       id: p.id,
       jobTitle: p.jobTitle,
       description: p.description,
+      buildingId:
+        buildingIdByName.get(
+          normalizeMatchValue(getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim())
+        ) ?? null,
       segment: p.segment,
       status: p.status,
       projectDate: p.projectDate ? p.projectDate.toISOString() : null,
@@ -98,6 +169,7 @@ export default async function ErpProjectsPage() {
       billingStatus: p.billingStatus ?? null,
       contractValueCents: p.contractValueCents,
       laborEntries,
+      materialEntries,
       totalHours,
       laborCents,
       materialCents,
@@ -111,6 +183,29 @@ export default async function ErpProjectsPage() {
       paintCents,
       miles,
       hubspotPipelineId: p.hubspotPipelineId ?? null,
+      unitQualityChecks: qualityChecks
+        .filter((check) => {
+          if (!check.turnoverRequest) return false;
+          const buildingName = getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim() || "";
+          const unitNumbers = parseProjectUnitNumbers(p.description).map(normalizeMatchValue);
+          const checkBuilding = normalizeMatchValue(check.turnoverRequest.building.name);
+          const checkUnit = normalizeMatchValue(check.turnoverRequest.unitNumber);
+
+          return (
+            normalizeMatchValue(buildingName) === checkBuilding &&
+            Boolean(checkUnit) &&
+            unitNumbers.includes(checkUnit)
+          );
+        })
+        .map((check) => ({
+          id: check.id,
+          createdAt: check.createdAt.toISOString(),
+          unitNumber: check.turnoverRequest?.unitNumber ?? null,
+          supervisorName: check.supervisorName,
+          pmApproval: check.pmApproval,
+          evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
+          notes: check.notes ?? null,
+        })),
       changeOrders: p.changeOrders.map((co) => ({
         id: co.id,
         title: co.title,
@@ -122,39 +217,46 @@ export default async function ErpProjectsPage() {
         requestedBy: co.requestedBy,
         supervisor: co.supervisor,
         description: co.description,
+        contractValueCents: co.contractValueCents,
+        estMaterialCents: co.estMaterialCents,
+        estTravelCents: co.estTravelCents,
+        estLaborCents: co.estLaborCents,
+        actualLaborCents: co.actualLaborCents,
+        actualMaterialCents: co.actualMaterialCents,
+        actualTravelCents: co.actualTravelCents,
+        estHours: co.estHours,
+        actualHours: co.actualHours,
         laborers: co.laborers.map((l) => ({
+          id: l.id,
+          updatePath: `/api/erp/change-order-laborers/${l.id}`,
           date: l.workDate.toISOString(),
           role: l.role ?? null,
           name: l.name,
           hours: l.hours,
           hourlyRateCents: l.hourlyRateCents,
           description: l.taskDescription ?? null,
+          qualityRating: l.qualityRating ?? null,
+          qualityNotes: l.qualityNotes ?? null,
         })),
         laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
+        materialCostCents: co.materialEntries.reduce((s, e) => s + e.costCents, 0),
       })),
     };
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
-          <p className="mt-1 text-sm text-gray-600">Simple view: core info on top, details on expand.</p>
-        </div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
         <div className="flex items-center gap-2">
           <Link
             href="/erp/projects/new"
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
+            className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
           >
             New project
           </Link>
-          <HubSpotSyncButton />
         </div>
       </div>
-
-      <hr className="border-pink-200" />
-
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">

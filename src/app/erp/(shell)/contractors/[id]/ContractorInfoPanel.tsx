@@ -3,6 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+type CollectedInfo = {
+  contractorFullName: string | null;
+  address: string | null;
+  dateOfBirth: string | null;
+  ssn: string | null;
+  bankAccountType: string | null;
+  bankAccountNumber: string | null;
+  bankRoutingNumber: string | null;
+  phone: string | null;
+  hasInsurance: boolean | null;
+};
+
 type Props = {
   id: string;
   email: string | null;
@@ -10,17 +22,7 @@ type Props = {
   infoTokenExpiry: string | null;
   resendConfigured: boolean;
   siteUrl: string;
-  collectedInfo: {
-    contractorFullName: string | null;
-    address: string | null;
-    dateOfBirth: string | null;
-    ssn: string | null;
-    bankAccountType: string | null;
-    bankAccountNumber: string | null;
-    bankRoutingNumber: string | null;
-    phone: string | null;
-    hasInsurance: boolean | null;
-  };
+  collectedInfo: CollectedInfo;
 };
 
 function formatDt(iso: string | null): string {
@@ -56,6 +58,11 @@ export function ContractorInfoPanel({
   const [sendOk, setSendOk] = useState(false);
   const [sendError, setSendError] = useState("");
 
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<CollectedInfo>({ ...collectedInfo });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   const infoLink = infoToken
     ? `${siteUrl.replace(/\/$/, "")}/contractor-info/${infoToken}`
     : null;
@@ -78,11 +85,45 @@ export function ContractorInfoPanel({
     setTimeout(() => setSendOk(false), 3000);
   }
 
+  async function saveInfo() {
+    if (!form.contractorFullName?.trim()) {
+      setSaveError("Full name is required");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    const res = await fetch(`/api/erp/contractors/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setSaveError(j.error ?? "Save failed");
+      return;
+    }
+    setEditing(false);
+    router.refresh();
+  }
+
+  function field(label: string, children: React.ReactNode) {
+    return (
+      <div>
+        <label className="text-xs text-pink-500 block mb-0.5">{label}</label>
+        {children}
+      </div>
+    );
+  }
+
+  const inputCls =
+    "w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
+
   return (
     <div className="space-y-5">
       <div className="space-y-3">
         <p className="text-xs text-zinc-500">
-          Send the contractor a secure link to fill in their personal information, banking details, and insurance status. No account required — expires after 7 days.
+          Send the contractor a secure link to fill in their personal information, banking details, and insurance status. No account required — expires after 7 days. You can also enter the information directly below.
         </p>
 
         {infoLink && !isExpired && (
@@ -130,9 +171,140 @@ export function ContractorInfoPanel({
         {sendError && <p className="text-xs text-red-400">{sendError}</p>}
       </div>
 
-      {hasInfo && (
-        <div className="border-t border-gray-200 pt-4">
-          <p className="text-xs font-medium text-gray-700 mb-3">Submitted information</p>
+      <div className="border-t border-gray-200 pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-gray-700">
+            {hasInfo ? "Submitted information" : "Contractor information"}
+          </p>
+          {!editing && (
+            <button
+              type="button"
+              onClick={() => { setForm({ ...collectedInfo }); setEditing(true); setSaveError(""); }}
+              className="text-xs text-[#E73C6E] hover:underline"
+            >
+              {hasInfo ? "Edit" : "Enter manually"}
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {field("Full name *",
+                <input
+                  className={inputCls}
+                  value={form.contractorFullName ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, contractorFullName: e.target.value }))}
+                />
+              )}
+              {field("Phone",
+                <input
+                  className={inputCls}
+                  value={form.phone ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+              )}
+              <div className="sm:col-span-2">
+                {field("Address",
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    value={form.address ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                  />
+                )}
+              </div>
+              {field("Date of birth",
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={form.dateOfBirth ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                />
+              )}
+              {field("SSN",
+                <input
+                  className={inputCls}
+                  value={form.ssn ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, ssn: e.target.value }))}
+                  placeholder="XXX-XX-XXXX"
+                />
+              )}
+              {field("Account type",
+                <select
+                  className={inputCls}
+                  value={form.bankAccountType ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, bankAccountType: e.target.value || null }))}
+                >
+                  <option value="">— Select —</option>
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                </select>
+              )}
+              {field("Account number",
+                <input
+                  className={inputCls}
+                  value={form.bankAccountNumber ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, bankAccountNumber: e.target.value }))}
+                />
+              )}
+              {field("Routing number",
+                <input
+                  className={inputCls}
+                  value={form.bankRoutingNumber ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, bankRoutingNumber: e.target.value }))}
+                />
+              )}
+              {field("Has insurance",
+                <div className="flex gap-4 pt-1">
+                  {(["yes", "no", "unknown"] as const).map((opt) => (
+                    <label key={opt} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="hasInsurance"
+                        checked={
+                          opt === "yes"
+                            ? form.hasInsurance === true
+                            : opt === "no"
+                            ? form.hasInsurance === false
+                            : form.hasInsurance === null
+                        }
+                        onChange={() =>
+                          setForm((f) => ({
+                            ...f,
+                            hasInsurance: opt === "yes" ? true : opt === "no" ? false : null,
+                          }))
+                        }
+                        className="accent-[#E73C6E]"
+                      />
+                      <span className="capitalize text-gray-700">{opt === "unknown" ? "Unknown" : opt.charAt(0).toUpperCase() + opt.slice(1)}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void saveInfo()}
+                disabled={saving}
+                className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditing(false); setSaveError(""); }}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : hasInfo ? (
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs text-pink-500">Full name</dt>
@@ -173,8 +345,10 @@ export function ContractorInfoPanel({
               </dd>
             </div>
           </dl>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-gray-400">No information submitted yet.</p>
+        )}
+      </div>
     </div>
   );
 }

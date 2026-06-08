@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const inputCls =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300";
 const labelCls = "block text-xs font-medium text-gray-600";
 
 type Props = {
@@ -83,7 +83,7 @@ export function ProjectPricePackageEditor({ projectId, description, contractValu
   }
 
   return (
-    <form onSubmit={onSubmit} className="mb-4 rounded-md border border-pink-100 bg-pink-50/40 p-3">
+    <form onSubmit={onSubmit} className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase text-gray-500">Price package</p>
@@ -138,7 +138,7 @@ export function ProjectPricePackageEditor({ projectId, description, contractValu
       <button
         type="submit"
         disabled={loading}
-        className="mt-3 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+        className="mt-3 rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
       >
         {loading ? "Saving..." : "Save price package"}
       </button>

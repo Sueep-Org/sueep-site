@@ -57,7 +57,7 @@ export function NewLaborAssignmentForm() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
+        className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
       >
         {open ? "Close" : "New assignment"}
       </button>
@@ -122,7 +122,7 @@ export function NewLaborAssignmentForm() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
+            className="rounded-md bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300 disabled:opacity-50"
           >
             {loading ? "Saving…" : "Create assignment"}
           </button>

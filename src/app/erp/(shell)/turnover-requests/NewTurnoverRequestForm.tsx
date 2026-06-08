@@ -4,6 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
+import { TurnoverPricingPackageQuestions } from "./TurnoverPricingPackageQuestions";
+
+type SelectedBuilding = {
+  id: string;
+  name: string;
+  builder?: string | null;
+  address?: string | null;
+  pricingPackage?: unknown;
+};
 
 type CreatedRequest = {
   id?: string;
@@ -25,6 +34,15 @@ export function NewTurnoverRequestForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdRequest, setCreatedRequest] = useState<CreatedRequest | null>(null);
+  const [selectedBuildingName, setSelectedBuildingName] = useState<string | null>(null);
+  const [selectedBuildingPricingPackage, setSelectedBuildingPricingPackage] = useState<unknown>(null);
+  const [bedrooms, setBedrooms] = useState("");
+  const [bathrooms, setBathrooms] = useState("");
+  const [fullPaint, setFullPaint] = useState(false);
+  const [touchUpPaint, setTouchUpPaint] = useState("");
+  const [fullClean, setFullClean] = useState(false);
+  const [carpetCleaning, setCarpetCleaning] = useState(false);
+  const [materialsAdditional, setMaterialsAdditional] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,13 +55,13 @@ export function NewTurnoverRequestForm() {
       buildingId: formData.get("buildingId"),
       requestType: formData.get("requestType"),
       unitNumber: formData.get("unitNumber") || undefined,
-      bedrooms: formData.get("bedrooms") || undefined,
-      bathrooms: formData.get("bathrooms") || undefined,
-      fullPaint: formData.get("fullPaint") === "on",
-      touchUpPaint: formData.get("touchUpPaint") || undefined,
-      fullClean: formData.get("fullClean") === "on",
-      carpetCleaning: formData.get("carpetCleaning") === "on",
-      materialsAdditional: formData.get("materialsAdditional") === "on",
+      bedrooms: bedrooms || undefined,
+      bathrooms: bathrooms || undefined,
+      fullPaint,
+      touchUpPaint: touchUpPaint || undefined,
+      fullClean,
+      carpetCleaning,
+      materialsAdditional,
       startDate: formData.get("startDate") || undefined,
       endDate: formData.get("endDate") || undefined,
       sueepPmName: formData.get("sueepPmName") || undefined,
@@ -130,7 +148,14 @@ Sueep Operations
           <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Sales / PM Input</div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <BuildingSelect required />
+            <BuildingSelect
+              required
+              onSelectedBuildingChange={(building) => {
+                const selected = building as SelectedBuilding | null;
+                setSelectedBuildingName(selected?.name ?? null);
+                setSelectedBuildingPricingPackage(selected?.pricingPackage ?? null);
+              }}
+            />
             <label className="block text-xs font-medium text-gray-600">
               Request type
               <select
@@ -147,47 +172,26 @@ Sueep Operations
               placeholder="Unit number"
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
             />
-            <input
-              name="bedrooms"
-              type="number"
-              min="0"
-              placeholder="Bedrooms"
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            />
-            <input
-              name="bathrooms"
-              type="number"
-              min="0"
-              placeholder="Bathrooms"
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            />
-            <input
-              name="touchUpPaint"
-              type="number"
-              min="0"
-              placeholder="Touch-up paint qty"
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-            />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input name="fullPaint" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-pink-600" />
-              Full paint
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input name="fullClean" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-pink-600" />
-              Full clean
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input name="carpetCleaning" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-pink-600" />
-              Carpet cleaning
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <input name="materialsAdditional" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-pink-600" />
-              Additional materials
-            </label>
-          </div>
+          <TurnoverPricingPackageQuestions
+            buildingName={selectedBuildingName}
+            pricingPackage={selectedBuildingPricingPackage}
+            bedrooms={bedrooms}
+            bathrooms={bathrooms}
+            fullPaint={fullPaint}
+            touchUpPaint={touchUpPaint}
+            fullClean={fullClean}
+            carpetCleaning={carpetCleaning}
+            materialsAdditional={materialsAdditional}
+            setBedrooms={setBedrooms}
+            setBathrooms={setBathrooms}
+            setFullPaint={setFullPaint}
+            setTouchUpPaint={setTouchUpPaint}
+            setFullClean={setFullClean}
+            setCarpetCleaning={setCarpetCleaning}
+            setMaterialsAdditional={setMaterialsAdditional}
+          />
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-medium text-gray-600">

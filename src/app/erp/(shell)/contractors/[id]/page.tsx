@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoPanel } from "./ContractorInfoPanel";
@@ -13,7 +14,10 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ContractorDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const contractor = await prisma.contractor.findUnique({ where: { id } });
+  const contractor = await prisma.contractor.findUnique({
+    where: { id },
+    include: { contracts: { orderBy: { createdAt: "asc" } } },
+  });
   if (!contractor) notFound();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
@@ -42,52 +46,78 @@ export default async function ContractorDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <CollapsiblePanel title="General Information">
-        <ContractorProfileEditor
-          contractorId={contractor.id}
-          initial={{
-            name: contractor.name,
-            email: contractor.email,
-            status: contractor.status,
-          }}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Document Upload">
-        <ContractorPaperworkPanel
-          id={contractor.id}
-          email={contractor.email}
-          paperwork={paperwork}
-          paperworkUploadToken={contractor.paperworkUploadToken}
-          paperworkUploadTokenExpiry={
-            contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
-          }
-          resendConfigured={resendConfigured}
-          siteUrl={siteUrl}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Contractor Information Form">
-        <ContractorInfoPanel
-          id={contractor.id}
-          email={contractor.email}
-          infoToken={contractor.infoToken}
-          infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
-          resendConfigured={resendConfigured}
-          siteUrl={siteUrl}
-          collectedInfo={{
-            contractorFullName: contractor.contractorFullName,
-            address: contractor.address,
-            dateOfBirth: contractor.dateOfBirth,
-            ssn: contractor.ssn,
-            bankAccountType: contractor.bankAccountType,
-            bankAccountNumber: contractor.bankAccountNumber,
-            bankRoutingNumber: contractor.bankRoutingNumber,
-            phone: contractor.phone,
-            hasInsurance: contractor.hasInsurance,
-          }}
-        />
-      </CollapsiblePanel>
+      <DetailTabs tabs={[
+        {
+          label: "General Info",
+          content: (
+            <ContractorProfileEditor
+              contractorId={contractor.id}
+              initial={{
+                name: contractor.name,
+                email: contractor.email,
+                status: contractor.status,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Documents",
+          content: (
+            <ContractorPaperworkPanel
+              id={contractor.id}
+              email={contractor.email}
+              paperwork={paperwork}
+              paperworkUploadToken={contractor.paperworkUploadToken}
+              paperworkUploadTokenExpiry={
+                contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
+              }
+              resendConfigured={resendConfigured}
+              siteUrl={siteUrl}
+            />
+          ),
+        },
+        {
+          label: "Info Form",
+          content: (
+            <ContractorInfoPanel
+              id={contractor.id}
+              email={contractor.email}
+              infoToken={contractor.infoToken}
+              infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
+              resendConfigured={resendConfigured}
+              siteUrl={siteUrl}
+              collectedInfo={{
+                contractorFullName: contractor.contractorFullName,
+                address: contractor.address,
+                dateOfBirth: contractor.dateOfBirth,
+                ssn: contractor.ssn,
+                bankAccountType: contractor.bankAccountType,
+                bankAccountNumber: contractor.bankAccountNumber,
+                bankRoutingNumber: contractor.bankRoutingNumber,
+                phone: contractor.phone,
+                hasInsurance: contractor.hasInsurance,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Signing",
+          content: (
+            <ContractSigningSection
+              apiBasePath={`/api/erp/contractors/${contractor.id}`}
+              initialContracts={contractor.contracts.map((c) => ({
+                id: c.id,
+                contractPdfFilename: c.contractPdfFilename,
+                docusealTemplateId: c.docusealTemplateId,
+                signingStatus: c.signingStatus,
+                signerEmail: c.signerEmail,
+                signedAt: c.signedAt?.toISOString() ?? null,
+                signedDocumentUrl: c.signedDocumentUrl,
+              }))}
+            />
+          ),
+        },
+      ]} />
     </div>
   );
 }

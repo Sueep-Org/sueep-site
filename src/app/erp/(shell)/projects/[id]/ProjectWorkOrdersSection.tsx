@@ -69,7 +69,8 @@ export function ProjectWorkOrdersSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const photoUrls = String(fd.get("photoUrls") || "")
       .split("\n")
       .map((line) => line.trim())
@@ -99,7 +100,7 @@ export function ProjectWorkOrdersSection({
       }
       const normalized = normalizeWorkOrder(data);
       setEntries((prev) => [normalized, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

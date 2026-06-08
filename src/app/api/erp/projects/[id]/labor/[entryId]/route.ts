@@ -42,6 +42,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.taskDescription !== undefined) {
     data.taskDescription = body.taskDescription ? String(body.taskDescription).trim() || null : null;
   }
+  if (body.qualityRating !== undefined) {
+    data.qualityRating = body.qualityRating ? String(body.qualityRating).trim() || null : null;
+  }
+  if (body.qualityNotes !== undefined) {
+    data.qualityNotes = body.qualityNotes ? String(body.qualityNotes).trim() || null : null;
+  }
 
   try {
     const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object });

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 export async function GET() {
   const buildings = await prisma.building.findMany({ orderBy: { name: "asc" } });
@@ -19,11 +21,18 @@ export async function POST(req: Request) {
   if (!name || !address) {
     return NextResponse.json({ error: "name and address are required" }, { status: 400 });
   }
+  if (body.pricingPackage !== undefined && !isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
+    return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+  }
 
   try {
     const building = await prisma.building.create({
       data: {
         name,
+        builder:
+          body.builder != null && String(body.builder).trim() !== ""
+            ? String(body.builder).trim()
+            : null,
         address,
         pmName:
           body.pmName != null && String(body.pmName).trim() !== ""
@@ -37,6 +46,8 @@ export async function POST(req: Request) {
           body.pmPhone != null && String(body.pmPhone).trim() !== ""
             ? String(body.pmPhone).trim()
             : null,
+        pricingPackage:
+          body.pricingPackage != null ? sanitizeTurnoverPricingPackage(body.pricingPackage) : undefined,
       },
     });
     return NextResponse.json(building);

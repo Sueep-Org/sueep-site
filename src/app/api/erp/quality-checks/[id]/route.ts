@@ -32,11 +32,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const data: Record<string, unknown> = {};
   if (body.turnoverRequestId !== undefined) {
-    const turnoverRequestId = String(body.turnoverRequestId || "").trim();
-    if (!turnoverRequestId) {
-      return NextResponse.json({ error: "turnoverRequestId is required" }, { status: 400 });
-    }
-    data.turnoverRequestId = turnoverRequestId;
+    data.turnoverRequestId = String(body.turnoverRequestId || "").trim() || null;
+  }
+  if (body.projectId !== undefined) {
+    data.projectId = String(body.projectId || "").trim() || null;
   }
   if (body.supervisorName !== undefined) {
     const supervisorName = String(body.supervisorName || "").trim();

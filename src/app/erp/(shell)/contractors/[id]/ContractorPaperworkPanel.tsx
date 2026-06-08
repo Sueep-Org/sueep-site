@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type PaperworkItem = { label: string; url: string };
 
@@ -42,6 +42,11 @@ export function ContractorPaperworkPanel({
   const [sending, setSending] = useState(false);
   const [sendOk, setSendOk] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [uploadingLabel, setUploadingLabel] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<Record<string, string>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const savedLabels = new Set(initial.map((p) => p.label));
 
   const uploadLink = paperworkUploadToken
     ? `${siteUrl.replace(/\/$/, "")}/contractor-portal/${paperworkUploadToken}`
@@ -97,6 +102,22 @@ export function ContractorPaperworkPanel({
     setTimeout(() => setSendOk(false), 3000);
   }
 
+  async function uploadFile(label: string, file: File) {
+    setUploadingLabel(label);
+    setUploadError((prev) => ({ ...prev, [label]: "" }));
+    const fd = new FormData();
+    fd.append("label", label);
+    fd.append("file", file);
+    const res = await fetch(`/api/erp/contractors/${id}/upload-document`, { method: "POST", body: fd });
+    setUploadingLabel(null);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      setUploadError((prev) => ({ ...prev, [label]: j.error ?? "Upload failed" }));
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-3">
@@ -105,34 +126,62 @@ export function ContractorPaperworkPanel({
         </p>
 
         {paperwork.length > 0 && (
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {paperwork.map((item, i) => (
-              <li key={i} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className={item.url ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
-                    {item.url ? "✓" : "○"}
+              <li key={i} className="text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <span className={item.url ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
+                      {item.url ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-800">{item.label}</span>
                   </span>
-                  <span className="text-gray-800">{item.label}</span>
-                </span>
-                <span className="flex items-center gap-3">
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-[#E73C6E] hover:underline"
+                  <span className="flex items-center gap-3">
+                    {item.url && (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-[#E73C6E] hover:underline"
+                      >
+                        View file
+                      </a>
+                    )}
+                    {savedLabels.has(item.label) ? (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRefs.current[item.label]?.click()}
+                        disabled={uploadingLabel === item.label}
+                        className="text-xs text-gray-500 hover:text-[#E73C6E] disabled:opacity-50"
+                      >
+                        {uploadingLabel === item.label ? "Uploading…" : item.url ? "Replace" : "Upload"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-amber-500">Save requirements first</span>
+                    )}
+                    <input
+                      ref={(el) => { fileInputRefs.current[item.label] = el; }}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadFile(item.label, file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeItem(i)}
+                      className="text-xs text-gray-400 hover:text-red-500"
                     >
-                      View file
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeItem(i)}
-                    className="text-xs text-gray-400 hover:text-red-500"
-                  >
-                    Remove
-                  </button>
-                </span>
+                      Remove
+                    </button>
+                  </span>
+                </div>
+                {uploadError[item.label] && (
+                  <p className="mt-0.5 text-xs text-red-500 pl-5">{uploadError[item.label]}</p>
+                )}
               </li>
             ))}
           </ul>

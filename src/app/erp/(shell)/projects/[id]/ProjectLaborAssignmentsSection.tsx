@@ -148,7 +148,8 @@ export function ProjectLaborAssignmentsSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const employeeId = selectedEmployeeId;
     if (!employeeId) {
       setError("Select a laborer.");
@@ -202,7 +203,7 @@ export function ProjectLaborAssignmentsSection({
       };
       setAssignments((prev) => [row, ...prev]);
       setSelectedEmployeeId("");
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

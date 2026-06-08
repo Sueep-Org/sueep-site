@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BuildingSelect } from "@/app/erp/(shell)/buildings/BuildingSelect";
+import { TurnoverPricingPackageQuestions } from "./TurnoverPricingPackageQuestions";
+import { SignaturePadInput } from "@/app/erp/(shell)/quality-checks/SignaturePadInput";
+
+type SelectedBuilding = {
+  id: string;
+  name: string;
+  pricingPackage?: unknown;
+};
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "QUALITY_CHECK", "APPROVED"] as const;
@@ -11,6 +19,8 @@ interface RequestEditorProps {
   requestId: string;
   initial: {
     buildingId: string;
+    buildingName: string;
+    pricingPackage?: unknown;
     requestType: string;
     unitNumber: string | null;
     bedrooms: number | null;
@@ -24,12 +34,18 @@ interface RequestEditorProps {
     endDate: string | null;
     createdBy: string | null;
     status: string;
+    priceCents: number | null;
+    approvedPriceCents: number | null;
+    pmSignatureUrl: string | null;
+    pmSignedAt: string | null;
   };
 }
 
 export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEditorProps) {
   const router = useRouter();
   const [buildingId, setBuildingId] = useState(initial.buildingId);
+  const [buildingName, setBuildingName] = useState(initial.buildingName);
+  const [pricingPackage, setPricingPackage] = useState<unknown>(initial.pricingPackage ?? null);
   const [requestType, setRequestType] = useState(initial.requestType);
   const [unitNumber, setUnitNumber] = useState(initial.unitNumber ?? "");
   const [bedrooms, setBedrooms] = useState(initial.bedrooms?.toString() ?? "");
@@ -42,6 +58,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   const [startDate, setStartDate] = useState(initial.startDate ?? "");
   const [endDate, setEndDate] = useState(initial.endDate ?? "");
   const [status, setStatus] = useState(initial.status);
+  const [pmSignatureUrl, setPmSignatureUrl] = useState(initial.pmSignatureUrl ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -66,6 +83,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
       startDate: startDate || null,
       endDate: endDate || null,
       status,
+      pmSignatureUrl: pmSignatureUrl || null,
     };
 
     try {
@@ -112,7 +130,16 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   return (
     <form onSubmit={onSubmit} className="space-y-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="grid gap-3 sm:grid-cols-2">
-        <BuildingSelect value={buildingId} onChange={setBuildingId} required />
+        <BuildingSelect
+          value={buildingId}
+          onChange={setBuildingId}
+          onSelectedBuildingChange={(building) => {
+            const selected = building as SelectedBuilding | null;
+            setBuildingName(selected?.name ?? initial.buildingName);
+            setPricingPackage(selected?.pricingPackage ?? initial.pricingPackage ?? null);
+          }}
+          required
+        />
         <label className="block text-xs font-medium text-gray-600">
           Request type
           <select
@@ -133,22 +160,6 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
           placeholder="Unit number"
           className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
         />
-        <input
-          value={bedrooms}
-          onChange={(e) => setBedrooms(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Bedrooms"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
-        <input
-          value={bathrooms}
-          onChange={(e) => setBathrooms(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Bathrooms"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
         <label className="block text-xs font-medium text-gray-600">
           Status
           <select
@@ -165,52 +176,51 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         </label>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={fullPaint}
-            onChange={(e) => setFullPaint(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Full paint
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={fullClean}
-            onChange={(e) => setFullClean(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Full clean
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={carpetCleaning}
-            onChange={(e) => setCarpetCleaning(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Carpet cleaning
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            checked={materialsAdditional}
-            onChange={(e) => setMaterialsAdditional(e.target.checked)}
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-pink-600"
-          />
-          Additional materials
-        </label>
-        <input
-          value={touchUpPaint}
-          onChange={(e) => setTouchUpPaint(e.target.value)}
-          type="number"
-          min="0"
-          placeholder="Touch-up paint qty"
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
-      </div>
+      <TurnoverPricingPackageQuestions
+        buildingName={buildingName}
+        pricingPackage={pricingPackage}
+        bedrooms={bedrooms}
+        bathrooms={bathrooms}
+        fullPaint={fullPaint}
+        touchUpPaint={touchUpPaint}
+        fullClean={fullClean}
+        carpetCleaning={carpetCleaning}
+        materialsAdditional={materialsAdditional}
+        setBedrooms={setBedrooms}
+        setBathrooms={setBathrooms}
+        setFullPaint={setFullPaint}
+        setTouchUpPaint={setTouchUpPaint}
+        setFullClean={setFullClean}
+        setCarpetCleaning={setCarpetCleaning}
+        setMaterialsAdditional={setMaterialsAdditional}
+      />
+
+      <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">PM signature</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              Property manager signs the request and approved price.
+            </p>
+          </div>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${initial.pmSignedAt ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+            {initial.pmSignedAt ? "Signed" : "Pending signature"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+          <div>
+            <span className="font-semibold text-gray-700">Current price: </span>
+            {initial.priceCents != null ? `$${(initial.priceCents / 100).toFixed(0)}` : "-"}
+          </div>
+          <div>
+            <span className="font-semibold text-gray-700">Approved price: </span>
+            {initial.approvedPriceCents != null ? `$${(initial.approvedPriceCents / 100).toFixed(0)}` : "Captured on signature"}
+          </div>
+        </div>
+        <div className="mt-4">
+          <SignaturePadInput value={pmSignatureUrl} onChange={setPmSignatureUrl} />
+        </div>
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-medium text-gray-600">

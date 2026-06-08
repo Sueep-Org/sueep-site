@@ -98,7 +98,7 @@ export function SignaturePadInput({ value, onChange }: SignaturePadInputProps) {
         <button
           type="button"
           onClick={clearSignature}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-gray-400"
         >
           Clear signature
         </button>

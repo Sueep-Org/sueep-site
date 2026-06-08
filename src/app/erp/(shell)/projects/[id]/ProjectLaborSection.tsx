@@ -14,6 +14,23 @@ export type LaborRow = {
   hours: string;
   hourlyRateCents: number;
   taskDescription: string | null;
+  qualityRating: string | null;
+  qualityNotes: string | null;
+};
+
+const QUALITY_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "EXCELLENT", label: "Excellent" },
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
+];
+
+const QUALITY_COLORS: Record<string, string> = {
+  EXCELLENT: "text-emerald-600",
+  GOOD: "text-blue-600",
+  FAIR: "text-amber-600",
+  POOR: "text-red-600",
 };
 
 export type LaborEmployeeOption = {
@@ -142,9 +159,18 @@ export function ProjectLaborSection({
   const [filterLaborer, setFilterLaborer] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
+  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""]))
+  );
+  const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""]))
+  );
+  const [qualityPopup, setQualityPopup] = useState<{ id: string; draft: string } | null>(null);
 
   useEffect(() => {
     setEntries(initialEntries);
+    setQualityMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""])));
+    setNotesMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""])));
   }, [initialEntries]);
 
   useEffect(() => {
@@ -157,6 +183,27 @@ export function ProjectLaborSection({
     setHourlyRateStr(e?.hourlyPayCents != null ? (e.hourlyPayCents / 100).toFixed(2) : "");
     setRoleStr(e?.role ?? "");
   }, [employeePick, employees]);
+
+  function handleQualityChange(entryId: string, value: string) {
+    setQualityMap((prev) => ({ ...prev, [entryId]: value }));
+    fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ qualityRating: value || null }),
+    }).catch(() => {});
+  }
+
+  function handleQualityNotesSave() {
+    if (!qualityPopup) return;
+    const { id, draft } = qualityPopup;
+    setNotesMap((prev) => ({ ...prev, [id]: draft }));
+    setQualityPopup(null);
+    fetch(`/api/erp/projects/${projectId}/labor/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ qualityNotes: draft || null }),
+    }).catch(() => {});
+  }
 
   async function onDelete(entryId: string) {
     if (!confirm("Delete this labor entry?")) return;
@@ -208,13 +255,14 @@ export function ProjectLaborSection({
 
   async function onAddLabor(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError("");
     if (!employeePick) {
-      setError("Choose an employee from the list, or “Other” if they are not in the roster.");
+      setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
     const hours = Number(fd.get("hours"));
@@ -279,9 +327,11 @@ export function ProjectLaborSection({
         hours: String(data.hours),
         hourlyRateCents: data.hourlyRateCents!,
         taskDescription: data.taskDescription ?? null,
+        qualityRating: null,
+        qualityNotes: null,
       };
       setEntries((prev) => [row, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
@@ -310,12 +360,13 @@ export function ProjectLaborSection({
   const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
 
   return (
+    <>
     <div className="space-y-6">
       <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
-          “Other” only when the worker is not in the list.
+          &quot;Other&quot; only when the worker is not in the list.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
@@ -448,7 +499,7 @@ export function ProjectLaborSection({
         </div>
 
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
               <tr>
                 <th className="py-2 pr-2 font-medium">Date</th>
@@ -458,19 +509,23 @@ export function ProjectLaborSection({
                 <th className="py-2 pr-2 font-medium">Rate</th>
                 <th className="py-2 pr-2 font-medium">Line $</th>
                 <th className="py-2 pr-2 font-medium">Task</th>
+                <th className="py-2 pr-2 font-medium">Quality</th>
+                <th className="py-2 pr-2 font-medium">Notes</th>
                 <th className="py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-gray-500">
+                  <td colSpan={10} className="py-6 text-center text-gray-500">
                     {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
                   </td>
                 </tr>
               ) : (
-                visibleEntries.map((r) =>
-                  editingId === r.id ? (
+                visibleEntries.map((r) => {
+                  const quality = qualityMap[r.id] ?? "";
+                  const notes = notesMap[r.id] ?? "";
+                  return editingId === r.id ? (
                     <tr key={r.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
                         <input type="date" className={editInput} value={editFields.workDate} onChange={(e) => setEditFields((f) => ({ ...f, workDate: e.target.value }))} />
@@ -490,6 +545,27 @@ export function ProjectLaborSection({
                       <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(editFields.hours, Number(editFields.hourlyRate) * 100))}</td>
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                      </td>
+                      <td className="py-1 pr-2">
+                        <select
+                          value={quality}
+                          onChange={(e) => handleQualityChange(r.id, e.target.value)}
+                          className={`w-full rounded border border-gray-300 bg-white px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                        >
+                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-1 pr-2">
+                        <button
+                          type="button"
+                          onClick={() => setQualityPopup({ id: r.id, draft: notes })}
+                          title={notes || "Add quality notes"}
+                          className={`rounded p-1 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                          </svg>
+                        </button>
                       </td>
                       <td className="py-1 text-right whitespace-nowrap">
                         <button type="button" onClick={() => onSaveEdit(r.id)} className="text-xs font-medium text-pink-600 hover:text-pink-800">Save</button>
@@ -512,18 +588,78 @@ export function ProjectLaborSection({
                       <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
                       <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
                       <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
+                      <td className="py-2 pr-2">
+                        <select
+                          value={quality}
+                          onChange={(e) => handleQualityChange(r.id, e.target.value)}
+                          className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                        >
+                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <button
+                          type="button"
+                          onClick={() => setQualityPopup({ id: r.id, draft: notes })}
+                          title={notes || "Add quality notes"}
+                          className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                          </svg>
+                        </button>
+                      </td>
                       <td className="py-2 text-right whitespace-nowrap">
                         <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
                         <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>
                       </td>
                     </tr>
-                  )
-                )
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
     </div>
+
+    {qualityPopup ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setQualityPopup(null)}
+      >
+        <div
+          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+          <textarea
+            autoFocus
+            rows={4}
+            value={qualityPopup.draft}
+            onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
+            placeholder="Add notes about work quality..."
+            className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+          />
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setQualityPopup(null)}
+              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleQualityNotesSave}
+              className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

@@ -39,7 +39,7 @@ export async function POST(req: Request, ctx: Ctx) {
   if (!changeOrder) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
-  const projectUrl = appUrl ? `${appUrl}/erp/projects/${id}` : null;
+  const projectUrl = appUrl ? `${appUrl}/erp/projects/${id}/change-orders/${changeOrderId}` : null;
 
   const results: { email: string; ok: boolean }[] = [];
 
@@ -55,7 +55,7 @@ export async function POST(req: Request, ctx: Ctx) {
       description: changeOrder.description,
       reason: changeOrder.reason,
       requestedBy: changeOrder.requestedBy,
-      projectUrl,
+      changeOrderUrl: projectUrl,
     });
     try {
       await sendEmail({

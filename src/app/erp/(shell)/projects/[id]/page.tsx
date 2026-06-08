@@ -10,7 +10,10 @@ import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
+import { ProjectChecklistSection } from "./ProjectChecklistSection";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,7 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -30,6 +33,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         contractorAssignments: {
           orderBy: { createdAt: "desc" },
           include: { contractor: { select: { id: true, name: true } } },
+        },
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+          select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
       },
     }),
@@ -46,6 +53,15 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       orderBy: { createdAt: "desc" },
       include: { laborers: { orderBy: { createdAt: "asc" } } },
     }),
+    prisma.materialEntry.findMany({
+      where: { projectId: id },
+      orderBy: { usedOn: "desc" },
+    }),
+    prisma.projectChecklistItem.findMany({
+      where: { projectId: id },
+      orderBy: [{ date: "desc" }, { createdAt: "asc" }],
+    }),
+    prisma.projectWorkOrderRecord.findUnique({ where: { projectId: id } }),
   ]);
   if (!project) notFound();
 
@@ -71,6 +87,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     hours: e.hours.toString(),
     hourlyRateCents: e.hourlyRateCents,
     taskDescription: e.taskDescription,
+    qualityRating: e.qualityRating ?? null,
+    qualityNotes: e.qualityNotes ?? null,
   }));
 
   const changeOrderRows = changeOrders.map((co) => ({
@@ -85,6 +103,13 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     estimatedDays: co.estimatedDays,
     reason: co.reason,
     resolutionNotes: co.resolutionNotes,
+    contractValueCents: co.contractValueCents,
+    estMaterialCents: co.estMaterialCents,
+    estTravelCents: co.estTravelCents,
+    estLaborCents: co.estLaborCents,
+    actualLaborCents: co.actualLaborCents,
+    actualMaterialCents: co.actualMaterialCents,
+    actualTravelCents: co.actualTravelCents,
     laborers: (co.laborers ?? []).map((l) => ({ id: l.id, employeeId: l.employeeId, name: l.name, role: l.role })),
   }));
 
@@ -99,33 +124,46 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     notes: a.notes,
   }));
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
-          ← Projects
-        </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} />
-          <ProjectDeleteButton projectId={project.id} />
-        </div>
-      </div>
-
-      <CollapsiblePanel title="Project Details">
-        <ProjectPricePackageEditor
-          projectId={project.id}
-          description={project.description}
-          contractValueCents={project.contractValueCents}
-        />
-        {project.description ? (
-          <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-            <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
-            <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
-          </div>
-        ) : null}
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Project Setup" defaultOpen={false}>
+  const tabs = [
+    {
+      label: "Details",
+      content: (
+        <>
+          <ProjectWorkOrderNotifier
+            projectId={project.id}
+            jobTitle={project.jobTitle}
+            description={project.description}
+            projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+            contacts={project.contacts}
+            employees={laborEmployees}
+            savedRecord={workOrderRecord ? {
+              projectName: workOrderRecord.projectName,
+              siteAddress: workOrderRecord.siteAddress,
+              contacts: workOrderRecord.contacts,
+              startDate: workOrderRecord.startDate,
+              serviceType: workOrderRecord.serviceType,
+              notes: workOrderRecord.notes,
+              lastSentToName: workOrderRecord.lastSentToName,
+              lastSentAt: workOrderRecord.lastSentAt ? workOrderRecord.lastSentAt.toISOString() : null,
+            } : null}
+          />
+          <ProjectPricePackageEditor
+            projectId={project.id}
+            description={project.description}
+            contractValueCents={project.contractValueCents}
+          />
+          {project.description ? (
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+            </div>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      label: "Setup",
+      content: (
         <ProjectSetupEditor
           projectId={project.id}
           status={project.status}
@@ -140,9 +178,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           description={project.description}
           showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS"}
         />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Money" defaultOpen={false}>
+      ),
+    },
+    {
+      label: "Money",
+      content: (
         <ProjectFinancialsEditor
           projectId={project.id}
           contractValueCents={project.contractValueCents}
@@ -157,25 +197,90 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           estHours={project.estHours}
           actualHours={project.actualHours}
         />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Labor" defaultOpen={false}>
-        <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Contractors" defaultOpen={false}>
+      ),
+    },
+    {
+      label: "Labor",
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />,
+    },
+    {
+      label: "Contractors",
+      content: (
         <ProjectContractorSection
           projectId={project.id}
           initialAssignments={contractorRows}
           contractors={contractors}
         />
-      </CollapsiblePanel>
+      ),
+    },
+    {
+      label: "Materials",
+      content: (
+        <ProjectMaterialsSection
+          projectId={project.id}
+          initialEntries={materialEntries.map((e) => ({
+            id: e.id,
+            usedOn: e.usedOn.toISOString(),
+            category: e.category as "CLEANING_PRODUCTS" | "PAINT",
+            itemName: e.itemName,
+            quantity: e.quantity,
+            unit: e.unit,
+            costCents: e.costCents,
+            notes: e.notes,
+          }))}
+        />
+      ),
+    },
+    {
+      label: "Checklist",
+      content: (
+        <ProjectChecklistSection
+          projectId={project.id}
+          initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({
+            id: item.id,
+            createdAt: item.createdAt.toISOString(),
+            date: item.date.toISOString(),
+            title: item.title,
+            completed: item.completed,
+            notes: item.notes,
+          }))}
+        />
+      ),
+    },
+    ...(isPostConstruction
+      ? [
+          {
+            label: "Change Orders",
+            content: (
+              <ProjectChangeOrdersSection
+                projectId={project.id}
+                initialEntries={changeOrderRows}
+                employees={laborEmployees.map((e) => ({
+                  id: e.id,
+                  firstName: e.firstName,
+                  lastName: e.lastName,
+                  email: e.email ?? null,
+                }))}
+              />
+            ),
+          },
+        ]
+      : []),
+  ];
 
-      {isPostConstruction ? (
-        <CollapsiblePanel title="Change Orders" defaultOpen={false}>
-          <ProjectChangeOrdersSection projectId={project.id} initialEntries={changeOrderRows} />
-        </CollapsiblePanel>
-      ) : null}
+  return (
+    <div className="space-y-6">
+      <div>
+        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
+          ← Projects
+        </Link>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
+          <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />
+        </div>
+      </div>
+
+      <DetailTabs tabs={tabs} />
     </div>
   );
 }
