@@ -197,24 +197,6 @@ export default function PayrollExportPage() {
         </div>
       )}
 
-      {/* Summary cards */}
-      {data && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total gross pay</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{fmt(totalGross)}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total hours</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{fmtHours(totalHours)}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Employees</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{data.rows.length}</p>
-          </div>
-        </div>
-      )}
-
       {/* Table */}
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
