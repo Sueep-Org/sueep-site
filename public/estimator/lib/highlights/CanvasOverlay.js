@@ -313,10 +313,11 @@ export class CanvasOverlay {
         }
       }
 
-      // compute the real-world inches for this drawn line
-      // if no scale set, fall back to raw PDF inches (pixelLength / pxPerPt / 72)
-      const rawInches = (Math.hypot(end.x - start.x, end.y - start.y) / this._pxPerPt) / 72;
-      let realInchesForLine = scaleFactor ? (Math.hypot(end.x - start.x, end.y - start.y) * scaleFactor) : rawInches;
+      // compute the real-world inches for this drawn line in a zoom-independent way
+      const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
+      const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
+      const rawInches = pageLengthPoints / 72;
+      let realInchesForLine = scaleFactor ? (pageLengthPoints * scaleFactor) : rawInches;
       if (this.doubleSided) {
         realInchesForLine *= 2;
       }
@@ -345,8 +346,9 @@ export class CanvasOverlay {
       const pixelArea = pixelWidth * pixelHeight;
       if (pixelArea <= 4) { this.redraw(); return; }
 
-      // convert area from pixels to scaled units using same helper
-      const areaScaled = applyScale(pixelArea, this._pxPerPt);
+      // convert area from pixels to a zoom-independent page-area value, then apply scale if present
+      const scale = this.store.getScale(this.currentPage);
+      const areaScaled = applyScale(pixelArea, this._pxPerPt, scale?.factor);
 
       // normalized rectangle polygon
       const left = Math.min(start.x, end.x);
@@ -571,7 +573,7 @@ export class CanvasOverlay {
         const pxLen = Math.hypot(b.x - a.x, b.y - a.y) || 0;
         const scale = this.store.getScale(this.currentPage);
         if (scale && scale.factor) {
-          const inches = pxLen * scale.factor;
+          const inches = (pxLen / (this._pxPerPt || 1)) * scale.factor;
           const txt = formatInches(inches);
           drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
         } else {
@@ -613,7 +615,7 @@ export class CanvasOverlay {
         // show pixel length while dragging
         const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
         const scale = this.store.getScale(this.currentPage);
-        const labelTxt = (scale && scale.factor) ? formatInches(pxLen * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
+        const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
         drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, labelTxt);
       }
       if (this.tool === 'rect') {
@@ -621,7 +623,8 @@ export class CanvasOverlay {
         const pxW = Math.abs(p.x2 - p.x1);
         const pxH = Math.abs(p.y2 - p.y1);
         const pxArea = pxW * pxH;
-        const areaScaled = applyScale(pxArea, this._pxPerPt);
+        const scale = this.store.getScale(this.currentPage);
+        const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
         drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${areaScaled.toFixed(2)} sq`);
       }
     }
@@ -702,14 +705,25 @@ function calculatePerimeter(points) {
   return total;
 }
 
-function applyScale(areaPx, pxPerPt) {
-  const scale = pxPerPt || 1;
-  return areaPx / (scale * scale);
+function toPagePoints(lengthPx, pxPerPt) {
+  const scale = Number(pxPerPt) || 1;
+  return lengthPx / scale;
 }
 
-function applyScaleLength(lengthPx, pxPerPt) {
-  const scale = pxPerPt || 1;
-  return lengthPx / scale;
+function applyScale(areaPx, pxPerPt, scaleFactor = null) {
+  const pageAreaPoints = (areaPx / ((Number(pxPerPt) || 1) * (Number(pxPerPt) || 1)));
+  if (scaleFactor && Number(scaleFactor) > 0) {
+    return pageAreaPoints * Number(scaleFactor) * Number(scaleFactor);
+  }
+  return pageAreaPoints;
+}
+
+function applyScaleLength(lengthPx, pxPerPt, scaleFactor = null) {
+  const pageLengthPoints = toPagePoints(lengthPx, pxPerPt);
+  if (scaleFactor && Number(scaleFactor) > 0) {
+    return pageLengthPoints * Number(scaleFactor);
+  }
+  return pageLengthPoints / 72;
 }
 
 // =========================
@@ -853,7 +867,7 @@ function parseScaleExpression(str) {
   return parseMeasurementToInches(str);
 }
 
-// compute inches-per-pixel from a scale expression and PDF space info
+// compute a zoom-independent scale factor in inches per PDF point
 function computeScaleFactorFromExpression(str, pixelLength, pxPerPt) {
   if (!str) return null;
   const parts = str.split('=');
@@ -863,21 +877,14 @@ function computeScaleFactorFromExpression(str, pixelLength, pxPerPt) {
     const leftInches = parseMeasurementToInches(left);
     const rightInches = parseMeasurementToInches(right);
     if (!leftInches || !rightInches) return null;
-    // if we have PDF space info (pxPerPt) we can compute inches-per-pixel independent of drawn pixel length
-    // pixels-per-inch = pxPerPt * 72 (points per inch)
-    if (pxPerPt && pxPerPt > 0) {
-      const pixelsPerInch = pxPerPt * 72;
-      const inchesPerPixelDrawing = 1 / pixelsPerInch;
-      // real inches per pixel = (rightInches / leftInches) * inchesPerPixelDrawing
-      return (rightInches / leftInches) * inchesPerPixelDrawing;
-    }
-    // fallback: treat the entered right side as the real-world length for the drawn pixelLength
-    return rightInches / pixelLength;
+    const pagePoints = leftInches * 72;
+    return rightInches / pagePoints;
   }
-  // no '=' -> parse as a real-world length corresponding to the drawn pixel length
+
   const realInches = parseMeasurementToInches(str);
   if (!realInches) return null;
-  return realInches / pixelLength;
+  const pagePoints = (pixelLength || 0) / (Number(pxPerPt) || 1);
+  return realInches / pagePoints;
 }
 
 // draw a preview (temporary) measurement line
