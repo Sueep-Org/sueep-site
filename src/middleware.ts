@@ -1,14 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyErpJwtEdge } from "@/lib/erpSessionEdge";
 import { erpSessionCookieName } from "@/lib/erpSession";
-
-function isAppSubdomain(host: string): boolean {
-  if (host === "app.sueep.com" || host.startsWith("app.sueep.com:")) return true;
-  if (process.env.NODE_ENV === "development") {
-    if (host === "app.localhost:3000" || host.startsWith("app.localhost:")) return true;
-  }
-  return false;
-}
+import { isAppSubdomainHost, MARKETING_SITE_URL } from "@/lib/siteHosts";
 
 function hasStaticExtension(pathname: string): boolean {
   const base = pathname.split("/").pop() || "";
@@ -19,22 +12,42 @@ function isPublicAppPath(pathname: string): boolean {
   return pathname === "/janitorial-turnover" || pathname.startsWith("/janitorial-turnover/");
 }
 
-/** Browser URL path → internal app route (same as rewrite target). */
+/** Paths served on app.sueep.com (ERP). All other browser paths belong on sueep.com. */
+function isErpBrowserPath(pathname: string): boolean {
+  if (pathname === "/" || pathname === "") return true;
+  if (pathname === "/login") return true;
+  if (pathname.startsWith("/erp")) return true;
+  return false;
+}
+
+function redirectMarketingPathFromApp(request: NextRequest): NextResponse | null {
+  const host = request.headers.get("host") || "";
+  if (!isAppSubdomainHost(host)) return null;
+
+  const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
+  if (hasStaticExtension(pathname)) return null;
+  if (isErpBrowserPath(pathname)) return null;
+
+  const target = new URL(`${pathname}${request.nextUrl.search}`, MARKETING_SITE_URL);
+  return NextResponse.redirect(target);
+}
+
+/** Browser URL path → internal ERP route. Marketing paths are never mapped into /erp. */
 function logicalErpPath(pathname: string, host: string): string {
-  if (!isAppSubdomain(host)) return pathname;
+  if (!isAppSubdomainHost(host)) return pathname;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return pathname;
   if (hasStaticExtension(pathname)) return pathname;
   if (isPublicAppPath(pathname)) return pathname;
   if (pathname === "/" || pathname === "") return "/erp";
   if (pathname === "/login") return "/erp/login";
-  if (!pathname.startsWith("/erp")) return `/erp${pathname}`;
   return pathname;
 }
 
 function rewriteUrlIfNeeded(request: NextRequest): URL | null {
   const host = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
-  if (!isAppSubdomain(host)) return null;
+  if (!isAppSubdomainHost(host)) return null;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
   if (hasStaticExtension(pathname)) return null;
   const logical = logicalErpPath(pathname, host);
@@ -45,6 +58,9 @@ function rewriteUrlIfNeeded(request: NextRequest): URL | null {
 }
 
 export async function middleware(request: NextRequest) {
+  const marketingRedirect = redirectMarketingPathFromApp(request);
+  if (marketingRedirect) return marketingRedirect;
+
   const host = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
   const logical = logicalErpPath(pathname, host);
@@ -64,7 +80,7 @@ export async function middleware(request: NextRequest) {
       if (pathname.startsWith("/api/erp/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const loginPath = isAppSubdomain(host) ? "/login" : "/erp/login";
+      const loginPath = isAppSubdomainHost(host) ? "/login" : "/erp/login";
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
   }

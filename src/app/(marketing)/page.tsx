@@ -184,8 +184,8 @@ export default function Home() {
             <Link href="/blog" className="text-gray-500 hover:text-white text-xs sm:text-sm">
               Blog
             </Link>
-            <a href="#" className="hover:text-white">Privacy</a>
-            <a href="#" className="hover:text-white">Terms</a>
+            <Link href="/privacy" className="hover:text-white">Privacy</Link>
+            <Link href="/terms" className="hover:text-white">Terms</Link>
             <a href="#contact" className="hover:text-white">Contact</a>
             </div>
           </div>
