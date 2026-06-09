@@ -118,12 +118,9 @@ export default function EstimatorPage() {
                 <button id="drawRectBtn" className="mini-btn">
                   Draw Rect
                 </button>
-                <button id="toggleSidebarBtn" className="mini-btn">
-                  Measurements
-                </button>
 
                 <button id="doubleSideToggle" className="mini-btn">
-                  Single sided
+                  Single Sided
                 </button>
 
                 <div className="zoom-group">
@@ -183,6 +180,12 @@ export default function EstimatorPage() {
                     Next
                   </button>
                 </div>
+
+                <div style={{ marginLeft: "auto" }}>
+                  <button id="toggleSidebarBtn" className="mini-btn">
+                    Measurements
+                  </button>
+                </div>
               </div>
 
               {/* VIEWER ROW */}
@@ -203,7 +206,6 @@ export default function EstimatorPage() {
                     <div className="mb-3">
                       <div className="flex items-center justify-between">
                         <h3 className="text-lg font-semibold mb-2">Measurements</h3>
-                        <button id="toggleMeasurementsBtn" className="mini-btn">▼</button>
                       </div>
                     </div>
                     <div id="measurementsContent">

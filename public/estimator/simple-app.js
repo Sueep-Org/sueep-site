@@ -103,7 +103,7 @@ async function refreshDrawer(){
       };
 
       const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
+      delBtn.textContent = '✕';
       delBtn.title = 'Delete';
       delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
 
@@ -124,7 +124,29 @@ async function refreshDrawer(){
         }
       };
 
+      const dlBtn = document.createElement('button');
+      dlBtn.textContent = '⬇';
+      dlBtn.title = 'Download';
+      dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#374151;';
+
+      dlBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        try{
+          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = display;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }catch(e){
+          toast(e.message, 'error');
+        }
+      };
+
       row.appendChild(btn);
+      row.appendChild(dlBtn);
       row.appendChild(delBtn);
       savedSec.appendChild(row);
     });
