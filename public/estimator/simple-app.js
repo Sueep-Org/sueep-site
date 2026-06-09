@@ -365,8 +365,8 @@ async function initApp(){
     // Update scale info based on viewed page
     if (measurementScaleInfo) {
       if (scale && scale.factor) {
-        const pxPerInch = 1 / scale.factor;
-        measurementScaleInfo.textContent = `Scale set: 1 in = ${pxPerInch.toFixed(1)} px`;
+        const pointsPerInch = 1 / scale.factor;
+        measurementScaleInfo.textContent = `Scale set: 1 in = ${pointsPerInch.toFixed(1)} pt`;
       } else {
         measurementScaleInfo.textContent = 'Scale not set';
       }
@@ -569,7 +569,7 @@ async function initApp(){
     return `${rem}"`;
   }
 
-  function computeScaleFactorFromExpression(str, pxPerPt) {
+  function computeScaleFactorFromExpression(str, pixelLength, pxPerPt) {
     if (!str) return null;
     const parts = str.split('=');
     if (parts.length === 2) {
@@ -578,13 +578,14 @@ async function initApp(){
       const leftInches = parseMeasurementToInches(left);
       const rightInches = parseMeasurementToInches(right);
       if (!leftInches || !rightInches) return null;
-      if (pxPerPt && pxPerPt > 0) {
-        const pixelsPerInch = pxPerPt * 72;
-        return (rightInches / leftInches) * (1 / pixelsPerInch);
-      }
-      return null;
+      const pagePoints = leftInches * 72;
+      return rightInches / pagePoints;
     }
-    return null;
+
+    const realInches = parseMeasurementToInches(str);
+    if (!realInches) return null;
+    const pagePoints = (pixelLength || 0) / (Number(pxPerPt) || 1);
+    return realInches / pagePoints;
   }
 
   // ======================================================
@@ -1113,7 +1114,7 @@ async function initApp(){
       e.stopPropagation();
       const entry = window.prompt('Enter page scale (example: "1/16 in = 1 ft"). This must contain "=".');
       if (!entry || !entry.trim()) return;
-      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), overlay._pxPerPt);
+      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), 72, overlay._pxPerPt);
       if (!scaleFactor || scaleFactor <= 0) {
         toast('Invalid scale expression', 'error');
         return;
