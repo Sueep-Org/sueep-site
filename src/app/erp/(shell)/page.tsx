@@ -24,8 +24,8 @@ export default async function ErpDashboardPage() {
   try {
     const cfg = parseHubSpotPipelineStageMap();
     const janitorialSegments = cfg?.janitorial.pipelineId
-      ? ["JANITORIAL_TURNOVER_REQUESTS"]
-      : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+      ? ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST"]
+      : ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST", "COMMERCIAL_CLEANING"];
     const janitorialProjectWhere = {
       OR: [
         { segment: { in: janitorialSegments } },

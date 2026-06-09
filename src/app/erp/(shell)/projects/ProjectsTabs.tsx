@@ -41,6 +41,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     const segment = normalizeProjectSegment(row.segment);
     const looksLikeTurnoverRequest =
       segment === "JANITORIAL_TURNOVER_REQUESTS" ||
+      segment === "JANITORIAL_GENERAL_WORK_REQUEST" ||
       Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im));
 
     if (pid === janitorialPipelineId || looksLikeTurnoverRequest) return "janitorial";

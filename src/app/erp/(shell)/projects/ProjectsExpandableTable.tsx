@@ -464,6 +464,7 @@ export function billingBadge(status: string | null) {
 function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string | null) {
   return (
     row.segment === "JANITORIAL_TURNOVER_REQUESTS" ||
+    row.segment === "JANITORIAL_GENERAL_WORK_REQUEST" ||
     Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im)) ||
     (Boolean(janitorialPipelineId) && row.hubspotPipelineId === janitorialPipelineId)
   );

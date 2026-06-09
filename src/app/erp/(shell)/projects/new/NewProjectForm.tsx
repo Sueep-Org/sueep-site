@@ -190,6 +190,8 @@ interface ScheduleBuildingOption {
 interface ProjectOption {
   id: string;
   jobTitle: string;
+  segment?: string | null;
+  hubspotPipelineId?: string | null;
 }
 
 interface EmployeeOption {
@@ -539,6 +541,22 @@ export function NewProjectForm({
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
   const isChangeOrder = segment === "CHANGE_ORDER";
+  const isJanitorialGeneralWorkRequest = segment === "JANITORIAL_GENERAL_WORK_REQUEST";
+  const isChildWorkRequest = isChangeOrder || isJanitorialGeneralWorkRequest;
+  const childWorkRequestProjects = useMemo(() => {
+    if (!isJanitorialGeneralWorkRequest) return allProjects;
+    return allProjects.filter((project) => {
+      if (janitorialPipelineId && project.hubspotPipelineId === janitorialPipelineId) return true;
+      return project.segment === "JANITORIAL_TURNOVER_REQUESTS" || project.segment === "COMMERCIAL_CLEANING";
+    });
+  }, [allProjects, isJanitorialGeneralWorkRequest, janitorialPipelineId]);
+  const childRequestNoun = isJanitorialGeneralWorkRequest ? "work request" : "change order";
+
+  useEffect(() => {
+    if (isJanitorialGeneralWorkRequest && coProjectId && !childWorkRequestProjects.some((project) => project.id === coProjectId)) {
+      setCoProjectId("");
+    }
+  }, [childWorkRequestProjects, coProjectId, isJanitorialGeneralWorkRequest]);
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -786,7 +804,7 @@ export function NewProjectForm({
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok) { setError(data.error || "Failed to create change order"); setLoading(false); return; }
+      if (!res.ok) { setError(data.error || `Failed to create ${childRequestNoun}`); setLoading(false); return; }
 
       if (data.id && notifyEmployeeIds.length > 0) {
         try {
@@ -944,7 +962,7 @@ export function NewProjectForm({
     }
   }
 
-  if (isChangeOrder) {
+  if (isChildWorkRequest) {
     return (
       <form onSubmit={onSubmitChangeOrder} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
         <div>
@@ -957,9 +975,9 @@ export function NewProjectForm({
         </div>
 
         <div>
-          <label className={label}>Project *</label>
+          <label className={label}>{isJanitorialGeneralWorkRequest ? "Janitorial project *" : "Project *"}</label>
           <ProjectSearchDropdown
-            projects={allProjects}
+            projects={childWorkRequestProjects}
             value={coProjectId}
             onChange={setCoProjectId}
           />
@@ -1024,7 +1042,7 @@ export function NewProjectForm({
         )}
         <div className="flex gap-3">
           <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto">
-            {loading ? "Saving…" : "Create change order"}
+            {loading ? "Saving…" : `Create ${childRequestNoun}`}
           </button>
         </div>
       </form>

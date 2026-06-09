@@ -14,8 +14,8 @@ export async function GET(req: Request) {
   const cfg = parseHubSpotPipelineStageMap();
   const normalizedSegment = segment ? normalizeProjectSegment(segment) : null;
   const janitorialSegments = cfg?.janitorial.pipelineId
-    ? ["JANITORIAL_TURNOVER_REQUESTS"]
-    : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+    ? ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST"]
+    : ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST", "COMMERCIAL_CLEANING"];
   const isJanitorialCategory = category === "active-janitorial" || category === "schedule-janitorial";
 
   const projects = await prisma.project.findMany({
