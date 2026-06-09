@@ -73,12 +73,20 @@ export default async function BuildingsPage() {
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/erp/buildings/${building.id}`}
-                        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
-                      >
-                        Edit
-                      </Link>
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/erp/buildings/${building.id}/pricing-package`}
+                          className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700"
+                        >
+                          Price package
+                        </Link>
+                        <Link
+                          href={`/erp/buildings/${building.id}`}
+                          className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
+                        >
+                          Edit
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
