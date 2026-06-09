@@ -21,6 +21,7 @@ function isCleanupRow(row: ProjectTableRow) {
 }
 
 function janitorialRowTitle(row: ProjectTableRow) {
+  const buildingTitle = janitorialBuildingTitle(row);
   const units = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
   const unitScope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
   const firstUnit = units.split(",")[0]?.replace(/^\s*\d+\s+unit[s]?\s*\([^)]*\)\s*-\s*/i, "").trim();
@@ -30,6 +31,7 @@ function janitorialRowTitle(row: ProjectTableRow) {
 
   const unitFromTitle = row.jobTitle.match(/\bUnit\b.+$/i)?.[0]?.trim();
   if (unitFromTitle) return unitFromTitle;
+  if (row.jobTitle.trim() === buildingTitle) return "Turnover";
 
   return row.jobTitle;
 }
@@ -81,6 +83,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       collapsibleGroups
       rowTitleForRow={janitorialRowTitle}
       rowDescriptionForRow={janitorialRowDescription}
+      rowSegmentLabelForRow={() => "Turnover"}
     />
   );
 }

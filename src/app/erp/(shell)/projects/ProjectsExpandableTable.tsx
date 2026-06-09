@@ -573,6 +573,7 @@ export function ProjectsExpandableTable({
   collapsibleGroups = false,
   rowTitleForRow,
   rowDescriptionForRow,
+  rowSegmentLabelForRow,
 }: {
   rows: ProjectTableRow[];
   janitorialPipelineId: string | null;
@@ -582,6 +583,7 @@ export function ProjectsExpandableTable({
   collapsibleGroups?: boolean;
   rowTitleForRow?: (row: ProjectTableRow) => string;
   rowDescriptionForRow?: (row: ProjectTableRow) => string | null;
+  rowSegmentLabelForRow?: (row: ProjectTableRow) => string;
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
@@ -650,6 +652,7 @@ export function ProjectsExpandableTable({
             const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
             const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
+            const rowSegmentLabel = rowSegmentLabelForRow?.(p) ?? projectSegmentLabel(p.segment);
             const groupHref = groupTitle ? groupHrefForRow?.(p, i, rows) || null : null;
             return (
               <Fragment key={p.id}>
@@ -720,7 +723,7 @@ export function ProjectsExpandableTable({
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
+                  <td className="px-3 py-2 text-gray-900">{rowSegmentLabel}</td>
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estMaterialCents)}</td>
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualMaterialCents)}</td>
