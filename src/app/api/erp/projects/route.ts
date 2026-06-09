@@ -65,6 +65,8 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({
         ok: true,
+        project: result.project,
+        projectId: result.project.id,
         buildingId: result.building.id,
         ids: result.turnoverRequests.map((request) => request.id),
       });

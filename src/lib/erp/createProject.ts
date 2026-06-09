@@ -20,12 +20,48 @@ function percentValue(value: unknown) {
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : undefined;
 }
 
+function minDateValue(values: (Date | null | undefined)[]) {
+  return values.filter((value): value is Date => Boolean(value)).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+}
+
+function maxDateValue(values: (Date | null | undefined)[]) {
+  const sorted = values.filter((value): value is Date => Boolean(value)).sort((a, b) => a.getTime() - b.getTime());
+  return sorted[sorted.length - 1] ?? null;
+}
+
 export async function createProjectFromPayload(body: Record<string, unknown>) {
   const segment = normalizeProjectSegment(String(body.segment || "COMMERCIAL_CLEANING"));
 
   if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
     const result = await createTurnoverRequestsFromPayload(body);
-    return { turnoverRequests: result.requests, building: result.building } as const;
+    const projectDate = parseProjectDate(body.projectDate) ?? minDateValue(result.requests.map((request) => request.startDate));
+    const projectEndDate =
+      parseProjectDate(body.projectEndDate) ?? maxDateValue(result.requests.map((request) => request.endDate));
+    const jobTitle = stringValue(body.jobTitle) || `${result.building.name} - Janitorial turnover`;
+
+    const project = await prisma.project.create({
+      data: {
+        segment,
+        jobTitle,
+        supervisor: stringValue(body.supervisor) || stringValue(body.pmName) || null,
+        description: stringValue(body.description) || null,
+        projectDate,
+        projectEndDate,
+        percentDone: percentValue(body.percentDone) ?? 0,
+        percentInvoiced: percentValue(body.percentInvoiced) ?? 0,
+        contractValueCents: inputToCents(body.contractValue) ?? undefined,
+        estMaterialCents: inputToCents(body.estMaterial) ?? undefined,
+        estTravelCents: inputToCents(body.estTravel) ?? undefined,
+        estLaborCents: inputToCents(body.estLabor) ?? undefined,
+        actualLaborCents: inputToCents(body.actualLabor) ?? undefined,
+        actualMaterialCents: inputToCents(body.actualMaterial) ?? undefined,
+        estHours: body.estHours != null && body.estHours !== "" ? Number(body.estHours) : undefined,
+        actualHours: body.actualHours != null && body.actualHours !== "" ? Number(body.actualHours) : undefined,
+        hubspotPipelineId: stringValue(body.hubspotPipelineId) || null,
+      },
+    });
+
+    return { turnoverRequests: result.requests, building: result.building, project } as const;
   }
 
   const jobTitle = stringValue(body.jobTitle);

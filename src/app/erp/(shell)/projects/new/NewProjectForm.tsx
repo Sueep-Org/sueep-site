@@ -942,7 +942,7 @@ export function NewProjectForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as { id?: string; error?: string };
+      const data = (await res.json()) as { id?: string; projectId?: string; error?: string };
       if (!res.ok) {
         setError(data.error || "Failed to create");
         setLoading(false);
@@ -951,7 +951,7 @@ export function NewProjectForm({
       if (successMessage) {
         setSubmitted(true);
       } else if (isTurnover) {
-        router.push("/erp/turnover-requests");
+        router.push(data.projectId ? `/erp/projects/${data.projectId}` : "/erp/projects");
       } else {
         router.push("/erp/projects");
       }
