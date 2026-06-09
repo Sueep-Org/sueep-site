@@ -314,7 +314,6 @@ export class CanvasOverlay {
       }
 
       // compute the real-world inches for this drawn line in a zoom-independent way
-      const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
       const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
       const rawInches = pageLengthPoints / 72;
       let realInchesForLine = scaleFactor ? (pageLengthPoints * scaleFactor) : rawInches;
