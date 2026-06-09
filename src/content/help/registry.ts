@@ -9,6 +9,8 @@ import { ProjectsOverview } from "./projects/projects-overview";
 import { InputtingLaborLogs } from "./workers/labor-logs";
 import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
+import { AddingContractors } from "./workers/adding-contractors";
+import { LoggingContractors } from "./workers/logging-contractors";
 
 export type ArticleEntry = {
   slug: string;
@@ -100,5 +102,21 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 5,
     component: MaterialsLog,
+  },
+  {
+    slug: "workers/adding-contractors",
+    title: "Adding Contractors",
+    category: "Workers",
+    description: "How to register contractors in our system to be added onto projects",
+    order:3,
+    component: AddingContractors
+  },
+  {
+    slug: "workers/logging-contractors",
+    title: "Assigning Contractors to Projects",
+    category: "Workers",
+    description: "How to log contractors on projects much like you add laborers",
+    order: 4,
+    component: LoggingContractors
   }
 ];
