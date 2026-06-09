@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegments";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
+import { notifyJanitorialTurnoverCreated } from "@/lib/erp/notifyJanitorialTurnover";
 
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
@@ -57,6 +58,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     if ("turnoverRequests" in result && result.turnoverRequests && result.building) {
+      await notifyJanitorialTurnoverCreated({
+        body,
+        building: result.building,
+        requests: result.turnoverRequests,
+      });
       return NextResponse.json({
         ok: true,
         buildingId: result.building.id,

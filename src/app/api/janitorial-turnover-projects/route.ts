@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
+import { notifyJanitorialTurnoverCreated } from "@/lib/erp/notifyJanitorialTurnover";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     if ("turnoverRequests" in result && result.turnoverRequests && result.building) {
+      await notifyJanitorialTurnoverCreated({
+        body: payload,
+        building: result.building,
+        requests: result.turnoverRequests,
+      });
       return NextResponse.json({
         buildingId: result.building.id,
         ids: result.turnoverRequests.map((request) => request.id),
