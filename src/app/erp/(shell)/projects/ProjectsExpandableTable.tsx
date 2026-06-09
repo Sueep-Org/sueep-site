@@ -110,6 +110,31 @@ export function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
 
+function projectActualCostCents(project: ProjectTableRow) {
+  return (project.actualLaborCents ?? 0) + (project.actualMaterialCents ?? 0);
+}
+
+function projectMarginCents(project: ProjectTableRow) {
+  if (project.contractValueCents == null) return null;
+  return project.contractValueCents - projectActualCostCents(project);
+}
+
+function marginClass(value: number | null) {
+  if (value == null) return "text-gray-400";
+  if (value < 0) return "text-red-600";
+  return "text-emerald-700";
+}
+
+function marginPercent(project: ProjectTableRow) {
+  const margin = projectMarginCents(project);
+  if (margin == null || !project.contractValueCents) return null;
+  return `${Math.round((margin / project.contractValueCents) * 100)}%`;
+}
+
+function sumProjects(rows: ProjectTableRow[], selector: (row: ProjectTableRow) => number | null | undefined) {
+  return rows.reduce((sum, row) => sum + (selector(row) ?? 0), 0);
+}
+
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
   return (
@@ -119,89 +144,6 @@ function getDetailLine(description: string | null, label: string) {
       ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
       .trim() || ""
   );
-}
-
-export function TurnoverPricingSummary({
-  project,
-  showPropertyTitle = true,
-  showUnitsSummary = true,
-}: {
-  project: ProjectTableRow;
-  showPropertyTitle?: boolean;
-  showUnitsSummary?: boolean;
-}) {
-  const property = getDetailLine(project.description, "Property");
-  const units = getDetailLine(project.description, "Units");
-  const total = getDetailLine(project.description, "Estimated Turnover Total");
-  const standardBreakdown = getDetailLine(project.description, "Pricing Breakdown");
-  const specialPackage = getDetailLine(project.description, "Special Pricing Package");
-  const breakdownLines = standardBreakdown ? standardBreakdown.split(/\s+\|\s+/).filter(Boolean) : [];
-
-  return (
-    <div className="overflow-x-auto bg-white px-3 py-2">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover pricing</p>
-          {showPropertyTitle ? <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p> : null}
-          {showUnitsSummary && units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{total || centsToDollars(project.contractValueCents)}</p>
-        </div>
-      </div>
-
-      {breakdownLines.length > 0 ? (
-        <table className="w-full table-fixed text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              <th className="w-[24%] pb-1.5 pr-3 text-left font-semibold">Unit</th>
-              <th className="w-[56%] pb-1.5 pr-3 text-left font-semibold">Pricing</th>
-              <th className="w-[20%] pb-1.5 text-right font-semibold">Line Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {breakdownLines.map((line, index) => {
-              const [unitPart, rest = ""] = line.split(": ");
-              const totalMatch = rest.match(/=\s*([^=]+)$/);
-              const lineTotal = totalMatch?.[1]?.trim() || "-";
-              const pricing = totalMatch ? rest.replace(/\s*=\s*[^=]+$/, "").trim() : rest;
-
-              return (
-                <tr key={`${unitPart}-${index}`} className="text-slate-900">
-                  <td className="py-1 pr-3 align-top font-medium">{unitPart || `Unit ${index + 1}`}</td>
-                  <td className="py-1 pr-3 align-top text-slate-600">{pricing || line}</td>
-                  <td className="py-1 text-right align-top font-medium tabular-nums">{lineTotal}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <p className="border-t border-gray-100 pt-2 text-xs text-slate-500">
-          No turnover pricing breakdown is saved on this project yet.
-        </p>
-      )}
-
-      {specialPackage ? (
-        <div className="mt-3 border-t border-gray-100 pt-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Special pricing package</p>
-          <p className="mt-1 whitespace-pre-line text-xs text-slate-700">{specialPackage}</p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function getTurnoverDropdownTitle(project: ProjectTableRow) {
-  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-
-  if (units) {
-    const scope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
-    if (scope) return scope;
-  }
-
-  return "Turnover";
 }
 
 function getJanitorialBuildingName(project: ProjectTableRow) {
@@ -241,74 +183,37 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
   );
 }
 
-function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
-  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-  const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
-  const geotracking = getDetailLine(project.description, "Geotracking");
-  const expectedLocation = getDetailLine(project.description, "Expected Worker Location");
-  const geofenceRadius = getDetailLine(project.description, "Geofence Radius");
-  const locationChecks = getDetailLine(project.description, "Location Checks");
-  const geotrackingNotes = getDetailLine(project.description, "Geotracking Notes");
+function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white px-3 py-2" }: { project: ProjectTableRow; className?: string }) {
+  const cost = projectActualCostCents(project);
+  const margin = projectMarginCents(project);
+  const marginLabel = margin == null ? "-" : centsToDollars(margin);
+  const marginPct = marginPercent(project);
 
   return (
-    <>
-      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
-        <LaborTable entries={project.laborEntries} />
-      </div>
-
-      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white">
-        <TurnoverPricingSummary project={project} />
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover scope</p>
-          <p className="mt-1 text-xs text-gray-700 line-clamp-3">
-            {comments || units || <span className="text-gray-400">No turnover notes</span>}
+    <div className={className}>
+      <div className="mb-3 grid gap-2 sm:grid-cols-4">
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Charged</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{centsToDollars(project.contractValueCents)}</p>
+        </div>
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Hours worked</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{project.actualHours.toFixed(2)}</p>
+        </div>
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actual cost</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{centsToDollars(cost)}</p>
+        </div>
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Margin</p>
+          <p className={`mt-1 text-sm font-semibold ${marginClass(margin)}`}>
+            {marginLabel}{marginPct ? ` (${marginPct})` : ""}
           </p>
         </div>
-
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
-          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-gray-400">Contract</span>
-            <span className="font-medium text-gray-800">{centsToDollars(project.contractValueCents)}</span>
-            <span className="text-gray-400">Start</span>
-            <span className="font-medium text-gray-800">{project.projectDate ? fmtDate(project.projectDate) : "-"}</span>
-            <span className="text-gray-400">Est. hours</span>
-            <span className="font-medium text-gray-800">{project.estHours ?? "-"}</span>
-          </div>
-        </div>
-
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Geotracking</p>
-          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-gray-400">Status</span>
-            <span className="font-medium text-gray-800">{geotracking || "Disabled"}</span>
-            <span className="text-gray-400">Location</span>
-            <span className="font-medium text-gray-800">{expectedLocation || "-"}</span>
-            <span className="text-gray-400">Radius</span>
-            <span className="font-medium text-gray-800">{geofenceRadius || "-"}</span>
-            <span className="text-gray-400">Checks</span>
-            <span className="font-medium text-gray-800">{locationChecks || "-"}</span>
-          </div>
-          {geotrackingNotes ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{geotrackingNotes}</p> : null}
-        </div>
-
-        <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-          <p className="mt-1 text-sm font-semibold text-gray-800">{project.supervisor || "-"}</p>
-          <Link
-            href={`/erp/projects/${project.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
-          >
-            Full details {"->"}
-          </Link>
-        </div>
       </div>
-    </>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Laborers log</p>
+      <LaborTable entries={project.laborEntries} />
+    </div>
   );
 }
 
@@ -571,6 +476,7 @@ export function ProjectsExpandableTable({
   groupTitleForRow,
   groupHrefForRow,
   collapsibleGroups = false,
+  groupsDefaultOpen = false,
   rowTitleForRow,
   rowDescriptionForRow,
 }: {
@@ -580,16 +486,15 @@ export function ProjectsExpandableTable({
   groupTitleForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   groupHrefForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   collapsibleGroups?: boolean;
+  groupsDefaultOpen?: boolean;
   rowTitleForRow?: (row: ProjectTableRow) => string;
   rowDescriptionForRow?: (row: ProjectTableRow) => string | null;
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
-  const [openTurnoverIds, setOpenTurnoverIds] = useState<string[]>([]);
   const [openGroupTitles, setOpenGroupTitles] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
-  const openTurnoverSet = useMemo(() => new Set(openTurnoverIds), [openTurnoverIds]);
   const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
 
   function toggle(id: string) {
@@ -601,18 +506,13 @@ export function ProjectsExpandableTable({
     setOpenCoIds((prev) => (prev.includes(coId) ? prev.filter((x) => x !== coId) : [...prev, coId]));
   }
 
-  function toggleTurnover(projectId: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    setOpenTurnoverIds((prev) => (prev.includes(projectId) ? prev.filter((x) => x !== projectId) : [...prev, projectId]));
-  }
-
   function toggleGroup(title: string) {
     setOpenGroupTitles((prev) => (prev.includes(title) ? prev.filter((x) => x !== title) : [...prev, title]));
   }
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-[1600px] text-left text-sm">
+      <table className="w-full min-w-[1820px] text-left text-sm">
         <thead className="border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
             <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
@@ -625,6 +525,8 @@ export function ProjectsExpandableTable({
             <th className="px-3 py-2 font-semibold">Act. Labor</th>
             <th className="px-3 py-2 font-semibold">Est. Hours</th>
             <th className="px-3 py-2 font-semibold">Act. Hours</th>
+            <th className="px-3 py-2 font-semibold">Act. Cost</th>
+            <th className="px-3 py-2 font-semibold">Margin</th>
             <th className="px-3 py-2 font-semibold">Progress</th>
             <th className="px-3 py-2 font-semibold">% Invoiced</th>
             <th className="px-3 py-2 font-semibold">Billing Status</th>
@@ -635,22 +537,32 @@ export function ProjectsExpandableTable({
             const currentGroupTitle = groupTitleForRow?.(p, i, rows) || null;
             const previousGroupTitle = i > 0 ? groupTitleForRow?.(rows[i - 1], i - 1, rows) || null : null;
             const groupTitle = currentGroupTitle !== previousGroupTitle ? currentGroupTitle : null;
-            const groupIsOpen = currentGroupTitle ? openGroupSet.has(currentGroupTitle) : true;
+            const groupIsOpen = currentGroupTitle
+              ? groupsDefaultOpen
+                ? !openGroupSet.has(currentGroupTitle)
+                : openGroupSet.has(currentGroupTitle)
+              : true;
             const rowIsVisible = !collapsibleGroups || !currentGroupTitle || groupIsOpen;
+            const groupRows = groupTitle ? rows.filter((row, index) => groupTitleForRow?.(row, index, rows) === groupTitle) : [];
             const groupCount = groupTitle
-              ? rows.filter((row, index) => groupTitleForRow?.(row, index, rows) === groupTitle).length
+              ? groupRows.length
               : 0;
+            const groupContract = groupTitle ? sumProjects(groupRows, (row) => row.contractValueCents) : 0;
+            const groupActualLabor = groupTitle ? sumProjects(groupRows, (row) => row.actualLaborCents) : 0;
+            const groupActualMaterial = groupTitle ? sumProjects(groupRows, (row) => row.actualMaterialCents) : 0;
+            const groupActualHours = groupTitle ? sumProjects(groupRows, (row) => row.actualHours) : 0;
+            const groupActualCost = groupActualLabor + groupActualMaterial;
+            const groupMargin = groupTitle && groupRows.some((row) => row.contractValueCents != null) ? groupContract - groupActualCost : null;
             const isOpen = openSet.has(p.id);
-            const isJanitorialRow = janitorialDetailMode === "team" || isJanitorialProject(p, janitorialPipelineId);
-            const showTurnoverDropdown = isJanitorialRow;
-            const isTurnoverOpen = openTurnoverSet.has(p.id);
             const state = deriveProjectLifecycle(p.status, p.projectDate);
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
-            const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
             const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
             const groupHref = groupTitle ? groupHrefForRow?.(p, i, rows) || null : null;
+            const actualCost = projectActualCostCents(p);
+            const margin = projectMarginCents(p);
+            const marginPct = marginPercent(p);
             return (
               <Fragment key={p.id}>
                 {groupTitle ? (
@@ -685,7 +597,18 @@ export function ProjectsExpandableTable({
                     <td className="px-3 py-2 text-gray-900">
                       Building
                     </td>
-                    {Array.from({ length: 9 }).map((_, emptyIndex) => (
+                    <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualMaterial)}</td>
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualLabor)}</td>
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-900">{groupActualHours.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualCost)}</td>
+                    <td className={`px-3 py-2 font-medium ${marginClass(groupMargin)}`}>
+                      {groupMargin == null ? "-" : centsToDollars(groupMargin)}
+                    </td>
+                    {Array.from({ length: 2 }).map((_, emptyIndex) => (
                       <td
                         key={emptyIndex}
                         className="px-3 py-2 text-gray-400"
@@ -728,6 +651,11 @@ export function ProjectsExpandableTable({
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualLaborCents)}</td>
                   <td className="px-3 py-2 text-gray-900">{p.estHours ?? <span className="text-gray-400">-</span>}</td>
                   <td className="px-3 py-2 text-gray-900">{p.actualHours.toFixed(2)}</td>
+                  <td className="px-3 py-2 text-gray-900">{centsToDollars(actualCost)}</td>
+                  <td className={`px-3 py-2 font-medium ${marginClass(margin)}`}>
+                    {margin == null ? <span className="text-gray-400">-</span> : centsToDollars(margin)}
+                    {marginPct ? <span className="ml-1 text-xs font-normal text-gray-500">({marginPct})</span> : null}
+                  </td>
                   <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
                   <td className="px-3 py-2 text-gray-900">
                     {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
@@ -739,68 +667,24 @@ export function ProjectsExpandableTable({
                   <>
                     {/* Project detail */}
                     <tr className={styles.detail}>
-                      <td colSpan={13} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={15} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId) ? (
-                          <TurnoverPricingSummary project={p} />
+                          <ProjectLaborLogPanel project={p} />
                         ) : janitorialDetailMode === "team" ? (
                           <JanitorialProjectDropdownDetail project={p} />
                         ) : (
-                          <div className="overflow-x-auto bg-white px-3 py-2">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                            <LaborTable entries={p.laborEntries} />
-                          </div>
+                          <ProjectLaborLogPanel project={p} />
                         )}
                       </td>
                     </tr>
 
-                    {showTurnoverDropdown ? (
-                      <>
-                        <tr
-                          className="cursor-pointer bg-gray-50 hover:bg-gray-100"
-                          onClick={(e) => toggleTurnover(p.id, e)}
-                          aria-expanded={isTurnoverOpen}
-                        >
-                          <SubRowTitleCell
-                            status="APPROVED"
-                            statusClass={CO_STATUS_COLORS.APPROVED}
-                            href={`/erp/projects/${p.id}`}
-                            title={turnoverDropdownTitle}
-                          />
-                          <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
-                            {p.supervisor || <span className="text-gray-400">-</span>}
-                          </td>
-                          <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
-                            Turnover
-                          </td>
-                          <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                            {centsToDollars(p.contractValueCents)}
-                          </td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-900">{p.percentDone}%</td>
-                          <td className="px-3 py-1.5 text-gray-900">
-                            {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
-                          </td>
-                          <td className="px-3 py-1.5">{billingBadge(p.billingStatus)}</td>
-                        </tr>
-
-                        {isTurnoverOpen ? (
-                          <tr onClick={(e) => e.stopPropagation()}>
-                            <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
-                              <JanitorialTurnoverDetail project={p} />
-                            </td>
-                          </tr>
-                        ) : null}
-                      </>
-                    ) : null}
-
                     {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
+                      const coActualLabor = co.laborCostCents > 0 ? co.laborCostCents : (co.actualLaborCents ?? 0);
+                      const coActualMaterial = co.materialCostCents > 0 ? co.materialCostCents : (co.actualMaterialCents ?? 0);
+                      const coActualCost = coActualLabor + coActualMaterial;
+                      const coMargin = co.contractValueCents == null ? null : co.contractValueCents - coActualCost;
                       return (
                         <Fragment key={co.id}>
                           <tr
@@ -852,6 +736,12 @@ export function ProjectsExpandableTable({
                             <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.actualHours != null ? co.actualHours : <span className="text-gray-400">-</span>}
                             </td>
+                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                              {centsToDollars(coActualCost)}
+                            </td>
+                            <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${marginClass(coMargin)}`}>
+                              {coMargin == null ? <span className="text-gray-400">-</span> : centsToDollars(coMargin)}
+                            </td>
                             <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
@@ -862,7 +752,7 @@ export function ProjectsExpandableTable({
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
+                              <td colSpan={15} className="bg-gray-50 px-6 py-2 pb-3">
                                 <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
                                   <LaborTable entries={co.laborers} />

@@ -20,26 +20,34 @@ function isCleanupRow(row: ProjectTableRow) {
   return title.includes("test") || pm.includes("jeff");
 }
 
-function janitorialRowTitle(row: ProjectTableRow) {
-  const units = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
-  const unitScope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
-  const firstUnit = units.split(",")[0]?.replace(/^\s*\d+\s+unit[s]?\s*\([^)]*\)\s*-\s*/i, "").trim();
-
-  if (unitScope) return unitScope;
-  if (firstUnit) return firstUnit;
-
-  const unitFromTitle = row.jobTitle.match(/\bUnit\b.+$/i)?.[0]?.trim();
-  if (unitFromTitle) return unitFromTitle;
-
-  return row.jobTitle;
-}
-
 function janitorialBuildingTitle(row: ProjectTableRow) {
   return getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
 }
 
 function janitorialBuildingHref(row: ProjectTableRow) {
-  return row.buildingId ? `/erp/buildings/${row.buildingId}` : null;
+  return `/erp/projects/${row.id}`;
+}
+
+function unitsFromDescription(row: ProjectTableRow) {
+  const units = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
+  if (!units) return "";
+
+  return units
+    .split(/\s+\|\s+|,/)
+    .map((unit) => unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || "")
+    .filter(Boolean)
+    .join(", ");
+}
+
+function janitorialRowTitle(row: ProjectTableRow) {
+  const units = unitsFromDescription(row);
+  if (units) return `${units} - Turnover request`;
+
+  const buildingTitle = janitorialBuildingTitle(row);
+  const withoutBuilding = row.jobTitle.replace(new RegExp(`^${buildingTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-\\s*`, "i"), "").trim();
+  if (withoutBuilding && withoutBuilding !== row.jobTitle) return `${withoutBuilding} - Turnover request`;
+
+  return "Turnover request";
 }
 
 function janitorialRowDescription(row: ProjectTableRow) {
@@ -61,17 +69,17 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));
       if (buildingCompare !== 0) return buildingCompare;
 
-      return janitorialRowTitle(a).localeCompare(janitorialRowTitle(b));
+      return a.jobTitle.localeCompare(b.jobTitle);
     });
 
   return (
     <ProjectsExpandableTable
       rows={visibleRows}
       janitorialPipelineId={null}
-      janitorialDetailMode="team"
       groupTitleForRow={janitorialBuildingTitle}
       groupHrefForRow={janitorialBuildingHref}
       collapsibleGroups
+      groupsDefaultOpen
       rowTitleForRow={janitorialRowTitle}
       rowDescriptionForRow={janitorialRowDescription}
     />
