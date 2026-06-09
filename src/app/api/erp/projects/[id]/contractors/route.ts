@@ -51,6 +51,7 @@ export async function POST(req: Request, ctx: Ctx) {
         startDate: parseDate(body.startDate),
         endDate: parseDate(body.endDate),
         notes: body.notes != null ? String(body.notes).trim() || null : null,
+        costCents: body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null,
       },
       include: { contractor: { select: { id: true, name: true } } },
     });

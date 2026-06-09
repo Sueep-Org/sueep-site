@@ -122,6 +122,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     startDate: a.startDate ? a.startDate.toISOString() : null,
     endDate: a.endDate ? a.endDate.toISOString() : null,
     notes: a.notes,
+    costCents: a.costCents ?? null,
   }));
 
   const tabs = [

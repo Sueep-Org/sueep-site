@@ -50,6 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
   if (body.notes !== undefined) data.notes = String(body.notes || "").trim() || null;
+  if (body.costCents !== undefined) data.costCents = body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null;
 
   try {
     const assignment = await prisma.contractorAssignment.update({ where: { id }, data: data as object });

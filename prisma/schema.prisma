@@ -577,6 +577,7 @@ model ContractorAssignment {
   startDate    DateTime?
   endDate      DateTime?
   notes        String?
+  costCents    Int?
 
   @@index([contractorId])
   @@index([buildingId])

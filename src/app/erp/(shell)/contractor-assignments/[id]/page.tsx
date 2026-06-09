@@ -45,6 +45,7 @@ export default async function ContractorAssignmentDetailPage({ params }: PagePro
               startDate: assignment.startDate ? assignment.startDate.toISOString().split("T")[0] : null,
               endDate: assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : null,
               notes: assignment.notes,
+              costCents: assignment.costCents,
             }}
           />
         </div>
@@ -87,6 +88,10 @@ export default async function ContractorAssignmentDetailPage({ params }: PagePro
             <div>
               <dt className="font-semibold text-gray-600">End date</dt>
               <dd>{assignment.endDate ? assignment.endDate.toISOString().split("T")[0] : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-600">Cost</dt>
+              <dd>{assignment.costCents != null ? (assignment.costCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" }) : "—"}</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-600">Notes</dt>
