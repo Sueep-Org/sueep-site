@@ -62,13 +62,17 @@ export function CreatingAChangeOrder() {
 
             <Step n={6} title="Details Page Overview">
                 Below is an overview of the details tab. Click “Save Changes” after edits, otherwise nothing will save.
-                <Img src="/help/change_order/details_1.png" alt="Details Tab" />                
+                <Img src="/help/change_order/details_1.png" alt="Details Tab" />       
+                Costs Tab: This is where you can updated all estimated and actual costs. The actual cost of labor and materials is pulled from their corresponding logs.
+                <Img src="/help/change_order/details_1.5.png" alt="Details Tab" />       
                 Billing tab
                 <Img src="/help/change_order/details_2.png" alt="Billing tab" />
-                Laborers tab
+                Laborers tab: Where you can add <A href="/erp/help/workers/labor-logs">labor entries</A>
                 <Img src="/help/change_order/details_3.png" alt="laborers tab" />
                 Laborers table
                 <Img src="/help/change_order/details_4.png" alt="labor table" />
+                Materials tab: This is where yoy can update the <A href="/erp/help/projects/material-logs">material logs</A>.
+                <Img src="/help/change_order/details_4.5.png" alt="labor table" />
                 Contracts tab: for more on contracts navigate to <A href="/erp/help/contracts/uploading-a-contract">Contract Signing</A> tutorial
                 <Img src="/help/change_order/details_5.png" alt="contracts tab" />
                 <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
