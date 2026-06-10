@@ -72,6 +72,7 @@ export function ProjectSetupEditor({
   );
   const [serviceTypeCustom, setServiceTypeCustom] = useState(description && !isKnownServiceType ? description : "");
 
+
   function handleLifecycleChange(next: ProjectLifecycle) {
     setLifecycle(next);
     const now = new Date();

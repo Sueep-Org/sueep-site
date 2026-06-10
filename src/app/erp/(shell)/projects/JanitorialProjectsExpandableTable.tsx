@@ -13,19 +13,12 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-function isCleanupRow(row: ProjectTableRow) {
-  const title = row.jobTitle.trim().toLowerCase();
-  const pm = (row.supervisor || "").trim().toLowerCase();
-
-  return title.includes("test") || pm.includes("jeff");
-}
-
 function janitorialBuildingTitle(row: ProjectTableRow) {
-  return getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
+  return row.buildingName || getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
 }
 
 function janitorialBuildingHref(row: ProjectTableRow) {
-  return `/erp/projects/${row.id}`;
+  return row.buildingId ? `/erp/buildings/${row.buildingId}` : null;
 }
 
 function unitsFromDescription(row: ProjectTableRow) {
@@ -41,32 +34,27 @@ function unitsFromDescription(row: ProjectTableRow) {
 
 function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
-  if (units) {
-    return `Unit ${units} - Turnover request`;
+  if (units) return `Unit ${units}`;
+  // Fall back to stripping the building prefix from job title
+  const buildingName = row.buildingName || getDetailLine(row.description, "Property");
+  if (buildingName && row.jobTitle.toLowerCase().startsWith(buildingName.toLowerCase())) {
+    return row.jobTitle.slice(buildingName.length).replace(/^\s*[-–]\s*/, "").trim() || row.jobTitle;
   }
-  
-  return "Turnover request";
+  return row.jobTitle;
 }
 
-function janitorialRowDescription(row: ProjectTableRow) {
-  const units = unitsFromDescription(row);
-  if (units) {
-    return "1 unit";
-  }
-
+function janitorialRowDescription(_row: ProjectTableRow) {
   return null;
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
-  // Expand rows with multiple units into separate rows
+  // Legacy: projects created before one-per-unit architecture may have multiple units in
+  // description — expand those into separate display rows for backward compatibility.
   const expandedRows = rows.flatMap((row) => {
     const units = unitsFromDescription(row);
     if (!units) return [row];
-    
     const unitList = units.split(", ");
     if (unitList.length <= 1) return [row];
-    
-    // Create a separate row for each unit
     return unitList.map((unit, index) => ({
       ...row,
       id: `${row.id}-unit-${index}`,
@@ -76,7 +64,6 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
   });
 
   const visibleRows = expandedRows
-    .filter((row) => !isCleanupRow(row))
     .sort((a, b) => {
       const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));
       if (buildingCompare !== 0) return buildingCompare;
@@ -91,7 +78,6 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       groupTitleForRow={janitorialBuildingTitle}
       groupHrefForRow={janitorialBuildingHref}
       collapsibleGroups
-      groupsDefaultOpen
       rowTitleForRow={janitorialRowTitle}
       rowDescriptionForRow={janitorialRowDescription}
     />

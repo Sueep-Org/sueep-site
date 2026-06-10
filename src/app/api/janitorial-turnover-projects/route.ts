@@ -34,8 +34,10 @@ export async function POST(req: Request) {
         requests: result.turnoverRequests,
         notifyEmployeeIds,
       });
+      const projectIds = result.projects.map((p) => p.id);
       return NextResponse.json({
-        projectId: result.project.id,
+        projectId: projectIds[0] ?? null,
+        projectIds,
         buildingId: result.building.id,
         ids: result.turnoverRequests.map((request) => request.id),
       });

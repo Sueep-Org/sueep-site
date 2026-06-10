@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { ProjectPricePackageEditor } from "./ProjectPricePackageEditor";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
@@ -15,6 +14,8 @@ import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
+import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
+import { UnitScopeCard } from "./UnitScopeCard";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,19 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
           select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
-        building: { select: { name: true } },
+        building: { select: { id: true, name: true, pricingPackage: true } },
+        turnoverRequest: {
+          select: {
+            unitNumber: true,
+            bedrooms: true,
+            bathrooms: true,
+            fullClean: true,
+            fullPaint: true,
+            touchUpPaint: true,
+            carpetCleaning: true,
+            materialsAdditional: true,
+          },
+        },
       },
     }),
     prisma.employee.findMany({
@@ -134,6 +147,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       label: "Details",
       content: (
         <>
+          {project.turnoverRequest && (
+            <div className="mb-6">
+              <UnitScopeCard
+                unitNumber={project.turnoverRequest.unitNumber}
+                bedrooms={project.turnoverRequest.bedrooms}
+                bathrooms={project.turnoverRequest.bathrooms}
+                fullClean={project.turnoverRequest.fullClean}
+                fullPaint={project.turnoverRequest.fullPaint}
+                touchUpPaint={project.turnoverRequest.touchUpPaint}
+                carpetCleaning={project.turnoverRequest.carpetCleaning}
+                materialsAdditional={project.turnoverRequest.materialsAdditional}
+              />
+            </div>
+          )}
           <ProjectWorkOrderNotifier
             projectId={project.id}
             jobTitle={project.jobTitle}
@@ -151,11 +178,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               lastSentToName: workOrderRecord.lastSentToName,
               lastSentAt: workOrderRecord.lastSentAt ? workOrderRecord.lastSentAt.toISOString() : null,
             } : null}
-          />
-          <ProjectPricePackageEditor
-            projectId={project.id}
-            description={project.description}
-            contractValueCents={project.contractValueCents}
           />
           {project.description ? (
             <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
@@ -255,6 +277,22 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       ),
     },
+    ...(project.segment === "JANITORIAL_TURNOVER_REQUESTS" && project.building
+      ? [
+          {
+            label: "Pricing Package",
+            content: (
+              <div className="max-w-4xl">
+                <BuildingPricingPackageEditor
+                  buildingId={project.building.id}
+                  buildingName={project.building.name}
+                  initialPackage={project.building.pricingPackage}
+                />
+              </div>
+            ),
+          },
+        ]
+      : []),
     ...(isPostConstruction
       ? [
           {

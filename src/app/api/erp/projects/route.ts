@@ -26,6 +26,8 @@ export async function GET(req: Request) {
             ...(category === "active-janitorial"
               ? { status: "ACTIVE" }
               : { status: { notIn: ["COMPLETE", "ARCHIVED"] } }),
+            // Exclude individual unit projects — they have a turnoverRequestId linking them to a specific unit
+            ...(category === "schedule-janitorial" ? { turnoverRequestId: null } : {}),
             OR: [
               { segment: { in: janitorialSegments } },
               ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
@@ -63,10 +65,11 @@ export async function POST(req: Request) {
         building: result.building,
         requests: result.turnoverRequests,
       });
+      const projectIds = result.projects.map((p) => p.id);
       return NextResponse.json({
         ok: true,
-        project: result.project,
-        projectId: result.project.id,
+        projectId: projectIds[0] ?? null,
+        projectIds,
         buildingId: result.building.id,
         ids: result.turnoverRequests.map((request) => request.id),
       });

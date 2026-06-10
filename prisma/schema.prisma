@@ -54,6 +54,10 @@ model Project {
   buildingId String?
   building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
 
+  /// Optional link to the originating TurnoverRequest (set for janitorial unit projects)
+  turnoverRequestId String?
+  turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+
   laborEntries LaborEntry[]
   materialEntries MaterialEntry[]
   distanceEntries DistanceEntry[]
@@ -146,6 +150,7 @@ model TurnoverRequest {
 
   laborAssignments       LaborAssignment[]
   qualityChecks          QualityCheck[]
+  projects               Project[]
 
   @@index([buildingId])
   @@index([status])

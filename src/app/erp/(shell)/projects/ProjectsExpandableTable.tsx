@@ -34,6 +34,7 @@ export type ProjectTableRow = {
   jobTitle: string;
   description: string | null;
   buildingId?: string | null;
+  buildingName?: string | null;
   segment: string;
   status: string;
   projectDate: string | null;
@@ -617,8 +618,16 @@ export function ProjectsExpandableTable({
                         -
                       </td>
                     ))}
-                    <td className="px-3 py-2 font-semibold text-emerald-600">
-                      {collapsibleGroups ? (groupIsOpen ? "v" : ">") : "-"}
+                    <td className="px-3 py-2 text-gray-400">
+                      {collapsibleGroups ? (
+                        <svg
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className={`h-4 w-4 transition-transform ${groupIsOpen ? "rotate-180" : ""}`}
+                        >
+                          <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                        </svg>
+                      ) : "-"}
                     </td>
                   </tr>
                 ) : null}
@@ -632,14 +641,24 @@ export function ProjectsExpandableTable({
                   title={isOpen ? "Collapse" : "Expand"}
                 >
                   <td className="w-[420px] min-w-[420px] px-3 py-2">
-                    <Link
-                      href={`/erp/projects/${p.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`font-medium ${styles.titleLink}`}
-                    >
-                      {rowTitle}
-                    </Link>
-                    {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
+                    <div className={`flex items-center gap-1.5 ${currentGroupTitle ? "pl-4" : ""}`}>
+                      {currentGroupTitle && (
+                        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-gray-400">
+                          <path d="M3 2 L3 10 Q3 13 6 13 L11 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M9 11 L12 13 L9 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                      <div className="min-w-0">
+                        <Link
+                          href={`/erp/projects/${p.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`font-medium ${styles.titleLink}`}
+                        >
+                          {rowTitle}
+                        </Link>
+                        {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
+                      </div>
+                    </div>
                   </td>
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
                     {p.supervisor || <span className="text-gray-400">Unassigned</span>}

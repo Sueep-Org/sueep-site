@@ -514,6 +514,7 @@ export function NewProjectForm({
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
   const [buildings, setBuildings] = useState<BuildingOption[]>(initialBuildings);
+  const [buildingsLoading, setBuildingsLoading] = useState(initialBuildings.length === 0);
   const [scheduleBuildings, setScheduleBuildings] = useState<ScheduleBuildingOption[]>(initialScheduleBuildings);
   const [scheduleBuildingsLoading, setScheduleBuildingsLoading] = useState(initialScheduleBuildings.length === 0);
   const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
@@ -592,17 +593,21 @@ export function NewProjectForm({
   useEffect(() => {
     if (!allowErpDataFetch) return;
     let mounted = true;
+    setBuildingsLoading(initialBuildings.length === 0);
     fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
         if (Array.isArray(data)) setBuildings(data);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (mounted) setBuildingsLoading(false);
+      });
     return () => {
       mounted = false;
     };
-  }, [allowErpDataFetch]);
+  }, [allowErpDataFetch, initialBuildings.length]);
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -690,6 +695,30 @@ export function NewProjectForm({
 
   function removeUnitScope(id: string) {
     setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
+  }
+
+  function applySelectedBuilding(id: string) {
+    if (id === ADD_NEW_BUILDING_VALUE) {
+      setIsAddingBuilding(true);
+      setBuildingProjectId(id);
+      setBuildingName("");
+      setBuildingAddress("");
+      setIsAddingAddress(true);
+      setPmName("");
+      setPmEmail("");
+      setPmPhone("");
+      return;
+    }
+
+    const building = buildings.find((b) => b.id === id);
+    setIsAddingBuilding(false);
+    setIsAddingAddress(false);
+    setBuildingProjectId(id);
+    setBuildingName(building?.name ?? "");
+    setBuildingAddress(building?.address ?? "");
+    setPmName(building?.pmName ?? "");
+    setPmEmail(building?.pmEmail ?? "");
+    setPmPhone(building?.pmPhone ?? "");
   }
 
   function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
@@ -832,11 +861,10 @@ export function NewProjectForm({
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
-    const selectedBuilding = scheduleBuildings.find((building) => building.id === buildingProjectId);
     const turnoverUnitLabel = unitScopes
       .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
       .join(", ");
-    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.jobTitle || "Janitorial turnover"}${
+    const generatedTurnoverTitle = `${buildingName.trim() || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
     const turnoverScheduleDates = unitScopes.flatMap((unit) => [
@@ -856,7 +884,7 @@ export function NewProjectForm({
     const geotrackingNotes = String(fd.get("geotrackingNotes") || "").trim();
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
-      isTurnover ? `Property: ${buildingName.trim() || selectedBuilding?.jobTitle || "Unspecified"}` : null,
+      isTurnover ? `Property: ${buildingName.trim() || "Unspecified"}` : null,
       isTurnover && buildingAddress.trim() ? `Address: ${buildingAddress.trim()}` : null,
       isTurnover && pmName.trim() ? `Property Manager/Maintenance Manager: ${pmName.trim()}` : null,
       isTurnover && pmEmail.trim() ? `Manager Email: ${pmEmail.trim()}` : null,
@@ -1135,44 +1163,20 @@ export function NewProjectForm({
                   required
                   className={input}
                   value={buildingProjectId}
-                  disabled={scheduleBuildingsLoading}
-                  onChange={(e) => {
-                    const selected = e.currentTarget.selectedOptions[0];
-                    applySelectedScheduleBuilding(e.target.value, {
-                      jobTitle: selected?.dataset.name,
-                      description: selected?.dataset.description,
-                      supervisor: selected?.dataset.supervisor,
-                      address: selected?.dataset.address,
-                    });
-                  }}
+                  disabled={buildingsLoading}
+                  onChange={(e) => applySelectedBuilding(e.target.value)}
                 >
-                  <option value="">{scheduleBuildingsLoading ? "Loading janitorial schedule..." : "Select a scheduled building..."}</option>
-                  {!scheduleBuildingsLoading && scheduleBuildings.length === 0 ? (
-                    <option value="" disabled>
-                      No janitorial schedule buildings found
-                    </option>
+                  <option value="">{buildingsLoading ? "Loading buildings..." : "Select a building..."}</option>
+                  {!buildingsLoading && buildings.length === 0 ? (
+                    <option value="" disabled>No buildings found</option>
                   ) : null}
-                  {scheduleBuildings.map((building) => {
-                    const matchedBuilding = buildings.find(
-                      (savedBuilding) => normalizeBuildingName(savedBuilding.name) === normalizeBuildingName(building.jobTitle)
-                    );
-                    const address = extractAddressFromScheduleProject(building) || matchedBuilding?.address || "";
-                    return (
-                    <option
-                      key={building.id}
-                      value={building.id}
-                      data-name={building.jobTitle}
-                      data-description={building.description || ""}
-                      data-supervisor={building.supervisor || ""}
-                      data-address={address}
-                    >
-                      {building.jobTitle}
+                  {buildings.map((building) => (
+                    <option key={building.id} value={building.id}>
+                      {building.name}
                     </option>
-                    );
-                  })}
+                  ))}
                   <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>
                 </select>
-                {scheduleBuildingsError ? <p className="mt-1 text-xs text-red-500">{scheduleBuildingsError}</p> : null}
                 {isAddingBuilding ? (
                   <div className="mt-2">
                     <label className={label} htmlFor="newBuildingName">

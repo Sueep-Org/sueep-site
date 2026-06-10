@@ -35,52 +35,32 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
 
   if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
     const result = await createTurnoverRequestsFromPayload(body);
-    const projectDate = parseProjectDate(body.projectDate) ?? minDateValue(result.requests.map((request) => request.startDate));
-    const projectEndDate =
-      parseProjectDate(body.projectEndDate) ?? maxDateValue(result.requests.map((request) => request.endDate));
-    const jobTitle = stringValue(body.jobTitle) || `${result.building.name} - Janitorial turnover`;
+    const supervisor = stringValue(body.supervisor) || stringValue(body.pmName) || null;
     const hubspotPipelineId = stringValue(body.hubspotPipelineId) || null;
-    
-    // Create HubSpot deal if pipeline is configured
-    let hubspotDealId: string | null = null;
-    if (hubspotPipelineId) {
-      const totalCents = result.requests.reduce((sum, req) => sum + (req.priceCents ?? 0), 0);
-      const dealAmount = totalCents > 0 ? totalCents / 100 : undefined;
-      const dealDate = projectEndDate?.toISOString().split("T")[0] ?? projectDate?.toISOString().split("T")[0];
-      
-      hubspotDealId = await createHubSpotDeal({
-        pipelineId: hubspotPipelineId,
-        dealName: jobTitle,
-        amount: dealAmount,
-        closeDate: dealDate ?? undefined,
-      });
-    }
 
-    const project = await prisma.project.create({
-      data: {
-        segment,
-        jobTitle,
-        buildingId: result.building.id,
-        supervisor: stringValue(body.supervisor) || stringValue(body.pmName) || null,
-        description: stringValue(body.description) || null,
-        projectDate,
-        projectEndDate,
-        percentDone: percentValue(body.percentDone) ?? 0,
-        percentInvoiced: percentValue(body.percentInvoiced) ?? 0,
-        contractValueCents: inputToCents(body.contractValue) ?? undefined,
-        estMaterialCents: inputToCents(body.estMaterial) ?? undefined,
-        estTravelCents: inputToCents(body.estTravel) ?? undefined,
-        estLaborCents: inputToCents(body.estLabor) ?? undefined,
-        actualLaborCents: inputToCents(body.actualLabor) ?? undefined,
-        actualMaterialCents: inputToCents(body.actualMaterial) ?? undefined,
-        estHours: body.estHours != null && body.estHours !== "" ? Number(body.estHours) : undefined,
-        actualHours: body.actualHours != null && body.actualHours !== "" ? Number(body.actualHours) : undefined,
-        hubspotPipelineId,
-        hubspotDealId: hubspotDealId ?? undefined,
-      },
-    });
+    // One project per unit so each unit has its own checklist, labor, and materials
+    const projects = await Promise.all(
+      result.requests.map((request) =>
+        prisma.project.create({
+          data: {
+            segment,
+            jobTitle: `${result.building.name} - Unit ${request.unitNumber}`,
+            buildingId: result.building.id,
+            turnoverRequestId: request.id,
+            description: `Property: ${result.building.name}\nUnits: ${request.unitNumber}`,
+            supervisor,
+            projectDate: request.startDate,
+            projectEndDate: request.endDate,
+            percentDone: 0,
+            percentInvoiced: 0,
+            contractValueCents: request.priceCents ?? undefined,
+            hubspotPipelineId,
+          },
+        })
+      )
+    );
 
-    return { turnoverRequests: result.requests, building: result.building, project } as const;
+    return { turnoverRequests: result.requests, building: result.building, projects } as const;
   }
 
   const jobTitle = stringValue(body.jobTitle);
