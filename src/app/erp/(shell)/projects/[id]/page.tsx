@@ -14,6 +14,7 @@ import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
+import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 
 export const dynamic = "force-dynamic";
 
@@ -237,7 +238,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Checklist",
-      content: (
+      content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
+        <ProjectUnitTurnoverChecklist projectId={project.id} />
+      ) : (
         <ProjectChecklistSection
           projectId={project.id}
           initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({

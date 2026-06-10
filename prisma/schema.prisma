@@ -60,6 +60,7 @@ model Project {
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
   checklistItems ProjectChecklistItem[]
+  unitTurnoverChecklist UnitTurnoverChecklist?
   workOrderRecord ProjectWorkOrderRecord?
   qualityChecks QualityCheck[]
 
@@ -749,6 +750,42 @@ model CandidateContract {
   @@index([candidateId])
   @@index([docusealSubmissionId])
   @@index([docusealTemplateId])
+}
+
+model UnitTurnoverChecklist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  propertyName    String?
+  unitNumber      String?
+  checklistDate   String?
+  technicianNames String?
+  startTime       String?
+  endTime         String?
+
+  photoBefore Boolean @default(false)
+  photoAfter  Boolean @default(false)
+
+  conditionScore Int?
+  issues         String?
+
+  addlPaintTouchUp      Boolean @default(false)
+  addlFullRepaint       Boolean @default(false)
+  addlCarpetCleaning    Boolean @default(false)
+  addlMaintenanceRepair Boolean @default(false)
+  addlTrashOut          Boolean @default(false)
+
+  technicianSignature String?
+  supervisorSignature String?
+
+  /// Record<sectionId, { before: string[], after: string[] }>
+  sectionPhotos Json @default("{}")
+  /// Record<itemId, boolean> — completion state for each checklist item
+  completedItems Json @default("{}")
 }
 
 model AppSetting {
