@@ -40,6 +40,20 @@ function unitsFromDescription(row: ProjectTableRow) {
 }
 
 function janitorialRowTitle(row: ProjectTableRow) {
+  const description = row.description?.trim();
+  const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
+
+  if (!firstLine) {
+    return janitorialBuildingTitle(row);
+  }
+  if (/^(property|address|units|unit numbers|price package|estimated turnover total|pricing breakdown):/i.test(firstLine)) {
+    return janitorialBuildingTitle(row);
+  }
+
+  return firstLine;
+}
+
+function janitorialRowDescription(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
   if (units) return `${units} - Turnover request`;
 
@@ -47,19 +61,7 @@ function janitorialRowTitle(row: ProjectTableRow) {
   const withoutBuilding = row.jobTitle.replace(new RegExp(`^${buildingTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-\\s*`, "i"), "").trim();
   if (withoutBuilding && withoutBuilding !== row.jobTitle) return `${withoutBuilding} - Turnover request`;
 
-  return "Turnover request";
-}
-
-function janitorialRowDescription(row: ProjectTableRow) {
-  const description = row.description?.trim();
-  const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
-
-  if (!firstLine) return null;
-  if (/^(property|address|units|unit numbers|price package|estimated turnover total|pricing breakdown):/i.test(firstLine)) {
-    return null;
-  }
-
-  return firstLine;
+  return null;
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
