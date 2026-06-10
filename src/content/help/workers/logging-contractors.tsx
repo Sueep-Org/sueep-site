@@ -5,7 +5,7 @@ export function LoggingContractors() {
         <>
          <H2>Overview</H2>
         <P>
-            Fill in later.
+            Contractor logs let you track which contractors worked on a project, their role, cost, and dates. Logs are added directly from the project detail page and can be edited or removed at any time.
         </P>
         <Steps>
             <Step n={1} title="Navigating to Contractors">
