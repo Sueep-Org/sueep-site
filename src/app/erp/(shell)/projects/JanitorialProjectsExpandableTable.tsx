@@ -40,19 +40,12 @@ function unitsFromDescription(row: ProjectTableRow) {
 }
 
 function janitorialRowTitle(row: ProjectTableRow) {
-  const description = row.description?.trim();
-  const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
-
-  if (!firstLine) {
-    return janitorialBuildingTitle(row);
+  const units = unitsFromDescription(row);
+  if (units) {
+    return `${units} - Turnover request`;
   }
-  if (/^(property|address|units|unit numbers|price package|estimated turnover total|pricing breakdown):/i.test(firstLine)) {
-    return janitorialBuildingTitle(row);
-  }
-
-  // Display address and property name as the main title (clearer display)
-  const buildingTitle = janitorialBuildingTitle(row);
-  return `${firstLine} - ${buildingTitle}`;
+  
+  return "Turnover request";
 }
 
 function janitorialRowDescription(row: ProjectTableRow) {
