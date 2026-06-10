@@ -39,6 +39,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
           select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
+        building: { select: { name: true } },
       },
     }),
     prisma.employee.findMany({
@@ -239,7 +240,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     {
       label: "Checklist",
       content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
-        <ProjectUnitTurnoverChecklist projectId={project.id} />
+        <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
       ) : (
         <ProjectChecklistSection
           projectId={project.id}

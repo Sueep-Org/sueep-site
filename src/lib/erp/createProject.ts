@@ -60,6 +60,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
       data: {
         segment,
         jobTitle,
+        buildingId: result.building.id,
         supervisor: stringValue(body.supervisor) || stringValue(body.pmName) || null,
         description: stringValue(body.description) || null,
         projectDate,

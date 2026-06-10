@@ -258,7 +258,7 @@ function ChecklistSectionBlock({
   );
 }
 
-export function ProjectUnitTurnoverChecklist({ projectId }: { projectId: string }) {
+export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { projectId: string; buildingName: string | null }) {
   const [data, setData] = useState<ChecklistData | null>(null);
   const [loading, setLoading] = useState(true);
   const [infoSaving, setInfoSaving] = useState(false);
@@ -283,7 +283,7 @@ export function ProjectUnitTurnoverChecklist({ projectId }: { projectId: string 
         const sp = (typeof d.sectionPhotos === "object" && d.sectionPhotos !== null && !Array.isArray(d.sectionPhotos))
           ? (d.sectionPhotos as SectionPhotos) : {};
         setData({ ...d, completedItems: completed, sectionPhotos: sp });
-        setPropertyName(d.propertyName ?? "");
+        setPropertyName(d.propertyName ?? buildingName ?? "");
         setUnitNumber(d.unitNumber ?? "");
         setChecklistDate(d.checklistDate ?? "");
         setTechnicianNames(d.technicianNames ?? "");
@@ -462,27 +462,6 @@ export function ProjectUnitTurnoverChecklist({ projectId }: { projectId: string 
             <label className={labelCls} htmlFor="utc-end">End Time</label>
             <input id="utc-end" type="time" className={inputCls} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-6 pt-1">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={data.photoBefore}
-              onChange={(e) => toggleBool("photoBefore", e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-            />
-            <span className="text-sm text-gray-700">Photos taken before cleaning</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={data.photoAfter}
-              onChange={(e) => toggleBool("photoAfter", e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-            />
-            <span className="text-sm text-gray-700">Photos taken after cleaning</span>
-          </label>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 border-t border-gray-100 pt-4">

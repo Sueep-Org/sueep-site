@@ -50,6 +50,10 @@ model Project {
   estHours    Float?
   actualHours Float?
 
+  /// Optional link to a Building (set for janitorial turnover projects)
+  buildingId String?
+  building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+
   laborEntries LaborEntry[]
   materialEntries MaterialEntry[]
   distanceEntries DistanceEntry[]
@@ -89,6 +93,7 @@ model Building {
 
   turnoverRequests      TurnoverRequest[]
   contractorAssignments ContractorAssignment[]
+  projects              Project[]
 
   @@index([name])
 }
