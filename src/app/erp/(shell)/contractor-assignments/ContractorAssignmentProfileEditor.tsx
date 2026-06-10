@@ -14,6 +14,7 @@ type Props = {
     startDate: string | null;
     endDate: string | null;
     notes?: string | null;
+    costCents?: number | null;
   };
 };
 
@@ -42,6 +43,7 @@ export function ContractorAssignmentProfileEditor({ assignmentId, initial }: Pro
           startDate: formData.get("startDate") || null,
           endDate: formData.get("endDate") || null,
           notes: formData.get("notes") || null,
+          costCents: formData.get("costCents") ? Math.round(parseFloat(String(formData.get("costCents"))) * 100) : null,
         }),
       });
       const data = await res.json();
@@ -107,6 +109,18 @@ export function ContractorAssignmentProfileEditor({ assignmentId, initial }: Pro
               name="endDate"
               type="date"
               defaultValue={initial.endDate ?? ""}
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+          <label className="block text-xs font-medium text-gray-600">
+            Cost ($)
+            <input
+              name="costCents"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={initial.costCents != null ? (initial.costCents / 100).toFixed(2) : ""}
+              placeholder="0.00"
               className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
             />
           </label>

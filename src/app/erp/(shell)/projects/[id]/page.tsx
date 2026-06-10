@@ -14,6 +14,7 @@ import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
+import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
           select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
+        building: { select: { name: true } },
       },
     }),
     prisma.employee.findMany({
@@ -64,6 +66,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     prisma.projectWorkOrderRecord.findUnique({ where: { projectId: id } }),
   ]);
   if (!project) notFound();
+
+  const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
 
   const isManual = !project.hubspotDealId;
   const isPostConstruction = cfg?.postConstruction.pipelineId
@@ -122,6 +126,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     startDate: a.startDate ? a.startDate.toISOString() : null,
     endDate: a.endDate ? a.endDate.toISOString() : null,
     notes: a.notes,
+    costCents: a.costCents ?? null,
   }));
 
   const tabs = [
@@ -193,6 +198,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           estTravelCents={project.estTravelCents}
           estLaborCents={project.estLaborCents}
           actualLaborCents={project.actualLaborCents}
+          contractorCostCents={contractorCostCents}
           actualMaterialCents={project.actualMaterialCents}
           estHours={project.estHours}
           actualHours={project.actualHours}
@@ -233,7 +239,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Checklist",
-      content: (
+      content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
+        <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
+      ) : (
         <ProjectChecklistSection
           projectId={project.id}
           initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({

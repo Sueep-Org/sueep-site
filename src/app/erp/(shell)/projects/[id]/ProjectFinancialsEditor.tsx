@@ -27,6 +27,7 @@ type Props = {
   actualMaterialCents: number | null;
   estHours: number | null;
   actualHours: number | null;
+  contractorCostCents: number;
 };
 
 function centsToInput(cents: number | null): string {
@@ -47,6 +48,7 @@ export function ProjectFinancialsEditor({
   actualMaterialCents,
   estHours,
   actualHours,
+  contractorCostCents,
 }: Props) {
   const router = useRouter();
   const [contractValue, setContractValue] = useState(centsToInput(contractValueCents));
@@ -152,9 +154,27 @@ export function ProjectFinancialsEditor({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
             <div className="space-y-3">
               <div>
-                <label className={labelCls} htmlFor="fin-act-lab">Labor ($)</label>
+                <label className={labelCls} htmlFor="fin-act-lab">Employee labor ($)</label>
                 <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
               </div>
+              {contractorCostCents > 0 && (
+                <div>
+                  <label className={labelCls}>Contractor costs ($)</label>
+                  <div className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-700 tabular-nums">
+                    {(contractorCostCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-400">From contractor assignments</p>
+                </div>
+              )}
+              {contractorCostCents > 0 && (
+                <div>
+                  <label className={labelCls}>Total labor ($)</label>
+                  <div className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 tabular-nums">
+                    {(((Number(actLab) || 0) * 100 + contractorCostCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-400">Employee + contractors</p>
+                </div>
+              )}
               <div>
                 <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
                 <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />

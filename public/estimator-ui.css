@@ -74,6 +74,10 @@
     background: #bfdbfe;
 }
 
+#drawRectBtn.active {
+    background: #bfdbfe;
+}
+
 #doubleSideToggle.active {
     background: #bbf7d0;
 }

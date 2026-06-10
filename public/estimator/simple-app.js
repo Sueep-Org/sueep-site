@@ -103,7 +103,7 @@ async function refreshDrawer(){
       };
 
       const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
+      delBtn.textContent = '✕';
       delBtn.title = 'Delete';
       delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
 
@@ -124,7 +124,29 @@ async function refreshDrawer(){
         }
       };
 
+      const dlBtn = document.createElement('button');
+      dlBtn.textContent = '⬇';
+      dlBtn.title = 'Download';
+      dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#374151;';
+
+      dlBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        try{
+          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = display;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }catch(e){
+          toast(e.message, 'error');
+        }
+      };
+
       row.appendChild(btn);
+      row.appendChild(dlBtn);
       row.appendChild(delBtn);
       savedSec.appendChild(row);
     });
@@ -343,8 +365,8 @@ async function initApp(){
     // Update scale info based on viewed page
     if (measurementScaleInfo) {
       if (scale && scale.factor) {
-        const pxPerInch = 1 / scale.factor;
-        measurementScaleInfo.textContent = `Scale set: 1 in = ${pxPerInch.toFixed(1)} px`;
+        const pointsPerInch = 1 / scale.factor;
+        measurementScaleInfo.textContent = `Scale set: 1 in = ${pointsPerInch.toFixed(1)} pt`;
       } else {
         measurementScaleInfo.textContent = 'Scale not set';
       }
@@ -547,7 +569,7 @@ async function initApp(){
     return `${rem}"`;
   }
 
-  function computeScaleFactorFromExpression(str, pxPerPt) {
+  function computeScaleFactorFromExpression(str, pixelLength, pxPerPt) {
     if (!str) return null;
     const parts = str.split('=');
     if (parts.length === 2) {
@@ -556,13 +578,14 @@ async function initApp(){
       const leftInches = parseMeasurementToInches(left);
       const rightInches = parseMeasurementToInches(right);
       if (!leftInches || !rightInches) return null;
-      if (pxPerPt && pxPerPt > 0) {
-        const pixelsPerInch = pxPerPt * 72;
-        return (rightInches / leftInches) * (1 / pixelsPerInch);
-      }
-      return null;
+      const pagePoints = leftInches * 72;
+      return rightInches / pagePoints;
     }
-    return null;
+
+    const realInches = parseMeasurementToInches(str);
+    if (!realInches) return null;
+    const pagePoints = (pixelLength || 0) / (Number(pxPerPt) || 1);
+    return realInches / pagePoints;
   }
 
   // ======================================================
@@ -779,8 +802,8 @@ async function initApp(){
         return;
       }
 
-      // do not start panning when measure mode is active
-      if (overlay && overlay.active && overlay.tool === 'measure') return;
+      // do not start panning when measure or rect mode is active
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
 
       if (!pdfDoc) return;
 
@@ -1091,7 +1114,7 @@ async function initApp(){
       e.stopPropagation();
       const entry = window.prompt('Enter page scale (example: "1/16 in = 1 ft"). This must contain "=".');
       if (!entry || !entry.trim()) return;
-      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), overlay._pxPerPt);
+      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), 72, overlay._pxPerPt);
       if (!scaleFactor || scaleFactor <= 0) {
         toast('Invalid scale expression', 'error');
         return;

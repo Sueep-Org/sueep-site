@@ -21,16 +21,19 @@ type PayrollResponse = {
   rows: PayrollRow[];
 };
 
-/** Biweekly anchor: Monday 2024-01-01. Returns the index of the biweekly period containing `date`. */
-const ANCHOR = new Date("2024-01-01T00:00:00Z");
+const DEFAULT_ANCHOR = "2024-01-01";
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
-function biweeklyIndex(date: Date): number {
-  return Math.floor((date.getTime() - ANCHOR.getTime()) / TWO_WEEKS_MS);
+function anchorDate(iso: string): Date {
+  return new Date(`${iso}T00:00:00Z`);
 }
 
-function biweeklyRange(index: number): { start: Date; end: Date } {
-  const start = new Date(ANCHOR.getTime() + index * TWO_WEEKS_MS);
+function biweeklyIndex(date: Date, anchor: Date): number {
+  return Math.floor((date.getTime() - anchor.getTime()) / TWO_WEEKS_MS);
+}
+
+function biweeklyRange(index: number, anchor: Date): { start: Date; end: Date } {
+  const start = new Date(anchor.getTime() + index * TWO_WEEKS_MS);
   const end = new Date(start.getTime() + TWO_WEEKS_MS - 1);
   return { start, end };
 }
@@ -90,16 +93,47 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
   return [headers.map(escape).join(","), ...dataRows].join("\r\n");
 }
 
+function isMondayISO(iso: string): boolean {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.getUTCDay() === 1;
+}
+
 export default function PayrollExportPage() {
-  const [periodIndex, setPeriodIndex] = useState(() => biweeklyIndex(new Date()));
+  const [anchorISO, setAnchorISO] = useState(DEFAULT_ANCHOR);
+  const [anchorLoaded, setAnchorLoaded] = useState(false);
+  const [editingAnchor, setEditingAnchor] = useState(false);
+  const [anchorDraft, setAnchorDraft] = useState("");
+  const [anchorSaving, setAnchorSaving] = useState(false);
+  const [anchorError, setAnchorError] = useState("");
+
+  const [periodIndex, setPeriodIndex] = useState(0);
   const [data, setData] = useState<PayrollResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { start, end } = biweeklyRange(periodIndex);
-
+  // Load anchor from API on mount
   useEffect(() => {
-    const { start: s, end: e } = biweeklyRange(periodIndex);
+    fetch("/api/erp/settings/payroll-anchor")
+      .then((r) => r.json())
+      .then((d: { anchor: string }) => {
+        setAnchorISO(d.anchor);
+        const anchor = anchorDate(d.anchor);
+        setPeriodIndex(biweeklyIndex(new Date(), anchor));
+        setAnchorLoaded(true);
+      })
+      .catch(() => {
+        setPeriodIndex(biweeklyIndex(new Date(), anchorDate(DEFAULT_ANCHOR)));
+        setAnchorLoaded(true);
+      });
+  }, []);
+
+  const anchor = anchorDate(anchorISO);
+  const { start, end } = biweeklyRange(periodIndex, anchor);
+
+  // Load payroll data when period or anchor changes
+  useEffect(() => {
+    if (!anchorLoaded) return;
+    const { start: s, end: e } = biweeklyRange(periodIndex, anchor);
     const startISO = toISO(s);
     const endISO = toISO(e);
     let cancelled = false;
@@ -111,7 +145,36 @@ export default function PayrollExportPage() {
       .catch(() => { if (!cancelled) setError("Could not load payroll data."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [periodIndex]); // primitive — only fires when user navigates periods
+  }, [periodIndex, anchorISO, anchorLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveAnchor() {
+    setAnchorError("");
+    if (!isMondayISO(anchorDraft)) {
+      setAnchorError("Anchor must be a Monday (YYYY-MM-DD).");
+      return;
+    }
+    setAnchorSaving(true);
+    try {
+      const res = await fetch("/api/erp/settings/payroll-anchor", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ anchor: anchorDraft }),
+      });
+      const result = (await res.json()) as { anchor?: string; error?: string };
+      if (!res.ok) {
+        setAnchorError(result.error ?? "Save failed");
+        return;
+      }
+      const newAnchor = anchorDate(result.anchor!);
+      setAnchorISO(result.anchor!);
+      setPeriodIndex(biweeklyIndex(new Date(), newAnchor));
+      setEditingAnchor(false);
+    } catch {
+      setAnchorError("Network error");
+    } finally {
+      setAnchorSaving(false);
+    }
+  }
 
   function downloadCsv() {
     if (!data) return;
@@ -149,6 +212,55 @@ export default function PayrollExportPage() {
           </svg>
           Download CSV
         </button>
+      </div>
+
+      {/* Anchor setting */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        {editingAnchor ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600" htmlFor="anchor-input">
+                Pay period anchor (must be a Monday)
+              </label>
+              <input
+                id="anchor-input"
+                type="date"
+                className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                value={anchorDraft}
+                onChange={(e) => { setAnchorDraft(e.target.value); setAnchorError(""); }}
+              />
+              {anchorError && <p className="mt-1 text-xs text-red-500">{anchorError}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={saveAnchor}
+              disabled={anchorSaving}
+              className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+            >
+              {anchorSaving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditingAnchor(false); setAnchorError(""); }}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-gray-600">
+              Pay period anchor: <span className="font-medium text-gray-900">{anchorISO}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => { setAnchorDraft(anchorISO); setAnchorError(""); setEditingAnchor(true); }}
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              Change
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Pay period picker */}

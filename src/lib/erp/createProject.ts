@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { createTurnoverRequestsFromPayload } from "@/lib/erp/createTurnoverRequests";
+import { createHubSpotDeal } from "@/lib/hubspot/createDeal";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -38,11 +39,28 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
     const projectEndDate =
       parseProjectDate(body.projectEndDate) ?? maxDateValue(result.requests.map((request) => request.endDate));
     const jobTitle = stringValue(body.jobTitle) || `${result.building.name} - Janitorial turnover`;
+    const hubspotPipelineId = stringValue(body.hubspotPipelineId) || null;
+    
+    // Create HubSpot deal if pipeline is configured
+    let hubspotDealId: string | null = null;
+    if (hubspotPipelineId) {
+      const totalCents = result.requests.reduce((sum, req) => sum + (req.priceCents ?? 0), 0);
+      const dealAmount = totalCents > 0 ? totalCents / 100 : undefined;
+      const dealDate = projectEndDate?.toISOString().split("T")[0] ?? projectDate?.toISOString().split("T")[0];
+      
+      hubspotDealId = await createHubSpotDeal({
+        pipelineId: hubspotPipelineId,
+        dealName: jobTitle,
+        amount: dealAmount,
+        closeDate: dealDate ?? undefined,
+      });
+    }
 
     const project = await prisma.project.create({
       data: {
         segment,
         jobTitle,
+        buildingId: result.building.id,
         supervisor: stringValue(body.supervisor) || stringValue(body.pmName) || null,
         description: stringValue(body.description) || null,
         projectDate,
@@ -57,7 +75,8 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
         actualMaterialCents: inputToCents(body.actualMaterial) ?? undefined,
         estHours: body.estHours != null && body.estHours !== "" ? Number(body.estHours) : undefined,
         actualHours: body.actualHours != null && body.actualHours !== "" ? Number(body.actualHours) : undefined,
-        hubspotPipelineId: stringValue(body.hubspotPipelineId) || null,
+        hubspotPipelineId,
+        hubspotDealId: hubspotDealId ?? undefined,
       },
     });
 

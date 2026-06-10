@@ -39,34 +39,48 @@ function unitsFromDescription(row: ProjectTableRow) {
     .join(", ");
 }
 
+function unitTitleFromJobTitle(row: ProjectTableRow) {
+  const title = row.jobTitle.trim();
+  if (!/^Unit\b/i.test(title)) return "";
+
+  return title.replace(/\s+-\s+Turnover request$/i, "").trim();
+}
+
 function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
-  if (units) return `${units} - Turnover request`;
+  if (units) {
+    return `Unit ${units}`;
+  }
 
-  const buildingTitle = janitorialBuildingTitle(row);
-  const withoutBuilding = row.jobTitle.replace(new RegExp(`^${buildingTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-\\s*`, "i"), "").trim();
-  if (withoutBuilding && withoutBuilding !== row.jobTitle) return `${withoutBuilding} - Turnover request`;
-
-  return "Turnover request";
+  return unitTitleFromJobTitle(row) || "1 unit";
 }
 
 function janitorialRowDescription(row: ProjectTableRow) {
-  const description = row.description?.trim();
   const unitDetails = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
-  if (unitDetails) return unitDetails;
+  if (unitDetails) return null;
 
-  const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
-
-  if (!firstLine) return null;
-  if (/^(property|address|units|unit numbers|price package|estimated turnover total|pricing breakdown):/i.test(firstLine)) {
-    return null;
-  }
-
-  return firstLine;
+  return null;
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
-  const visibleRows = rows
+  // Expand rows with multiple units into separate rows
+  const expandedRows = rows.flatMap((row) => {
+    const units = unitsFromDescription(row);
+    if (!units) return [row];
+    
+    const unitList = units.split(", ");
+    if (unitList.length <= 1) return [row];
+    
+    // Create a separate row for each unit
+    return unitList.map((unit, index) => ({
+      ...row,
+      id: `${row.id}-unit-${index}`,
+      jobTitle: `${row.jobTitle} - Unit ${unit}`,
+      description: `Units: ${unit}\n${row.description || ""}`,
+    }));
+  });
+
+  const visibleRows = expandedRows
     .filter((row) => !isCleanupRow(row))
     .sort((a, b) => {
       const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));

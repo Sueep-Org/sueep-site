@@ -1,4 +1,5 @@
 import { buildJanitorialTurnoverProjectEmailHtml, formatUsd, sendEmail } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
 
 type TurnoverRequestForEmail = {
   unitNumber: string | null;
@@ -51,9 +52,25 @@ export async function notifyJanitorialTurnoverCreated(params: {
   body: Record<string, unknown>;
   building: BuildingForEmail;
   requests: TurnoverRequestForEmail[];
+  notifyEmployeeIds?: string[];
 }) {
-  const { body, building, requests } = params;
-  const recipients = uniqueEmails([stringValue(body.pmEmail) || building.pmEmail || "", stringValue(body.sueepPmEmail)]);
+  const { body, building, requests, notifyEmployeeIds = [] } = params;
+  
+  // Resolve employee emails from database
+  const employeeEmails: string[] = [];
+  if (notifyEmployeeIds.length > 0) {
+    const employees = await prisma.employee.findMany({
+      where: { id: { in: notifyEmployeeIds } },
+      select: { email: true },
+    });
+    employeeEmails.push(...employees.map((e) => e.email).filter((email): email is string => Boolean(email)));
+  }
+  
+  const recipients = uniqueEmails([
+    stringValue(body.pmEmail) || building.pmEmail || "",
+    stringValue(body.sueepPmEmail),
+    ...employeeEmails,
+  ]);
   if (recipients.length === 0) return;
 
   const totalCents = requests.reduce((sum, request) => sum + (request.priceCents ?? 0), 0);

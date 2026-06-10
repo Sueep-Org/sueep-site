@@ -50,6 +50,10 @@ model Project {
   estHours    Float?
   actualHours Float?
 
+  /// Optional link to a Building (set for janitorial turnover projects)
+  buildingId String?
+  building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+
   laborEntries LaborEntry[]
   materialEntries MaterialEntry[]
   distanceEntries DistanceEntry[]
@@ -60,6 +64,7 @@ model Project {
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
   checklistItems ProjectChecklistItem[]
+  unitTurnoverChecklist UnitTurnoverChecklist?
   workOrderRecord ProjectWorkOrderRecord?
   qualityChecks QualityCheck[]
 
@@ -88,6 +93,7 @@ model Building {
 
   turnoverRequests      TurnoverRequest[]
   contractorAssignments ContractorAssignment[]
+  projects              Project[]
 
   @@index([name])
 }
@@ -577,6 +583,7 @@ model ContractorAssignment {
   startDate    DateTime?
   endDate      DateTime?
   notes        String?
+  costCents    Int?
 
   @@index([contractorId])
   @@index([buildingId])
@@ -748,6 +755,64 @@ model CandidateContract {
   @@index([candidateId])
   @@index([docusealSubmissionId])
   @@index([docusealTemplateId])
+}
+
+model UnitTurnoverChecklist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  propertyName    String?
+  unitNumber      String?
+  checklistDate   String?
+  technicianNames String?
+  startTime       String?
+  endTime         String?
+
+  photoBefore Boolean @default(false)
+  photoAfter  Boolean @default(false)
+
+  conditionScore Int?
+  issues         String?
+
+  addlPaintTouchUp      Boolean @default(false)
+  addlFullRepaint       Boolean @default(false)
+  addlCarpetCleaning    Boolean @default(false)
+  addlMaintenanceRepair Boolean @default(false)
+  addlTrashOut          Boolean @default(false)
+
+  technicianSignature String?
+  supervisorSignature String?
+
+  /// Record<sectionId, { before: string[], after: string[] }>
+  sectionPhotos Json @default("{}")
+  /// Record<itemId, boolean> — completion state for each checklist item
+  completedItems Json @default("{}")
+
+  photos UnitChecklistPhoto[]
+}
+
+model UnitChecklistPhoto {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+
+  checklistId String
+  checklist   UnitTurnoverChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  sectionId   String
+  photoType   String   // "before" | "after"
+  filename    String
+  mimeType    String
+  size        Int
+  data        Bytes
+}
+
+model AppSetting {
+  key   String @id
+  value String
 }
 
 model ChangeOrderMaterialEntry {

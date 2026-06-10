@@ -47,6 +47,32 @@ export async function uploadCandidateFile(
   });
 }
 
+export async function uploadChecklistSectionPhoto(
+  projectId: string,
+  sectionId: string,
+  photoType: "before" | "after",
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const app = getFirebaseApp();
+  const storage = getStorage(app);
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `checklist-photos/${projectId}/${sectionId}/${photoType}/${Date.now()}-${safeName}`;
+  const storageRef = ref(storage, path);
+
+  const task = uploadBytesResumable(storageRef, file);
+
+  if (onProgress) {
+    task.on("state_changed", (snap) => {
+      onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+    });
+  }
+
+  await task;
+  return getDownloadURL(task.snapshot.ref);
+}
+
 export async function uploadQualityCheckEvidenceFile(
   qualityCheckKey: string,
   file: File,

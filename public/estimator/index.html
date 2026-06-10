@@ -84,6 +84,33 @@
             z-index: 5;
         }
 
+        #viewerRow {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        #pdfPanel {
+            min-width: 320px;
+            flex: 1 1 0;
+        }
+
+        #measurementSidebar {
+            min-width: 240px;
+            max-width: 280px;
+        }
+
+        #measurementList {
+            max-height: 360px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        #measurementList button.mini-btn {
+            font-size: 12px;
+            padding: 2px 6px;
+        }
+
         .mini-btn {
             padding: 4px 10px;
             font-size: 12px;
@@ -214,10 +241,12 @@
 
         <strong>Library</strong>
 
-        <div style="display:flex;gap:6px;">
-            <button class="sidebar-close-btn" id="refreshDrawerBtn" title="Refresh">🔄</button>
-            <button class="sidebar-close-btn" data-close-sidebar>✕</button>
-        </div>
+        <button
+            class="sidebar-close-btn"
+            data-close-sidebar
+        >
+            ✕
+        </button>
 
     </div>
 
@@ -377,21 +406,51 @@
 
                     </div>
 
-                </div>
-
-                <h2 class="text-xl font-semibold mb-2">
-                    PDF Preview
-                </h2>
-
-                <!-- PDF CONTAINER -->
-                <div id="pdfContainer">
-
-                    <div id="pdfWrapper">
-
-                        <canvas id="pdfCanvas"></canvas>
-
+                    <!-- Page navigation -->
+                    <div style="display:flex;align-items:center;gap:8px;margin-left:12px;">
+                        <button id="prevPageBtn" class="mini-btn" style="display:none">Prev</button>
+                        <div style="display:flex;flex-direction:column;align-items:center;min-width:140px;">
+                          <div id="pageInfo" style="min-width:120px;text-align:center">Page 1</div>
+                          <div id="vectorLineInfo" style="font-size:12px;color:#4b5563;">Vector lines: unknown</div>
+                        </div>
+                        <button id="nextPageBtn" class="mini-btn" style="display:none">Next</button>
                     </div>
 
+                </div>
+
+                <div id="viewerRow" class="flex flex-col lg:flex-row gap-6">
+                  <div id="pdfPanel" class="flex-1">
+                    <h2 class="text-xl font-semibold mb-2">
+                        PDF Preview
+                    </h2>
+
+                    <!-- PDF CONTAINER -->
+                    <div id="pdfContainer">
+
+                        <div id="pdfWrapper">
+
+                            <canvas id="pdfCanvas"></canvas>
+
+                        </div>
+
+                    </div>
+                  </div>
+
+                  <aside id="measurementSidebar" class="w-full lg:w-80">
+                    <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                      <div class="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 class="text-lg font-semibold">Measurements</h3>
+                          <div id="measurementScaleInfo" style="font-size:12px;color:#6b7280;">Scale not set</div>
+                        </div>
+                      </div>
+                      <div class="flex gap-2 flex-wrap mb-3">
+                        <button id="changeScaleBtn" class="mini-btn" style="flex:1;min-width:110px;">Change scale</button>
+                        <button id="doubleSideToggle" class="mini-btn" style="flex:1;min-width:110px;">Single sided</button>
+                      </div>
+                      <div id="measurementList" style="font-size:13px;color:#374151;min-height:120px;">No saved measurements</div>
+                    </div>
+                  </aside>
                 </div>
 
             </div>

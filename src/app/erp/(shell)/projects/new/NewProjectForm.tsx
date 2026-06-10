@@ -934,6 +934,7 @@ export function NewProjectForm({
         pricePackageCents: packagePricing.pricePackageCents,
         pricePackageDollars: pricePackageValues,
       },
+      ...(isTurnover && notifyEmployeeIds.length > 0 ? { notifyEmployeeIds } : {}),
     };
 
     try {
@@ -1623,6 +1624,18 @@ export function NewProjectForm({
               />
             </div>
           </div>
+
+          {notifiableEmployees.length > 0 && (
+            <div className="space-y-3">
+              <p className={sectionHeader}>Notify employees</p>
+              <p className="text-xs text-gray-600">Select additional team members to notify about this turnover</p>
+              <NotifyMultiSelect
+                employees={notifiableEmployees}
+                selectedIds={notifyEmployeeIds}
+                onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+              />
+            </div>
+          )}
 
         </div>
       ) : null}

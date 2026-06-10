@@ -14,6 +14,8 @@ export async function POST(req: Request) {
   }
 
   const cfg = parseHubSpotPipelineStageMap();
+  const notifyEmployeeIds = Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [];
+  
   const payload = {
     ...body,
     segment: "JANITORIAL_TURNOVER_REQUESTS",
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
         body: payload,
         building: result.building,
         requests: result.turnoverRequests,
+        notifyEmployeeIds,
       });
       return NextResponse.json({
         projectId: result.project.id,
