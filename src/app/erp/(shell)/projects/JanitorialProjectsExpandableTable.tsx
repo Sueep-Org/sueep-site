@@ -42,7 +42,12 @@ function unitsFromDescription(row: ProjectTableRow) {
 function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
   if (units) {
-    return `${units} - Turnover request`;
+    const unitList = units.split(", ");
+    if (unitList.length === 1) {
+      return `Unit ${units} - Turnover request`;
+    } else {
+      return `Units: ${units} - Turnover request`;
+    }
   }
   
   return "Turnover request";
