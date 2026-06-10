@@ -42,12 +42,7 @@ function unitsFromDescription(row: ProjectTableRow) {
 function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
   if (units) {
-    const unitList = units.split(", ");
-    if (unitList.length === 1) {
-      return `Unit ${units} - Turnover request`;
-    } else {
-      return `Units: ${units} - Turnover request`;
-    }
+    return `Unit ${units} - Turnover request`;
   }
   
   return "Turnover request";
@@ -56,15 +51,31 @@ function janitorialRowTitle(row: ProjectTableRow) {
 function janitorialRowDescription(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
   if (units) {
-    const unitCount = units.split(',').length;
-    return `${unitCount} unit${unitCount !== 1 ? 's' : ''}`;
+    return "1 unit";
   }
 
   return null;
 }
 
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
-  const visibleRows = rows
+  // Expand rows with multiple units into separate rows
+  const expandedRows = rows.flatMap((row) => {
+    const units = unitsFromDescription(row);
+    if (!units) return [row];
+    
+    const unitList = units.split(", ");
+    if (unitList.length <= 1) return [row];
+    
+    // Create a separate row for each unit
+    return unitList.map((unit, index) => ({
+      ...row,
+      id: `${row.id}-unit-${index}`,
+      jobTitle: `${row.jobTitle} - Unit ${unit}`,
+      description: `Units: ${unit}\n${row.description || ""}`,
+    }));
+  });
+
+  const visibleRows = expandedRows
     .filter((row) => !isCleanupRow(row))
     .sort((a, b) => {
       const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));
