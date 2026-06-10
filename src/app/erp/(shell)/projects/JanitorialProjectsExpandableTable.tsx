@@ -50,16 +50,21 @@ function janitorialRowTitle(row: ProjectTableRow) {
     return janitorialBuildingTitle(row);
   }
 
+  // Get unit information and combine with address
+  const units = unitsFromDescription(row);
+  if (units) {
+    return `${units} - ${firstLine}`;
+  }
+  
   return firstLine;
 }
 
 function janitorialRowDescription(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
-  if (units) return `${units} - Turnover request`;
-
-  const buildingTitle = janitorialBuildingTitle(row);
-  const withoutBuilding = row.jobTitle.replace(new RegExp(`^${buildingTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-\\s*`, "i"), "").trim();
-  if (withoutBuilding && withoutBuilding !== row.jobTitle) return `${withoutBuilding} - Turnover request`;
+  if (units) {
+    const unitCount = units.split(',').length;
+    return `${unitCount} unit${unitCount !== 1 ? 's' : ''}`;
+  }
 
   return null;
 }
