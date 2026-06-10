@@ -50,10 +50,11 @@ function janitorialRowTitle(row: ProjectTableRow) {
     return janitorialBuildingTitle(row);
   }
 
-  // Get unit information and combine with address
+  // Get unit information and combine with address and property
   const units = unitsFromDescription(row);
+  const buildingTitle = janitorialBuildingTitle(row);
   if (units) {
-    return `${units} - ${firstLine}`;
+    return `${units} - ${firstLine} - ${buildingTitle}`;
   }
   
   return firstLine;
