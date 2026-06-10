@@ -58,6 +58,7 @@ export default async function ErpProjectsPage() {
         orderBy: { usedOn: "asc" },
       },
       distanceEntries: { select: { miles: true } },
+      contractorAssignments: { select: { costCents: true } },
       changeOrders: {
         select: {
           id: true,
@@ -128,7 +129,8 @@ export default async function ErpProjectsPage() {
       .filter((e) => e.category === "CLEANING_PRODUCTS")
       .reduce((s, e) => s + e.costCents, 0);
     const miles = p.distanceEntries.reduce((s, e) => s + e.miles, 0);
-    const actualLaborCents = p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0);
+    const contractorCostCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+    const actualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
     const laborEntries = p.laborEntries.map((e) => ({

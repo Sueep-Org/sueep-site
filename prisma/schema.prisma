@@ -751,6 +751,11 @@ model CandidateContract {
   @@index([docusealTemplateId])
 }
 
+model AppSetting {
+  key   String @id
+  value String
+}
+
 model ChangeOrderMaterialEntry {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
