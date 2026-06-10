@@ -51,6 +51,7 @@ export function AddingEmployees() {
                 The final tab is contract signing. If you need to send any documents to employees for signing you can do it here. For more information on contract signing go to the <A href="/erp/help/contracts/uploading-a-contract">contract signing</A> help page.
                 <Img src="/help/employees/employee_7.png" alt="Employees details" />
 
+                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
 
             </Step>
         </Steps>
