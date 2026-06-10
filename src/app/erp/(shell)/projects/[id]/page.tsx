@@ -65,6 +65,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   ]);
   if (!project) notFound();
 
+  const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+
   const isManual = !project.hubspotDealId;
   const isPostConstruction = cfg?.postConstruction.pipelineId
     ? project.hubspotPipelineId === cfg.postConstruction.pipelineId
@@ -194,6 +196,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           estTravelCents={project.estTravelCents}
           estLaborCents={project.estLaborCents}
           actualLaborCents={project.actualLaborCents}
+          contractorCostCents={contractorCostCents}
           actualMaterialCents={project.actualMaterialCents}
           estHours={project.estHours}
           actualHours={project.actualHours}
