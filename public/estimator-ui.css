@@ -74,7 +74,8 @@
     background: #bfdbfe;
 }
 
-#drawRectBtn.active {
+#drawRectBtn.active,
+#drawIrregBtn.active {
     background: #bfdbfe;
 }
 

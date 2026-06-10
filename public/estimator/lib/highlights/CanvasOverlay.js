@@ -34,6 +34,8 @@ export class CanvasOverlay {
     this._isDraggingMeasure = false;
     this._measureStart = null; // {x,y}
     this._measurePreview = null; // {x1,y1,x2,y2}
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
   }
 
   attach() {
@@ -55,7 +57,7 @@ export class CanvasOverlay {
     this._bindEvents();
     // prevent default wheel behavior on overlay to avoid zooming while drawing
     this.overlay.addEventListener('wheel', (ev) => {
-      if (this._isDraggingMeasure) {
+      if (this._isDraggingMeasure || (this.tool === 'irregular' && this.active && this._pendingPolygonPoints.length > 0)) {
         ev.preventDefault();
         ev.stopPropagation();
         return false;
@@ -66,11 +68,23 @@ export class CanvasOverlay {
   setActive(active) {
     this.active = active;
     this.overlay.style.pointerEvents = active ? 'auto' : 'none';
+    if (!active) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this._measurePreview = null;
+      this._isDraggingMeasure = false;
+      this._measureStart = null;
+    }
   }
 
   setTool(t) {
     this.tool = t;
     this.hoverPoly = null;
+    this._measurePreview = null;
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
+    this._isDraggingMeasure = false;
+    this._measureStart = null;
     this.redraw();
   }
 
@@ -88,6 +102,7 @@ export class CanvasOverlay {
     this.currentPage = p;
     this.hoverPoly = null;
     this._measurePreview = null;
+    this._irregularPreview = null;
     this._isDraggingMeasure = false;
     this._measureStart = null;
     this._hoverLineId = null;
@@ -202,6 +217,7 @@ export class CanvasOverlay {
     this.overlay.addEventListener('pointermove', this._onPointerMove);
     this.overlay.addEventListener('pointerup', this._onPointerUp);
     this.overlay.addEventListener('click', this._onClick);
+    this.overlay.addEventListener('dblclick', this._onDoubleClick);
     this.overlay.addEventListener('pointercancel', this._onPointerCancel);
   }
 
@@ -215,6 +231,12 @@ export class CanvasOverlay {
     // if user is dragging a measure line or rect, update preview and skip hover logic
     if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
       this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+      this.redraw();
+      return;
+    }
+
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
       this.redraw();
       return;
     }
@@ -321,7 +343,6 @@ export class CanvasOverlay {
       }
 
       // compute the real-world inches for this drawn line in a zoom-independent way
-      const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
       const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
       const rawInches = pageLengthPoints / 72;
       let realInchesForLine = scaleFactor ? (pageLengthPoints * scaleFactor) : rawInches;
@@ -403,7 +424,52 @@ export class CanvasOverlay {
     }
   };
 
-  
+  _onDoubleClick = () => {
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length >= 3) {
+      this._finalizeIrregularPolygon();
+    }
+  };
+
+  _finalizeIrregularPolygon = () => {
+    if (this._pendingPolygonPoints.length < 3) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this.redraw();
+      return;
+    }
+
+    const points = this._pendingPolygonPoints.map(p => ({ x: p.x, y: p.y }));
+    const closedPoints = [...points, points[0]];
+    const pixelArea = calculateFilledAreaPixels(closedPoints, this.overlay.width, this.overlay.height);
+    if (pixelArea <= 4) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this.redraw();
+      return;
+    }
+
+    const scale = this.store.getScale(this.currentPage);
+    const areaScaled = applyScale(pixelArea, this._pxPerPt, scale?.factor);
+    const norm = points.map(point => ({ x: point.x / this.overlay.width, y: point.y / this.overlay.height }));
+    const measurementId = `irreg-${Date.now()}`;
+
+    this.store.addPolygon(this.currentPage, { points: norm, measurementId });
+    this.store.addMeasurement(this.currentPage, {
+      id: measurementId,
+      area: areaScaled,
+      areaPx: pixelArea,
+      areaLabel: `${areaScaled.toFixed(2)} sq`,
+      at: Date.now(),
+      pts: points.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < points.length - 1 ? points[index + 1] : points[0]).x / this.overlay.width, y2: (index < points.length - 1 ? points[index + 1] : points[0]).y / this.overlay.height }))
+    });
+
+    this.onMeasurementsChanged?.();
+    toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
+
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
+    this.redraw();
+  };
 
   _onClick = (e) => {
     if (!this.active) return;
@@ -415,6 +481,27 @@ export class CanvasOverlay {
     if (this.tool === 'area') {
       if (!this._barrierState) return;
       this._fillWorker.postMessage({ type: 'commit', seedX: x, seedY: y, ...this._barrierState });
+      return;
+    }
+
+    if (this.tool === 'irregular') {
+      if (this._pendingPolygonPoints.length === 0) {
+        this._pendingPolygonPoints = [{ x, y }];
+        this._irregularPreview = null;
+        this.redraw();
+        return;
+      }
+
+      const firstPoint = this._pendingPolygonPoints[0];
+      const closeDistance = Math.hypot(x - firstPoint.x, y - firstPoint.y);
+      if (this._pendingPolygonPoints.length >= 3 && closeDistance <= 10) {
+        this._finalizeIrregularPolygon();
+        return;
+      }
+
+      this._pendingPolygonPoints.push({ x, y });
+      this._irregularPreview = null;
+      this.redraw();
       return;
     }
 
@@ -637,6 +724,10 @@ export class CanvasOverlay {
         drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${areaScaled.toFixed(2)} sq`);
       }
     }
+
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      drawIrregularPath(this.ctx, this._pendingPolygonPoints, this._irregularPreview);
+    }
   }
 }
 
@@ -816,6 +907,24 @@ function drawPreviewRect(ctx, a, b) {
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 3;
   ctx.setLineDash([6,6]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawIrregularPath(ctx, points, preview) {
+  if (!points.length) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  if (preview) {
+    ctx.lineTo(preview.x2, preview.y2);
+  }
+  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.restore();
 }

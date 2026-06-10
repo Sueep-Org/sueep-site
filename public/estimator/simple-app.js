@@ -211,6 +211,7 @@ async function initApp(){
 
   const measureToggle = $('measureToggle');
   const drawRectBtn = $('drawRectBtn');
+  const drawIrregBtn = $('drawIrregBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -1042,6 +1043,9 @@ async function initApp(){
         isOn ? 'measure' : 'area'
       );
 
+      if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+      if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+
       if (pdfContainer) {
         pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       }
@@ -1055,13 +1059,32 @@ async function initApp(){
 
         const isOn = !drawRectBtn.classList.contains('active');
 
-        // turn off measure toggle if active
         if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
 
         drawRectBtn.classList.toggle('active', isOn);
 
         overlay.setActive(isOn);
         overlay.setTool(isOn ? 'rect' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
+
+    if (drawIrregBtn) {
+      drawIrregBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawIrregBtn.classList.contains('active');
+
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+
+        drawIrregBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'irregular' : 'area');
 
         if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       };
