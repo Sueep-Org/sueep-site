@@ -25,7 +25,7 @@ export function AddingContractors() {
                 Next is the documents tab where you can set required documents for contractors.
                 <Img src="/help/add_contractor/contractor_4.png" alt="Contractor" />
                 Once a document is added you can either upload it yourself or send an upload link via email to the contractor.
-                <Img src="/help/add_contractor/contractor_5.png" alt="Contractor" />
+                <Img src="/help/add_contractor/contractor_5.jpg" alt="Contractor" />
                 Next is the informational form where we can gather information directly from the contractor.
                 <Img src="/help/add_contractor/contractor_6.png" alt="Contractor" />
                 You can also manually input this information if needed. 
