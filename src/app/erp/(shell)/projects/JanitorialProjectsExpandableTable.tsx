@@ -52,6 +52,9 @@ function janitorialRowTitle(row: ProjectTableRow) {
 
 function janitorialRowDescription(row: ProjectTableRow) {
   const description = row.description?.trim();
+  const unitDetails = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
+  if (unitDetails) return unitDetails;
+
   const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
 
   if (!firstLine) return null;
