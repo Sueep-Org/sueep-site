@@ -32,15 +32,20 @@ function unitsFromDescription(row: ProjectTableRow) {
     .join(", ");
 }
 
+function unitTitleFromJobTitle(row: ProjectTableRow) {
+  const title = row.jobTitle.trim();
+  if (!/^Unit\b/i.test(title)) return "";
+
+  return title.replace(/\s+-\s+Turnover request$/i, "").trim();
+}
+
 function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
-  if (units) return `Unit ${units}`;
-  // Fall back to stripping the building prefix from job title
-  const buildingName = row.buildingName || getDetailLine(row.description, "Property");
-  if (buildingName && row.jobTitle.toLowerCase().startsWith(buildingName.toLowerCase())) {
-    return row.jobTitle.slice(buildingName.length).replace(/^\s*[-–]\s*/, "").trim() || row.jobTitle;
+  if (units) {
+    return `Unit ${units}`;
   }
-  return row.jobTitle;
+
+  return unitTitleFromJobTitle(row) || "1 unit";
 }
 
 function janitorialRowDescription(_row: ProjectTableRow) {
