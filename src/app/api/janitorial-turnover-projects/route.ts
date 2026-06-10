@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         body: payload,
         building: result.building,
         requests: result.turnoverRequests,
-        notifyEmployeeIds: Array.isArray(payload.notifyEmployeeIds) ? (payload.notifyEmployeeIds as string[]) : [],
+        notifyEmployeeIds: Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [],
       });
       return NextResponse.json({
         projectId: result.project.id,
