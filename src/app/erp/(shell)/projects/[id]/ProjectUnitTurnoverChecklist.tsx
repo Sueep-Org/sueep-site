@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { UNIT_CHECKLIST_SECTIONS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import type { ChecklistSection } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { SignaturePadInput } from "@/app/erp/(shell)/quality-checks/SignaturePadInput";
-import { uploadChecklistSectionPhoto } from "@/lib/firebaseStorage";
 
 type SectionPhotos = Record<string, { before: string[]; after: string[] }>;
 
@@ -127,16 +126,27 @@ function ChecklistSectionBlock({
   const [open, setOpen] = useState(!allDone);
   const [uploadingBefore, setUploadingBefore] = useState(false);
   const [uploadingAfter, setUploadingAfter] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   async function handleUpload(type: "before" | "after", file: File) {
     const setter = type === "before" ? setUploadingBefore : setUploadingAfter;
+    setUploadError("");
     setter(true);
     try {
-      const url = await uploadChecklistSectionPhoto(projectId, section.id, type, file);
-      const updated = { ...photos, [type]: [...(photos[type] ?? []), url] };
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sectionId", section.id);
+      fd.append("photoType", type);
+      const res = await fetch(`/api/erp/projects/${projectId}/unit-checklist/photos`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+      const updated = { ...photos, [type]: [...(photos[type] ?? []), data.url] };
       onPhotosChange(section.id, updated);
-    } catch {
-      // silent — user can retry
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setter(false);
     }
@@ -145,6 +155,11 @@ function ChecklistSectionBlock({
   function handleDelete(type: "before" | "after", url: string) {
     const updated = { ...photos, [type]: (photos[type] ?? []).filter((u) => u !== url) };
     onPhotosChange(section.id, updated);
+    // extract photo ID from url and delete from DB
+    const photoId = url.split("/").pop();
+    if (photoId) {
+      fetch(`/api/erp/projects/${projectId}/unit-checklist/photos/${photoId}`, { method: "DELETE" }).catch(() => {});
+    }
   }
 
   return (
@@ -218,6 +233,9 @@ function ChecklistSectionBlock({
                 onDelete={(url) => handleDelete("after", url)}
               />
             </div>
+            {uploadError && (
+              <p className="mt-2 text-xs text-red-500">{uploadError}</p>
+            )}
           </div>
         </div>
       )}

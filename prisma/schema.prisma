@@ -786,6 +786,23 @@ model UnitTurnoverChecklist {
   sectionPhotos Json @default("{}")
   /// Record<itemId, boolean> — completion state for each checklist item
   completedItems Json @default("{}")
+
+  photos UnitChecklistPhoto[]
+}
+
+model UnitChecklistPhoto {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+
+  checklistId String
+  checklist   UnitTurnoverChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  sectionId   String
+  photoType   String   // "before" | "after"
+  filename    String
+  mimeType    String
+  size        Int
+  data        Bytes
 }
 
 model AppSetting {
