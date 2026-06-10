@@ -87,6 +87,13 @@ export class CanvasOverlay {
   setCurrentPage(p) {
     this.currentPage = p;
     this.hoverPoly = null;
+    this._measurePreview = null;
+    this._isDraggingMeasure = false;
+    this._measureStart = null;
+    this._hoverLineId = null;
+    this._hoverMeasurementId = null;
+    this._selectedMeasurementId = null;
+    this._selectedLineIds.clear();
     this.redraw();
   }
 
@@ -363,12 +370,14 @@ export class CanvasOverlay {
         { x: left / this.overlay.width, y: bottom / this.overlay.height }
       ];
 
-      // save polygon for visualization
-      this.store.addPolygon(this.currentPage, { points: norm });
+      const measurementId = `rect-${Date.now()}`;
+
+      // save polygon for visualization and tie it to the measurement so it can be removed together
+      this.store.addPolygon(this.currentPage, { points: norm, measurementId });
 
       // save area measurement record
       this.store.addMeasurement(this.currentPage, {
-        id: `rect-${Date.now()}`,
+        id: measurementId,
         area: areaScaled,
         areaPx: pixelArea,
         areaLabel: `${areaScaled.toFixed(2)} sq`,
