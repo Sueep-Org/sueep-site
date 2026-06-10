@@ -61,17 +61,16 @@ export async function uploadChecklistSectionPhoto(
   const path = `checklist-photos/${projectId}/${sectionId}/${photoType}/${Date.now()}-${safeName}`;
   const storageRef = ref(storage, path);
 
-  return new Promise((resolve, reject) => {
-    const task = uploadBytesResumable(storageRef, file);
-    task.on(
-      "state_changed",
-      (snap) => {
-        if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
-      },
-      reject,
-      () => { getDownloadURL(task.snapshot.ref).then(resolve).catch(reject); }
-    );
-  });
+  const task = uploadBytesResumable(storageRef, file);
+
+  if (onProgress) {
+    task.on("state_changed", (snap) => {
+      onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+    });
+  }
+
+  await task;
+  return getDownloadURL(task.snapshot.ref);
 }
 
 export async function uploadQualityCheckEvidenceFile(

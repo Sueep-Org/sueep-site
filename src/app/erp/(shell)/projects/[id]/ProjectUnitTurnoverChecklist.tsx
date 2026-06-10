@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { UNIT_CHECKLIST_SECTIONS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import type { ChecklistSection } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { SignaturePadInput } from "@/app/erp/(shell)/quality-checks/SignaturePadInput";
-import { uploadChecklistSectionPhoto } from "@/lib/firebaseStorage";
 
 type SectionPhotos = Record<string, { before: string[]; after: string[] }>;
 
@@ -61,36 +60,51 @@ function PhotoUploadArea({
   return (
     <div className="flex-1 min-w-0">
       <p className="text-xs font-medium text-gray-500 mb-1.5">{label}</p>
-      <div className="flex flex-wrap gap-2">
-        {photos.map((url) => (
-          <div key={url} className="relative group h-16 w-16 shrink-0">
-            <img src={url} alt="" className="h-16 w-16 rounded-md object-cover border border-gray-200" />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {uploading ? (
+            <>
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Uploading…
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                <path d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
+                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+              </svg>
+              Upload
+            </>
+          )}
+        </button>
+        {photos.map((url, i) => (
+          <div key={url} className="flex items-center gap-1">
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-pink-600 hover:underline"
+            >
+              Photo {i + 1}
+            </a>
             <button
               type="button"
               onClick={() => onDelete(url)}
-              className="absolute -top-1 -right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs shadow"
+              className="text-gray-400 hover:text-red-500 text-xs leading-none"
+              aria-label="Delete photo"
             >
               ×
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 hover:border-pink-400 hover:text-pink-500 disabled:opacity-50"
-        >
-          {uploading ? (
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-            </svg>
-          )}
-        </button>
       </div>
       <input
         ref={inputRef}
@@ -127,16 +141,27 @@ function ChecklistSectionBlock({
   const [open, setOpen] = useState(!allDone);
   const [uploadingBefore, setUploadingBefore] = useState(false);
   const [uploadingAfter, setUploadingAfter] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   async function handleUpload(type: "before" | "after", file: File) {
     const setter = type === "before" ? setUploadingBefore : setUploadingAfter;
+    setUploadError("");
     setter(true);
     try {
-      const url = await uploadChecklistSectionPhoto(projectId, section.id, type, file);
-      const updated = { ...photos, [type]: [...(photos[type] ?? []), url] };
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sectionId", section.id);
+      fd.append("photoType", type);
+      const res = await fetch(`/api/erp/projects/${projectId}/unit-checklist/photos`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+      const updated = { ...photos, [type]: [...(photos[type] ?? []), data.url] };
       onPhotosChange(section.id, updated);
-    } catch {
-      // silent — user can retry
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setter(false);
     }
@@ -145,6 +170,11 @@ function ChecklistSectionBlock({
   function handleDelete(type: "before" | "after", url: string) {
     const updated = { ...photos, [type]: (photos[type] ?? []).filter((u) => u !== url) };
     onPhotosChange(section.id, updated);
+    // extract photo ID from url and delete from DB
+    const photoId = url.split("/").pop();
+    if (photoId) {
+      fetch(`/api/erp/projects/${projectId}/unit-checklist/photos/${photoId}`, { method: "DELETE" }).catch(() => {});
+    }
   }
 
   return (
@@ -218,6 +248,9 @@ function ChecklistSectionBlock({
                 onDelete={(url) => handleDelete("after", url)}
               />
             </div>
+            {uploadError && (
+              <p className="mt-2 text-xs text-red-500">{uploadError}</p>
+            )}
           </div>
         </div>
       )}
