@@ -439,8 +439,9 @@ export class CanvasOverlay {
     }
 
     const points = this._pendingPolygonPoints.map(p => ({ x: p.x, y: p.y }));
-    const closedPoints = [...points, points[0]];
-    const pixelArea = calculateFilledAreaPixels(closedPoints, this.overlay.width, this.overlay.height);
+    const smoothedPoints = buildSmoothedPathPoints(points, null, 24);
+    const closedPoints = smoothedPoints.length > 1 ? [...smoothedPoints, smoothedPoints[0]] : [...points, points[0]];
+    const pixelArea = calculateFilledAreaPixels(closedPoints);
     if (pixelArea <= 4) {
       this._pendingPolygonPoints = [];
       this._irregularPreview = null;
@@ -450,7 +451,8 @@ export class CanvasOverlay {
 
     const scale = this.store.getScale(this.currentPage);
     const areaScaled = applyScale(pixelArea, this._pxPerPt, scale?.factor);
-    const norm = points.map(point => ({ x: point.x / this.overlay.width, y: point.y / this.overlay.height }));
+    const pathPoints = smoothedPoints.length > 1 ? smoothedPoints : points;
+    const norm = pathPoints.map(point => ({ x: point.x / this.overlay.width, y: point.y / this.overlay.height }));
     const measurementId = `irreg-${Date.now()}`;
 
     this.store.addPolygon(this.currentPage, { points: norm, measurementId });
@@ -460,7 +462,7 @@ export class CanvasOverlay {
       areaPx: pixelArea,
       areaLabel: `${areaScaled.toFixed(2)} sq`,
       at: Date.now(),
-      pts: points.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < points.length - 1 ? points[index + 1] : points[0]).x / this.overlay.width, y2: (index < points.length - 1 ? points[index + 1] : points[0]).y / this.overlay.height }))
+      pts: pathPoints.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).x / this.overlay.width, y2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).y / this.overlay.height }))
     });
 
     this.onMeasurementsChanged?.();
@@ -794,6 +796,11 @@ function calculatePolygonArea(points) {
   return Math.abs(area / 2);
 }
 
+function calculateFilledAreaPixels(points) {
+  if (!points || points.length < 3) return 0;
+  return calculatePolygonArea(points);
+}
+
 function calculatePerimeter(points) {
   let total = 0;
 
@@ -915,16 +922,63 @@ function drawPreviewRect(ctx, a, b) {
   ctx.restore();
 }
 
+function buildSmoothedPathPoints(points, preview = null, samples = 24) {
+  if (!points || !points.length) return [];
+
+  const anchors = preview ? [...points, { x: preview.x2, y: preview.y2 }] : [...points];
+  if (anchors.length < 2) return anchors.map(point => ({ x: point.x, y: point.y }));
+
+  const output = [];
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const p0 = i > 0 ? anchors[i - 1] : anchors[0];
+    const p1 = anchors[i];
+    const p2 = anchors[i + 1];
+    const p3 = i + 2 < anchors.length ? anchors[i + 2] : anchors[i + 1];
+
+    for (let step = 0; step <= samples; step++) {
+      const t = step / samples;
+      const t2 = t * t;
+      const t3 = t2 * t;
+
+      const x = 0.5 * (
+        (2 * p1.x) +
+        (-p0.x + p2.x) * t +
+        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+      );
+      const y = 0.5 * (
+        (2 * p1.y) +
+        (-p0.y + p2.y) * t +
+        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+      );
+
+      const last = output[output.length - 1];
+      if (!last || Math.hypot(last.x - x, last.y - y) > 0.001) {
+        output.push({ x, y });
+      }
+    }
+  }
+
+  if (output.length > 1) {
+    const first = output[0];
+    const last = output[output.length - 1];
+    if (Math.hypot(first.x - last.x, first.y - last.y) < 0.001) {
+      output.pop();
+    }
+  }
+
+  return output;
+}
+
 function drawIrregularPath(ctx, points, preview) {
-  if (!points.length) return;
+  const pathPoints = buildSmoothedPathPoints(points, preview, 24);
+  if (!pathPoints.length) return;
   ctx.save();
   ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
-  }
-  if (preview) {
-    ctx.lineTo(preview.x2, preview.y2);
+  ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+  for (let i = 1; i < pathPoints.length; i++) {
+    ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
   }
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 2.5;
