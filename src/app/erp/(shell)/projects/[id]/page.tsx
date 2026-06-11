@@ -80,10 +80,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   ]);
   if (!project) notFound();
 
-  function getDescLine(label: string) {
+  function getDescLine(desc: string | null, label: string) {
     const prefix = `${label}:`;
     return (
-      (project.description || "")
+      (desc || "")
         .split(/\r?\n/)
         .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
         ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
@@ -91,8 +91,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     );
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
-  const propertyManager = isTurnover ? getDescLine("Property Manager/Maintenance Manager") : null;
-  const sueepPm = isTurnover ? (project.supervisor || getDescLine("SUEEP PM")) : null;
+  const propertyManager = isTurnover ? getDescLine(project.description, "Property Manager/Maintenance Manager") : null;
+  const sueepPm = isTurnover ? (project.supervisor || getDescLine(project.description, "SUEEP PM")) : null;
 
   const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
 
