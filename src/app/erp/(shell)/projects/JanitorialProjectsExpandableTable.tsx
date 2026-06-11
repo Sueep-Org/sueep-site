@@ -40,8 +40,10 @@ function unitTitleFromJobTitle(row: ProjectTableRow) {
 }
 
 function janitorialRowTitle(row: ProjectTableRow) {
+  const rawUnits = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
   const units = unitsFromDescription(row);
   if (units) {
+    if (rawUnits && rawUnits.toLowerCase().includes("(common area")) return units;
     return `Unit ${units}`;
   }
 
@@ -60,12 +62,17 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
     if (!units) return [row];
     const unitList = units.split(", ");
     if (unitList.length <= 1) return [row];
-    return unitList.map((unit, index) => ({
-      ...row,
-      id: `${row.id}-unit-${index}`,
-      jobTitle: `${row.jobTitle} - Unit ${unit}`,
-      description: `Units: ${unit}\n${row.description || ""}`,
-    }));
+    const rawLine = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers") || "";
+    const rawEntries = rawLine.split(/\s+\|\s+/);
+    return unitList.map((unit, index) => {
+      const isCommonArea = (rawEntries[index] || "").toLowerCase().includes("(common area");
+      return {
+        ...row,
+        id: `${row.id}-unit-${index}`,
+        jobTitle: `${row.jobTitle} - ${isCommonArea ? unit : `Unit ${unit}`}`,
+        description: `Units: ${unit}${isCommonArea ? " (Common Area)" : ""}\n${row.description || ""}`,
+      };
+    });
   });
 
   const visibleRows = expandedRows

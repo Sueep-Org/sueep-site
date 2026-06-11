@@ -38,6 +38,7 @@ function normalizeName(value: string) {
 function featureToBedsBaths(value: unknown) {
   const feature = stringValue(value);
   if (feature === "studio") return { bedrooms: 0, bathrooms: 1 };
+  if (feature === "common-area") return { bedrooms: null, bathrooms: null };
   const match = feature.match(/^(\d+)\/(\d+)$/);
   if (!match) return { bedrooms: 1, bathrooms: 1 };
   return {
@@ -167,7 +168,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
         data: {
           buildingId: building.id,
           requestType: "TURNOVER",
-          unitNumber: stringValue(unit.unitNumber) || `Unit ${index + 1}`,
+          unitNumber: stringValue(unit.unitNumber) || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`),
           bedrooms,
           bathrooms,
           fullPaint,

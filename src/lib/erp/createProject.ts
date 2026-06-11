@@ -44,10 +44,10 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
         prisma.project.create({
           data: {
             segment,
-            jobTitle: `${result.building.name} - Unit ${request.unitNumber}`,
+            jobTitle: request.bedrooms === null ? `${result.building.name} - ${request.unitNumber}` : `${result.building.name} - Unit ${request.unitNumber}`,
             buildingId: result.building.id,
             turnoverRequestId: request.id,
-            description: `Property: ${result.building.name}\nUnits: ${request.unitNumber}`,
+            description: `Property: ${result.building.name}\nUnits: ${request.unitNumber}${request.bedrooms === null ? " (Common Area)" : ""}`,
             supervisor,
             projectDate: request.startDate,
             projectEndDate: request.endDate,

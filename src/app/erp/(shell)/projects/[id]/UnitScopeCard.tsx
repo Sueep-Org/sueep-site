@@ -36,22 +36,30 @@ export function UnitScopeCard({
     materialsAdditional ? "Materials" : null,
   ].filter(Boolean) as string[];
 
+  const isCommonArea = bedrooms === null && bathrooms === null;
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
       <div className="bg-gray-50 border-b border-gray-200 px-4 py-2.5 flex items-center gap-3">
         {unitNumber && (
-          <span className="text-sm font-semibold text-gray-800">Unit {unitNumber}</span>
+          <span className="text-sm font-semibold text-gray-800">{isCommonArea ? unitNumber : `Unit ${unitNumber}`}</span>
         )}
-        {(bedrooms != null || bathrooms != null) && (
-          <span className="text-xs text-gray-400">·</span>
-        )}
-        {bedrooms != null && (
-          <span className="text-sm text-gray-600">{bedrooms} Bedroom{bedrooms !== 1 ? "s" : ""}</span>
-        )}
-        {bathrooms != null && (
+        {isCommonArea ? (
+          <span className="text-sm text-gray-600">Common Area</span>
+        ) : (
           <>
-            <span className="text-xs text-gray-400">·</span>
-            <span className="text-sm text-gray-600">{bathrooms} Bathroom{bathrooms !== 1 ? "s" : ""}</span>
+            {(bedrooms != null || bathrooms != null) && (
+              <span className="text-xs text-gray-400">·</span>
+            )}
+            {bedrooms != null && (
+              <span className="text-sm text-gray-600">{bedrooms} Bedroom{bedrooms !== 1 ? "s" : ""}</span>
+            )}
+            {bathrooms != null && (
+              <>
+                <span className="text-xs text-gray-400">·</span>
+                <span className="text-sm text-gray-600">{bathrooms} Bathroom{bathrooms !== 1 ? "s" : ""}</span>
+              </>
+            )}
           </>
         )}
       </div>

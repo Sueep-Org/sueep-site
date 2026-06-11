@@ -37,6 +37,7 @@ const UNIT_FEATURE_OPTIONS = [
   { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
   { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
   { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
+  { value: "common-area", label: "Common Area", bedrooms: 0, bathrooms: 0 },
 ] as const;
 const UNIT_QUALITY_OPTIONS = [
   "Vacant",
@@ -155,7 +156,8 @@ function unitScopeSummary(unit: UnitScope) {
     unit.carpetCleaning ? "carpet cleaning" : null,
   ].filter(Boolean);
 
-  return `${unit.unitNumber || "Unit"} (${feature.label}${dateRange}${
+  const unitLabel = unit.unitNumber || (unit.features === "common-area" ? "Common Area" : "Unit");
+  return `${unitLabel} (${feature.label}${dateRange}${
     scheduledDates.length ? `, ${scheduledDates.join(", ")}` : ""
   })${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
@@ -795,7 +797,7 @@ export function NewProjectForm({
       totalPrice += unitTotal;
       if (unitLines.length > 0) {
         breakdown.push(
-          `${unit.unitNumber || `Unit ${index + 1}`} (${feature.label}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
+          `${unit.unitNumber || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`)} (${feature.label}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
         );
       }
     });
@@ -862,7 +864,7 @@ export function NewProjectForm({
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
     const turnoverUnitLabel = unitScopes
-      .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
+      .map((unit, index) => unit.unitNumber.trim() || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`))
       .join(", ");
     const generatedTurnoverTitle = `${buildingName.trim() || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
@@ -935,7 +937,7 @@ export function NewProjectForm({
       pmPhone: pmPhone.trim() || undefined,
       sueepPmName: sueepPmName.trim() || undefined,
       sueepPmEmail: sueepPmEmail.trim() || undefined,
-      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`).join(", ") || undefined,
+      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`)).join(", ") || undefined,
       unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
       moveOutDates: unitScopes.map((unit) => unit.moveOutDate).filter(Boolean).join(", ") || undefined,
       paintDates: unitScopes.map((unit) => unit.paintDate).filter(Boolean).join(", ") || undefined,
@@ -1307,14 +1309,14 @@ export function NewProjectForm({
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
                     <div className="min-w-0">
                       <label className={label} htmlFor={`unit-${unit.id}`}>
-                        Unit number
+                        {unit.features === "common-area" ? "Title" : "Unit number"}
                       </label>
                       <input
                         id={`unit-${unit.id}`}
                         className={input}
                         value={unit.unitNumber}
                         onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
-                        placeholder={`Unit ${index + 1}`}
+                        placeholder={unit.features === "common-area" ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
                       />
                     </div>
                     <div className="min-w-0">
