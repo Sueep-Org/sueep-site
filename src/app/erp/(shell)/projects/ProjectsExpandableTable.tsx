@@ -155,7 +155,7 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
   const building = getJanitorialBuildingName(project);
   const address = getDetailLine(project.description, "Address");
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-  const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}` : null;
+  const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}?from=projects` : null;
 
   return (
     <div className="space-y-2">

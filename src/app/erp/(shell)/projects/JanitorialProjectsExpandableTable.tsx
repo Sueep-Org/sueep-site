@@ -18,7 +18,7 @@ function janitorialBuildingTitle(row: ProjectTableRow) {
 }
 
 function janitorialBuildingHref(row: ProjectTableRow) {
-  return row.buildingId ? `/erp/buildings/${row.buildingId}` : null;
+  return row.buildingId ? `/erp/buildings/${row.buildingId}?from=projects` : null;
 }
 
 function unitsFromDescription(row: ProjectTableRow) {
