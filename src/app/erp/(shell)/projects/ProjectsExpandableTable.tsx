@@ -59,6 +59,14 @@ export type ProjectTableRow = {
   miles: number;
   hubspotPipelineId: string | null;
   unitQualityChecks: UnitQualityCheckRow[];
+  contractorEntries: {
+    name: string;
+    role: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    costCents: number | null;
+    notes: string | null;
+  }[];
   changeOrders: {
     id: string;
     title: string;
@@ -223,8 +231,45 @@ function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white p
           </p>
         </div>
       </div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Laborers log</p>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Labor log</p>
       <LaborTable entries={project.laborEntries} />
+      {project.contractorEntries.length > 0 && (
+        <>
+          <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contractors</p>
+          <table className="w-full table-fixed text-xs">
+            <colgroup>
+              <col className="w-[16%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[16%]" />
+              <col className="w-[14%]" />
+              <col className="w-[14%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
+                <th className="pb-1.5 pr-3 text-left font-semibold">Role</th>
+                <th className="pb-1.5 pr-3 text-left font-semibold">Start</th>
+                <th className="pb-1.5 pr-3 text-left font-semibold">End</th>
+                <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
+                <th className="pb-1.5 text-left font-semibold">Notes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {project.contractorEntries.map((c, i) => (
+                <tr key={i} className="text-slate-900">
+                  <td className="py-1 pr-3 truncate font-medium">{c.name}</td>
+                  <td className="py-1 pr-3 truncate">{c.role ?? "Contractor"}</td>
+                  <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.startDate ? fmtDate(c.startDate) : <EmptyValue />}</td>
+                  <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.endDate ? fmtDate(c.endDate) : <EmptyValue />}</td>
+                  <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
+                  <td className="py-1 truncate text-slate-500">{c.notes ?? <EmptyValue />}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   );
 }

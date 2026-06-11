@@ -58,7 +58,16 @@ export default async function ErpProjectsPage() {
         orderBy: { usedOn: "asc" },
       },
       distanceEntries: { select: { miles: true } },
-      contractorAssignments: { select: { costCents: true } },
+      contractorAssignments: {
+        select: {
+          costCents: true,
+          role: true,
+          startDate: true,
+          endDate: true,
+          notes: true,
+          contractor: { select: { name: true } },
+        },
+      },
       building: { select: { id: true, name: true } },
       changeOrders: {
         select: {
@@ -246,6 +255,14 @@ export default async function ErpProjectsPage() {
         })),
         laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
         materialCostCents: co.materialEntries.reduce((s, e) => s + e.costCents, 0),
+      })),
+      contractorEntries: p.contractorAssignments.map((a) => ({
+        name: a.contractor.name,
+        role: a.role ?? null,
+        startDate: a.startDate ? a.startDate.toISOString() : null,
+        endDate: a.endDate ? a.endDate.toISOString() : null,
+        costCents: a.costCents ?? null,
+        notes: a.notes ?? null,
       })),
     };
   });
