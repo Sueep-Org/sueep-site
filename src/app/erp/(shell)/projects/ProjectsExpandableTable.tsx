@@ -107,6 +107,17 @@ function fmtDate(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
+function getDescriptionLine(description: string | null, label: string) {
+  const prefix = `${label}:`;
+  return (
+    (description || "")
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
+      .trim() || null
+  );
+}
+
 export function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
@@ -661,7 +672,17 @@ export function ProjectsExpandableTable({
                     </div>
                   </td>
                   <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
-                    {p.supervisor || <span className="text-gray-400">Unassigned</span>}
+                    {(() => {
+                      const isTurnover = p.segment === "JANITORIAL_TURNOVER_REQUESTS";
+                      const sueepPm = isTurnover ? (p.supervisor || getDescriptionLine(p.description, "SUEEP PM")) : p.supervisor;
+                      const pm = isTurnover ? getDescriptionLine(p.description, "Property Manager/Maintenance Manager") : null;
+                      return (
+                        <>
+                          {sueepPm ? <span>{sueepPm}</span> : <span className="text-gray-400">Unassigned</span>}
+                          {pm ? <p className="text-xs text-gray-500">{pm}</p> : null}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
                   <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>

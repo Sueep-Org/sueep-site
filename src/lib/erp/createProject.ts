@@ -35,7 +35,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
 
   if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
     const result = await createTurnoverRequestsFromPayload(body);
-    const supervisor = stringValue(body.supervisor) || stringValue(body.pmName) || null;
+    const supervisor = stringValue(body.sueepPmName) || stringValue(body.supervisor) || null;
     const hubspotPipelineId = stringValue(body.hubspotPipelineId) || null;
 
     // One project per unit so each unit has its own checklist, labor, and materials

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
@@ -59,11 +59,15 @@ export function ProjectSetupEditor({
   const [startDate, setStartDate] = useState(toInputDate(projectDateIso));
   const [endDate, setEndDate] = useState(toInputDate(projectEndDateIso));
 
-  // Supervisor
+  // Supervisor — searchable combobox
   const employeeNames = employees.map((e) => `${e.firstName} ${e.lastName}`.trim());
-  const isKnownSupervisor = supervisor ? employeeNames.includes(supervisor) : false;
-  const [supervisorSelected, setSupervisorSelected] = useState(isKnownSupervisor ? (supervisor ?? "") : "__other__");
-  const [supervisorCustom, setSupervisorCustom] = useState(isKnownSupervisor ? "" : (supervisor ?? ""));
+  const [supervisorValue, setSupervisorValue] = useState(supervisor ?? "");
+  const [supervisorQuery, setSupervisorQuery] = useState(supervisor ?? "");
+  const [showSupervisorDropdown, setShowSupervisorDropdown] = useState(false);
+  const supervisorBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filteredEmployees = employeeNames.filter((name) =>
+    name.toLowerCase().includes(supervisorQuery.toLowerCase())
+  );
 
   // Service type
   const isKnownServiceType = description ? (SERVICE_TYPE_OPTIONS as readonly string[]).includes(description) : false;
@@ -96,8 +100,7 @@ export function ProjectSetupEditor({
     const fd = new FormData(e.currentTarget);
     const nextSegment = String(fd.get("segment") || segment);
     const nextPipelineId = isManual ? (String(fd.get("pipelineId") || "").trim() || null) : undefined;
-    const supervisorValue = supervisorSelected === "__other__" ? supervisorCustom.trim() : supervisorSelected;
-    if (!supervisorValue) { setError("Project Manager is required"); return; }
+    if (!supervisorValue.trim()) { setError("Project Manager is required"); return; }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -127,7 +130,7 @@ export function ProjectSetupEditor({
       segment: nextSegment,
       projectDate: nextProjectDate,
       projectEndDate: endDate || null,
-      supervisor: supervisorValue,
+      supervisor: supervisorValue.trim(),
     };
     if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
     if (serviceTypeValue !== undefined) payload.description = serviceTypeValue;
@@ -194,28 +197,44 @@ export function ProjectSetupEditor({
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Manager</h3>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
+          <div className="relative">
             <label className={label} htmlFor="ps-pm">Project Manager</label>
-            <select id="ps-pm" className={input} value={supervisorSelected} onChange={(e) => setSupervisorSelected(e.target.value)}>
-              {employeeNames.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-              <option value="__other__">Other…</option>
-            </select>
+            <input
+              id="ps-pm"
+              type="text"
+              className={input}
+              value={supervisorQuery}
+              placeholder="Search employees…"
+              autoComplete="off"
+              onChange={(e) => {
+                setSupervisorQuery(e.target.value);
+                setSupervisorValue(e.target.value);
+                setShowSupervisorDropdown(true);
+              }}
+              onFocus={() => setShowSupervisorDropdown(true)}
+              onBlur={() => {
+                supervisorBlurTimeout.current = setTimeout(() => setShowSupervisorDropdown(false), 150);
+              }}
+            />
+            {showSupervisorDropdown && filteredEmployees.length > 0 && (
+              <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg text-sm">
+                {filteredEmployees.map((name) => (
+                  <li
+                    key={name}
+                    className="cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700"
+                    onMouseDown={() => {
+                      if (supervisorBlurTimeout.current) clearTimeout(supervisorBlurTimeout.current);
+                      setSupervisorValue(name);
+                      setSupervisorQuery(name);
+                      setShowSupervisorDropdown(false);
+                    }}
+                  >
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          {supervisorSelected === "__other__" && (
-            <div>
-              <label className={label} htmlFor="ps-pm-custom">Name</label>
-              <input
-                id="ps-pm-custom"
-                type="text"
-                className={input}
-                value={supervisorCustom}
-                onChange={(e) => setSupervisorCustom(e.target.value)}
-                placeholder="Full name"
-              />
-            </div>
-          )}
         </div>
       </div>
 

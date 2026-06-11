@@ -80,6 +80,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   ]);
   if (!project) notFound();
 
+  function getDescLine(label: string) {
+    const prefix = `${label}:`;
+    return (
+      (project.description || "")
+        .split(/\r?\n/)
+        .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+        ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
+        .trim() || null
+    );
+  }
+  const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const propertyManager = isTurnover ? getDescLine("Property Manager/Maintenance Manager") : null;
+  const sueepPm = isTurnover ? (project.supervisor || getDescLine("SUEEP PM")) : null;
+
   const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
 
   const isManual = !project.hubspotDealId;
@@ -179,6 +193,22 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               lastSentAt: workOrderRecord.lastSentAt ? workOrderRecord.lastSentAt.toISOString() : null,
             } : null}
           />
+          {isTurnover && (propertyManager || sueepPm) && (
+            <div className="mb-4 flex gap-6 rounded-md border border-gray-200 bg-gray-50 p-3">
+              {propertyManager && (
+                <div>
+                  <p className="text-[10px] uppercase text-gray-500">Property Manager</p>
+                  <p className="mt-0.5 text-sm font-medium text-gray-800">{propertyManager}</p>
+                </div>
+              )}
+              {sueepPm && (
+                <div>
+                  <p className="text-[10px] uppercase text-gray-500">Sueep PM</p>
+                  <p className="mt-0.5 text-sm font-medium text-gray-800">{sueepPm}</p>
+                </div>
+              )}
+            </div>
+          )}
           {project.description ? (
             <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
               <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
