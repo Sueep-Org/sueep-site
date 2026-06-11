@@ -254,7 +254,7 @@ export default async function ErpProjectsPage() {
   const presidentialCityEntry: typeof rows[number] = {
     id: "presidential-city-demo",
     jobTitle: "Presidential City - Janitorial Services",
-    description: "Property: Presidential City\nAddress: 3900 City Ave, Philadelphia, PA 19131\n\n🚨 DEMO ENTRY - For testing purposes",
+    description: "Property: Presidential City\nAddress: 3900 City Ave, Philadelphia, PA 19131\nUnits: 911 Bldn Madison - Studio | 916 Bldn Adams - 2/2\n\n🚨 DEMO ENTRY - For testing purposes",
     buildingId: null,
     buildingName: "Presidential City",
     segment: "JANITORIAL_GENERAL_WORK_REQUEST",
