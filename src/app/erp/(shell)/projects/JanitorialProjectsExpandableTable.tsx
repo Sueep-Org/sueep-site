@@ -26,7 +26,7 @@ function unitsFromDescription(row: ProjectTableRow) {
   if (!units) return "";
 
   return units
-    .split(/\s+\|\s+|,/)
+    .split(/\s+\|\s+/)
     .map((unit) => unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || "")
     .filter(Boolean)
     .join(", ");
