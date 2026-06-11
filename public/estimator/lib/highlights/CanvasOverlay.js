@@ -682,6 +682,10 @@ export class CanvasOverlay {
     const measurements = this.store.listMeasurements(this.currentPage) || [];
     for (const m of measurements) {
       if (!m.pts || !m.pts.length) continue;
+
+      const isAreaMeasurement = m.area != null || m.areaLabel;
+      if (isAreaMeasurement) continue;
+
       const isHover = this._hoverMeasurementId === m.id;
       const isSelected = this._selectedMeasurementId === m.id;
       for (const seg of m.pts) {
