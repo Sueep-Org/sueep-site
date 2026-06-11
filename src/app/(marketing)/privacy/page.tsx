@@ -90,11 +90,10 @@ export default function PrivacyPage() {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">5. Opt-In Method</h3>
             <p className="mt-2">
-              Opt-in to receive SMS messages from Sueep can be done in the following ways:
+              Customers may opt in verbally during phone conversations with Sueep representatives. During the
+              conversation, customers are informed that message frequency may vary, message and data rates may apply,
+              they may reply STOP to opt out, and HELP for assistance.
             </p>
-            <ul className="mt-3 list-disc pl-6">
-              <li>We ask them verbally</li>
-            </ul>
           </div>
 
           <div>
