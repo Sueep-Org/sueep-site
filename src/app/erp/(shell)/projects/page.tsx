@@ -250,6 +250,42 @@ export default async function ErpProjectsPage() {
     };
   });
 
+  // ========== DEMO ENTRY: Presidential City Janitorial ==========
+  const presidentialCityEntry: typeof rows[number] = {
+    id: "presidential-city-demo",
+    jobTitle: "Presidential City - Janitorial Services",
+    description: "Property: Presidential City\nAddress: 3900 City Ave, Philadelphia, PA 19131\n\n🚨 DEMO ENTRY - For testing purposes",
+    buildingId: null,
+    buildingName: "Presidential City",
+    segment: "JANITORIAL_GENERAL_WORK_REQUEST",
+    status: "ACTIVE",
+    projectDate: new Date().toISOString(),
+    supervisor: null,
+    percentDone: 0,
+    percentInvoiced: 0,
+    billingStatus: null,
+    contractValueCents: null,
+    laborEntries: [],
+    materialEntries: [],
+    totalHours: 0,
+    laborCents: 0,
+    materialCents: 0,
+    estMaterialCents: null,
+    actualMaterialCents: 0,
+    estLaborCents: null,
+    actualLaborCents: 0,
+    estHours: null,
+    actualHours: 0,
+    cleaningCents: 0,
+    paintCents: 0,
+    miles: 0,
+    hubspotPipelineId: null,
+    unitQualityChecks: [],
+    changeOrders: [],
+  };
+  rows.push(presidentialCityEntry);
+  // ============================================================
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
