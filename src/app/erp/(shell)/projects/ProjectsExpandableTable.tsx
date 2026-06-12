@@ -204,33 +204,8 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
 }
 
 function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white px-3 py-2" }: { project: ProjectTableRow; className?: string }) {
-  const cost = projectActualCostCents(project);
-  const margin = projectMarginCents(project);
-  const marginLabel = margin == null ? "-" : centsToDollars(margin);
-  const marginPct = marginPercent(project);
-
   return (
     <div className={className}>
-      <div className="mb-3 grid gap-2 sm:grid-cols-4">
-        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Charged</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{centsToDollars(project.contractValueCents)}</p>
-        </div>
-        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Hours worked</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{project.actualHours.toFixed(2)}</p>
-        </div>
-        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actual cost</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{centsToDollars(cost)}</p>
-        </div>
-        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Margin</p>
-          <p className={`mt-1 text-sm font-semibold ${marginClass(margin)}`}>
-            {marginLabel}{marginPct ? ` (${marginPct})` : ""}
-          </p>
-        </div>
-      </div>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Labor log</p>
       <LaborTable entries={project.laborEntries} />
       {project.contractorEntries.length > 0 && (
@@ -839,73 +814,11 @@ export function ProjectsExpandableTable({
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
                               <td colSpan={15} className="bg-gray-50 px-6 py-2 pb-3">
-                                <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-                                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
-                                  <LaborTable entries={co.laborers} />
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
-                                    <p className="mt-1 text-xs text-gray-700 line-clamp-3">
-                                      {co.description || <span className="text-gray-400">No comments</span>}
-                                    </p>
-                                  </div>
-
-                                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
-                                    <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                      <span className="text-gray-400">Contract</span>
-                                      <span className="font-medium text-gray-800">{centsToDollars(co.contractValueCents)}</span>
-                                      <span className="text-gray-400">Est. cost</span>
-                                      <span className="font-medium text-gray-800">{centsToDollars(co.estimatedCostCents)}</span>
-                                      <span className="text-gray-400">Schedule</span>
-                                      <span className="font-medium text-gray-800">
-                                        {co.estimatedDays != null ? `${co.estimatedDays} day${co.estimatedDays !== 1 ? "s" : ""}` : "-"}
-                                      </span>
-                                      <span className="text-gray-400">Requested by</span>
-                                      <span className="font-medium text-gray-800">{co.requestedBy || "-"}</span>
-                                    </div>
-                                    <div className="mt-2 grid grid-cols-2 gap-x-4 border-t border-gray-100 pt-2">
-                                      <div>
-                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Estimated</p>
-                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                          <span className="text-gray-400">Labor</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estLaborCents)}</span>
-                                          <span className="text-gray-400">Material</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estMaterialCents)}</span>
-                                          <span className="text-gray-400">Travel</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estTravelCents)}</span>
-                                          <span className="text-gray-400">Hours</span>
-                                          <span className="font-medium text-gray-800">{co.estHours ?? "-"}</span>
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Actual</p>
-                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                          <span className="text-gray-400">Labor</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}</span>
-                                          <span className="text-gray-400">Material</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}</span>
-                                          <span className="text-gray-400">Travel</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.actualTravelCents)}</span>
-                                          <span className="text-gray-400">Hours</span>
-                                          <span className="font-medium text-gray-800">{co.actualHours ?? "-"}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-                                    <p className="mt-1 text-sm font-semibold text-gray-800">{co.supervisor || "-"}</p>
-                                    <Link
-                                      href={`/erp/projects/${p.id}/change-orders/${co.id}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
-                                    >
-                                      Full details {"->"}
-                                    </Link>
-                                  </div>
+                                <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
+                                  <p className="mt-1 text-xs text-gray-700">
+                                    {co.description || <span className="text-gray-400">No comments</span>}
+                                  </p>
                                 </div>
                               </td>
                             </tr>
