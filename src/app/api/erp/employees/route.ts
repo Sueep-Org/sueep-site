@@ -59,9 +59,16 @@ export async function POST(req: Request) {
   if (body.hireDate !== undefined && hireDate === undefined) {
     return NextResponse.json({ error: "Invalid hireDate" }, { status: 400 });
   }
+  const payTypeRaw = String(body.payType || "HOURLY").toUpperCase();
+  const payType = payTypeRaw === "SALARY" ? "SALARY" : "HOURLY";
+
   const hourlyPayCents = parseHourlyPayCents(body.hourlyPay);
   if (body.hourlyPay !== undefined && hourlyPayCents === undefined) {
     return NextResponse.json({ error: "Invalid hourlyPay" }, { status: 400 });
+  }
+  const annualSalaryCents = parseHourlyPayCents(body.annualSalary);
+  if (body.annualSalary !== undefined && annualSalaryCents === undefined) {
+    return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
   }
 
   try {
@@ -72,7 +79,9 @@ export async function POST(req: Request) {
         email: body.email ? String(body.email).trim().toLowerCase() : null,
         phone: body.phone ? String(body.phone).trim() : null,
         role: body.role ? String(body.role).trim() : null,
+        payType,
         hourlyPayCents: hourlyPayCents ?? null,
+        annualSalaryCents: annualSalaryCents ?? null,
         defaultProject: body.defaultProject ? String(body.defaultProject).trim() : null,
         status,
         hireDate: hireDate ?? null,

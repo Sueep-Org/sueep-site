@@ -15,7 +15,9 @@ type Props = {
     email: string | null;
     phone: string | null;
     role: string | null;
+    payType: string;
     hourlyPayCents: number | null;
+    annualSalaryCents: number | null;
     defaultProject: string | null;
     status: string;
     hireDate: string | null;
@@ -30,6 +32,7 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+  const [payType, setPayType] = useState<"HOURLY" | "SALARY">(initial.payType === "SALARY" ? "SALARY" : "HOURLY");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,7 +47,9 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
       email: fd.get("email") || null,
       phone: fd.get("phone") || null,
       role: fd.get("role") || null,
+      payType,
       hourlyPay: fd.get("hourlyPay") || null,
+      annualSalary: payType === "SALARY" ? (fd.get("annualSalary") || null) : null,
       defaultProject: fd.get("defaultProject") || null,
       status: fd.get("status"),
       hireDate: fd.get("hireDate") || null,
@@ -93,6 +98,7 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
 
   const hireDate = initial.hireDate ? initial.hireDate.slice(0, 10) : "";
   const hourlyPay = initial.hourlyPayCents != null ? (initial.hourlyPayCents / 100).toFixed(2) : "";
+  const annualSalary = initial.annualSalaryCents != null ? (initial.annualSalaryCents / 100).toFixed(2) : "";
 
   return (
     <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -130,11 +136,43 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
             <input id="role" name="role" defaultValue={initial.role ?? ""} className={input} />
           </div>
           <div>
-            <label className={label} htmlFor="hourlyPay">
-              Hourly pay
-            </label>
-            <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} />
+            <label className={label}>Pay type</label>
+            <div className="mt-1 flex rounded-md border border-gray-300 overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => setPayType("HOURLY")}
+                className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              >
+                Hourly
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayType("SALARY")}
+                className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              >
+                Salary
+              </button>
+            </div>
           </div>
+          <div>
+            {payType === "HOURLY" ? (
+              <>
+                <label className={label} htmlFor="hourlyPay">Hourly pay</label>
+                <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 18.75" />
+              </>
+            ) : (
+              <>
+                <label className={label} htmlFor="annualSalary">Annual salary</label>
+                <input id="annualSalary" name="annualSalary" type="number" min="0" step="0.01" defaultValue={annualSalary} className={input} placeholder="e.g. 50000" />
+              </>
+            )}
+          </div>
+          {payType === "SALARY" && (
+            <div>
+              <label className={label} htmlFor="hourlyPay">Est. hourly rate (for labor cost tracking)</label>
+              <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 24.04" />
+            </div>
+          )}
           <div>
             <label className={label} htmlFor="defaultProject">
               Default project

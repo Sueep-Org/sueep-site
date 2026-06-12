@@ -470,8 +470,12 @@ model Employee {
   email     String? @unique
   phone     String?
   role      String?
+  /// HOURLY | SALARY
+  payType        String  @default("HOURLY")
   /// Cents per hour (e.g. $18.75 => 1875)
   hourlyPayCents Int?
+  /// Annual salary in cents (e.g. $50,000 => 5000000)
+  annualSalaryCents Int?
   defaultProject String?
   /// ACTIVE | INACTIVE
   status String @default("ACTIVE")

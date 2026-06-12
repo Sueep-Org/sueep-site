@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
+const inputCls = "rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900";
+
 type Props = { title: ReactNode };
 
 export function NewEmployeeForm({ title }: Props) {
@@ -10,6 +12,7 @@ export function NewEmployeeForm({ title }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [payType, setPayType] = useState<"HOURLY" | "SALARY">("HOURLY");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -23,7 +26,9 @@ export function NewEmployeeForm({ title }: Props) {
       email: fd.get("email") || undefined,
       phone: fd.get("phone") || undefined,
       role: fd.get("role") || undefined,
+      payType,
       hourlyPay: fd.get("hourlyPay") || undefined,
+      annualSalary: payType === "SALARY" ? (fd.get("annualSalary") || undefined) : undefined,
       defaultProject: fd.get("defaultProject") || undefined,
       hireDate: fd.get("hireDate") || undefined,
       status: fd.get("status") || "ACTIVE",
@@ -67,15 +72,40 @@ export function NewEmployeeForm({ title }: Props) {
       {open ? (
         <form onSubmit={onSubmit} className="mt-3 w-full max-w-2xl space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <input name="firstName" required placeholder="First name *" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="lastName" required placeholder="Last name *" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="email" type="email" placeholder="Email" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="phone" placeholder="Phone" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="role" placeholder="Role" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Hourly pay (e.g. 18.75)" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="defaultProject" placeholder="Default project" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <input name="hireDate" type="date" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            <select name="status" defaultValue="ACTIVE" className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
+            <input name="firstName" required placeholder="First name *" className={inputCls} />
+            <input name="lastName" required placeholder="Last name *" className={inputCls} />
+            <input name="email" type="email" placeholder="Email" className={inputCls} />
+            <input name="phone" placeholder="Phone" className={inputCls} />
+            <input name="role" placeholder="Role" className={inputCls} />
+            <div className="flex flex-col gap-1">
+              <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setPayType("HOURLY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Hourly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayType("SALARY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Salary
+                </button>
+              </div>
+              {payType === "HOURLY" ? (
+                <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Hourly pay (e.g. 18.75)" className={inputCls} />
+              ) : (
+                <input name="annualSalary" type="number" min="0" step="0.01" placeholder="Annual salary (e.g. 50000)" className={inputCls} />
+              )}
+            </div>
+            {payType === "SALARY" && (
+              <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Est. hourly rate for labor cost" className={inputCls} />
+            )}
+            <input name="defaultProject" placeholder="Default project" className={inputCls} />
+            <input name="hireDate" type="date" className={inputCls} />
+            <select name="status" defaultValue="ACTIVE" className={inputCls}>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
             </select>

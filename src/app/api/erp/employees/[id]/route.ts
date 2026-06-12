@@ -59,10 +59,20 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.email !== undefined) data.email = body.email ? String(body.email).trim().toLowerCase() : null;
   if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() : null;
+  if (body.payType !== undefined) {
+    const pt = String(body.payType || "").toUpperCase();
+    if (pt !== "HOURLY" && pt !== "SALARY") return NextResponse.json({ error: "Invalid payType" }, { status: 400 });
+    data.payType = pt;
+  }
   if (body.hourlyPay !== undefined) {
     const cents = parseHourlyPayCents(body.hourlyPay);
     if (cents === undefined) return NextResponse.json({ error: "Invalid hourlyPay" }, { status: 400 });
     data.hourlyPayCents = cents;
+  }
+  if (body.annualSalary !== undefined) {
+    const cents = parseHourlyPayCents(body.annualSalary);
+    if (cents === undefined) return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
+    data.annualSalaryCents = cents;
   }
   if (body.defaultProject !== undefined) data.defaultProject = body.defaultProject ? String(body.defaultProject).trim() : null;
   if (body.status !== undefined) {
