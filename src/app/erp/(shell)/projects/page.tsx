@@ -54,7 +54,7 @@ export default async function ErpProjectsPage() {
           qualityNotes: true,
           employee: { select: { firstName: true, lastName: true } },
         },
-        orderBy: { workDate: "asc" },
+        orderBy: { workDate: "desc" },
       },
       materialEntries: {
         select: { usedOn: true, category: true, itemName: true, quantity: true, unit: true, costCents: true, notes: true },
@@ -96,7 +96,7 @@ export default async function ErpProjectsPage() {
           materialEntries: { select: { costCents: true } },
           laborers: {
             select: { id: true, name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
-            orderBy: { workDate: "asc" },
+            orderBy: { workDate: "desc" },
           },
         },
         orderBy: { createdAt: "desc" },
