@@ -15,8 +15,8 @@ function endOfDay(date: Date): Date {
 
 function mondayOf(date: Date): Date {
   const d = new Date(date);
-  const day = d.getUTCDay(); // 0=Sun
-  const diff = (day === 0 ? -6 : 1 - day);
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
   d.setUTCDate(d.getUTCDate() + diff);
   d.setUTCHours(0, 0, 0, 0);
   return d;
@@ -38,18 +38,39 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  const entries = await prisma.laborEntry.findMany({
-    where: { workDate: { gte: periodStart, lte: periodEnd } },
-    include: {
-      employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
-      project: { select: { id: true, jobTitle: true } },
-    },
-    orderBy: { workDate: "asc" },
-  });
+  const [entries, contractorAssignments] = await Promise.all([
+    prisma.laborEntry.findMany({
+      where: { workDate: { gte: periodStart, lte: periodEnd } },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
+        project: { select: { id: true, jobTitle: true } },
+      },
+      orderBy: { workDate: "asc" },
+    }),
+    prisma.contractorAssignment.findMany({
+      where: {
+        costCents: { not: null },
+        OR: [
+          // Assignment starts within period
+          { startDate: { gte: periodStart, lte: periodEnd } },
+          // Assignment ends within period
+          { endDate: { gte: periodStart, lte: periodEnd } },
+          // Assignment spans the entire period
+          { AND: [{ startDate: { lte: periodStart } }, { endDate: { gte: periodEnd } }] },
+          // No dates set — include if assignedDate is within period
+          { AND: [{ startDate: null }, { endDate: null }, { assignedDate: { gte: periodStart, lte: periodEnd } }] },
+        ],
+      },
+      include: {
+        contractor: { select: { id: true, name: true } },
+        project: { select: { jobTitle: true } },
+      },
+    }),
+  ]);
 
-  // Group by employee (keyed by employeeId or workerName for ad-hoc entries)
+  // ── Employee rows ──────────────────────────────────────────────────────
   type EmployeeKey = string;
-  type WeekKey = string; // ISO week start YYYY-MM-DD
+  type WeekKey = string;
 
   const employeeMap = new Map<EmployeeKey, {
     employeeId: string | null;
@@ -93,7 +114,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const rows = Array.from(employeeMap.values()).map((emp) => {
+  const employeeRows = Array.from(employeeMap.values()).map((emp) => {
     let regHours = 0;
     let otHours = 0;
     for (const weekHours of emp.weeklyHours.values()) {
@@ -105,11 +126,10 @@ export async function GET(req: Request) {
       }
     }
     const totalHours = regHours + otHours;
-    const regPay = regHours * emp.hourlyRateCents;
-    const otPay = otHours * emp.hourlyRateCents * 1.5;
-    const grossPayCents = Math.round(regPay + otPay);
+    const grossPayCents = Math.round(regHours * emp.hourlyRateCents + otHours * emp.hourlyRateCents * 1.5);
 
     return {
+      isContractor: false as const,
       employeeId: emp.employeeId,
       adpFileNumber: emp.adpFileNumber,
       name: emp.name,
@@ -124,7 +144,42 @@ export async function GET(req: Request) {
     };
   });
 
-  rows.sort((a, b) => a.name.localeCompare(b.name));
+  // ── Contractor rows — group by contractor, sum costCents ───────────────
+  const contractorMap = new Map<string, { name: string; costCents: number; projects: Set<string> }>();
+
+  for (const a of contractorAssignments) {
+    const key = a.contractorId;
+    if (!contractorMap.has(key)) {
+      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set() });
+    }
+    const c = contractorMap.get(key)!;
+    c.costCents += a.costCents ?? 0;
+    if (a.project?.jobTitle) c.projects.add(a.project.jobTitle);
+  }
+
+  const contractorRows = Array.from(contractorMap.values()).map((c) => ({
+    isContractor: true as const,
+    employeeId: null,
+    adpFileNumber: null,
+    name: c.name,
+    payType: "CONTRACTOR",
+    hourlyRateCents: 0,
+    totalHours: 0,
+    regHours: 0,
+    otHours: 0,
+    grossPayCents: c.costCents,
+    projects: Array.from(c.projects).join(", "),
+    entries: [],
+  }));
+
+  function lastName(name: string) {
+    const parts = name.trim().split(/\s+/);
+    return parts[parts.length - 1] ?? name;
+  }
+
+  const rows = [...employeeRows, ...contractorRows].sort((a, b) =>
+    lastName(a.name).localeCompare(lastName(b.name))
+  );
 
   return NextResponse.json({ periodStart: startParam, periodEnd: endParam, rows });
 }

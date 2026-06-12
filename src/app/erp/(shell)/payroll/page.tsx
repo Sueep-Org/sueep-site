@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 type PayrollRow = {
+  isContractor: boolean;
   employeeId: string | null;
   adpFileNumber: string | null;
   name: string;
@@ -16,7 +17,7 @@ type PayrollRow = {
   projects: string;
 };
 
-type PayFilter = "all" | "hourly" | "salary";
+type PayFilter = "all" | "hourly" | "salary" | "contractor";
 
 type PayrollResponse = {
   periodStart: string;
@@ -182,8 +183,9 @@ export default function PayrollExportPage() {
   }
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
-    if (payFilter === "hourly") return r.payType !== "SALARY";
-    if (payFilter === "salary") return r.payType === "SALARY";
+    if (payFilter === "hourly") return !r.isContractor && r.payType !== "SALARY";
+    if (payFilter === "salary") return !r.isContractor && r.payType === "SALARY";
+    if (payFilter === "contractor") return r.isContractor;
     return true;
   }).filter((r) => {
     if (!search.trim()) return true;
@@ -193,7 +195,7 @@ export default function PayrollExportPage() {
 
   function downloadCsv() {
     if (!data) return;
-    const suffix = payFilter === "hourly" ? "-hourly" : payFilter === "salary" ? "-salary" : "";
+    const suffix = payFilter === "hourly" ? "-hourly" : payFilter === "salary" ? "-salary" : payFilter === "contractor" ? "-contractors" : "";
     const csv = buildCsv(filteredRows, data.periodStart, data.periodEnd);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -318,14 +320,14 @@ export default function PayrollExportPage() {
           className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 w-56"
         />
         <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
-          {(["all", "hourly", "salary"] as PayFilter[]).map((f) => (
+          {([["all", "All"], ["hourly", "Hourly"], ["salary", "Salary"], ["contractor", "Contractors"]] as [PayFilter, string][]).map(([f, label]) => (
             <button
               key={f}
               type="button"
               onClick={() => setPayFilter(f)}
-              className={`px-3 py-1.5 capitalize transition-colors ${payFilter === f ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              className={`px-3 py-1.5 transition-colors ${payFilter === f ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
             >
-              {f === "all" ? "All" : f === "hourly" ? "Hourly" : "Salary"}
+              {label}
             </button>
           ))}
         </div>
@@ -378,31 +380,44 @@ export default function PayrollExportPage() {
                 </tr>
               ) : (
                 filteredRows.map((row, i) => (
-                  <tr key={row.employeeId ?? row.name} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+                  <tr key={`${row.isContractor ? "c" : "e"}-${row.employeeId ?? row.name}`} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
                     <td className="px-4 py-3 font-medium text-gray-900">
-                      {row.employeeId ? (
-                        <Link href={`/erp/employees/${row.employeeId}`} className="hover:text-pink-600 hover:underline">
-                          {row.name}
-                        </Link>
-                      ) : (
-                        <span className="text-gray-500">{row.name}</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {row.isContractor && (
+                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Contractor</span>
+                        )}
+                        {row.employeeId ? (
+                          <Link href={`/erp/employees/${row.employeeId}`} className="hover:text-pink-600 hover:underline">
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <span className={row.isContractor ? "text-gray-900" : "text-gray-500"}>{row.name}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      {row.adpFileNumber ? (
+                      {row.isContractor ? (
+                        <span className="text-gray-400">—</span>
+                      ) : row.adpFileNumber ? (
                         <span className="font-mono text-gray-700">{row.adpFileNumber}</span>
                       ) : (
                         <span className="text-amber-500">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{fmtHours(row.regHours)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.otHours > 0 ? (
+                      {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.regHours)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                      {row.isContractor ? <span className="text-gray-400">—</span> : row.otHours > 0 ? (
                         <span className="font-medium text-amber-600">{fmtHours(row.otHours)}</span>
                       ) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">{fmtHours(row.totalHours)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{fmt(row.hourlyRateCents)}/hr</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                      {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.totalHours)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                      {row.isContractor ? <span className="text-xs text-gray-400">Flat fee</span> : `${fmt(row.hourlyRateCents)}/hr`}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">{fmt(row.grossPayCents)}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{row.projects}</td>
                   </tr>
