@@ -569,9 +569,9 @@ export function ProjectsExpandableTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="overflow-auto rounded-lg border border-gray-200 max-h-[calc(100vh-8rem)]">
       <table className="w-full min-w-[1820px] text-left text-sm">
-        <thead className="border-b border-gray-300 text-xs uppercase">
+        <thead className="sticky top-0 z-10 border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
             <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
             <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>

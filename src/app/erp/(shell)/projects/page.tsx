@@ -144,6 +144,25 @@ export default async function ErpProjectsPage() {
     const actualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
+
+    // Roll up qualifying change orders (exclude VOID and REJECTED)
+    const qualifyingCOs = p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
+    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? 0), 0);
+    const coEstMaterialCents = qualifyingCOs.reduce((s, co) => s + (co.estMaterialCents ?? 0), 0);
+    const coActualMaterialCents = qualifyingCOs.reduce((s, co) => {
+      const mat = co.materialEntries.reduce((ms, e) => ms + e.costCents, 0);
+      return s + (mat > 0 ? mat : (co.actualMaterialCents ?? 0));
+    }, 0);
+    const coEstLaborCents = qualifyingCOs.reduce((s, co) => s + (co.estLaborCents ?? 0), 0);
+    const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
+      const lab = co.laborers.reduce((ls, l) => ls + Math.round(l.hours * l.hourlyRateCents), 0);
+      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0));
+    }, 0);
+    const coEstHours = qualifyingCOs.reduce((s, co) => s + (co.estHours ?? 0), 0);
+    const coActualHours = qualifyingCOs.reduce((s, co) => {
+      const laborerHours = co.laborers.reduce((ls, l) => ls + l.hours, 0);
+      return s + (laborerHours > 0 ? laborerHours : (co.actualHours ?? 0));
+    }, 0);
     const laborEntries = p.laborEntries.map((e) => ({
       id: e.id,
       updatePath: `/api/erp/projects/${p.id}/labor/${e.id}`,
@@ -182,18 +201,26 @@ export default async function ErpProjectsPage() {
       percentDone: p.percentDone,
       percentInvoiced: p.percentInvoiced,
       billingStatus: p.billingStatus ?? null,
-      contractValueCents: p.contractValueCents,
+      contractValueCents: p.contractValueCents == null && coContractValueCents === 0
+        ? null
+        : (p.contractValueCents ?? 0) + coContractValueCents,
       laborEntries,
       materialEntries,
       totalHours,
       laborCents,
       materialCents,
-      estMaterialCents: p.estMaterialCents ?? null,
-      actualMaterialCents,
-      estLaborCents: p.estLaborCents ?? null,
-      actualLaborCents,
-      estHours: p.estHours ?? null,
-      actualHours,
+      estMaterialCents: p.estMaterialCents == null && coEstMaterialCents === 0
+        ? null
+        : (p.estMaterialCents ?? 0) + coEstMaterialCents,
+      actualMaterialCents: actualMaterialCents + coActualMaterialCents,
+      estLaborCents: p.estLaborCents == null && coEstLaborCents === 0
+        ? null
+        : (p.estLaborCents ?? 0) + coEstLaborCents,
+      actualLaborCents: actualLaborCents + coActualLaborCents,
+      estHours: p.estHours == null && coEstHours === 0
+        ? null
+        : (p.estHours ?? 0) + coEstHours,
+      actualHours: actualHours + coActualHours,
       cleaningCents,
       paintCents,
       miles,
