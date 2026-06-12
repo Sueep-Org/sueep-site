@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -61,11 +64,6 @@ const BUILDING_ADDRESS_OPTIONS = [
 ] as const;
 const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
 const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
-const GEOTRACKING_CHECK_MODE_OPTIONS = [
-  "Clock in and clock out",
-  "Clock in only",
-  "Continuous during scheduled shift",
-] as const;
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 type PricingField = keyof typeof PRICING_FIELD_LABELS;
@@ -498,6 +496,14 @@ export function NewProjectForm({
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
 
+  const [currentEmail, setCurrentEmail] = useState(auth?.currentUser?.email ?? "");
+  const canEditPricing = isTurnoverPricingAdmin(currentEmail);
+
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, (user) => setCurrentEmail(user?.email ?? ""));
+  }, []);
+
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {
     const ids: string[] = [];
@@ -899,11 +905,6 @@ export function NewProjectForm({
         : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
-      isTurnover ? `Geotracking: ${geotrackingEnabled ? "Enabled" : "Disabled"}` : null,
-      isTurnover && geotrackingEnabled && geotrackingLocation ? `Expected Worker Location: ${geotrackingLocation}` : null,
-      isTurnover && geotrackingEnabled && geofenceRadiusFeet ? `Geofence Radius: ${geofenceRadiusFeet} ft` : null,
-      isTurnover && geotrackingEnabled && geotrackingCheckMode ? `Location Checks: ${geotrackingCheckMode}` : null,
-      isTurnover && geotrackingEnabled && geotrackingNotes ? `Geotracking Notes: ${geotrackingNotes}` : null,
       isTurnover && turnoverComments ? `Comments: ${turnoverComments}` : null,
     ]
       .filter(Boolean)
@@ -1452,6 +1453,7 @@ export function NewProjectForm({
             </div>
           </div>
 
+          {canEditPricing && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={sectionHeader}>Step 3 - Price package</p>
@@ -1497,82 +1499,10 @@ export function NewProjectForm({
               </div>
             </div>
           </div>
+          )}
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 - Geotracking</p>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <label className="flex items-start rounded-md border border-gray-200 bg-white px-3 py-2">
-                <input
-                  type="checkbox"
-                  name="geotrackingEnabled"
-                  className="mt-0.5 h-4 w-4 text-pink-600"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Track worker location for this turnover
-                </span>
-              </label>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                <div className="min-w-0 sm:col-span-2">
-                  <label className={label} htmlFor="geotrackingLocation">
-                    Expected worker location
-                  </label>
-                  <input
-                    id="geotrackingLocation"
-                    name="geotrackingLocation"
-                    className={input}
-                    value={buildingAddress}
-                    readOnly
-                    placeholder="Select a building address"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className={label} htmlFor="geofenceRadiusFeet">
-                    Geofence radius (ft)
-                  </label>
-                  <input
-                    id="geofenceRadiusFeet"
-                    name="geofenceRadiusFeet"
-                    type="number"
-                    min={50}
-                    step={50}
-                    className={input}
-                    defaultValue="300"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className={label} htmlFor="geotrackingCheckMode">
-                    Location checks
-                  </label>
-                  <select
-                    id="geotrackingCheckMode"
-                    name="geotrackingCheckMode"
-                    className={input}
-                    defaultValue={GEOTRACKING_CHECK_MODE_OPTIONS[0]}
-                  >
-                    {GEOTRACKING_CHECK_MODE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-0 sm:col-span-2">
-                  <label className={label} htmlFor="geotrackingNotes">
-                    Tracking notes
-                  </label>
-                  <input
-                    id="geotrackingNotes"
-                    name="geotrackingNotes"
-                    className={input}
-                    placeholder="Gate, entrance, or access notes for verifying the worker location"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className={sectionHeader}>Step 5 - Estimated total</p>
+            <p className={sectionHeader}>{canEditPricing ? "Step 4" : "Step 3"} - Estimated total</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="sueepPmName">

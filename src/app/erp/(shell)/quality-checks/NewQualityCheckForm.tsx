@@ -335,6 +335,7 @@ export function NewQualityCheckForm() {
                 <label className="block text-xs font-medium text-gray-600" htmlFor="qc-evidence">
                   Evidence photos
                 </label>
+                <p className="mt-0.5 text-xs text-gray-500">Please provide all photos</p>
                 <input
                   id="qc-evidence"
                   type="file"

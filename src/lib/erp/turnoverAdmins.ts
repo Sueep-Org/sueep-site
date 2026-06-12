@@ -1,4 +1,4 @@
-export const TURNOVER_PRICING_ADMIN_NAMES = ["nick", "dave", "edwin"] as const;
+export const TURNOVER_PRICING_ADMIN_NAMES = ["nick", "david", "edwin", "emma"] as const;
 export const TURNOVER_PRICING_ADMIN_EMAILS = ["jefferson@sueep.com"] as const;
 
 export function isTurnoverPricingAdmin(identity: string | null | undefined) {
