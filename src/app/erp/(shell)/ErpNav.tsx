@@ -5,33 +5,51 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ErpBrandLogo } from "@/app/erp/components/ErpBrandLogo";
 import { ErpLogoutButton } from "./ErpLogoutButton";
+import type { ErpRole } from "@/lib/erpSession";
 
-const topNav = [
-  { href: "/erp", label: "Dashboard" },
+type AllRoles = ErpRole[];
+const ALL: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const PM_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER"];
+const FIELD: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
+const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
+
+interface NavItem {
+  href: string;
+  label: string;
+  roles: AllRoles;
+}
+
+const topNav: NavItem[] = [
+  { href: "/erp", label: "Dashboard", roles: ALL },
 ];
 
-const projectGroup = {
-  label: "Project Information",
-  items: [
-    { href: "/erp/projects", label: "Projects" },
-    { href: "/erp/projects/new", label: "New Project" },
-    { href: "/erp/labor-assignments", label: "Labor Assignments" },
-    { href: "/erp/contractor-assignments", label: "Contractor Assignments" },
-    { href: "/erp/quality-checks", label: "Quality Checks" },
-    { href: "/erp/schedule", label: "Schedule" },
-  ],
-};
-
-const bottomNav = [
-  { href: "/erp/employees", label: "Employees" },
-  { href: "/erp/payroll", label: "Payroll Export" },
-  { href: "/erp/candidates", label: "Candidates" },
-  { href: "/erp/contractors", label: "Contractor Verification" },
-  { href: "/erp/estimator", label: "AI Estimator" },
+const projectGroupItems: NavItem[] = [
+  { href: "/erp/projects", label: "Projects", roles: ALL },
+  { href: "/erp/projects/new", label: "New Project", roles: PM_EST },
+  { href: "/erp/labor-assignments", label: "Labor Assignments", roles: FIELD },
+  { href: "/erp/contractor-assignments", label: "Contractor Assignments", roles: PM_UP },
+  { href: "/erp/quality-checks", label: "Quality Checks", roles: FIELD },
+  { href: "/erp/schedule", label: "Schedule", roles: ALL },
 ];
 
-function isGroupActive(pathname: string) {
-  return projectGroup.items.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
+const employmentGroupItems: NavItem[] = [
+  { href: "/erp/employees", label: "Employees", roles: PM_UP },
+  { href: "/erp/payroll", label: "Payroll Export", roles: PM_UP },
+  { href: "/erp/candidates", label: "Candidates", roles: PM_UP },
+  { href: "/erp/contractors", label: "Contractor Verification", roles: PM_UP },
+];
+
+const bottomNav: NavItem[] = [
+  { href: "/erp/estimator", label: "AI Estimator", roles: PM_EST },
+  { href: "/erp/users", label: "User Management", roles: ["ADMIN"] },
+];
+
+function allowed(item: NavItem, role: ErpRole): boolean {
+  return (item.roles as string[]).includes(role);
+}
+
+function isGroupActive(pathname: string, items: NavItem[]) {
+  return items.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
 }
 
 function NavLink({ href, label, pathname }: { href: string; label: string; pathname: string }) {
@@ -51,12 +69,31 @@ function NavLink({ href, label, pathname }: { href: string; label: string; pathn
   );
 }
 
-function ProjectGroup({ pathname }: { pathname: string }) {
-  const [open, setOpen] = useState(() => isGroupActive(pathname));
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={["h-4 w-4 text-gray-400 transition-transform", open ? "rotate-180" : ""].join(" ")}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function NavGroup({ label, items, pathname, role }: { label: string; items: NavItem[]; pathname: string; role: ErpRole }) {
+  const visibleItems = items.filter((i) => allowed(i, role));
+  const [open, setOpen] = useState(() => isGroupActive(pathname, visibleItems));
 
   useEffect(() => {
-    if (isGroupActive(pathname)) setOpen(true);
+    if (isGroupActive(pathname, visibleItems)) setOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  if (visibleItems.length === 0) return null;
 
   return (
     <div>
@@ -65,21 +102,12 @@ function ProjectGroup({ pathname }: { pathname: string }) {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
       >
-        <span>Project Information</span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className={["h-4 w-4 text-gray-400 transition-transform", open ? "rotate-180" : ""].join(" ")}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <span>{label}</span>
+        <ChevronIcon open={open} />
       </button>
       {open && (
         <div className="ml-3 mt-0.5 flex flex-col gap-0.5 border-l border-gray-200 pl-2">
-          {projectGroup.items.map((item) => (
+          {visibleItems.map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
           ))}
         </div>
@@ -88,11 +116,33 @@ function ProjectGroup({ pathname }: { pathname: string }) {
   );
 }
 
-export function ErpNav() {
+export function ErpNav({ role }: { role: ErpRole }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  const visibleTopNav = topNav.filter((i) => allowed(i, role));
+  const visibleBottomNav = bottomNav.filter((i) => allowed(i, role));
+  const hasEmploymentGroup = employmentGroupItems.some((i) => allowed(i, role));
+
+  function NavContent() {
+    return (
+      <>
+        {visibleTopNav.map((item) => (
+          <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
+        ))}
+        <div className="my-1 border-t border-gray-100" />
+        <NavGroup label="Project Information" items={projectGroupItems} pathname={pathname} role={role} />
+        {hasEmploymentGroup && <div className="my-1 border-t border-gray-100" />}
+        {hasEmploymentGroup && <NavGroup label="Employment" items={employmentGroupItems} pathname={pathname} role={role} />}
+        {visibleBottomNav.length > 0 && <div className="my-1 border-t border-gray-100" />}
+        {visibleBottomNav.map((item) => (
+          <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
+        ))}
+      </>
+    );
+  }
 
   return (
     <>
@@ -105,15 +155,7 @@ export function ErpNav() {
           <p className="mt-2 text-[10px] uppercase tracking-wider text-gray-500">Internal</p>
         </div>
         <nav className="flex flex-col gap-1 p-3">
-          {topNav.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
-          ))}
-          <div className="my-1 border-t border-gray-100" />
-          <ProjectGroup pathname={pathname} />
-          <div className="my-1 border-t border-gray-100" />
-          {bottomNav.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
-          ))}
+          <NavContent />
           <div className="mt-2 border-t border-gray-200 pt-2">
             <NavLink href="/erp/help" label="Help Center" pathname={pathname} />
           </div>
@@ -149,15 +191,7 @@ export function ErpNav() {
         {open && (
           <div className="absolute left-0 right-0 z-50 border-b border-gray-200 bg-white shadow-lg">
             <nav className="flex flex-col gap-1 p-3">
-              {topNav.map((item) => (
-                <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
-              ))}
-              <div className="my-1 border-t border-gray-100" />
-              <ProjectGroup pathname={pathname} />
-              <div className="my-1 border-t border-gray-100" />
-              {bottomNav.map((item) => (
-                <NavLink key={item.href} href={item.href} label={item.label} pathname={pathname} />
-              ))}
+              <NavContent />
             </nav>
             <div className="border-t border-gray-200 p-3 flex flex-col gap-1">
               <NavLink href="/erp/help" label="Help Center" pathname={pathname} />

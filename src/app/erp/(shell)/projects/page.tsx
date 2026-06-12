@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { getErpAuth, canSeeFinancials as checkFinancials } from "@/lib/erpAuth";
 import { ProjectsTabs } from "./ProjectsTabs";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,8 @@ function parseProjectUnitNumbers(description: string | null) {
 
 export default async function ErpProjectsPage() {
   const cfg = parseHubSpotPipelineStageMap();
+  const auth = await getErpAuth();
+  const financials = checkFinancials(auth?.role ?? "EMPLOYEE");
 
   const projects = await prisma.project.findMany({
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
@@ -327,6 +330,7 @@ export default async function ErpProjectsPage() {
           postConstructionPipelineId={cfg?.postConstruction.pipelineId ?? null}
           janitorialPipelineId={cfg?.janitorial.pipelineId ?? null}
           residentialPipelineId={cfg?.residential.pipelineId ?? null}
+          canSeeFinancials={financials}
         />
       )}
     </div>

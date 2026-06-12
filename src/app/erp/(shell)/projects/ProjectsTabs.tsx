@@ -29,9 +29,10 @@ type Props = {
   postConstructionPipelineId: string | null;
   janitorialPipelineId: string | null;
   residentialPipelineId: string | null;
+  canSeeFinancials: boolean;
 };
 
-export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, residentialPipelineId }: Props) {
+export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, residentialPipelineId, canSeeFinancials }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [activeLifecycle, setActiveLifecycle] = useState<Lifecycle | null>(null);
   const [search, setSearch] = useState("");
@@ -163,7 +164,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
         ) : activeTab === "janitorial" ? (
           <JanitorialProjectsExpandableTable rows={filtered} />
         ) : (
-          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} />
+          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} canSeeFinancials={canSeeFinancials} />
         )}
       </div>
     </div>

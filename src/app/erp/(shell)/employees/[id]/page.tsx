@@ -7,6 +7,7 @@ import { ContractSigningSection } from "@/app/erp/components/ContractSigningSect
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
+import { getErpAuth, canEditEmployeePayInfo } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ function parseRequiredDocuments(value: unknown): string[] {
 
 export default async function EmployeeDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const auth = await getErpAuth();
+  const canSeePay = canEditEmployeePayInfo(auth?.role ?? "EMPLOYEE");
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -54,6 +57,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           content: (
             <EmployeeProfileEditor
               employeeId={employee.id}
+              canSeePay={canSeePay}
               initial={{
                 firstName: employee.firstName,
                 lastName: employee.lastName,
@@ -72,7 +76,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
             />
           ),
         },
-        {
+        ...(canSeePay ? [{
           label: "Bank Account",
           content: (
             <EmployeeBankAccountSection
@@ -84,7 +88,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
               }}
             />
           ),
-        },
+        }] : []),
         {
           label: "Documents",
           content: (

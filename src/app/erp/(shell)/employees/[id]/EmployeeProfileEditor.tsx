@@ -9,6 +9,7 @@ const label = "block text-xs font-medium text-gray-600";
 
 type Props = {
   employeeId: string;
+  canSeePay?: boolean;
   initial: {
     firstName: string;
     lastName: string;
@@ -26,7 +27,7 @@ type Props = {
   };
 };
 
-export function EmployeeProfileEditor({ employeeId, initial }: Props) {
+export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -135,39 +136,43 @@ export function EmployeeProfileEditor({ employeeId, initial }: Props) {
             </label>
             <input id="role" name="role" defaultValue={initial.role ?? ""} className={input} />
           </div>
-          <div>
-            <label className={label}>Pay type</label>
-            <div className="mt-1 flex rounded-md border border-gray-300 overflow-hidden text-sm">
-              <button
-                type="button"
-                onClick={() => setPayType("HOURLY")}
-                className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-              >
-                Hourly
-              </button>
-              <button
-                type="button"
-                onClick={() => setPayType("SALARY")}
-                className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-              >
-                Salary
-              </button>
+          {canSeePay && (
+            <div>
+              <label className={label}>Pay type</label>
+              <div className="mt-1 flex rounded-md border border-gray-300 overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setPayType("HOURLY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Hourly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayType("SALARY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Salary
+                </button>
+              </div>
             </div>
-          </div>
-          <div>
-            {payType === "HOURLY" ? (
-              <>
-                <label className={label} htmlFor="hourlyPay">Hourly pay</label>
-                <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 18.75" />
-              </>
-            ) : (
-              <>
-                <label className={label} htmlFor="annualSalary">Annual salary</label>
-                <input id="annualSalary" name="annualSalary" type="number" min="0" step="0.01" defaultValue={annualSalary} className={input} placeholder="e.g. 50000" />
-              </>
-            )}
-          </div>
-          {payType === "SALARY" && (
+          )}
+          {canSeePay && (
+            <div>
+              {payType === "HOURLY" ? (
+                <>
+                  <label className={label} htmlFor="hourlyPay">Hourly pay</label>
+                  <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 18.75" />
+                </>
+              ) : (
+                <>
+                  <label className={label} htmlFor="annualSalary">Annual salary</label>
+                  <input id="annualSalary" name="annualSalary" type="number" min="0" step="0.01" defaultValue={annualSalary} className={input} placeholder="e.g. 50000" />
+                </>
+              )}
+            </div>
+          )}
+          {canSeePay && payType === "SALARY" && (
             <div>
               <label className={label} htmlFor="hourlyPay">Est. hourly rate (for labor cost tracking)</label>
               <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 24.04" />

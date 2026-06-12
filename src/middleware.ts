@@ -75,14 +75,25 @@ export async function middleware(request: NextRequest) {
   if (needsErpAuth) {
     const token = request.cookies.get(erpSessionCookieName)?.value;
     const secret = process.env.ERP_SESSION_SECRET || "";
-    const ok = token && secret ? await verifyErpJwtEdge(token, secret) : false;
-    if (!ok) {
+    const session = token && secret ? await verifyErpJwtEdge(token, secret) : null;
+    if (!session) {
       if (pathname.startsWith("/api/erp/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       const loginPath = isAppSubdomainHost(host) ? "/login" : "/erp/login";
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
+
+    // Attach role/uid headers for server components and API routes
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-erp-role", session.role);
+    requestHeaders.set("x-erp-uid", session.uid);
+    requestHeaders.set("x-erp-email", session.email);
+
+    const rw = rewriteUrlIfNeeded(request);
+    const nextOpts = { request: { headers: requestHeaders } };
+    if (rw) return NextResponse.rewrite(rw, nextOpts);
+    return NextResponse.next(nextOpts);
   }
 
   const rw = rewriteUrlIfNeeded(request);

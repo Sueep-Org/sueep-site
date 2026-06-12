@@ -460,6 +460,18 @@ model DistanceEntry {
   @@index([travelDate])
 }
 
+/// ADMIN | PROJECT_MANAGER | SUPERVISOR | ESTIMATION | EMPLOYEE
+model ErpUser {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  firebaseUid String   @unique
+  email       String   @unique
+  role        String   @default("EMPLOYEE")
+
+  @@index([firebaseUid])
+}
+
 model Employee {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())

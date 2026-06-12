@@ -2,6 +2,11 @@ import { SignJWT } from "jose";
 
 const COOKIE = "erp_session";
 
+export const ERP_ROLES = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+export type ErpRole = (typeof ERP_ROLES)[number];
+
+export type ErpSessionPayload = { uid: string; email: string; role: ErpRole };
+
 function getSecret() {
   const s = process.env.ERP_SESSION_SECRET;
   if (!s || s.length < 16) {
@@ -10,8 +15,8 @@ function getSecret() {
   return new TextEncoder().encode(s);
 }
 
-export async function createErpSessionToken(): Promise<string> {
-  return new SignJWT({ scope: "erp" })
+export async function createErpSessionToken(payload: ErpSessionPayload): Promise<string> {
+  return new SignJWT({ scope: "erp", ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
