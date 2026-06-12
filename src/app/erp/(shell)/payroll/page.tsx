@@ -114,6 +114,7 @@ export default function PayrollExportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
+  const [search, setSearch] = useState("");
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -184,6 +185,10 @@ export default function PayrollExportPage() {
     if (payFilter === "hourly") return r.payType !== "SALARY";
     if (payFilter === "salary") return r.payType === "SALARY";
     return true;
+  }).filter((r) => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return r.name.toLowerCase().includes(q) || (r.adpFileNumber ?? "").toLowerCase().includes(q);
   });
 
   function downloadCsv() {
@@ -303,9 +308,15 @@ export default function PayrollExportPage() {
         </button>
       </div>
 
-      {/* Pay type filter */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-gray-500">Filter:</span>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          placeholder="Search by name or ADP #…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 w-56"
+        />
         <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
           {(["all", "hourly", "salary"] as PayFilter[]).map((f) => (
             <button
