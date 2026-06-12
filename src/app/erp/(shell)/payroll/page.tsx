@@ -209,7 +209,6 @@ export default function PayrollExportPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-pink-600">Payroll Export</h1>
-          <p className="mt-1 text-sm text-gray-500">Biweekly labor summary for ADP Run import.</p>
         </div>
         <button
           type="button"
