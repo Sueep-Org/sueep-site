@@ -28,6 +28,8 @@ type Props = {
   estHours: number | null;
   actualHours: number | null;
   contractorCostCents: number;
+  laborCentsFromLogs: number;
+  hoursFromLogs: number;
 };
 
 function centsToInput(cents: number | null): string {
@@ -49,7 +51,10 @@ export function ProjectFinancialsEditor({
   estHours,
   actualHours,
   contractorCostCents,
+  laborCentsFromLogs,
+  hoursFromLogs,
 }: Props) {
+  const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
   const [contractValue, setContractValue] = useState(centsToInput(contractValueCents));
   const [pctDone, setPctDone] = useState(percentDone === 0 ? "" : String(percentDone));
@@ -154,8 +159,20 @@ export function ProjectFinancialsEditor({
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
             <div className="space-y-3">
               <div>
-                <label className={labelCls} htmlFor="fin-act-lab">Employee labor ($)</label>
-                <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
+                <label className={labelCls}>Employee labor ($)</label>
+                {hasLaborLogs ? (
+                  <>
+                    <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                      {(laborCentsFromLogs / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    </div>
+                    <p className="mt-0.5 text-xs text-emerald-600">Calculated from work logs (Rate/hr × hours)</p>
+                  </>
+                ) : (
+                  <>
+                    <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
+                    <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                  </>
+                )}
               </div>
               {contractorCostCents > 0 && (
                 <div>
@@ -170,7 +187,7 @@ export function ProjectFinancialsEditor({
                 <div>
                   <label className={labelCls}>Total labor ($)</label>
                   <div className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 tabular-nums">
-                    {(((Number(actLab) || 0) * 100 + contractorCostCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    {((( hasLaborLogs ? laborCentsFromLogs : (Number(actLab) || 0) * 100) + contractorCostCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
                   </div>
                   <p className="mt-0.5 text-xs text-gray-400">Employee + contractors</p>
                 </div>
@@ -184,8 +201,20 @@ export function ProjectFinancialsEditor({
                 <input type="number" className={inputCls} disabled tabIndex={-1} />
               </div>
               <div>
-                <label className={labelCls} htmlFor="fin-act-hrs">Hours</label>
-                <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
+                <label className={labelCls}>Hours</label>
+                {hasLaborLogs ? (
+                  <>
+                    <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                      {hoursFromLogs.toFixed(2)}
+                    </div>
+                    <p className="mt-0.5 text-xs text-emerald-600">Calculated from work logs</p>
+                  </>
+                ) : (
+                  <>
+                    <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
+                    <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                  </>
+                )}
               </div>
             </div>
           </div>

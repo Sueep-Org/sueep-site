@@ -95,6 +95,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const sueepPm = isTurnover ? (project.supervisor || getDescLine(project.description, "SUEEP PM")) : null;
 
   const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+  const laborCentsFromLogs = project.laborEntries.reduce((s, e) => s + Math.round(e.hours * e.hourlyRateCents), 0);
+  const hoursFromLogs = project.laborEntries.reduce((s, e) => s + e.hours, 0);
 
   const isManual = !project.hubspotDealId;
   const isPostConstruction = cfg?.postConstruction.pipelineId
@@ -254,6 +256,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           actualMaterialCents={project.actualMaterialCents}
           estHours={project.estHours}
           actualHours={project.actualHours}
+          laborCentsFromLogs={laborCentsFromLogs}
+          hoursFromLogs={hoursFromLogs}
         />
       ),
     },
