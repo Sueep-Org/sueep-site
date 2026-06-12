@@ -41,7 +41,7 @@ export async function GET(req: Request) {
   const entries = await prisma.laborEntry.findMany({
     where: { workDate: { gte: periodStart, lte: periodEnd } },
     include: {
-      employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true } },
+      employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
       project: { select: { id: true, jobTitle: true } },
     },
     orderBy: { workDate: "asc" },
@@ -55,6 +55,7 @@ export async function GET(req: Request) {
     employeeId: string | null;
     adpFileNumber: string | null;
     name: string;
+    payType: string;
     hourlyRateCents: number;
     weeklyHours: Map<WeekKey, number>;
     projects: Set<string>;
@@ -72,6 +73,7 @@ export async function GET(req: Request) {
         employeeId: entry.employeeId,
         adpFileNumber: entry.employee?.adpFileNumber ?? null,
         name,
+        payType: entry.employee?.payType ?? "HOURLY",
         hourlyRateCents: entry.hourlyRateCents,
         weeklyHours: new Map(),
         projects: new Set(),
@@ -111,6 +113,7 @@ export async function GET(req: Request) {
       employeeId: emp.employeeId,
       adpFileNumber: emp.adpFileNumber,
       name: emp.name,
+      payType: emp.payType,
       hourlyRateCents: emp.hourlyRateCents,
       totalHours,
       regHours,

@@ -7,6 +7,7 @@ type PayrollRow = {
   employeeId: string | null;
   adpFileNumber: string | null;
   name: string;
+  payType: string;
   hourlyRateCents: number;
   totalHours: number;
   regHours: number;
@@ -14,6 +15,8 @@ type PayrollRow = {
   grossPayCents: number;
   projects: string;
 };
+
+type PayFilter = "all" | "hourly" | "salary";
 
 type PayrollResponse = {
   periodStart: string;
@@ -110,6 +113,7 @@ export default function PayrollExportPage() {
   const [data, setData] = useState<PayrollResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [payFilter, setPayFilter] = useState<PayFilter>("all");
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -176,21 +180,28 @@ export default function PayrollExportPage() {
     }
   }
 
+  const filteredRows = (data?.rows ?? []).filter((r) => {
+    if (payFilter === "hourly") return r.payType !== "SALARY";
+    if (payFilter === "salary") return r.payType === "SALARY";
+    return true;
+  });
+
   function downloadCsv() {
     if (!data) return;
-    const csv = buildCsv(data.rows, data.periodStart, data.periodEnd);
+    const suffix = payFilter === "hourly" ? "-hourly" : payFilter === "salary" ? "-salary" : "";
+    const csv = buildCsv(filteredRows, data.periodStart, data.periodEnd);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payroll-${data.periodStart}.csv`;
+    a.download = `payroll-${data.periodStart}${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  const totalGross = data?.rows.reduce((s, r) => s + r.grossPayCents, 0) ?? 0;
-  const totalHours = data?.rows.reduce((s, r) => s + r.totalHours, 0) ?? 0;
-  const missingAdp = data?.rows.filter((r) => !r.adpFileNumber).length ?? 0;
+  const totalGross = filteredRows.reduce((s, r) => s + r.grossPayCents, 0);
+  const totalHours = filteredRows.reduce((s, r) => s + r.totalHours, 0);
+  const missingAdp = filteredRows.filter((r) => !r.adpFileNumber).length;
 
   return (
     <div className="space-y-6">
@@ -293,6 +304,23 @@ export default function PayrollExportPage() {
         </button>
       </div>
 
+      {/* Pay type filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">Filter:</span>
+        <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
+          {(["all", "hourly", "salary"] as PayFilter[]).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setPayFilter(f)}
+              className={`px-3 py-1.5 capitalize transition-colors ${payFilter === f ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+            >
+              {f === "all" ? "All" : f === "hourly" ? "Hourly" : "Salary"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Warnings */}
       {missingAdp > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -334,12 +362,12 @@ export default function PayrollExportPage() {
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-red-500">{error}</td>
                 </tr>
-              ) : !data || data.rows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-gray-500">No labor entries for this pay period.</td>
                 </tr>
               ) : (
-                data.rows.map((row, i) => (
+                filteredRows.map((row, i) => (
                   <tr key={row.employeeId ?? row.name} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
                     <td className="px-4 py-3 font-medium text-gray-900">
                       {row.employeeId ? (
@@ -371,12 +399,12 @@ export default function PayrollExportPage() {
                 ))
               )}
             </tbody>
-            {data && data.rows.length > 0 && (
+            {filteredRows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>Totals</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(data.rows.reduce((s, r) => s + r.regHours, 0))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(data.rows.reduce((s, r) => s + r.otHours, 0))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.regHours, 0))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0))}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtHours(totalHours)}</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalGross)}</td>
