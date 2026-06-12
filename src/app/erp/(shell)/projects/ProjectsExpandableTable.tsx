@@ -829,12 +829,16 @@ export function ProjectsExpandableTable({
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={colCount} className="bg-gray-50 px-6 py-2 pb-3">
+                              <td colSpan={colCount} className="bg-gray-50 px-6 py-2 pb-3 space-y-2">
+                                {co.description && (
+                                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
+                                    <p className="mt-1 text-xs text-gray-700">{co.description}</p>
+                                  </div>
+                                )}
                                 <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
-                                  <p className="mt-1 text-xs text-gray-700">
-                                    {co.description || <span className="text-gray-400">No comments</span>}
-                                  </p>
+                                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor log</p>
+                                  <LaborTable entries={co.laborers} />
                                 </div>
                               </td>
                             </tr>
