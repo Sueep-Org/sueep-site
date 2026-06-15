@@ -13,6 +13,30 @@ const ROLE_LABELS: Record<ErpRole, string> = {
   EMPLOYEE: "Employee",
 };
 
+const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER"];
+const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
+const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
+
+const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
+  { label: "Dashboard", roles: ALL_ROLES },
+  { label: "View projects", roles: ALL_ROLES },
+  { label: "View schedule", roles: ALL_ROLES },
+  { label: "Create new project", roles: PM_EST },
+  { label: "Add / edit labor logs", roles: FIELD },
+  { label: "Labor assignments", roles: FIELD },
+  { label: "Quality checks", roles: FIELD },
+  { label: "Contractor assignments", roles: PM_UP },
+  { label: "View financials (contract value, costs)", roles: PM_UP },
+  { label: "Employees", roles: PM_UP },
+  { label: "Payroll export", roles: PM_UP },
+  { label: "Candidates", roles: PM_UP },
+  { label: "Contractor verification", roles: PM_UP },
+  { label: "AI Estimator", roles: PM_EST },
+  { label: "Edit employee pay info", roles: ["ADMIN"] },
+  { label: "User management", roles: ["ADMIN"] },
+];
+
 type User = {
   id: string;
   email: string;
@@ -64,7 +88,7 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       {error ? <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p> : null}
       <div className="overflow-hidden rounded-lg border border-gray-200">
         <table className="w-full text-sm">
@@ -122,6 +146,41 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
         {users.length === 0 && (
           <p className="py-8 text-center text-sm text-gray-500">No users yet. Users appear here on first login.</p>
         )}
+      </div>
+
+      {/* Role permissions key */}
+      <div className="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">Role Permissions</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-xs">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="pb-2 pr-4 text-left font-semibold text-gray-700">Feature</th>
+                {ROLES.map((r) => (
+                  <th key={r} className="pb-2 px-3 text-center font-semibold text-gray-700">{ROLE_LABELS[r]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {PERMISSION_ROWS.map(({ label, roles }) => (
+                <tr key={label} className="hover:bg-gray-50">
+                  <td className="py-2 pr-4 text-gray-600">{label}</td>
+                  {ROLES.map((r) => (
+                    <td key={r} className="py-2 px-3 text-center">
+                      {roles.includes(r)
+                        ? <span className="inline-block h-4 w-4 rounded-full bg-emerald-500" title="Access granted" />
+                        : <span className="inline-block h-4 w-4 rounded-full bg-gray-200" title="No access" />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-emerald-500" /> Access</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-gray-200" /> No access</span>
+        </div>
       </div>
     </div>
   );

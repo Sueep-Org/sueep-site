@@ -16,10 +16,11 @@ type Props = {
     pmPhone: string | null;
   };
   initialPackage: unknown;
+  isSupervisor?: boolean;
 };
 
-export function BuildingTabs({ buildingId, buildingName, initial, initialPackage }: Props) {
-  const tabs = [
+export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor }: Props) {
+  const allTabs = [
     {
       label: "Details",
       content: (
@@ -39,6 +40,8 @@ export function BuildingTabs({ buildingId, buildingName, initial, initialPackage
       ),
     },
   ];
+
+  const tabs = isSupervisor ? allTabs.filter((t) => t.label === "Details") : allTabs;
 
   return <DetailTabs tabs={tabs} />;
 }

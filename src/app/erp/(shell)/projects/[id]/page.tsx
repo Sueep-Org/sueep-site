@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { getErpAuth } from "@/lib/erpAuth";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
@@ -23,6 +24,8 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const auth = await getErpAuth();
+  const isSupervisor = auth?.role === "SUPERVISOR";
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord] = await Promise.all([
     prisma.project.findUnique({
@@ -158,7 +161,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     costCents: a.costCents ?? null,
   }));
 
-  const tabs = [
+  const allTabs = [
     {
       label: "Details",
       content: (
@@ -348,6 +351,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
   ];
 
+  const tabs = isSupervisor
+    ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist")
+    : allTabs;
+
   return (
     <div className="space-y-6">
       <div>
@@ -356,7 +363,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
-          <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />
+          {!isSupervisor && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
         </div>
       </div>
 

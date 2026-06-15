@@ -174,12 +174,14 @@ export function ChangeOrderDetailEditor({
   data,
   employees,
   signingContent,
+  isSupervisor,
 }: {
   projectId: string;
   projectTitle: string;
   data: ChangeOrderDetailData;
   employees: EmployeeOption[];
   signingContent?: React.ReactNode;
+  isSupervisor?: boolean;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -312,6 +314,14 @@ export function ChangeOrderDetailEditor({
         </div>
       </div>
 
+      {isSupervisor ? (
+        <ChangeOrderLaborersSection
+          projectId={projectId}
+          changeOrderId={data.id}
+          initialLaborers={data.laborers}
+          employees={employees}
+        />
+      ) : (
       <DetailTabs tabs={[
         {
           label: "Details",
@@ -575,6 +585,7 @@ export function ChangeOrderDetailEditor({
           : []),
         ...(signingContent ? [{ label: "Signing", content: signingContent }] : []),
       ]} />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth } from "@/lib/erpAuth";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
 import { ChangeOrderSigningSection, type ContractItem } from "./ChangeOrderSigningSection";
 
@@ -9,6 +10,8 @@ type PageProps = { params: Promise<{ id: string; changeOrderId: string }> };
 
 export default async function ChangeOrderDetailPage({ params }: PageProps) {
   const { id, changeOrderId } = await params;
+  const auth = await getErpAuth();
+  const isSupervisor = auth?.role === "SUPERVISOR";
 
   const [changeOrder, project, employees, contracts, materialEntries] = await Promise.all([
     prisma.projectChangeOrder.findFirst({
@@ -114,6 +117,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         projectTitle={project.jobTitle}
         data={data}
         employees={employees}
+        isSupervisor={isSupervisor}
         signingContent={
           <ChangeOrderSigningSection
             projectId={id}
