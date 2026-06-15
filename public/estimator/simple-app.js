@@ -699,8 +699,12 @@ async function initApp(){
 
       if (!pdfDoc) return;
 
-      // if user is actively drawing a measure, do not zoom
+      // prevent zoom while drawing or while a measurement tool is active
       try {
+        if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) {
+          e.preventDefault();
+          return;
+        }
         if (overlay && overlay._isDraggingMeasure) {
           e.preventDefault();
           return;
@@ -781,8 +785,8 @@ async function initApp(){
         return;
       }
 
-      // do not start panning when measure mode is active
-      if (overlay && overlay.active && overlay.tool === 'measure') return;
+      // do not start panning while measurement tools are active
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
 
       if (!pdfDoc) return;
 

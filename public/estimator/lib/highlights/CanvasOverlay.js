@@ -173,7 +173,8 @@ export class CanvasOverlay {
             // =========================
 
             const areaPx = calculatePolygonArea(d.polygon);
-            const areaScaled = applyScale(areaPx, this._pxPerPt);
+            const scale = this.store.getScale(this.currentPage);
+            const areaScaled = applyScale(areaPx, this._pxPerPt, scale?.factor);
 
             const perimeterPx = calculatePerimeter(d.polygon);
             const perimeterScaled = applyScaleLength(perimeterPx, this._pxPerPt);
@@ -403,6 +404,9 @@ export class CanvasOverlay {
         areaPx: pixelArea,
         areaLabel: `${areaScaled.toFixed(2)} sq`,
         at: Date.now(),
+        shapeType: 'polygon',
+        shapePoints: norm,
+        polygonPoints: norm,
         pts: [{ x1: left / this.overlay.width, y1: top / this.overlay.height, x2: right / this.overlay.width, y2: bottom / this.overlay.height }]
       });
 
@@ -462,6 +466,9 @@ export class CanvasOverlay {
       areaPx: pixelArea,
       areaLabel: `${areaScaled.toFixed(2)} sq`,
       at: Date.now(),
+      shapeType: 'polygon',
+      shapePoints: norm,
+      polygonPoints: norm,
       pts: pathPoints.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).x / this.overlay.width, y2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).y / this.overlay.height }))
     });
 
@@ -686,7 +693,24 @@ export class CanvasOverlay {
       if (!m.pts || !m.pts.length) continue;
 
       const isAreaMeasurement = m.area != null || m.areaLabel;
-      if (isAreaMeasurement) continue;
+      if (isAreaMeasurement) {
+        const polygon = (this.store.getPage(this.currentPage) || []).find(item => item.measurementId === m.id || item.id === m.id);
+        const points = Array.isArray(polygon?.points) && polygon.points.length
+          ? polygon.points
+          : (Array.isArray(m.shapePoints) && m.shapePoints.length
+            ? m.shapePoints
+            : (Array.isArray(m.polygonPoints) && m.polygonPoints.length
+              ? m.polygonPoints
+              : []));
+        const pts = points.map(p => ({ x: p.x * w, y: p.y * h }));
+        if (pts.length >= 3) {
+          const centroid = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+          const midX = centroid.x / pts.length;
+          const midY = centroid.y / pts.length;
+          drawLabel(this.ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`);
+        }
+        continue;
+      }
 
       const isHover = this._hoverMeasurementId === m.id;
       const isSelected = this._selectedMeasurementId === m.id;
@@ -822,11 +846,14 @@ function toPagePoints(lengthPx, pxPerPt) {
 }
 
 function applyScale(areaPx, pxPerPt, scaleFactor = null) {
-  const pageAreaPoints = (areaPx / ((Number(pxPerPt) || 1) * (Number(pxPerPt) || 1)));
+  const pxPerPtValue = Number(pxPerPt);
+  if (!Number.isFinite(pxPerPtValue) || pxPerPtValue <= 0) return 0;
+  const pageAreaPoints = areaPx / (pxPerPtValue * pxPerPtValue);
   if (scaleFactor && Number(scaleFactor) > 0) {
-    return pageAreaPoints * Number(scaleFactor) * Number(scaleFactor);
+    const scaleValue = Number(scaleFactor);
+    return pageAreaPoints * scaleValue * scaleValue;
   }
-  return pageAreaPoints;
+  return pageAreaPoints / (72 * 72);
 }
 
 function applyScaleLength(lengthPx, pxPerPt, scaleFactor = null) {
