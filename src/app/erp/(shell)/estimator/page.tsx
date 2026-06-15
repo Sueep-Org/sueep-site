@@ -98,9 +98,18 @@ export default function EstimatorPage() {
                 Select file
               </button>
             </div>
-            <div id="uploadCollapsed" style={{ display: "none" }} className="flex items-center gap-3">
-              <span id="uploadedFileName" className="text-sm text-gray-700 font-medium flex-1 truncate"></span>
-              <button id="changeFileBtn" className="mini-btn">Change file</button>
+            <div
+              id="uploadCollapsed"
+              style={{ display: "none" }}
+              className="flex items-center gap-3"
+            >
+              <span
+                id="uploadedFileName"
+                className="text-sm text-gray-700 font-medium flex-1 truncate"
+              ></span>
+              <button id="changeFileBtn" className="mini-btn">
+                Change file
+              </button>
             </div>
           </div>
 
@@ -118,9 +127,15 @@ export default function EstimatorPage() {
                 <button id="drawRectBtn" className="mini-btn">
                   Draw Rect
                 </button>
+                <button id="drawIrregBtn" className="mini-btn">
+                  Draw Irreg
+                </button>
+                <button id="toggleSidebarBtn" className="mini-btn">
+                  Measurements
+                </button>
 
                 <button id="doubleSideToggle" className="mini-btn">
-                  Single Sided
+                  Single sided
                 </button>
 
                 <div className="zoom-group">
@@ -180,12 +195,6 @@ export default function EstimatorPage() {
                     Next
                   </button>
                 </div>
-
-                <div style={{ marginLeft: "auto" }}>
-                  <button id="toggleSidebarBtn" className="mini-btn">
-                    Measurements
-                  </button>
-                </div>
               </div>
 
               {/* VIEWER ROW */}
@@ -205,141 +214,147 @@ export default function EstimatorPage() {
                   <div className="bg-white rounded-lg shadow-md p-4 mb-4">
                     <div className="mb-3">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold mb-2">Measurements</h3>
+                        <h3 className="text-lg font-semibold mb-2">
+                          Measurements
+                        </h3>
+                        <button id="toggleMeasurementsBtn" className="mini-btn">
+                          ▼
+                        </button>
                       </div>
                     </div>
                     <div id="measurementsContent">
-                    <div className="mb-3">
+                      <div className="mb-3">
                         <div
-                        id="measurementScaleInfo"
-                        style={{ fontSize: "12px", color: "#6b7280" }}
-                      >
-                        Scale not set
+                          id="measurementScaleInfo"
+                          style={{ fontSize: "12px", color: "#6b7280" }}
+                        >
+                          Scale not set
+                        </div>
+                        <div
+                          id="measurementPageAggregateInfo"
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Page total: 0&quot;
+                        </div>
                       </div>
+
+                      <div className="flex gap-2 flex-wrap mb-3">
+                        <button
+                          id="changeScaleBtn"
+                          className="mini-btn"
+                          style={{ flex: 1, minWidth: "110px" }}
+                        >
+                          Change scale
+                        </button>
+                      </div>
+
+                      {/* MEASUREMENT PAGE NAV */}
                       <div
-                        id="measurementPageAggregateInfo"
                         style={{
-                          fontSize: "12px",
-                          color: "#6b7280",
-                          marginTop: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          marginBottom: "12px",
                         }}
                       >
-                        Page total: 0&quot;
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 flex-wrap mb-3">
-                      <button
-                        id="changeScaleBtn"
-                        className="mini-btn"
-                        style={{ flex: 1, minWidth: "110px" }}
-                      >
-                        Change scale
-                      </button>
-                    </div>
-
-                    {/* MEASUREMENT PAGE NAV */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <button
-                        id="measurementPrevPageBtn"
-                        className="mini-btn"
-                        style={{ flex: 1 }}
-                      >
-                        ←
-                      </button>
-                      <input
-                        id="measurementPageInput"
-                        type="number"
-                        min={1}
-                        placeholder="1"
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          padding: "4px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "6px",
-                          textAlign: "center",
-                          fontSize: "12px",
-                        }}
-                      />
-                      <button
-                        id="measurementNextPageBtn"
-                        className="mini-btn"
-                        style={{ flex: 1 }}
-                      >
-                        →
-                      </button>
-                      <span
-                        id="measurementPageLabel"
-                        style={{ display: "none" }}
-                      >
-                        Page 1
-                      </span>
-                    </div>
-
-                    {/* TWO-COLUMN MEASUREMENT LIST */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "12px",
-                      }}
-                    >
-                      <div>
-                        <h4
-                          style={{
-                            fontWeight: 600,
-                            fontSize: "13px",
-                            marginBottom: "8px",
-                            borderBottom: "2px solid #3b82f6",
-                            paddingBottom: "4px",
-                          }}
+                        <button
+                          id="measurementPrevPageBtn"
+                          className="mini-btn"
+                          style={{ flex: 1 }}
                         >
-                          Line Measurements
-                        </h4>
-                        <div
-                          id="measurementListLeft"
+                          ←
+                        </button>
+                        <input
+                          id="measurementPageInput"
+                          type="number"
+                          min={1}
+                          placeholder="1"
                           style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: "4px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            textAlign: "center",
                             fontSize: "12px",
-                            color: "#374151",
-                            minHeight: "200px",
                           }}
+                        />
+                        <button
+                          id="measurementNextPageBtn"
+                          className="mini-btn"
+                          style={{ flex: 1 }}
                         >
-                          No measurements
+                          →
+                        </button>
+                        <span
+                          id="measurementPageLabel"
+                          style={{ display: "none" }}
+                        >
+                          Page 1
+                        </span>
+                      </div>
+
+                      {/* TWO-COLUMN MEASUREMENT LIST */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "12px",
+                        }}
+                      >
+                        <div>
+                          <h4
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              marginBottom: "8px",
+                              borderBottom: "2px solid #3b82f6",
+                              paddingBottom: "4px",
+                            }}
+                          >
+                            Line Measurements
+                          </h4>
+                          <div
+                            id="measurementListLeft"
+                            style={{
+                              fontSize: "12px",
+                              color: "#374151",
+                              minHeight: "200px",
+                            }}
+                          >
+                            No measurements
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <h4
-                          style={{
-                            fontWeight: 600,
-                            fontSize: "13px",
-                            marginBottom: "8px",
-                            borderBottom: "2px solid #10b981",
-                            paddingBottom: "4px",
-                          }}
-                        >
-                          Surface Area
-                        </h4>
-                        <div
-                          id="measurementListRight"
-                          style={{
-                            fontSize: "12px",
-                            color: "#374151",
-                            minHeight: "200px",
-                          }}
-                        >
-                          No surface area
+                        <div>
+                          <h4
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              marginBottom: "8px",
+                              borderBottom: "2px solid #10b981",
+                              paddingBottom: "4px",
+                            }}
+                          >
+                            Surface Area
+                          </h4>
+                          <div
+                            id="measurementListRight"
+                            style={{
+                              fontSize: "12px",
+                              color: "#374151",
+                              minHeight: "200px",
+                            }}
+                          >
+                            No surface area
+                          </div>
                         </div>
                       </div>
                     </div>
-                    </div>{/* measurementsContent */}
+                    {/* measurementsContent */}
                   </div>
                 </aside>
               </div>

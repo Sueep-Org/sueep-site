@@ -103,7 +103,7 @@ async function refreshDrawer(){
       };
 
       const delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
+      delBtn.textContent = '🗑';
       delBtn.title = 'Delete';
       delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
 
@@ -124,29 +124,7 @@ async function refreshDrawer(){
         }
       };
 
-      const dlBtn = document.createElement('button');
-      dlBtn.textContent = '⬇';
-      dlBtn.title = 'Download';
-      dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#374151;';
-
-      dlBtn.onclick = async (e)=>{
-        e.stopPropagation();
-        try{
-          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
-          const resp = await fetch(url);
-          const blob = await resp.blob();
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = display;
-          a.click();
-          URL.revokeObjectURL(a.href);
-        }catch(e){
-          toast(e.message, 'error');
-        }
-      };
-
       row.appendChild(btn);
-      row.appendChild(dlBtn);
       row.appendChild(delBtn);
       savedSec.appendChild(row);
     });
@@ -233,6 +211,7 @@ async function initApp(){
 
   const measureToggle = $('measureToggle');
   const drawRectBtn = $('drawRectBtn');
+  const drawIrregBtn = $('drawIrregBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -258,6 +237,7 @@ async function initApp(){
   const measurementPrevPageBtn = $('measurementPrevPageBtn');
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
+  const downloadPdfBtn = $('downloadPdfBtn');
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -311,6 +291,11 @@ async function initApp(){
 
   overlay.setTool('area');
 
+  if (downloadPdfBtn) {
+    downloadPdfBtn.disabled = true;
+    downloadPdfBtn.addEventListener('click', exportCurrentPageWithAnnotations);
+  }
+
   let __renderSeq = 0;
 
   // ======================================================
@@ -354,6 +339,56 @@ async function initApp(){
     } else {
       vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
+    }
+  }
+
+  async function exportCurrentPageWithAnnotations(){
+    if (!pdfDoc || !pdfCanvas || !overlay) return;
+
+    try {
+      const page = await pdfDoc.getPage(currentPage);
+      const viewport = page.getViewport({ scale: zoom });
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = Math.ceil(viewport.width);
+      exportCanvas.height = Math.ceil(viewport.height);
+      const exportCtx = exportCanvas.getContext('2d');
+
+      exportCtx.save();
+      exportCtx.translate(panOffset.x, panOffset.y);
+      await page.render({ canvasContext: exportCtx, viewport }).promise;
+      overlay.renderToContext(exportCtx, { width: viewport.width, height: viewport.height });
+      exportCtx.restore();
+
+      const printWindow = window.open('', '_blank', 'width=1200,height=900');
+      if (!printWindow) {
+        toast('Please allow popups to download the PDF view.', 'error');
+        return;
+      }
+
+      const imageUrl = exportCanvas.toDataURL('image/png');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Exported PDF</title>
+            <style>
+              body { margin: 0; padding: 0; background: #fff; }
+              img { display: block; width: 100%; height: auto; }
+              @media print { body { margin: 0; } img { page-break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <img src="${imageUrl}" alt="Exported PDF page" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        try { printWindow.print(); } catch (err) {}
+      }, 250);
+    } catch (error) {
+      console.error(error);
+      toast('Unable to export the current page.', 'error');
     }
   }
 
@@ -616,6 +651,10 @@ async function initApp(){
 
       await renderPage();
 
+      if (downloadPdfBtn) {
+        downloadPdfBtn.disabled = false;
+      }
+
       if (mainContent){
 
         mainContent.classList.remove('hidden');
@@ -720,8 +759,12 @@ async function initApp(){
 
       if (!pdfDoc) return;
 
-      // if user is actively drawing a measure, do not zoom
+      // prevent zoom while drawing or while a measurement tool is active
       try {
+        if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) {
+          e.preventDefault();
+          return;
+        }
         if (overlay && overlay._isDraggingMeasure) {
           e.preventDefault();
           return;
@@ -802,7 +845,7 @@ async function initApp(){
         return;
       }
 
-      // do not start panning when measure or rect mode is active
+      // do not start panning while measurement tools are active
       if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
 
       if (!pdfDoc) return;
@@ -1064,6 +1107,9 @@ async function initApp(){
         isOn ? 'measure' : 'area'
       );
 
+      if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+      if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+
       if (pdfContainer) {
         pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       }
@@ -1077,13 +1123,32 @@ async function initApp(){
 
         const isOn = !drawRectBtn.classList.contains('active');
 
-        // turn off measure toggle if active
         if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
 
         drawRectBtn.classList.toggle('active', isOn);
 
         overlay.setActive(isOn);
         overlay.setTool(isOn ? 'rect' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
+
+    if (drawIrregBtn) {
+      drawIrregBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawIrregBtn.classList.contains('active');
+
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+
+        drawIrregBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'irregular' : 'area');
 
         if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       };
