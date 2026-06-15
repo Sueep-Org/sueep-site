@@ -56,7 +56,7 @@ const BUILDING_ADDRESS_OPTIONS = [
   "751 Vandenburg Rd, King of Prussia, PA 19406 (Park Square)",
   "580 S Goddard Blvd, King of Prussia, PA 19406 (The Smith)",
   "140 Valley Green Ln, King of Prussia, PA 19406 (The George)",
-  "3000 Emily Lane Bulrington NJ 08016 (J Centra Burlington)",
+  "3000 Emily Lane Burlington NJ 08016 (J Centra Burlington)",
   "3029 W Glenwood Ave (Equinox)",
   "200 University Dr, Schuylkill Haven, PA, 17972 (Nittany Apartments)",
   "456 N. 5th Street, Philadelphia, PA 19123 (The Block at SONO)",
