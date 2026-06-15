@@ -38,12 +38,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  const [entries, contractorAssignments] = await Promise.all([
+  const [entries, changeOrderEntries, contractorAssignments] = await Promise.all([
     prisma.laborEntry.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
       include: {
         employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
         project: { select: { id: true, jobTitle: true } },
+      },
+      orderBy: { workDate: "asc" },
+    }),
+    prisma.projectChangeOrderLaborer.findMany({
+      where: { workDate: { gte: periodStart, lte: periodEnd } },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
+        changeOrder: { select: { project: { select: { jobTitle: true } } } },
       },
       orderBy: { workDate: "asc" },
     }),
@@ -114,19 +122,42 @@ export async function GET(req: Request) {
     });
   }
 
-  const employeeRows = Array.from(employeeMap.values()).map((emp) => {
-    let regHours = 0;
-    let otHours = 0;
-    for (const weekHours of emp.weeklyHours.values()) {
-      if (weekHours <= 40) {
-        regHours += weekHours;
-      } else {
-        regHours += 40;
-        otHours += weekHours - 40;
-      }
+  for (const entry of changeOrderEntries) {
+    if (!entry.hours || !entry.hourlyRateCents) continue;
+    const key: EmployeeKey = entry.employeeId ?? `adhoc:${entry.name}`;
+    const name = entry.employee
+      ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
+      : entry.name;
+    const projectTitle = entry.changeOrder.project?.jobTitle ?? "—";
+
+    if (!employeeMap.has(key)) {
+      employeeMap.set(key, {
+        employeeId: entry.employeeId,
+        adpFileNumber: entry.employee?.adpFileNumber ?? null,
+        name,
+        payType: entry.employee?.payType ?? "HOURLY",
+        hourlyRateCents: entry.hourlyRateCents,
+        weeklyHours: new Map(),
+        projects: new Set(),
+        entries: [],
+      });
     }
-    const totalHours = regHours + otHours;
-    const grossPayCents = Math.round(regHours * emp.hourlyRateCents + otHours * emp.hourlyRateCents * 1.5);
+
+    const emp = employeeMap.get(key)!;
+    const weekStart = mondayOf(entry.workDate).toISOString().slice(0, 10);
+    emp.weeklyHours.set(weekStart, (emp.weeklyHours.get(weekStart) ?? 0) + entry.hours);
+    emp.projects.add(projectTitle);
+    emp.entries.push({
+      date: entry.workDate.toISOString().slice(0, 10),
+      hours: entry.hours,
+      project: projectTitle,
+      rateCents: entry.hourlyRateCents,
+    });
+  }
+
+  const employeeRows = Array.from(employeeMap.values()).map((emp) => {
+    const totalHours = Array.from(emp.weeklyHours.values()).reduce((s, h) => s + h, 0);
+    const grossPayCents = Math.round(totalHours * emp.hourlyRateCents);
 
     return {
       isContractor: false as const,
@@ -136,8 +167,8 @@ export async function GET(req: Request) {
       payType: emp.payType,
       hourlyRateCents: emp.hourlyRateCents,
       totalHours,
-      regHours,
-      otHours,
+      regHours: totalHours,
+      otHours: 0,
       grossPayCents,
       projects: Array.from(emp.projects).join(", "),
       entries: emp.entries,

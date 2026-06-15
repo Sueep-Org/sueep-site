@@ -11,8 +11,6 @@ type PayrollRow = {
   payType: string;
   hourlyRateCents: number;
   totalHours: number;
-  regHours: number;
-  otHours: number;
   grossPayCents: number;
   projects: string;
 };
@@ -66,12 +64,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     "Employee Name",
     "Pay Period Start",
     "Pay Period End",
-    "Reg Hours",
-    "OT Hours",
     "Total Hours",
     "Hourly Rate",
-    "Reg Pay",
-    "OT Pay",
     "Gross Pay",
     "Projects",
   ];
@@ -84,12 +78,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     escape(r.name),
     escape(periodStart),
     escape(periodEnd),
-    escape(fmtHours(r.regHours)),
-    escape(fmtHours(r.otHours)),
     escape(fmtHours(r.totalHours)),
     escape((r.hourlyRateCents / 100).toFixed(2)),
-    escape(((r.regHours * r.hourlyRateCents) / 100).toFixed(2)),
-    escape(((r.otHours * r.hourlyRateCents * 1.5) / 100).toFixed(2)),
     escape((r.grossPayCents / 100).toFixed(2)),
     escape(r.projects),
   ].join(","));
@@ -357,8 +347,6 @@ export default function PayrollExportPage() {
               <tr>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">ADP File #</th>
-                <th className="px-4 py-3 text-right">Reg Hrs</th>
-                <th className="px-4 py-3 text-right">OT Hrs</th>
                 <th className="px-4 py-3 text-right">Total Hrs</th>
                 <th className="px-4 py-3 text-right">Rate</th>
                 <th className="px-4 py-3 text-right">Gross Pay</th>
@@ -368,15 +356,15 @@ export default function PayrollExportPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">Loading…</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-red-500">{error}</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-red-500">{error}</td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">No labor entries for this pay period.</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No labor entries for this pay period.</td>
                 </tr>
               ) : (
                 filteredRows.map((row, i) => (
@@ -404,14 +392,6 @@ export default function PayrollExportPage() {
                         <span className="text-amber-500">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.regHours)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-gray-400">—</span> : row.otHours > 0 ? (
-                        <span className="font-medium text-amber-600">{fmtHours(row.otHours)}</span>
-                      ) : "—"}
-                    </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
                       {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.totalHours)}
                     </td>
@@ -428,8 +408,6 @@ export default function PayrollExportPage() {
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>Totals</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.regHours, 0))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0))}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtHours(totalHours)}</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalGross)}</td>
