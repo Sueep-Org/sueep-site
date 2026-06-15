@@ -138,10 +138,13 @@ export class HighlightsStore {
     const measurement = arr[idx];
     arr.splice(idx, 1);
 
-    const polygons = this._pageToStrokes.get(page) || [];
-    const polygonIdx = polygons.findIndex(poly => poly.measurementId === measurement.id || poly.id === measurement.polygonId);
-    if (polygonIdx >= 0) {
-      polygons.splice(polygonIdx, 1);
+    const isAreaMeasurement = measurement?.area != null || measurement?.areaLabel || measurement?.areaPx != null || measurement?.shapeType === 'polygon' || Array.isArray(measurement?.shapePoints) || Array.isArray(measurement?.polygonPoints);
+    if (isAreaMeasurement) {
+      const polygons = this._pageToStrokes.get(page) || [];
+      const polygonIdx = polygons.findIndex(poly => poly.measurementId === measurement.id || poly.id === measurement.polygonId);
+      if (polygonIdx >= 0) {
+        polygons.splice(polygonIdx, 1);
+      }
     }
 
     return true;

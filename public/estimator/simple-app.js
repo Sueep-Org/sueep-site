@@ -237,6 +237,7 @@ async function initApp(){
   const measurementPrevPageBtn = $('measurementPrevPageBtn');
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
+  const downloadPdfBtn = $('downloadPdfBtn');
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -290,6 +291,11 @@ async function initApp(){
 
   overlay.setTool('area');
 
+  if (downloadPdfBtn) {
+    downloadPdfBtn.disabled = true;
+    downloadPdfBtn.addEventListener('click', exportCurrentPageWithAnnotations);
+  }
+
   let __renderSeq = 0;
 
   // ======================================================
@@ -333,6 +339,56 @@ async function initApp(){
     } else {
       vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
+    }
+  }
+
+  async function exportCurrentPageWithAnnotations(){
+    if (!pdfDoc || !pdfCanvas || !overlay) return;
+
+    try {
+      const page = await pdfDoc.getPage(currentPage);
+      const viewport = page.getViewport({ scale: zoom });
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = Math.ceil(viewport.width);
+      exportCanvas.height = Math.ceil(viewport.height);
+      const exportCtx = exportCanvas.getContext('2d');
+
+      exportCtx.save();
+      exportCtx.translate(panOffset.x, panOffset.y);
+      await page.render({ canvasContext: exportCtx, viewport }).promise;
+      overlay.renderToContext(exportCtx, { width: viewport.width, height: viewport.height });
+      exportCtx.restore();
+
+      const printWindow = window.open('', '_blank', 'width=1200,height=900');
+      if (!printWindow) {
+        toast('Please allow popups to download the PDF view.', 'error');
+        return;
+      }
+
+      const imageUrl = exportCanvas.toDataURL('image/png');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Exported PDF</title>
+            <style>
+              body { margin: 0; padding: 0; background: #fff; }
+              img { display: block; width: 100%; height: auto; }
+              @media print { body { margin: 0; } img { page-break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <img src="${imageUrl}" alt="Exported PDF page" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        try { printWindow.print(); } catch (err) {}
+      }, 250);
+    } catch (error) {
+      console.error(error);
+      toast('Unable to export the current page.', 'error');
     }
   }
 
@@ -594,6 +650,10 @@ async function initApp(){
       };
 
       await renderPage();
+
+      if (downloadPdfBtn) {
+        downloadPdfBtn.disabled = false;
+      }
 
       if (mainContent){
 
