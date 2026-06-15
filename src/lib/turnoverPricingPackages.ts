@@ -6,15 +6,16 @@ export type TurnoverPricingPackage = {
   label: string;
 };
 
-export type TurnoverUnitLayout = "1/1" | "2/1" | "2/2" | "3/1" | "3/2";
+export type TurnoverUnitLayout = "studio" | "1/1" | "2/1" | "2/2" | "3/1" | "3/2";
 
-export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["1/1", "2/1", "2/2", "3/1", "3/2"];
+export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["studio", "1/1", "2/1", "2/2", "3/1", "3/2"];
 
 export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
   label: "Standard turnover pricing",
   cleaningRates: { 1: 185, 2: 255, 3: 385 },
   paintingRates: { 1: 340, 2: 400, 3: 450 },
   cleaningLayoutRates: {
+    "studio": 150,
     "1/1": 185,
     "2/1": 255,
     "2/2": 255,
@@ -22,6 +23,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/2": 385,
   },
   paintingLayoutRates: {
+    "studio": 280,
     "1/1": 340,
     "2/1": 400,
     "2/2": 400,
@@ -35,6 +37,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
   cleaningRates: { 1: 150, 2: 200, 3: 200 },
   paintingRates: { 1: 500, 2: 600, 3: 600 },
   cleaningLayoutRates: {
+    "studio": 120,
     "1/1": 150,
     "2/1": 200,
     "2/2": 200,
@@ -42,6 +45,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/2": 200,
   },
   paintingLayoutRates: {
+    "studio": 400,
     "1/1": 500,
     "2/1": 600,
     "2/2": 600,
@@ -118,6 +122,8 @@ export function normalizePricingBedrooms(value?: number | null): 1 | 2 | 3 {
 }
 
 export function getTurnoverUnitLayout(bedrooms?: number | null, bathrooms?: number | null): TurnoverUnitLayout {
+  const rawBeds = Number(bedrooms ?? 1);
+  if (rawBeds <= 0) return "studio";
   const beds = normalizePricingBedrooms(bedrooms);
   const baths = Number(bathrooms ?? (beds === 1 ? 1 : beds === 2 ? 2 : 2));
 
