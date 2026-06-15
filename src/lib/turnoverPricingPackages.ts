@@ -6,9 +6,9 @@ export type TurnoverPricingPackage = {
   label: string;
 };
 
-export type TurnoverUnitLayout = "studio" | "1/1" | "2/1" | "2/2" | "3/1" | "3/2";
+export type TurnoverUnitLayout = "studio" | "1/1" | "2/1" | "2/2" | "3/1" | "3/2" | "3/3";
 
-export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["studio", "1/1", "2/1", "2/2", "3/1", "3/2"];
+export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["studio", "1/1", "2/1", "2/2", "3/1", "3/2", "3/3"];
 
 export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
   label: "Standard turnover pricing",
@@ -21,6 +21,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "2/2": 255,
     "3/1": 385,
     "3/2": 385,
+    "3/3": 385,
   },
   paintingLayoutRates: {
     "studio": 280,
@@ -29,6 +30,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "2/2": 400,
     "3/1": 450,
     "3/2": 450,
+    "3/3": 450,
   },
 };
 
@@ -43,6 +45,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
     "2/2": 200,
     "3/1": 200,
     "3/2": 200,
+    "3/3": 200,
   },
   paintingLayoutRates: {
     "studio": 400,
@@ -51,6 +54,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
     "2/2": 600,
     "3/1": 600,
     "3/2": 600,
+    "3/3": 600,
   },
 };
 
@@ -102,12 +106,12 @@ export function sanitizeTurnoverPricingPackage(
     cleaningRates: {
       1: cleaningLayoutRates["1/1"] ?? fallback.cleaningRates[1],
       2: cleaningLayoutRates["2/2"] ?? cleaningLayoutRates["2/1"] ?? fallback.cleaningRates[2],
-      3: cleaningLayoutRates["3/2"] ?? cleaningLayoutRates["3/1"] ?? fallback.cleaningRates[3],
+      3: cleaningLayoutRates["3/3"] ?? cleaningLayoutRates["3/2"] ?? cleaningLayoutRates["3/1"] ?? fallback.cleaningRates[3],
     },
     paintingRates: {
       1: paintingLayoutRates["1/1"] ?? fallback.paintingRates[1],
       2: paintingLayoutRates["2/2"] ?? paintingLayoutRates["2/1"] ?? fallback.paintingRates[2],
-      3: paintingLayoutRates["3/2"] ?? paintingLayoutRates["3/1"] ?? fallback.paintingRates[3],
+      3: paintingLayoutRates["3/3"] ?? paintingLayoutRates["3/2"] ?? paintingLayoutRates["3/1"] ?? fallback.paintingRates[3],
     },
     cleaningLayoutRates,
     paintingLayoutRates,
@@ -129,7 +133,9 @@ export function getTurnoverUnitLayout(bedrooms?: number | null, bathrooms?: numb
 
   if (beds === 1) return "1/1";
   if (beds === 2) return baths <= 1 ? "2/1" : "2/2";
-  return baths <= 1 ? "3/1" : "3/2";
+  if (baths <= 1) return "3/1";
+  if (baths === 2) return "3/2";
+  return "3/3";
 }
 
 export function getTurnoverCleaningRate(

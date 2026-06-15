@@ -38,8 +38,9 @@ const UNIT_FEATURE_OPTIONS = [
   { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
   { value: "2/1", label: "2/1", bedrooms: 2, bathrooms: 1 },
   { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
-  { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
   { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
+  { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
+  { value: "3/3", label: "3/3", bedrooms: 3, bathrooms: 3 },
   { value: "common-area", label: "Common Area", bedrooms: 0, bathrooms: 0 },
 ] as const;
 const UNIT_QUALITY_OPTIONS = [
