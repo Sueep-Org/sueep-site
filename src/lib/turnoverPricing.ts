@@ -1,6 +1,9 @@
 import {
   getTurnoverCleaningRate,
   getTurnoverPaintingRate,
+  getTurnoverTouchUpPaintRate,
+  getTurnoverCarpetCleaningRate,
+  getTurnoverAdditionalMaterialsRate,
   getTurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
 
@@ -53,21 +56,24 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.touchUpPaint > 0 && !input.fullPaint) {
-    const touchUpPrice = input.touchUpPaint * 12500;
+    const touchUpRate = getTurnoverTouchUpPaintRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const touchUpPrice = input.touchUpPaint * touchUpRate.dollars * 100;
     services.push(`${input.touchUpPaint} touch-up paint item${input.touchUpPaint === 1 ? "" : "s"}`);
     priceCents += touchUpPrice;
-    breakdown.push(`Touch-up paint: ${formatUsd(touchUpPrice)}`);
+    breakdown.push(`Touch-up paint (${input.touchUpPaint}x ${formatUsd(touchUpRate.dollars * 100)}): ${formatUsd(touchUpPrice)}`);
   }
 
   if (input.carpetCleaning) {
-    const carpetPrice = input.fullClean ? 8000 : 12500;
+    const carpetRate = getTurnoverCarpetCleaningRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const carpetPrice = carpetRate.dollars * 100;
     services.push("Carpet cleaning");
     priceCents += carpetPrice;
     breakdown.push(`Carpet cleaning: ${formatUsd(carpetPrice)}`);
   }
 
   if (input.materialsAdditional) {
-    const materialsPrice = 8500;
+    const materialsRate = getTurnoverAdditionalMaterialsRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const materialsPrice = materialsRate.dollars * 100;
     services.push("Additional materials");
     priceCents += materialsPrice;
     breakdown.push(`Additional materials: ${formatUsd(materialsPrice)}`);

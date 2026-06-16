@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth } from "@/lib/erpAuth";
 import { BuildingPricingPackageEditor } from "../../BuildingPricingPackageEditor";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function BuildingPricingPackagePage({ params }: PageProps) {
   const { id } = await params;
+  const auth = await getErpAuth();
+  if (auth?.role === "EMPLOYEE" || auth?.role === "SUPERVISOR") notFound();
   const building = await prisma.building.findUnique({ where: { id } });
   if (!building) notFound();
 

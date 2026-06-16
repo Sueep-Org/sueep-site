@@ -3,6 +3,9 @@ export type TurnoverPricingPackage = {
   paintingRates: { 1: number; 2: number; 3: number };
   cleaningLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   paintingLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  touchUpPaintLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  carpetCleaningLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  additionalMaterialsLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   label: string;
 };
 
@@ -31,6 +34,33 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 450,
     "3/2": 450,
     "3/3": 450,
+  },
+  touchUpPaintLayoutRates: {
+    "studio": 125,
+    "1/1": 125,
+    "2/1": 125,
+    "2/2": 125,
+    "3/1": 125,
+    "3/2": 125,
+    "3/3": 125,
+  },
+  carpetCleaningLayoutRates: {
+    "studio": 100,
+    "1/1": 100,
+    "2/1": 100,
+    "2/2": 100,
+    "3/1": 100,
+    "3/2": 100,
+    "3/3": 100,
+  },
+  additionalMaterialsLayoutRates: {
+    "studio": 85,
+    "1/1": 85,
+    "2/1": 85,
+    "2/2": 85,
+    "3/1": 85,
+    "3/2": 85,
+    "3/3": 85,
   },
 };
 
@@ -100,6 +130,9 @@ export function sanitizeTurnoverPricingPackage(
   const raw = value as Record<string, unknown>;
   const cleaningLayoutRates = { ...fallback.cleaningLayoutRates, ...readLayoutRates(raw.cleaningLayoutRates) };
   const paintingLayoutRates = { ...fallback.paintingLayoutRates, ...readLayoutRates(raw.paintingLayoutRates) };
+  const touchUpPaintLayoutRates = { ...fallback.touchUpPaintLayoutRates, ...readLayoutRates(raw.touchUpPaintLayoutRates) };
+  const carpetCleaningLayoutRates = { ...fallback.carpetCleaningLayoutRates, ...readLayoutRates(raw.carpetCleaningLayoutRates) };
+  const additionalMaterialsLayoutRates = { ...fallback.additionalMaterialsLayoutRates, ...readLayoutRates(raw.additionalMaterialsLayoutRates) };
 
   return {
     label: String(raw.label || fallback.label).trim() || fallback.label,
@@ -115,6 +148,9 @@ export function sanitizeTurnoverPricingPackage(
     },
     cleaningLayoutRates,
     paintingLayoutRates,
+    touchUpPaintLayoutRates,
+    carpetCleaningLayoutRates,
+    additionalMaterialsLayoutRates,
   };
 }
 
@@ -161,6 +197,42 @@ export function getTurnoverPaintingRate(
   return {
     layout,
     dollars: pricingPackage.paintingLayoutRates?.[layout] ?? pricingPackage.paintingRates[beds],
+  };
+}
+
+export function getTurnoverTouchUpPaintRate(
+  pricingPackage: TurnoverPricingPackage,
+  bedrooms?: number | null,
+  bathrooms?: number | null
+) {
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  return {
+    layout,
+    dollars: pricingPackage.touchUpPaintLayoutRates?.[layout] ?? 125,
+  };
+}
+
+export function getTurnoverCarpetCleaningRate(
+  pricingPackage: TurnoverPricingPackage,
+  bedrooms?: number | null,
+  bathrooms?: number | null
+) {
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  return {
+    layout,
+    dollars: pricingPackage.carpetCleaningLayoutRates?.[layout] ?? 100,
+  };
+}
+
+export function getTurnoverAdditionalMaterialsRate(
+  pricingPackage: TurnoverPricingPackage,
+  bedrooms?: number | null,
+  bathrooms?: number | null
+) {
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  return {
+    layout,
+    dollars: pricingPackage.additionalMaterialsLayoutRates?.[layout] ?? 85,
   };
 }
 

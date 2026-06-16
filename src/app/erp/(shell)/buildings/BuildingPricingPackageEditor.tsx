@@ -13,6 +13,7 @@ import {
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
 
+
 type Props = {
   buildingId: string;
   buildingName: string;
@@ -36,6 +37,15 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
   const [painting, setPainting] = useState<Record<string, string>>(() =>
     Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.paintingLayoutRates?.[layout])]))
   );
+  const [touchUpPaint, setTouchUpPaint] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.touchUpPaintLayoutRates?.[layout])]))
+  );
+  const [carpetCleaning, setCarpetCleaning] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.carpetCleaningLayoutRates?.[layout])]))
+  );
+  const [additionalMaterials, setAdditionalMaterials] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.additionalMaterialsLayoutRates?.[layout])]))
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -54,11 +64,23 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     const paintingLayoutRates = Object.fromEntries(
       TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(painting[layout]) || 0))])
     );
+    const touchUpPaintLayoutRates = Object.fromEntries(
+      TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(touchUpPaint[layout]) || 0))])
+    );
+    const carpetCleaningLayoutRates = Object.fromEntries(
+      TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(carpetCleaning[layout]) || 0))])
+    );
+    const additionalMaterialsLayoutRates = Object.fromEntries(
+      TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(additionalMaterials[layout]) || 0))])
+    );
 
     return sanitizeTurnoverPricingPackage({
       label,
       cleaningLayoutRates,
       paintingLayoutRates,
+      touchUpPaintLayoutRates,
+      carpetCleaningLayoutRates,
+      additionalMaterialsLayoutRates,
     });
   }
 
@@ -109,12 +131,15 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       </label>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[520px] text-left text-sm">
+        <table className="w-full min-w-[820px] text-left text-sm">
           <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
             <tr>
               <th className="py-2 pr-3">Unit</th>
               <th className="py-2 pr-3">Cleaning</th>
-              <th className="py-2">Painting</th>
+              <th className="py-2 pr-3">Painting</th>
+              <th className="py-2 pr-3">Touch-up Paint</th>
+              <th className="py-2 pr-3">Carpet Cleaning</th>
+              <th className="py-2">Add. Materials</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -131,10 +156,40 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
                   />
                 </td>
-                <td className="py-2">
+                <td className="py-2 pr-3">
                   <input
                     value={painting[layout]}
                     onChange={(event) => setPainting((current) => ({ ...current, [layout]: event.target.value }))}
+                    disabled={!canEdit || loading}
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                  />
+                </td>
+                <td className="py-2 pr-3">
+                  <input
+                    value={touchUpPaint[layout]}
+                    onChange={(event) => setTouchUpPaint((current) => ({ ...current, [layout]: event.target.value }))}
+                    disabled={!canEdit || loading}
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                  />
+                </td>
+                <td className="py-2 pr-3">
+                  <input
+                    value={carpetCleaning[layout]}
+                    onChange={(event) => setCarpetCleaning((current) => ({ ...current, [layout]: event.target.value }))}
+                    disabled={!canEdit || loading}
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                  />
+                </td>
+                <td className="py-2">
+                  <input
+                    value={additionalMaterials[layout]}
+                    onChange={(event) => setAdditionalMaterials((current) => ({ ...current, [layout]: event.target.value }))}
                     disabled={!canEdit || loading}
                     type="number"
                     min="0"

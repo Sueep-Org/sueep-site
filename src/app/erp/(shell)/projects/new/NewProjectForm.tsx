@@ -25,7 +25,7 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 
 const TOUCH_UP_PAINT_CENTS = 12500;
 const ADDITIONAL_MATERIALS_CENTS = 8500;
-const CARPET_WITH_CLEAN_CENTS = 8000;
+const CARPET_WITH_CLEAN_CENTS = 10000;
 const PRICING_FIELD_LABELS = {
   fullClean: "Full clean",
   fullPaint: "Full paint",
