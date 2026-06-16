@@ -26,6 +26,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
+  const isEmployee = auth?.role === "EMPLOYEE";
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord] = await Promise.all([
     prisma.project.findUnique({
@@ -266,7 +267,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} canEdit={!isEmployee} showFinancials={!isEmployee} />,
     },
     {
       label: "Contractors",
@@ -351,7 +352,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
   ];
 
-  const tabs = isSupervisor
+  const tabs = (isSupervisor || isEmployee)
     ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist")
     : allTabs;
 
@@ -363,7 +364,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
-          {!isSupervisor && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
+          {!isSupervisor && !isEmployee && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
         </div>
       </div>
 

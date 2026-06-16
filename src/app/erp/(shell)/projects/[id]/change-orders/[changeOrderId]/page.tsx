@@ -12,6 +12,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
   const { id, changeOrderId } = await params;
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
+  const isEmployee = auth?.role === "EMPLOYEE";
 
   const [changeOrder, project, employees, contracts, materialEntries] = await Promise.all([
     prisma.projectChangeOrder.findFirst({
@@ -118,6 +119,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         data={data}
         employees={employees}
         isSupervisor={isSupervisor}
+        isEmployee={isEmployee}
         signingContent={
           <ChangeOrderSigningSection
             projectId={id}

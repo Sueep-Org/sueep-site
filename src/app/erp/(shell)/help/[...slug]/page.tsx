@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getAllArticles, getArticle } from "@/lib/help";
+import { getAllArticles, getArticle, canAccessArticle } from "@/lib/help";
+import { getErpAuth } from "@/lib/erpAuth";
 import { BackToTop } from "@/app/erp/components/help/BackToTop";
 
 type Params = { slug: string[] };
@@ -14,6 +15,9 @@ export default async function HelpArticlePage({ params }: { params: Promise<Para
   const slugStr = Array.isArray(slug) ? slug.join("/") : slug;
   const article = getArticle(slugStr);
   if (!article) notFound();
+
+  const auth = await getErpAuth();
+  if (auth && !canAccessArticle(article, auth.role)) notFound();
 
   const ArticleContent = article.component;
 

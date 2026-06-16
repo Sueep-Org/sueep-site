@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { ErpRole } from "@/lib/erpSession";
 import { UploadingAContract } from "./contracts/uploading-a-contract";
 import { CreatingAProject } from "./projects/creating-a-project";
 import { HubSpotSync } from "./projects/hubspot-sync";
@@ -19,6 +20,8 @@ export type ArticleEntry = {
   description: string;
   order: number;
   component: ComponentType;
+  /** If set, only users whose role appears in this list can see this article. */
+  roles?: ErpRole[];
 };
 
 export const registry: ArticleEntry[] = [
@@ -29,6 +32,7 @@ export const registry: ArticleEntry[] = [
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
     order: 1,
     component: UploadingAContract,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "projects/creating-a-project",
@@ -37,6 +41,7 @@ export const registry: ArticleEntry[] = [
     description: "How to manually create a new project in the ERP.",
     order: 1,
     component: CreatingAProject,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "projects/hubspot-sync",
@@ -45,6 +50,7 @@ export const registry: ArticleEntry[] = [
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
     order: 6,
     component: HubSpotSync,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "turnover/creating-a-request",
@@ -53,6 +59,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create and manage a turnover or regular cleaning request.",
     order: 1,
     component: CreatingATurnoverRequest,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
   },
   {
     slug: "sops/onboarding-new-employee",
@@ -61,6 +68,7 @@ export const registry: ArticleEntry[] = [
     description: "Standard process for onboarding a new employee into the ERP.",
     order: 1,
     component: OnboardingNewEmployee,
+    roles: ["ADMIN"],
   },
   {
     slug: "projects/creating-a-change-order",
@@ -69,6 +77,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create a change order for a post-construction project in the ERP",
     order: 2,
     component: CreatingAChangeOrder,
+    roles: ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"],
   },
   {
     slug: "projects/projects-overview",
@@ -77,7 +86,7 @@ export const registry: ArticleEntry[] = [
     description: "Overview of the projects table, project details page, and editing projects.",
     order: 3,
     component: ProjectsOverview,
-
+    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION"],
   },
   {
     slug: "workers/labor-logs",
@@ -86,6 +95,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter, edit, and sort through labor logs on projects and change orders.",
     order: 2,
     component: InputtingLaborLogs,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
   },
   {
     slug: "workers/adding-employees",
@@ -94,6 +104,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter employees into the system and manage their documentation",
     order: 1,
     component: AddingEmployees,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "projects/material-logs",
@@ -102,14 +113,16 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 5,
     component: MaterialsLog,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
   },
   {
     slug: "workers/adding-contractors",
     title: "Adding Contractors",
     category: "Workers",
     description: "How to register contractors in our system to be added onto projects",
-    order:3,
-    component: AddingContractors
+    order: 3,
+    component: AddingContractors,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "workers/logging-contractors",
@@ -117,6 +130,7 @@ export const registry: ArticleEntry[] = [
     category: "Workers",
     description: "How to log contractors on projects much like you add laborers",
     order: 4,
-    component: LoggingContractors
-  }
+    component: LoggingContractors,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
+  },
 ];

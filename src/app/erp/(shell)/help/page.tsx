@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getArticlesByCategory } from "@/lib/help";
+import { getErpAuth } from "@/lib/erpAuth";
 
 const categoryOrder = ["Projects", "Workers", "Contracts", "Turnover", "SOPs", "General"];
 
@@ -31,8 +32,9 @@ const categoryIcons: Record<string, React.ReactNode> = {
   ),
 };
 
-export default function HelpIndexPage() {
-  const byCategory = getArticlesByCategory();
+export default async function HelpIndexPage() {
+  const auth = await getErpAuth();
+  const byCategory = getArticlesByCategory(auth?.role);
 
   const orderedCategories = [
     ...categoryOrder.filter((c) => byCategory[c]),

@@ -136,11 +136,15 @@ export function ChangeOrderLaborersSection({
   changeOrderId,
   initialLaborers,
   employees,
+  canEdit = true,
+  showFinancials = true,
 }: {
   projectId: string;
   changeOrderId: string;
   initialLaborers: ChangeOrderLaborerRow[];
   employees: ChangeOrderLaborerEmployeeOption[];
+  canEdit?: boolean;
+  showFinancials?: boolean;
 }) {
   const router = useRouter();
   const [laborers, setLaborers] = useState(initialLaborers);
@@ -346,10 +350,12 @@ export function ChangeOrderLaborersSection({
 
   const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
 
+  const colCount = 7 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
+
   return (
     <>
     <div className="space-y-6">
-      <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      {canEdit && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
@@ -391,21 +397,23 @@ export function ChangeOrderLaborersSection({
         <button type="submit" disabled={loading} className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
           {loading ? "Adding…" : "Add entry"}
         </button>
-      </form>
+      </form>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          <p className="text-sm text-gray-700">
-            {filterDate || filterLaborer ? (
-              <>
-                Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
-                <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
-              </>
-            ) : (
-              <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
-            )}
-          </p>
+          {showFinancials && (
+            <p className="text-sm text-gray-700">
+              {filterDate || filterLaborer ? (
+                <>
+                  Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                  <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
+                </>
+              ) : (
+                <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap gap-3">
@@ -459,18 +467,18 @@ export function ChangeOrderLaborersSection({
                 </th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
-                <th className="py-2 pr-2 font-medium">Rate</th>
-                <th className="py-2 pr-2 font-medium">Line $</th>
+                {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
+                {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
                 <th className="py-2 pr-2 font-medium">Quality</th>
                 <th className="py-2 pr-2 font-medium">Notes</th>
-                <th className="py-2" />
+                {canEdit && <th className="py-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleLaborers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-gray-500">
+                  <td colSpan={colCount} className="py-6 text-center text-gray-500">
                     {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
                   </td>
                 </tr>
@@ -492,10 +500,14 @@ export function ChangeOrderLaborersSection({
                       <td className="py-1 pr-2">
                         <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
                       </td>
-                      <td className="py-1 pr-2">
-                        <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
-                      </td>
-                      <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(Number(editFields.hours), Number(editFields.hourlyRate) * 100))}</td>
+                      {showFinancials && (
+                        <td className="py-1 pr-2">
+                          <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
+                        </td>
+                      )}
+                      {showFinancials && (
+                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(Number(editFields.hours), Number(editFields.hourlyRate) * 100))}</td>
+                      )}
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
                       </td>
@@ -531,34 +543,44 @@ export function ChangeOrderLaborersSection({
                       <td className="py-2 pr-2 text-gray-900">{l.name}</td>
                       <td className="py-2 pr-2 text-gray-500">{l.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{l.hours}</td>
-                      <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>
-                      <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.hours, l.hourlyRateCents))}</td>
+                      {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>}
+                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.hours, l.hourlyRateCents))}</td>}
                       <td className="py-2 pr-2 text-gray-500">{l.taskDescription || "—"}</td>
                       <td className="py-2 pr-2">
-                        <select
-                          value={quality}
-                          onChange={(e) => handleQualityChange(l.id, e.target.value)}
-                          className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                        >
-                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                        {canEdit ? (
+                          <select
+                            value={quality}
+                            onChange={(e) => handleQualityChange(l.id, e.target.value)}
+                            className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                          >
+                            {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`text-xs ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
+                            {QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? "—"}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
-                        <button
-                          type="button"
-                          onClick={() => setQualityPopup({ id: l.id, draft: notes })}
-                          title={notes || "Add quality notes"}
-                          className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
-                          </svg>
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setQualityPopup({ id: l.id, draft: notes })}
+                            title={notes || "Add quality notes"}
+                            className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                            </svg>
+                          </button>
+                        )}
                       </td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        <button type="button" onClick={() => startEdit(l)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
-                        <button type="button" onClick={() => onRemove(l.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Remove</button>
-                      </td>
+                      {canEdit && (
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <button type="button" onClick={() => startEdit(l)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                          <button type="button" onClick={() => onRemove(l.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Remove</button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })

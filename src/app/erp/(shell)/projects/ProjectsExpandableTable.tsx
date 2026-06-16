@@ -170,7 +170,7 @@ function getJanitorialBuildingName(project: ProjectTableRow) {
   return getDetailLine(project.description, "Property") || project.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || project.jobTitle;
 }
 
-function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow }) {
+function JanitorialProjectDropdownDetail({ project, showFinancials = true }: { project: ProjectTableRow; showFinancials?: boolean }) {
   const building = getJanitorialBuildingName(project);
   const address = getDetailLine(project.description, "Address");
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
@@ -197,17 +197,17 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
       </div>
       <div className="overflow-x-auto bg-white px-3 py-2">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-        <LaborTable entries={project.laborEntries} />
+        <LaborTable entries={project.laborEntries} showFinancials={showFinancials} />
       </div>
     </div>
   );
 }
 
-function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white px-3 py-2" }: { project: ProjectTableRow; className?: string }) {
+function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white px-3 py-2", showFinancials = true }: { project: ProjectTableRow; className?: string; showFinancials?: boolean }) {
   return (
     <div className={className}>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Labor log</p>
-      <LaborTable entries={project.laborEntries} />
+      <LaborTable entries={project.laborEntries} showFinancials={showFinancials} />
       {project.contractorEntries.length > 0 && (
         <>
           <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contractors</p>
@@ -308,7 +308,7 @@ const QUALITY_COLORS: Record<string, string> = {
   POOR: "text-red-400",
 };
 
-export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
+export function LaborTable({ entries, initialVisible = 5, showFinancials = true }: { entries: LaborRow[]; initialVisible?: number; showFinancials?: boolean }) {
   const [showAll, setShowAll] = useState(false);
   const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(entries.map((e) => [e.id, e.qualityRating ?? ""]))
@@ -351,9 +351,9 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
           <colgroup>
             <col className="w-[9%]" />
             <col className="w-[20%]" />
-            <col className="w-[21%]" />
+            <col className={showFinancials ? "w-[21%]" : "w-[31%]"} />
             <col className="w-[8%]" />
-            <col className="w-[10%]" />
+            {showFinancials && <col className="w-[10%]" />}
             <col className="w-[10%]" />
             <col className="w-[16%]" />
             <col className="w-[6%]" />
@@ -364,7 +364,7 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
               <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
               <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
               <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
-              <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>
+              {showFinancials && <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>}
               <th className="pb-1.5 pr-3 text-left font-semibold">Description</th>
               <th className="pb-1.5 pr-3 text-left font-semibold">Quality</th>
               <th className="pb-1.5 text-left font-semibold">Notes</th>
@@ -380,7 +380,7 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
                   <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
-                  <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
+                  {showFinancials && <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>}
                   <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3">
                     <div className="flex items-center gap-1">
@@ -732,11 +732,11 @@ export function ProjectsExpandableTable({
                     <tr className={styles.detail}>
                       <td colSpan={colCount} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId) ? (
-                          <ProjectLaborLogPanel project={p} />
+                          <ProjectLaborLogPanel project={p} showFinancials={canSeeFinancials} />
                         ) : janitorialDetailMode === "team" ? (
-                          <JanitorialProjectDropdownDetail project={p} />
+                          <JanitorialProjectDropdownDetail project={p} showFinancials={canSeeFinancials} />
                         ) : (
-                          <ProjectLaborLogPanel project={p} />
+                          <ProjectLaborLogPanel project={p} showFinancials={canSeeFinancials} />
                         )}
                       </td>
                     </tr>
@@ -838,7 +838,7 @@ export function ProjectsExpandableTable({
                                 )}
                                 <div className="rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor log</p>
-                                  <LaborTable entries={co.laborers} />
+                                  <LaborTable entries={co.laborers} showFinancials={canSeeFinancials} />
                                 </div>
                               </td>
                             </tr>
