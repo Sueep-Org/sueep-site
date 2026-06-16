@@ -209,7 +209,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
         type="button"
         onClick={savePackage}
         disabled={!canEdit || loading}
-        className="mt-4 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+        className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300"
       >
         {loading ? "Saving..." : "Save pricing package"}
       </button>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -36,6 +37,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   const updated = await prisma.projectSOVItem.update({ where: { id: itemId }, data: data as object });
+  await syncSovPercentDone(id);
   return NextResponse.json(updated);
 }
 
@@ -48,5 +50,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.projectSOVItem.delete({ where: { id: itemId } });
+  await syncSovPercentDone(id);
   return NextResponse.json({ ok: true });
 }

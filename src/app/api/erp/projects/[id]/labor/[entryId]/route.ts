@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
+import { syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; entryId: string }> };
 
@@ -48,9 +49,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.qualityNotes !== undefined) {
     data.qualityNotes = body.qualityNotes ? String(body.qualityNotes).trim() || null : null;
   }
+  if (body.sovItemId !== undefined) {
+    const sovItemId = body.sovItemId ? String(body.sovItemId).trim() : null;
+    if (sovItemId) {
+      const sovItem = await prisma.projectSOVItem.findFirst({ where: { id: sovItemId, sov: { projectId: id } }, select: { id: true } });
+      if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    }
+    data.sovItemId = sovItemId;
+  }
 
   try {
     const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object });
+    if (body.sovItemId !== undefined && data.sovItemId) {
+      if (body.sovCompleted !== undefined) {
+        await prisma.projectSOVItem.update({ where: { id: String(data.sovItemId) }, data: { completed: Boolean(body.sovCompleted) } });
+      }
+      await syncSovPercentDone(id);
+    }
     return NextResponse.json(entry);
   } catch {
     return NextResponse.json({ error: "Update failed" }, { status: 500 });

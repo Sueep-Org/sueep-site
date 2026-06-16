@@ -140,6 +140,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     hours: e.hours.toString(),
     hourlyRateCents: e.hourlyRateCents,
     taskDescription: e.taskDescription,
+    sovItemId: e.sovItemId ?? null,
     qualityRating: e.qualityRating ?? null,
     qualityNotes: e.qualityNotes ?? null,
   }));
@@ -283,7 +284,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} canEdit={!isEmployee} showFinancials={!isEmployee} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee} />,
     },
     {
       label: "Contractors",

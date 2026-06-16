@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type SOVItem = {
   id: string;
@@ -48,6 +48,14 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function close() { setMenuOpenId(null); }
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuOpenId]);
 
   const totalScheduled = items.reduce((s, i) => s + i.scheduledValueCents, 0);
   const totalCompleted = items.filter((i) => i.completed).reduce((s, i) => s + i.scheduledValueCents, 0);
@@ -234,28 +242,45 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
                 </span>
               )}
               {canEdit && (
-                <div className="flex gap-1.5">
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditingId(item.id);
-                      setEditDesc(item.description);
-                      setEditValue((item.scheduledValueCents / 100).toFixed(2));
-                      setError("");
-                      setAdding(false);
-                    }}
-                    className="rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100"
+                    onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
+                    className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label="More options"
                   >
-                    Edit
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <circle cx="8" cy="3" r="1.2" />
+                      <circle cx="8" cy="8" r="1.2" />
+                      <circle cx="8" cy="13" r="1.2" />
+                    </svg>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteItem(item.id)}
-                    disabled={saving}
-                    className="rounded border border-red-200 px-2 py-1 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
+                  {menuOpenId === item.id && (
+                    <div className="absolute right-0 z-20 mt-1 w-28 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(item.id);
+                          setEditDesc(item.description);
+                          setEditValue((item.scheduledValueCents / 100).toFixed(2));
+                          setError("");
+                          setAdding(false);
+                          setMenuOpenId(null);
+                        }}
+                        className="flex w-full items-center px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { deleteItem(item.id); setMenuOpenId(null); }}
+                        disabled={saving}
+                        className="flex w-full items-center px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

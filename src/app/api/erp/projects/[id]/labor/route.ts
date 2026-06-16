@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
+import { syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -71,6 +72,12 @@ export async function POST(req: Request, ctx: Ctx) {
   const locationLongitude = body.locationLongitude != null ? parseFloat(String(body.locationLongitude)) : null;
   const locationAccuracy = body.locationAccuracy != null ? parseFloat(String(body.locationAccuracy)) : null;
 
+  const sovItemId = body.sovItemId ? String(body.sovItemId).trim() : null;
+  if (sovItemId) {
+    const sovItem = await prisma.projectSOVItem.findFirst({ where: { id: sovItemId, sov: { projectId: id } }, select: { id: true } });
+    if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+  }
+
   try {
     const entry = await prisma.laborEntry.create({
       data: {
@@ -82,12 +89,17 @@ export async function POST(req: Request, ctx: Ctx) {
         hours,
         hourlyRateCents,
         taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
+        sovItemId: sovItemId || null,
         locationLatitude: Number.isFinite(locationLatitude) ? locationLatitude : null,
         locationLongitude: Number.isFinite(locationLongitude) ? locationLongitude : null,
         locationAccuracy: Number.isFinite(locationAccuracy) ? locationAccuracy : null,
         lastLocationAt: (Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude)) ? new Date() : null,
       },
     });
+    if (sovItemId && body.sovCompleted !== undefined) {
+      await prisma.projectSOVItem.update({ where: { id: sovItemId }, data: { completed: Boolean(body.sovCompleted) } });
+      await syncSovPercentDone(id);
+    }
     return NextResponse.json(entry);
   } catch (e) {
     console.error("POST labor", e);

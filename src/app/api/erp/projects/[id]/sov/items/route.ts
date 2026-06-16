@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -44,5 +45,6 @@ export async function POST(req: Request, ctx: Ctx) {
     },
   });
 
+  await syncSovPercentDone(id);
   return NextResponse.json(item, { status: 201 });
 }
