@@ -86,6 +86,22 @@ export default function ContactForm() {
             <p id="phone-error" className="mt-1 text-sm text-red-600">{errors.phone}</p>
           )}
         </div>
+        <div className="flex items-start gap-3">
+          <input
+            id="sms-consent"
+            name="sms_consent"
+            type="checkbox"
+            required
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[#E73C6E] focus:ring-[#E73C6E]/50 cursor-pointer"
+          />
+          <label htmlFor="sms-consent" className="text-xs text-gray-500 leading-relaxed">
+            By checking this box, I consent to receive SMS from Sueep LLC related to Marketing and General follow-up SMS. Reply STOP to opt-out; Reply HELP for support; Message &amp; data rates may apply; Messaging frequency may vary. Visit{" "}
+            <a href="https://sueep.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">https://sueep.com/privacy</a>{" "}
+            to see our privacy policy and{" "}
+            <a href="https://sueep.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700">https://sueep.com/terms</a>{" "}
+            for our Terms of Service.
+          </label>
+        </div>
         <input name="company" type="text" placeholder="Company / Property" className="w-full rounded-md px-4 py-3 text-base bg-white text-gray-900 placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/50 focus:border-[#E73C6E]" />
         <textarea name="message" placeholder="Scope, timelines, requirements" rows={5} className="w-full rounded-md px-4 py-3 text-base bg-white text-gray-900 placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/50 focus:border-[#E73C6E]" required></textarea>
         <button type="submit" className="px-6 py-3 bg-[#E73C6E] text-white font-medium rounded-md hover:opacity-90">Send</button>
