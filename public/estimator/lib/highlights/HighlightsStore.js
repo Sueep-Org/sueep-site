@@ -29,9 +29,11 @@ export class HighlightsStore {
   addPolygon(page, polygon) {
     this._ensure(page);
     const arr = this._pageToStrokes.get(page);
-    arr.push(polygon);
+    const entry = { ...polygon };
+    arr.push(entry);
     // clear redo stack on new action
     this._pageToRedo.set(page, []);
+    return entry;
   }
 
   undo(page) {
@@ -127,7 +129,26 @@ export class HighlightsStore {
 
   // Measurements
   addMeasurement(page, m){ this._ensure(page); const arr=this._pageToMeasurements.get(page); arr.push(m); }
-  removeMeasurement(page, id){ this._ensure(page); const arr=this._pageToMeasurements.get(page); const idx = arr.findIndex(m=>m.id===id); if (idx >= 0) arr.splice(idx, 1); }
+  removeMeasurement(page, id){
+    this._ensure(page);
+    const arr=this._pageToMeasurements.get(page);
+    const idx = arr.findIndex(m=>m.id===id);
+    if (idx < 0) return false;
+
+    const measurement = arr[idx];
+    arr.splice(idx, 1);
+
+    const isAreaMeasurement = measurement?.area != null || measurement?.areaLabel || measurement?.areaPx != null || measurement?.shapeType === 'polygon' || Array.isArray(measurement?.shapePoints) || Array.isArray(measurement?.polygonPoints);
+    if (isAreaMeasurement) {
+      const polygons = this._pageToStrokes.get(page) || [];
+      const polygonIdx = polygons.findIndex(poly => poly.measurementId === measurement.id || poly.id === measurement.polygonId);
+      if (polygonIdx >= 0) {
+        polygons.splice(polygonIdx, 1);
+      }
+    }
+
+    return true;
+  }
   listMeasurements(page){ this._ensure(page); return this._pageToMeasurements.get(page); }
   listMeasurementsAllPages(){ const out=[]; for (const [page, arr] of this._pageToMeasurements.entries()){ out.push({ page, measurements: arr.slice() }); } return out; }
 }

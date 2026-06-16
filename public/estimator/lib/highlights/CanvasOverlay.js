@@ -34,6 +34,8 @@ export class CanvasOverlay {
     this._isDraggingMeasure = false;
     this._measureStart = null; // {x,y}
     this._measurePreview = null; // {x1,y1,x2,y2}
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
   }
 
   attach() {
@@ -55,7 +57,7 @@ export class CanvasOverlay {
     this._bindEvents();
     // prevent default wheel behavior on overlay to avoid zooming while drawing
     this.overlay.addEventListener('wheel', (ev) => {
-      if (this._isDraggingMeasure) {
+      if (this._isDraggingMeasure || (this.tool === 'irregular' && this.active && this._pendingPolygonPoints.length > 0)) {
         ev.preventDefault();
         ev.stopPropagation();
         return false;
@@ -66,11 +68,23 @@ export class CanvasOverlay {
   setActive(active) {
     this.active = active;
     this.overlay.style.pointerEvents = active ? 'auto' : 'none';
+    if (!active) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this._measurePreview = null;
+      this._isDraggingMeasure = false;
+      this._measureStart = null;
+    }
   }
 
   setTool(t) {
     this.tool = t;
     this.hoverPoly = null;
+    this._measurePreview = null;
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
+    this._isDraggingMeasure = false;
+    this._measureStart = null;
     this.redraw();
   }
 
@@ -87,7 +101,121 @@ export class CanvasOverlay {
   setCurrentPage(p) {
     this.currentPage = p;
     this.hoverPoly = null;
+    this._measurePreview = null;
+    this._irregularPreview = null;
+    this._isDraggingMeasure = false;
+    this._measureStart = null;
+    this._hoverLineId = null;
+    this._hoverMeasurementId = null;
+    this._selectedMeasurementId = null;
+    this._selectedLineIds.clear();
     this.redraw();
+  }
+
+  renderToContext(ctx, { width = this.overlay?.width || this.canvasEl?.width || 0, height = this.overlay?.height || this.canvasEl?.height || 0 } = {}) {
+    if (!ctx) return;
+
+    const w = width;
+    const h = height;
+
+    const items = this.store.getPage(this.currentPage) || [];
+    for (const it of items) {
+      const pts = (it.points || []).map(p => ({ x: p.x * w, y: p.y * h }));
+      drawPolygon(ctx, pts, true);
+    }
+    if (this.hoverPoly) drawPolygon(ctx, this.hoverPoly, false);
+
+    const lines = this.store.getLines(this.currentPage) || [];
+    for (const ln of lines) {
+      const a = { x: (ln.x1 || ln.x) * w, y: (ln.y1 || ln.y) * h };
+      const b = { x: (ln.x2 || ln.x1) * w, y: (ln.y2 || ln.y1) * h };
+
+      const id = ln.id || ln.__id;
+      const isHover = id && this._hoverLineId === id;
+      const isSel = id && this._selectedLineIds.has(id);
+
+      drawLine(ctx, a, b, { hover: isHover, selected: isSel });
+
+      if (isSel || isHover) {
+        const pxLen = Math.hypot(b.x - a.x, b.y - a.y) || 0;
+        const scale = this.store.getScale(this.currentPage);
+        if (scale && scale.factor) {
+          const inches = (pxLen / (this._pxPerPt || 1)) * scale.factor;
+          const txt = formatInches(inches);
+          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
+        } else {
+          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`);
+        }
+      }
+    }
+
+    const measurements = this.store.listMeasurements(this.currentPage) || [];
+    for (const m of measurements) {
+      if (!m.pts || !m.pts.length) continue;
+
+      const isAreaMeasurement = m.area != null || m.areaLabel;
+      if (isAreaMeasurement) {
+        const polygon = (this.store.getPage(this.currentPage) || []).find(item => item.measurementId === m.id || item.id === m.id);
+        const points = Array.isArray(polygon?.points) && polygon.points.length
+          ? polygon.points
+          : (Array.isArray(m.shapePoints) && m.shapePoints.length
+            ? m.shapePoints
+            : (Array.isArray(m.polygonPoints) && m.polygonPoints.length
+              ? m.polygonPoints
+              : []));
+        const pts = points.map(p => ({ x: p.x * w, y: p.y * h }));
+        if (pts.length >= 3) {
+          const centroid = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+          const midX = centroid.x / pts.length;
+          const midY = centroid.y / pts.length;
+          drawLabel(ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`);
+        }
+        continue;
+      }
+
+      const isHover = this._hoverMeasurementId === m.id;
+      const isSelected = this._selectedMeasurementId === m.id;
+      for (const seg of m.pts) {
+        const a = { x: seg.x1 * w, y: seg.y1 * h };
+        const b = { x: seg.x2 * w, y: seg.y2 * h };
+        drawMeasurementLine(ctx, a, b, { hover: isHover, selected: isSelected });
+      }
+      const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
+      const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
+      const labelText = m.label || formatInches(m.inches || 0);
+      drawLabel(ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText);
+    }
+
+    if (this.tool === 'measure' && this.active && lines.length > 0) {
+      const hasScale = this.store.getScale(this.currentPage)?.factor;
+      const hint = hasScale
+        ? 'Click a line to measure'
+        : 'Click a line to calibrate scale';
+      drawHint(ctx, 10, 30, hint);
+    }
+    if (this._measurePreview) {
+      const p = this._measurePreview;
+      if (this.tool === 'measure') {
+        drawPreviewLine(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
+        const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
+        const scale = this.store.getScale(this.currentPage);
+        const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
+        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16, labelTxt);
+      }
+      if (this.tool === 'rect') {
+        drawPreviewRect(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
+        const pxW = Math.abs(p.x2 - p.x1);
+        const pxH = Math.abs(p.y2 - p.y1);
+        const pxArea = pxW * pxH;
+        const scale = this.store.getScale(this.currentPage);
+        const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
+        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16, `${areaScaled.toFixed(2)} sq`);
+      }
+    }
+
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      drawIrregularPath(ctx, this._pendingPolygonPoints, this._irregularPreview);
+    }
   }
 
   setDoubleSided(value) {
@@ -151,7 +279,8 @@ export class CanvasOverlay {
             // =========================
 
             const areaPx = calculatePolygonArea(d.polygon);
-            const areaScaled = applyScale(areaPx, this._pxPerPt);
+            const scale = this.store.getScale(this.currentPage);
+            const areaScaled = applyScale(areaPx, this._pxPerPt, scale?.factor);
 
             const perimeterPx = calculatePerimeter(d.polygon);
             const perimeterScaled = applyScaleLength(perimeterPx, this._pxPerPt);
@@ -195,6 +324,7 @@ export class CanvasOverlay {
     this.overlay.addEventListener('pointermove', this._onPointerMove);
     this.overlay.addEventListener('pointerup', this._onPointerUp);
     this.overlay.addEventListener('click', this._onClick);
+    this.overlay.addEventListener('dblclick', this._onDoubleClick);
     this.overlay.addEventListener('pointercancel', this._onPointerCancel);
   }
 
@@ -208,6 +338,12 @@ export class CanvasOverlay {
     // if user is dragging a measure line or rect, update preview and skip hover logic
     if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
       this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+      this.redraw();
+      return;
+    }
+
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
       this.redraw();
       return;
     }
@@ -362,16 +498,21 @@ export class CanvasOverlay {
         { x: left / this.overlay.width, y: bottom / this.overlay.height }
       ];
 
-      // save polygon for visualization
-      this.store.addPolygon(this.currentPage, { points: norm });
+      const measurementId = `rect-${Date.now()}`;
+
+      // save polygon for visualization and tie it to the measurement so it can be removed together
+      this.store.addPolygon(this.currentPage, { points: norm, measurementId });
 
       // save area measurement record
       this.store.addMeasurement(this.currentPage, {
-        id: `rect-${Date.now()}`,
+        id: measurementId,
         area: areaScaled,
         areaPx: pixelArea,
         areaLabel: `${areaScaled.toFixed(2)} sq`,
         at: Date.now(),
+        shapeType: 'polygon',
+        shapePoints: norm,
+        polygonPoints: norm,
         pts: [{ x1: left / this.overlay.width, y1: top / this.overlay.height, x2: right / this.overlay.width, y2: bottom / this.overlay.height }]
       });
 
@@ -393,7 +534,57 @@ export class CanvasOverlay {
     }
   };
 
-  
+  _onDoubleClick = () => {
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length >= 3) {
+      this._finalizeIrregularPolygon();
+    }
+  };
+
+  _finalizeIrregularPolygon = () => {
+    if (this._pendingPolygonPoints.length < 3) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this.redraw();
+      return;
+    }
+
+    const points = this._pendingPolygonPoints.map(p => ({ x: p.x, y: p.y }));
+    const smoothedPoints = buildSmoothedPathPoints(points, null, 24);
+    const closedPoints = smoothedPoints.length > 1 ? [...smoothedPoints, smoothedPoints[0]] : [...points, points[0]];
+    const pixelArea = calculateFilledAreaPixels(closedPoints);
+    if (pixelArea <= 4) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this.redraw();
+      return;
+    }
+
+    const scale = this.store.getScale(this.currentPage);
+    const areaScaled = applyScale(pixelArea, this._pxPerPt, scale?.factor);
+    const pathPoints = smoothedPoints.length > 1 ? smoothedPoints : points;
+    const norm = pathPoints.map(point => ({ x: point.x / this.overlay.width, y: point.y / this.overlay.height }));
+    const measurementId = `irreg-${Date.now()}`;
+
+    this.store.addPolygon(this.currentPage, { points: norm, measurementId });
+    this.store.addMeasurement(this.currentPage, {
+      id: measurementId,
+      area: areaScaled,
+      areaPx: pixelArea,
+      areaLabel: `${areaScaled.toFixed(2)} sq`,
+      at: Date.now(),
+      shapeType: 'polygon',
+      shapePoints: norm,
+      polygonPoints: norm,
+      pts: pathPoints.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).x / this.overlay.width, y2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).y / this.overlay.height }))
+    });
+
+    this.onMeasurementsChanged?.();
+    toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
+
+    this._pendingPolygonPoints = [];
+    this._irregularPreview = null;
+    this.redraw();
+  };
 
   _onClick = (e) => {
     if (!this.active) return;
@@ -405,6 +596,27 @@ export class CanvasOverlay {
     if (this.tool === 'area') {
       if (!this._barrierState) return;
       this._fillWorker.postMessage({ type: 'commit', seedX: x, seedY: y, ...this._barrierState });
+      return;
+    }
+
+    if (this.tool === 'irregular') {
+      if (this._pendingPolygonPoints.length === 0) {
+        this._pendingPolygonPoints = [{ x, y }];
+        this._irregularPreview = null;
+        this.redraw();
+        return;
+      }
+
+      const firstPoint = this._pendingPolygonPoints[0];
+      const closeDistance = Math.hypot(x - firstPoint.x, y - firstPoint.y);
+      if (this._pendingPolygonPoints.length >= 3 && closeDistance <= 10) {
+        this._finalizeIrregularPolygon();
+        return;
+      }
+
+      this._pendingPolygonPoints.push({ x, y });
+      this._irregularPreview = null;
+      this.redraw();
       return;
     }
 
@@ -425,33 +637,45 @@ export class CanvasOverlay {
 
     const measurements = this.store.listMeasurements(this.currentPage) || [];
     if (measurements.length) {
-      let nearestMeasurement = null;
-      let nearestMeasurementDist = Infinity;
-      let nearestMeasurementSeg = null;
+      let nearestLineMeasurement = null;
+      let nearestLineMeasurementDist = Infinity;
+      let nearestAreaMeasurement = null;
+      let nearestAreaMeasurementDist = Infinity;
 
       for (const m of measurements) {
-        if (!m.pts) continue;
+        if (!m.pts || !m.pts.length) continue;
+
+        const isAreaMeasurement = m.area != null || m.areaLabel;
         for (const seg of m.pts) {
           const a = { x: seg.x1 * w, y: seg.y1 * h };
           const b = { x: seg.x2 * w, y: seg.y2 * h };
           const d = pointToSegmentDistance({ x, y }, a, b);
-          if (d < nearestMeasurementDist) {
-            nearestMeasurementDist = d;
-            nearestMeasurement = m;
-            nearestMeasurementSeg = { a, b };
+          if (isAreaMeasurement) {
+            if (d < nearestAreaMeasurementDist) {
+              nearestAreaMeasurementDist = d;
+              nearestAreaMeasurement = m;
+            }
+          } else if (d < nearestLineMeasurementDist) {
+            nearestLineMeasurementDist = d;
+            nearestLineMeasurement = m;
           }
         }
       }
 
-      if (nearestMeasurement && nearestMeasurementDist <= Math.max(10, 10 * (this.zoom || 1))) {
+      const deleteThreshold = Math.max(10, 10 * (this.zoom || 1));
+      const targetMeasurement = nearestLineMeasurement && nearestLineMeasurementDist <= deleteThreshold
+        ? nearestLineMeasurement
+        : (nearestAreaMeasurement && nearestAreaMeasurementDist <= deleteThreshold ? nearestAreaMeasurement : null);
+
+      if (targetMeasurement) {
         if (e.altKey) {
-          this.store.removeMeasurement(this.currentPage, nearestMeasurement.id);
+          this.store.removeMeasurement(this.currentPage, targetMeasurement.id);
           this.onMeasurementsChanged?.();
           toast('Measurement removed', 'info');
           this.redraw();
           return;
         }
-        this._selectedMeasurementId = nearestMeasurement.id;
+        this._selectedMeasurementId = targetMeasurement.id;
         this.redraw();
         return;
       }
@@ -543,90 +767,7 @@ export class CanvasOverlay {
     if (!this.ctx) return;
 
     this.clear();
-
-    const w = this.overlay.width;
-    const h = this.overlay.height;
-
-    // draw polygons (areas)
-    const items = this.store.getPage(this.currentPage) || [];
-    for (const it of items) {
-      const pts = it.points.map(p => ({ x: p.x * w, y: p.y * h }));
-      drawPolygon(this.ctx, pts, true);
-    }
-    if (this.hoverPoly) drawPolygon(this.ctx, this.hoverPoly, false);
-
-    // draw vector lines
-    const lines = this.store.getLines(this.currentPage) || [];
-    for (const ln of lines) {
-      const a = { x: (ln.x1 || ln.x) * w, y: (ln.y1 || ln.y) * h };
-      const b = { x: (ln.x2 || ln.x1) * w, y: (ln.y2 || ln.y1) * h };
-
-      const id = ln.id || ln.__id;
-      const isHover = id && this._hoverLineId === id;
-      const isSel = id && this._selectedLineIds.has(id);
-
-      drawLine(this.ctx, a, b, { hover: isHover, selected: isSel });
-
-      // draw label for selected
-      if (isSel || isHover) {
-        const pxLen = Math.hypot(b.x - a.x, b.y - a.y) || 0;
-        const scale = this.store.getScale(this.currentPage);
-        if (scale && scale.factor) {
-          const inches = (pxLen / (this._pxPerPt || 1)) * scale.factor;
-          const txt = formatInches(inches);
-          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
-        } else {
-          drawLabel(this.ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`);
-        }
-      }
-    }
-
-    // draw saved measurement lines
-    const measurements = this.store.listMeasurements(this.currentPage) || [];
-    for (const m of measurements) {
-      if (!m.pts || !m.pts.length) continue;
-      const isHover = this._hoverMeasurementId === m.id;
-      const isSelected = this._selectedMeasurementId === m.id;
-      for (const seg of m.pts) {
-        const a = { x: seg.x1 * w, y: seg.y1 * h };
-        const b = { x: seg.x2 * w, y: seg.y2 * h };
-        drawMeasurementLine(this.ctx, a, b, { hover: isHover, selected: isSelected });
-      }
-      const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
-      const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
-      const labelText = m.label || formatInches(m.inches || 0);
-      drawLabel(this.ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText);
-    }
-
-    // draw measure mode hint
-    if (this.tool === 'measure' && this.active && lines.length > 0) {
-      const hasScale = this.store.getScale(this.currentPage)?.factor;
-      const hint = hasScale 
-        ? 'Click a line to measure'
-        : 'Click a line to calibrate scale';
-      drawHint(this.ctx, 10, 30, hint);
-    }
-    // draw measure preview if user is dragging
-    if (this._measurePreview) {
-      const p = this._measurePreview;
-      if (this.tool === 'measure') {
-        drawPreviewLine(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
-        // show pixel length while dragging
-        const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
-        const scale = this.store.getScale(this.currentPage);
-        const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
-        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, labelTxt);
-      }
-      if (this.tool === 'rect') {
-        drawPreviewRect(this.ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
-        const pxW = Math.abs(p.x2 - p.x1);
-        const pxH = Math.abs(p.y2 - p.y1);
-        const pxArea = pxW * pxH;
-        const scale = this.store.getScale(this.currentPage);
-        const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
-        drawLabel(this.ctx, (p.x1 + p.x2)/2, (p.y1 + p.y2)/2 - 16, `${areaScaled.toFixed(2)} sq`);
-      }
-    }
+    this.renderToContext(this.ctx, { width: this.overlay.width, height: this.overlay.height });
   }
 }
 
@@ -689,6 +830,11 @@ function calculatePolygonArea(points) {
   return Math.abs(area / 2);
 }
 
+function calculateFilledAreaPixels(points) {
+  if (!points || points.length < 3) return 0;
+  return calculatePolygonArea(points);
+}
+
 function calculatePerimeter(points) {
   let total = 0;
 
@@ -710,11 +856,14 @@ function toPagePoints(lengthPx, pxPerPt) {
 }
 
 function applyScale(areaPx, pxPerPt, scaleFactor = null) {
-  const pageAreaPoints = (areaPx / ((Number(pxPerPt) || 1) * (Number(pxPerPt) || 1)));
+  const pxPerPtValue = Number(pxPerPt);
+  if (!Number.isFinite(pxPerPtValue) || pxPerPtValue <= 0) return 0;
+  const pageAreaPoints = areaPx / (pxPerPtValue * pxPerPtValue);
   if (scaleFactor && Number(scaleFactor) > 0) {
-    return pageAreaPoints * Number(scaleFactor) * Number(scaleFactor);
+    const scaleValue = Number(scaleFactor);
+    return pageAreaPoints * scaleValue * scaleValue;
   }
-  return pageAreaPoints;
+  return pageAreaPoints / (72 * 72);
 }
 
 function applyScaleLength(lengthPx, pxPerPt, scaleFactor = null) {
@@ -806,6 +955,71 @@ function drawPreviewRect(ctx, a, b) {
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 3;
   ctx.setLineDash([6,6]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function buildSmoothedPathPoints(points, preview = null, samples = 24) {
+  if (!points || !points.length) return [];
+
+  const anchors = preview ? [...points, { x: preview.x2, y: preview.y2 }] : [...points];
+  if (anchors.length < 2) return anchors.map(point => ({ x: point.x, y: point.y }));
+
+  const output = [];
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const p0 = i > 0 ? anchors[i - 1] : anchors[0];
+    const p1 = anchors[i];
+    const p2 = anchors[i + 1];
+    const p3 = i + 2 < anchors.length ? anchors[i + 2] : anchors[i + 1];
+
+    for (let step = 0; step <= samples; step++) {
+      const t = step / samples;
+      const t2 = t * t;
+      const t3 = t2 * t;
+
+      const x = 0.5 * (
+        (2 * p1.x) +
+        (-p0.x + p2.x) * t +
+        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+      );
+      const y = 0.5 * (
+        (2 * p1.y) +
+        (-p0.y + p2.y) * t +
+        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+      );
+
+      const last = output[output.length - 1];
+      if (!last || Math.hypot(last.x - x, last.y - y) > 0.001) {
+        output.push({ x, y });
+      }
+    }
+  }
+
+  if (output.length > 1) {
+    const first = output[0];
+    const last = output[output.length - 1];
+    if (Math.hypot(first.x - last.x, first.y - last.y) < 0.001) {
+      output.pop();
+    }
+  }
+
+  return output;
+}
+
+function drawIrregularPath(ctx, points, preview) {
+  const pathPoints = buildSmoothedPathPoints(points, preview, 24);
+  if (!pathPoints.length) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+  for (let i = 1; i < pathPoints.length; i++) {
+    ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
+  }
+  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.restore();
 }
