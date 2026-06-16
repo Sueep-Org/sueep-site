@@ -17,6 +17,8 @@ import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { UnitScopeCard } from "./UnitScopeCard";
+import { ProjectSOVSection } from "./ProjectSOVSection";
+import type { SOVItem } from "./ProjectSOVSection";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +29,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
+  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER";
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -81,8 +84,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       orderBy: [{ date: "desc" }, { createdAt: "asc" }],
     }),
     prisma.projectWorkOrderRecord.findUnique({ where: { projectId: id } }),
+    prisma.projectSOV.findUnique({
+      where: { projectId: id },
+      include: { items: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
+    }),
   ]);
   if (!project) notFound();
+
+  const sovItems: SOVItem[] = (sov?.items ?? []).map((item) => ({
+    id: item.id,
+    order: item.order,
+    description: item.description,
+    scheduledValueCents: item.scheduledValueCents,
+    completed: item.completed,
+    billingStatus: item.billingStatus,
+  }));
 
   function getDescLine(desc: string | null, label: string) {
     const prefix = `${label}:`;
@@ -345,6 +361,16 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   lastName: e.lastName,
                   email: e.email ?? null,
                 }))}
+              />
+            ),
+          },
+          {
+            label: "SOVs",
+            content: (
+              <ProjectSOVSection
+                projectId={project.id}
+                initialItems={sovItems}
+                canEdit={canEditSOV}
               />
             ),
           },

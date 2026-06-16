@@ -71,6 +71,7 @@ model Project {
   unitTurnoverChecklist UnitTurnoverChecklist?
   workOrderRecord ProjectWorkOrderRecord?
   qualityChecks QualityCheck[]
+  sov ProjectSOV?
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -834,6 +835,31 @@ model UnitChecklistPhoto {
 model AppSetting {
   key   String @id
   value String
+}
+
+model ProjectSOV {
+  id        String         @id @default(cuid())
+  projectId String         @unique
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items     ProjectSOVItem[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model ProjectSOVItem {
+  id                  String     @id @default(cuid())
+  sovId               String
+  sov                 ProjectSOV @relation(fields: [sovId], references: [id], onDelete: Cascade)
+  order               Int        @default(0)
+  description         String
+  scheduledValueCents Int        @default(0)
+  completed           Boolean    @default(false)
+  /// NOT_BILLED | BILLED | PAID
+  billingStatus       String     @default("NOT_BILLED")
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([sovId])
 }
 
 model ChangeOrderMaterialEntry {
