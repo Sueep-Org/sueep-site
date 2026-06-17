@@ -17,6 +17,7 @@ import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { UnitScopeCard } from "./UnitScopeCard";
+import { UnitScopeEditor } from "./UnitScopeEditor";
 import { ProjectSOVSection } from "./ProjectSOVSection";
 import type { SOVItem } from "./ProjectSOVSection";
 import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
@@ -51,6 +52,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         building: { select: { id: true, name: true, pricingPackage: true } },
         turnoverRequest: {
           select: {
+            id: true,
             unitNumber: true,
             bedrooms: true,
             bathrooms: true,
@@ -59,6 +61,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             touchUpPaint: true,
             carpetCleaning: true,
             materialsAdditional: true,
+            priceCents: true,
           },
         },
       },
@@ -244,6 +247,28 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </>
       ),
     },
+    ...(isTurnover && project.turnoverRequest
+      ? [
+          {
+            label: "Layout",
+            content: (
+              <UnitScopeEditor
+                turnoverRequestId={project.turnoverRequest.id}
+                unitNumber={project.turnoverRequest.unitNumber}
+                buildingName={project.building?.name ?? ""}
+                pricingPackage={project.building?.pricingPackage ?? null}
+                bedrooms={project.turnoverRequest.bedrooms}
+                bathrooms={project.turnoverRequest.bathrooms}
+                fullClean={project.turnoverRequest.fullClean}
+                fullPaint={project.turnoverRequest.fullPaint}
+                touchUpPaint={project.turnoverRequest.touchUpPaint}
+                carpetCleaning={project.turnoverRequest.carpetCleaning}
+                materialsAdditional={project.turnoverRequest.materialsAdditional}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       label: "Setup",
       content: (
