@@ -557,21 +557,31 @@ export function ProjectLaborSection({
             </label>
             <input id="l-hours" name="hours" type="number" min={0.25} step={0.25} required className={input} />
           </div>
-          <div>
-            <label className={label} htmlFor="l-rate">
-              Hourly rate (USD) *
-            </label>
-            <input
-              id="l-rate"
-              name="hourlyRate"
-              type="text"
-              required
-              className={input}
-              placeholder="28.84"
-              value={hourlyRateStr}
-              onChange={(ev) => setHourlyRateStr(ev.target.value)}
-            />
-          </div>
+          {showFinancials ? (
+            <div>
+              <label className={label} htmlFor="l-rate">
+                Hourly rate (USD) *
+              </label>
+              <input
+                id="l-rate"
+                name="hourlyRate"
+                type="text"
+                required
+                className={input}
+                placeholder="28.84"
+                value={hourlyRateStr}
+                onChange={(ev) => setHourlyRateStr(ev.target.value)}
+              />
+            </div>
+          ) : (
+            <div>
+              <input type="hidden" name="hourlyRate" value={hourlyRateStr} />
+              <p className={label}>Hourly rate</p>
+              <p className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400 italic">
+                Pulled from employee profile
+              </p>
+            </div>
+          )}
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={label}>
               {sovItems.length > 0 ? "SOV Item / Task" : "Task"}
