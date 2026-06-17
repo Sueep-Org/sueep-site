@@ -75,6 +75,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.hubspotPipelineId !== undefined) {
     data.hubspotPipelineId = body.hubspotPipelineId ? String(body.hubspotPipelineId).trim() : null;
   }
+  if (body.turnoverRequestId !== undefined) {
+    data.turnoverRequestId = body.turnoverRequestId ? String(body.turnoverRequestId).trim() : null;
+  }
   if (body.status !== undefined) {
     const s = String(body.status).toUpperCase();
     if (STATUSES.includes(s as (typeof STATUSES)[number])) data.status = s;

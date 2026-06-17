@@ -7,7 +7,8 @@ import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 type Props = {
   projectId: string;
-  turnoverRequestId: string;
+  buildingId: string | null;
+  turnoverRequestId: string | null;
   unitNumber: string | null;
   buildingName: string;
   pricingPackage: unknown;
@@ -22,7 +23,8 @@ type Props = {
 
 export function UnitScopeEditor({
   projectId,
-  turnoverRequestId,
+  buildingId,
+  turnoverRequestId: initialTurnoverRequestId,
   unitNumber,
   buildingName,
   pricingPackage,
@@ -35,6 +37,7 @@ export function UnitScopeEditor({
   materialsAdditional,
 }: Props) {
   const router = useRouter();
+  const [turnoverRequestId, setTurnoverRequestId] = useState(initialTurnoverRequestId);
   const [unitNumberVal, setUnitNumberVal] = useState(unitNumber ?? "");
   const [bedroomsStr, setBedroomsStr] = useState(bedrooms?.toString() ?? "");
   const [bathroomsStr, setBathroomsStr] = useState(bathrooms?.toString() ?? "");
@@ -53,33 +56,59 @@ export function UnitScopeEditor({
     setSuccess(false);
     try {
       const newUnitNumber = unitNumberVal.trim() || null;
-      const [trRes, projRes] = await Promise.all([
-        fetch(`/api/erp/turnover-requests/${turnoverRequestId}`, {
+      const layoutPayload = {
+        unitNumber: newUnitNumber,
+        bedrooms: bedroomsStr !== "" ? Number(bedroomsStr) : null,
+        bathrooms: bathroomsStr !== "" ? Number(bathroomsStr) : null,
+        fullClean: fullCleanVal,
+        fullPaint: fullPaintVal,
+        touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
+        carpetCleaning: carpetCleaningVal,
+        materialsAdditional: materialsAdditionalVal,
+      };
+      const newJobTitle = `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`;
+
+      let trId = turnoverRequestId;
+
+      if (!trId) {
+        // No TurnoverRequest yet — create one and link it to the project
+        if (!buildingId) { setError("No building linked to this project."); return; }
+        const createRes = await fetch("/api/erp/turnover-requests", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ buildingId, ...layoutPayload }),
+        });
+        const created = (await createRes.json()) as { id?: string; error?: string };
+        if (!createRes.ok) { setError(created.error ?? "Failed to create layout record"); return; }
+        trId = created.id!;
+        setTurnoverRequestId(trId);
+
+        // Link the new TurnoverRequest to the project
+        const linkRes = await fetch(`/api/erp/projects/${projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            unitNumber: newUnitNumber,
-            bedrooms: bedroomsStr !== "" ? Number(bedroomsStr) : null,
-            bathrooms: bathroomsStr !== "" ? Number(bathroomsStr) : null,
-            fullClean: fullCleanVal,
-            fullPaint: fullPaintVal,
-            touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
-            carpetCleaning: carpetCleaningVal,
-            materialsAdditional: materialsAdditionalVal,
+          body: JSON.stringify({ turnoverRequestId: trId, jobTitle: newJobTitle }),
+        });
+        if (!linkRes.ok) { setError("Layout created but failed to link to project"); return; }
+      } else {
+        const [trRes, projRes] = await Promise.all([
+          fetch(`/api/erp/turnover-requests/${trId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(layoutPayload),
           }),
-        }),
-        fetch(`/api/erp/projects/${projectId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            jobTitle: `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`,
+          fetch(`/api/erp/projects/${projectId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ jobTitle: newJobTitle }),
           }),
-        }),
-      ]);
-      const trData = (await trRes.json().catch(() => ({}))) as { error?: string };
-      const projData = (await projRes.json().catch(() => ({}))) as { error?: string };
-      if (!trRes.ok) { setError(trData.error ?? "Save failed"); return; }
-      if (!projRes.ok) { setError(projData.error ?? "Save failed"); return; }
+        ]);
+        const trData = (await trRes.json().catch(() => ({}))) as { error?: string };
+        const projData = (await projRes.json().catch(() => ({}))) as { error?: string };
+        if (!trRes.ok) { setError(trData.error ?? "Save failed"); return; }
+        if (!projRes.ok) { setError(projData.error ?? "Save failed"); return; }
+      }
+
       setSuccess(true);
       router.refresh();
     } catch {
@@ -91,11 +120,9 @@ export function UnitScopeEditor({
 
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Unit scope{unitNumber ? ` — Unit ${unitNumber}` : ""}
-        </h2>
-      </div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        Unit scope{unitNumberVal ? ` — ${formatUnitDisplay(unitNumberVal)}` : ""}
+      </h2>
 
       <div>
         <label className="block text-xs font-medium text-gray-600" htmlFor="use-unit-number">

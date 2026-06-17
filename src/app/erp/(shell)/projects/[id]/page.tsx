@@ -247,24 +247,25 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </>
       ),
     },
-    ...(isTurnover && project.turnoverRequest
+    ...(isTurnover || project.turnoverRequest
       ? [
           {
             label: "Layout",
             content: (
               <UnitScopeEditor
                 projectId={project.id}
-                turnoverRequestId={project.turnoverRequest.id}
-                unitNumber={project.turnoverRequest.unitNumber}
+                buildingId={project.building?.id ?? null}
+                turnoverRequestId={project.turnoverRequest?.id ?? null}
+                unitNumber={project.turnoverRequest?.unitNumber ?? project.jobTitle.replace(new RegExp(`^${(project.building?.name ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+-\\s+`), "").trim()}
                 buildingName={project.building?.name ?? ""}
                 pricingPackage={project.building?.pricingPackage ?? null}
-                bedrooms={project.turnoverRequest.bedrooms}
-                bathrooms={project.turnoverRequest.bathrooms}
-                fullClean={project.turnoverRequest.fullClean}
-                fullPaint={project.turnoverRequest.fullPaint}
-                touchUpPaint={project.turnoverRequest.touchUpPaint}
-                carpetCleaning={project.turnoverRequest.carpetCleaning}
-                materialsAdditional={project.turnoverRequest.materialsAdditional}
+                bedrooms={project.turnoverRequest?.bedrooms ?? null}
+                bathrooms={project.turnoverRequest?.bathrooms ?? null}
+                fullClean={project.turnoverRequest?.fullClean ?? false}
+                fullPaint={project.turnoverRequest?.fullPaint ?? false}
+                touchUpPaint={project.turnoverRequest?.touchUpPaint ?? null}
+                carpetCleaning={project.turnoverRequest?.carpetCleaning ?? false}
+                materialsAdditional={project.turnoverRequest?.materialsAdditional ?? false}
               />
             ),
           },
