@@ -145,6 +145,8 @@ model TurnoverRequest {
   completedAt DateTime?
   invoiceGeneratedAt DateTime?
   invoiceUrl String?
+  /// NOT_BILLED | BILLED | PAID
+  billingStatus String @default("NOT_BILLED")
 
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)

@@ -32,9 +32,13 @@ const projectGroupItems: NavItem[] = [
   { href: "/erp/schedule", label: "Schedule", roles: ALL },
 ];
 
+const billingGroupItems: NavItem[] = [
+  { href: "/erp/billing", label: "Project Billing", roles: PM_UP },
+  { href: "/erp/payroll", label: "Payroll Export", roles: PM_UP },
+];
+
 const employmentGroupItems: NavItem[] = [
   { href: "/erp/employees", label: "Employees", roles: PM_UP },
-  { href: "/erp/payroll", label: "Payroll Export", roles: PM_UP },
   { href: "/erp/candidates", label: "Candidates", roles: PM_UP },
   { href: "/erp/contractors", label: "Contractor Verification", roles: PM_UP },
 ];
@@ -124,6 +128,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
 
   const visibleTopNav = topNav.filter((i) => allowed(i, role));
   const visibleBottomNav = bottomNav.filter((i) => allowed(i, role));
+  const hasBillingGroup = billingGroupItems.some((i) => allowed(i, role));
   const hasEmploymentGroup = employmentGroupItems.some((i) => allowed(i, role));
 
   function NavContent() {
@@ -134,6 +139,8 @@ export function ErpNav({ role }: { role: ErpRole }) {
         ))}
         <div className="my-1 border-t border-gray-100" />
         <NavGroup label="Project Information" items={projectGroupItems} pathname={pathname} role={role} />
+        {hasBillingGroup && <div className="my-1 border-t border-gray-100" />}
+        {hasBillingGroup && <NavGroup label="Billing" items={billingGroupItems} pathname={pathname} role={role} />}
         {hasEmploymentGroup && <div className="my-1 border-t border-gray-100" />}
         {hasEmploymentGroup && <NavGroup label="Employment" items={employmentGroupItems} pathname={pathname} role={role} />}
         {visibleBottomNav.length > 0 && <div className="my-1 border-t border-gray-100" />}

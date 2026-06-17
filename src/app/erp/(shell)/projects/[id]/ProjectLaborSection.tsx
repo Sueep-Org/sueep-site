@@ -235,6 +235,7 @@ export function ProjectLaborSection({
   sovItems = [],
   canEdit = true,
   showFinancials = true,
+  isJanitorialUnit = false,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -242,6 +243,7 @@ export function ProjectLaborSection({
   sovItems?: SOVItemOption[];
   canEdit?: boolean;
   showFinancials?: boolean;
+  isJanitorialUnit?: boolean;
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
@@ -256,6 +258,7 @@ export function ProjectLaborSection({
   const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
   const [sovPick, setSovPick] = useState<string>("");
   const [sovMarkComplete, setSovMarkComplete] = useState(false);
+  const [unitCompleted, setUnitCompleted] = useState(false);
   const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
   );
@@ -458,6 +461,15 @@ export function ProjectLaborSection({
       if (sovMarkComplete && sovItemId) {
         setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: true }));
       }
+      if (unitCompleted) {
+        const today = new Date();
+        const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        await fetch(`/api/erp/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "COMPLETE", projectEndDate: todayISO }),
+        }).catch(() => {});
+      }
       setEntries((prev) => [row, ...prev]);
       form.reset();
       setEmployeePick("");
@@ -465,6 +477,7 @@ export function ProjectLaborSection({
       setRoleStr("");
       setSovPick("");
       setSovMarkComplete(false);
+      setUnitCompleted(false);
       router.refresh();
     } catch {
       setError("Network error");
@@ -586,6 +599,19 @@ export function ProjectLaborSection({
             )}
           </div>
         </div>
+        {isJanitorialUnit && (
+          <div className="mt-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={unitCompleted}
+                onChange={(e) => setUnitCompleted(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+              />
+              Mark unit as completed
+            </label>
+          </div>
+        )}
         {error ? (
           <p className="mt-3 text-sm text-red-400" role="alert">
             {error}

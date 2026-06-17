@@ -59,7 +59,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create and manage a turnover or regular cleaning request.",
     order: 1,
     component: CreatingATurnoverRequest,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "sops/onboarding-new-employee",
@@ -86,7 +86,7 @@ export const registry: ArticleEntry[] = [
     description: "Overview of the projects table, project details page, and editing projects.",
     order: 3,
     component: ProjectsOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"],
   },
   {
     slug: "workers/labor-logs",
@@ -113,7 +113,7 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 5,
     component: MaterialsLog,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "workers/adding-contractors",
@@ -131,6 +131,6 @@ export const registry: ArticleEntry[] = [
     description: "How to log contractors on projects much like you add laborers",
     order: 4,
     component: LoggingContractors,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
 ];

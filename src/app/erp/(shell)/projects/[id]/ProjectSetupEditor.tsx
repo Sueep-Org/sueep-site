@@ -85,9 +85,11 @@ export function ProjectSetupEditor({
     tomorrow.setDate(tomorrow.getDate() + 1);
     const current = startDate ? new Date(startDate) : null;
 
-    if (next === "UPCOMING") {
+    if (next === "COMPLETED") {
+      if (!endDate) setEndDate(toIsoDate(today));
+    } else if (next === "UPCOMING") {
       if (!current || current.getTime() <= today.getTime()) setStartDate(toIsoDate(tomorrow));
-    } else if (next === "ACTIVE") {
+    } else {
       if (!current) setStartDate(toIsoDate(today));
       else if (current.getTime() > today.getTime()) setStartDate(toIsoDate(today));
     }
@@ -252,7 +254,7 @@ export function ProjectSetupEditor({
             />
           </div>
           <div>
-            <label className={label} htmlFor="ps-end">Target end</label>
+            <label className={label} htmlFor="ps-end">End date</label>
             <input
               id="ps-end"
               type="date"

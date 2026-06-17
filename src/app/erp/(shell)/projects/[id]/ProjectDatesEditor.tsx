@@ -57,7 +57,7 @@ export function ProjectDatesEditor({ projectId, projectDateIso, projectEndDateIs
     <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule (calendar & Gantt)</h2>
       <p className="mt-1 text-[11px] text-gray-400">
-        Start and target end dates control how this job appears on the Schedule page.
+        Start and end dates control how this job appears on the Schedule page. End date is also used as the completion date for billing.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
@@ -74,7 +74,7 @@ export function ProjectDatesEditor({ projectId, projectDateIso, projectEndDateIs
         </div>
         <div>
           <label className={label} htmlFor="edit-projectEndDate">
-            Target end
+            End date
           </label>
           <input
             id="edit-projectEndDate"

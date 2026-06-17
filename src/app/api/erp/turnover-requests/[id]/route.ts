@@ -87,6 +87,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
+  if (body.billingStatus !== undefined) {
+    const VALID_BILLING = ["NOT_BILLED", "BILLED", "PAID"];
+    const val = String(body.billingStatus).toUpperCase();
+    if (VALID_BILLING.includes(val)) data.billingStatus = val;
+  }
+
   let pricingBuildingName = existing.building.name;
   let pricingPackage: unknown = existing.building.pricingPackage;
   if (typeof data.buildingId === "string" && data.buildingId !== existing.buildingId) {
