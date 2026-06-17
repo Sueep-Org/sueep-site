@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverPricingPackageQuestions } from "@/app/erp/(shell)/turnover-requests/TurnoverPricingPackageQuestions";
+import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 type Props = {
+  projectId: string;
   turnoverRequestId: string;
   unitNumber: string | null;
   buildingName: string;
@@ -19,6 +21,7 @@ type Props = {
 };
 
 export function UnitScopeEditor({
+  projectId,
   turnoverRequestId,
   unitNumber,
   buildingName,
@@ -32,6 +35,7 @@ export function UnitScopeEditor({
   materialsAdditional,
 }: Props) {
   const router = useRouter();
+  const [unitNumberVal, setUnitNumberVal] = useState(unitNumber ?? "");
   const [bedroomsStr, setBedroomsStr] = useState(bedrooms?.toString() ?? "");
   const [bathroomsStr, setBathroomsStr] = useState(bathrooms?.toString() ?? "");
   const [fullCleanVal, setFullClean] = useState(fullClean);
@@ -48,24 +52,34 @@ export function UnitScopeEditor({
     setError("");
     setSuccess(false);
     try {
-      const res = await fetch(`/api/erp/turnover-requests/${turnoverRequestId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          bedrooms: bedroomsStr !== "" ? Number(bedroomsStr) : null,
-          bathrooms: bathroomsStr !== "" ? Number(bathroomsStr) : null,
-          fullClean: fullCleanVal,
-          fullPaint: fullPaintVal,
-          touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
-          carpetCleaning: carpetCleaningVal,
-          materialsAdditional: materialsAdditionalVal,
+      const newUnitNumber = unitNumberVal.trim() || null;
+      const [trRes, projRes] = await Promise.all([
+        fetch(`/api/erp/turnover-requests/${turnoverRequestId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            unitNumber: newUnitNumber,
+            bedrooms: bedroomsStr !== "" ? Number(bedroomsStr) : null,
+            bathrooms: bathroomsStr !== "" ? Number(bathroomsStr) : null,
+            fullClean: fullCleanVal,
+            fullPaint: fullPaintVal,
+            touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
+            carpetCleaning: carpetCleaningVal,
+            materialsAdditional: materialsAdditionalVal,
+          }),
         }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Save failed");
-        return;
-      }
+        fetch(`/api/erp/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            jobTitle: `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`,
+          }),
+        }),
+      ]);
+      const trData = (await trRes.json().catch(() => ({}))) as { error?: string };
+      const projData = (await projRes.json().catch(() => ({}))) as { error?: string };
+      if (!trRes.ok) { setError(trData.error ?? "Save failed"); return; }
+      if (!projRes.ok) { setError(projData.error ?? "Save failed"); return; }
       setSuccess(true);
       router.refresh();
     } catch {
@@ -81,6 +95,21 @@ export function UnitScopeEditor({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           Unit scope{unitNumber ? ` — Unit ${unitNumber}` : ""}
         </h2>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-gray-600" htmlFor="use-unit-number">
+          Unit identifier
+        </label>
+        <input
+          id="use-unit-number"
+          type="text"
+          value={unitNumberVal}
+          onChange={(e) => setUnitNumberVal(e.target.value)}
+          placeholder="e.g. Unit 1, 2000-2037: C3"
+          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        />
+        <p className="mt-1 text-[11px] text-gray-400">Purely numeric entries (e.g. "1") will display as "Unit 1" automatically.</p>
       </div>
 
       <TurnoverPricingPackageQuestions

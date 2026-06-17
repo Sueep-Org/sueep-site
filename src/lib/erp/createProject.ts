@@ -3,6 +3,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { createTurnoverRequestsFromPayload } from "@/lib/erp/createTurnoverRequests";
 import { createHubSpotDeal } from "@/lib/hubspot/createDeal";
+import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -44,7 +45,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
         prisma.project.create({
           data: {
             segment,
-            jobTitle: request.bedrooms === null ? `${result.building.name} - ${request.unitNumber}` : `${result.building.name} - Unit ${request.unitNumber}`,
+            jobTitle: `${result.building.name} - ${formatUnitDisplay(request.unitNumber)}`,
             buildingId: result.building.id,
             turnoverRequestId: request.id,
             description: `Property: ${result.building.name}\nUnits: ${request.unitNumber}${request.bedrooms === null ? " (Common Area)" : ""}`,

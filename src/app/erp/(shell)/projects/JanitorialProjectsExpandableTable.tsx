@@ -1,6 +1,7 @@
 "use client";
 
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
+import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
@@ -14,7 +15,7 @@ function getDetailLine(description: string | null, label: string) {
 }
 
 function janitorialBuildingTitle(row: ProjectTableRow) {
-  return row.buildingName || getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
+  return row.buildingName || getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+/)[0]?.trim() || row.jobTitle;
 }
 
 function janitorialBuildingHref(row: ProjectTableRow) {
@@ -27,7 +28,7 @@ function unitsFromDescription(row: ProjectTableRow) {
 
   return units
     .split(/\s+\|\s+/)
-    .map((unit) => unit.match(/^\s*([^(:|-]+)/)?.[1]?.trim() || "")
+    .map((unit) => unit.match(/^\s*([^(|]+)/)?.[1]?.trim() || "")
     .filter(Boolean)
     .join(", ");
 }
@@ -44,7 +45,7 @@ function janitorialRowTitle(row: ProjectTableRow) {
   const units = unitsFromDescription(row);
   if (units) {
     if (rawUnits && rawUnits.toLowerCase().includes("(common area")) return units;
-    return `Unit ${units}`;
+    return formatUnitDisplay(units);
   }
 
   return unitTitleFromJobTitle(row) || "1 unit";
@@ -69,7 +70,7 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
       return {
         ...row,
         id: `${row.id}-unit-${index}`,
-        jobTitle: `${row.jobTitle} - ${isCommonArea ? unit : `Unit ${unit}`}`,
+        jobTitle: `${row.jobTitle} - ${unit}`,
         description: `Units: ${unit}${isCommonArea ? " (Common Area)" : ""}\n${row.description || ""}`,
       };
     });

@@ -253,6 +253,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             label: "Layout",
             content: (
               <UnitScopeEditor
+                projectId={project.id}
                 turnoverRequestId={project.turnoverRequest.id}
                 unitNumber={project.turnoverRequest.unitNumber}
                 buildingName={project.building?.name ?? ""}

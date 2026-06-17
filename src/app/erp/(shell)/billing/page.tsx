@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
@@ -251,7 +252,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
       const bedbath = [unit.bedrooms != null ? `${unit.bedrooms}bd` : null, unit.bathrooms != null ? `${unit.bathrooms}ba` : null].filter(Boolean).join("/") || "—";
       dataRows.push([
         escape(building.buildingName),
-        escape(unit.unitNumber ?? unit.jobTitle),
+        escape(formatUnitDisplay(unit.unitNumber) ?? unit.jobTitle),
         escape(bedbath),
         escape(unit.completedAt.slice(0, 10)),
         escape((unit.contractCents / 100).toFixed(2)),
@@ -368,7 +369,7 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
                       </td>
                       <td className="px-4 py-3 text-gray-700">
                         <Link href={`/erp/projects/${unit.projectId}`} className="hover:text-pink-600 hover:underline">
-                          {unit.unitNumber ?? unit.jobTitle}
+                          {formatUnitDisplay(unit.unitNumber) || unit.jobTitle}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
