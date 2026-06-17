@@ -7,6 +7,7 @@ export async function sendEmail(options: {
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -21,6 +22,10 @@ export async function sendEmail(options: {
     subject: options.subject,
     html: options.html,
     reply_to: options.replyTo,
+    attachments: options.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    })),
   });
   if (error) {
     throw new Error(`Resend error: ${error.message}`);

@@ -62,6 +62,7 @@ model Project {
   materialEntries MaterialEntry[]
   distanceEntries DistanceEntry[]
   workOrders ProjectWorkOrder[]
+  workOrderAttachments ProjectWorkOrderAttachment[]
   images ProjectImage[]
   changeOrders ProjectChangeOrder[]
   contacts ProjectContact[]
@@ -220,10 +221,24 @@ model ProjectWorkOrder {
   specifications String?
   supportInfo   String?
   photoUrls     Json?
-
   @@index([projectId, createdAt])
   @@index([priority])
   @@index([dueDate])
+}
+
+model ProjectWorkOrderAttachment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  @@index([projectId])
 }
 
 model ProjectChecklistItem {

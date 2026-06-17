@@ -19,6 +19,7 @@ import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/Buildi
 import { UnitScopeCard } from "./UnitScopeCard";
 import { ProjectSOVSection } from "./ProjectSOVSection";
 import type { SOVItem } from "./ProjectSOVSection";
+import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
-  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER";
+  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov] = await Promise.all([
     prisma.project.findUnique({
@@ -216,6 +217,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               lastSentAt: workOrderRecord.lastSentAt ? workOrderRecord.lastSentAt.toISOString() : null,
             } : null}
           />
+          <WorkOrderAttachmentsSection projectId={project.id} />
+          <div className="mt-4" />
           {isTurnover && (propertyManager || sueepPm) && (
             <div className="mb-4 flex gap-6 rounded-md border border-gray-200 bg-gray-50 p-3">
               {propertyManager && (

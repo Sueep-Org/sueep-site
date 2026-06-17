@@ -59,11 +59,22 @@ export async function POST(req: Request, ctx: Ctx) {
     projectUrl,
   });
 
+  const attachmentRows = await prisma.projectWorkOrderAttachment.findMany({
+    where: { projectId: id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const emailAttachments = attachmentRows.map((a) => ({
+    filename: a.filename,
+    content: Buffer.from(a.data),
+  }));
+
   try {
     await sendEmail({
       to: employee.email,
       subject: `Work Order: ${projectName}`,
       html,
+      attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });
   } catch (e) {
     console.error("send-work-order-email", e);
