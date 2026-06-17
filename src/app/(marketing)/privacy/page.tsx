@@ -90,9 +90,13 @@ export default function PrivacyPage() {
           <div>
             <h3 className="text-lg font-semibold text-gray-900">5. Opt-In Method</h3>
             <p className="mt-2">
-              Customers may opt in verbally during phone conversations with Sueep representatives. During the
-              conversation, customers are informed that message frequency may vary, message and data rates may apply,
-              they may reply STOP to opt out, and HELP for assistance.
+              They fill out our website form on our contact page. By checking this box, I consent to receive SMS from
+              Sueep LLC related to Marketing and General follow-up SMS. Reply STOP to opt-out; Reply HELP for support;
+              Message &amp; data rates may apply; Messaging frequency may vary. Visit{" "}
+              <a href="https://sueep.com/privacy" className="text-[#E73C6E] font-medium hover:underline">
+                https://sueep.com/privacy
+              </a>{" "}
+              to see our privacy policy.
             </p>
           </div>
 
@@ -128,12 +132,8 @@ export default function PrivacyPage() {
                 For assistance, text &quot;HELP&quot; or visit our{" "}
                 <Link href="/privacy" className="text-[#E73C6E] font-medium hover:underline">
                   Privacy Policy
-                </Link>{" "}
-                and{" "}
-                <Link href="/terms" className="text-[#E73C6E] font-medium hover:underline">
-                  Terms and Conditions
-                </Link>{" "}
-                pages.
+                </Link>
+                .
               </li>
               <li>Message frequency may vary.</li>
             </ul>
@@ -162,9 +162,6 @@ export default function PrivacyPage() {
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-white">
               Privacy
-            </Link>
-            <Link href="/terms" className="hover:text-white">
-              Terms
             </Link>
             <Link href="/#contact" className="hover:text-white">
               Contact
