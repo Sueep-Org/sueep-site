@@ -73,6 +73,33 @@ export async function uploadChecklistSectionPhoto(
   return getDownloadURL(task.snapshot.ref);
 }
 
+export async function uploadSafetyCheckPhoto(
+  safetyCheckId: string,
+  slot: string,
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const app = getFirebaseApp();
+  const storage = getStorage(app);
+
+  const safeSlot = slot.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `safety-checks/${safetyCheckId}/${safeSlot}/${Date.now()}-${safeName}`;
+  const storageRef = ref(storage, path);
+
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(storageRef, file);
+    task.on(
+      "state_changed",
+      (snap) => {
+        if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+      },
+      reject,
+      () => { getDownloadURL(task.snapshot.ref).then(resolve).catch(reject); }
+    );
+  });
+}
+
 export async function uploadQualityCheckEvidenceFile(
   qualityCheckKey: string,
   file: File,

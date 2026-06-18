@@ -21,6 +21,7 @@ import { UnitScopeEditor } from "./UnitScopeEditor";
 import { ProjectSOVSection } from "./ProjectSOVSection";
 import type { SOVItem } from "./ProjectSOVSection";
 import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
+import { ProjectSafetySection } from "./ProjectSafetySection";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -92,8 +93,85 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       where: { projectId: id },
       include: { items: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
     }),
+    prisma.dailySafetyCheck.findMany({
+      where: { projectId: id },
+      orderBy: { checkDate: "desc" },
+      include: {
+        workers: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            incidents: {
+              orderBy: { createdAt: "desc" },
+              select: { id: true, status: true, violationCount: true, createdAt: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.erpUser.findMany({
+      where: { role: "SUPERVISOR" },
+      select: { id: true, email: true },
+      orderBy: { email: "asc" },
+    }),
   ]);
   if (!project) notFound();
+
+  // Resolve display names for ERP supervisors from employee records
+  const erpSupervisors = await Promise.all(
+    erpSupervisorUsers.map(async (u) => {
+      const emp = await prisma.employee.findFirst({
+        where: { email: { equals: u.email, mode: "insensitive" } },
+        select: { firstName: true, lastName: true },
+      });
+      const displayName = emp
+        ? `${emp.firstName} ${emp.lastName}`.trim()
+        : u.email.split("@")[0];
+      return { id: u.id, email: u.email, displayName };
+    })
+  );
+
+  // Build serializable array of keys for labor warning badge: "emp:{id}:{date}" or "name:{lower}:{date}"
+  const safetyPassedKeysArr: string[] = [];
+  const safetyCheckRows = safetyChecks.map((check) => {
+    const dateStr = check.checkDate.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    for (const w of check.workers) {
+      if (w.passed) {
+        if (w.employeeId) safetyPassedKeysArr.push(`emp:${w.employeeId}:${dateStr}`);
+        safetyPassedKeysArr.push(`name:${w.workerName.toLowerCase()}:${dateStr}`);
+      }
+    }
+    return {
+      id: check.id,
+      checkDate: check.checkDate.toISOString(),
+      supervisorName: check.supervisorName,
+      hasGroupPhoto: check.groupPhotoData != null,
+      groupPhotoUploadedAt: check.groupPhotoUploadedAt ? check.groupPhotoUploadedAt.toISOString() : null,
+      hasArrivalPhoto: check.siteArrivalPhotoData != null,
+      siteArrivalPhotoUploadedAt: check.siteArrivalPhotoUploadedAt ? check.siteArrivalPhotoUploadedAt.toISOString() : null,
+      approvedForWork: check.approvedForWork,
+      approvedAt: check.approvedAt ? check.approvedAt.toISOString() : null,
+      notes: check.notes,
+      workers: check.workers.map((w) => ({
+        id: w.id,
+        workerName: w.workerName,
+        employeeId: w.employeeId,
+        hasVest: w.hasVest,
+        hasHardHat: w.hasHardHat,
+        hasBoots: w.hasBoots,
+        hasUniform: w.hasUniform,
+        hasPhoto: w.photoData != null,
+        photoUploadedAt: w.photoUploadedAt ? w.photoUploadedAt.toISOString() : null,
+        passed: w.passed,
+        notes: w.notes,
+        incidents: w.incidents.map((inc) => ({
+          id: inc.id,
+          status: inc.status,
+          violationCount: inc.violationCount,
+          createdAt: inc.createdAt.toISOString(),
+        })),
+      })),
+    };
+  });
 
   const sovItems: SOVItem[] = (sov?.items ?? []).map((item) => ({
     id: item.id,
@@ -126,6 +204,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isPostConstruction = cfg?.postConstruction.pipelineId
     ? project.hubspotPipelineId === cfg.postConstruction.pipelineId
     : true;
+
+  const todayDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const hasApprovedCheckToday = isPostConstruction && safetyChecks.some((check) => {
+    const checkStr = check.checkDate.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    return checkStr === todayDateStr && check.approvedForWork;
+  });
   const pipelineOptions = cfg
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
@@ -282,7 +366,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           isManual={isManual}
           pipelineOptions={pipelineOptions}
           supervisor={project.supervisor}
+          supervisorUserId={project.supervisorUserId ?? null}
           employees={laborEmployees}
+          erpSupervisors={erpSupervisors}
           projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
           projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
           description={project.description}
@@ -314,7 +400,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} />,
     },
     {
       label: "Contractors",
@@ -344,24 +430,28 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         />
       ),
     },
-    {
-      label: "Checklist",
-      content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
-        <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
-      ) : (
-        <ProjectChecklistSection
-          projectId={project.id}
-          initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({
-            id: item.id,
-            createdAt: item.createdAt.toISOString(),
-            date: item.date.toISOString(),
-            title: item.title,
-            completed: item.completed,
-            notes: item.notes,
-          }))}
-        />
-      ),
-    },
+    ...(!isPostConstruction
+      ? [
+          {
+            label: "Checklist",
+            content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
+              <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
+            ) : (
+              <ProjectChecklistSection
+                projectId={project.id}
+                initialItems={checklistItems.map((item: { id: string; createdAt: Date; date: Date; title: string; completed: boolean; notes: string | null }) => ({
+                  id: item.id,
+                  createdAt: item.createdAt.toISOString(),
+                  date: item.date.toISOString(),
+                  title: item.title,
+                  completed: item.completed,
+                  notes: item.notes,
+                }))}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(project.segment === "JANITORIAL_TURNOVER_REQUESTS" && project.building
       ? [
           {
@@ -380,6 +470,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
     ...(isPostConstruction
       ? [
+          {
+            label: "Safety Checklist",
+            content: (
+              <ProjectSafetySection
+                projectId={project.id}
+                initialChecks={safetyCheckRows}
+                defaultSupervisorName={project.supervisor ?? ""}
+                employees={laborEmployees.map((e) => ({
+                  id: e.id,
+                  firstName: e.firstName,
+                  lastName: e.lastName,
+                }))}
+              />
+            ),
+          },
           {
             label: "Change Orders",
             content: (
@@ -409,8 +514,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
   ];
 
-  const tabs = (isSupervisor || isEmployee)
+  const tabs = isEmployee
     ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist")
+    : isSupervisor
+    ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist" || t.label === "Safety Checklist")
     : allTabs;
 
   return (

@@ -182,22 +182,51 @@ export default async function ErpDashboardPage() {
 
     // ── Supervisor ─────────────────────────────────────────────────────────
     if (role === "SUPERVISOR") {
-      const [activeProjects, recentLabor] = await Promise.all([
+      const supervisorUser = auth?.uid
+        ? await prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } })
+        : null;
+
+      const _now = new Date();
+      const todayStart = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate(), 0, 0, 0, 0));
+      const todayEnd = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate(), 23, 59, 59, 999));
+
+      const [myProjects, openIncidents] = await Promise.all([
         prisma.project.findMany({
-          where: { NOT: { status: { in: ["COMPLETED", "ARCHIVED", "CANCELLED"] } } },
-          select: { id: true, jobTitle: true, status: true, projectDate: true, supervisor: true, segment: true },
-          orderBy: [{ projectDate: "asc" }, { updatedAt: "desc" }],
-          take: 20,
-        }),
-        prisma.laborEntry.findMany({
-          orderBy: { workDate: "desc" },
-          take: 12,
+          where: supervisorUser
+            ? { supervisorUserId: supervisorUser.id, NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } }
+            : { NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } },
           select: {
-            id: true, workDate: true, workerName: true, hours: true, taskDescription: true,
+            id: true, jobTitle: true, status: true, projectDate: true, segment: true,
+            dailySafetyChecks: {
+              where: { checkDate: { gte: todayStart, lte: todayEnd } },
+              include: { workers: { select: { passed: true } } },
+              take: 1,
+            },
+          },
+          orderBy: [{ projectDate: "asc" }, { updatedAt: "desc" }],
+        }),
+        prisma.safetyIncident.findMany({
+          where: supervisorUser
+            ? { status: { in: ["OPEN", "ESCALATED"] }, project: { supervisorUserId: supervisorUser.id } }
+            : { status: { in: ["OPEN", "ESCALATED"] } },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: {
+            id: true, workerName: true, violationCount: true, status: true, checkDate: true, createdAt: true,
             project: { select: { id: true, jobTitle: true } },
           },
         }),
       ]);
+
+      // KPIs across all my projects today
+      const allWorkers = myProjects.flatMap((p) => p.dailySafetyChecks.flatMap((c) => c.workers));
+      const totalWorkers = allWorkers.length;
+      const passedWorkers = allWorkers.filter((w) => w.passed).length;
+      const complianceRate = totalWorkers > 0 ? Math.round((passedWorkers / totalWorkers) * 100) : null;
+      const projectsWithCheck = myProjects.filter((p) => p.dailySafetyChecks.length > 0).length;
+      const projectsMissingCheck = myProjects.filter(
+        (p) => p.segment === "POST_CONSTRUCTION" && p.dailySafetyChecks.length === 0
+      ).length;
 
       return (
         <div className="space-y-6">
@@ -206,34 +235,79 @@ export default async function ErpDashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Active projects */}
-            <div className="rounded-lg border border-gray-200 bg-white">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Active projects</h2>
-                <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              {
+                label: "My Projects",
+                value: myProjects.length,
+                card: "border-blue-200 bg-blue-50", val: "text-blue-700",
+              },
+              {
+                label: "Checks Today",
+                value: `${projectsWithCheck}/${myProjects.length}`,
+                card: projectsMissingCheck > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
+                val: projectsMissingCheck > 0 ? "text-amber-700" : "text-emerald-700",
+              },
+              {
+                label: "Compliance Rate",
+                value: complianceRate !== null ? `${complianceRate}%` : "—",
+                card: complianceRate !== null && complianceRate < 100 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50",
+                val: complianceRate !== null && complianceRate < 100 ? "text-red-600" : "text-emerald-700",
+              },
+              {
+                label: "Open Incidents",
+                value: openIncidents.length,
+                card: openIncidents.length > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50",
+                val: openIncidents.length > 0 ? "text-red-600" : "text-gray-400",
+              },
+            ].map((k) => (
+              <div key={k.label} className={`rounded-lg border px-3 py-2.5 ${k.card}`}>
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
+                <p className={`mt-1 text-xl font-bold ${k.val}`}>{k.value}</p>
               </div>
-              {activeProjects.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">No active projects.</p>
+            ))}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* My projects with today's safety status */}
+            <div className="rounded-lg border border-gray-200 bg-white">
+              <div className="border-b border-gray-100 px-4 py-3">
+                <h2 className="text-sm font-semibold text-gray-900">My projects</h2>
+                {!supervisorUser && (
+                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
+                )}
+              </div>
+              {myProjects.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-gray-400">No projects assigned yet.</p>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {activeProjects.map((p) => {
+                  {myProjects.map((p) => {
+                    const check = p.dailySafetyChecks[0] ?? null;
+                    const workers = check?.workers ?? [];
+                    const passed = workers.filter((w) => w.passed).length;
                     const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null);
                     return (
                       <li key={p.id}>
-                        <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                          <div className="min-w-0">
+                        <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                          <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{p.supervisor || "Unassigned"}</p>
-                          </div>
-                          <div className="ml-3 shrink-0 text-right">
-                            <span className={`text-xs font-semibold ${lc === "ACTIVE" ? "text-emerald-600" : "text-purple-600"}`}>
+                            <p className="text-xs text-gray-400 mt-0.5">
                               {lc === "ACTIVE" ? "WIP" : "Upcoming"}
-                            </span>
-                            {p.projectDate && (
-                              <p className="text-[11px] text-gray-400 mt-0.5">
-                                {new Date(p.projectDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                              </p>
+                              {p.projectDate ? ` · ${new Date(p.projectDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            {check ? (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${passed === workers.length && workers.length > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                {passed}/{workers.length} passed
+                              </span>
+                            ) : p.segment === "POST_CONSTRUCTION" ? (
+                              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                                No check
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
                             )}
                           </div>
                         </Link>
@@ -244,26 +318,29 @@ export default async function ErpDashboardPage() {
               )}
             </div>
 
-            {/* Recent labor */}
+            {/* Open incidents */}
             <div className="rounded-lg border border-gray-200 bg-white">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Recent labor entries</h2>
+              <div className="border-b border-gray-100 px-4 py-3">
+                <h2 className="text-sm font-semibold text-gray-900">Open incidents</h2>
+                <p className="mt-0.5 text-xs text-gray-400">Workers marked non-compliant</p>
               </div>
-              {recentLabor.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">No labor logged yet.</p>
+              {openIncidents.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-gray-400">No open incidents.</p>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {recentLabor.map((e) => (
-                    <li key={e.id}>
-                      <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{e.workerName}</p>
-                          <p className="truncate text-xs text-gray-400">{e.project.jobTitle}</p>
+                  {openIncidents.map((inc) => (
+                    <li key={inc.id}>
+                      <Link href={`/erp/projects/${inc.project.id}?tab=Safety`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900">{inc.workerName}</p>
+                          <p className="truncate text-xs text-gray-400">{inc.project.jobTitle}</p>
                         </div>
-                        <div className="ml-3 shrink-0 text-right">
-                          <p className="text-xs font-medium text-gray-700">{e.hours}h</p>
-                          <p className="text-[11px] text-gray-400">
-                            {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        <div className="shrink-0 text-right">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${inc.status === "ESCALATED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                            {inc.status === "ESCALATED" ? "Escalated" : `#${inc.violationCount}`}
+                          </span>
+                          <p className="mt-0.5 text-[11px] text-gray-400">
+                            {new Date(inc.checkDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           </p>
                         </div>
                       </Link>
@@ -278,7 +355,11 @@ export default async function ErpDashboardPage() {
     }
 
     // ── Admin / Project Manager ────────────────────────────────────────────
-    const [allProjects, employees, candidates, contractors, recentProjects, recentLabor] = await Promise.all([
+    const _adminNow = new Date();
+    const adminTodayStart = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 0, 0, 0, 0));
+    const adminTodayEnd = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 23, 59, 59, 999));
+
+    const [allProjects, employees, candidates, contractors, recentProjects, recentLabor, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
       prisma.project.findMany({
         select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true },
         orderBy: { updatedAt: "desc" },
@@ -309,6 +390,12 @@ export default async function ErpDashboardPage() {
           project: { select: { id: true, jobTitle: true } },
         },
       }),
+      prisma.dailySafetyCheck.findMany({
+        where: { checkDate: { gte: adminTodayStart, lte: adminTodayEnd } },
+        include: { workers: { select: { passed: true } } },
+      }),
+      prisma.safetyIncident.count({ where: { status: { in: ["OPEN", "ESCALATED"] } } }),
+      prisma.safetyIncident.count({ where: { status: "ESCALATED" } }),
     ]);
 
     // Lifecycle bucketing
@@ -329,6 +416,12 @@ export default async function ErpDashboardPage() {
 
     const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
+
+    // Safety KPIs
+    const safetyWorkers = todaySafetyChecks.flatMap((c) => c.workers);
+    const safetyTotal = safetyWorkers.length;
+    const safetyPassed = safetyWorkers.filter((w) => w.passed).length;
+    const safetyComplianceRate = safetyTotal > 0 ? Math.round((safetyPassed / safetyTotal) * 100) : null;
 
     return (
       <div className="space-y-6">
@@ -368,6 +461,31 @@ export default async function ErpDashboardPage() {
               {k.sub && <p className={`mt-0.5 text-[11px] ${k.val} opacity-80`}>{k.sub}</p>}
             </Link>
           ))}
+        </div>
+
+        {/* Safety KPIs */}
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Safety — Today</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className={`rounded-lg border px-3 py-2.5 ${todaySafetyChecks.length === 0 ? "border-gray-200 bg-gray-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Checks submitted</p>
+              <p className={`mt-1 text-xl font-bold ${todaySafetyChecks.length === 0 ? "text-gray-400" : "text-emerald-700"}`}>{todaySafetyChecks.length}</p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2.5 ${safetyComplianceRate === null ? "border-gray-200 bg-gray-50" : safetyComplianceRate < 100 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Compliance rate</p>
+              <p className={`mt-1 text-xl font-bold ${safetyComplianceRate === null ? "text-gray-400" : safetyComplianceRate < 100 ? "text-red-600" : "text-emerald-700"}`}>
+                {safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—"}
+              </p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2.5 ${openIncidentCount > 0 ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Open incidents</p>
+              <p className={`mt-1 text-xl font-bold ${openIncidentCount > 0 ? "text-amber-700" : "text-gray-400"}`}>{openIncidentCount}</p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2.5 ${escalatedIncidentCount > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Escalated</p>
+              <p className={`mt-1 text-xl font-bold ${escalatedIncidentCount > 0 ? "text-red-600" : "text-gray-400"}`}>{escalatedIncidentCount}</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-5">

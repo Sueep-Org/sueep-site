@@ -72,7 +72,13 @@ model Project {
   unitTurnoverChecklist UnitTurnoverChecklist?
   workOrderRecord ProjectWorkOrderRecord?
   qualityChecks QualityCheck[]
+  dailySafetyChecks DailySafetyCheck[]
+  safetyIncidents SafetyIncident[]
   sov ProjectSOV?
+
+  /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
+  supervisorUserId String?
+  supervisorUser   ErpUser? @relation(fields: [supervisorUserId], references: [id], onDelete: SetNull)
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -202,6 +208,97 @@ model QualityCheck {
 
   @@index([turnoverRequestId])
   @@index([projectId])
+}
+
+model DailySafetyCheck {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  checkDate           DateTime
+  supervisorName      String
+  groupPhotoData           Bytes?
+  groupPhotoMimeType       String?
+  groupPhotoUploadedAt     DateTime?
+  siteArrivalPhotoData     Bytes?
+  siteArrivalPhotoMimeType String?
+  siteArrivalPhotoUploadedAt DateTime?
+  approvedForWork          Boolean  @default(false)
+  approvedAt               DateTime?
+  notes                    String?
+
+  workers   SafetyCheckWorker[]
+  incidents SafetyIncident[]
+
+  @@index([projectId])
+  @@index([checkDate])
+}
+
+model SafetyCheckWorker {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  safetyCheckId String
+  safetyCheck   DailySafetyCheck @relation(fields: [safetyCheckId], references: [id], onDelete: Cascade)
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  workerName String
+  hasVest    Boolean @default(false)
+  hasHardHat Boolean @default(false)
+  hasBoots   Boolean @default(false)
+  hasUniform       Boolean @default(false)
+  photoData        Bytes?
+  photoMimeType    String?
+  photoUploadedAt  DateTime?
+  passed         Boolean @default(false)
+  notes          String?
+
+  incidents SafetyIncident[]
+
+  @@index([safetyCheckId])
+  @@index([employeeId])
+}
+
+model SafetyIncident {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  safetyCheckWorkerId String
+  safetyCheckWorker   SafetyCheckWorker @relation(fields: [safetyCheckWorkerId], references: [id], onDelete: Cascade)
+
+  safetyCheckId String
+  safetyCheck   DailySafetyCheck @relation(fields: [safetyCheckId], references: [id], onDelete: Cascade)
+
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  workerName String
+  checkDate  DateTime
+
+  /// OPEN | RESOLVED | ESCALATED
+  status             String    @default("OPEN")
+  resolvedAt         DateTime?
+  escalatedAt        DateTime?
+  notificationSentAt DateTime?
+  escalationSentAt   DateTime?
+
+  /// Running total of violations for this worker at time of creation
+  violationCount Int @default(1)
+
+  @@index([projectId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([safetyCheckId])
+  @@index([safetyCheckWorkerId])
 }
 
 model ProjectWorkOrder {
@@ -491,6 +588,8 @@ model ErpUser {
   email       String   @unique
   role        String   @default("EMPLOYEE")
 
+  supervisorProjects Project[]
+
   @@index([firebaseUid])
 }
 
@@ -535,6 +634,8 @@ model Employee {
   projectLaborAssignments ProjectLaborAssignment[]
   changeOrderAssignments ProjectChangeOrderLaborer[]
   contracts EmployeeContract[]
+  safetyCheckWorkers SafetyCheckWorker[]
+  safetyIncidents SafetyIncident[]
 
   @@index([status])
   @@index([defaultProject])

@@ -228,6 +228,13 @@ function SOVCombobox({
   );
 }
 
+// Labor entries on or after this date are expected to have a safety check.
+const SAFETY_CUTOFF = "2026-06-18";
+
+function laborDateStr(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
 export function ProjectLaborSection({
   projectId,
   initialEntries,
@@ -236,6 +243,8 @@ export function ProjectLaborSection({
   canEdit = true,
   showFinancials = true,
   isJanitorialUnit = false,
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -244,8 +253,11 @@ export function ProjectLaborSection({
   canEdit?: boolean;
   showFinancials?: boolean;
   isJanitorialUnit?: boolean;
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
 }) {
   const router = useRouter();
+  const passedKeySet = new Set(safetyPassedKeys);
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -507,6 +519,14 @@ export function ProjectLaborSection({
   return (
     <>
     <div className="space-y-6">
+      {hasApprovedCheckToday === false && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-amber-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor.
+          </p>
+        </div>
+      )}
       {canEdit && <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
@@ -715,6 +735,13 @@ export function ProjectLaborSection({
                 visibleEntries.map((r) => {
                   const quality = qualityMap[r.id] ?? "";
                   const notes = notesMap[r.id] ?? "";
+                  const dateStr = laborDateStr(r.workDate);
+                  const needsSafetyCheck = dateStr >= SAFETY_CUTOFF;
+                  const hasSafety = needsSafetyCheck && (
+                    (r.employeeId && passedKeySet.has(`emp:${r.employeeId}:${dateStr}`)) ||
+                    passedKeySet.has(`name:${r.workerName.toLowerCase()}:${dateStr}`)
+                  );
+                  const missingSafety = needsSafetyCheck && !hasSafety;
                   return editingId === r.id ? (
                     <tr key={r.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
@@ -791,10 +818,22 @@ export function ProjectLaborSection({
                         {new Date(r.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}
                       </td>
                       <td className="py-2 pr-2 text-gray-900">
-                        {r.employeeName || r.workerName}
-                        {r.employeeName && r.employeeName !== r.workerName ? (
-                          <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
-                        ) : null}
+                        <div className="flex items-center gap-1.5">
+                          {missingSafety && (
+                            <span
+                              title="No passing safety check for this worker on this date"
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white text-[9px] font-bold"
+                            >
+                              !
+                            </span>
+                          )}
+                          <span>
+                            {r.employeeName || r.workerName}
+                            {r.employeeName && r.employeeName !== r.workerName ? (
+                              <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
+                            ) : null}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>

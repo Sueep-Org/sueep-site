@@ -53,6 +53,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!supervisor) return NextResponse.json({ error: "supervisor (PM) is required" }, { status: 400 });
     data.supervisor = supervisor;
   }
+  if (body.supervisorUserId !== undefined) {
+    data.supervisorUserId = body.supervisorUserId ? String(body.supervisorUserId).trim() : null;
+  }
   if (body.description !== undefined) data.description = body.description ? String(body.description).trim() : null;
   if (body.projectDate !== undefined) {
     data.projectDate =

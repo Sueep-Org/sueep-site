@@ -12,6 +12,7 @@ const label = "block text-xs font-medium text-gray-600";
 
 type PipelineOption = { id: string; label: string };
 type Employee = { id: string; firstName: string; lastName: string };
+type ErpSupervisor = { id: string; email: string; displayName: string };
 
 type Props = {
   projectId: string;
@@ -21,7 +22,9 @@ type Props = {
   isManual: boolean;
   pipelineOptions: PipelineOption[];
   supervisor: string | null;
+  supervisorUserId: string | null;
   employees: Employee[];
+  erpSupervisors: ErpSupervisor[];
   projectDateIso: string | null;
   projectEndDateIso: string | null;
   description: string | null;
@@ -44,7 +47,9 @@ export function ProjectSetupEditor({
   isManual,
   pipelineOptions,
   supervisor,
+  supervisorUserId,
   employees,
+  erpSupervisors,
   projectDateIso,
   projectEndDateIso,
   description,
@@ -68,6 +73,9 @@ export function ProjectSetupEditor({
   const filteredEmployees = employeeNames.filter((name) =>
     name.toLowerCase().includes(supervisorQuery.toLowerCase())
   );
+
+  // ERP supervisor link
+  const [selectedSupervisorUserId, setSelectedSupervisorUserId] = useState(supervisorUserId ?? "");
 
   // Service type
   const isKnownServiceType = description ? (SERVICE_TYPE_OPTIONS as readonly string[]).includes(description) : false;
@@ -133,6 +141,7 @@ export function ProjectSetupEditor({
       projectDate: nextProjectDate,
       projectEndDate: endDate || null,
       supervisor: supervisorValue.trim(),
+      supervisorUserId: selectedSupervisorUserId || null,
     };
     if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
     if (serviceTypeValue !== undefined) payload.description = serviceTypeValue;
@@ -199,6 +208,24 @@ export function ProjectSetupEditor({
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Manager</h3>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {erpSupervisors.length > 0 && (
+            <div>
+              <label className={label} htmlFor="ps-supervisor-user">Assigned Supervisor (ERP)</label>
+              <select
+                id="ps-supervisor-user"
+                className={input}
+                value={selectedSupervisorUserId}
+                onChange={(e) => {
+                  setSelectedSupervisorUserId(e.target.value);
+                }}
+              >
+                <option value="">— Unassigned —</option>
+                {erpSupervisors.map((s) => (
+                  <option key={s.id} value={s.id}>{s.displayName} ({s.email})</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="relative">
             <label className={label} htmlFor="ps-pm">Project Manager</label>
             <input
