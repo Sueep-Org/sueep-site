@@ -80,36 +80,202 @@ export default function EstimatorPage() {
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           {/* UPLOAD */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div
-              id="dropZone"
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400"
-            >
-              <input
-                type="file"
-                id="fileInput"
-                accept=".pdf,.jpg,.jpeg,.png"
-                className="sr-only"
-              />
-              <p>Drag and drop OR click below</p>
-              <button
-                id="selectFileBtn"
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
-              >
-                Select file
-              </button>
+            {/* PROJECT LOADED CARD — shown when a project is opened from the Library */}
+            <div id="projectLoadedCard" style={{ display: "none" }}>
+              {/* Top row: name + edit button */}
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div
+                  id="loadedProjectName"
+                  className="text-base font-semibold text-gray-900"
+                ></div>
+                <button id="editProjectBtn" className="mini-btn flex-shrink-0">
+                  Edit
+                </button>
+              </div>
+
+              {/* Info grid */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm mt-2 mb-3">
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Address
+                  </span>
+                  <div
+                    id="loadedProjectAddress"
+                    className="text-gray-700 mt-0.5"
+                  >
+                    —
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Quotation
+                  </span>
+                  <div
+                    id="loadedQuotationName"
+                    className="text-gray-700 mt-0.5"
+                  >
+                    None
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Drive Distance
+                  </span>
+                  <div id="detailDistance" className="text-gray-700 mt-0.5">
+                    —
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Drive Time
+                  </span>
+                  <div id="detailDuration" className="text-gray-700 mt-0.5">
+                    —
+                  </div>
+                </div>
+              </div>
+
+              {/* PDF row + actions */}
+              <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                <span
+                  id="loadedPdfName"
+                  className="text-sm text-gray-600 flex-1 truncate"
+                ></span>
+                <button id="refreshDistanceBtn" className="mini-btn">
+                  ↻ Distance
+                </button>
+                <button id="changePdfBtn" className="mini-btn">
+                  Change PDF
+                </button>
+              </div>
             </div>
-            <div
-              id="uploadCollapsed"
-              style={{ display: "none" }}
-              className="flex items-center gap-3"
-            >
-              <span
-                id="uploadedFileName"
-                className="text-sm text-gray-700 font-medium flex-1 truncate"
-              ></span>
-              <button id="changeFileBtn" className="mini-btn">
-                Change file
-              </button>
+
+            {/* NEW PROJECT FORM — shown when creating a new project */}
+            <div id="newProjectForm">
+              {/* PROJECT NAME */}
+              <div className="mb-4" id="projectNameInputWrapper">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Name
+                </label>
+                <input
+                  type="text"
+                  id="projectNameInput"
+                  placeholder="Enter project name"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              {/* PROJECT ADDRESS */}
+              <div className="mb-4" id="projectAddressInputWrapper">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Address{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  id="projectAddressInput"
+                  placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              {/* QUOTATION UPLOAD */}
+              <div className="mb-4" id="quotationInputWrapper">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quotation File{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  id="quotationInput"
+                  accept=".xlsx,.xls,.pdf"
+                  className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-gray-300 file:text-sm file:bg-white file:cursor-pointer"
+                />
+              </div>
+
+              {/* PDF FILE UPLOAD */}
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PDF File
+              </label>
+              <div
+                id="dropZone"
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400"
+              >
+                <input
+                  type="file"
+                  id="fileInput"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="sr-only"
+                />
+                <p>Drag and drop OR click below</p>
+                <button
+                  id="selectFileBtn"
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                  Select file
+                </button>
+              </div>
+              <div
+                id="uploadCollapsed"
+                style={{ display: "none" }}
+                className="flex items-center gap-3"
+              >
+                <span
+                  id="uploadedFileName"
+                  className="text-sm text-gray-700 font-medium flex-1 truncate"
+                ></span>
+                <button id="changeFileBtn" className="mini-btn">
+                  Change file
+                </button>
+              </div>
+            </div>
+
+            {/* EDIT PROJECT FORM — shown when editing an existing project */}
+            <div id="editProjectForm" style={{ display: "none" }}>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Name
+                </label>
+                <input
+                  type="text"
+                  id="editProjectNameInput"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Address{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  id="editProjectAddressInput"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Add / Replace Quotation{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  id="editQuotationInput"
+                  accept=".xlsx,.xls,.pdf"
+                  className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-gray-300 file:text-sm file:bg-white file:cursor-pointer"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  id="saveProjectBtn"
+                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                >
+                  Save
+                </button>
+                <button id="cancelEditBtn" className="mini-btn">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
 
@@ -129,9 +295,6 @@ export default function EstimatorPage() {
                 </button>
                 <button id="drawIrregBtn" className="mini-btn">
                   Draw Irreg
-                </button>
-                <button id="toggleSidebarBtn" className="mini-btn">
-                  Measurements
                 </button>
 
                 <button id="doubleSideToggle" className="mini-btn">
@@ -195,6 +358,14 @@ export default function EstimatorPage() {
                     Next
                   </button>
                 </div>
+
+                <button
+                  id="toggleSidebarBtn"
+                  className="mini-btn"
+                  style={{ marginLeft: "auto" }}
+                >
+                  Measurements
+                </button>
               </div>
 
               {/* VIEWER ROW */}
@@ -213,14 +384,9 @@ export default function EstimatorPage() {
                 <aside id="measurementSidebar" className="w-full lg:w-80">
                   <div className="bg-white rounded-lg shadow-md p-4 mb-4">
                     <div className="mb-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold mb-2">
-                          Measurements
-                        </h3>
-                        <button id="toggleMeasurementsBtn" className="mini-btn">
-                          ▼
-                        </button>
-                      </div>
+                      <h3 className="text-lg font-semibold mb-2">
+                        Measurements
+                      </h3>
                     </div>
                     <div id="measurementsContent">
                       <div className="mb-3">
@@ -359,6 +525,24 @@ export default function EstimatorPage() {
                 </aside>
               </div>
             </div>
+          </div>
+
+          {/* QUOTATION DATA */}
+          <div
+            id="quotationDataCard"
+            className="bg-white rounded-lg shadow-md p-6 mt-6"
+            style={{ display: "none" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-800">
+                Quotation Data
+              </h3>
+              <span
+                id="quotationFileName"
+                className="text-xs text-gray-400 truncate max-w-xs"
+              ></span>
+            </div>
+            <div id="quotationDataContent"></div>
           </div>
 
           {/* ALL PAGES TOTAL */}
