@@ -41,6 +41,7 @@ const sidebarRoot = document.getElementById('sidebarRoot');
 const libraryMount = document.getElementById('libraryMount');
 
 let drawerLoaded = false;
+let activeProjectId = null;
 
 function renderDrawerSkeleton(){
 
@@ -55,83 +56,131 @@ function renderDrawerSkeleton(){
 }
 
 async function refreshDrawer(){
-
+  if (!document.getElementById('savedSection')) {
+    renderDrawerSkeleton();
+    drawerLoaded = true;
+  }
   const savedSec = document.getElementById('savedSection');
   const loading = document.getElementById('listLoading');
 
-  try{
-
-    const savedOnly = await listAllNormalized();
+  try {
+    const res = await fetch(`${API_BASE}/api/projects`, { cache: 'no-store' });
+    const data = await res.json();
+    const projects = data.projects || [];
 
     if (loading) loading.remove();
-
     savedSec.innerHTML = '';
 
-    if (!savedOnly || savedOnly.length === 0){
-
-      savedSec.innerHTML = `<div>No saved files</div>`;
+    if (projects.length === 0) {
+      savedSec.innerHTML = `<div style="padding:.5rem;color:#888;">No projects yet</div>`;
       return;
     }
 
-    savedOnly.forEach(item=>{
+    for (const project of projects) {
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;padding:.4rem .5rem;background:#f3f4f6;border-radius:6px;margin-bottom:.3rem;margin-top:.6rem;';
 
-      const full = item.name || item.key || '';
-      const display = full.split('/').pop();
+      const headerLabel = document.createElement('span');
+      headerLabel.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      headerLabel.textContent = `📁 ${project.name}`;
 
-      // skip json analysis files
-      if (display.endsWith('.json')) return;
-
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.5rem;';
-
-      const btn = document.createElement('button');
-      btn.textContent = display;
-      btn.style.cssText = `flex:1;text-align:left;padding:.5rem;border:1px solid #ddd;border-radius:8px;background:white;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;`;
-
-      btn.onclick = async ()=>{
-        try{
-          const url = `${API_BASE}/api/files/download-local?name=${encodeURIComponent(full)}`;
-          const resp = await fetch(url);
-          const blob = await resp.blob();
-          const file = new File([blob], display);
-          await window.__handleFile?.(file);
-          closeSidebar();
-        }catch(e){
-          console.error(e);
-          toast(e.message, 'error');
-        }
-      };
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
-      delBtn.title = 'Delete';
-      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
-
-      delBtn.onclick = async (e)=>{
+      const projDelBtn = document.createElement('button');
+      projDelBtn.textContent = '🗑';
+      projDelBtn.title = 'Delete project';
+      projDelBtn.style.cssText = 'flex-shrink:0;padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;cursor:pointer;font-size:12px;color:#ef4444;';
+      projDelBtn.onclick = async (e) => {
         e.stopPropagation();
-        if (!confirm(`Delete "${display}"?`)) return;
-        try{
-          const res = await fetch(`${API_BASE}/api/files/delete`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name: full })
-          });
-          if (!res.ok) throw new Error('Delete failed');
-          row.remove();
-          toast(`Deleted ${display}`, 'info');
-        }catch(e){
+        if (!confirm(`Delete project "${project.name}" and all its files?`)) return;
+        try {
+          const r = await fetch(`${API_BASE}/api/projects/${project.id}`, { method: 'DELETE' });
+          if (!r.ok) throw new Error('Delete failed');
+          toast(`Deleted project "${project.name}"`, 'info');
+        } catch(e) {
           toast(e.message, 'error');
+          return;
         }
+        try { await refreshDrawer(); } catch(_) {}
       };
 
-      row.appendChild(btn);
-      row.appendChild(delBtn);
-      savedSec.appendChild(row);
-    });
+      header.appendChild(headerLabel);
+      header.appendChild(projDelBtn);
+      savedSec.appendChild(header);
 
-  }catch(e){
+      const projRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
+      if (!projRes.ok) continue;
+      const projData = await projRes.json();
+      const files = projData.files || [];
 
+      if (files.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'font-size:12px;color:#aaa;padding:.3rem .5rem;';
+        empty.textContent = 'No files';
+        savedSec.appendChild(empty);
+        continue;
+      }
+
+      for (const f of files) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;padding-left:.5rem;';
+
+        const isBlueprint = f.file_type === 'blueprint';
+        const isQuotation = f.file_type === 'quotation';
+
+        const btn = document.createElement('button');
+        btn.textContent = `${isBlueprint ? '📄' : '📊'} ${f.filename}`;
+        btn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:6px;background:white;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;' + (isBlueprint ? 'cursor:pointer;' : 'cursor:default;color:#6b7280;');
+
+        if (isBlueprint) {
+          btn.onclick = async () => {
+            try {
+              const resp = await fetch(`${API_BASE}/api/projects/${project.id}/files/${f.id}/download`, { redirect: 'follow' });
+              if (!resp.ok) throw new Error('Download failed');
+              const blob = await resp.blob();
+              const fileObj = new File([blob], f.filename);
+              await window.__handleFile?.(fileObj);
+              activeProjectId = project.id;
+              window.__showProjectLoadedCard?.(projData, f.filename);
+              closeSidebar();
+            } catch(e) {
+              toast(e.message, 'error');
+            }
+          };
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '🗑';
+        delBtn.title = 'Delete';
+        delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
+        delBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete "${f.filename}"?`)) return;
+          try {
+            const r = await fetch(`${API_BASE}/api/projects/${project.id}/files/${f.id}`, { method: 'DELETE' });
+            if (!r.ok) throw new Error('Delete failed');
+            toast(`Deleted ${f.filename}`, 'info');
+          } catch(e) {
+            toast(e.message, 'error');
+            return;
+          }
+          try { await refreshDrawer(); } catch(_) {}
+        };
+
+        row.appendChild(btn);
+        if (isBlueprint) {
+          const dlBtn = document.createElement('a');
+          dlBtn.textContent = '⬇';
+          dlBtn.href = `${API_BASE}/api/projects/${project.id}/files/${f.id}/download`;
+          dlBtn.target = '_blank';
+          dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#3b82f6;text-decoration:none;';
+          row.appendChild(dlBtn);
+        }
+        row.appendChild(delBtn);
+        savedSec.appendChild(row);
+      }
+    }
+  } catch(e) {
     console.error(e);
+    if (savedSec) savedSec.innerHTML = `<div style="color:red;padding:.5rem;">Failed to load projects</div>`;
   }
 }
 
@@ -681,6 +730,317 @@ async function initApp(){
   window.__handleFile = handleFile;
 
   // ======================================================
+  // PROJECT DETAILS CARD
+  // ======================================================
+
+  function updateProjectDetails(project) {
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    const di = project.driving_info || {};
+    setText('detailDistance', di.distance);
+    setText('detailDuration', di.duration);
+  }
+
+  // ======================================================
+  // PROJECT LOADED CARD (sidebar → open project)
+  // ======================================================
+
+  let _loadedProjectData = null; // cache for edit form
+
+  function showProjectLoadedCard(projData, blueprintFilename) {
+    _loadedProjectData = projData;
+    const files = projData.files || [];
+    const quotationFile = files.find(f => f.file_type === 'quotation');
+
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    setText('loadedProjectName', projData.name);
+    setText('loadedProjectAddress', projData.address);
+    setText('loadedQuotationName', quotationFile ? quotationFile.filename : 'None');
+    setText('loadedPdfName', blueprintFilename);
+
+    document.getElementById('projectLoadedCard').style.display = 'block';
+    document.getElementById('newProjectForm').style.display = 'none';
+    document.getElementById('editProjectForm').style.display = 'none';
+
+    updateProjectDetails(projData);
+
+    // Load quotation data if project has a quotation file
+    const hasQuotation = (projData.files || []).some(f => f.file_type === 'quotation');
+    if (hasQuotation && projData.id) {
+      loadQuotationData(projData.id);
+    } else {
+      const qCard = document.getElementById('quotationDataCard');
+      if (qCard) qCard.style.display = 'none';
+    }
+  }
+
+  function showNewProjectForm() {
+    document.getElementById('projectLoadedCard').style.display = 'none';
+    document.getElementById('newProjectForm').style.display = 'block';
+    document.getElementById('editProjectForm').style.display = 'none';
+    const qCard = document.getElementById('quotationDataCard');
+    if (qCard) qCard.style.display = 'none';
+  }
+
+  function showEditProjectForm() {
+    if (!_loadedProjectData) return;
+    const nameEl = document.getElementById('editProjectNameInput');
+    const addrEl = document.getElementById('editProjectAddressInput');
+    if (nameEl) nameEl.value = _loadedProjectData.name || '';
+    if (addrEl) addrEl.value = _loadedProjectData.address || '';
+    const qInput = document.getElementById('editQuotationInput');
+    if (qInput) qInput.value = '';
+    document.getElementById('projectLoadedCard').style.display = 'none';
+    document.getElementById('newProjectForm').style.display = 'none';
+    document.getElementById('editProjectForm').style.display = 'block';
+  }
+
+  window.__showProjectLoadedCard = showProjectLoadedCard;
+  window.__showNewProjectForm = showNewProjectForm;
+
+  // ======================================================
+  // QUOTATION DATA DISPLAY
+  // ======================================================
+
+  async function loadQuotationData(projectId) {
+    const card = document.getElementById('quotationDataCard');
+    const content = document.getElementById('quotationDataContent');
+    if (!card || !content) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/quotation-data`, { cache: 'no-store' });
+      if (!res.ok) { card.style.display = 'none'; return; }
+      const { filename, analysis } = await res.json();
+
+      const fileLabel = document.getElementById('quotationFileName');
+      if (fileLabel) fileLabel.textContent = filename;
+
+      content.innerHTML = '';
+
+      // ── Cost Rates ──
+      const rates = analysis.cost_rates || {};
+      if (Object.keys(rates).length > 0) {
+        content.appendChild(_section('Cost Rates (per SF)', _rateTable(rates)));
+      }
+
+      // ── Labor Breakdown ──
+      const lb = analysis.labor_breakdown || {};
+      if (Object.keys(lb).length > 0) {
+        content.appendChild(_section('Labor Breakdown', _laborTable(lb)));
+      }
+
+      // ── Quote Line Items ──
+      const quoteSheets = analysis.quote_items || [];
+      for (const sheet of quoteSheets) {
+        content.appendChild(_section(`Quote — ${sheet.sheet}`, _quoteTable(sheet.items)));
+      }
+
+      card.style.display = 'block';
+    } catch (e) {
+      console.warn('Failed to load quotation data:', e);
+    }
+  }
+
+  function _section(title, tableEl) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-bottom:20px;';
+    const h = document.createElement('h4');
+    h.textContent = title;
+    h.style.cssText = 'font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;';
+    wrap.appendChild(h);
+    wrap.appendChild(tableEl);
+    return wrap;
+  }
+
+  function _rateTable(rates) {
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Service', '$/SF'].forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `text-align:${i===0?'left':'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;`;
+      hrow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    for (const [label, val] of Object.entries(rates)) {
+      const row = tbody.insertRow();
+      row.style.cssText = 'border-top:1px solid #f3f4f6;';
+      const td1 = row.insertCell(); td1.textContent = label; td1.style.cssText = 'padding:5px 8px;color:#374151;';
+      const td2 = row.insertCell(); td2.textContent = `$${Number(val).toFixed(4)}`; td2.style.cssText = 'padding:5px 8px;text-align:right;color:#374151;font-family:monospace;';
+    }
+    return table;
+  }
+
+  function _laborTable(lb) {
+    const serviceTypes = lb['Service Types'] || [];
+    const keys = Object.keys(lb).filter(k => k !== 'Service Types');
+
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    const headers = ['', ...serviceTypes.slice(0, 4)];
+    headers.forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `text-align:${i===0?'left':'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;`;
+      hrow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    for (const key of keys) {
+      const val = lb[key];
+      const row = tbody.insertRow();
+      row.style.cssText = 'border-top:1px solid #f3f4f6;';
+      const td0 = row.insertCell(); td0.textContent = key; td0.style.cssText = 'padding:5px 8px;color:#374151;font-weight:500;';
+      const vals = Array.isArray(val) ? val : [val];
+      vals.slice(0, 4).forEach(v => {
+        const td = row.insertCell();
+        td.textContent = typeof v === 'number' ? (v % 1 === 0 ? v : v.toFixed(2)) : (v ?? '—');
+        td.style.cssText = 'padding:5px 8px;text-align:right;color:#374151;font-family:monospace;';
+      });
+    }
+    return table;
+  }
+
+  function _quoteTable(items) {
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Description', 'Unit Price', 'Total'].forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `text-align:${i===0?'left':'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;`;
+      hrow.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    for (const item of items) {
+      const isTotal = (item.service || '').toLowerCase() === 'total';
+      const row = tbody.insertRow();
+      row.style.cssText = `border-top:1px solid ${isTotal ? '#d1d5db' : '#f3f4f6'};${isTotal ? 'font-weight:600;' : ''}`;
+      const desc = item.description || item.service || '—';
+      const td1 = row.insertCell(); td1.textContent = desc; td1.style.cssText = 'padding:5px 8px;color:#374151;';
+      const td2 = row.insertCell(); td2.textContent = item.unit_price ? `$${item.unit_price.toLocaleString()}` : ''; td2.style.cssText = 'padding:5px 8px;text-align:right;color:#374151;';
+      const td3 = row.insertCell(); td3.textContent = item.total ? `$${item.total.toLocaleString()}` : ''; td3.style.cssText = `padding:5px 8px;text-align:right;${isTotal ? 'color:#111827;' : 'color:#374151;'}`;
+    }
+    return table;
+  }
+
+  window.__loadQuotationData = loadQuotationData;
+
+  const editProjectBtn = document.getElementById('editProjectBtn');
+  if (editProjectBtn) {
+    editProjectBtn.addEventListener('click', () => showEditProjectForm());
+  }
+
+  const cancelEditBtn = document.getElementById('cancelEditBtn');
+  if (cancelEditBtn) {
+    cancelEditBtn.addEventListener('click', () => {
+      if (_loadedProjectData) {
+        const files = _loadedProjectData.files || [];
+        const bp = files.find(f => f.file_type === 'blueprint');
+        showProjectLoadedCard(_loadedProjectData, bp?.filename || '');
+      } else {
+        showNewProjectForm();
+      }
+    });
+  }
+
+  const saveProjectBtn = document.getElementById('saveProjectBtn');
+  if (saveProjectBtn) {
+    saveProjectBtn.addEventListener('click', async () => {
+      if (!activeProjectId) return;
+      const nameVal = document.getElementById('editProjectNameInput')?.value?.trim();
+      const addrVal = document.getElementById('editProjectAddressInput')?.value?.trim() || '';
+      if (!nameVal) { toast('Project name cannot be empty', 'error'); return; }
+
+      saveProjectBtn.textContent = 'Saving…';
+      saveProjectBtn.disabled = true;
+      try {
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nameVal, address: addrVal }),
+        });
+        if (r.status === 409) { toast('A project with that name already exists', 'error'); return; }
+        if (!r.ok) throw new Error('Save failed');
+        const updated = await r.json();
+
+        // upload new quotation if provided
+        const qFile = document.getElementById('editQuotationInput')?.files?.[0];
+        if (qFile) {
+          const qForm = new FormData();
+          qForm.append('file', qFile);
+          const qRes = await fetch(`${API_BASE}/api/projects/${activeProjectId}/quotation`, { method: 'POST', body: qForm });
+          if (!qRes.ok) toast('Quotation upload failed', 'error');
+        }
+
+        // re-fetch full project to get latest files
+        const projRes = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, { cache: 'no-store' });
+        const projData = projRes.ok ? await projRes.json() : updated;
+        const bp = (projData.files || []).find(f => f.file_type === 'blueprint');
+        _loadedProjectData = projData;
+        showProjectLoadedCard(projData, bp?.filename || '');
+        updateProjectDetails(projData);
+        toast('Project updated', 'info');
+        try { await refreshDrawer(); } catch(_) {}
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        saveProjectBtn.textContent = 'Save';
+        saveProjectBtn.disabled = false;
+      }
+    });
+  }
+
+  const changePdfBtn = document.getElementById('changePdfBtn');
+  if (changePdfBtn) {
+    changePdfBtn.addEventListener('click', () => {
+      // full reset — same as "Change file"
+      _loadedProjectData = null;
+      activeProjectId = null;
+      showNewProjectForm();
+      const dropZone = document.getElementById('dropZone');
+      const uploadCollapsed = document.getElementById('uploadCollapsed');
+      if (dropZone) dropZone.style.display = '';
+      if (uploadCollapsed) uploadCollapsed.style.display = 'none';
+      const nameIn = document.getElementById('projectNameInput');
+      const addrIn = document.getElementById('projectAddressInput');
+      const qIn = document.getElementById('quotationInput');
+      if (nameIn) nameIn.value = '';
+      if (addrIn) addrIn.value = '';
+      if (qIn) qIn.value = '';
+      const mainContent = document.getElementById('mainContent');
+      if (mainContent) mainContent.classList.add('hidden');
+    });
+  }
+
+  const refreshDistanceBtn = document.getElementById('refreshDistanceBtn');
+  if (refreshDistanceBtn) {
+    refreshDistanceBtn.addEventListener('click', async () => {
+      if (!activeProjectId) return;
+      refreshDistanceBtn.textContent = '↻ Refreshing...';
+      refreshDistanceBtn.disabled = true;
+      try {
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, { method: 'POST' });
+        if (!r.ok) throw new Error('Failed to refresh');
+        const data = await r.json();
+        const di = data.driving_info || {};
+        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+        setText('detailDistance', di.distance);
+        setText('detailDuration', di.duration);
+        toast('Distance updated', 'info');
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        refreshDistanceBtn.textContent = '↻ Refresh Distance';
+        refreshDistanceBtn.disabled = false;
+      }
+    });
+  }
+
+  // ======================================================
   // ZOOM HELPERS
   // ======================================================
 
@@ -908,6 +1268,17 @@ async function initApp(){
       const uploadCollapsed = document.getElementById('uploadCollapsed');
       if (dropZone) dropZone.style.display = '';
       if (uploadCollapsed) uploadCollapsed.style.display = 'none';
+
+      const projectNameInput = document.getElementById('projectNameInput');
+      const quotationInput = document.getElementById('quotationInput');
+      if (projectNameInput) projectNameInput.value = '';
+      if (quotationInput) quotationInput.value = '';
+      const addrInput = document.getElementById('projectAddressInput');
+      if (addrInput) addrInput.value = '';
+      activeProjectId = null;
+      _loadedProjectData = null;
+      showNewProjectForm();
+
       fileInput.click();
     });
   }
@@ -960,23 +1331,55 @@ async function initApp(){
 
     try {
 
+      // 1. Create project
+      const projectName = document.getElementById('projectNameInput')?.value?.trim();
+      if (!projectName) {
+        toast('Please enter a project name before uploading.', 'error');
+        return;
+      }
+      console.log('[upload] creating project:', projectName);
+      const projectAddress = document.getElementById('projectAddressInput')?.value?.trim() || '';
+      const projectRes = await fetch(`${API_BASE}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: projectName, address: projectAddress })
+      });
+      if (projectRes.status === 409) {
+        toast(`Project "${projectName}" already exists. Please use a different name.`, 'error');
+        return;
+      }
+      if (!projectRes.ok) {
+        toast('Failed to create project', 'error');
+        return;
+      }
+      const project = await projectRes.json();
+      const projectId = project.id;
+      activeProjectId = projectId;
+      updateProjectDetails(project);
+      console.log('[upload] project created:', projectId);
+
+      // 2. Upload blueprint
       const formData = new FormData();
-
       formData.append('file', file);
-
-      console.log(
-        '[upload] sending to backend...'
-      );
-
+      console.log('[upload] sending blueprint to backend...');
       const res = await fetch(
-        `${API_BASE}/api/upload`,
-        {
-          method: 'POST',
-          body: formData
-        }
+        `${API_BASE}/api/projects/${projectId}/blueprint`,
+        { method: 'POST', body: formData }
       );
-
       const data = await res.json();
+
+      // 3. Upload quotation if provided
+      const quotationInput = document.getElementById('quotationInput');
+      if (quotationInput?.files?.[0]) {
+        console.log('[upload] uploading quotation...');
+        const qForm = new FormData();
+        qForm.append('file', quotationInput.files[0]);
+        await fetch(`${API_BASE}/api/projects/${projectId}/quotation`, {
+          method: 'POST',
+          body: qForm
+        });
+        console.log('[upload] quotation uploaded');
+      }
 
       console.log('==============================');
       console.log('✅ BACKEND RESPONSE');
@@ -1039,10 +1442,18 @@ async function initApp(){
         'success'
       );
 
-      if (drawerLoaded){
+      renderDrawerSkeleton();
+      drawerLoaded = true;
+      await refreshDrawer();
 
-        await refreshDrawer();
-      }
+      // Switch upload card to the loaded-project view
+      try {
+        const freshRes = await fetch(`${API_BASE}/api/projects/${projectId}`, { cache: 'no-store' });
+        if (freshRes.ok) {
+          const freshData = await freshRes.json();
+          showProjectLoadedCard(freshData, file.name);
+        }
+      } catch(_) {}
 
     } catch (err) {
 
@@ -1076,6 +1487,38 @@ async function initApp(){
         await processFile(file);
       }
     );
+  }
+
+  const quotationInput = document.getElementById('quotationInput');
+  if (quotationInput) {
+    quotationInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!activeProjectId) {
+        // No active project yet — file will be picked up when PDF is uploaded
+        return;
+      }
+      try {
+        const qForm = new FormData();
+        qForm.append('file', file);
+        const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}/quotation`, {
+          method: 'POST',
+          body: qForm,
+        });
+        if (!res.ok) throw new Error('Quotation upload failed');
+        const data = await res.json();
+        if (data.duplicate) {
+          toast('This quotation file already exists in the project.', 'info');
+        } else {
+          toast('Quotation uploaded.', 'info');
+        }
+        renderDrawerSkeleton();
+        drawerLoaded = true;
+        try { await refreshDrawer(); } catch(_) {}
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
   }
 
   // ======================================================
@@ -1164,15 +1607,6 @@ async function initApp(){
       };
     }
 
-    const toggleMeasurementsBtn = $('toggleMeasurementsBtn');
-    if (toggleMeasurementsBtn) {
-      toggleMeasurementsBtn.onclick = () => {
-        const content = document.getElementById('measurementsContent');
-        const isHidden = content.style.display === 'none';
-        content.style.display = isHidden ? '' : 'none';
-        toggleMeasurementsBtn.textContent = isHidden ? '▼' : '▶';
-    };
-}
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
       e.preventDefault();
