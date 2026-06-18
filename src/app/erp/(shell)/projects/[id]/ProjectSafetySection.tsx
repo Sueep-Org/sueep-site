@@ -601,6 +601,23 @@ function CheckCard({
             </div>
           </div>
 
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+              Notes <span className="font-normal normal-case text-gray-400">(optional)</span>
+            </label>
+            <textarea
+              rows={3}
+              defaultValue={check.notes ?? ""}
+              placeholder="Site conditions, issues observed, follow-up items…"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+              onBlur={(e) => {
+                const val = e.target.value.trim() || null;
+                if (val !== (check.notes ?? null)) patchCheck({ notes: val });
+              }}
+            />
+          </div>
+
           {/* Approve / revoke */}
           {(() => {
             const missing: string[] = [];
