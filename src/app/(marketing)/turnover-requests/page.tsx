@@ -50,24 +50,8 @@ export default async function TurnoverRequestsPage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-white/80">Property Managers</p>
         <h1 className="mt-3 text-3xl font-extrabold md:text-5xl">Unit Turnover Requests</h1>
         <p className="mx-auto mt-4 max-w-2xl text-base text-white/90 md:text-lg">
-          Submit your unit scope, dates, and pricing information directly to the Sueep team. We&apos;ll confirm and schedule your clean fast.
+          Submit your unit details and scope directly to your Sueep PM. We&apos;ll confirm and get your clean scheduled fast.
         </p>
-      </section>
-
-      {/* Trust strip */}
-      <section className="border-b border-gray-100 bg-gray-50 px-6 py-6">
-        <div className="mx-auto flex max-w-4xl flex-wrap justify-center gap-8 text-center">
-          {[
-            { stat: "24hr", label: "Average response time" },
-            { stat: "2,000+", label: "Units turned annually" },
-            { stat: "PA · NJ · NY", label: "Service area" },
-          ].map((item) => (
-            <div key={item.stat}>
-              <p className="text-2xl font-extrabold text-[#E73C6E]">{item.stat}</p>
-              <p className="mt-0.5 text-xs text-gray-500">{item.label}</p>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* Form */}
@@ -75,7 +59,7 @@ export default async function TurnoverRequestsPage() {
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900">Submit a request</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Fill out the details below and your Sueep PM will be notified immediately.
+            Fill out your unit details and scope below. Your Sueep PM will be notified immediately.
           </p>
         </div>
         <NewProjectForm
