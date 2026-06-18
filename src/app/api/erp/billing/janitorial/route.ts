@@ -33,7 +33,6 @@ export async function GET(req: Request) {
   const janitorialFilter = [
     ...(janitorialPipelineId ? [{ hubspotPipelineId: janitorialPipelineId }] : []),
     { segment: { in: JANITORIAL_SEGMENTS } },
-    { turnoverRequestId: { not: null } },
   ];
 
   const projects = await prisma.project.findMany({
@@ -60,6 +59,7 @@ export async function GET(req: Request) {
           priceCents: true,
           approvedPriceCents: true,
           billingStatus: true,
+          building: { select: { id: true, name: true } },
         },
       },
     },
@@ -87,8 +87,8 @@ export async function GET(req: Request) {
   const buildingMap = new Map<string, BuildingRow>();
 
   for (const project of projects) {
-    const buildingId = project.building?.id ?? project.buildingId ?? "unknown";
-    const buildingName = project.building?.name ?? "Unknown Building";
+    const buildingId = project.building?.id ?? project.turnoverRequest?.building?.id ?? project.buildingId ?? "unknown";
+    const buildingName = project.building?.name ?? project.turnoverRequest?.building?.name ?? "No building";
 
     if (!buildingMap.has(buildingId)) {
       buildingMap.set(buildingId, { buildingId, buildingName, units: [] });

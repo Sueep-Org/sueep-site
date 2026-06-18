@@ -66,8 +66,9 @@ export async function notifyJanitorialTurnoverCreated(params: {
     employeeEmails.push(...employees.map((e) => e.email).filter((email): email is string => Boolean(email)));
   }
   
+  const isExternal = body.source === "external";
   const recipients = uniqueEmails([
-    stringValue(body.pmEmail) || building.pmEmail || "",
+    isExternal ? (stringValue(body.pmEmail) || building.pmEmail || "") : "",
     stringValue(body.sueepPmEmail),
     ...employeeEmails,
   ]);

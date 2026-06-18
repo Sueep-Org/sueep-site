@@ -214,6 +214,12 @@ interface NewProjectFormProps {
   submitEndpoint?: string;
   successMessage?: string;
   submitLabel?: string;
+  /** Pre-fill and lock the SUEEP PM name and email fields */
+  lockedSueepPm?: { name: string; email: string };
+  /** Hide the "Add new building / address" options — only allow existing buildings */
+  disableNewBuilding?: boolean;
+  /** Arbitrary extra fields merged into the submission payload */
+  payloadExtra?: Record<string, unknown>;
 }
 
 function normalizeBuildingName(value: string) {
@@ -482,6 +488,9 @@ export function NewProjectForm({
   submitEndpoint = "/api/erp/projects",
   successMessage,
   submitLabel = "Create project",
+  lockedSueepPm,
+  disableNewBuilding = false,
+  payloadExtra,
 }: NewProjectFormProps) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -498,7 +507,7 @@ export function NewProjectForm({
   const [coComments, setCoComments] = useState("");
 
   const [currentEmail, setCurrentEmail] = useState(auth?.currentUser?.email ?? "");
-  const canEditPricing = isTurnoverPricingAdmin(currentEmail);
+  const canEditPricing = !lockedSueepPm && isTurnoverPricingAdmin(currentEmail);
 
   useEffect(() => {
     if (!auth) return;
@@ -543,8 +552,8 @@ export function NewProjectForm({
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
-  const [sueepPmName, setSueepPmName] = useState("");
-  const [sueepPmEmail, setSueepPmEmail] = useState("");
+  const [sueepPmName, setSueepPmName] = useState(lockedSueepPm?.name ?? "");
+  const [sueepPmEmail, setSueepPmEmail] = useState(lockedSueepPm?.email ?? "");
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
@@ -967,6 +976,7 @@ export function NewProjectForm({
         pricePackageDollars: pricePackageValues,
       },
       ...(isTurnover && notifyEmployeeIds.length > 0 ? { notifyEmployeeIds } : {}),
+      ...payloadExtra,
     };
 
     try {
@@ -1179,7 +1189,7 @@ export function NewProjectForm({
                       {building.name}
                     </option>
                   ))}
-                  <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>
+                  {!disableNewBuilding && <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>}
                 </select>
                 {isAddingBuilding ? (
                   <div className="mt-2">
@@ -1230,7 +1240,7 @@ export function NewProjectForm({
                       {address}
                     </option>
                   ))}
-                  <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>
+                  {!disableNewBuilding && <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>}
                 </select>
                 {isAddingAddress ? (
                   <div className="mt-2">
@@ -1454,20 +1464,21 @@ export function NewProjectForm({
             </div>
           </div>
 
-          {canEditPricing && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={sectionHeader}>Step 3 - Price package</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setPricePackageValues(defaultPricePackageValues);
-                  setPricePackageTouched(false);
-                }}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
-              >
-                Reset prices
-              </button>
+              {canEditPricing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPricePackageValues(defaultPricePackageValues);
+                    setPricePackageTouched(false);
+                  }}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
+                >
+                  Reset prices
+                </button>
+              )}
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -1487,9 +1498,11 @@ export function NewProjectForm({
                         min={0}
                         step="0.01"
                         inputMode="decimal"
-                        className={`${input} pl-7`}
+                        readOnly={!canEditPricing}
+                        className={`${input} pl-7 ${!canEditPricing ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
                         value={pricePackageValues[field]}
                         onChange={(e) => {
+                          if (!canEditPricing) return;
                           setPricePackageTouched(true);
                           setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
                         }}
@@ -1500,10 +1513,9 @@ export function NewProjectForm({
               </div>
             </div>
           </div>
-          )}
 
           <div className="space-y-3">
-            <p className={sectionHeader}>{canEditPricing ? "Step 4" : "Step 3"} - Estimated total</p>
+            <p className={sectionHeader}>Step 4 - Estimated total</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="sueepPmName">
@@ -1513,9 +1525,10 @@ export function NewProjectForm({
                   id="sueepPmName"
                   name="sueepPmName"
                   required
-                  className={input}
+                  readOnly={Boolean(lockedSueepPm)}
+                  className={`${input} ${lockedSueepPm ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
                   value={sueepPmName}
-                  onChange={(e) => setSueepPmName(e.target.value)}
+                  onChange={(e) => { if (!lockedSueepPm) setSueepPmName(e.target.value); }}
                 />
               </div>
               <div className="min-w-0">
@@ -1527,9 +1540,10 @@ export function NewProjectForm({
                   name="sueepPmEmail"
                   type="email"
                   required
-                  className={input}
+                  readOnly={Boolean(lockedSueepPm)}
+                  className={`${input} ${lockedSueepPm ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
                   value={sueepPmEmail}
-                  onChange={(e) => setSueepPmEmail(e.target.value)}
+                  onChange={(e) => { if (!lockedSueepPm) setSueepPmEmail(e.target.value); }}
                 />
               </div>
             </div>

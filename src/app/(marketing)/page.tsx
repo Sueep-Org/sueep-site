@@ -8,6 +8,7 @@ const HOME_NAV_LINKS = [
   { label: "Services", href: "#services", anchor: true as const },
   { label: "Projects", href: "#projects", anchor: true as const },
   { label: "Contact", href: "#contact", anchor: true as const },
+  { label: "Turnover Requests", href: "/turnover-requests", subtle: true },
   { label: "Referral program", href: "/referral", subtle: true },
   { label: "Careers", href: "/careers", subtle: true },
   { label: "Blog", href: "/blog", subtle: true },
