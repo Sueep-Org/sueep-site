@@ -1346,7 +1346,7 @@ export function NewProjectForm({
             <div className={isMultiStep ? "min-w-0 flex-1 space-y-3" : "space-y-3"}>
               {unitScopes.map((unit, index) => (
                 <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
+                  <div className={isMultiStep ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]"}>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`unit-${unit.id}`}>
                         {unit.features === "common-area" ? "Title" : "Unit number"}
@@ -1400,7 +1400,7 @@ export function NewProjectForm({
                         ))}
                       </select>
                     </div>
-                    <div className="min-w-0 md:col-span-2 xl:col-span-1">
+                    <div className={isMultiStep ? "min-w-0 sm:col-span-2 lg:col-span-1" : "min-w-0 md:col-span-2 xl:col-span-1"}>
                       <label className={label} htmlFor={`quality-${unit.id}`}>
                         Unit quality
                       </label>
@@ -1418,12 +1418,12 @@ export function NewProjectForm({
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-end md:col-span-2 xl:col-span-1">
+                    <div className={isMultiStep ? "flex items-end sm:col-span-2 lg:col-span-1" : "flex items-end md:col-span-2 xl:col-span-1"}>
                       <button
                         type="button"
                         onClick={() => removeUnitScope(unit.id)}
                         disabled={unitScopes.length <= 1}
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40 xl:w-auto"
+                        className={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40 ${isMultiStep ? "lg:w-auto" : "xl:w-auto"}`}
                       >
                         Remove
                       </button>

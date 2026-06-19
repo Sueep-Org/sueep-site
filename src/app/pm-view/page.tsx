@@ -125,6 +125,9 @@ export default async function PmViewPage({ searchParams }: PageProps) {
             projects.map((project) => {
               const units = getDescLine(project.description, "Units") || getDescLine(project.description, "Unit Numbers");
               const sueepPm = project.supervisor || getDescLine(project.description, "SUEEP PM");
+              const estimatedTotal = getDescLine(project.description, "Estimated Turnover Total");
+              const pricingBreakdown = getDescLine(project.description, "Pricing Breakdown");
+              const pricePackage = getDescLine(project.description, "Price Package");
 
               // Services are embedded in each unit line in the description
               const desc = project.description ?? "";
@@ -173,6 +176,34 @@ export default async function PmViewPage({ searchParams }: PageProps) {
                   {services.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {services.map((s) => <ServiceBadge key={s} label={s} />)}
+                    </div>
+                  )}
+
+                  {/* Pricing */}
+                  {(estimatedTotal || pricingBreakdown || pricePackage) && (
+                    <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 p-3">
+                      {estimatedTotal && (
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimated total</span>
+                          <span className="text-base font-bold text-gray-900">{estimatedTotal}</span>
+                        </div>
+                      )}
+                      {pricingBreakdown && (
+                        <div className="mt-2 border-t border-gray-200 pt-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Breakdown</p>
+                          <ul className="space-y-1">
+                            {pricingBreakdown.split(" | ").map((line) => (
+                              <li key={line} className="text-xs text-gray-600">{line}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {pricePackage && !pricingBreakdown && (
+                        <div className="mt-2 border-t border-gray-200 pt-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Price package</p>
+                          <p className="text-xs text-gray-600">{pricePackage.split(" | ").join("  ·  ")}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
