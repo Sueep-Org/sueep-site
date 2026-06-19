@@ -493,10 +493,12 @@ export function NewProjectForm({
   payloadExtra,
 }: NewProjectFormProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [segment, setSegment] = useState(initialSegment);
+  const [currentStep, setCurrentStep] = useState(1);
 
   // Change order state
   const [coProjectId, setCoProjectId] = useState("");
@@ -559,6 +561,7 @@ export function NewProjectForm({
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const isMultiStep = lockedSegment && isTurnover;
   const isChangeOrder = segment === "CHANGE_ORDER";
   const isJanitorialGeneralWorkRequest = segment === "JANITORIAL_GENERAL_WORK_REQUEST";
   const isChildWorkRequest = isChangeOrder || isJanitorialGeneralWorkRequest;
@@ -767,6 +770,21 @@ export function NewProjectForm({
     setPmPhone(matchedBuilding?.pmPhone || "");
   }
 
+  function validateStep(step: number): string {
+    if (step === 1) {
+      if (!buildingProjectId) return "Please select a building.";
+      if (!buildingAddress.trim()) return "Please select or enter a building address.";
+      if (!pmName.trim()) return "PM name is required.";
+      if (!pmEmail.trim()) return "PM email is required.";
+      if (!pmPhone.trim()) return "PM phone is required.";
+    }
+    if (step === 3) {
+      if (!sueepPmName.trim()) return "SUEEP PM name is required.";
+      if (!sueepPmEmail.trim()) return "SUEEP PM email is required.";
+    }
+    return "";
+  }
+
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
@@ -876,6 +894,10 @@ export function NewProjectForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    if (isMultiStep) {
+      const stepError = validateStep(currentStep);
+      if (stepError) { setError(stepError); return; }
+    }
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
@@ -1093,7 +1115,7 @@ export function NewProjectForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
+    <form ref={formRef} onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
       {submitted && successMessage ? (
         <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">
           {successMessage}
@@ -1164,7 +1186,25 @@ export function NewProjectForm({
 
       {isTurnover ? (
         <div className="space-y-5 rounded-lg border border-pink-200 bg-white p-4 sm:p-5">
-          <div className="space-y-2">
+          {isMultiStep && (
+            <div className="flex items-center gap-1.5 border-b border-pink-100 pb-3">
+              {(["Property Info", "Units & Scope", "Review & Submit"] as const).map((stepLabel, i) => {
+                const s = i + 1;
+                const done = s < currentStep;
+                const active = s === currentStep;
+                return (
+                  <div key={s} className="flex items-center gap-1.5">
+                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${done ? "bg-pink-600 text-white" : active ? "bg-pink-600 text-white ring-2 ring-pink-200" : "bg-gray-200 text-gray-500"}`}>
+                      {done ? "✓" : s}
+                    </div>
+                    {active && <span className="text-xs font-medium text-pink-700">{stepLabel}</span>}
+                    {s < 3 && <div className={`h-px w-4 shrink-0 ${done ? "bg-pink-400" : "bg-gray-200"}`} />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className={isMultiStep && currentStep !== 1 ? "hidden" : "space-y-2"}>
             <p className={sectionHeader}>Step 1 - Property and Property Manager/Maintenance Manager Info</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
@@ -1304,9 +1344,9 @@ export function NewProjectForm({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className={isMultiStep && currentStep !== 2 ? "hidden" : "space-y-3"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className={sectionHeader}>Step 2 — Units & independent scope</p>
+              <p className={sectionHeader}>Step 2 — Units & scope</p>
               <button
                 type="button"
                 onClick={addUnitScope}
@@ -1315,7 +1355,8 @@ export function NewProjectForm({
                 Add unit
               </button>
             </div>
-            <div className="space-y-3">
+            <div className={isMultiStep ? "flex flex-col gap-4 lg:flex-row lg:items-start" : "space-y-3"}>
+            <div className={isMultiStep ? "min-w-0 flex-1 space-y-3" : "space-y-3"}>
               {unitScopes.map((unit, index) => (
                 <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
@@ -1462,9 +1503,103 @@ export function NewProjectForm({
                 </div>
               ))}
             </div>
+            {isMultiStep && (
+              <div className="space-y-4 lg:w-72 lg:shrink-0">
+                {canEditPricing && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Price rates</p>
+                      <button
+                        type="button"
+                        onClick={() => { setPricePackageValues(defaultPricePackageValues); setPricePackageTouched(false); }}
+                        className="text-xs text-gray-400 underline hover:text-pink-600"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
+                        <div key={field} className="flex items-center gap-2">
+                          <label className="flex-1 text-xs text-gray-600">{PRICING_FIELD_LABELS[field]}</label>
+                          <div className="relative w-28">
+                            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              inputMode="decimal"
+                              className="w-full rounded border border-gray-300 bg-white py-1 pl-5 pr-2 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                              value={pricePackageValues[field]}
+                              onChange={(e) => {
+                                setPricePackageTouched(true);
+                                setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-100 px-4 py-3">
+                    <p className="text-sm font-semibold text-gray-900">Order summary</p>
+                  </div>
+                  <div className="divide-y divide-gray-50 px-4">
+                    {unitScopes.every((u) => !u.fullClean && !u.fullPaint && !u.touchUpPaint && !u.materialsAdditional && !u.carpetCleaning && !u.lightWallTouchUps) ? (
+                      <p className="py-4 text-xs italic text-gray-400">Select services to see pricing.</p>
+                    ) : (
+                      unitScopes.map((unit, index) => {
+                        const feature = getUnitFeature(unit.features);
+                        const unitLabel = unit.unitNumber || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`);
+                        const pc = packagePricing.pricePackageCents;
+                        const items: { label: string; cents: number }[] = [];
+                        if (unit.fullClean) items.push({ label: "Full clean", cents: pc.fullClean });
+                        if (unit.fullPaint) items.push({ label: "Full paint", cents: pc.fullPaint });
+                        else if (unit.touchUpPaint) items.push({ label: "Touch-up paint", cents: pc.touchUpPaint });
+                        if (unit.materialsAdditional) items.push({ label: "Additional materials", cents: pc.additionalMaterials });
+                        if (unit.carpetCleaning) items.push({ label: "Carpet cleaning", cents: pc.carpetCleaning });
+                        if (unit.lightWallTouchUps) items.push({ label: "Light wall touch-ups", cents: 0 });
+                        if (items.length === 0) return null;
+                        const subtotal = items.reduce((s, item) => s + item.cents, 0);
+                        return (
+                          <div key={unit.id} className="py-3">
+                            <p className="mb-2 text-xs font-semibold text-gray-700">
+                              {unitLabel}{" "}
+                              <span className="font-normal text-gray-400">({feature.label})</span>
+                            </p>
+                            <div className="space-y-1.5">
+                              {items.map((item) => (
+                                <div key={item.label} className="flex justify-between">
+                                  <span className="text-xs text-gray-500">{item.label}</span>
+                                  <span className="text-xs tabular-nums text-gray-600">
+                                    {item.cents > 0 ? formatUsd(item.cents) : "—"}
+                                  </span>
+                                </div>
+                              ))}
+                              {items.length > 1 && (
+                                <div className="flex justify-between border-t border-gray-100 pt-1.5">
+                                  <span className="text-xs font-medium text-gray-600">Subtotal</span>
+                                  <span className="text-xs font-medium tabular-nums text-gray-700">{formatUsd(subtotal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+                    <span className="text-sm font-semibold text-gray-700">Estimated total</span>
+                    <span className="text-lg font-bold tabular-nums text-gray-900">{packagePricing.totalPriceLabel}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            </div>
           </div>
 
-          <div className="space-y-3">
+          <div className={isMultiStep ? "hidden" : "space-y-3"}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={sectionHeader}>Step 3 - Price package</p>
               {canEditPricing && (
@@ -1514,6 +1649,7 @@ export function NewProjectForm({
             </div>
           </div>
 
+          <div className={isMultiStep && currentStep !== 3 ? "hidden" : "space-y-5"}>
           <div className="space-y-3">
             <p className={sectionHeader}>Step 4 - Estimated total</p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1587,6 +1723,7 @@ export function NewProjectForm({
               />
             </div>
           )}
+          </div>
 
         </div>
       ) : null}
@@ -1763,15 +1900,58 @@ export function NewProjectForm({
           {error}
         </p>
       ) : null}
-      <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
-        >
-          {loading ? "Saving…" : submitLabel}
-        </button>
-      </div>
+      {!(isMultiStep && submitted) && (
+        <div className="flex gap-3">
+          {isMultiStep ? (
+            <>
+              {currentStep > 1 && (
+                <button
+                  type="button"
+                  onClick={() => { setError(""); setCurrentStep((s) => s - 1); }}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Back
+                </button>
+              )}
+              {currentStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (err) { setError(err); return; }
+                    setError("");
+                    setCurrentStep((s) => s + 1);
+                  }}
+                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (err) { setError(err); return; }
+                    formRef.current?.requestSubmit();
+                  }}
+                  className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
+                >
+                  {loading ? "Saving…" : submitLabel}
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
+            >
+              {loading ? "Saving…" : submitLabel}
+            </button>
+          )}
+        </div>
+      )}
     </form>
   );
 }

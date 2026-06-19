@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { NewProjectForm } from "@/app/erp/(shell)/projects/new/NewProjectForm";
+import { TurnoverRequestsGate } from "./TurnoverRequestsGate";
 import { MarketingNav } from "../components/MarketingNav";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Unit Turnover Requests | Sueep",
+  title: "Janitorial Requests | Sueep",
   description:
-    "Submit a unit turnover cleaning request to Sueep. Fast scheduling, detailed scope tracking, and direct PM notification for property managers.",
+    "Submit a janitorial turnover request to Sueep. For property managers and real estate agents — fast scheduling, detailed scope tracking, and direct PM notification.",
   alternates: { canonical: "/turnover-requests" },
 };
 
@@ -47,34 +47,19 @@ export default async function TurnoverRequestsPage() {
 
       {/* Hero */}
       <section className="bg-[#E73C6E] px-6 py-16 text-center text-white">
-        <p className="text-xs font-semibold uppercase tracking-widest text-white/80">Property Managers</p>
-        <h1 className="mt-3 text-3xl font-extrabold md:text-5xl">Unit Turnover Requests</h1>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/80">Sueep</p>
+        <h1 className="mt-3 text-3xl font-extrabold md:text-5xl">Janitorial Requests</h1>
         <p className="mx-auto mt-4 max-w-2xl text-base text-white/90 md:text-lg">
-          Submit your unit details and scope directly to your Sueep PM. We&apos;ll confirm and get your clean scheduled fast.
+          For property managers and real estate agents. Submit your unit details and scope directly to your Sueep PM. We&apos;ll confirm and get you scheduled fast.
         </p>
       </section>
 
       {/* Form */}
       <section className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900">Submit a request</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Fill out your unit details and scope below. Your Sueep PM will be notified immediately.
-          </p>
-        </div>
-        <NewProjectForm
-          initialBuildings={buildings}
-          initialScheduleBuildings={scheduleBuildings}
+        <TurnoverRequestsGate
+          buildings={buildings}
+          scheduleBuildings={scheduleBuildings}
           janitorialPipelineId={cfg?.janitorial.pipelineId || null}
-          initialSegment="JANITORIAL_TURNOVER_REQUESTS"
-          lockedSegment
-          allowErpDataFetch={false}
-          submitEndpoint="/api/janitorial-turnover-projects"
-          successMessage="Your turnover request was submitted. Your Sueep PM has been notified."
-          submitLabel="Submit turnover request"
-          lockedSueepPm={{ name: "David Rodriguez", email: "david@sueep.com" }}
-          disableNewBuilding
-          payloadExtra={{ source: "external" }}
         />
       </section>
 

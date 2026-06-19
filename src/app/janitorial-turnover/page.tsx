@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { NewProjectForm } from "@/app/erp/(shell)/projects/new/NewProjectForm";
+import { JanitorialTurnoverGate } from "./JanitorialTurnoverGate";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,16 +51,10 @@ export default async function JanitorialTurnoverPage() {
             Submit unit turnover details, scope, dates, pricing estimate, and SUEEP PM notification information.
           </p>
         </div>
-        <NewProjectForm
-          initialBuildings={buildings}
-          initialScheduleBuildings={scheduleBuildings}
+        <JanitorialTurnoverGate
+          buildings={buildings}
+          scheduleBuildings={scheduleBuildings}
           janitorialPipelineId={cfg?.janitorial.pipelineId || null}
-          initialSegment="JANITORIAL_TURNOVER_REQUESTS"
-          lockedSegment
-          allowErpDataFetch={false}
-          submitEndpoint="/api/janitorial-turnover-projects"
-          successMessage="Your janitorial turnover request was submitted. The SUEEP PM has been notified."
-          submitLabel="Submit turnover request"
         />
       </div>
     </main>
