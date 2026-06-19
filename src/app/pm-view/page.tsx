@@ -181,27 +181,41 @@ export default async function PmViewPage({ searchParams }: PageProps) {
 
                   {/* Pricing */}
                   {(estimatedTotal || pricingBreakdown || pricePackage) && (
-                    <div className="mt-3 rounded-md border border-gray-100 bg-gray-50 p-3">
+                    <div className="mt-3 overflow-hidden rounded-md border border-gray-200 bg-white">
+                      {/* Total */}
                       {estimatedTotal && (
-                        <div className="flex items-baseline justify-between">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimated total</span>
-                          <span className="text-base font-bold text-gray-900">{estimatedTotal}</span>
+                        <div className="flex items-baseline justify-between bg-pink-50 px-4 py-3">
+                          <span className="text-sm font-semibold text-pink-700">Estimated total</span>
+                          <span className="text-xl font-bold text-pink-700">{estimatedTotal}</span>
                         </div>
                       )}
+                      {/* Per-unit breakdown */}
                       {pricingBreakdown && (
-                        <div className="mt-2 border-t border-gray-200 pt-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Breakdown</p>
-                          <ul className="space-y-1">
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Per-unit breakdown</p>
+                          <ul className="space-y-1.5">
                             {pricingBreakdown.split(" | ").map((line) => (
-                              <li key={line} className="text-xs text-gray-600">{line}</li>
+                              <li key={line} className="text-xs text-gray-700">{line}</li>
                             ))}
                           </ul>
                         </div>
                       )}
-                      {pricePackage && !pricingBreakdown && (
-                        <div className="mt-2 border-t border-gray-200 pt-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Price package</p>
-                          <p className="text-xs text-gray-600">{pricePackage.split(" | ").join("  ·  ")}</p>
+                      {/* Price package rates */}
+                      {pricePackage && (
+                        <div className="border-t border-gray-100 px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Pricing package rates</p>
+                          <ul className="space-y-1">
+                            {pricePackage.split(" | ").map((rate) => {
+                              const [name, ...rest] = rate.trim().split(" ");
+                              const price = rest.join(" ");
+                              return (
+                                <li key={rate} className="flex justify-between text-xs text-gray-600">
+                                  <span>{name}</span>
+                                  <span className="font-medium text-gray-800">{price}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
                       )}
                     </div>
