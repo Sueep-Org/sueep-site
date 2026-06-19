@@ -75,6 +75,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     actualTravelCents: changeOrder.actualTravelCents,
     estHours: changeOrder.estHours,
     actualHours: changeOrder.actualHours,
+    estLaborers: changeOrder.estLaborers,
+    estSupervisors: changeOrder.estSupervisors,
     computedLaborCents,
     computedMaterialCents,
     materialEntries: materialEntries.map((e) => ({

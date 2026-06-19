@@ -79,7 +79,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
 
     const { segment, phase } = classified;
-    const projectSegment = segment === "COMMERCIAL" ? "COMMERCIAL_CLEANING" : "RESIDENTIAL_PAINTING";
+    const projectSegment = "COMMERCIAL_CLEANING";
     const status = erpStatusFromPhase(phase);
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;

@@ -165,6 +165,7 @@ export function ProjectChangeOrdersSection({
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const notifiableEmployees = employees.filter((e) => e.email);
+  const [pmSupervisor, setPmSupervisor] = useState("");
 
   const defaultNotifyIds = useState(() => {
     const ids: string[] = [];
@@ -199,6 +200,7 @@ export function ProjectChangeOrdersSection({
         body: JSON.stringify({
           title: String(fd.get("title") || "").trim(),
           requestedBy: String(fd.get("requestedBy") || "").trim() || undefined,
+          supervisor: pmSupervisor.trim() || undefined,
           status: String(fd.get("status") || "DRAFT"),
           description: String(fd.get("description") || "").trim() || undefined,
         }),
@@ -211,6 +213,7 @@ export function ProjectChangeOrdersSection({
       }
       setEntries((prev) => [data, ...prev]);
       form.reset();
+      setPmSupervisor("");
 
       // Send notifications to selected employees
       if (notifyEmployeeIds.length > 0) {
@@ -320,6 +323,10 @@ export function ProjectChangeOrdersSection({
             </select>
           </div>
           <div>
+            <label className={label}>PM</label>
+            <PmCombobox employees={employees} value={pmSupervisor} onChange={setPmSupervisor} />
+          </div>
+          <div>
             <label className={label} htmlFor="co-requestedBy">
               Requested by
             </label>
@@ -360,6 +367,61 @@ export function ProjectChangeOrdersSection({
           {loading ? "Saving..." : "Create change order"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function PmCombobox({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeNotifyOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const blurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) => `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase()))
+    : employees;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder="Search employees…"
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onBlur={() => { blurRef.current = setTimeout(() => setOpen(false), 150); }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <li
+                key={e.id}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  if (blurRef.current) clearTimeout(blurRef.current);
+                  onChange(name);
+                  setQuery(name);
+                  setOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                {name}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

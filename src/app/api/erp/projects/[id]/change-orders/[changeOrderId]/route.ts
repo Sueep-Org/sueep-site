@@ -72,6 +72,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.actualHours !== undefined) {
     data.actualHours = body.actualHours === null || body.actualHours === "" ? null : Number(body.actualHours);
   }
+  if (body.estLaborers !== undefined) {
+    data.estLaborers = body.estLaborers === null || body.estLaborers === "" ? null : Math.max(0, Math.round(Number(body.estLaborers)));
+  }
+  if (body.estSupervisors !== undefined) {
+    data.estSupervisors = body.estSupervisors === null || body.estSupervisors === "" ? null : Math.max(0, Math.round(Number(body.estSupervisors)));
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;

@@ -1,7 +1,6 @@
 export const PROJECT_SEGMENTS = [
     "COMMERCIAL_PAINTING",
     "COMMERCIAL_CLEANING",
-    "RESIDENTIAL_PAINTING",
     "CHANGE_ORDER",
     "JANITORIAL_TURNOVER_REQUESTS",
     "REAL_ESTATE",
@@ -12,13 +11,11 @@ export const PROJECT_SEGMENTS = [
   
   const LEGACY_SEGMENT_MAP: Record<string, ProjectSegment> = {
     COMMERCIAL: "COMMERCIAL_CLEANING",
-    RESIDENTIAL: "RESIDENTIAL_PAINTING",
   };
   
   const SEGMENT_LABELS: Record<ProjectSegment, string> = {
     COMMERCIAL_PAINTING: "Commercial painting",
     COMMERCIAL_CLEANING: "Commercial cleaning",
-    RESIDENTIAL_PAINTING: "Residential painting",
     CHANGE_ORDER: "Change order",
     JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
     REAL_ESTATE: "Real estate",

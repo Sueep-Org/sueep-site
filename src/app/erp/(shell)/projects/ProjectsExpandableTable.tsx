@@ -762,9 +762,9 @@ export function ProjectsExpandableTable({
                               href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                               title={co.title}
                             />
-                            {/* PM -> Requested by */}
+                            {/* PM */}
                             <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
-                              {co.requestedBy || <span className="text-gray-400">-</span>}
+                              {co.supervisor || <span className="text-gray-400">-</span>}
                             </td>
                             {/* Segment -> "Change Order" label */}
                             <td className="px-3 py-1.5 text-sm font-medium text-gray-500">

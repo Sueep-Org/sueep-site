@@ -420,6 +420,8 @@ model ProjectChangeOrder {
   actualTravelCents   Int?
   estHours            Float?
   actualHours         Float?
+  estLaborers         Int?
+  estSupervisors      Int?
 
   laborers        ProjectChangeOrderLaborer[]
   contracts       ChangeOrderContract[]

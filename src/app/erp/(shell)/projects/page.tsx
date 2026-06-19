@@ -329,7 +329,6 @@ export default async function ErpProjectsPage() {
           rows={rows}
           postConstructionPipelineId={cfg?.postConstruction.pipelineId ?? null}
           janitorialPipelineId={cfg?.janitorial.pipelineId ?? null}
-          residentialPipelineId={cfg?.residential.pipelineId ?? null}
           canSeeFinancials={financials}
         />
       )}

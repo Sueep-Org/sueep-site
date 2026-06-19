@@ -16,7 +16,7 @@
  * or inspect a deal’s `pipeline` / `dealstage` property values in the API.
  */
 
-export type ErpSegment = "COMMERCIAL" | "RESIDENTIAL";
+export type ErpSegment = "COMMERCIAL";
 
 /** Awarded/confirmed & WIP should appear on Schedule/Gantt; completed = done in ERP. */
 export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "OTHER";
@@ -26,8 +26,6 @@ export type HubSpotPipelineStageMap = {
   postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
   /** Janitorial pipeline */
   janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
-  /** Residential pipeline — "Confirmed" plays the same role as commercial "Quote approved" */
-  residential: { pipelineId: string; stages: { confirmed: string; workInProgress: string; workCompleted: string } };
 };
 
 export function parseHubSpotPipelineStageMap(): HubSpotPipelineStageMap | null {
@@ -57,14 +55,6 @@ export function classifyHubSpotDealStage(
     const c = configured?.trim();
     return Boolean(c) && dealStageId === c;
   };
-
-  if (pipelineId === cfg.residential.pipelineId) {
-    const { confirmed, workInProgress, workCompleted } = cfg.residential.stages;
-    if (matches(confirmed)) return { segment: "RESIDENTIAL", phase: "AWARDED" };
-    if (matches(workInProgress)) return { segment: "RESIDENTIAL", phase: "WIP" };
-    if (matches(workCompleted)) return { segment: "RESIDENTIAL", phase: "COMPLETED" };
-    return { segment: "RESIDENTIAL", phase: "OTHER" };
-  }
 
   if (pipelineId === cfg.postConstruction.pipelineId) {
     const { quoteApproved, workInProgress, workCompleted, billing } = cfg.postConstruction.stages;

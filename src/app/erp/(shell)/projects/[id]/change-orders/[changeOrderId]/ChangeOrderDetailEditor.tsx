@@ -46,6 +46,8 @@ export type ChangeOrderDetailData = {
   actualTravelCents: number | null;
   estHours: number | null;
   actualHours: number | null;
+  estLaborers: number | null;
+  estSupervisors: number | null;
   computedLaborCents: number;
   computedMaterialCents: number;
   materialEntries: CoMaterialRow[];
@@ -168,6 +170,61 @@ function LaborerMultiSelect({
   );
 }
 
+function PmCombobox({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const blurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) => `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase()))
+    : employees;
+
+  return (
+    <div className="relative mt-1">
+      <input
+        type="text"
+        autoComplete="off"
+        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        placeholder="Search employees…"
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onBlur={() => { blurRef.current = setTimeout(() => setOpen(false), 150); }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <li
+                key={e.id}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  if (blurRef.current) clearTimeout(blurRef.current);
+                  onChange(name);
+                  setQuery(name);
+                  setOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                {name}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ChangeOrderDetailEditor({
   projectId,
   projectTitle,
@@ -225,6 +282,10 @@ export function ChangeOrderDetailEditor({
   );
   const [estHours, setEstHours] = useState(data.estHours != null ? String(data.estHours) : "");
   const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
+  const [estLaborers, setEstLaborers] = useState(data.estLaborers != null ? String(data.estLaborers) : "");
+  const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
+  const actualLaborers = data.laborers.filter((l) => !l.role?.toLowerCase().includes("supervisor")).length;
+  const actualSupervisors = data.laborers.filter((l) => l.role?.toLowerCase().includes("supervisor")).length;
   const [liveMaterialCents, setLiveMaterialCents] = useState(data.computedMaterialCents);
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
@@ -256,6 +317,8 @@ export function ChangeOrderDetailEditor({
           actualTravel: actualTravel.trim() || null,
           estHours: estHours.trim() || null,
           actualHours: actualHours.trim() || null,
+          estLaborers: estLaborers.trim() || null,
+          estSupervisors: estSupervisors.trim() || null,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -354,14 +417,8 @@ export function ChangeOrderDetailEditor({
                   <input id="co-requested-by" className={input} value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)} />
                 </div>
                 <div>
-                  <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
-                  <select id="co-supervisor" className={input} value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
-                    <option value="">— None —</option>
-                    {employees.map((e) => {
-                      const name = `${e.firstName} ${e.lastName}`.trim();
-                      return <option key={e.id} value={name}>{name}</option>;
-                    })}
-                  </select>
+                  <label className={label}>PM</label>
+                  <PmCombobox employees={employees} value={supervisor} onChange={setSupervisor} />
                 </div>
                 <div>
                   <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
@@ -460,6 +517,14 @@ export function ChangeOrderDetailEditor({
                       <label className={label} htmlFor="co-est-hours">Hours</label>
                       <input id="co-est-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={estHours} onChange={(e) => setEstHours(e.target.value)} />
                     </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-laborers"># of laborers</label>
+                      <input id="co-est-laborers" type="number" min={0} step={1} className={input} placeholder="0" value={estLaborers} onChange={(e) => setEstLaborers(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-supervisors"># of supervisors</label>
+                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} onChange={(e) => setEstSupervisors(e.target.value)} />
+                    </div>
                   </div>
                 </div>
 
@@ -487,6 +552,20 @@ export function ChangeOrderDetailEditor({
                     <div>
                       <label className={label} htmlFor="co-actual-hours">Hours</label>
                       <input id="co-actual-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={actualHours} onChange={(e) => setActualHours(e.target.value)} />
+                    </div>
+                    <div>
+                      <p className={label}># of laborers</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {actualLaborers}
+                        <span className="ml-2 text-xs text-gray-400">from laborers log</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className={label}># of supervisors</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {actualSupervisors}
+                        <span className="ml-2 text-xs text-gray-400">from laborers log</span>
+                      </p>
                     </div>
                   </div>
                 </div>

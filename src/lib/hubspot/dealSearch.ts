@@ -12,7 +12,6 @@ function collectAllDealStageIds(cfg: HubSpotPipelineStageMap): string[] {
   };
   add(cfg.postConstruction.stages);
   add(cfg.janitorial.stages);
-  add(cfg.residential.stages);
   return [...ids];
 }
 

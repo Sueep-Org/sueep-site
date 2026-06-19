@@ -6,7 +6,7 @@ import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
-type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "residential" | "manual";
+type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -14,7 +14,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "post-construction", label: "Post-Const" },
   { id: "janitorial", label: "Janitorial" },
   { id: "real-estate", label: "Real Estate" },
-  { id: "residential", label: "Residential" },
   { id: "manual", label: "Manual" },
 ];
 
@@ -29,11 +28,10 @@ type Props = {
   rows: ProjectTableRow[];
   postConstructionPipelineId: string | null;
   janitorialPipelineId: string | null;
-  residentialPipelineId: string | null;
   canSeeFinancials: boolean;
 };
 
-export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, residentialPipelineId, canSeeFinancials }: Props) {
+export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, canSeeFinancials }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [activeLifecycle, setActiveLifecycle] = useState<Lifecycle | null>(null);
   const [search, setSearch] = useState("");
@@ -50,7 +48,6 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
       Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im));
 
     if (pid === janitorialPipelineId || looksLikeTurnoverRequest) return "janitorial";
-    if (pid === residentialPipelineId) return "residential";
     if (pid === postConstructionPipelineId) return "post-construction";
     return "manual";
   }
