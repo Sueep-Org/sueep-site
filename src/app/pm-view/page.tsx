@@ -73,7 +73,21 @@ export default async function PmViewPage({ searchParams }: PageProps) {
       projectDate: true,
       projectEndDate: true,
       supervisor: true,
+      contractValueCents: true,
       createdAt: true,
+      turnoverRequest: {
+        select: {
+          priceCents: true,
+          fullClean: true,
+          fullPaint: true,
+          touchUpPaint: true,
+          carpetCleaning: true,
+          materialsAdditional: true,
+          bedrooms: true,
+          bathrooms: true,
+          unitNumber: true,
+        },
+      },
     },
   });
 
@@ -123,24 +137,27 @@ export default async function PmViewPage({ searchParams }: PageProps) {
             </div>
           ) : (
             projects.map((project) => {
-              const units = getDescLine(project.description, "Units") || getDescLine(project.description, "Unit Numbers");
+              const units = getDescLine(project.description, "Units") || getDescLine(project.description, "Unit Numbers") || project.turnoverRequest?.unitNumber || "";
               const sueepPm = project.supervisor || getDescLine(project.description, "SUEEP PM");
-              const estimatedTotal = getDescLine(project.description, "Estimated Turnover Total");
-              const pricingBreakdown = getDescLine(project.description, "Pricing Breakdown");
+
+              // Price — prefer TurnoverRequest.priceCents, fall back to contractValueCents
+              const priceCents = project.turnoverRequest?.priceCents ?? project.contractValueCents ?? null;
+              const priceLabel = priceCents != null && priceCents > 0
+                ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(priceCents / 100)
+                : null;
+
+              // Price package rates from description (stored on new submissions)
               const pricePackage = getDescLine(project.description, "Price Package");
 
-              // Services are embedded in each unit line in the description
-              const desc = project.description ?? "";
-              const serviceKeywords: [RegExp, string][] = [
-                [/full clean/i, "Full clean"],
-                [/full paint/i, "Full paint"],
-                [/touch-up paint/i, "Touch-up paint"],
-                [/carpet cleaning/i, "Carpet cleaning"],
-                [/additional materials/i, "Additional materials"],
-              ];
-              const services = serviceKeywords
-                .filter(([re]) => re.test(desc))
-                .map(([, label]) => label);
+              // Services — read from TurnoverRequest flags; fall back to description keywords
+              const tr = project.turnoverRequest;
+              const services: string[] = tr ? [
+                tr.fullClean ? "Full clean" : null,
+                tr.fullPaint ? "Full paint" : null,
+                tr.touchUpPaint ? "Touch-up paint" : null,
+                tr.carpetCleaning ? "Carpet cleaning" : null,
+                tr.materialsAdditional ? "Additional materials" : null,
+              ].filter((s): s is string => Boolean(s)) : [];
 
               const statusKey = project.status ?? "ACTIVE";
               const statusLabel = STATUS_LABEL[statusKey] ?? statusKey;
@@ -180,37 +197,27 @@ export default async function PmViewPage({ searchParams }: PageProps) {
                   )}
 
                   {/* Pricing */}
-                  {(estimatedTotal || pricingBreakdown || pricePackage) && (
+                  {(priceLabel || pricePackage) && (
                     <div className="mt-3 overflow-hidden rounded-md border border-gray-200 bg-white">
-                      {/* Total */}
-                      {estimatedTotal && (
+                      {/* Unit total */}
+                      {priceLabel && (
                         <div className="flex items-baseline justify-between bg-pink-50 px-4 py-3">
                           <span className="text-sm font-semibold text-pink-700">Estimated total</span>
-                          <span className="text-xl font-bold text-pink-700">{estimatedTotal}</span>
-                        </div>
-                      )}
-                      {/* Per-unit breakdown */}
-                      {pricingBreakdown && (
-                        <div className="px-4 py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Per-unit breakdown</p>
-                          <ul className="space-y-1.5">
-                            {pricingBreakdown.split(" | ").map((line) => (
-                              <li key={line} className="text-xs text-gray-700">{line}</li>
-                            ))}
-                          </ul>
+                          <span className="text-xl font-bold text-pink-700">{priceLabel}</span>
                         </div>
                       )}
                       {/* Price package rates */}
                       {pricePackage && (
-                        <div className="border-t border-gray-100 px-4 py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Pricing package rates</p>
-                          <ul className="space-y-1">
+                        <div className="px-4 py-3">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pricing package rates</p>
+                          <ul className="space-y-1.5">
                             {pricePackage.split(" | ").map((rate) => {
-                              const [name, ...rest] = rate.trim().split(" ");
-                              const price = rest.join(" ");
+                              const lastSpace = rate.lastIndexOf(" ");
+                              const name = rate.slice(0, lastSpace).trim();
+                              const price = rate.slice(lastSpace + 1).trim();
                               return (
-                                <li key={rate} className="flex justify-between text-xs text-gray-600">
-                                  <span>{name}</span>
+                                <li key={rate} className="flex justify-between text-xs">
+                                  <span className="text-gray-600">{name}</span>
                                   <span className="font-medium text-gray-800">{price}</span>
                                 </li>
                               );

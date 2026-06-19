@@ -39,16 +39,33 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
     const supervisor = stringValue(body.sueepPmName) || stringValue(body.supervisor) || null;
     const hubspotPipelineId = stringValue(body.hubspotPipelineId) || null;
 
+    // Extract pricing lines from the submission payload description to store per project
+    const bodyDesc = stringValue(body.description);
+    const pricePackageLine = bodyDesc
+      .split(/\r?\n/)
+      .find((l) => l.trim().toLowerCase().startsWith("price package:"))
+      ?.trim() ?? null;
+
     // One project per unit so each unit has its own checklist, labor, and materials
     const projects = await Promise.all(
-      result.requests.map((request) =>
-        prisma.project.create({
+      result.requests.map((request) => {
+        const unitTotal = request.priceCents != null && request.priceCents > 0
+          ? `Estimated Unit Total: $${(request.priceCents / 100).toFixed(0)}`
+          : null;
+        const descLines = [
+          `Property: ${result.building.name}`,
+          `Units: ${request.unitNumber}${request.bedrooms === null ? " (Common Area)" : ""}`,
+          pricePackageLine,
+          unitTotal,
+        ].filter(Boolean);
+
+        return prisma.project.create({
           data: {
             segment,
             jobTitle: `${result.building.name} - ${formatUnitDisplay(request.unitNumber)}`,
             buildingId: result.building.id,
             turnoverRequestId: request.id,
-            description: `Property: ${result.building.name}\nUnits: ${request.unitNumber}${request.bedrooms === null ? " (Common Area)" : ""}`,
+            description: descLines.join("\n"),
             supervisor,
             projectDate: request.startDate,
             projectEndDate: request.endDate,
@@ -57,8 +74,8 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
             contractValueCents: request.priceCents ?? undefined,
             hubspotPipelineId,
           },
-        })
-      )
+        });
+      })
     );
 
     return { turnoverRequests: result.requests, building: result.building, projects } as const;
