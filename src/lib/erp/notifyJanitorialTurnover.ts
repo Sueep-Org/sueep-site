@@ -9,6 +9,7 @@ type TurnoverRequestForEmail = {
 };
 
 type BuildingForEmail = {
+  id: string;
   name: string;
   address: string;
   pmName: string | null;
@@ -43,9 +44,10 @@ function maxDate(dates: (Date | null)[]) {
   return sorted[sorted.length - 1] ?? null;
 }
 
-function projectUrl() {
+function projectUrl(buildingId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
-  return appUrl ? `${appUrl.replace(/\/$/, "")}/erp/turnover-requests` : null;
+  if (!appUrl) return null;
+  return `${appUrl.replace(/\/$/, "")}/pm-view?building=${buildingId}`;
 }
 
 export async function notifyJanitorialTurnoverCreated(params: {
@@ -87,7 +89,7 @@ export async function notifyJanitorialTurnoverCreated(params: {
     endDate: dateLabel(maxDate(requests.map((request) => request.endDate))),
     estimatedTotal: totalCents > 0 ? formatUsd(totalCents) : null,
     details: stringValue(body.description) || null,
-    projectUrl: projectUrl(),
+    projectUrl: projectUrl(building.id),
   });
 
   try {
