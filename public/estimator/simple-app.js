@@ -824,13 +824,10 @@ async function initApp(){
 
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
-    const files = projData.files || [];
-    const quotationFile = files.find(f => f.file_type === 'quotation');
 
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
     setText('loadedProjectName', projData.name);
     setText('loadedProjectAddress', projData.address);
-    setText('loadedQuotationName', quotationFile ? quotationFile.filename : 'None');
     setText('loadedPdfName', blueprintFilename);
 
     document.getElementById('projectLoadedCard').style.display = 'block';
@@ -838,23 +835,15 @@ async function initApp(){
     document.getElementById('editProjectForm').style.display = 'none';
 
     updateProjectDetails(projData);
-
-    // Load quotation data if project has a quotation file
-    const hasQuotation = (projData.files || []).some(f => f.file_type === 'quotation');
-    if (hasQuotation && projData.id) {
-      loadQuotationData(projData.id);
-    } else {
-      const qCard = document.getElementById('quotationDataCard');
-      if (qCard) qCard.style.display = 'none';
-    }
+    showAnalysisCard(projData);
   }
 
   function showNewProjectForm() {
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'block';
     document.getElementById('editProjectForm').style.display = 'none';
-    const qCard = document.getElementById('quotationDataCard');
-    if (qCard) qCard.style.display = 'none';
+    const aCard = document.getElementById('analysisCard');
+    if (aCard) aCard.style.display = 'none';
   }
 
   function showEditProjectForm() {
@@ -863,8 +852,6 @@ async function initApp(){
     const addrEl = document.getElementById('editProjectAddressInput');
     if (nameEl) nameEl.value = _loadedProjectData.name || '';
     if (addrEl) addrEl.value = _loadedProjectData.address || '';
-    const qInput = document.getElementById('editQuotationInput');
-    if (qInput) qInput.value = '';
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'none';
     document.getElementById('editProjectForm').style.display = 'block';
@@ -1043,15 +1030,6 @@ async function initApp(){
         if (!r.ok) throw new Error('Save failed');
         const updated = await r.json();
 
-        // upload new quotation if provided
-        const qFile = document.getElementById('editQuotationInput')?.files?.[0];
-        if (qFile) {
-          const qForm = new FormData();
-          qForm.append('file', qFile);
-          const qRes = await fetch(`${API_BASE}/api/projects/${activeProjectId}/quotation`, { method: 'POST', body: qForm });
-          if (!qRes.ok) toast('Quotation upload failed', 'error');
-        }
-
         // re-fetch full project to get latest files
         const projRes = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, { cache: 'no-store' });
         const projData = projRes.ok ? await projRes.json() : updated;
@@ -1083,10 +1061,8 @@ async function initApp(){
       if (uploadCollapsed) uploadCollapsed.style.display = 'none';
       const nameIn = document.getElementById('projectNameInput');
       const addrIn = document.getElementById('projectAddressInput');
-      const qIn = document.getElementById('quotationInput');
       if (nameIn) nameIn.value = '';
       if (addrIn) addrIn.value = '';
-      if (qIn) qIn.value = '';
       const mainContent = document.getElementById('mainContent');
       if (mainContent) mainContent.classList.add('hidden');
     });
@@ -1112,6 +1088,222 @@ async function initApp(){
       } finally {
         refreshDistanceBtn.textContent = '↻ Refresh Distance';
         refreshDistanceBtn.disabled = false;
+      }
+    });
+  }
+
+  // ======================================================
+  // ANALYSIS CARD
+  // ======================================================
+
+  const fmt$ = v => (v != null ? `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—');
+  const fmtSF = v => (v != null ? Number(v).toLocaleString() + ' SF' : '—');
+
+  let _laborRows = [];
+  let _laborRowId = 0;
+
+  function _calcLaborTotal() {
+    return _laborRows.reduce((sum, r) => sum + (parseFloat(r.hour_rate) || 0) * (parseFloat(r.days) || 0) * 8, 0);
+  }
+
+  function _updateTotalCalcEl() {
+    const el = document.getElementById('analysisTotalLaborCalc');
+    if (el) el.textContent = fmt$(_calcLaborTotal());
+  }
+
+  function _renderLaborRows() {
+    const container = document.getElementById('laborRowsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (_laborRows.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:12px;color:#9ca3af;padding:6px 0;';
+      empty.textContent = 'No entries — click + Add to start.';
+      container.appendChild(empty);
+      _updateTotalCalcEl();
+      return;
+    }
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:4px;';
+    ['Labor Type', '$/hr', 'Days', 'Subtotal', ''].forEach(h => {
+      const el = document.createElement('div');
+      el.textContent = h;
+      el.style.cssText = 'font-size:11px;color:#6b7280;font-weight:500;padding:0 2px;';
+      header.appendChild(el);
+    });
+    container.appendChild(header);
+
+    const iStyle = 'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;box-sizing:border-box;outline:none;';
+
+    for (const row of _laborRows) {
+      const rowEl = document.createElement('div');
+      rowEl.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:6px;align-items:center;';
+
+      const nameIn = document.createElement('input');
+      nameIn.type = 'text'; nameIn.placeholder = 'e.g. Painter';
+      nameIn.value = row.name || ''; nameIn.style.cssText = iStyle;
+      nameIn.addEventListener('input', e => { row.name = e.target.value; });
+
+      const rateIn = document.createElement('input');
+      rateIn.type = 'number'; rateIn.placeholder = '0.00'; rateIn.step = '0.01'; rateIn.min = '0';
+      rateIn.value = row.hour_rate || ''; rateIn.style.cssText = iStyle;
+      rateIn.addEventListener('input', e => {
+        row.hour_rate = parseFloat(e.target.value) || 0;
+        const sub = row.hour_rate * (parseFloat(row.days) || 0) * 8;
+        subEl.textContent = fmt$(sub);
+        _updateTotalCalcEl();
+      });
+
+      const daysIn = document.createElement('input');
+      daysIn.type = 'number'; daysIn.placeholder = '0'; daysIn.step = '0.5'; daysIn.min = '0';
+      daysIn.value = row.days || ''; daysIn.style.cssText = iStyle;
+      daysIn.addEventListener('input', e => {
+        row.days = parseFloat(e.target.value) || 0;
+        const sub = (parseFloat(row.hour_rate) || 0) * row.days * 8;
+        subEl.textContent = fmt$(sub);
+        _updateTotalCalcEl();
+      });
+
+      const subEl = document.createElement('div');
+      subEl.textContent = fmt$((parseFloat(row.hour_rate) || 0) * (parseFloat(row.days) || 0) * 8);
+      subEl.style.cssText = 'font-size:12px;color:#374151;font-family:monospace;padding:0 2px;';
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '×';
+      removeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0;line-height:1;';
+      removeBtn.addEventListener('click', () => {
+        _laborRows = _laborRows.filter(r => r.id !== row.id);
+        _renderLaborRows();
+      });
+
+      rowEl.appendChild(nameIn); rowEl.appendChild(rateIn); rowEl.appendChild(daysIn);
+      rowEl.appendChild(subEl); rowEl.appendChild(removeBtn);
+      container.appendChild(rowEl);
+    }
+    _updateTotalCalcEl();
+  }
+
+  function showAnalysisCard(projData) {
+    const card = document.getElementById('analysisCard');
+    if (!card) return;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    const breakdownDiv = document.getElementById('analysisViewBreakdown');
+    if (breakdownDiv) {
+      breakdownDiv.innerHTML = '';
+      const rows = projData.labor_breakdown || [];
+      if (rows.length > 0) {
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+        const thead = table.createTHead();
+        const hrow = thead.insertRow();
+        ['Labor Type', '$/hr', 'Days', 'Hours', 'Subtotal'].forEach((h, i) => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          th.style.cssText = `text-align:${i === 0 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;`;
+          hrow.appendChild(th);
+        });
+        const tbody = table.createTBody();
+        for (const r of rows) {
+          const tr = tbody.insertRow();
+          tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+          const sub = (r.hour_rate || 0) * (r.days || 0) * 8;
+          [
+            { v: r.name || '—', a: 'left' },
+            { v: `$${(r.hour_rate || 0).toFixed(2)}`, a: 'right' },
+            { v: r.days || 0, a: 'right' },
+            { v: (r.days || 0) * 8, a: 'right' },
+            { v: fmt$(sub), a: 'right' },
+          ].forEach(({ v, a }) => {
+            const td = tr.insertCell();
+            td.textContent = v;
+            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;`;
+          });
+        }
+        breakdownDiv.appendChild(table);
+      }
+    }
+
+    const lps = (projData.labor != null && projData.total_area) ? (projData.labor / projData.total_area) : null;
+    setText('analysisViewLabor', fmt$(projData.labor));
+    setText('analysisViewTotalArea', fmtSF(projData.total_area));
+    setText('analysisViewQuote', fmt$(projData.quote));
+    setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
+
+    document.getElementById('analysisView').style.display = 'block';
+    document.getElementById('analysisEditForm').style.display = 'none';
+    document.getElementById('editAnalysisBtn').style.display = '';
+    card.style.display = 'block';
+  }
+
+  function showAnalysisEditForm() {
+    if (!_loadedProjectData) return;
+    _laborRows = (_loadedProjectData.labor_breakdown || []).map(r => ({
+      id: ++_laborRowId, name: r.name || '', hour_rate: r.hour_rate || 0, days: r.days || 0,
+    }));
+    _renderLaborRows();
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+    setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
+    setVal('analysisQuoteInput', _loadedProjectData.quote);
+    document.getElementById('analysisView').style.display = 'none';
+    document.getElementById('analysisEditForm').style.display = 'block';
+    document.getElementById('editAnalysisBtn').style.display = 'none';
+  }
+
+  const editAnalysisBtn = document.getElementById('editAnalysisBtn');
+  if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => showAnalysisEditForm());
+
+  const cancelAnalysisBtn = document.getElementById('cancelAnalysisBtn');
+  if (cancelAnalysisBtn) cancelAnalysisBtn.addEventListener('click', () => {
+    if (_loadedProjectData) showAnalysisCard(_loadedProjectData);
+  });
+
+  const addLaborRowBtn = document.getElementById('addLaborRowBtn');
+  if (addLaborRowBtn) addLaborRowBtn.addEventListener('click', () => {
+    _laborRows.push({ id: ++_laborRowId, name: '', hour_rate: 0, days: 0 });
+    _renderLaborRows();
+  });
+
+  const saveAnalysisBtn = document.getElementById('saveAnalysisBtn');
+  if (saveAnalysisBtn) {
+    saveAnalysisBtn.addEventListener('click', async () => {
+      if (!activeProjectId) return;
+      const breakdown = _laborRows.map(r => ({
+        name: r.name,
+        hour_rate: parseFloat(r.hour_rate) || 0,
+        days: parseFloat(r.days) || 0,
+      }));
+      const totalLabor = _calcLaborTotal();
+      const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
+      const quoteVal = document.getElementById('analysisQuoteInput')?.value;
+
+      const body = {
+        labor: totalLabor > 0 ? totalLabor : null,
+        labor_breakdown: breakdown.length > 0 ? breakdown : null,
+      };
+      if (areaVal !== '') body.total_area = parseFloat(areaVal);
+      if (quoteVal !== '') body.quote = parseFloat(quoteVal);
+
+      saveAnalysisBtn.textContent = 'Saving…';
+      saveAnalysisBtn.disabled = true;
+      try {
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error('Save failed');
+        const updated = await r.json();
+        _loadedProjectData = { ..._loadedProjectData, ...updated };
+        showAnalysisCard(_loadedProjectData);
+        toast('Analysis saved', 'info');
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        saveAnalysisBtn.textContent = 'Save';
+        saveAnalysisBtn.disabled = false;
       }
     });
   }
@@ -1346,9 +1538,7 @@ async function initApp(){
       if (uploadCollapsed) uploadCollapsed.style.display = 'none';
 
       const projectNameInput = document.getElementById('projectNameInput');
-      const quotationInput = document.getElementById('quotationInput');
       if (projectNameInput) projectNameInput.value = '';
-      if (quotationInput) quotationInput.value = '';
       const addrInput = document.getElementById('projectAddressInput');
       if (addrInput) addrInput.value = '';
       activeProjectId = null;
@@ -1443,19 +1633,6 @@ async function initApp(){
         { method: 'POST', body: formData }
       );
       const data = await res.json();
-
-      // 3. Upload quotation if provided
-      const quotationInput = document.getElementById('quotationInput');
-      if (quotationInput?.files?.[0]) {
-        console.log('[upload] uploading quotation...');
-        const qForm = new FormData();
-        qForm.append('file', quotationInput.files[0]);
-        await fetch(`${API_BASE}/api/projects/${projectId}/quotation`, {
-          method: 'POST',
-          body: qForm
-        });
-        console.log('[upload] quotation uploaded');
-      }
 
       console.log('==============================');
       console.log('✅ BACKEND RESPONSE');
@@ -1563,38 +1740,6 @@ async function initApp(){
         await processFile(file);
       }
     );
-  }
-
-  const quotationInput = document.getElementById('quotationInput');
-  if (quotationInput) {
-    quotationInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (!activeProjectId) {
-        // No active project yet — file will be picked up when PDF is uploaded
-        return;
-      }
-      try {
-        const qForm = new FormData();
-        qForm.append('file', file);
-        const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}/quotation`, {
-          method: 'POST',
-          body: qForm,
-        });
-        if (!res.ok) throw new Error('Quotation upload failed');
-        const data = await res.json();
-        if (data.duplicate) {
-          toast('This quotation file already exists in the project.', 'info');
-        } else {
-          toast('Quotation uploaded.', 'info');
-        }
-        renderDrawerSkeleton();
-        drawerLoaded = true;
-        try { await refreshDrawer(); } catch(_) {}
-      } catch (err) {
-        toast(err.message, 'error');
-      }
-    });
   }
 
   // ======================================================
