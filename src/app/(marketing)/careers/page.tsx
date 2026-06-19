@@ -1,6 +1,7 @@
 import Script from "next/script";
 import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
+import { CareersPixelEvents } from "./CareersPixelEvents";
 
 
 export const metadata = {
@@ -48,6 +49,7 @@ export default async function CareersPage({
         </div>
       )}
 
+      <CareersPixelEvents submitted={showSuccess} />
       <MarketingNav />
 
       <section className="relative py-16 md:py-24 overflow-hidden">
