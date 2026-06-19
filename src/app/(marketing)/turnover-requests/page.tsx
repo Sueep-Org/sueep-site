@@ -14,11 +14,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "/turnover-requests" },
 };
 
-const NAV_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Commercial Cleaning", href: "/commercial-cleaning" },
-  { label: "Careers", href: "/careers", subtle: true },
-];
 
 export default async function TurnoverRequestsPage() {
   const cfg = parseHubSpotPipelineStageMap();
@@ -43,7 +38,7 @@ export default async function TurnoverRequestsPage() {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <MarketingNav links={NAV_LINKS} cta={{ label: "Request a Quote", href: "/" }} />
+      <MarketingNav />
 
       {/* Hero */}
       <section className="bg-[#E73C6E] px-6 py-16 text-center text-white">

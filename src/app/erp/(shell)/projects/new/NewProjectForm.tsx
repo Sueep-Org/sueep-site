@@ -563,22 +563,9 @@ export function NewProjectForm({
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
   const isMultiStep = lockedSegment && isTurnover;
   const isChangeOrder = segment === "CHANGE_ORDER";
-  const isJanitorialGeneralWorkRequest = segment === "JANITORIAL_GENERAL_WORK_REQUEST";
-  const isChildWorkRequest = isChangeOrder || isJanitorialGeneralWorkRequest;
-  const childWorkRequestProjects = useMemo(() => {
-    if (!isJanitorialGeneralWorkRequest) return allProjects;
-    return allProjects.filter((project) => {
-      if (janitorialPipelineId && project.hubspotPipelineId === janitorialPipelineId) return true;
-      return project.segment === "JANITORIAL_TURNOVER_REQUESTS" || project.segment === "COMMERCIAL_CLEANING";
-    });
-  }, [allProjects, isJanitorialGeneralWorkRequest, janitorialPipelineId]);
-  const childRequestNoun = isJanitorialGeneralWorkRequest ? "work request" : "change order";
-
-  useEffect(() => {
-    if (isJanitorialGeneralWorkRequest && coProjectId && !childWorkRequestProjects.some((project) => project.id === coProjectId)) {
-      setCoProjectId("");
-    }
-  }, [childWorkRequestProjects, coProjectId, isJanitorialGeneralWorkRequest]);
+  const isChildWorkRequest = isChangeOrder;
+  const childWorkRequestProjects = allProjects;
+  const childRequestNoun = "change order";
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -1040,7 +1027,7 @@ export function NewProjectForm({
         </div>
 
         <div>
-          <label className={label}>{isJanitorialGeneralWorkRequest ? "Janitorial project *" : "Project *"}</label>
+          <label className={label}>Project *</label>
           <ProjectSearchDropdown
             projects={childWorkRequestProjects}
             value={coProjectId}

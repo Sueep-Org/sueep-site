@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { NewProjectForm } from "@/app/erp/(shell)/projects/new/NewProjectForm";
+import { RealEstateForm } from "./RealEstateForm";
 
 type Role = "property-manager" | "real-estate-agent" | null;
 
@@ -93,7 +94,7 @@ export function TurnoverRequestsGate({ buildings, scheduleBuildings, janitorialP
   const [role, setRole] = useState<Role>(null);
 
   if (role === "real-estate-agent") {
-    return <WipScreen onBack={() => setRole(null)} />;
+    return <RealEstateForm onBack={() => setRole(null)} />;
   }
 
   if (role === "property-manager") {

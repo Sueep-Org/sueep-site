@@ -6,13 +6,14 @@ import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
-type Tab = "all" | "post-construction" | "janitorial" | "residential" | "manual";
+type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "residential" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "post-construction", label: "Post-Const" },
   { id: "janitorial", label: "Janitorial" },
+  { id: "real-estate", label: "Real Estate" },
   { id: "residential", label: "Residential" },
   { id: "manual", label: "Manual" },
 ];
@@ -40,9 +41,12 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
   function getTab(row: ProjectTableRow): Tab {
     const pid = row.hubspotPipelineId;
     const segment = normalizeProjectSegment(row.segment);
+
+    // Explicit segment takes priority over description heuristics
+    if (segment === "REAL_ESTATE") return "real-estate";
+
     const looksLikeTurnoverRequest =
       segment === "JANITORIAL_TURNOVER_REQUESTS" ||
-      segment === "JANITORIAL_GENERAL_WORK_REQUEST" ||
       Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im));
 
     if (pid === janitorialPipelineId || looksLikeTurnoverRequest) return "janitorial";

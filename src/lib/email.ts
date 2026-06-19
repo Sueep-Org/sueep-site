@@ -272,6 +272,56 @@ export function buildWorkOrderNotificationEmailHtml(params: {
   `;
 }
 
+export function buildRealEstateConfirmationEmail(params: {
+  agentName: string;
+  propertyAddress: string;
+  propertyType?: string | null;
+  bedrooms?: string | null;
+  bathrooms?: string | null;
+  services: string[];
+  cleanDate?: string | null;
+  moveInDate?: string | null;
+  contractValue?: string | null;
+}) {
+  const serviceRows = params.services.length
+    ? params.services.map((s) => `<li style="margin-bottom:4px">${escapeHtml(s)}</li>`).join("")
+    : "<li>No specific services selected</li>";
+
+  const detailRows = [
+    params.propertyType ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Property type</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.propertyType)}</td></tr>` : "",
+    params.bedrooms ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Bedrooms</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.bedrooms)}</td></tr>` : "",
+    params.bathrooms ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Bathrooms</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.bathrooms)}</td></tr>` : "",
+    params.cleanDate ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Target clean date</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.cleanDate)}</td></tr>` : "",
+    params.moveInDate ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Move-in / listing date</td><td style="padding:6px 0;font-weight:600">${escapeHtml(params.moveInDate)}</td></tr>` : "",
+    params.contractValue ? `<tr><td style="padding:6px 12px 6px 0;color:#555;white-space:nowrap">Estimated value</td><td style="padding:6px 0;font-weight:600">$${escapeHtml(params.contractValue)}</td></tr>` : "",
+  ].filter(Boolean).join("");
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:600px">
+      <div style="background:#E73C6E;padding:24px 28px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;color:#fff;font-size:20px">Sueep — Request Received</h1>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:28px;border-radius:0 0 8px 8px">
+        <p>Hi ${escapeHtml(params.agentName)},</p>
+        <p>Thanks for submitting a cleaning request through Sueep. We've received your request and our team will be in touch shortly to confirm the details and schedule.</p>
+
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px 20px;margin:20px 0">
+          <p style="margin:0 0 10px;font-weight:700;font-size:15px">📍 ${escapeHtml(params.propertyAddress)}</p>
+          ${detailRows ? `<table style="border-collapse:collapse;width:100%">${detailRows}</table>` : ""}
+        </div>
+
+        <p style="font-weight:600;margin-bottom:8px">Services requested:</p>
+        <ul style="margin:0;padding-left:20px;color:#374151">${serviceRows}</ul>
+
+        <p style="margin-top:24px;font-size:13px;color:#6b7280">
+          Questions? Reply to this email or reach out to your Sueep contact directly.
+        </p>
+        <p style="margin-top:4px;font-size:13px;color:#6b7280">— The Sueep Team</p>
+      </div>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

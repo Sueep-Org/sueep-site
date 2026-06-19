@@ -39,7 +39,6 @@ function timeAgo(date: Date): string {
 
 const SEGMENT_DOT: Record<string, string> = {
   JANITORIAL_TURNOVER_REQUESTS: "bg-teal-400",
-  JANITORIAL_GENERAL_WORK_REQUEST: "bg-teal-400",
   COMMERCIAL_CLEANING: "bg-teal-400",
   POST_CONSTRUCTION: "bg-amber-400",
   RESIDENTIAL: "bg-blue-400",

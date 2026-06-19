@@ -1,4 +1,5 @@
 import CommercialLeadForm from "../components/CommercialLeadForm";
+import { MarketingNav } from "../components/MarketingNav";
 
 export const metadata = {
   title: "Commercial Janitorial Services in Philadelphia | Sueep Facility Maintenance",
@@ -16,6 +17,7 @@ export const metadata = {
 export default function CommercialCleaningPage() {
   return (
     <main className="bg-white text-gray-900">
+      <MarketingNav />
       {/* Hero Section */}
       <section className="relative min-h-[70vh] flex items-center overflow-hidden">
         <img

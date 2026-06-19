@@ -36,6 +36,7 @@ export type WorkOrderRecord = {
 
 type Props = {
   projectId: string;
+  segment?: string | null;
   // Fallback defaults (used only if no saved record exists)
   jobTitle: string;
   description: string | null;
@@ -183,6 +184,7 @@ function EmployeeSearchDropdown({
 
 export function ProjectWorkOrderNotifier({
   projectId,
+  segment,
   jobTitle,
   description,
   projectDateIso,
@@ -190,10 +192,27 @@ export function ProjectWorkOrderNotifier({
   employees,
   savedRecord,
 }: Props) {
+  const isRealEstate = segment === "REAL_ESTATE";
+
   // Derive fallback values from project fields (used when no saved record exists)
-  const fallbackAddress = useMemo(() => getDetailLine(description, "Address"), [description]);
+  const fallbackAddress = useMemo(() => {
+    if (isRealEstate) return getDetailLine(description, "Property");
+    return getDetailLine(description, "Address");
+  }, [description, isRealEstate]);
+
   const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
-  const fallbackContacts = useMemo(() => formatContacts(contacts), [contacts]);
+
+  const fallbackContacts = useMemo(() => {
+    if (isRealEstate) {
+      const agentName = getDetailLine(description, "Agent");
+      const agentEmail = getDetailLine(description, "Agent Email");
+      const agentPhone = getDetailLine(description, "Agent Phone");
+      if (agentName) {
+        return [agentName, "Agent", agentEmail, agentPhone].filter(Boolean).join(" · ");
+      }
+    }
+    return formatContacts(contacts);
+  }, [contacts, description, isRealEstate]);
   // Keep as YYYY-MM-DD for the date picker — no formatting
   const fallbackStartDate = projectDateIso ? projectDateIso.slice(0, 10) : null;
 
@@ -373,30 +392,32 @@ export function ProjectWorkOrderNotifier({
           )}
         </div>
 
-        <div>
-          <label className={labelCls} htmlFor="wo-service-type">Service Type</label>
-          <select
-            id="wo-service-type"
-            className={inputCls}
-            value={serviceTypeSelected}
-            onChange={(e) => setServiceTypeSelected(e.target.value)}
-          >
-            <option value="">— None —</option>
-            {SERVICE_TYPE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-            <option value="__other__">Other…</option>
-          </select>
-          {serviceTypeSelected === "__other__" && (
-            <input
-              type="text"
+        {!isRealEstate && (
+          <div>
+            <label className={labelCls} htmlFor="wo-service-type">Service Type</label>
+            <select
+              id="wo-service-type"
               className={inputCls}
-              value={serviceTypeCustom}
-              onChange={(e) => setServiceTypeCustom(e.target.value)}
-              placeholder="Describe the work"
-            />
-          )}
-        </div>
+              value={serviceTypeSelected}
+              onChange={(e) => setServiceTypeSelected(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {SERVICE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+              <option value="__other__">Other…</option>
+            </select>
+            {serviceTypeSelected === "__other__" && (
+              <input
+                type="text"
+                className={inputCls}
+                value={serviceTypeCustom}
+                onChange={(e) => setServiceTypeCustom(e.target.value)}
+                placeholder="Describe the work"
+              />
+            )}
+          </div>
+        )}
 
         <div className="sm:col-span-2">
           <label className={labelCls} htmlFor="wo-contacts">Main Point of Contacts</label>

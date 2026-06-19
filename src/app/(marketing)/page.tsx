@@ -3,21 +3,11 @@ import ContactForm from "./components/ContactForm";
 import PartnersCarousel from "./components/PartnersCarousel";
 import { MarketingNav } from "./components/MarketingNav";
 
-const HOME_NAV_LINKS = [
-  { label: "About", href: "#about", anchor: true as const },
-  { label: "Services", href: "#services", anchor: true as const },
-  { label: "Projects", href: "#projects", anchor: true as const },
-  { label: "Contact", href: "#contact", anchor: true as const },
-  { label: "Janitorial Requests", href: "/turnover-requests", subtle: true },
-  { label: "Referral program", href: "/referral", subtle: true },
-  { label: "Careers", href: "/careers", subtle: true },
-  { label: "Blog", href: "/blog", subtle: true },
-];
 
 export default function Home() {
   return (
     <main className="bg-white text-gray-900">
-      <MarketingNav links={HOME_NAV_LINKS} cta={{ label: "Request a Quote", href: "#contact" }} />
+      <MarketingNav cta={{ label: "Request a Quote", href: "#contact" }} />
 
       {/* Hero */}
       <section className="relative h-[80vh] flex items-center justify-center text-center">

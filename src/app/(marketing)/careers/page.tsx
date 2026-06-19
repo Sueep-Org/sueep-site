@@ -2,10 +2,6 @@ import Script from "next/script";
 import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
 
-const CAREERS_NAV_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "Referrals", href: "/referral" },
-];
 
 export const metadata = {
   title: "Careers & Join Sueep | Sueep",
@@ -52,7 +48,7 @@ export default async function CareersPage({
         </div>
       )}
 
-      <MarketingNav links={CAREERS_NAV_LINKS} />
+      <MarketingNav />
 
       <section className="relative py-16 md:py-24 overflow-hidden">
         <img src="/hero.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.18]" />

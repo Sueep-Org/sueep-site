@@ -288,6 +288,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           )}
           <ProjectWorkOrderNotifier
             projectId={project.id}
+            segment={project.segment}
             jobTitle={project.jobTitle}
             description={project.description}
             projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
@@ -372,7 +373,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
           projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
           description={project.description}
-          showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS"}
+          showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS" && project.segment !== "REAL_ESTATE"}
         />
       ),
     },

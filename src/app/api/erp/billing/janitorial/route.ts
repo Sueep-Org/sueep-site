@@ -4,7 +4,6 @@ import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 
 const JANITORIAL_SEGMENTS = [
   "JANITORIAL_TURNOVER_REQUESTS",
-  "JANITORIAL_GENERAL_WORK_REQUEST",
   "COMMERCIAL_CLEANING",
 ];
 

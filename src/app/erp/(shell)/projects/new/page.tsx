@@ -9,8 +9,8 @@ export const runtime = "nodejs";
 export default async function NewProjectPage() {
   const cfg = parseHubSpotPipelineStageMap();
   const janitorialSegments = cfg?.janitorial.pipelineId
-    ? ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST"]
-    : ["JANITORIAL_TURNOVER_REQUESTS", "JANITORIAL_GENERAL_WORK_REQUEST", "COMMERCIAL_CLEANING"];
+    ? ["JANITORIAL_TURNOVER_REQUESTS"]
+    : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
   const changeOrderProjectFilter = cfg
     ? {
