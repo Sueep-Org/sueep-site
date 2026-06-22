@@ -41,7 +41,7 @@ const billingGroupItems: NavItem[] = [
 const employmentGroupItems: NavItem[] = [
   { href: "/erp/employees", label: "Employees", roles: FINANCE_UP },
   { href: "/erp/candidates", label: "Candidates", roles: FINANCE_UP },
-  { href: "/erp/contractors", label: "Contractor Verification", roles: PM_UP },
+  { href: "/erp/contractors", label: "Contractor Verification", roles: FINANCE_UP },
 ];
 
 const bottomNav: NavItem[] = [

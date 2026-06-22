@@ -113,6 +113,16 @@ export default async function ErpDashboardPage() {
               <p className="mt-1 text-base font-semibold text-gray-900">All Projects</p>
               <p className="mt-1 text-sm text-gray-500">View project financials and contract values.</p>
             </Link>
+            <Link href="/erp/candidates" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Hiring</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Candidates</p>
+              <p className="mt-1 text-sm text-gray-500">Manage applicants and onboarding.</p>
+            </Link>
+            <Link href="/erp/contractors" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Hiring</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Contractor Verification</p>
+              <p className="mt-1 text-sm text-gray-500">Review and verify contractor paperwork.</p>
+            </Link>
           </div>
         </div>
       );

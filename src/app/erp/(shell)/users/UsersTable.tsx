@@ -34,7 +34,7 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Payroll export", roles: FINANCE_UP },
   { label: "Project billing", roles: FINANCE_UP },
   { label: "Candidates", roles: FINANCE_UP },
-  { label: "Contractor verification", roles: PM_UP },
+  { label: "Contractor verification", roles: FINANCE_UP },
   { label: "AI Estimator", roles: PM_EST },
   { label: "Edit employee pay info", roles: FINANCE_UP },
   { label: "User management", roles: ["ADMIN"] },
