@@ -2,7 +2,7 @@ import { SignJWT } from "jose";
 
 const COOKIE = "erp_session";
 
-export const ERP_ROLES = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+export const ERP_ROLES = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 export type ErpRole = (typeof ERP_ROLES)[number];
 
 export type ErpSessionPayload = { uid: string; email: string; role: ErpRole };

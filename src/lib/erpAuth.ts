@@ -18,11 +18,11 @@ export async function getErpAuth(): Promise<ErpAuthContext | null> {
 }
 
 export function canSeeFinancials(role: ErpRole): boolean {
-  return role === "ADMIN" || role === "PROJECT_MANAGER";
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "FINANCE";
 }
 
 export function canEditEmployeePayInfo(role: ErpRole): boolean {
-  return role === "ADMIN";
+  return role === "ADMIN" || role === "FINANCE";
 }
 
 export function canManageUsers(role: ErpRole): boolean {

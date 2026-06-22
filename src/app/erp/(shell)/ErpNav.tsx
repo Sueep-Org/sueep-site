@@ -8,10 +8,11 @@ import { ErpLogoutButton } from "./ErpLogoutButton";
 import type { ErpRole } from "@/lib/erpSession";
 
 type AllRoles = ErpRole[];
-const ALL: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const ALL: AllRoles = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
 const PM_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER"];
 const FIELD: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
 const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
+const FINANCE_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "FINANCE"];
 
 interface NavItem {
   href: string;
@@ -33,13 +34,13 @@ const projectGroupItems: NavItem[] = [
 ];
 
 const billingGroupItems: NavItem[] = [
-  { href: "/erp/billing", label: "Project Billing", roles: PM_UP },
-  { href: "/erp/payroll", label: "Payroll Export", roles: PM_UP },
+  { href: "/erp/billing", label: "Project Billing", roles: FINANCE_UP },
+  { href: "/erp/payroll", label: "Payroll Export", roles: FINANCE_UP },
 ];
 
 const employmentGroupItems: NavItem[] = [
-  { href: "/erp/employees", label: "Employees", roles: PM_UP },
-  { href: "/erp/candidates", label: "Candidates", roles: PM_UP },
+  { href: "/erp/employees", label: "Employees", roles: FINANCE_UP },
+  { href: "/erp/candidates", label: "Candidates", roles: FINANCE_UP },
   { href: "/erp/contractors", label: "Contractor Verification", roles: PM_UP },
 ];
 

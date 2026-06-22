@@ -29,7 +29,7 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return x === 0;
 }
 
-const VALID_ROLES = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+const VALID_ROLES = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 
 export async function verifyErpJwtEdge(token: string, secret: string): Promise<ErpSessionPayload | null> {
   if (!secret || secret.length < 16) return null;

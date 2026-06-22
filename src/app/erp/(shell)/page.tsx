@@ -84,6 +84,40 @@ export default async function ErpDashboardPage() {
       );
     }
 
+    // ── Finance ────────────────────────────────────────────────────────────
+    if (role === "FINANCE") {
+      return (
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm text-gray-400">{today}</p>
+            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Link href="/erp/billing" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Billing</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Project Billing</p>
+              <p className="mt-1 text-sm text-gray-500">View and manage billing status across projects.</p>
+            </Link>
+            <Link href="/erp/payroll" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Payroll</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Payroll Export</p>
+              <p className="mt-1 text-sm text-gray-500">Export labor hours and pay data for payroll processing.</p>
+            </Link>
+            <Link href="/erp/employees" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Employees</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Employee Records</p>
+              <p className="mt-1 text-sm text-gray-500">View employee info and pay rates.</p>
+            </Link>
+            <Link href="/erp/projects" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Projects</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">All Projects</p>
+              <p className="mt-1 text-sm text-gray-500">View project financials and contract values.</p>
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     // ── Estimation ─────────────────────────────────────────────────────────
     if (role === "ESTIMATION") {
       const [missingEstimates, recentChangeOrders] = await Promise.all([

@@ -2,19 +2,21 @@
 
 import { useState } from "react";
 
-const ROLES = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+const ROLES = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 type ErpRole = (typeof ROLES)[number];
 
 const ROLE_LABELS: Record<ErpRole, string> = {
   ADMIN: "Admin",
   PROJECT_MANAGER: "Project Manager",
+  FINANCE: "Finance",
   SUPERVISOR: "Supervisor",
   ESTIMATION: "Estimation",
   EMPLOYEE: "Employee",
 };
 
-const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
 const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER"];
+const FINANCE_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "FINANCE"];
 const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
 const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
 
@@ -27,13 +29,14 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Labor assignments", roles: FIELD },
   { label: "Quality checks", roles: FIELD },
   { label: "Contractor assignments", roles: PM_UP },
-  { label: "View financials (contract value, costs)", roles: PM_UP },
-  { label: "Employees", roles: PM_UP },
-  { label: "Payroll export", roles: PM_UP },
-  { label: "Candidates", roles: PM_UP },
+  { label: "View financials (contract value, costs)", roles: FINANCE_UP },
+  { label: "Employees", roles: FINANCE_UP },
+  { label: "Payroll export", roles: FINANCE_UP },
+  { label: "Project billing", roles: FINANCE_UP },
+  { label: "Candidates", roles: FINANCE_UP },
   { label: "Contractor verification", roles: PM_UP },
   { label: "AI Estimator", roles: PM_EST },
-  { label: "Edit employee pay info", roles: ["ADMIN"] },
+  { label: "Edit employee pay info", roles: FINANCE_UP },
   { label: "User management", roles: ["ADMIN"] },
 ];
 
