@@ -90,19 +90,9 @@ export default function EstimatorPage() {
               </div>
 
               {/* Info grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm mt-2 mb-3">
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Address</span>
-                  <div id="loadedProjectAddress" className="text-gray-700 mt-0.5">—</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
-                  <div id="detailDistance" className="text-gray-700 mt-0.5">—</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
-                  <div id="detailDuration" className="text-gray-700 mt-0.5">—</div>
-                </div>
+              <div className="text-sm mt-2 mb-3">
+                <span className="text-gray-400 text-xs uppercase tracking-wide">Address</span>
+                <div id="loadedProjectAddress" className="text-gray-700 mt-0.5">—</div>
               </div>
 
               {/* PDF row + actions */}
@@ -468,10 +458,12 @@ export default function EstimatorPage() {
 
             {/* READ-ONLY VIEW */}
             <div id="analysisView">
+              {/* Address */}
+              <div className="text-sm text-gray-500 mb-4" id="analysisViewAddress"></div>
               {/* Labor breakdown table — rendered by JS */}
               <div id="analysisViewBreakdown" className="mb-4"></div>
               {/* Summary row */}
-              <div className="grid grid-cols-4 gap-x-6 gap-y-1 text-sm pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">Total Labor</span>
                   <div id="analysisViewLabor" className="text-gray-800 font-semibold mt-0.5">—</div>
@@ -487,6 +479,14 @@ export default function EstimatorPage() {
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">Labor / SF</span>
                   <div id="analysisViewLaborPerSF" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
+                  <div id="detailDistance" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
+                  <div id="detailDuration" className="text-gray-800 font-semibold mt-0.5">—</div>
                 </div>
               </div>
             </div>
