@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { complianceBadgeClasses, complianceLabel, evaluateEmployeeCompliance } from "@/lib/erp/employees";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
@@ -20,7 +21,10 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const { id } = await params;
   const employee = await prisma.employee.findUnique({
     where: { id },
-    include: { documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] } },
+    include: {
+      documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
+      contracts: { orderBy: { createdAt: "asc" } },
+    },
   });
   if (!employee) notFound();
 
@@ -44,49 +48,78 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <CollapsiblePanel title="General Information">
-        <EmployeeProfileEditor
-          employeeId={employee.id}
-          initial={{
-            firstName: employee.firstName,
-            lastName: employee.lastName,
-            email: employee.email,
-            phone: employee.phone,
-            role: employee.role,
-            hourlyPayCents: employee.hourlyPayCents,
-            defaultProject: employee.defaultProject,
-            status: employee.status,
-            hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
-            notes: employee.notes,
-          }}
-        />
-      </CollapsiblePanel>
-
-      <CollapsiblePanel title="Bank Account Info" defaultOpen={false}>
-        <EmployeeBankAccountSection
-          employeeId={employee.id}
-          initial={{
-            bankAccountType: employee.bankAccountType,
-            bankAccountNumber: employee.bankAccountNumber,
-            bankRoutingNumber: employee.bankRoutingNumber,
-          }}
-        />
-      </CollapsiblePanel>
-
-      <EmployeeDocumentsSection
-        employeeId={employee.id}
-        initialRequiredDocuments={requiredDocuments}
-        initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
-        initialDocuments={employee.documents.map((d) => ({
-          id: d.id,
-          documentType: d.documentType,
-          title: d.title,
-          issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
-          expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
-          fileUrl: d.fileUrl,
-          notes: d.notes,
-        }))}
-      />
+      <DetailTabs tabs={[
+        {
+          label: "General Info",
+          content: (
+            <EmployeeProfileEditor
+              employeeId={employee.id}
+              initial={{
+                firstName: employee.firstName,
+                lastName: employee.lastName,
+                email: employee.email,
+                phone: employee.phone,
+                role: employee.role,
+                hourlyPayCents: employee.hourlyPayCents,
+                defaultProject: employee.defaultProject,
+                status: employee.status,
+                hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
+                notes: employee.notes,
+                adpFileNumber: employee.adpFileNumber ?? null,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Bank Account",
+          content: (
+            <EmployeeBankAccountSection
+              employeeId={employee.id}
+              initial={{
+                bankAccountType: employee.bankAccountType,
+                bankAccountNumber: employee.bankAccountNumber,
+                bankRoutingNumber: employee.bankRoutingNumber,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Documents",
+          content: (
+            <EmployeeDocumentsSection
+              employeeId={employee.id}
+              initialRequiredDocuments={requiredDocuments}
+              initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+              initialDocuments={employee.documents.map((d) => ({
+                id: d.id,
+                documentType: d.documentType,
+                title: d.title,
+                issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
+                expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
+                fileUrl: d.fileUrl,
+                notes: d.notes,
+              }))}
+            />
+          ),
+        },
+        {
+          label: "Signing",
+          content: (
+            <ContractSigningSection
+              apiBasePath={`/api/erp/employees/${employee.id}`}
+              initialContracts={employee.contracts.map((c) => ({
+                id: c.id,
+                contractPdfFilename: c.contractPdfFilename,
+                docusealTemplateId: c.docusealTemplateId,
+                signingStatus: c.signingStatus,
+                signerEmail: c.signerEmail,
+                signedAt: c.signedAt?.toISOString() ?? null,
+                signedDocumentUrl: c.signedDocumentUrl,
+              }))}
+            />
+          ),
+        },
+      ]} />
     </div>
   );
 }

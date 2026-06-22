@@ -6,9 +6,10 @@ import { useState } from "react";
 type Props = {
   projectId: string;
   jobTitle: string;
+  hubspotDealId: string | null;
 };
 
-export function ProjectJobTitleEditor({ projectId, jobTitle }: Props) {
+export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(jobTitle);
@@ -42,15 +43,17 @@ export function ProjectJobTitleEditor({ projectId, jobTitle }: Props) {
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-start gap-2">
-        <h1 className="text-2xl font-semibold text-gray-900">{jobTitle}</h1>
-        <button
+      <div>
+        <h1
+          className="text-2xl font-semibold text-gray-900 cursor-pointer hover:text-gray-600"
           onClick={() => { setValue(jobTitle); setEditing(true); }}
-          className="mt-1 rounded px-2 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Edit job title"
+          title="Click to edit"
         >
-          Edit
-        </button>
+          {jobTitle}
+        </h1>
+        <p className="mt-0.5 text-xs text-gray-400">
+          {hubspotDealId ? "Synced from HubSpot" : "Manually created"}
+        </p>
       </div>
     );
   }

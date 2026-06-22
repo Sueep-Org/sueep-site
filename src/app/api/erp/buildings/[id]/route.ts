@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,6 +32,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     data.name = trimmed;
   }
+  if (body.builder !== undefined) {
+    const trimmed = String(body.builder || "").trim();
+    data.builder = trimmed || null;
+  }
   if (body.address !== undefined) {
     const trimmed = String(body.address || "").trim();
     if (!trimmed) {
@@ -48,6 +54,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.pmPhone !== undefined) {
     const trimmed = String(body.pmPhone || "").trim();
     data.pmPhone = trimmed || null;
+  }
+  if (body.pricingPackage !== undefined) {
+    if (!isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
+      return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+    }
+    data.pricingPackage =
+      body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);
   }
 
   try {

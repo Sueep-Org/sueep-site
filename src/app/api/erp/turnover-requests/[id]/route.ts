@@ -71,6 +71,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
   if (body.createdBy !== undefined) data.createdBy = String(body.createdBy || "").trim() || null;
+  if (body.pmSignatureUrl !== undefined) {
+    const signature = String(body.pmSignatureUrl || "").trim();
+    data.pmSignatureUrl = signature || null;
+    data.pmSignedAt = signature ? existing.pmSignedAt ?? new Date() : null;
+  }
 
   if (body.status !== undefined) {
     const statusRaw = String(body.status || "").toUpperCase();
@@ -83,15 +88,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   let pricingBuildingName = existing.building.name;
+  let pricingPackage: unknown = existing.building.pricingPackage;
   if (typeof data.buildingId === "string" && data.buildingId !== existing.buildingId) {
     const nextBuilding = await prisma.building.findUnique({ where: { id: data.buildingId } });
     if (!nextBuilding) return NextResponse.json({ error: "Building not found" }, { status: 400 });
     pricingBuildingName = nextBuilding.name;
+    pricingPackage = nextBuilding.pricingPackage;
   }
 
   const pricingInput = {
     requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
     buildingName: pricingBuildingName,
+    pricingPackage,
     bedrooms: body.bedrooms !== undefined ? parseIntValue(body.bedrooms) : existing.bedrooms,
     bathrooms: body.bathrooms !== undefined ? parseIntValue(body.bathrooms) : existing.bathrooms,
     fullPaint: data.fullPaint !== undefined ? Boolean(data.fullPaint) : existing.fullPaint,
@@ -105,6 +113,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const pricing = computeTurnoverPricing(pricingInput);
   data.priceCents = pricing.priceCents || null;
+  if (body.pmSignatureUrl !== undefined && data.pmSignatureUrl) {
+    data.approvedPriceCents = pricing.priceCents || null;
+  }
 
   try {
     const request = await prisma.turnoverRequest.update({ where: { id }, data: data as object });

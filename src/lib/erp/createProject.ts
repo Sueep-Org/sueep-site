@@ -1,14 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
-import { buildJanitorialTurnoverProjectEmailHtml, formatUsd, sendEmail } from "@/lib/email";
+import { createTurnoverRequestsFromPayload } from "@/lib/erp/createTurnoverRequests";
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function dateLabel(date: Date | null) {
-  return date ? date.toISOString().split("T")[0] : null;
 }
 
 function parseProjectDate(value: unknown) {
@@ -24,13 +20,19 @@ function percentValue(value: unknown) {
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : undefined;
 }
 
-export async function createProjectFromPayload(body: Record<string, unknown>, req: Request) {
+export async function createProjectFromPayload(body: Record<string, unknown>) {
+  const segment = normalizeProjectSegment(String(body.segment || "COMMERCIAL_CLEANING"));
+
+  if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
+    const result = await createTurnoverRequestsFromPayload(body);
+    return { turnoverRequests: result.requests, building: result.building } as const;
+  }
+
   const jobTitle = stringValue(body.jobTitle);
   if (!jobTitle) {
     return { error: "jobTitle is required", status: 400 } as const;
   }
 
-  const segment = normalizeProjectSegment(String(body.segment || "COMMERCIAL_CLEANING"));
   const projectDate = parseProjectDate(body.projectDate);
   const projectEndDate = parseProjectDate(body.projectEndDate);
 
@@ -55,35 +57,6 @@ export async function createProjectFromPayload(body: Record<string, unknown>, re
       hubspotPipelineId: body.hubspotPipelineId != null ? String(body.hubspotPipelineId).trim() || null : null,
     },
   });
-
-  if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
-    const sueepPmEmail = stringValue(body.sueepPmEmail);
-    if (sueepPmEmail) {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(req.url).origin;
-      const projectUrl = `${siteUrl}/erp/projects/${project.id}`;
-      try {
-        await sendEmail({
-          to: sueepPmEmail,
-          subject: `New Janitorial Turnover Submitted - ${project.jobTitle}`,
-          html: buildJanitorialTurnoverProjectEmailHtml({
-            projectTitle: project.jobTitle,
-            propertyName: stringValue(body.buildingName),
-            propertyAddress: stringValue(body.buildingAddress),
-            managerName: stringValue(body.pmName),
-            sueepPmName: stringValue(body.sueepPmName),
-            unitNumbers: stringValue(body.unitNumbers),
-            startDate: dateLabel(project.projectDate),
-            endDate: dateLabel(project.projectEndDate),
-            estimatedTotal: project.contractValueCents != null ? formatUsd(project.contractValueCents) : null,
-            details: project.description,
-            projectUrl,
-          }),
-        });
-      } catch (emailError) {
-        console.error("Janitorial turnover PM notification failed", emailError);
-      }
-    }
-  }
 
   return { project } as const;
 }

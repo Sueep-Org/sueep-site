@@ -35,7 +35,8 @@ export function ProjectDistanceSection({
     e.preventDefault();
     setError("");
     setLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
 
     const travelDate = String(fd.get("travelDate") || "");
     const miles = Number(fd.get("miles"));
@@ -60,7 +61,7 @@ export function ProjectDistanceSection({
         return;
       }
       setEntries((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       router.refresh();
     } catch {
       setError("Network error");

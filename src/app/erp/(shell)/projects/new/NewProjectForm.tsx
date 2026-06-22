@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
@@ -23,7 +23,13 @@ const sectionHeader = "text-sm font-semibold text-gray-900";
 const TOUCH_UP_PAINT_CENTS = 12500;
 const ADDITIONAL_MATERIALS_CENTS = 8500;
 const CARPET_WITH_CLEAN_CENTS = 8000;
-const CARPET_STANDALONE_CENTS = 12500;
+const PRICING_FIELD_LABELS = {
+  fullClean: "Full clean",
+  fullPaint: "Full paint",
+  touchUpPaint: "Touch-up paint",
+  additionalMaterials: "Additional materials",
+  carpetCleaning: "Carpet cleaning",
+} as const;
 const UNIT_FEATURE_OPTIONS = [
   { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
   { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
@@ -38,6 +44,8 @@ const UNIT_QUALITY_OPTIONS = [
   "Light wear",
   "Heavy dust",
   "Needs trash-out",
+
+  
   "Needs maintenance",
 ] as const;
 const BUILDING_ADDRESS_OPTIONS = [
@@ -52,8 +60,15 @@ const BUILDING_ADDRESS_OPTIONS = [
 ] as const;
 const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
 const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
+const GEOTRACKING_CHECK_MODE_OPTIONS = [
+  "Clock in and clock out",
+  "Clock in only",
+  "Continuous during scheduled shift",
+] as const;
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
+type PricingField = keyof typeof PRICING_FIELD_LABELS;
+type PricePackageValues = Record<PricingField, string>;
 type UnitScope = {
   id: string;
   unitNumber: string;
@@ -103,6 +118,17 @@ function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     cents / 100
   );
+}
+
+function centsToDollarInput(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
+function dollarsToCents(value: string) {
+  const normalized = value.replace(/[$,\s]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100);
 }
 
 function getUnitFeature(value: UnitFeatureValue) {
@@ -170,6 +196,7 @@ interface EmployeeOption {
   id: string;
   firstName: string;
   lastName: string;
+  email?: string | null;
 }
 
 interface NewProjectFormProps {
@@ -202,12 +229,250 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 }
 
 const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
+const JANITORIAL_CO_REQUEST_TYPES = ["UDR", "Pool", "Grill Cleaning"] as const;
+
+function ProjectSearchDropdown({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: ProjectOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selected = projects.find((p) => p.id === value);
+
+  const filtered = query.trim()
+    ? projects.filter((p) => p.jobTitle.toLowerCase().includes(query.toLowerCase()))
+    : projects;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative mt-1">
+      <input
+        type="text"
+        autoComplete="off"
+        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        placeholder={selected ? selected.jobTitle : "Search projects…"}
+        value={open ? query : (selected?.jobTitle ?? "")}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No projects found</li>
+          ) : (
+            filtered.map((p) => (
+              <li
+                key={p.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(p.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className={`cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700 ${p.id === value ? "font-medium text-pink-700" : "text-gray-900"}`}
+              >
+                {p.jobTitle}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function NotifyMultiSelect({
+  employees,
+  selectedIds,
+  onChange,
+}: {
+  employees: EmployeeOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  const filtered = employees.filter((e) =>
+    `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  function toggle(id: string) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  }
+
+  const selected = employees.filter((e) => selectedIds.includes(e.id));
+
+  return (
+    <div ref={containerRef} className="relative mt-1">
+      <div
+        className="min-h-[38px] w-full cursor-text rounded-md border border-gray-300 bg-white px-2 py-1.5 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500"
+        onClick={() => setOpen(true)}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <span key={e.id} className="flex items-center gap-1 rounded bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-800">
+                {name}
+                <button
+                  type="button"
+                  onMouseDown={(ev) => { ev.stopPropagation(); toggle(e.id); }}
+                  className="ml-0.5 text-pink-500 hover:text-pink-700"
+                  aria-label={`Remove ${name}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <input
+            type="text"
+            className="min-w-[120px] flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+            placeholder={selectedIds.length === 0 ? "Search employees…" : ""}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+          />
+        </div>
+      </div>
+      {open && (
+        <ul className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-gray-400">No results</li>
+          ) : (
+            filtered.map((e) => {
+              const name = `${e.firstName} ${e.lastName}`.trim();
+              const isSelected = selectedIds.includes(e.id);
+              return (
+                <li
+                  key={e.id}
+                  onMouseDown={(ev) => { ev.preventDefault(); toggle(e.id); setQuery(""); }}
+                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-pink-50 ${isSelected ? "font-medium text-pink-700" : "text-gray-800"}`}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected ? "border-pink-500 bg-pink-500 text-white" : "border-gray-300"}`}>
+                    {isSelected && (
+                      <svg viewBox="0 0 12 12" fill="currentColor" className="h-2.5 w-2.5">
+                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span>{name}</span>
+                  {e.email && <span className="ml-auto text-xs text-gray-400">{e.email}</span>}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SupervisorSearchDropdown({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) =>
+        `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={value || "Search by name…"}
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No employees found</li>
+          ) : (
+            filtered.map((emp) => (
+              <li
+                key={emp.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(`${emp.firstName} ${emp.lastName}`.trim());
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                {emp.firstName} {emp.lastName}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function NewProjectForm({
   initialBuildings = [],
   initialScheduleBuildings = [],
   janitorialPipelineId = null,
   allProjects = [],
+  employees = [],
   initialSegment = "COMMERCIAL_CLEANING",
   lockedSegment = false,
   allowErpDataFetch = true,
@@ -223,10 +488,23 @@ export function NewProjectForm({
 
   // Change order state
   const [coProjectId, setCoProjectId] = useState("");
+  const [coRequestType, setCoRequestType] = useState("");
   const [coTitle, setCoTitle] = useState("");
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
+
+  const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
+  const defaultNotifyIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const e of notifiableEmployees) {
+      const name = `${e.firstName} ${e.lastName}`.toLowerCase();
+      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio") ids.push(e.id);
+    }
+    return ids;
+  }, [notifiableEmployees]);
+  const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(() => defaultNotifyIds);
+  const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");
 
@@ -244,6 +522,12 @@ export function NewProjectForm({
   const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
   const [buildingAddress, setBuildingAddress] = useState("");
+  const [supervisorName, setSupervisorName] = useState(() => {
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david ? `${david.firstName} ${david.lastName}` : "";
+  });
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
@@ -334,6 +618,19 @@ export function NewProjectForm({
   const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
+  const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
+  const defaultPricePackageValues = useMemo<PricePackageValues>(
+    () => ({
+      fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
+      fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
+      touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
+      additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
+      carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
+    }),
+    [normalizedBeds, pricingPackage]
+  );
+  const [pricePackageValues, setPricePackageValues] = useState<PricePackageValues>(() => defaultPricePackageValues);
+  const [pricePackageTouched, setPricePackageTouched] = useState(false);
   const addressOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -348,6 +645,12 @@ export function NewProjectForm({
       )
     ).sort((a, b) => a.localeCompare(b));
   }, [buildings, scheduleBuildings, buildingAddress]);
+
+  useEffect(() => {
+    if (!pricePackageTouched) {
+      setPricePackageValues(defaultPricePackageValues);
+    }
+  }, [defaultPricePackageValues, pricePackageTouched]);
 
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
     setUnitScopes((prev) =>
@@ -402,38 +705,40 @@ export function NewProjectForm({
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
-    const pricingPackage = getTurnoverPricingPackage(buildingName);
+    const pricePackageCents = {
+      fullClean: dollarsToCents(pricePackageValues.fullClean),
+      fullPaint: dollarsToCents(pricePackageValues.fullPaint),
+      touchUpPaint: dollarsToCents(pricePackageValues.touchUpPaint),
+      additionalMaterials: dollarsToCents(pricePackageValues.additionalMaterials),
+      carpetCleaning: dollarsToCents(pricePackageValues.carpetCleaning),
+    };
 
     unitScopes.forEach((unit, index) => {
       const feature = getUnitFeature(unit.features);
-      const beds = normalizeBeds(feature.bedrooms);
-      const baseCleaning = pricingPackage.cleaningRates[beds] * 100;
-      const basePainting = pricingPackage.paintingRates[beds] * 100;
       const unitLines: string[] = [];
       let unitTotal = 0;
 
       if (unit.fullClean) {
-        unitTotal += baseCleaning;
-        unitLines.push(`cleaning ${formatUsd(baseCleaning)}`);
+        unitTotal += pricePackageCents.fullClean;
+        unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
       }
 
       if (unit.fullPaint) {
-        unitTotal += basePainting;
-        unitLines.push(`painting ${formatUsd(basePainting)}`);
+        unitTotal += pricePackageCents.fullPaint;
+        unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
       } else if (unit.touchUpPaint) {
-        unitTotal += TOUCH_UP_PAINT_CENTS;
-        unitLines.push(`touch-up paint ${formatUsd(TOUCH_UP_PAINT_CENTS)}`);
+        unitTotal += pricePackageCents.touchUpPaint;
+        unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
       }
 
       if (unit.materialsAdditional) {
-        unitTotal += ADDITIONAL_MATERIALS_CENTS;
-        unitLines.push(`additional materials ${formatUsd(ADDITIONAL_MATERIALS_CENTS)}`);
+        unitTotal += pricePackageCents.additionalMaterials;
+        unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
       }
 
       if (unit.carpetCleaning) {
-        const carpetPrice = unit.fullClean ? CARPET_WITH_CLEAN_CENTS : CARPET_STANDALONE_CENTS;
-        unitTotal += carpetPrice;
-        unitLines.push(`carpet cleaning ${formatUsd(carpetPrice)}`);
+        unitTotal += pricePackageCents.carpetCleaning;
+        unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
       }
 
       if (unit.lightWallTouchUps) {
@@ -457,13 +762,15 @@ export function NewProjectForm({
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
+      pricePackageCents,
       unitCount,
     };
-  }, [buildingName, unitScopes, unitCount]);
+  }, [pricePackageValues, unitScopes, unitCount]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    setNotifyResult(null);
     if (!coProjectId) { setError("Please select a project."); return; }
     if (!coTitle.trim()) { setError("Title is required."); return; }
     setLoading(true);
@@ -480,6 +787,19 @@ export function NewProjectForm({
       });
       const data = (await res.json()) as { id?: string; error?: string };
       if (!res.ok) { setError(data.error || "Failed to create change order"); setLoading(false); return; }
+
+      if (data.id && notifyEmployeeIds.length > 0) {
+        try {
+          await fetch(`/api/erp/projects/${coProjectId}/change-orders/${data.id}/notify`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
+          });
+        } catch {
+          // Non-fatal — proceed to redirect
+        }
+      }
+
       router.push(`/erp/projects/${coProjectId}`);
     } catch {
       setError("Network error");
@@ -511,6 +831,11 @@ export function NewProjectForm({
     const turnoverStartDate = minDateValue(turnoverScheduleDates);
     const turnoverEndDate = maxDateValue(turnoverScheduleDates);
     const turnoverComments = String(fd.get("turnoverComments") || "").trim();
+    const geotrackingEnabled = fd.get("geotrackingEnabled") === "on";
+    const geotrackingLocation = String(fd.get("geotrackingLocation") || buildingAddress).trim();
+    const geofenceRadiusFeet = String(fd.get("geofenceRadiusFeet") || "").trim();
+    const geotrackingCheckMode = String(fd.get("geotrackingCheckMode") || "").trim();
+    const geotrackingNotes = String(fd.get("geotrackingNotes") || "").trim();
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
       isTurnover ? `Property: ${buildingName.trim() || selectedBuilding?.jobTitle || "Unspecified"}` : null,
@@ -521,8 +846,16 @@ export function NewProjectForm({
       isTurnover && sueepPmName.trim() ? `SUEEP PM: ${sueepPmName.trim()}` : null,
       isTurnover && sueepPmEmail.trim() ? `SUEEP PM Email: ${sueepPmEmail.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
+      isTurnover
+        ? `Price Package: ${PRICING_FIELD_LABELS.fullClean} ${formatUsd(packagePricing.pricePackageCents.fullClean)} | ${PRICING_FIELD_LABELS.fullPaint} ${formatUsd(packagePricing.pricePackageCents.fullPaint)} | ${PRICING_FIELD_LABELS.touchUpPaint} ${formatUsd(packagePricing.pricePackageCents.touchUpPaint)} | ${PRICING_FIELD_LABELS.additionalMaterials} ${formatUsd(packagePricing.pricePackageCents.additionalMaterials)} | ${PRICING_FIELD_LABELS.carpetCleaning} ${formatUsd(packagePricing.pricePackageCents.carpetCleaning)}`
+        : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
+      isTurnover ? `Geotracking: ${geotrackingEnabled ? "Enabled" : "Disabled"}` : null,
+      isTurnover && geotrackingEnabled && geotrackingLocation ? `Expected Worker Location: ${geotrackingLocation}` : null,
+      isTurnover && geotrackingEnabled && geofenceRadiusFeet ? `Geofence Radius: ${geofenceRadiusFeet} ft` : null,
+      isTurnover && geotrackingEnabled && geotrackingCheckMode ? `Location Checks: ${geotrackingCheckMode}` : null,
+      isTurnover && geotrackingEnabled && geotrackingNotes ? `Geotracking Notes: ${geotrackingNotes}` : null,
       isTurnover && turnoverComments ? `Comments: ${turnoverComments}` : null,
     ]
       .filter(Boolean)
@@ -531,7 +864,7 @@ export function NewProjectForm({
     const payload: Record<string, unknown> = {
       segment,
       jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
-      supervisor: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
+      supervisor: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
       description: turnoverDescription || undefined,
       projectDate: isTurnover ? turnoverStartDate || undefined : fd.get("projectDate") || undefined,
       projectEndDate: isTurnover ? turnoverEndDate || undefined : fd.get("projectEndDate") || undefined,
@@ -564,17 +897,24 @@ export function NewProjectForm({
       bedrooms: normalizedBeds || undefined,
       bathrooms: normalizedBathrooms,
       unitScopes,
+      geotrackingEnabled,
+      geotrackingLocation: geotrackingEnabled ? geotrackingLocation || undefined : undefined,
+      geofenceRadiusFeet: geotrackingEnabled ? geofenceRadiusFeet || undefined : undefined,
+      geotrackingCheckMode: geotrackingEnabled ? geotrackingCheckMode || undefined : undefined,
+      geotrackingNotes: geotrackingEnabled ? geotrackingNotes || undefined : undefined,
       fullPaint: unitScopes.some((unit) => unit.fullPaint),
       touchUpPaint: unitScopes.some((unit) => unit.touchUpPaint),
       lightWallTouchUps: unitScopes.some((unit) => unit.lightWallTouchUps),
       materialsAdditional: unitScopes.some((unit) => unit.materialsAdditional),
       fullClean: unitScopes.some((unit) => unit.fullClean),
       carpetCleaning: unitScopes.some((unit) => unit.carpetCleaning),
-      supervisorSignOff: isTurnover ? pmName.trim() || undefined : fd.get("supervisor") || undefined,
+      supervisorSignOff: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
       pricing: {
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
         totalPrice: packagePricing.totalPrice,
+        pricePackageCents: packagePricing.pricePackageCents,
+        pricePackageDollars: pricePackageValues,
       },
     };
 
@@ -592,6 +932,8 @@ export function NewProjectForm({
       }
       if (successMessage) {
         setSubmitted(true);
+      } else if (isTurnover) {
+        router.push("/erp/turnover-requests");
       } else {
         router.push("/erp/projects");
       }
@@ -615,19 +957,38 @@ export function NewProjectForm({
         </div>
 
         <div>
-          <label className={label} htmlFor="co-project">Project *</label>
-          <select id="co-project" required className={input} value={coProjectId} onChange={(e) => setCoProjectId(e.target.value)}>
-            <option value="">— Select a project —</option>
-            {allProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.jobTitle}</option>
-            ))}
-          </select>
+          <label className={label}>Project *</label>
+          <ProjectSearchDropdown
+            projects={allProjects}
+            value={coProjectId}
+            onChange={setCoProjectId}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="sm:col-span-2">
+          <div>
+            <label className={label} htmlFor="co-request-type">Request type</label>
+            <select
+              id="co-request-type"
+              className={input}
+              value={coRequestType}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCoRequestType(next);
+                if (next && (!coTitle.trim() || JANITORIAL_CO_REQUEST_TYPES.includes(coTitle as typeof JANITORIAL_CO_REQUEST_TYPES[number]))) {
+                  setCoTitle(next);
+                }
+              }}
+            >
+              <option value="">Custom</option>
+              {JANITORIAL_CO_REQUEST_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className={label} htmlFor="co-title">Title *</label>
-            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. Add two extra prep coats in lobby" />
+            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. UDR" />
           </div>
           <div>
             <label className={label} htmlFor="co-status">Status</label>
@@ -645,7 +1006,22 @@ export function NewProjectForm({
           </div>
         </div>
 
+        {notifiableEmployees.length > 0 && (
+          <div>
+            <label className={label}>Notify employees</label>
+            <NotifyMultiSelect
+              employees={notifiableEmployees}
+              selectedIds={notifyEmployeeIds}
+              onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+            />
+          </div>
+        )}
         {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
+        {notifyResult && (
+          <p className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`} role="status">
+            {notifyResult.msg}
+          </p>
+        )}
         <div className="flex gap-3">
           <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto">
             {loading ? "Saving…" : "Create change order"}
@@ -664,24 +1040,38 @@ export function NewProjectForm({
       ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
         {!lockedSegment ? (
-          <div className="min-w-0">
-            <label className={label} htmlFor="segment">
-              Segment
-            </label>
-            <select
-              id="segment"
-              name="segment"
-              className={input}
-              value={segment}
-              onChange={(e) => setSegment(e.target.value)}
-            >
-              {PROJECT_SEGMENT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <>
+            <div className="min-w-0">
+              <label className={label} htmlFor="segment">
+                Segment
+              </label>
+              <select
+                id="segment"
+                name="segment"
+                className={input}
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+              >
+                {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {isTurnover && (
+              <div className="flex items-end sm:col-start-3 sm:justify-end">
+                <a
+                  href="/janitorial-turnover"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-md border border-pink-200 bg-white px-3 py-2 text-sm font-medium text-pink-700 hover:bg-pink-50"
+                >
+                  External link
+                </a>
+              </div>
+            )}
+          </>
         ) : null}
         {!isTurnover && (
           <>
@@ -1038,7 +1428,126 @@ export function NewProjectForm({
           </div>
 
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 3 — Estimated total</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className={sectionHeader}>Step 3 - Price package</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setPricePackageValues(defaultPricePackageValues);
+                  setPricePackageTouched(false);
+                }}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
+              >
+                Reset prices
+              </button>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
+                  <div key={field} className="min-w-0">
+                    <label className={label} htmlFor={`price-${field}`}>
+                      {PRICING_FIELD_LABELS[field]}
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                        $
+                      </span>
+                      <input
+                        id={`price-${field}`}
+                        name={`pricePackage-${field}`}
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        inputMode="decimal"
+                        className={`${input} pl-7`}
+                        value={pricePackageValues[field]}
+                        onChange={(e) => {
+                          setPricePackageTouched(true);
+                          setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className={sectionHeader}>Step 4 - Geotracking</p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+              <label className="flex items-start rounded-md border border-gray-200 bg-white px-3 py-2">
+                <input
+                  type="checkbox"
+                  name="geotrackingEnabled"
+                  className="mt-0.5 h-4 w-4 text-pink-600"
+                />
+                <span className="ml-2 text-sm text-gray-700">
+                  Track worker location for this turnover
+                </span>
+              </label>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="min-w-0 sm:col-span-2">
+                  <label className={label} htmlFor="geotrackingLocation">
+                    Expected worker location
+                  </label>
+                  <input
+                    id="geotrackingLocation"
+                    name="geotrackingLocation"
+                    className={input}
+                    value={buildingAddress}
+                    readOnly
+                    placeholder="Select a building address"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className={label} htmlFor="geofenceRadiusFeet">
+                    Geofence radius (ft)
+                  </label>
+                  <input
+                    id="geofenceRadiusFeet"
+                    name="geofenceRadiusFeet"
+                    type="number"
+                    min={50}
+                    step={50}
+                    className={input}
+                    defaultValue="300"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className={label} htmlFor="geotrackingCheckMode">
+                    Location checks
+                  </label>
+                  <select
+                    id="geotrackingCheckMode"
+                    name="geotrackingCheckMode"
+                    className={input}
+                    defaultValue={GEOTRACKING_CHECK_MODE_OPTIONS[0]}
+                  >
+                    {GEOTRACKING_CHECK_MODE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <label className={label} htmlFor="geotrackingNotes">
+                    Tracking notes
+                  </label>
+                  <input
+                    id="geotrackingNotes"
+                    name="geotrackingNotes"
+                    className={input}
+                    placeholder="Gate, entrance, or access notes for verifying the worker location"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className={sectionHeader}>Step 5 - Estimated total</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="sueepPmName">
@@ -1142,10 +1651,12 @@ export function NewProjectForm({
           </div>
 
           <div>
-            <label className={label} htmlFor="supervisor">
-              Supervisor / PM *
-            </label>
-            <input id="supervisor" name="supervisor" className={input} />
+            <label className={label}>Supervisor / PM</label>
+            <SupervisorSearchDropdown
+              employees={employees}
+              value={supervisorName}
+              onChange={setSupervisorName}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

@@ -123,41 +123,51 @@ export function ProjectFinancialsEditor({
       </div>
 
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Estimates</h3>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-6">
+          {/* Estimated column */}
           <div>
-            <label className={labelCls} htmlFor="fin-est-mat">Est. material ($)</label>
-            <input id="fin-est-mat" type="number" min={0} step={0.01} className={inputCls} value={estMat} onChange={(e) => setEstMat(e.target.value)} placeholder="0.00" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Estimated</h3>
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls} htmlFor="fin-est-lab">Labor ($)</label>
+                <input id="fin-est-lab" type="number" min={0} step={0.01} className={inputCls} value={estLab} onChange={(e) => setEstLab(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="fin-est-mat">Material ($)</label>
+                <input id="fin-est-mat" type="number" min={0} step={0.01} className={inputCls} value={estMat} onChange={(e) => setEstMat(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="fin-est-travel">Travel ($)</label>
+                <input id="fin-est-travel" type="number" min={0} step={0.01} className={inputCls} value={estTravel} onChange={(e) => setEstTravel(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="fin-est-hrs">Hours</label>
+                <input id="fin-est-hrs" type="number" min={0} step={0.5} className={inputCls} value={estHrs} onChange={(e) => setEstHrs(e.target.value)} placeholder="0" />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-est-travel">Est. travel ($)</label>
-            <input id="fin-est-travel" type="number" min={0} step={0.01} className={inputCls} value={estTravel} onChange={(e) => setEstTravel(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-est-lab">Est. labor ($)</label>
-            <input id="fin-est-lab" type="number" min={0} step={0.01} className={inputCls} value={estLab} onChange={(e) => setEstLab(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-est-hrs">Est. hours</label>
-            <input id="fin-est-hrs" type="number" min={0} step={0.5} className={inputCls} value={estHrs} onChange={(e) => setEstHrs(e.target.value)} placeholder="0" />
-          </div>
-        </div>
-      </div>
 
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Actuals</h3>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Actual column */}
           <div>
-            <label className={labelCls} htmlFor="fin-act-lab">Actual labor ($)</label>
-            <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-act-mat">Actual material ($)</label>
-            <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-act-hrs">Actual hours</label>
-            <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls} htmlFor="fin-act-lab">Labor ($)</label>
+                <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
+                <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="invisible">
+                <label className={labelCls}>Travel ($)</label>
+                <input type="number" className={inputCls} disabled tabIndex={-1} />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="fin-act-hrs">Hours</label>
+                <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

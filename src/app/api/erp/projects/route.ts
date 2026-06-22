@@ -52,9 +52,16 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await createProjectFromPayload(body, req);
+    const result = await createProjectFromPayload(body);
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    if ("turnoverRequests" in result && result.turnoverRequests && result.building) {
+      return NextResponse.json({
+        ok: true,
+        buildingId: result.building.id,
+        ids: result.turnoverRequests.map((request) => request.id),
+      });
     }
     return NextResponse.json(result.project);
   } catch (e) {

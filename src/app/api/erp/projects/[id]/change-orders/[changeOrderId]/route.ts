@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
+import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
+import { centsToDollars } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -57,6 +59,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.percentInvoiced = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
   }
   if (body.estimatedCost !== undefined) data.estimatedCostCents = inputToCents(body.estimatedCost);
+  if (body.contractValue !== undefined) data.contractValueCents = inputToCents(body.contractValue);
+  if (body.estMaterial !== undefined) data.estMaterialCents = inputToCents(body.estMaterial);
+  if (body.estTravel !== undefined) data.estTravelCents = inputToCents(body.estTravel);
+  if (body.estLabor !== undefined) data.estLaborCents = inputToCents(body.estLabor);
+  if (body.actualLabor !== undefined) data.actualLaborCents = inputToCents(body.actualLabor);
+  if (body.actualMaterial !== undefined) data.actualMaterialCents = inputToCents(body.actualMaterial);
+  if (body.actualTravel !== undefined) data.actualTravelCents = inputToCents(body.actualTravel);
+  if (body.estHours !== undefined) {
+    data.estHours = body.estHours === null || body.estHours === "" ? null : Number(body.estHours);
+  }
+  if (body.actualHours !== undefined) {
+    data.actualHours = body.actualHours === null || body.actualHours === "" ? null : Number(body.actualHours);
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;
@@ -79,6 +94,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
       })
     : null;
 
+  const becomingApproved = data.status === "APPROVED" && existing.status !== "APPROVED";
+
   try {
     const updated = await prisma.$transaction(async (tx) => {
       if (laborersRaw !== null) {
@@ -95,6 +112,55 @@ export async function PATCH(req: Request, ctx: Ctx) {
         include: { laborers: { orderBy: { createdAt: "asc" } } },
       });
     });
+
+    // Fire approval notification to the project's PM — non-blocking, best effort
+    if (becomingApproved) {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id },
+          select: { jobTitle: true, supervisor: true },
+        });
+        const supervisorName = project?.supervisor?.trim() || "";
+        if (supervisorName) {
+          const [firstName, ...rest] = supervisorName.split(" ");
+          const lastName = rest.join(" ");
+          const pmEmployee = await prisma.employee.findFirst({
+            where: {
+              firstName: { equals: firstName, mode: "insensitive" },
+              lastName: { equals: lastName, mode: "insensitive" },
+              email: { not: null },
+            },
+            select: { firstName: true, lastName: true, email: true },
+          });
+          if (pmEmployee?.email) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+            const changeOrderUrl = appUrl
+              ? `${appUrl}/erp/projects/${id}/change-orders/${changeOrderId}`
+              : null;
+            const html = buildChangeOrderNotificationEmail({
+              recipientName: `${pmEmployee.firstName} ${pmEmployee.lastName}`.trim(),
+              projectTitle: project?.jobTitle ?? "",
+              coTitle: updated.title,
+              coStatus: updated.status,
+              estimatedCost: centsToDollars(updated.estimatedCostCents),
+              estimatedDays: updated.estimatedDays,
+              description: updated.description,
+              reason: updated.reason,
+              requestedBy: updated.requestedBy,
+              changeOrderUrl,
+            });
+            await sendEmail({
+              to: pmEmployee.email,
+              subject: `Change Order Approved: ${updated.title} — ${project?.jobTitle ?? ""}`,
+              html,
+            });
+          }
+        }
+      } catch (emailErr) {
+        console.error("approval notification email failed", emailErr);
+      }
+    }
+
     return NextResponse.json(updated);
   } catch (e) {
     console.error("PATCH project change order", e);

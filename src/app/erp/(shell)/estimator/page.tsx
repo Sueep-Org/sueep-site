@@ -80,73 +80,36 @@ export default function EstimatorPage() {
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           {/* UPLOAD */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+
             {/* PROJECT LOADED CARD — shown when a project is opened from the Library */}
             <div id="projectLoadedCard" style={{ display: "none" }}>
               {/* Top row: name + edit button */}
               <div className="flex items-start justify-between gap-3 mb-1">
-                <div
-                  id="loadedProjectName"
-                  className="text-base font-semibold text-gray-900"
-                ></div>
-                <button id="editProjectBtn" className="mini-btn flex-shrink-0">
-                  Edit
-                </button>
+                <div id="loadedProjectName" className="text-base font-semibold text-gray-900"></div>
+                <button id="editProjectBtn" className="mini-btn flex-shrink-0">Edit</button>
               </div>
 
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm mt-2 mb-3">
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Address
-                  </span>
-                  <div
-                    id="loadedProjectAddress"
-                    className="text-gray-700 mt-0.5"
-                  >
-                    —
-                  </div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Address</span>
+                  <div id="loadedProjectAddress" className="text-gray-700 mt-0.5">—</div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Quotation
-                  </span>
-                  <div
-                    id="loadedQuotationName"
-                    className="text-gray-700 mt-0.5"
-                  >
-                    None
-                  </div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
+                  <div id="detailDistance" className="text-gray-700 mt-0.5">—</div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Distance
-                  </span>
-                  <div id="detailDistance" className="text-gray-700 mt-0.5">
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Time
-                  </span>
-                  <div id="detailDuration" className="text-gray-700 mt-0.5">
-                    —
-                  </div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
+                  <div id="detailDuration" className="text-gray-700 mt-0.5">—</div>
                 </div>
               </div>
 
               {/* PDF row + actions */}
               <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-                <span
-                  id="loadedPdfName"
-                  className="text-sm text-gray-600 flex-1 truncate"
-                ></span>
-                <button id="refreshDistanceBtn" className="mini-btn">
-                  ↻ Distance
-                </button>
-                <button id="changePdfBtn" className="mini-btn">
-                  Change PDF
-                </button>
+                <span id="loadedPdfName" className="text-sm text-gray-600 flex-1 truncate"></span>
+                <button id="refreshDistanceBtn" className="mini-btn">↻ Distance</button>
+                <button id="changePdfBtn" className="mini-btn">Change PDF</button>
               </div>
             </div>
 
@@ -154,9 +117,7 @@ export default function EstimatorPage() {
             <div id="newProjectForm">
               {/* PROJECT NAME */}
               <div className="mb-4" id="projectNameInputWrapper">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
                 <input
                   type="text"
                   id="projectNameInput"
@@ -168,8 +129,7 @@ export default function EstimatorPage() {
               {/* PROJECT ADDRESS */}
               <div className="mb-4" id="projectAddressInputWrapper">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Address{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  Project Address <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
@@ -179,24 +139,8 @@ export default function EstimatorPage() {
                 />
               </div>
 
-              {/* QUOTATION UPLOAD */}
-              <div className="mb-4" id="quotationInputWrapper">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quotation File{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="file"
-                  id="quotationInput"
-                  accept=".xlsx,.xls,.pdf"
-                  className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-gray-300 file:text-sm file:bg-white file:cursor-pointer"
-                />
-              </div>
-
               {/* PDF FILE UPLOAD */}
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                PDF File
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PDF File</label>
               <div
                 id="dropZone"
                 className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400"
@@ -233,9 +177,7 @@ export default function EstimatorPage() {
             {/* EDIT PROJECT FORM — shown when editing an existing project */}
             <div id="editProjectForm" style={{ display: "none" }}>
               <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
                 <input
                   type="text"
                   id="editProjectNameInput"
@@ -244,8 +186,7 @@ export default function EstimatorPage() {
               </div>
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Address{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
+                  Project Address <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
@@ -253,28 +194,9 @@ export default function EstimatorPage() {
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Add / Replace Quotation{" "}
-                  <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="file"
-                  id="editQuotationInput"
-                  accept=".xlsx,.xls,.pdf"
-                  className="w-full text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-gray-300 file:text-sm file:bg-white file:cursor-pointer"
-                />
-              </div>
               <div className="flex gap-2">
-                <button
-                  id="saveProjectBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-                >
-                  Save
-                </button>
-                <button id="cancelEditBtn" className="mini-btn">
-                  Cancel
-                </button>
+                <button id="saveProjectBtn" className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">Save</button>
+                <button id="cancelEditBtn" className="mini-btn">Cancel</button>
               </div>
             </div>
           </div>
@@ -359,11 +281,7 @@ export default function EstimatorPage() {
                   </button>
                 </div>
 
-                <button
-                  id="toggleSidebarBtn"
-                  className="mini-btn"
-                  style={{ marginLeft: "auto" }}
-                >
+                <button id="toggleSidebarBtn" className="mini-btn" style={{ marginLeft: "auto" }}>
                   Measurements
                 </button>
               </div>
@@ -527,24 +445,6 @@ export default function EstimatorPage() {
             </div>
           </div>
 
-          {/* QUOTATION DATA */}
-          <div
-            id="quotationDataCard"
-            className="bg-white rounded-lg shadow-md p-6 mt-6"
-            style={{ display: "none" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800">
-                Quotation Data
-              </h3>
-              <span
-                id="quotationFileName"
-                className="text-xs text-gray-400 truncate max-w-xs"
-              ></span>
-            </div>
-            <div id="quotationDataContent"></div>
-          </div>
-
           {/* ALL PAGES TOTAL */}
           <div
             id="allPagesTotalContainer"
@@ -556,6 +456,85 @@ export default function EstimatorPage() {
               style={{ fontSize: "14px", color: "#374151", fontWeight: 600 }}
             >
               All pages total: 0&quot;
+            </div>
+          </div>
+
+          {/* ANALYSIS CARD — below canvas, shown after project loaded */}
+          <div id="analysisCard" className="bg-white rounded-lg shadow-md p-6 mt-6" style={{ display: "none" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-800">Analysis</h3>
+              <button id="editAnalysisBtn" className="mini-btn">Edit</button>
+            </div>
+
+            {/* READ-ONLY VIEW */}
+            <div id="analysisView">
+              {/* Labor breakdown table — rendered by JS */}
+              <div id="analysisViewBreakdown" className="mb-4"></div>
+              {/* Summary row */}
+              <div className="grid grid-cols-4 gap-x-6 gap-y-1 text-sm pt-3 border-t border-gray-100">
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Total Labor</span>
+                  <div id="analysisViewLabor" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Total Area</span>
+                  <div id="analysisViewTotalArea" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Quote</span>
+                  <div id="analysisViewQuote" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Labor / SF</span>
+                  <div id="analysisViewLaborPerSF" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+              </div>
+            </div>
+
+            {/* EDIT FORM */}
+            <div id="analysisEditForm" style={{ display: "none" }}>
+              {/* Labor breakdown table */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Labor Breakdown</span>
+                  <button id="addLaborRowBtn" className="mini-btn">+ Add</button>
+                </div>
+                {/* rows rendered by JS */}
+                <div id="laborRowsContainer"></div>
+                <div className="flex justify-end mt-2 text-sm text-gray-700">
+                  Total Labor:&nbsp;<span id="analysisTotalLaborCalc" className="font-semibold text-blue-600">$0.00</span>
+                </div>
+              </div>
+
+              {/* Area + Quote */}
+              <div className="grid grid-cols-2 gap-4 mb-4 pt-4 border-t border-gray-100">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Area (SF)</label>
+                  <input
+                    type="number"
+                    id="analysisTotalAreaInput"
+                    placeholder="0"
+                    step="1"
+                    min="0"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quote ($)</label>
+                  <input
+                    type="number"
+                    id="analysisQuoteInput"
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button id="saveAnalysisBtn" className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">Save</button>
+                <button id="cancelAnalysisBtn" className="mini-btn">Cancel</button>
+              </div>
             </div>
           </div>
         </div>

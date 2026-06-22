@@ -97,7 +97,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
         await prisma.project.update({
           where: { id: existing.id },
           data: {
-            jobTitle: name,
             ...(existing.supervisor ? {} : { supervisor: "UNASSIGNED PM" }),
             segment: projectSegment,
             status,

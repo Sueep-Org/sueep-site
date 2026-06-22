@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CollapsiblePanel } from "@/app/erp/components/CollapsiblePanel";
 
 type DocumentRow = {
   id: string;
@@ -145,7 +144,8 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
     e.preventDefault();
     setAddError("");
     setAddLoading(true);
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
 
     try {
       const res = await fetch(`/api/erp/employees/${employeeId}/documents`, {
@@ -159,7 +159,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
         return;
       }
       setDocs((prev) => [data, ...prev]);
-      e.currentTarget.reset();
+      form.reset();
       setSelectedFileName(null);
     } catch {
       setAddError("Network error");
@@ -175,8 +175,9 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
   }
 
   return (
-    <div className="space-y-4">
-      <CollapsiblePanel title="Required Documents" defaultOpen={false}>
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700">Required Documents</h3>
         <p className="text-xs text-gray-500">
           Define which document types this employee must have on file. Compliance is met when all are present.
         </p>
@@ -279,9 +280,10 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
 
         {reqError ? <p className="text-xs text-red-500">{reqError}</p> : null}
         {reqOk ? <p className="text-xs text-emerald-600">Saved.</p> : null}
-      </CollapsiblePanel>
+      </div>
 
-      <CollapsiblePanel title="Documents on File" defaultOpen={false}>
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700">Documents on File</h3>
         <p className="text-xs text-gray-500">Upload and manage this employee&apos;s documents.</p>
 
         <form onSubmit={addDoc} className="space-y-3">
@@ -402,7 +404,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
             </tbody>
           </table>
         </div>
-      </CollapsiblePanel>
+      </div>
     </div>
   );
 }

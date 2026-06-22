@@ -73,6 +73,7 @@ export async function POST(req: Request) {
   const pricing = computeTurnoverPricing({
     requestType,
     buildingName: building.name,
+    pricingPackage: building.pricingPackage,
     bedrooms,
     bathrooms,
     fullPaint,
@@ -98,6 +99,7 @@ export async function POST(req: Request) {
         startDate,
         endDate,
         priceCents: pricing.priceCents || null,
+        approvedPriceCents: null,
         createdBy: createdBy || null,
       },
     });

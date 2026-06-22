@@ -133,7 +133,7 @@ export function CandidateQuestionnairePanel(props: Props) {
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       <details className="text-xs text-zinc-500 leading-relaxed border-t border-zinc-800 pt-4">
-        <summary className="cursor-pointer text-zinc-400 hover:text-zinc-300">Automate “completed” from Google Forms</summary>
+        <summary className="cursor-pointer text-zinc-400 hover:text-zinc-300">Automate &quot;completed&quot; from Google Forms</summary>
         <p className="mt-3">
           Add an Apps Script trigger on form submit. POST JSON{" "}
           <code className="text-zinc-400">{`{ "token": "<applicant code from response>" }`}</code> to:

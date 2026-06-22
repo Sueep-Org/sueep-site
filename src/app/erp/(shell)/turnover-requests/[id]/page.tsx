@@ -35,6 +35,8 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
             requestId={request.id}
             initial={{
               buildingId: request.buildingId,
+              buildingName: request.building.name,
+              pricingPackage: request.building.pricingPackage,
               requestType: request.requestType,
               unitNumber: request.unitNumber,
               bedrooms: request.bedrooms,
@@ -48,6 +50,10 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
               endDate: request.endDate ? request.endDate.toISOString().split("T")[0] : null,
               createdBy: request.createdBy,
               status: request.status,
+              priceCents: request.priceCents,
+              approvedPriceCents: request.approvedPriceCents,
+              pmSignatureUrl: request.pmSignatureUrl,
+              pmSignedAt: request.pmSignedAt ? request.pmSignedAt.toISOString() : null,
             }}
           />
         </div>
@@ -66,6 +72,10 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
             <div>
               <dt className="font-semibold text-gray-600">Price</dt>
               <dd>{request.priceCents != null ? `$${(request.priceCents / 100).toFixed(0)}` : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-600">Signature</dt>
+              <dd>{request.pmSignedAt ? `Signed ${request.pmSignedAt.toISOString().split("T")[0]}` : "Pending"}</dd>
             </div>
             <div>
               <dt className="font-semibold text-gray-600">Created by</dt>

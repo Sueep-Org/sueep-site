@@ -11,9 +11,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     select: { id: true, signingStatus: true },
   });
   if (!contract) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (contract.signingStatus === "SIGNED") {
-    return NextResponse.json({ error: "Cannot remove a signed contract" }, { status: 409 });
-  }
 
   await prisma.changeOrderContract.delete({ where: { id: contractId } });
 
