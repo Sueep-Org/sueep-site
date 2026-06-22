@@ -64,6 +64,39 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
   },
 };
 
+export const REAL_ESTATE_PRICING_PACKAGE: TurnoverPricingPackage = {
+  label: "Real estate pricing (2× standard)",
+  cleaningRates: { 1: 370, 2: 510, 3: 770 },
+  paintingRates: { 1: 680, 2: 800, 3: 900 },
+  cleaningLayoutRates: {
+    "studio": 300,
+    "1/1": 370,
+    "2/1": 510,
+    "2/2": 510,
+    "3/1": 770,
+    "3/2": 770,
+    "3/3": 770,
+  },
+  paintingLayoutRates: {
+    "studio": 560,
+    "1/1": 680,
+    "2/1": 800,
+    "2/2": 800,
+    "3/1": 900,
+    "3/2": 900,
+    "3/3": 900,
+  },
+  carpetCleaningLayoutRates: {
+    "studio": 200,
+    "1/1": 200,
+    "2/1": 200,
+    "2/2": 200,
+    "3/1": 200,
+    "3/2": 200,
+    "3/3": 200,
+  },
+};
+
 const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
   label: "The Block at SONO / The Gio Apartments pricing",
   cleaningRates: { 1: 150, 2: 200, 3: 200 },

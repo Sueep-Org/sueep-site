@@ -80,6 +80,9 @@ model Project {
   supervisorUserId String?
   supervisorUser   ErpUser? @relation(fields: [supervisorUserId], references: [id], onDelete: SetNull)
 
+  /// Per-project pricing package (used for real estate; overrides global default)
+  pricingPackage Json?
+
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
   hubspotPipelineId String?

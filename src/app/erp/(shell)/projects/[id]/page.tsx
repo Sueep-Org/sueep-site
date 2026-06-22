@@ -23,6 +23,7 @@ import type { SOVItem } from "./ProjectSOVSection";
 import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
 import { ProjectSafetySection } from "./ProjectSafetySection";
 import { RealEstateProjectDetails } from "./RealEstateProjectDetails";
+import { RealEstatePricingPackageEditor } from "./RealEstatePricingPackageEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -273,6 +274,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       label: "Details",
       content: (
         <>
+          {project.segment === "REAL_ESTATE" && project.description && (
+            <RealEstateProjectDetails description={project.description} />
+          )}
           {project.turnoverRequest && (
             <div className="mb-6">
               <UnitScopeCard
@@ -324,15 +328,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               )}
             </div>
           )}
-          {project.description ? (
-            project.segment === "REAL_ESTATE" ? (
-              <RealEstateProjectDetails description={project.description} />
-            ) : (
-              <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-                <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
-                <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
-              </div>
-            )
+          {project.description && project.segment !== "REAL_ESTATE" ? (
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+              <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+            </div>
           ) : null}
         </>
       ),
@@ -468,6 +468,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   buildingId={project.building.id}
                   buildingName={project.building.name}
                   initialPackage={project.building.pricingPackage}
+                />
+              </div>
+            ),
+          },
+        ]
+      : []),
+    ...(project.segment === "REAL_ESTATE"
+      ? [
+          {
+            label: "Pricing Package",
+            content: (
+              <div className="max-w-4xl">
+                <RealEstatePricingPackageEditor
+                  projectId={project.id}
+                  initialPackage={project.pricingPackage}
                 />
               </div>
             ),

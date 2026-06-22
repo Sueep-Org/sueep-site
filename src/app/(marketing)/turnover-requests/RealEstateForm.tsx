@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { REAL_ESTATE_PRICING_PACKAGE } from "@/lib/turnoverPricingPackages";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -25,9 +27,7 @@ interface FormState {
   // Step 2 — services
   fullClean: boolean;
   fullPaint: boolean;
-  touchUpPaint: boolean;
   carpetCleaning: boolean;
-  materialsAdditional: boolean;
   cleanDate: string;
   moveInDate: string;
   // Step 3 — agent & contract
@@ -46,9 +46,7 @@ const initial: FormState = {
   furnished: false,
   fullClean: false,
   fullPaint: false,
-  touchUpPaint: false,
   carpetCleaning: false,
-  materialsAdditional: false,
   cleanDate: "",
   moveInDate: "",
   agentName: "",
@@ -158,6 +156,18 @@ export function RealEstateForm({ onBack }: Props) {
     const bedroomValue = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
     const bathroomValue = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
 
+    const pricing = computeTurnoverPricing({
+      requestType: "TURNOVER",
+      pricingPackage: REAL_ESTATE_PRICING_PACKAGE,
+      bedrooms: bedroomValue,
+      bathrooms: bathroomValue,
+      fullClean: form.fullClean,
+      fullPaint: form.fullPaint,
+      touchUpPaint: 0,
+      carpetCleaning: form.carpetCleaning,
+      materialsAdditional: false,
+    });
+
     const jobTitle = `Real Estate - ${form.address.trim()}`;
     const description = [
       `Property: ${form.address.trim()}`,
@@ -172,6 +182,9 @@ export function RealEstateForm({ onBack }: Props) {
       form.cleanDate ? `Clean Date: ${form.cleanDate}` : null,
       form.moveInDate ? `Move-in Date: ${form.moveInDate}` : null,
       form.comments.trim() ? `Notes: ${form.comments.trim()}` : null,
+      pricing.services.filter(s => s !== "No services selected").length > 0
+        ? `Services: ${pricing.services.join(", ")}` : null,
+      pricing.priceCents > 0 ? `Estimated Price: ${pricing.priceLabel}` : null,
     ].filter(Boolean).join("\n");
 
     const payload = {
@@ -186,14 +199,13 @@ export function RealEstateForm({ onBack }: Props) {
       furnished: form.furnished,
       fullClean: form.fullClean,
       fullPaint: form.fullPaint,
-      touchUpPaint: form.touchUpPaint,
       carpetCleaning: form.carpetCleaning,
-      materialsAdditional: form.materialsAdditional,
       projectDate: form.cleanDate || undefined,
       agentName: form.agentName.trim() || undefined,
       agentEmail: form.agentEmail.trim() || undefined,
       agentPhone: form.agentPhone.trim() || undefined,
       source: "external-real-estate",
+      contractValue: pricing.priceCents > 0 ? pricing.priceCents / 100 : undefined,
     };
 
     try {
@@ -328,52 +340,80 @@ export function RealEstateForm({ onBack }: Props) {
         )}
 
         {/* Step 2 — Services */}
-        {step === 2 && (
-          <>
-            <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Services needed</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <ServiceCheckbox checked={form.fullClean} onChange={(v) => patch({ fullClean: v })} label="Full clean" />
-                <ServiceCheckbox
-                  checked={form.fullPaint}
-                  disabled={form.touchUpPaint}
-                  onChange={(v) => patch({ fullPaint: v, touchUpPaint: false })}
-                  label="Full paint"
-                />
-                <ServiceCheckbox
-                  checked={form.touchUpPaint}
-                  disabled={form.fullPaint}
-                  onChange={(v) => patch({ touchUpPaint: v, fullPaint: false })}
-                  label="Touch-up paint"
-                />
-                <ServiceCheckbox checked={form.carpetCleaning} onChange={(v) => patch({ carpetCleaning: v })} label="Carpet cleaning" />
-                <ServiceCheckbox checked={form.materialsAdditional} onChange={(v) => patch({ materialsAdditional: v })} label="Additional materials" />
+        {step === 2 && (() => {
+          const bedroomVal = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
+          const bathroomVal = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
+          const livePricing = computeTurnoverPricing({
+            requestType: "TURNOVER",
+            pricingPackage: REAL_ESTATE_PRICING_PACKAGE,
+            bedrooms: bedroomVal,
+            bathrooms: bathroomVal,
+            fullClean: form.fullClean,
+            fullPaint: form.fullPaint,
+            touchUpPaint: 0,
+            carpetCleaning: form.carpetCleaning,
+            materialsAdditional: false,
+          });
+          const lineItems = livePricing.breakdown.filter(l => !l.startsWith("No ")).map((line) => {
+            const match = line.match(/^(.+?):\s+(\$.+)$/);
+            return match ? { label: match[1], price: match[2] } : null;
+          }).filter(Boolean) as { label: string; price: string }[];
+
+          return (
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+            {/* Left — inputs */}
+            <div className="flex-1 space-y-5">
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Services needed</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <ServiceCheckbox checked={form.fullClean} onChange={(v) => patch({ fullClean: v })} label="Full clean" />
+                  <ServiceCheckbox checked={form.fullPaint} onChange={(v) => patch({ fullPaint: v })} label="Full paint" />
+                  <ServiceCheckbox checked={form.carpetCleaning} onChange={(v) => patch({ carpetCleaning: v })} label="Carpet cleaning" />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={label} htmlFor="re-clean-date">Target clean date</label>
+                  <input id="re-clean-date" type="date" className={input} value={form.cleanDate} onChange={(e) => patch({ cleanDate: e.target.value })} />
+                </div>
+                <div>
+                  <label className={label} htmlFor="re-movein-date">Move-in / listing date</label>
+                  <input id="re-movein-date" type="date" className={input} value={form.moveInDate} onChange={(e) => patch({ moveInDate: e.target.value })} />
+                </div>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="re-clean-date">Target clean date</label>
-                <input
-                  id="re-clean-date"
-                  type="date"
-                  className={input}
-                  value={form.cleanDate}
-                  onChange={(e) => patch({ cleanDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="re-movein-date">Move-in / listing date</label>
-                <input
-                  id="re-movein-date"
-                  type="date"
-                  className={input}
-                  value={form.moveInDate}
-                  onChange={(e) => patch({ moveInDate: e.target.value })}
-                />
+
+            {/* Right — order summary */}
+            <div className="w-full lg:w-64 lg:shrink-0">
+              <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="border-b border-gray-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-gray-900">Order summary</p>
+                </div>
+                <div className="px-4 py-3">
+                  {lineItems.length === 0 ? (
+                    <p className="py-2 text-xs italic text-gray-400">Select services to see pricing.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {lineItems.map((item) => (
+                        <div key={item.label} className="flex justify-between">
+                          <span className="text-xs text-gray-500">{item.label}</span>
+                          <span className="text-xs tabular-nums text-gray-600">{item.price}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+                  <span className="text-sm font-semibold text-gray-700">Estimated total</span>
+                  <span className="text-lg font-bold tabular-nums text-gray-900">
+                    {livePricing.priceCents > 0 ? livePricing.priceLabel : "—"}
+                  </span>
+                </div>
               </div>
             </div>
-          </>
-        )}
+          </div>
+          );
+        })()}
 
         {/* Step 3 — Agent & Contract */}
         {step === 3 && (

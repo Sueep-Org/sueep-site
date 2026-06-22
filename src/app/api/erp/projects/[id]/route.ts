@@ -95,6 +95,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
+  if (body.pricingPackage !== undefined) data.pricingPackage = body.pricingPackage ?? null;
   if (body.contractValue !== undefined) data.contractValueCents = cents(body.contractValue);
   if (body.estMaterial !== undefined) data.estMaterialCents = cents(body.estMaterial);
   if (body.estTravel !== undefined) data.estTravelCents = cents(body.estTravel);
