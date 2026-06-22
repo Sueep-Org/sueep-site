@@ -20,6 +20,8 @@ interface FormState {
   propertyType: string;
   bedrooms: string;
   bathrooms: string;
+  squareFootage: string;
+  furnished: boolean;
   // Step 2 — services
   fullClean: boolean;
   fullPaint: boolean;
@@ -40,6 +42,8 @@ const initial: FormState = {
   propertyType: "",
   bedrooms: "",
   bathrooms: "",
+  squareFootage: "",
+  furnished: false,
   fullClean: false,
   fullPaint: false,
   touchUpPaint: false,
@@ -160,6 +164,8 @@ export function RealEstateForm({ onBack }: Props) {
       form.propertyType ? `Type: ${form.propertyType}` : null,
       form.bedrooms ? `Bedrooms: ${form.bedrooms}` : null,
       form.bathrooms ? `Bathrooms: ${form.bathrooms}` : null,
+      form.squareFootage.trim() ? `Square Footage: ${form.squareFootage.trim()} sq ft` : null,
+      `Furnished: ${form.furnished ? "Yes" : "No"}`,
       `Agent: ${form.agentName.trim()}`,
       form.agentEmail.trim() ? `Agent Email: ${form.agentEmail.trim()}` : null,
       form.agentPhone.trim() ? `Agent Phone: ${form.agentPhone.trim()}` : null,
@@ -176,6 +182,8 @@ export function RealEstateForm({ onBack }: Props) {
       propertyType: form.propertyType || undefined,
       bedrooms: bedroomValue,
       bathrooms: bathroomValue,
+      squareFootage: form.squareFootage.trim() ? Number(form.squareFootage.trim()) || undefined : undefined,
+      furnished: form.furnished,
       fullClean: form.fullClean,
       fullPaint: form.fullPaint,
       touchUpPaint: form.touchUpPaint,
@@ -283,6 +291,37 @@ export function RealEstateForm({ onBack }: Props) {
                   <option value="">Select...</option>
                   {BATHROOM_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="re-sqft">Square footage</label>
+                <input
+                  id="re-sqft"
+                  type="number"
+                  min="0"
+                  className={input}
+                  value={form.squareFootage}
+                  onChange={(e) => patch({ squareFootage: e.target.value })}
+                  placeholder="e.g. 950"
+                />
+              </div>
+              <div>
+                <p className={label}>Furnished?</p>
+                <div className="mt-1 flex gap-3">
+                  {(["No", "Yes"] as const).map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="re-furnished"
+                        checked={form.furnished === (opt === "Yes")}
+                        onChange={() => patch({ furnished: opt === "Yes" })}
+                        className="accent-[#E73C6E]"
+                      />
+                      <span className="text-sm text-gray-700">{opt}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           </>

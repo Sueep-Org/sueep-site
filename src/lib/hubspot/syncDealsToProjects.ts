@@ -29,6 +29,23 @@ export type SyncDealResult = {
   phase: DealLifecyclePhase;
 };
 
+type OwnerRecord = { id: string; email: string; firstName: string; lastName: string };
+
+async function fetchAllOwners(): Promise<Map<string, OwnerRecord>> {
+  const map = new Map<string, OwnerRecord>();
+  try {
+    const res = await hubspotFetch("/crm/v3/owners?limit=100");
+    if (!res.ok) return map;
+    const data = (await res.json()) as { results?: OwnerRecord[] };
+    for (const o of data.results ?? []) {
+      map.set(o.id, o);
+    }
+  } catch {
+    // non-fatal — owner info stays blank if unavailable
+  }
+  return map;
+}
+
 async function isDealClosedLost(dealId: string): Promise<boolean> {
   try {
     const res = await hubspotFetch(`/crm/v3/objects/deals/${dealId}?properties=hs_is_closed,hs_deal_stage_probability`);
@@ -56,7 +73,10 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   const startDateProperty = process.env.HUBSPOT_PROJECT_START_DATE_PROPERTY?.trim() || null;
   const endDateProperty = process.env.HUBSPOT_PROJECT_END_DATE_PROPERTY?.trim() || null;
   const extraProperties = [startDateProperty, endDateProperty].filter((p): p is string => Boolean(p));
-  const deals = await searchDealsInConfiguredStages(200, extraProperties);
+  const [deals, owners] = await Promise.all([
+    searchDealsInConfiguredStages(200, extraProperties),
+    fetchAllOwners(),
+  ]);
   const cfg = parseHubSpotPipelineStageMap();
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
@@ -79,10 +99,16 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
 
     const { segment, phase } = classified;
-    const projectSegment = "COMMERCIAL_CLEANING";
+    const projectSegment = segment === "REAL_ESTATE" ? "REAL_ESTATE" : "COMMERCIAL_CLEANING";
     const status = erpStatusFromPhase(phase);
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;
+
+    const ownerIdRaw = prop(deal, "hubspot_owner_id");
+    const owner = ownerIdRaw ? owners.get(ownerIdRaw) : null;
+    const hubspotOwnerId = ownerIdRaw ?? undefined;
+    const hubspotOwnerName = owner ? `${owner.firstName} ${owner.lastName}`.trim() || owner.email : undefined;
+    const hubspotOwnerEmail = owner?.email ?? undefined;
 
     let syncedProjectId: string | null = null;
     try {
@@ -104,6 +130,9 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             hubspotStageId: stageId,
             projectDate,
             projectEndDate,
+            ...(hubspotOwnerId !== undefined ? { hubspotOwnerId } : {}),
+            ...(hubspotOwnerName !== undefined ? { hubspotOwnerName } : {}),
+            ...(hubspotOwnerEmail !== undefined ? { hubspotOwnerEmail } : {}),
             ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
           },
         });
@@ -128,6 +157,9 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             contractValueCents: contractValueCents ?? null,
             projectDate,
             projectEndDate,
+            hubspotOwnerId: hubspotOwnerId ?? null,
+            hubspotOwnerName: hubspotOwnerName ?? null,
+            hubspotOwnerEmail: hubspotOwnerEmail ?? null,
             ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
           },
         });

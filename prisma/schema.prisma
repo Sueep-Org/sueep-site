@@ -84,6 +84,9 @@ model Project {
   hubspotDealId     String? @unique
   hubspotPipelineId String?
   hubspotStageId    String?
+  hubspotOwnerId    String?
+  hubspotOwnerName  String?
+  hubspotOwnerEmail String?
 
   @@index([segment])
   @@index([status])

@@ -12,6 +12,7 @@ function collectAllDealStageIds(cfg: HubSpotPipelineStageMap): string[] {
   };
   add(cfg.postConstruction.stages);
   add(cfg.janitorial.stages);
+  if (cfg.realEstate) add(cfg.realEstate.stages);
   return [...ids];
 }
 
@@ -35,7 +36,7 @@ export async function searchDealsInConfiguredStages(
   const stageIds = collectAllDealStageIds(cfg);
   if (stageIds.length === 0) return [];
 
-  const baseProperties = ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed"];
+  const baseProperties = ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed", "hubspot_owner_id"];
   const properties = [...new Set([...baseProperties, ...extraProperties.filter(Boolean)])];
 
   const res = await hubspotFetch("/crm/v3/objects/deals/search", {

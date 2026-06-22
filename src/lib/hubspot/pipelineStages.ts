@@ -2,12 +2,12 @@
  * Maps your three HubSpot deal pipelines + stages into ERP segment + lifecycle phase.
  *
  * Pipelines:
- * - Post-construction + Janitorial → ERP segment COMMERCIAL
- * - Residential → ERP segment RESIDENTIAL
+ * - Post-construction + Janitorial → ERP segment COMMERCIAL_CLEANING
+ * - Real Estate → ERP segment REAL_ESTATE
  *
  * Stages (your naming):
  * - Commercial: Quote approved = awarded, Work in progress, Work completed
- * - Residential: Confirmed (= awarded), WIP, Work completed
+ * - Real Estate: same stage naming as commercial (quoteApproved, workInProgress, workCompleted)
  * - Janitorial: Omit `workCompleted` (empty string) to sync only active stages (e.g. Awarded + Signed as WIP);
  *   deals that leave those stages are marked COMPLETE on the next sync.
  *
@@ -16,7 +16,7 @@
  * or inspect a deal’s `pipeline` / `dealstage` property values in the API.
  */
 
-export type ErpSegment = "COMMERCIAL";
+export type ErpSegment = "COMMERCIAL" | "REAL_ESTATE";
 
 /** Awarded/confirmed & WIP should appear on Schedule/Gantt; completed = done in ERP. */
 export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "OTHER";
@@ -26,6 +26,8 @@ export type HubSpotPipelineStageMap = {
   postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
   /** Janitorial pipeline */
   janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
+  /** Real estate pipeline (formerly residential) — syncs as REAL_ESTATE segment */
+  realEstate?: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
 };
 
 export function parseHubSpotPipelineStageMap(): HubSpotPipelineStageMap | null {
@@ -71,6 +73,14 @@ export function classifyHubSpotDealStage(
     if (matches(workInProgress)) return { segment: "COMMERCIAL", phase: "WIP" };
     if (matches(workCompleted)) return { segment: "COMMERCIAL", phase: "COMPLETED" };
     return { segment: "COMMERCIAL", phase: "OTHER" };
+  }
+
+  if (cfg.realEstate && pipelineId === cfg.realEstate.pipelineId) {
+    const { quoteApproved, workInProgress, workCompleted } = cfg.realEstate.stages;
+    if (matches(quoteApproved)) return { segment: "REAL_ESTATE", phase: "AWARDED" };
+    if (matches(workInProgress)) return { segment: "REAL_ESTATE", phase: "WIP" };
+    if (matches(workCompleted)) return { segment: "REAL_ESTATE", phase: "COMPLETED" };
+    return { segment: "REAL_ESTATE", phase: "OTHER" };
   }
 
   return null;

@@ -22,6 +22,7 @@ import { ProjectSOVSection } from "./ProjectSOVSection";
 import type { SOVItem } from "./ProjectSOVSection";
 import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
 import { ProjectSafetySection } from "./ProjectSafetySection";
+import { RealEstateProjectDetails } from "./RealEstateProjectDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -214,6 +215,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
         { id: cfg.janitorial.pipelineId, label: "Janitorial" },
+        ...(cfg.realEstate ? [{ id: cfg.realEstate.pipelineId, label: "Real Estate" }] : []),
       ].filter((o) => o.id?.trim())
     : [];
 
@@ -323,10 +325,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             </div>
           )}
           {project.description ? (
-            <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-              <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
-            </div>
+            project.segment === "REAL_ESTATE" ? (
+              <RealEstateProjectDetails description={project.description} />
+            ) : (
+              <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
+                <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
+                <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+              </div>
+            )
           ) : null}
         </>
       ),
@@ -527,7 +533,19 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           ← Projects
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
+          <div>
+            <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
+            {project.hubspotOwnerName && (
+              <p className="mt-1 text-xs text-gray-500">
+                Deal owner: <span className="font-medium text-gray-700">{project.hubspotOwnerName}</span>
+                {project.hubspotOwnerEmail && (
+                  <a href={`mailto:${project.hubspotOwnerEmail}`} className="ml-1 text-pink-600 hover:underline">
+                    {project.hubspotOwnerEmail}
+                  </a>
+                )}
+              </p>
+            )}
+          </div>
           {!isSupervisor && !isEmployee && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
         </div>
       </div>
