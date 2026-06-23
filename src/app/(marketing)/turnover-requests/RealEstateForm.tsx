@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { DocusealForm } from "@docuseal/react";
+import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
+import { paintingStripePromise } from "@/lib/stripePublishableClient";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { REAL_ESTATE_PRICING_PACKAGE } from "@/lib/turnoverPricingPackages";
 
@@ -13,9 +15,9 @@ const PROPERTY_TYPES = ["House", "Condo", "Apartment", "Townhouse", "Multi-famil
 const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
 const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
-const STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract"] as const;
+const STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract", "Pay Deposit"] as const;
 
 interface FormState {
   // Step 1 — property
@@ -141,6 +143,12 @@ export function RealEstateForm({ onBack }: Props) {
   const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
   const [signingLoading, setSigningLoading] = useState(false);
   const [docusealSubmissionId, setDocusealSubmissionId] = useState<number | null>(null);
+  const [projectSubmitted, setProjectSubmitted] = useState(false);
+
+  // Payment state
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
+  const [checkoutDepositCents, setCheckoutDepositCents] = useState(0);
+  const [checkoutPhase, setCheckoutPhase] = useState<"loading" | "ready" | "test" | "error">("loading");
 
   function patch(updates: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...updates }));
@@ -267,14 +275,52 @@ export function RealEstateForm({ onBack }: Props) {
     };
 
     try {
-      const res = await fetch("/api/real-estate-projects", {
+      // Submit project (only once — guard against re-submission if agent navigates back)
+      if (!projectSubmitted) {
+        const res = await fetch("/api/real-estate-projects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        if (!res.ok) { setError(data.error || "Submission failed. Please try again."); setLoading(false); return; }
+        setProjectSubmitted(true);
+      }
+
+      // Set up Stripe checkout for the deposit
+      setCheckoutPhase("loading");
+      const checkoutRes = await fetch("/api/real-estate-checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          agentEmail: form.agentEmail.trim(),
+          agentName: form.agentName.trim(),
+          address: form.address.trim(),
+          priceCents: pricing.priceCents,
+        }),
       });
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      if (!res.ok) { setError(data.error || "Submission failed. Please try again."); setLoading(false); return; }
-      setSubmitted(true);
+      const checkoutData = await checkoutRes.json().catch(() => ({})) as {
+        clientSecret?: string;
+        depositCents?: number;
+        testMode?: boolean;
+        error?: string;
+      };
+
+      if (checkoutData.testMode) {
+        setCheckoutDepositCents(checkoutData.depositCents ?? 0);
+        setCheckoutPhase("test");
+      } else if (!checkoutRes.ok || !checkoutData.clientSecret) {
+        setCheckoutPhase("error");
+        setError(checkoutData.error || "Payment setup failed. Please try again.");
+        setLoading(false);
+        return;
+      } else {
+        setCheckoutClientSecret(checkoutData.clientSecret);
+        setCheckoutDepositCents(checkoutData.depositCents ?? 0);
+        setCheckoutPhase("ready");
+      }
+
+      setStep(5);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -541,11 +587,60 @@ export function RealEstateForm({ onBack }: Props) {
             />
           </div>
         )}
+
+        {/* Step 5 — Pay Deposit */}
+        {step === 5 && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-pink-100 bg-pink-50 px-4 py-3">
+              <p className="text-sm font-medium text-pink-900">Last step — pay your 50% deposit to confirm.</p>
+              <p className="mt-1 text-xs text-pink-700">
+                Your contract is signed and your request is submitted.
+                {checkoutDepositCents > 0 && (
+                  <span className="ml-1 font-semibold">
+                    Due now:{" "}
+                    {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(checkoutDepositCents / 100)}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {checkoutPhase === "loading" && (
+              <div className="flex min-h-[200px] items-center justify-center rounded-md border border-dashed border-gray-200 bg-gray-50 text-xs text-gray-500">
+                Preparing secure checkout…
+              </div>
+            )}
+
+            {checkoutPhase === "test" && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                <p className="font-semibold">Test mode — Stripe not configured</p>
+                <p className="mt-1">Add <code className="rounded bg-amber-100 px-1">STRIPE_SECRET_KEY</code> to .env.local for real payments.</p>
+                <a
+                  href="/real-estate-thank-you?status=ok&deposit=simulated"
+                  className="mt-3 inline-block rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                >
+                  Simulate deposit →
+                </a>
+              </div>
+            )}
+
+            {checkoutPhase === "ready" && checkoutClientSecret && (
+              <div className="min-h-[300px]">
+                <EmbeddedCheckoutProvider
+                  key={checkoutClientSecret}
+                  stripe={paintingStripePromise}
+                  options={{ clientSecret: checkoutClientSecret }}
+                >
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      {/* Navigation — hidden on step 4 (DocuSeal drives completion) */}
+      {/* Navigation — hidden on steps 4 and 5 */}
       {step < 4 && (
         <div className="mt-6 flex gap-3">
           <button
@@ -587,7 +682,9 @@ export function RealEstateForm({ onBack }: Props) {
         </div>
       )}
       {loading && (
-        <p className="mt-3 text-xs text-gray-500">Submitting your request…</p>
+        <p className="mt-3 text-xs text-gray-500">
+          {projectSubmitted ? "Setting up payment…" : "Submitting your request…"}
+        </p>
       )}
     </div>
   );
