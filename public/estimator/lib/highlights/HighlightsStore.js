@@ -138,12 +138,41 @@ export class HighlightsStore {
     const measurement = arr[idx];
     arr.splice(idx, 1);
 
-    const isAreaMeasurement = measurement?.area != null || measurement?.areaLabel || measurement?.areaPx != null || measurement?.shapeType === 'polygon' || Array.isArray(measurement?.shapePoints) || Array.isArray(measurement?.polygonPoints);
+    const isAreaMeasurement = Boolean(
+      measurement?.area != null ||
+      measurement?.areaLabel != null ||
+      measurement?.areaPx != null ||
+      measurement?.shapeType === 'polygon'
+    );
     if (isAreaMeasurement) {
       const polygons = this._pageToStrokes.get(page) || [];
-      const polygonIdx = polygons.findIndex(poly => poly.measurementId === measurement.id || poly.id === measurement.polygonId);
-      if (polygonIdx >= 0) {
-        polygons.splice(polygonIdx, 1);
+      const shapePoints = Array.isArray(measurement?.shapePoints) ? measurement.shapePoints : [];
+      const polygonPoints = Array.isArray(measurement?.polygonPoints) ? measurement.polygonPoints : [];
+
+      const samePoints = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((pt, i) => {
+        const other = b[i] || {};
+        return Math.abs((pt.x || 0) - (other.x || 0)) < 1e-9 && Math.abs((pt.y || 0) - (other.y || 0)) < 1e-9;
+      });
+      const targetPolygonId = measurement.polygonId || measurement.id;
+      const exactMatches = polygons.filter(poly =>
+        poly.id === measurement.id ||
+        poly.id === targetPolygonId ||
+        poly.measurementId === measurement.id ||
+        poly.measurementId === targetPolygonId
+      );
+
+      if (exactMatches.length) {
+        const exactIndex = polygons.findIndex(poly => exactMatches[0] === poly);
+        if (exactIndex >= 0) polygons.splice(exactIndex, 1);
+      } else if (shapePoints.length || polygonPoints.length) {
+        const fallbackMatches = polygons.filter(poly =>
+          samePoints(poly.points, shapePoints) ||
+          samePoints(poly.points, polygonPoints)
+        );
+        if (fallbackMatches.length === 1) {
+          const fallbackIndex = polygons.findIndex(poly => fallbackMatches[0] === poly);
+          if (fallbackIndex >= 0) polygons.splice(fallbackIndex, 1);
+        }
       }
     }
 
