@@ -124,6 +124,21 @@ export default async function CareersPage({
             </div>
 
             <div>
+              <label htmlFor="location" className={labelClass}>
+                Location <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="location"
+                name="location"
+                type="text"
+                required
+                className={inputClass}
+                placeholder="City, State (e.g. Philadelphia, PA)"
+                autoComplete="address-level2"
+              />
+            </div>
+
+            <div>
               <label className={labelClass}>
                 Do you have cleaning experience? <span className="text-red-500">*</span>
               </label>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSovPercentDone } from "@/lib/sovSync";
+import { syncSovPercentDone, syncProjectBillingFromSOV } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -38,6 +38,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const updated = await prisma.projectSOVItem.update({ where: { id: itemId }, data: data as object });
   await syncSovPercentDone(id);
+  if (data.billingStatus) await syncProjectBillingFromSOV(id);
   return NextResponse.json(updated);
 }
 

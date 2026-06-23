@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const name = String(body?.agentName || "").trim();
     const address = String(body?.address || "").trim();
     const priceCents = Math.round(Number(body?.priceCents) || 0);
+    const projectId = String(body?.projectId || "").trim() || null;
 
     if (!email || priceCents <= 0) {
       return NextResponse.json({ error: "Invalid checkout request" }, { status: 400 });
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
         address,
         deposit_type: "50pct",
         service: "real_estate_turnover",
+        ...(projectId ? { projectId } : {}),
       },
       return_url: `${origin}/real-estate-thank-you?status=ok&deposit=paid&session_id={CHECKOUT_SESSION_ID}`,
       wallet_options: { link: { display: "never" } },

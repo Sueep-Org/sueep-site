@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -125,6 +126,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const request = await prisma.turnoverRequest.update({ where: { id }, data: data as object });
+
+    if (data.billingStatus) {
+      await syncProjectBillingFromRequest(id, String(data.billingStatus));
+    }
+
     return NextResponse.json(request);
   } catch (e) {
     console.error("PATCH /api/erp/turnover-requests/[id]", e);

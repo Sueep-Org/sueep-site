@@ -144,6 +144,7 @@ export function RealEstateForm({ onBack }: Props) {
   const [signingLoading, setSigningLoading] = useState(false);
   const [docusealSubmissionId, setDocusealSubmissionId] = useState<number | null>(null);
   const [projectSubmitted, setProjectSubmitted] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
 
   // Payment state
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
@@ -282,9 +283,10 @@ export function RealEstateForm({ onBack }: Props) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const data = await res.json().catch(() => ({})) as { error?: string };
+        const data = await res.json().catch(() => ({})) as { id?: string; projectId?: string; error?: string };
         if (!res.ok) { setError(data.error || "Submission failed. Please try again."); setLoading(false); return; }
         setProjectSubmitted(true);
+        setProjectId(data.projectId ?? data.id ?? null);
       }
 
       // Set up Stripe checkout for the deposit
@@ -297,6 +299,7 @@ export function RealEstateForm({ onBack }: Props) {
           agentName: form.agentName.trim(),
           address: form.address.trim(),
           priceCents: pricing.priceCents,
+          projectId: projectId ?? undefined,
         }),
       });
       const checkoutData = await checkoutRes.json().catch(() => ({})) as {

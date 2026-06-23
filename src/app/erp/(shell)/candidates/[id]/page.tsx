@@ -39,6 +39,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
 
   const responses = (row.responses ?? {}) as Record<string, string>;
+  const location = responses.location;
   const cleaningExp = responses.cleaningExperience;
   const cleaningYears = responses.cleaningYears;
   const hasVehicle = responses.hasVehicle;
@@ -120,6 +121,10 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 <div>
                   <dt className="text-pink-500">Phone</dt>
                   <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-pink-500">Location</dt>
+                  <dd className="mt-0.5 text-zinc-500">{location || "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-pink-500">Position interest</dt>

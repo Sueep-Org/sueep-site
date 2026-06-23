@@ -9,6 +9,7 @@ const KNOWN_BODY_KEYS = new Set([
   "fullName",
   "email",
   "phone",
+  "location",
   "cleaningExperience",
   "cleaningYears",
   "hasVehicle",
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
     let fullName = "";
     let email = "";
     let phone = "";
+    let location = "";
     let cleaningExperience = "";
     let cleaningYears = "";
     let hasVehicle = "";
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest) {
       fullName = String(body.fullName || "").trim();
       email = String(body.email || "").trim().toLowerCase();
       phone = String(body.phone || "").trim();
+      location = String(body.location || "").trim();
       cleaningExperience = String(body.cleaningExperience || "").trim();
       cleaningYears = String(body.cleaningYears || "").trim();
       hasVehicle = String(body.hasVehicle || "").trim();
@@ -57,6 +60,7 @@ export async function POST(req: NextRequest) {
       fullName = String(form.get("fullName") || "").trim();
       email = String(form.get("email") || "").trim().toLowerCase();
       phone = String(form.get("phone") || "").trim();
+      location = String(form.get("location") || "").trim();
       cleaningExperience = String(form.get("cleaningExperience") || "").trim();
       cleaningYears = String(form.get("cleaningYears") || "").trim();
       hasVehicle = String(form.get("hasVehicle") || "").trim();
@@ -81,6 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     const formResponses: Record<string, unknown> = {
+      ...(location ? { location } : {}),
       ...(cleaningExperience ? { cleaningExperience } : {}),
       ...(cleaningYears ? { cleaningYears } : {}),
       ...(hasVehicle ? { hasVehicle } : {}),
