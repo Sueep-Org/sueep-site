@@ -153,9 +153,21 @@ export class CanvasOverlay {
     for (const m of measurements) {
       if (!m.pts || !m.pts.length) continue;
 
-      const isAreaMeasurement = m.area != null || m.areaLabel;
+      const isAreaMeasurement = m.area != null || m.areaLabel != null || m.areaPx != null || m.shapeType === 'polygon' ||
+        (Array.isArray(m.shapePoints) && m.shapePoints.length >= 3) ||
+        (Array.isArray(m.polygonPoints) && m.polygonPoints.length >= 3);
       if (isAreaMeasurement) {
-        const polygon = (this.store.getPage(this.currentPage) || []).find(item => item.measurementId === m.id || item.id === m.id);
+        const polygons = this.store.getPage(this.currentPage) || [];
+        const targetPolygonId = m.polygonId || m.id;
+        const polygon = polygons.find(item =>
+          item.id === m.id ||
+          item.id === targetPolygonId ||
+          item.measurementId === m.id ||
+          item.measurementId === targetPolygonId
+        ) || polygons.find(item =>
+          (Array.isArray(item.points) && Array.isArray(m.shapePoints) && samePoints(item.points, m.shapePoints)) ||
+          (Array.isArray(item.points) && Array.isArray(m.polygonPoints) && samePoints(item.points, m.polygonPoints))
+        ) || null;
         const points = Array.isArray(polygon?.points) && polygon.points.length
           ? polygon.points
           : (Array.isArray(m.shapePoints) && m.shapePoints.length
@@ -498,7 +510,7 @@ export class CanvasOverlay {
         { x: left / this.overlay.width, y: bottom / this.overlay.height }
       ];
 
-      const measurementId = `rect-${Date.now()}`;
+      const measurementId = makeStableId('rect');
 
       // save polygon for visualization and tie it to the measurement so it can be removed together
       this.store.addPolygon(this.currentPage, { points: norm, measurementId });
@@ -563,7 +575,7 @@ export class CanvasOverlay {
     const areaScaled = applyScale(pixelArea, this._pxPerPt, scale?.factor);
     const pathPoints = smoothedPoints.length > 1 ? smoothedPoints : points;
     const norm = pathPoints.map(point => ({ x: point.x / this.overlay.width, y: point.y / this.overlay.height }));
-    const measurementId = `irreg-${Date.now()}`;
+    const measurementId = makeStableId('irreg');
 
     this.store.addPolygon(this.currentPage, { points: norm, measurementId });
     this.store.addMeasurement(this.currentPage, {
@@ -1022,6 +1034,17 @@ function drawIrregularPath(ctx, points, preview) {
   ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.restore();
+}
+
+function samePoints(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((pt, i) => {
+    const other = b[i] || {};
+    return Math.abs((pt.x || 0) - (other.x || 0)) < 1e-9 && Math.abs((pt.y || 0) - (other.y || 0)) < 1e-9;
+  });
+}
+
+function makeStableId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function drawMeasurementLine(ctx, a, b, { hover = false, selected = false } = {}) {

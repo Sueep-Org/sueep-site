@@ -3,9 +3,16 @@
 // =========================
 
 // Auto-switch between local + production
+const hostname = location.hostname.toLowerCase();
 const isLocal =
-  location.hostname === "localhost" ||
-  location.hostname === "127.0.0.1";
+  hostname === "localhost" ||
+  hostname === "127.0.0.1" ||
+  hostname === "0.0.0.0" ||
+  hostname.endsWith(".localhost") ||
+  hostname.endsWith(".local") ||
+  hostname.startsWith("192.168.") ||
+  hostname.startsWith("10.") ||
+  hostname.startsWith("172.");
 
 export const API_BASE = isLocal
   ? "http://localhost:8000"
