@@ -458,12 +458,25 @@ export default function EstimatorPage() {
 
             {/* READ-ONLY VIEW */}
             <div id="analysisView">
-              {/* Address */}
-              <div className="text-sm text-gray-500 mb-4" id="analysisViewAddress"></div>
+              {/* Address + Drive info */}
+              <div className="grid grid-cols-4 gap-x-6 gap-y-3 text-sm mb-4">
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Address</span>
+                  <div id="analysisViewAddress" className="text-gray-800 font-semibold mt-0.5"></div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
+                  <div id="detailDistance" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
+                  <div id="detailDuration" className="text-gray-800 font-semibold mt-0.5">—</div>
+                </div>
+              </div>
               {/* Labor breakdown table — rendered by JS */}
               <div id="analysisViewBreakdown" className="mb-4"></div>
               {/* Summary row */}
-              <div className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-4 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">Total Labor</span>
                   <div id="analysisViewLabor" className="text-gray-800 font-semibold mt-0.5">—</div>
@@ -480,57 +493,59 @@ export default function EstimatorPage() {
                   <span className="text-gray-400 text-xs uppercase tracking-wide">Labor / SF</span>
                   <div id="analysisViewLaborPerSF" className="text-gray-800 font-semibold mt-0.5">—</div>
                 </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
-                  <div id="detailDistance" className="text-gray-800 font-semibold mt-0.5">—</div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
-                  <div id="detailDuration" className="text-gray-800 font-semibold mt-0.5">—</div>
-                </div>
               </div>
+
             </div>
 
             {/* EDIT FORM */}
             <div id="analysisEditForm" style={{ display: "none" }}>
-              {/* Labor breakdown table */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Labor Breakdown</span>
-                  <button id="addLaborRowBtn" className="mini-btn">+ Add</button>
+              {/* Global rates */}
+              <div className="grid grid-cols-3 gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Cleaner Rate ($/hr)</label>
+                  <input type="number" id="cleanerRateInput" defaultValue="22" min="0" step="0.01"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
-                {/* rows rendered by JS */}
-                <div id="laborRowsContainer"></div>
-                <div className="flex justify-end mt-2 text-sm text-gray-700">
-                  Total Labor:&nbsp;<span id="analysisTotalLaborCalc" className="font-semibold text-blue-600">$0.00</span>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Foreman Rate ($/day)</label>
+                  <input type="number" id="foremanRateInput" defaultValue="220" min="0" step="0.01"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Overhead (%)</label>
+                  <input type="number" id="overheadInput" defaultValue="10" min="0" step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Profit (%)</label>
+                  <input type="number" id="profitInput" defaultValue="25" min="0" step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tax (%)</label>
+                  <input type="number" id="taxInput" defaultValue="6" min="0" step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Commission (%)</label>
+                  <input type="number" id="commissionInput" defaultValue="10" min="0" step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
               </div>
 
-              {/* Area + Quote */}
-              <div className="grid grid-cols-2 gap-4 mb-4 pt-4 border-t border-gray-100">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Area (SF)</label>
-                  <input
-                    type="number"
-                    id="analysisTotalAreaInput"
-                    placeholder="0"
-                    step="1"
-                    min="0"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quote ($)</label>
-                  <input
-                    type="number"
-                    id="analysisQuoteInput"
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
+              {/* Phase table — rendered by JS */}
+              <div id="phaseTableContainer" className="mb-4 overflow-x-auto"></div>
+
+              {/* Calc summary — rendered by JS */}
+              <div id="calcSummaryContainer" className="mb-4"></div>
+
+              {/* Total Area */}
+              <div className="mb-4 pt-4 border-t border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">Total Area (SF)</label>
+                <input type="number" id="analysisTotalAreaInput" placeholder="0" min="0" step="1"
+                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
               </div>
+
               <div className="flex gap-2">
                 <button id="saveAnalysisBtn" className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">Save</button>
                 <button id="cancelAnalysisBtn" className="mini-btn">Cancel</button>

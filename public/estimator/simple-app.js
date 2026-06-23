@@ -287,12 +287,31 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
+  let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
     zoomResetBtn,
-    zoomLabel
+    zoomLabel,
+    savePdfBtn
   });
+
+  function createSavePdfBtn() {
+    const existing = $('savePdfBtn');
+    if (existing) return existing;
+    const toolbar = $('toolbar');
+    if (!toolbar) return null;
+    const btn = document.createElement('button');
+    btn.id = 'savePdfBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Save';
+    if (zoomResetBtn && zoomResetBtn.parentElement === toolbar) {
+      toolbar.insertBefore(btn, zoomResetBtn.nextSibling);
+    } else {
+      toolbar.appendChild(btn);
+    }
+    return btn;
+  }
 
   // ======================================================
   // PDF STATE
@@ -345,6 +364,10 @@ async function initApp(){
     downloadPdfBtn.addEventListener('click', exportCurrentPageWithAnnotations);
   }
 
+  if (savePdfBtn) {
+    savePdfBtn.addEventListener('click', exportAllPagesWithAnnotations);
+  }
+
   let __renderSeq = 0;
 
   // ======================================================
@@ -389,6 +412,47 @@ async function initApp(){
       vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
     }
+  }
+
+  async function renderPageWithAnnotationsToCanvas(pageNum){
+    if (!pdfDoc || !pdfCanvas || !overlay) return null;
+
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1 });
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = Math.ceil(viewport.width);
+    exportCanvas.height = Math.ceil(viewport.height);
+    const exportCtx = exportCanvas.getContext('2d');
+
+    const prevPage = overlay.currentPage;
+    const prevPxPerPt = overlay._pxPerPt;
+    const prevActive = overlay.active;
+    const prevTool = overlay.tool;
+    const prevMeasurePreview = overlay._measurePreview;
+    const prevIrregularPreview = overlay._irregularPreview;
+    const prevHoverPoly = overlay.hoverPoly;
+
+    overlay.currentPage = pageNum;
+    overlay.setPdfSpace({ pxPerPt: viewport.scale });
+    overlay.active = false;
+    overlay._measurePreview = null;
+    overlay._irregularPreview = null;
+    overlay.hoverPoly = null;
+
+    exportCtx.save();
+    await page.render({ canvasContext: exportCtx, viewport }).promise;
+    overlay.renderToContext(exportCtx, { width: viewport.width, height: viewport.height });
+    exportCtx.restore();
+
+    overlay.currentPage = prevPage;
+    overlay._pxPerPt = prevPxPerPt;
+    overlay.active = prevActive;
+    overlay.tool = prevTool;
+    overlay._measurePreview = prevMeasurePreview;
+    overlay._irregularPreview = prevIrregularPreview;
+    overlay.hoverPoly = prevHoverPoly;
+
+    return { exportCanvas, viewport };
   }
 
   async function exportCurrentPageWithAnnotations(){
@@ -438,6 +502,219 @@ async function initApp(){
     } catch (error) {
       console.error(error);
       toast('Unable to export the current page.', 'error');
+    }
+  }
+
+  async function loadJsPdf(){
+    const getJsPdf = () => {
+      if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+      if (typeof window.jsPDF === 'function') return window.jsPDF;
+      if (typeof window.jspdf?.default === 'function') return window.jspdf.default;
+      if (typeof window.jspdf?.default?.jsPDF === 'function') return window.jspdf.default.jsPDF;
+      if (typeof window.jspdf === 'function') return window.jspdf;
+      return null;
+    };
+
+    let jsPDF = getJsPdf();
+    if (jsPDF) return jsPDF;
+
+    const urls = [
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+    ];
+
+    const loadScript = (url, timeoutMs = 10000) => new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      let timeout = setTimeout(() => {
+        script.onerror = null;
+        script.onload = null;
+        reject(new Error(`jsPDF load timed out: ${url}`));
+      }, timeoutMs);
+
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load jsPDF: ${url}`));
+      };
+      document.head.appendChild(script);
+    });
+
+    for (const url of urls) {
+      try {
+        await loadScript(url);
+        jsPDF = getJsPdf();
+        if (jsPDF) return jsPDF;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    return null;
+  }
+
+  async function loadPdfLib(){
+    if (window.PDFLib) return window.PDFLib;
+
+    if (window._pdfLibLoadingPromise) {
+      await window._pdfLibLoadingPromise;
+      return window.PDFLib || null;
+    }
+
+    const url = 'https://unpkg.com/pdf-lib@1.28.0/dist/pdf-lib.min.js';
+    window._pdfLibLoadingPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      let timeout = setTimeout(() => {
+        script.onerror = null;
+        script.onload = null;
+        reject(new Error(`PDFLib load timed out: ${url}`));
+      }, 10000);
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load PDFLib: ${url}`));
+      };
+      document.head.appendChild(script);
+    });
+
+    await window._pdfLibLoadingPromise;
+    return window.PDFLib || null;
+  }
+
+  async function canvasToArrayBuffer(canvas){
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Canvas toBlob returned null'));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+      }, 'image/png');
+    });
+  }
+
+  async function downloadBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  async function exportWithPdfLib(){
+    const PDFLib = await loadPdfLib();
+    if (!PDFLib) throw new Error('PDFLib unavailable');
+
+    const { PDFDocument } = PDFLib;
+    const outPdfDoc = await PDFDocument.create();
+
+    const pageCanvases = [];
+    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+      const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+      if (!rendered) {
+        throw new Error('Failed to render page for export.');
+      }
+      pageCanvases.push(rendered.exportCanvas);
+    }
+
+    for (const canvas of pageCanvases) {
+      const pngBytes = await canvasToArrayBuffer(canvas);
+      const img = await outPdfDoc.embedPng(pngBytes);
+      const page = outPdfDoc.addPage([img.width, img.height]);
+      page.drawImage(img, {
+        x: 0,
+        y: 0,
+        width: img.width,
+        height: img.height
+      });
+    }
+
+    const pdfBytes = await outPdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    await downloadBlob(blob, `annotated-${Date.now()}.pdf`);
+  }
+
+  async function exportAllPagesWithAnnotations(){
+    if (!pdfDoc || !savePdfBtn) return;
+
+    const originalSaveText = savePdfBtn.textContent;
+    savePdfBtn.disabled = true;
+    savePdfBtn.textContent = 'Saving…';
+
+    try {
+      await exportWithPdfLib();
+      return;
+    } catch (error) {
+      console.warn('PDFLib export failed, falling back to jsPDF', error);
+    }
+
+    try {
+      const jsPDF = await loadJsPdf();
+      if (!jsPDF) throw new Error('jsPDF unavailable');
+
+      let doc;
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+        if (!rendered) {
+          throw new Error('Failed to render page for export.');
+        }
+
+        const { exportCanvas, viewport } = rendered;
+        const imageUrl = exportCanvas.toDataURL('image/jpeg', 0.85);
+        const pageWidth = Math.ceil(viewport.width);
+        const pageHeight = Math.ceil(viewport.height);
+
+        if (!doc) {
+          doc = new jsPDF({ unit: 'px', format: [pageWidth, pageHeight], compress: true });
+        } else {
+          doc.addPage([pageWidth, pageHeight]);
+        }
+
+        doc.addImage(imageUrl, 'JPEG', 0, 0, pageWidth, pageHeight);
+      }
+
+      if (!doc) {
+        throw new Error('No pages to export.');
+      }
+
+      const filename = `annotated-${Date.now()}.pdf`;
+      if (typeof doc.save === 'function') {
+        doc.save(filename);
+      } else if (typeof doc.output === 'function') {
+        let blob;
+        try {
+          const arrayBuffer = doc.output('arraybuffer');
+          blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        } catch (err) {
+          const blobResult = doc.output('blob');
+          blob = blobResult instanceof Blob ? blobResult : new Blob([blobResult], { type: 'application/pdf' });
+        }
+        await downloadBlob(blob, filename);
+      } else {
+        throw new Error('PDF save function is unavailable.');
+      }
+    } catch (error) {
+      console.error('PDF export failed', error);
+      toast('Unable to save annotated PDF.', 'error');
+    } finally {
+      savePdfBtn.disabled = false;
+      savePdfBtn.textContent = originalSaveText;
     }
   }
 
@@ -702,6 +979,9 @@ async function initApp(){
 
       if (downloadPdfBtn) {
         downloadPdfBtn.disabled = false;
+      }
+      if (savePdfBtn) {
+        savePdfBtn.disabled = false;
       }
 
       if (mainContent){
@@ -1023,90 +1303,163 @@ async function initApp(){
   const fmt$ = v => (v != null ? `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—');
   const fmtSF = v => (v != null ? Number(v).toLocaleString() + ' SF' : '—');
 
-  let _laborRows = [];
-  let _laborRowId = 0;
+  // ---- Estimate phases ----
+  const PHASES = ['Rough Cleaning', 'Final Cleaning', 'Touch Up Cleaning'];
+  const PHASE_IDS = ['rough', 'final', 'touchup'];
 
-  function _calcLaborTotal() {
-    return _laborRows.reduce((sum, r) => sum + (parseFloat(r.hour_rate) || 0) * (parseFloat(r.days) || 0) * 8, 0);
+  function _calcPhase(p, rates) {
+    const cleanersPay = (p.persons || 0) * (p.days || 0) * rates.cleanerRate * 8;
+    const foremanPay = (p.days || 0) * rates.foremanRate;
+    const laborCost = cleanersPay + foremanPay;
+    const materials = laborCost * 0.05;
+    const subtotal = laborCost + materials;
+    const oh = subtotal * rates.overhead;
+    const pft = (subtotal + oh) * rates.profit;
+    const price = pft + oh + subtotal;
+    const taxes = price * rates.tax;
+    const comm = price * rates.commission;
+    const finalPrice = price + taxes;
+    return { cleanersPay, foremanPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
   }
 
-  function _updateTotalCalcEl() {
-    const el = document.getElementById('analysisTotalLaborCalc');
-    if (el) el.textContent = fmt$(_calcLaborTotal());
+  function _getRates() {
+    const n = id => parseFloat(document.getElementById(id)?.value) || 0;
+    return {
+      cleanerRate: n('cleanerRateInput'),
+      foremanRate: n('foremanRateInput'),
+      overhead: n('overheadInput') / 100,
+      profit: n('profitInput') / 100,
+      tax: n('taxInput') / 100,
+      commission: n('commissionInput') / 100,
+    };
   }
 
-  function _renderLaborRows() {
-    const container = document.getElementById('laborRowsContainer');
+  function _getPhaseInputs() {
+    return PHASE_IDS.map((pid, i) => ({
+      name: PHASES[i],
+      persons: parseFloat(document.getElementById(`phase_persons_${pid}`)?.value) || 0,
+      days: parseFloat(document.getElementById(`phase_days_${pid}`)?.value) || 0,
+    }));
+  }
+
+  function _updateCalcCells() {
+    const rates = _getRates();
+    const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
+    const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
+    const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+    const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+
+    let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+
+    PHASE_IDS.forEach((pid, i) => {
+      const p = {
+        persons: parseFloat(document.getElementById(`phase_persons_${pid}`)?.value) || 0,
+        days: parseFloat(document.getElementById(`phase_days_${pid}`)?.value) || 0,
+      };
+      const c = _calcPhase(p, rates);
+      totLabor += c.laborCost;
+      totSubtotal += c.subtotal;
+      totOh += c.oh;
+      totPft += c.pft;
+      totPrice += c.price;
+      totTaxes += c.taxes;
+      totComm += c.comm;
+      totFinal += c.finalPrice;
+
+      const setCell = (suffix, val) => {
+        const el = document.getElementById(`phase_${suffix}_${pid}`);
+        if (el) el.textContent = fmt$(val);
+      };
+      setCell('cleaners', c.cleanersPay);
+      setCell('foreman', c.foremanPay);
+      setCell('labor', c.laborCost);
+      setCell('materials', c.materials);
+      setCell('subtotal', c.subtotal);
+    });
+
+    const summaryContainer = document.getElementById('calcSummaryContainer');
+    if (summaryContainer) {
+      summaryContainer.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+      [
+        [`Subtotal`, totSubtotal],
+        [`Overhead (${overheadPct}%)`, totOh],
+        [`Profit (${profitPct}%)`, totPft],
+        [`Price`, totPrice],
+        [`Tax (${taxPct}%)`, totTaxes],
+        [`Commission (${commPct}%)`, totComm],
+        [`Final Price`, totFinal],
+      ].forEach(([label, val], i) => {
+        const isLast = i === 6;
+        const item = document.createElement('div');
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        grid.appendChild(item);
+      });
+      summaryContainer.appendChild(grid);
+    }
+  }
+
+  function _renderPhaseTable() {
+    const container = document.getElementById('phaseTableContainer');
     if (!container) return;
     container.innerHTML = '';
 
-    if (_laborRows.length === 0) {
-      const empty = document.createElement('div');
-      empty.style.cssText = 'font-size:12px;color:#9ca3af;padding:6px 0;';
-      empty.textContent = 'No entries — click + Add to start.';
-      container.appendChild(empty);
-      _updateTotalCalcEl();
-      return;
-    }
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
 
-    const header = document.createElement('div');
-    header.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:4px;';
-    ['Labor Type', '$/hr', 'Days', 'Subtotal', ''].forEach(h => {
-      const el = document.createElement('div');
-      el.textContent = h;
-      el.style.cssText = 'font-size:11px;color:#6b7280;font-weight:500;padding:0 2px;';
-      header.appendChild(el);
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor Cost', 'Materials', 'Subtotal'].forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `text-align:${i <= 2 ? 'left' : 'right'};padding:6px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;border-bottom:1px solid #e5e7eb;white-space:nowrap;`;
+      hrow.appendChild(th);
     });
-    container.appendChild(header);
 
-    const iStyle = 'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;box-sizing:border-box;outline:none;';
+    const tbody = table.createTBody();
+    const iStyle = 'width:64px;border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;outline:none;';
+    PHASE_IDS.forEach((pid, i) => {
+      const tr = tbody.insertRow();
+      tr.style.cssText = 'border-top:1px solid #f3f4f6;';
 
-    for (const row of _laborRows) {
-      const rowEl = document.createElement('div');
-      rowEl.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:6px;align-items:center;';
+      const nameTd = tr.insertCell();
+      nameTd.textContent = PHASES[i];
+      nameTd.style.cssText = 'padding:6px 8px;color:#374151;font-weight:500;white-space:nowrap;';
 
-      const nameIn = document.createElement('input');
-      nameIn.type = 'text'; nameIn.placeholder = 'e.g. Painter';
-      nameIn.value = row.name || ''; nameIn.style.cssText = iStyle;
-      nameIn.addEventListener('input', e => { row.name = e.target.value; });
+      const personsTd = tr.insertCell();
+      personsTd.style.cssText = 'padding:4px 6px;';
+      const personsInput = document.createElement('input');
+      personsInput.type = 'number'; personsInput.id = `phase_persons_${pid}`;
+      personsInput.min = '0'; personsInput.step = '1'; personsInput.placeholder = '0';
+      personsInput.style.cssText = iStyle;
+      personsInput.addEventListener('input', _updateCalcCells);
+      personsTd.appendChild(personsInput);
 
-      const rateIn = document.createElement('input');
-      rateIn.type = 'number'; rateIn.placeholder = '0.00'; rateIn.step = '0.01'; rateIn.min = '0';
-      rateIn.value = row.hour_rate || ''; rateIn.style.cssText = iStyle;
-      rateIn.addEventListener('input', e => {
-        row.hour_rate = parseFloat(e.target.value) || 0;
-        const sub = row.hour_rate * (parseFloat(row.days) || 0) * 8;
-        subEl.textContent = fmt$(sub);
-        _updateTotalCalcEl();
+      const daysTd = tr.insertCell();
+      daysTd.style.cssText = 'padding:4px 6px;';
+      const daysInput = document.createElement('input');
+      daysInput.type = 'number'; daysInput.id = `phase_days_${pid}`;
+      daysInput.min = '0'; daysInput.step = '0.5'; daysInput.placeholder = '0';
+      daysInput.style.cssText = iStyle;
+      daysInput.addEventListener('input', _updateCalcCells);
+      daysTd.appendChild(daysInput);
+
+      ['cleaners', 'foreman', 'labor', 'materials', 'subtotal'].forEach(suffix => {
+        const td = tr.insertCell();
+        td.id = `phase_${suffix}_${pid}`;
+        td.style.cssText = 'padding:6px 8px;text-align:right;color:#374151;white-space:nowrap;';
+        td.textContent = '$0.00';
       });
+    });
 
-      const daysIn = document.createElement('input');
-      daysIn.type = 'number'; daysIn.placeholder = '0'; daysIn.step = '0.5'; daysIn.min = '0';
-      daysIn.value = row.days || ''; daysIn.style.cssText = iStyle;
-      daysIn.addEventListener('input', e => {
-        row.days = parseFloat(e.target.value) || 0;
-        const sub = (parseFloat(row.hour_rate) || 0) * row.days * 8;
-        subEl.textContent = fmt$(sub);
-        _updateTotalCalcEl();
-      });
+    container.appendChild(table);
 
-      const subEl = document.createElement('div');
-      subEl.textContent = fmt$((parseFloat(row.hour_rate) || 0) * (parseFloat(row.days) || 0) * 8);
-      subEl.style.cssText = 'font-size:12px;color:#374151;font-family:monospace;padding:0 2px;';
+    ['cleanerRateInput', 'foremanRateInput', 'overheadInput', 'profitInput', 'taxInput', 'commissionInput'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', _updateCalcCells);
+    });
 
-      const removeBtn = document.createElement('button');
-      removeBtn.textContent = '×';
-      removeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0;line-height:1;';
-      removeBtn.addEventListener('click', () => {
-        _laborRows = _laborRows.filter(r => r.id !== row.id);
-        _renderLaborRows();
-      });
-
-      rowEl.appendChild(nameIn); rowEl.appendChild(rateIn); rowEl.appendChild(daysIn);
-      rowEl.appendChild(subEl); rowEl.appendChild(removeBtn);
-      container.appendChild(rowEl);
-    }
-    _updateTotalCalcEl();
+    _updateCalcCells();
   }
 
   function showAnalysisCard(projData) {
@@ -1117,36 +1470,61 @@ async function initApp(){
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
-      const rows = projData.labor_breakdown || [];
-      if (rows.length > 0) {
+      const bd = projData.labor_breakdown;
+      if (bd && bd.phases && bd.phases.length > 0) {
+        const rates = {
+          cleanerRate: bd.cleaner_rate || 0,
+          foremanRate: bd.foreman_rate || 0,
+          overhead: (bd.overhead_pct || 0) / 100,
+          profit: (bd.profit_pct || 0) / 100,
+          tax: (bd.tax_pct || 0) / 100,
+          commission: (bd.commission_pct || 0) / 100,
+        };
+
         const table = document.createElement('table');
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Labor Type', '$/hr', 'Days', 'Hours', 'Subtotal'].forEach((h, i) => {
+        ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor Cost', 'Materials', 'Subtotal'].forEach((h, i) => {
           const th = document.createElement('th');
           th.textContent = h;
-          th.style.cssText = `text-align:${i === 0 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;`;
+          th.style.cssText = `text-align:${i <= 2 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
           hrow.appendChild(th);
         });
         const tbody = table.createTBody();
-        for (const r of rows) {
+        let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+        for (const p of bd.phases) {
+          const c = _calcPhase(p, rates);
+          totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
+          totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
           const tr = tbody.insertRow();
           tr.style.cssText = 'border-top:1px solid #f3f4f6;';
-          const sub = (r.hour_rate || 0) * (r.days || 0) * 8;
           [
-            { v: r.name || '—', a: 'left' },
-            { v: `$${(r.hour_rate || 0).toFixed(2)}`, a: 'right' },
-            { v: r.days || 0, a: 'right' },
-            { v: (r.days || 0) * 8, a: 'right' },
-            { v: fmt$(sub), a: 'right' },
+            { v: p.name, a: 'left' }, { v: p.persons || 0, a: 'left' }, { v: p.days || 0, a: 'left' },
+            { v: fmt$(c.cleanersPay), a: 'right' }, { v: fmt$(c.foremanPay), a: 'right' },
+            { v: fmt$(c.laborCost), a: 'right' }, { v: fmt$(c.materials), a: 'right' }, { v: fmt$(c.subtotal), a: 'right' },
           ].forEach(({ v, a }) => {
             const td = tr.insertCell();
             td.textContent = v;
-            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;`;
+            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
         breakdownDiv.appendChild(table);
+
+        const pricingDiv = document.createElement('div');
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        [
+          [`Subtotal`, totSubtotal], [`Overhead (${bd.overhead_pct}%)`, totOh],
+          [`Profit (${bd.profit_pct}%)`, totPft], [`Price`, totPrice],
+          [`Tax (${bd.tax_pct}%)`, totTaxes], [`Commission (${bd.commission_pct}%)`, totComm],
+          [`Final Price`, totFinal],
+        ].forEach(([label, val], i) => {
+          const isLast = i === 6;
+          const item = document.createElement('div');
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          pricingDiv.appendChild(item);
+        });
+        breakdownDiv.appendChild(pricingDiv);
       }
     }
 
@@ -1163,15 +1541,33 @@ async function initApp(){
     card.style.display = 'block';
   }
 
+
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
-    _laborRows = (_loadedProjectData.labor_breakdown || []).map(r => ({
-      id: ++_laborRowId, name: r.name || '', hour_rate: r.hour_rate || 0, days: r.days || 0,
-    }));
-    _renderLaborRows();
+    const bd = _loadedProjectData.labor_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+
+    if (bd && bd.phases) {
+      setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
+      setVal('foremanRateInput', bd.foreman_rate ?? 220);
+      setVal('overheadInput', bd.overhead_pct ?? 10);
+      setVal('profitInput', bd.profit_pct ?? 25);
+      setVal('taxInput', bd.tax_pct ?? 6);
+      setVal('commissionInput', bd.commission_pct ?? 10);
+    }
+
+    _renderPhaseTable();
+
+    if (bd && bd.phases) {
+      const phaseMap = { 'Rough Cleaning': 'rough', 'Final Cleaning': 'final', 'Touch Up Cleaning': 'touchup' };
+      for (const p of bd.phases) {
+        const pid = phaseMap[p.name];
+        if (pid) { setVal(`phase_persons_${pid}`, p.persons); setVal(`phase_days_${pid}`, p.days); }
+      }
+      _updateCalcCells();
+    }
+
     setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
-    setVal('analysisQuoteInput', _loadedProjectData.quote);
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
@@ -1185,31 +1581,42 @@ async function initApp(){
     if (_loadedProjectData) showAnalysisCard(_loadedProjectData);
   });
 
-  const addLaborRowBtn = document.getElementById('addLaborRowBtn');
-  if (addLaborRowBtn) addLaborRowBtn.addEventListener('click', () => {
-    _laborRows.push({ id: ++_laborRowId, name: '', hour_rate: 0, days: 0 });
-    _renderLaborRows();
-  });
-
   const saveAnalysisBtn = document.getElementById('saveAnalysisBtn');
   if (saveAnalysisBtn) {
     saveAnalysisBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
-      const breakdown = _laborRows.map(r => ({
-        name: r.name,
-        hour_rate: parseFloat(r.hour_rate) || 0,
-        days: parseFloat(r.days) || 0,
-      }));
-      const totalLabor = _calcLaborTotal();
-      const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
-      const quoteVal = document.getElementById('analysisQuoteInput')?.value;
+      const rates = _getRates();
+      const phases = _getPhaseInputs();
 
-      const body = {
-        labor: totalLabor > 0 ? totalLabor : null,
-        labor_breakdown: breakdown.length > 0 ? breakdown : null,
+      let totLabor = 0, totFinalPrice = 0;
+      for (const p of phases) {
+        const c = _calcPhase(p, rates);
+        totLabor += c.laborCost;
+        totFinalPrice += c.finalPrice;
+      }
+
+      const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
+      const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
+      const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+
+      const laborBreakdown = {
+        cleaner_rate: rates.cleanerRate,
+        foreman_rate: rates.foremanRate,
+        overhead_pct: overheadPct,
+        profit_pct: profitPct,
+        tax_pct: taxPct,
+        commission_pct: commPct,
+        phases,
       };
-      if (areaVal !== '') body.total_area = parseFloat(areaVal);
-      if (quoteVal !== '') body.quote = parseFloat(quoteVal);
+
+      const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
+      const body = {
+        labor: totLabor > 0 ? totLabor : null,
+        labor_breakdown: laborBreakdown,
+        quote: totFinalPrice > 0 ? totFinalPrice : null,
+      };
+      if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
 
       saveAnalysisBtn.textContent = 'Saving…';
       saveAnalysisBtn.disabled = true;
