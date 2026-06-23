@@ -1023,90 +1023,163 @@ async function initApp(){
   const fmt$ = v => (v != null ? `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—');
   const fmtSF = v => (v != null ? Number(v).toLocaleString() + ' SF' : '—');
 
-  let _laborRows = [];
-  let _laborRowId = 0;
+  // ---- Estimate phases ----
+  const PHASES = ['Rough Cleaning', 'Final Cleaning', 'Touch Up Cleaning'];
+  const PHASE_IDS = ['rough', 'final', 'touchup'];
 
-  function _calcLaborTotal() {
-    return _laborRows.reduce((sum, r) => sum + (parseFloat(r.hour_rate) || 0) * (parseFloat(r.days) || 0) * 8, 0);
+  function _calcPhase(p, rates) {
+    const cleanersPay = (p.persons || 0) * (p.days || 0) * rates.cleanerRate * 8;
+    const foremanPay = (p.days || 0) * rates.foremanRate;
+    const laborCost = cleanersPay + foremanPay;
+    const materials = laborCost * 0.05;
+    const subtotal = laborCost + materials;
+    const oh = subtotal * rates.overhead;
+    const pft = (subtotal + oh) * rates.profit;
+    const price = pft + oh + subtotal;
+    const taxes = price * rates.tax;
+    const comm = price * rates.commission;
+    const finalPrice = price + taxes;
+    return { cleanersPay, foremanPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
   }
 
-  function _updateTotalCalcEl() {
-    const el = document.getElementById('analysisTotalLaborCalc');
-    if (el) el.textContent = fmt$(_calcLaborTotal());
+  function _getRates() {
+    const n = id => parseFloat(document.getElementById(id)?.value) || 0;
+    return {
+      cleanerRate: n('cleanerRateInput'),
+      foremanRate: n('foremanRateInput'),
+      overhead: n('overheadInput') / 100,
+      profit: n('profitInput') / 100,
+      tax: n('taxInput') / 100,
+      commission: n('commissionInput') / 100,
+    };
   }
 
-  function _renderLaborRows() {
-    const container = document.getElementById('laborRowsContainer');
+  function _getPhaseInputs() {
+    return PHASE_IDS.map((pid, i) => ({
+      name: PHASES[i],
+      persons: parseFloat(document.getElementById(`phase_persons_${pid}`)?.value) || 0,
+      days: parseFloat(document.getElementById(`phase_days_${pid}`)?.value) || 0,
+    }));
+  }
+
+  function _updateCalcCells() {
+    const rates = _getRates();
+    const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
+    const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
+    const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+    const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+
+    let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+
+    PHASE_IDS.forEach((pid, i) => {
+      const p = {
+        persons: parseFloat(document.getElementById(`phase_persons_${pid}`)?.value) || 0,
+        days: parseFloat(document.getElementById(`phase_days_${pid}`)?.value) || 0,
+      };
+      const c = _calcPhase(p, rates);
+      totLabor += c.laborCost;
+      totSubtotal += c.subtotal;
+      totOh += c.oh;
+      totPft += c.pft;
+      totPrice += c.price;
+      totTaxes += c.taxes;
+      totComm += c.comm;
+      totFinal += c.finalPrice;
+
+      const setCell = (suffix, val) => {
+        const el = document.getElementById(`phase_${suffix}_${pid}`);
+        if (el) el.textContent = fmt$(val);
+      };
+      setCell('cleaners', c.cleanersPay);
+      setCell('foreman', c.foremanPay);
+      setCell('labor', c.laborCost);
+      setCell('materials', c.materials);
+      setCell('subtotal', c.subtotal);
+    });
+
+    const summaryContainer = document.getElementById('calcSummaryContainer');
+    if (summaryContainer) {
+      summaryContainer.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+      [
+        [`Subtotal`, totSubtotal],
+        [`Overhead (${overheadPct}%)`, totOh],
+        [`Profit (${profitPct}%)`, totPft],
+        [`Price`, totPrice],
+        [`Tax (${taxPct}%)`, totTaxes],
+        [`Commission (${commPct}%)`, totComm],
+        [`Final Price`, totFinal],
+      ].forEach(([label, val], i) => {
+        const isLast = i === 6;
+        const item = document.createElement('div');
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        grid.appendChild(item);
+      });
+      summaryContainer.appendChild(grid);
+    }
+  }
+
+  function _renderPhaseTable() {
+    const container = document.getElementById('phaseTableContainer');
     if (!container) return;
     container.innerHTML = '';
 
-    if (_laborRows.length === 0) {
-      const empty = document.createElement('div');
-      empty.style.cssText = 'font-size:12px;color:#9ca3af;padding:6px 0;';
-      empty.textContent = 'No entries — click + Add to start.';
-      container.appendChild(empty);
-      _updateTotalCalcEl();
-      return;
-    }
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
 
-    const header = document.createElement('div');
-    header.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:4px;';
-    ['Labor Type', '$/hr', 'Days', 'Subtotal', ''].forEach(h => {
-      const el = document.createElement('div');
-      el.textContent = h;
-      el.style.cssText = 'font-size:11px;color:#6b7280;font-weight:500;padding:0 2px;';
-      header.appendChild(el);
+    const thead = table.createTHead();
+    const hrow = thead.insertRow();
+    ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor Cost', 'Materials', 'Subtotal'].forEach((h, i) => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = `text-align:${i <= 2 ? 'left' : 'right'};padding:6px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;border-bottom:1px solid #e5e7eb;white-space:nowrap;`;
+      hrow.appendChild(th);
     });
-    container.appendChild(header);
 
-    const iStyle = 'width:100%;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;box-sizing:border-box;outline:none;';
+    const tbody = table.createTBody();
+    const iStyle = 'width:64px;border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:13px;outline:none;';
+    PHASE_IDS.forEach((pid, i) => {
+      const tr = tbody.insertRow();
+      tr.style.cssText = 'border-top:1px solid #f3f4f6;';
 
-    for (const row of _laborRows) {
-      const rowEl = document.createElement('div');
-      rowEl.style.cssText = 'display:grid;grid-template-columns:1fr 100px 80px 110px 28px;gap:6px;margin-bottom:6px;align-items:center;';
+      const nameTd = tr.insertCell();
+      nameTd.textContent = PHASES[i];
+      nameTd.style.cssText = 'padding:6px 8px;color:#374151;font-weight:500;white-space:nowrap;';
 
-      const nameIn = document.createElement('input');
-      nameIn.type = 'text'; nameIn.placeholder = 'e.g. Painter';
-      nameIn.value = row.name || ''; nameIn.style.cssText = iStyle;
-      nameIn.addEventListener('input', e => { row.name = e.target.value; });
+      const personsTd = tr.insertCell();
+      personsTd.style.cssText = 'padding:4px 6px;';
+      const personsInput = document.createElement('input');
+      personsInput.type = 'number'; personsInput.id = `phase_persons_${pid}`;
+      personsInput.min = '0'; personsInput.step = '1'; personsInput.placeholder = '0';
+      personsInput.style.cssText = iStyle;
+      personsInput.addEventListener('input', _updateCalcCells);
+      personsTd.appendChild(personsInput);
 
-      const rateIn = document.createElement('input');
-      rateIn.type = 'number'; rateIn.placeholder = '0.00'; rateIn.step = '0.01'; rateIn.min = '0';
-      rateIn.value = row.hour_rate || ''; rateIn.style.cssText = iStyle;
-      rateIn.addEventListener('input', e => {
-        row.hour_rate = parseFloat(e.target.value) || 0;
-        const sub = row.hour_rate * (parseFloat(row.days) || 0) * 8;
-        subEl.textContent = fmt$(sub);
-        _updateTotalCalcEl();
+      const daysTd = tr.insertCell();
+      daysTd.style.cssText = 'padding:4px 6px;';
+      const daysInput = document.createElement('input');
+      daysInput.type = 'number'; daysInput.id = `phase_days_${pid}`;
+      daysInput.min = '0'; daysInput.step = '0.5'; daysInput.placeholder = '0';
+      daysInput.style.cssText = iStyle;
+      daysInput.addEventListener('input', _updateCalcCells);
+      daysTd.appendChild(daysInput);
+
+      ['cleaners', 'foreman', 'labor', 'materials', 'subtotal'].forEach(suffix => {
+        const td = tr.insertCell();
+        td.id = `phase_${suffix}_${pid}`;
+        td.style.cssText = 'padding:6px 8px;text-align:right;color:#374151;white-space:nowrap;';
+        td.textContent = '$0.00';
       });
+    });
 
-      const daysIn = document.createElement('input');
-      daysIn.type = 'number'; daysIn.placeholder = '0'; daysIn.step = '0.5'; daysIn.min = '0';
-      daysIn.value = row.days || ''; daysIn.style.cssText = iStyle;
-      daysIn.addEventListener('input', e => {
-        row.days = parseFloat(e.target.value) || 0;
-        const sub = (parseFloat(row.hour_rate) || 0) * row.days * 8;
-        subEl.textContent = fmt$(sub);
-        _updateTotalCalcEl();
-      });
+    container.appendChild(table);
 
-      const subEl = document.createElement('div');
-      subEl.textContent = fmt$((parseFloat(row.hour_rate) || 0) * (parseFloat(row.days) || 0) * 8);
-      subEl.style.cssText = 'font-size:12px;color:#374151;font-family:monospace;padding:0 2px;';
+    ['cleanerRateInput', 'foremanRateInput', 'overheadInput', 'profitInput', 'taxInput', 'commissionInput'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', _updateCalcCells);
+    });
 
-      const removeBtn = document.createElement('button');
-      removeBtn.textContent = '×';
-      removeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0;line-height:1;';
-      removeBtn.addEventListener('click', () => {
-        _laborRows = _laborRows.filter(r => r.id !== row.id);
-        _renderLaborRows();
-      });
-
-      rowEl.appendChild(nameIn); rowEl.appendChild(rateIn); rowEl.appendChild(daysIn);
-      rowEl.appendChild(subEl); rowEl.appendChild(removeBtn);
-      container.appendChild(rowEl);
-    }
-    _updateTotalCalcEl();
+    _updateCalcCells();
   }
 
   function showAnalysisCard(projData) {
@@ -1117,36 +1190,61 @@ async function initApp(){
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
-      const rows = projData.labor_breakdown || [];
-      if (rows.length > 0) {
+      const bd = projData.labor_breakdown;
+      if (bd && bd.phases && bd.phases.length > 0) {
+        const rates = {
+          cleanerRate: bd.cleaner_rate || 0,
+          foremanRate: bd.foreman_rate || 0,
+          overhead: (bd.overhead_pct || 0) / 100,
+          profit: (bd.profit_pct || 0) / 100,
+          tax: (bd.tax_pct || 0) / 100,
+          commission: (bd.commission_pct || 0) / 100,
+        };
+
         const table = document.createElement('table');
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Labor Type', '$/hr', 'Days', 'Hours', 'Subtotal'].forEach((h, i) => {
+        ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor Cost', 'Materials', 'Subtotal'].forEach((h, i) => {
           const th = document.createElement('th');
           th.textContent = h;
-          th.style.cssText = `text-align:${i === 0 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;`;
+          th.style.cssText = `text-align:${i <= 2 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
           hrow.appendChild(th);
         });
         const tbody = table.createTBody();
-        for (const r of rows) {
+        let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+        for (const p of bd.phases) {
+          const c = _calcPhase(p, rates);
+          totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
+          totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
           const tr = tbody.insertRow();
           tr.style.cssText = 'border-top:1px solid #f3f4f6;';
-          const sub = (r.hour_rate || 0) * (r.days || 0) * 8;
           [
-            { v: r.name || '—', a: 'left' },
-            { v: `$${(r.hour_rate || 0).toFixed(2)}`, a: 'right' },
-            { v: r.days || 0, a: 'right' },
-            { v: (r.days || 0) * 8, a: 'right' },
-            { v: fmt$(sub), a: 'right' },
+            { v: p.name, a: 'left' }, { v: p.persons || 0, a: 'left' }, { v: p.days || 0, a: 'left' },
+            { v: fmt$(c.cleanersPay), a: 'right' }, { v: fmt$(c.foremanPay), a: 'right' },
+            { v: fmt$(c.laborCost), a: 'right' }, { v: fmt$(c.materials), a: 'right' }, { v: fmt$(c.subtotal), a: 'right' },
           ].forEach(({ v, a }) => {
             const td = tr.insertCell();
             td.textContent = v;
-            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;`;
+            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
         breakdownDiv.appendChild(table);
+
+        const pricingDiv = document.createElement('div');
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        [
+          [`Subtotal`, totSubtotal], [`Overhead (${bd.overhead_pct}%)`, totOh],
+          [`Profit (${bd.profit_pct}%)`, totPft], [`Price`, totPrice],
+          [`Tax (${bd.tax_pct}%)`, totTaxes], [`Commission (${bd.commission_pct}%)`, totComm],
+          [`Final Price`, totFinal],
+        ].forEach(([label, val], i) => {
+          const isLast = i === 6;
+          const item = document.createElement('div');
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          pricingDiv.appendChild(item);
+        });
+        breakdownDiv.appendChild(pricingDiv);
       }
     }
 
@@ -1163,15 +1261,33 @@ async function initApp(){
     card.style.display = 'block';
   }
 
+
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
-    _laborRows = (_loadedProjectData.labor_breakdown || []).map(r => ({
-      id: ++_laborRowId, name: r.name || '', hour_rate: r.hour_rate || 0, days: r.days || 0,
-    }));
-    _renderLaborRows();
+    const bd = _loadedProjectData.labor_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+
+    if (bd && bd.phases) {
+      setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
+      setVal('foremanRateInput', bd.foreman_rate ?? 220);
+      setVal('overheadInput', bd.overhead_pct ?? 10);
+      setVal('profitInput', bd.profit_pct ?? 25);
+      setVal('taxInput', bd.tax_pct ?? 6);
+      setVal('commissionInput', bd.commission_pct ?? 10);
+    }
+
+    _renderPhaseTable();
+
+    if (bd && bd.phases) {
+      const phaseMap = { 'Rough Cleaning': 'rough', 'Final Cleaning': 'final', 'Touch Up Cleaning': 'touchup' };
+      for (const p of bd.phases) {
+        const pid = phaseMap[p.name];
+        if (pid) { setVal(`phase_persons_${pid}`, p.persons); setVal(`phase_days_${pid}`, p.days); }
+      }
+      _updateCalcCells();
+    }
+
     setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
-    setVal('analysisQuoteInput', _loadedProjectData.quote);
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
@@ -1185,31 +1301,42 @@ async function initApp(){
     if (_loadedProjectData) showAnalysisCard(_loadedProjectData);
   });
 
-  const addLaborRowBtn = document.getElementById('addLaborRowBtn');
-  if (addLaborRowBtn) addLaborRowBtn.addEventListener('click', () => {
-    _laborRows.push({ id: ++_laborRowId, name: '', hour_rate: 0, days: 0 });
-    _renderLaborRows();
-  });
-
   const saveAnalysisBtn = document.getElementById('saveAnalysisBtn');
   if (saveAnalysisBtn) {
     saveAnalysisBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
-      const breakdown = _laborRows.map(r => ({
-        name: r.name,
-        hour_rate: parseFloat(r.hour_rate) || 0,
-        days: parseFloat(r.days) || 0,
-      }));
-      const totalLabor = _calcLaborTotal();
-      const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
-      const quoteVal = document.getElementById('analysisQuoteInput')?.value;
+      const rates = _getRates();
+      const phases = _getPhaseInputs();
 
-      const body = {
-        labor: totalLabor > 0 ? totalLabor : null,
-        labor_breakdown: breakdown.length > 0 ? breakdown : null,
+      let totLabor = 0, totFinalPrice = 0;
+      for (const p of phases) {
+        const c = _calcPhase(p, rates);
+        totLabor += c.laborCost;
+        totFinalPrice += c.finalPrice;
+      }
+
+      const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
+      const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
+      const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+
+      const laborBreakdown = {
+        cleaner_rate: rates.cleanerRate,
+        foreman_rate: rates.foremanRate,
+        overhead_pct: overheadPct,
+        profit_pct: profitPct,
+        tax_pct: taxPct,
+        commission_pct: commPct,
+        phases,
       };
-      if (areaVal !== '') body.total_area = parseFloat(areaVal);
-      if (quoteVal !== '') body.quote = parseFloat(quoteVal);
+
+      const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
+      const body = {
+        labor: totLabor > 0 ? totLabor : null,
+        labor_breakdown: laborBreakdown,
+        quote: totFinalPrice > 0 ? totFinalPrice : null,
+      };
+      if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
 
       saveAnalysisBtn.textContent = 'Saving…';
       saveAnalysisBtn.disabled = true;
