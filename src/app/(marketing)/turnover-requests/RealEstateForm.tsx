@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DocusealForm } from "@docuseal/react";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { REAL_ESTATE_PRICING_PACKAGE } from "@/lib/turnoverPricingPackages";
 
@@ -12,9 +13,9 @@ const PROPERTY_TYPES = ["House", "Condo", "Apartment", "Townhouse", "Multi-famil
 const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
 const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
-const STEP_LABELS = ["Property Info", "Services", "Agent & Contract"] as const;
+const STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract"] as const;
 
 interface FormState {
   // Step 1 — property
@@ -26,11 +27,12 @@ interface FormState {
   furnished: boolean;
   // Step 2 — services
   fullClean: boolean;
+  touchUpPaint: boolean;
   fullPaint: boolean;
   carpetCleaning: boolean;
   cleanDate: string;
   moveInDate: string;
-  // Step 3 — agent & contract
+  // Step 3 — agent info
   agentName: string;
   agentEmail: string;
   agentPhone: string;
@@ -45,6 +47,7 @@ const initial: FormState = {
   squareFootage: "",
   furnished: false,
   fullClean: false,
+  touchUpPaint: false,
   fullPaint: false,
   carpetCleaning: false,
   cleanDate: "",
@@ -107,6 +110,22 @@ function ServiceCheckbox({
   );
 }
 
+function computePricing(form: FormState) {
+  const bedroomValue = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
+  const bathroomValue = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
+  return computeTurnoverPricing({
+    requestType: "TURNOVER",
+    pricingPackage: REAL_ESTATE_PRICING_PACKAGE,
+    bedrooms: bedroomValue,
+    bathrooms: bathroomValue,
+    fullClean: form.fullClean,
+    fullPaint: form.fullPaint,
+    touchUpPaint: form.touchUpPaint ? 1 : 0,
+    carpetCleaning: form.carpetCleaning,
+    materialsAdditional: false,
+  });
+}
+
 interface Props {
   onBack: () => void;
 }
@@ -118,6 +137,11 @@ export function RealEstateForm({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  // Signing state
+  const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
+  const [signingLoading, setSigningLoading] = useState(false);
+  const [docusealSubmissionId, setDocusealSubmissionId] = useState<number | null>(null);
+
   function patch(updates: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...updates }));
   }
@@ -128,46 +152,74 @@ export function RealEstateForm({ onBack }: Props) {
       if (!form.propertyType) return "Please select a property type.";
     }
     if (s === 3) {
-      if (!form.agentName.trim()) return "Agent name is required.";
-      if (!form.agentEmail.trim()) return "Agent email is required.";
+      if (!form.agentName.trim()) return "Your name is required.";
+      if (!form.agentEmail.trim()) return "Your email is required.";
     }
     return "";
   }
 
-  function handleNext() {
+  async function handleNext() {
     const err = validateStep(step);
     if (err) { setError(err); return; }
     setError("");
+
+    if (step === 3) {
+      // Fetch DocuSeal embed URL before advancing to signing step
+      setSigningLoading(true);
+      const pricing = computePricing(form);
+      try {
+        const res = await fetch("/api/real-estate-signing-embed", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            agentName: form.agentName.trim(),
+            agentEmail: form.agentEmail.trim(),
+            agentPhone: form.agentPhone.trim() || undefined,
+            address: form.address.trim(),
+            fullClean: form.fullClean,
+            touchUpPaint: form.touchUpPaint,
+            fullPaint: form.fullPaint,
+            carpetCleaning: form.carpetCleaning,
+            priceCents: pricing.priceCents,
+            cleanDate: form.cleanDate || undefined,
+          }),
+        });
+        const data = await res.json().catch(() => ({})) as { embedSrc?: string; submissionId?: number; error?: string };
+        if (!res.ok || !data.embedSrc) {
+          setError(data.error || "Could not load contract. Please try again.");
+          setSigningLoading(false);
+          return;
+        }
+        setSigningEmbedSrc(data.embedSrc);
+        setDocusealSubmissionId(data.submissionId ?? null);
+        setStep(4);
+      } catch {
+        setError("Network error. Please try again.");
+      } finally {
+        setSigningLoading(false);
+      }
+      return;
+    }
+
     setStep((s) => s + 1);
   }
 
   function handleBack() {
     setError("");
     if (step === 1) { onBack(); return; }
+    if (step === 4) {
+      // Clear signing state so a fresh embed is created if they go forward again
+      setSigningEmbedSrc("");
+      setDocusealSubmissionId(null);
+    }
     setStep((s) => s - 1);
   }
 
   async function handleSubmit() {
-    const err = validateStep(step);
-    if (err) { setError(err); return; }
     setError("");
     setLoading(true);
 
-    const bedroomValue = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
-    const bathroomValue = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
-
-    const pricing = computeTurnoverPricing({
-      requestType: "TURNOVER",
-      pricingPackage: REAL_ESTATE_PRICING_PACKAGE,
-      bedrooms: bedroomValue,
-      bathrooms: bathroomValue,
-      fullClean: form.fullClean,
-      fullPaint: form.fullPaint,
-      touchUpPaint: 0,
-      carpetCleaning: form.carpetCleaning,
-      materialsAdditional: false,
-    });
-
+    const pricing = computePricing(form);
     const jobTitle = `Real Estate - ${form.address.trim()}`;
     const description = [
       `Property: ${form.address.trim()}`,
@@ -182,10 +234,14 @@ export function RealEstateForm({ onBack }: Props) {
       form.cleanDate ? `Clean Date: ${form.cleanDate}` : null,
       form.moveInDate ? `Move-in Date: ${form.moveInDate}` : null,
       form.comments.trim() ? `Notes: ${form.comments.trim()}` : null,
-      pricing.services.filter(s => s !== "No services selected").length > 0
+      pricing.services.filter((s) => s !== "No services selected").length > 0
         ? `Services: ${pricing.services.join(", ")}` : null,
       pricing.priceCents > 0 ? `Estimated Price: ${pricing.priceLabel}` : null,
+      docusealSubmissionId ? `DocuSeal Submission ID: ${docusealSubmissionId}` : null,
     ].filter(Boolean).join("\n");
+
+    const bedroomValue = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
+    const bathroomValue = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
 
     const payload = {
       segment: "REAL_ESTATE",
@@ -198,6 +254,7 @@ export function RealEstateForm({ onBack }: Props) {
       squareFootage: form.squareFootage.trim() ? Number(form.squareFootage.trim()) || undefined : undefined,
       furnished: form.furnished,
       fullClean: form.fullClean,
+      touchUpPaint: form.touchUpPaint,
       fullPaint: form.fullPaint,
       carpetCleaning: form.carpetCleaning,
       projectDate: form.cleanDate || undefined,
@@ -206,6 +263,7 @@ export function RealEstateForm({ onBack }: Props) {
       agentPhone: form.agentPhone.trim() || undefined,
       source: "external-real-estate",
       contractValue: pricing.priceCents > 0 ? pricing.priceCents / 100 : undefined,
+      docusealSubmissionId: docusealSubmissionId ?? undefined,
     };
 
     try {
@@ -233,14 +291,14 @@ export function RealEstateForm({ onBack }: Props) {
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold text-green-900">Request submitted!</p>
+          <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
           <p className="mt-2 max-w-sm text-sm text-green-700">
-            Your real estate cleaning request has been sent to Sueep. We&apos;ll be in touch shortly.
+            Your agreement has been signed and your request sent to Sueep. We&apos;ll be in touch shortly.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => { setForm(initial); setStep(1); setSubmitted(false); }}
+          onClick={() => { setForm(initial); setStep(1); setSubmitted(false); setSigningEmbedSrc(""); setDocusealSubmissionId(null); }}
           className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
         >
           Submit another request
@@ -341,81 +399,80 @@ export function RealEstateForm({ onBack }: Props) {
 
         {/* Step 2 — Services */}
         {step === 2 && (() => {
-          const bedroomVal = form.bedrooms === "Studio" ? 0 : form.bedrooms === "4+" ? 4 : Number(form.bedrooms) || undefined;
-          const bathroomVal = form.bathrooms === "3+" ? 3 : Number(form.bathrooms) || undefined;
-          const livePricing = computeTurnoverPricing({
-            requestType: "TURNOVER",
-            pricingPackage: REAL_ESTATE_PRICING_PACKAGE,
-            bedrooms: bedroomVal,
-            bathrooms: bathroomVal,
-            fullClean: form.fullClean,
-            fullPaint: form.fullPaint,
-            touchUpPaint: 0,
-            carpetCleaning: form.carpetCleaning,
-            materialsAdditional: false,
-          });
-          const lineItems = livePricing.breakdown.filter(l => !l.startsWith("No ")).map((line) => {
+          const livePricing = computePricing(form);
+          const lineItems = livePricing.breakdown.filter((l) => !l.startsWith("No ")).map((line) => {
             const match = line.match(/^(.+?):\s+(\$.+)$/);
             return match ? { label: match[1], price: match[2] } : null;
           }).filter(Boolean) as { label: string; price: string }[];
 
           return (
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-            {/* Left — inputs */}
-            <div className="flex-1 space-y-5">
-              <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Services needed</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <ServiceCheckbox checked={form.fullClean} onChange={(v) => patch({ fullClean: v })} label="Full clean" />
-                  <ServiceCheckbox checked={form.fullPaint} onChange={(v) => patch({ fullPaint: v })} label="Full paint" />
-                  <ServiceCheckbox checked={form.carpetCleaning} onChange={(v) => patch({ carpetCleaning: v })} label="Carpet cleaning" />
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+              {/* Left — inputs */}
+              <div className="flex-1 space-y-5">
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Services needed</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ServiceCheckbox checked={form.fullClean} onChange={(v) => patch({ fullClean: v })} label="Full clean" />
+                    <ServiceCheckbox
+                      checked={form.fullPaint}
+                      disabled={form.touchUpPaint}
+                      onChange={(v) => patch({ fullPaint: v, ...(v && { touchUpPaint: false }) })}
+                      label="Full paint"
+                    />
+                    <ServiceCheckbox
+                      checked={form.touchUpPaint}
+                      disabled={form.fullPaint}
+                      onChange={(v) => patch({ touchUpPaint: v, ...(v && { fullPaint: false }) })}
+                      label="Paint touch-up"
+                    />
+                    <ServiceCheckbox checked={form.carpetCleaning} onChange={(v) => patch({ carpetCleaning: v })} label="Carpet cleaning" />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={label} htmlFor="re-clean-date">Target clean date</label>
+                    <input id="re-clean-date" type="date" className={input} value={form.cleanDate} onChange={(e) => patch({ cleanDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="re-movein-date">Move-in / listing date</label>
+                    <input id="re-movein-date" type="date" className={input} value={form.moveInDate} onChange={(e) => patch({ moveInDate: e.target.value })} />
+                  </div>
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={label} htmlFor="re-clean-date">Target clean date</label>
-                  <input id="re-clean-date" type="date" className={input} value={form.cleanDate} onChange={(e) => patch({ cleanDate: e.target.value })} />
-                </div>
-                <div>
-                  <label className={label} htmlFor="re-movein-date">Move-in / listing date</label>
-                  <input id="re-movein-date" type="date" className={input} value={form.moveInDate} onChange={(e) => patch({ moveInDate: e.target.value })} />
-                </div>
-              </div>
-            </div>
 
-            {/* Right — order summary */}
-            <div className="w-full lg:w-64 lg:shrink-0">
-              <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                <div className="border-b border-gray-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-gray-900">Order summary</p>
-                </div>
-                <div className="px-4 py-3">
-                  {lineItems.length === 0 ? (
-                    <p className="py-2 text-xs italic text-gray-400">Select services to see pricing.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {lineItems.map((item) => (
-                        <div key={item.label} className="flex justify-between">
-                          <span className="text-xs text-gray-500">{item.label}</span>
-                          <span className="text-xs tabular-nums text-gray-600">{item.price}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
-                  <span className="text-sm font-semibold text-gray-700">Estimated total</span>
-                  <span className="text-lg font-bold tabular-nums text-gray-900">
-                    {livePricing.priceCents > 0 ? livePricing.priceLabel : "—"}
-                  </span>
+              {/* Right — order summary */}
+              <div className="w-full lg:w-64 lg:shrink-0">
+                <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div className="border-b border-gray-100 px-4 py-3">
+                    <p className="text-sm font-semibold text-gray-900">Order summary</p>
+                  </div>
+                  <div className="px-4 py-3">
+                    {lineItems.length === 0 ? (
+                      <p className="py-2 text-xs italic text-gray-400">Select services to see pricing.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {lineItems.map((item) => (
+                          <div key={item.label} className="flex justify-between">
+                            <span className="text-xs text-gray-500">{item.label}</span>
+                            <span className="text-xs tabular-nums text-gray-600">{item.price}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+                    <span className="text-sm font-semibold text-gray-700">Estimated total</span>
+                    <span className="text-lg font-bold tabular-nums text-gray-900">
+                      {livePricing.priceCents > 0 ? livePricing.priceLabel : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           );
         })()}
 
-        {/* Step 3 — Agent & Contract */}
+        {/* Step 3 — Agent Info */}
         {step === 3 && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -465,37 +522,73 @@ export function RealEstateForm({ onBack }: Props) {
             </div>
           </>
         )}
+
+        {/* Step 4 — Sign Contract */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-medium text-blue-900">Almost done — please sign the service agreement below.</p>
+              <p className="mt-1 text-xs text-blue-700">
+                Your request will be submitted automatically once you sign. Sueep will countersign and send you a copy.
+              </p>
+            </div>
+            <DocusealForm
+              src={signingEmbedSrc}
+              email={form.agentEmail}
+              withTitle={false}
+              onComplete={() => { void handleSubmit(); }}
+              className="w-full"
+            />
+          </div>
+        )}
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      <div className="mt-6 flex gap-3">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          {step === 1 ? "Back" : "Back"}
-        </button>
-        {step < TOTAL_STEPS ? (
+      {/* Navigation — hidden on step 4 (DocuSeal drives completion) */}
+      {step < 4 && (
+        <div className="mt-6 flex gap-3">
           <button
             type="button"
-            onClick={handleNext}
-            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            onClick={handleBack}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Next
+            Back
           </button>
-        ) : (
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={() => { void handleNext(); }}
+              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={signingLoading}
+              onClick={() => { void handleNext(); }}
+              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {signingLoading ? "Loading contract…" : "Review & Sign"}
+            </button>
+          )}
+        </div>
+      )}
+      {step === 4 && (
+        <div className="mt-4">
           <button
             type="button"
-            disabled={loading}
-            onClick={handleSubmit}
-            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            onClick={handleBack}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            {loading ? "Submitting…" : "Submit request"}
+            Back
           </button>
-        )}
-      </div>
+        </div>
+      )}
+      {loading && (
+        <p className="mt-3 text-xs text-gray-500">Submitting your request…</p>
+      )}
     </div>
   );
 }
