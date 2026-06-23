@@ -1150,6 +1150,7 @@ async function initApp(){
       }
     }
 
+    setText('analysisViewAddress', projData.address || '');
     const lps = (projData.labor != null && projData.total_area) ? (projData.labor / projData.total_area) : null;
     setText('analysisViewLabor', fmt$(projData.labor));
     setText('analysisViewTotalArea', fmtSF(projData.total_area));
