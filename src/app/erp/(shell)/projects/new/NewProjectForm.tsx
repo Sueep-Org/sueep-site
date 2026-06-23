@@ -1530,11 +1530,11 @@ export function NewProjectForm({
                 )}
                 <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="border-b border-gray-100 px-4 py-3">
-                    <p className="text-sm font-semibold text-gray-900">Order summary</p>
+                    <p className="text-sm font-semibold text-gray-900">{lockedSueepPm ? "Unit Summary" : "Order summary"}</p>
                   </div>
                   <div className="divide-y divide-gray-50 px-4">
                     {unitScopes.every((u) => !u.fullClean && !u.fullPaint && !u.touchUpPaint && !u.materialsAdditional && !u.carpetCleaning && !u.lightWallTouchUps) ? (
-                      <p className="py-4 text-xs italic text-gray-400">Select services to see pricing.</p>
+                      <p className="py-4 text-xs italic text-gray-400">Select services to see {lockedSueepPm ? "a summary" : "pricing"}.</p>
                     ) : (
                       unitScopes.map((unit, index) => {
                         const feature = getUnitFeature(unit.features);
@@ -1557,14 +1557,16 @@ export function NewProjectForm({
                             </p>
                             <div className="space-y-1.5">
                               {items.map((item) => (
-                                <div key={item.label} className="flex justify-between">
+                                <div key={item.label} className={lockedSueepPm ? undefined : "flex justify-between"}>
                                   <span className="text-xs text-gray-500">{item.label}</span>
-                                  <span className="text-xs tabular-nums text-gray-600">
-                                    {item.cents > 0 ? formatUsd(item.cents) : "—"}
-                                  </span>
+                                  {!lockedSueepPm && (
+                                    <span className="text-xs tabular-nums text-gray-600">
+                                      {item.cents > 0 ? formatUsd(item.cents) : "—"}
+                                    </span>
+                                  )}
                                 </div>
                               ))}
-                              {items.length > 1 && (
+                              {!lockedSueepPm && items.length > 1 && (
                                 <div className="flex justify-between border-t border-gray-100 pt-1.5">
                                   <span className="text-xs font-medium text-gray-600">Subtotal</span>
                                   <span className="text-xs font-medium tabular-nums text-gray-700">{formatUsd(subtotal)}</span>
@@ -1576,10 +1578,12 @@ export function NewProjectForm({
                       })
                     )}
                   </div>
-                  <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
-                    <span className="text-sm font-semibold text-gray-700">Estimated total</span>
-                    <span className="text-lg font-bold tabular-nums text-gray-900">{packagePricing.totalPriceLabel}</span>
-                  </div>
+                  {!lockedSueepPm && (
+                    <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+                      <span className="text-sm font-semibold text-gray-700">Estimated total</span>
+                      <span className="text-lg font-bold tabular-nums text-gray-900">{packagePricing.totalPriceLabel}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1638,49 +1642,57 @@ export function NewProjectForm({
 
           <div className={isMultiStep && currentStep !== 3 ? "hidden" : "space-y-5"}>
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 - Estimated total</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
-                <label className={label} htmlFor="sueepPmName">
-                  SUEEP PM name
-                </label>
-                <input
-                  id="sueepPmName"
-                  name="sueepPmName"
-                  required
-                  readOnly={Boolean(lockedSueepPm)}
-                  className={`${input} ${lockedSueepPm ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
-                  value={sueepPmName}
-                  onChange={(e) => { if (!lockedSueepPm) setSueepPmName(e.target.value); }}
-                />
-              </div>
-              <div className="min-w-0">
-                <label className={label} htmlFor="sueepPmEmail">
-                  SUEEP PM email
-                </label>
-                <input
-                  id="sueepPmEmail"
-                  name="sueepPmEmail"
-                  type="email"
-                  required
-                  readOnly={Boolean(lockedSueepPm)}
-                  className={`${input} ${lockedSueepPm ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
-                  value={sueepPmEmail}
-                  onChange={(e) => { if (!lockedSueepPm) setSueepPmEmail(e.target.value); }}
-                />
-              </div>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
-              <div className="mt-3 border-t border-gray-200 pt-3">
-                <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
-                <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                  {packagePricing.breakdown.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+            <p className={sectionHeader}>{lockedSueepPm ? "Step 3 - Review & Submit" : "Step 4 - Estimated total"}</p>
+            {!lockedSueepPm && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <label className={label} htmlFor="sueepPmName">
+                      SUEEP PM name
+                    </label>
+                    <input
+                      id="sueepPmName"
+                      name="sueepPmName"
+                      required
+                      className={input}
+                      value={sueepPmName}
+                      onChange={(e) => setSueepPmName(e.target.value)}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label className={label} htmlFor="sueepPmEmail">
+                      SUEEP PM email
+                    </label>
+                    <input
+                      id="sueepPmEmail"
+                      name="sueepPmEmail"
+                      type="email"
+                      required
+                      className={input}
+                      value={sueepPmEmail}
+                      onChange={(e) => setSueepPmEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+                  <div className="mt-3 border-t border-gray-200 pt-3">
+                    <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
+                    <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                      {packagePricing.breakdown.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+            {lockedSueepPm && (
+              <input type="hidden" name="sueepPmName" value={sueepPmName} />
+            )}
+            {lockedSueepPm && (
+              <input type="hidden" name="sueepPmEmail" value={sueepPmEmail} />
+            )}
           </div>
 
           <div className="space-y-3">
