@@ -287,12 +287,31 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
+  let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
     zoomResetBtn,
-    zoomLabel
+    zoomLabel,
+    savePdfBtn
   });
+
+  function createSavePdfBtn() {
+    const existing = $('savePdfBtn');
+    if (existing) return existing;
+    const toolbar = $('toolbar');
+    if (!toolbar) return null;
+    const btn = document.createElement('button');
+    btn.id = 'savePdfBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Save';
+    if (zoomResetBtn && zoomResetBtn.parentElement === toolbar) {
+      toolbar.insertBefore(btn, zoomResetBtn.nextSibling);
+    } else {
+      toolbar.appendChild(btn);
+    }
+    return btn;
+  }
 
   // ======================================================
   // PDF STATE
@@ -345,6 +364,10 @@ async function initApp(){
     downloadPdfBtn.addEventListener('click', exportCurrentPageWithAnnotations);
   }
 
+  if (savePdfBtn) {
+    savePdfBtn.addEventListener('click', exportAllPagesWithAnnotations);
+  }
+
   let __renderSeq = 0;
 
   // ======================================================
@@ -389,6 +412,47 @@ async function initApp(){
       vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
     }
+  }
+
+  async function renderPageWithAnnotationsToCanvas(pageNum){
+    if (!pdfDoc || !pdfCanvas || !overlay) return null;
+
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1 });
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = Math.ceil(viewport.width);
+    exportCanvas.height = Math.ceil(viewport.height);
+    const exportCtx = exportCanvas.getContext('2d');
+
+    const prevPage = overlay.currentPage;
+    const prevPxPerPt = overlay._pxPerPt;
+    const prevActive = overlay.active;
+    const prevTool = overlay.tool;
+    const prevMeasurePreview = overlay._measurePreview;
+    const prevIrregularPreview = overlay._irregularPreview;
+    const prevHoverPoly = overlay.hoverPoly;
+
+    overlay.currentPage = pageNum;
+    overlay.setPdfSpace({ pxPerPt: viewport.scale });
+    overlay.active = false;
+    overlay._measurePreview = null;
+    overlay._irregularPreview = null;
+    overlay.hoverPoly = null;
+
+    exportCtx.save();
+    await page.render({ canvasContext: exportCtx, viewport }).promise;
+    overlay.renderToContext(exportCtx, { width: viewport.width, height: viewport.height });
+    exportCtx.restore();
+
+    overlay.currentPage = prevPage;
+    overlay._pxPerPt = prevPxPerPt;
+    overlay.active = prevActive;
+    overlay.tool = prevTool;
+    overlay._measurePreview = prevMeasurePreview;
+    overlay._irregularPreview = prevIrregularPreview;
+    overlay.hoverPoly = prevHoverPoly;
+
+    return { exportCanvas, viewport };
   }
 
   async function exportCurrentPageWithAnnotations(){
@@ -438,6 +502,219 @@ async function initApp(){
     } catch (error) {
       console.error(error);
       toast('Unable to export the current page.', 'error');
+    }
+  }
+
+  async function loadJsPdf(){
+    const getJsPdf = () => {
+      if (window.jspdf?.jsPDF) return window.jspdf.jsPDF;
+      if (typeof window.jsPDF === 'function') return window.jsPDF;
+      if (typeof window.jspdf?.default === 'function') return window.jspdf.default;
+      if (typeof window.jspdf?.default?.jsPDF === 'function') return window.jspdf.default.jsPDF;
+      if (typeof window.jspdf === 'function') return window.jspdf;
+      return null;
+    };
+
+    let jsPDF = getJsPdf();
+    if (jsPDF) return jsPDF;
+
+    const urls = [
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+    ];
+
+    const loadScript = (url, timeoutMs = 10000) => new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      let timeout = setTimeout(() => {
+        script.onerror = null;
+        script.onload = null;
+        reject(new Error(`jsPDF load timed out: ${url}`));
+      }, timeoutMs);
+
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load jsPDF: ${url}`));
+      };
+      document.head.appendChild(script);
+    });
+
+    for (const url of urls) {
+      try {
+        await loadScript(url);
+        jsPDF = getJsPdf();
+        if (jsPDF) return jsPDF;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    return null;
+  }
+
+  async function loadPdfLib(){
+    if (window.PDFLib) return window.PDFLib;
+
+    if (window._pdfLibLoadingPromise) {
+      await window._pdfLibLoadingPromise;
+      return window.PDFLib || null;
+    }
+
+    const url = 'https://unpkg.com/pdf-lib@1.28.0/dist/pdf-lib.min.js';
+    window._pdfLibLoadingPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      let timeout = setTimeout(() => {
+        script.onerror = null;
+        script.onload = null;
+        reject(new Error(`PDFLib load timed out: ${url}`));
+      }, 10000);
+      script.onload = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load PDFLib: ${url}`));
+      };
+      document.head.appendChild(script);
+    });
+
+    await window._pdfLibLoadingPromise;
+    return window.PDFLib || null;
+  }
+
+  async function canvasToArrayBuffer(canvas){
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Canvas toBlob returned null'));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(blob);
+      }, 'image/png');
+    });
+  }
+
+  async function downloadBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  async function exportWithPdfLib(){
+    const PDFLib = await loadPdfLib();
+    if (!PDFLib) throw new Error('PDFLib unavailable');
+
+    const { PDFDocument } = PDFLib;
+    const outPdfDoc = await PDFDocument.create();
+
+    const pageCanvases = [];
+    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+      const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+      if (!rendered) {
+        throw new Error('Failed to render page for export.');
+      }
+      pageCanvases.push(rendered.exportCanvas);
+    }
+
+    for (const canvas of pageCanvases) {
+      const pngBytes = await canvasToArrayBuffer(canvas);
+      const img = await outPdfDoc.embedPng(pngBytes);
+      const page = outPdfDoc.addPage([img.width, img.height]);
+      page.drawImage(img, {
+        x: 0,
+        y: 0,
+        width: img.width,
+        height: img.height
+      });
+    }
+
+    const pdfBytes = await outPdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    await downloadBlob(blob, `annotated-${Date.now()}.pdf`);
+  }
+
+  async function exportAllPagesWithAnnotations(){
+    if (!pdfDoc || !savePdfBtn) return;
+
+    const originalSaveText = savePdfBtn.textContent;
+    savePdfBtn.disabled = true;
+    savePdfBtn.textContent = 'Saving…';
+
+    try {
+      await exportWithPdfLib();
+      return;
+    } catch (error) {
+      console.warn('PDFLib export failed, falling back to jsPDF', error);
+    }
+
+    try {
+      const jsPDF = await loadJsPdf();
+      if (!jsPDF) throw new Error('jsPDF unavailable');
+
+      let doc;
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+        if (!rendered) {
+          throw new Error('Failed to render page for export.');
+        }
+
+        const { exportCanvas, viewport } = rendered;
+        const imageUrl = exportCanvas.toDataURL('image/jpeg', 0.85);
+        const pageWidth = Math.ceil(viewport.width);
+        const pageHeight = Math.ceil(viewport.height);
+
+        if (!doc) {
+          doc = new jsPDF({ unit: 'px', format: [pageWidth, pageHeight], compress: true });
+        } else {
+          doc.addPage([pageWidth, pageHeight]);
+        }
+
+        doc.addImage(imageUrl, 'JPEG', 0, 0, pageWidth, pageHeight);
+      }
+
+      if (!doc) {
+        throw new Error('No pages to export.');
+      }
+
+      const filename = `annotated-${Date.now()}.pdf`;
+      if (typeof doc.save === 'function') {
+        doc.save(filename);
+      } else if (typeof doc.output === 'function') {
+        let blob;
+        try {
+          const arrayBuffer = doc.output('arraybuffer');
+          blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        } catch (err) {
+          const blobResult = doc.output('blob');
+          blob = blobResult instanceof Blob ? blobResult : new Blob([blobResult], { type: 'application/pdf' });
+        }
+        await downloadBlob(blob, filename);
+      } else {
+        throw new Error('PDF save function is unavailable.');
+      }
+    } catch (error) {
+      console.error('PDF export failed', error);
+      toast('Unable to save annotated PDF.', 'error');
+    } finally {
+      savePdfBtn.disabled = false;
+      savePdfBtn.textContent = originalSaveText;
     }
   }
 
@@ -702,6 +979,9 @@ async function initApp(){
 
       if (downloadPdfBtn) {
         downloadPdfBtn.disabled = false;
+      }
+      if (savePdfBtn) {
+        savePdfBtn.disabled = false;
       }
 
       if (mainContent){

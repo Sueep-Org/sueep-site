@@ -730,7 +730,8 @@ export class CanvasOverlay {
       toast('Scale saved for this page', 'success');
     }
 
-    let measuredInches = pixelLength * scaleFactor;
+    const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
+    let measuredInches = pageLengthPoints * scaleFactor;
     if (this.doubleSided) {
       measuredInches *= 2;
     }
