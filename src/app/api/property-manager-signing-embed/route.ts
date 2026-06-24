@@ -75,8 +75,6 @@ export async function POST(req: Request) {
   const address = [body.buildingName, body.buildingAddress].filter(Boolean).join(" — ");
 
   const totalCents = body.priceCents ?? 0;
-  const depositCents = Math.round(totalCents / 2);
-  const finalCents = totalCents - depositCents;
 
   const services = [
     body.fullClean && "Turnover cleaning",
@@ -97,9 +95,9 @@ export async function POST(req: Request) {
     ...(body.carpetCleaning ? [{ name: "other_service_text", default_value: "Carpet cleaning" }] : []),
     ...(totalCents > 0 ? [
       { name: "project_cost", default_value: formatAmount(totalCents) },
-      { name: "project_deposit", default_value: formatAmount(depositCents) },
-      { name: "project_final", default_value: formatAmount(finalCents) },
     ] : []),
+    { name: "project_deposit", default_value: "N/A" },
+    { name: "project_final", default_value: totalCents > 0 ? formatAmount(totalCents) : "N/A" },
     ...(body.buildingAddress ? (() => {
       const tax = getSalesTax(body.buildingAddress);
       return tax !== null ? [{ name: "sales_tax", default_value: tax }] : [];
