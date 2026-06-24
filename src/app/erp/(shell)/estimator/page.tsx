@@ -89,11 +89,8 @@ export default function EstimatorPage() {
                 <button id="editProjectBtn" className="mini-btn flex-shrink-0">Edit</button>
               </div>
 
-              {/* Info grid */}
-              <div className="text-sm mt-2 mb-3">
-                <span className="text-gray-400 text-xs uppercase tracking-wide">Address</span>
-                <div id="loadedProjectAddress" className="text-gray-700 mt-0.5">—</div>
-              </div>
+              {/* hidden address — still used by JS to populate analysis card */}
+              <div id="loadedProjectAddress" style={{ display: "none" }}></div>
 
               {/* PDF row + actions */}
               <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
