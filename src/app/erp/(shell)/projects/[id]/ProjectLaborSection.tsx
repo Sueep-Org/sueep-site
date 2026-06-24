@@ -245,6 +245,7 @@ export function ProjectLaborSection({
   isJanitorialUnit = false,
   safetyPassedKeys = [],
   hasApprovedCheckToday,
+  requiresSafetyCheck = true,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -255,6 +256,7 @@ export function ProjectLaborSection({
   isJanitorialUnit?: boolean;
   safetyPassedKeys?: string[];
   hasApprovedCheckToday?: boolean;
+  requiresSafetyCheck?: boolean;
 }) {
   const router = useRouter();
   const passedKeySet = new Set(safetyPassedKeys);
@@ -519,7 +521,7 @@ export function ProjectLaborSection({
   return (
     <>
     <div className="space-y-6">
-      {hasApprovedCheckToday === false && (
+      {requiresSafetyCheck && hasApprovedCheckToday === false && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
           <p className="text-sm text-amber-800">
@@ -736,7 +738,7 @@ export function ProjectLaborSection({
                   const quality = qualityMap[r.id] ?? "";
                   const notes = notesMap[r.id] ?? "";
                   const dateStr = laborDateStr(r.workDate);
-                  const needsSafetyCheck = dateStr >= SAFETY_CUTOFF;
+                  const needsSafetyCheck = requiresSafetyCheck && dateStr >= SAFETY_CUTOFF;
                   const hasSafety = needsSafetyCheck && (
                     (r.employeeId && passedKeySet.has(`emp:${r.employeeId}:${dateStr}`)) ||
                     passedKeySet.has(`name:${r.workerName.toLowerCase()}:${dateStr}`)

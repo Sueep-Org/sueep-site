@@ -27,9 +27,6 @@ const topNav: NavItem[] = [
 const projectGroupItems: NavItem[] = [
   { href: "/erp/projects", label: "Projects", roles: ALL },
   { href: "/erp/projects/new", label: "New Project", roles: PM_EST },
-  { href: "/erp/labor-assignments", label: "Labor Assignments", roles: FIELD },
-  { href: "/erp/contractor-assignments", label: "Contractor Assignments", roles: PM_UP },
-  { href: "/erp/quality-checks", label: "Quality Checks", roles: FIELD },
   { href: "/erp/schedule", label: "Schedule", roles: ALL },
 ];
 

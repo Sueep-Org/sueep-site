@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
-import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
 import { ChangeOrderMaterialsSection, type CoMaterialRow } from "./ChangeOrderMaterialsSection";
+import { ProjectSafetySection } from "../../ProjectSafetySection";
+import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
 
 const input =
@@ -28,6 +29,7 @@ const STATUS_COLORS: Record<Status, string> = {
 export type ChangeOrderDetailData = {
   id: string;
   createdAt: string;
+  completedAt: string | null;
   title: string;
   description: string | null;
   requestedBy: string | null;
@@ -51,7 +53,7 @@ export type ChangeOrderDetailData = {
   computedLaborCents: number;
   computedMaterialCents: number;
   materialEntries: CoMaterialRow[];
-  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null }[];
+  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null; completed: boolean }[];
 };
 
 export type EmployeeOption = {
@@ -233,6 +235,9 @@ export function ChangeOrderDetailEditor({
   signingContent,
   isSupervisor,
   isEmployee,
+  safetyChecks = [],
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
 }: {
   projectId: string;
   projectTitle: string;
@@ -241,6 +246,9 @@ export function ChangeOrderDetailEditor({
   signingContent?: React.ReactNode;
   isSupervisor?: boolean;
   isEmployee?: boolean;
+  safetyChecks?: SafetyCheck[];
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -250,6 +258,9 @@ export function ChangeOrderDetailEditor({
 
   const [title, setTitle] = useState(data.title);
   const [status, setStatus] = useState<Status>(data.status);
+  const [completedAt, setCompletedAt] = useState(
+    data.completedAt ? data.completedAt.slice(0, 10) : "",
+  );
   const [requestedBy, setRequestedBy] = useState(data.requestedBy || "");
   const [supervisor, setSupervisor] = useState(data.supervisor || "");
   const [comments, setComments] = useState(data.description || "");
@@ -303,6 +314,7 @@ export function ChangeOrderDetailEditor({
         body: JSON.stringify({
           title: title.trim(),
           status,
+          completedAt: completedAt || null,
           requestedBy: requestedBy.trim() || null,
           supervisor: supervisor.trim() || null,
           description: comments.trim() || null,
@@ -385,6 +397,10 @@ export function ChangeOrderDetailEditor({
           changeOrderId={data.id}
           initialLaborers={data.laborers}
           employees={employees}
+          initialStatus={data.status}
+          initialCompletedAt={data.completedAt}
+          safetyPassedKeys={safetyPassedKeys}
+          hasApprovedCheckToday={hasApprovedCheckToday}
         />
       ) : isEmployee ? (
         <ChangeOrderLaborersSection
@@ -411,6 +427,38 @@ export function ChangeOrderDetailEditor({
                   <select id="co-status" className={input} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className={label} htmlFor="co-completed-at">
+                    Completed date
+                    <span className="ml-1 text-gray-400 font-normal">(auto-set on mark complete)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="co-completed-at"
+                      type="date"
+                      className={`${input} mt-0`}
+                      value={completedAt}
+                      onChange={(e) => setCompletedAt(e.target.value)}
+                    />
+                    {status !== "BILLING" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatus("BILLING");
+                          if (!completedAt) setCompletedAt(new Date().toISOString().slice(0, 10));
+                        }}
+                        className="shrink-0 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500"
+                      >
+                        Mark complete
+                      </button>
+                    )}
+                    {status === "BILLING" && (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        Complete ✓
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className={label} htmlFor="co-requested-by">Requested by</label>
@@ -594,6 +642,10 @@ export function ChangeOrderDetailEditor({
               changeOrderId={data.id}
               initialLaborers={data.laborers}
               employees={employees}
+              initialStatus={data.status}
+              initialCompletedAt={data.completedAt}
+              safetyPassedKeys={safetyPassedKeys}
+              hasApprovedCheckToday={hasApprovedCheckToday}
             />
           ),
         },
@@ -609,13 +661,13 @@ export function ChangeOrderDetailEditor({
           ),
         },
         {
-          label: "Billing",
+          label: "Safety Checklist",
           content: (
-            <ChangeOrderBillingEditor
+            <ProjectSafetySection
               projectId={projectId}
-              changeOrderId={data.id}
-              percentInvoiced={data.percentInvoiced}
-              billingStatus={data.billingStatus}
+              initialChecks={safetyChecks}
+              defaultSupervisorName=""
+              employees={employees.map((e) => ({ id: e.id, firstName: e.firstName, lastName: e.lastName }))}
             />
           ),
         },

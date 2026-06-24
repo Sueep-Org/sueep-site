@@ -24,6 +24,8 @@ import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
 import { ProjectSafetySection } from "./ProjectSafetySection";
 import { RealEstateProjectDetails } from "./RealEstateProjectDetails";
 import { RealEstatePricingPackageEditor } from "./RealEstatePricingPackageEditor";
+import { NewQualityCheckForm } from "@/app/erp/(shell)/quality-checks/NewQualityCheckForm";
+import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChecksTable";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +38,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -114,6 +116,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       where: { role: "SUPERVISOR" },
       select: { id: true, email: true },
       orderBy: { email: "asc" },
+    }),
+    prisma.qualityCheck.findMany({
+      where: {
+        OR: [
+          { projectId: id },
+          // also pick up checks filed against this project's turnover request (janitorial)
+          { turnoverRequest: { projects: { some: { id } } } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        turnoverRequest: { include: { building: true } },
+        project: { select: { id: true, jobTitle: true } },
+      },
     }),
   ]);
   if (!project) notFound();
@@ -406,7 +422,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} />,
     },
     {
       label: "Contractors",
@@ -533,6 +549,29 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
+    {
+      label: "Quality Checks",
+      content: (() => {
+        const qcRows = qualityChecks.map((check) => ({
+          id: check.id,
+          label: check.turnoverRequest
+            ? `${check.turnoverRequest.building.name} • ${check.turnoverRequest.requestType}${check.turnoverRequest.unitNumber ? ` • ${check.turnoverRequest.unitNumber}` : ""}`
+            : check.project?.jobTitle ?? "—",
+          supervisorName: check.supervisorName,
+          pmApproval: check.pmApproval,
+          evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
+          notes: check.notes ?? null,
+        }));
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <NewQualityCheckForm defaultProjectId={project.id} defaultProjectTitle={project.jobTitle} />
+            </div>
+            <QualityChecksTable checks={qcRows} />
+          </div>
+        );
+      })(),
+    },
   ];
 
   const tabs = isEmployee

@@ -107,12 +107,12 @@ function SearchCombobox({
   );
 }
 
-export function NewQualityCheckForm() {
+export function NewQualityCheckForm({ defaultProjectId, defaultProjectTitle }: { defaultProjectId?: string; defaultProjectTitle?: string } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("project");
 
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
 
@@ -148,7 +148,7 @@ export function NewQualityCheckForm() {
   function close() {
     setOpen(false);
     setError("");
-    setProjectId("");
+    setProjectId(defaultProjectId ?? "");
     setTurnoverRequestId("");
     setMode("project");
     setSupervisorSignature("");
@@ -256,30 +256,39 @@ export function NewQualityCheckForm() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5 px-6 py-5">
-              <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setMode("project")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "project" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Project
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("turnover")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "turnover" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Turnover request
-                </button>
-              </div>
+              {!defaultProjectId && (
+                <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode("project")}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === "project" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("turnover")}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === "turnover" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Turnover request
+                  </button>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  {mode === "project" ? (
+                  {defaultProjectId ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-600">Project</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {defaultProjectTitle ?? defaultProjectId}
+                      </p>
+                    </div>
+                  ) : mode === "project" ? (
                     <SearchCombobox
                       label="Project"
                       items={projectItems}

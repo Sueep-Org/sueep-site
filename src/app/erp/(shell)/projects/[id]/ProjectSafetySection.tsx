@@ -27,7 +27,7 @@ type WorkerRow = {
   incidents: IncidentRow[];
 };
 
-type SafetyCheck = {
+export type SafetyCheck = {
   id: string;
   checkDate: string;
   supervisorName: string;

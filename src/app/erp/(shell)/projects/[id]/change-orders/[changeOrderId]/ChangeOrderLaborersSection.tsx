@@ -15,6 +15,7 @@ export type ChangeOrderLaborerRow = {
   taskDescription: string | null;
   qualityRating: string | null;
   qualityNotes: string | null;
+  completed: boolean;
 };
 
 const QUALITY_OPTIONS = [
@@ -131,6 +132,9 @@ function EmployeeCombobox({
   );
 }
 
+// Reuse same cutoff as ProjectLaborSection
+const SAFETY_CUTOFF = "2026-06-18";
+
 export function ChangeOrderLaborersSection({
   projectId,
   changeOrderId,
@@ -138,6 +142,10 @@ export function ChangeOrderLaborersSection({
   employees,
   canEdit = true,
   showFinancials = true,
+  initialStatus,
+  initialCompletedAt,
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
 }: {
   projectId: string;
   changeOrderId: string;
@@ -145,9 +153,20 @@ export function ChangeOrderLaborersSection({
   employees: ChangeOrderLaborerEmployeeOption[];
   canEdit?: boolean;
   showFinancials?: boolean;
+  initialStatus?: string;
+  initialCompletedAt?: string | null;
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
 }) {
   const router = useRouter();
+  const passedKeySet = new Set(safetyPassedKeys);
   const [laborers, setLaborers] = useState(initialLaborers);
+  const [coStatus, setCoStatus] = useState(initialStatus ?? "");
+  const [completedAt, setCompletedAt] = useState(
+    initialCompletedAt ? initialCompletedAt.slice(0, 10) : "",
+  );
+  const [markingComplete, setMarkingComplete] = useState(false);
+  const [markCompleteError, setMarkCompleteError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [employeePick, setEmployeePick] = useState<string>("");
@@ -161,13 +180,52 @@ export function ChangeOrderLaborersSection({
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityNotes ?? ""]))
   );
+  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(initialLaborers.map((l) => [l.id, l.completed]))
+  );
+  const [markCompleteOnAdd, setMarkCompleteOnAdd] = useState(false);
   const [qualityPopup, setQualityPopup] = useState<{ id: string; draft: string } | null>(null);
 
   useEffect(() => {
     setLaborers(initialLaborers);
     setQualityMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityRating ?? ""])));
     setNotesMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityNotes ?? ""])));
+    setCompletedMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.completed])));
   }, [initialLaborers]);
+
+  function toggleCompleted(laborerId: string) {
+    const next = !completedMap[laborerId];
+    setCompletedMap((prev) => ({ ...prev, [laborerId]: next }));
+    fetch(`/api/erp/change-order-laborers/${laborerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ completed: next }),
+    }).catch(() => {
+      setCompletedMap((prev) => ({ ...prev, [laborerId]: !next }));
+    });
+  }
+
+  async function handleMarkComplete() {
+    setMarkingComplete(true);
+    setMarkCompleteError("");
+    const date = completedAt || new Date().toISOString().slice(0, 10);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${changeOrderId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "BILLING", completedAt: date }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setMarkCompleteError(json.error || "Failed to mark complete"); return; }
+      setCoStatus("BILLING");
+      if (!completedAt) setCompletedAt(date);
+      router.refresh();
+    } catch {
+      setMarkCompleteError("Network error");
+    } finally {
+      setMarkingComplete(false);
+    }
+  }
 
   useEffect(() => {
     if (!employeePick || employeePick === OTHER_VALUE) {
@@ -251,12 +309,15 @@ export function ChangeOrderLaborersSection({
         taskDescription: data.taskDescription ?? null,
         qualityRating: null,
         qualityNotes: null,
+        completed: markCompleteOnAdd,
       };
       setLaborers((prev) => [row, ...prev]);
+      setCompletedMap((prev) => ({ ...prev, [data.id!]: markCompleteOnAdd }));
       form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
+      setMarkCompleteOnAdd(false);
       router.refresh();
     } catch {
       setError("Network error");
@@ -350,11 +411,20 @@ export function ChangeOrderLaborersSection({
 
   const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
 
-  const colCount = 7 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
+  const colCount = 8 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
 
   return (
     <>
     <div className="space-y-6">
+      {hasApprovedCheckToday === false && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-amber-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor.
+          </p>
+        </div>
+      )}
+
       {canEdit && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
         <p className="mt-2 text-xs text-gray-500">
@@ -394,9 +464,20 @@ export function ChangeOrderLaborersSection({
           </div>
         </div>
         {error ? <p className="mt-3 text-sm text-red-400" role="alert">{error}</p> : null}
-        <button type="submit" disabled={loading} className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
-          {loading ? "Adding…" : "Add entry"}
-        </button>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+            {loading ? "Adding…" : "Add entry"}
+          </button>
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              checked={markCompleteOnAdd}
+              onChange={(e) => setMarkCompleteOnAdd(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+            />
+            Mark entry as complete
+          </label>
+        </div>
       </form>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -486,6 +567,13 @@ export function ChangeOrderLaborersSection({
                 visibleLaborers.map((l) => {
                   const quality = qualityMap[l.id] ?? "";
                   const notes = notesMap[l.id] ?? "";
+                  const dateStr = new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+                  const needsSafetyCheck = dateStr >= SAFETY_CUTOFF;
+                  const hasSafety = needsSafetyCheck && (
+                    (l.employeeId && passedKeySet.has(`emp:${l.employeeId}:${dateStr}`)) ||
+                    passedKeySet.has(`name:${l.name.toLowerCase()}:${dateStr}`)
+                  );
+                  const missingSafety = needsSafetyCheck && !hasSafety;
                   return editingId === l.id ? (
                     <tr key={l.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
@@ -540,7 +628,17 @@ export function ChangeOrderLaborersSection({
                   ) : (
                     <tr key={l.id}>
                       <td className="py-2 pr-2 text-gray-600">{new Date(l.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}</td>
-                      <td className="py-2 pr-2 text-gray-900">{l.name}</td>
+                      <td className="py-2 pr-2 text-gray-900">
+                        <span className="flex items-center gap-1.5">
+                          {l.name}
+                          {missingSafety && (
+                            <span
+                              title="No passing safety check for this worker on this date"
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
+                            >!</span>
+                          )}
+                        </span>
+                      </td>
                       <td className="py-2 pr-2 text-gray-500">{l.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{l.hours}</td>
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>}

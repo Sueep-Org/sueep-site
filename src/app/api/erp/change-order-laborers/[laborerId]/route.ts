@@ -45,6 +45,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.qualityNotes !== undefined) {
     data.qualityNotes = body.qualityNotes ? String(body.qualityNotes).trim() || null : null;
   }
+  if (body.completed !== undefined) {
+    data.completed = Boolean(body.completed);
+  }
 
   try {
     const entry = await prisma.projectChangeOrderLaborer.update({ where: { id: laborerId }, data: data as object });

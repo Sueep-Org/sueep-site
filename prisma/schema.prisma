@@ -413,6 +413,7 @@ model ProjectChangeOrder {
   status             String   @default("DRAFT")
   billingStatus      String?
   percentInvoiced    Int      @default(0)
+  completedAt        DateTime?
   estimatedCostCents  Int?
   estimatedDays       Int?
   reason              String?
@@ -457,6 +458,7 @@ model ProjectChangeOrderLaborer {
 
   qualityRating String?
   qualityNotes  String?
+  completed     Boolean @default(false)
 
   @@index([changeOrderId])
 }

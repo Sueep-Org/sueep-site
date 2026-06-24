@@ -49,16 +49,34 @@ export async function GET(req: Request) {
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
+  // Fetch completed change orders in the same date range
+  const changeOrders = await prisma.projectChangeOrder.findMany({
+    where: {
+      status: "BILLING",
+      completedAt: { gte: start, lte: end },
+      ...(postConPipelineId ? { project: { hubspotPipelineId: postConPipelineId } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      contractValueCents: true,
+      billingStatus: true,
+      completedAt: true,
+      projectId: true,
+      project: { select: { id: true, jobTitle: true, billingStatus: true } },
+    },
+    orderBy: { completedAt: "asc" },
+  });
+
+  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string };
+  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; completedAt: string };
+
   type ProjectRow = {
     projectId: string;
     jobTitle: string;
     projectBillingStatus: string | null;
-    items: {
-      id: string;
-      description: string;
-      scheduledValueCents: number;
-      billingStatus: string;
-    }[];
+    items: SOVItemRow[];
+    changeOrders: CORow[];
   };
 
   const projectMap = new Map<string, ProjectRow>();
@@ -71,6 +89,7 @@ export async function GET(req: Request) {
         jobTitle: project.jobTitle,
         projectBillingStatus: project.billingStatus,
         items: [],
+        changeOrders: [],
       });
     }
     projectMap.get(project.id)!.items.push({
@@ -78,6 +97,27 @@ export async function GET(req: Request) {
       description: item.description,
       scheduledValueCents: item.scheduledValueCents,
       billingStatus: item.billingStatus,
+    });
+  }
+
+  for (const co of changeOrders) {
+    const project = co.project;
+    if (!projectMap.has(project.id)) {
+      projectMap.set(project.id, {
+        projectId: project.id,
+        jobTitle: project.jobTitle,
+        projectBillingStatus: project.billingStatus,
+        items: [],
+        changeOrders: [],
+      });
+    }
+    projectMap.get(project.id)!.changeOrders.push({
+      id: co.id,
+      projectId: co.projectId,
+      title: co.title,
+      contractValueCents: co.contractValueCents ?? 0,
+      billingStatus: co.billingStatus ?? "NOT_BILLED",
+      completedAt: co.completedAt!.toISOString(),
     });
   }
 

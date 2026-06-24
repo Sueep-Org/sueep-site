@@ -42,11 +42,21 @@ type SOVItemRow = {
   billingStatus: string;
 };
 
+type CORow = {
+  id: string;
+  projectId: string;
+  title: string;
+  contractValueCents: number;
+  billingStatus: string;
+  completedAt: string;
+};
+
 type PostConProjectRow = {
   projectId: string;
   jobTitle: string;
   projectBillingStatus: string | null;
   items: SOVItemRow[];
+  changeOrders: CORow[];
 };
 
 type PostConResponse = {
@@ -57,20 +67,31 @@ type PostConResponse = {
 
 function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Project", "SOV Item", "Scheduled Value", "Billing Status"].map(escape).join(",");
+  const headers = ["Project", "Item", "Type", "Value", "Billing Status"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const project of rows) {
     for (const item of project.items) {
       dataRows.push([
         escape(project.jobTitle),
         escape(item.description),
+        escape("SOV"),
         escape((item.scheduledValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === item.billingStatus)?.label ?? item.billingStatus),
       ].join(","));
     }
+    for (const co of (project.changeOrders ?? [])) {
+      dataRows.push([
+        escape(project.jobTitle),
+        escape(`CO: ${co.title}`),
+        escape("Change Order"),
+        escape((co.contractValueCents / 100).toFixed(2)),
+        escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
+      ].join(","));
+    }
   }
-  const total = rows.flatMap((r) => r.items).reduce((s, i) => s + i.scheduledValueCents, 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
+  const sovTotal = rows.flatMap((r) => r.items).reduce((s, i) => s + i.scheduledValueCents, 0);
+  const coTotal = rows.flatMap((r) => r.changeOrders ?? []).reduce((s, c) => s + c.contractValueCents, 0);
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal) / 100).toFixed(2)), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -94,7 +115,36 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
   }, [start, end]);
 
   const allItems = data?.rows.flatMap((r) => r.items) ?? [];
-  const totalCents = allItems.reduce((s, i) => s + i.scheduledValueCents, 0);
+  const allCOs = data?.rows.flatMap((r) => r.changeOrders ?? []) ?? [];
+  const totalCents = allItems.reduce((s, i) => s + i.scheduledValueCents, 0)
+    + allCOs.reduce((s, c) => s + c.contractValueCents, 0);
+
+  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string) {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) =>
+          row.projectId !== projectId ? row : {
+            ...row,
+            changeOrders: (row.changeOrders ?? []).map((co) =>
+              co.id === coId ? { ...co, billingStatus } : co,
+            ),
+          },
+        ),
+      };
+    });
+    try {
+      await fetch(`/api/erp/projects/${projectId}/change-orders/${coId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ billingStatus }),
+      });
+    } catch {
+      fetch(`/api/erp/billing/post-construction?start=${start}&end=${end}`)
+        .then((r) => r.json()).then((d: PostConResponse) => setData(d)).catch(() => {});
+    }
+  }
 
   async function updateBillingStatus(projectId: string, itemId: string, billingStatus: string) {
     setData((prev) => {
@@ -169,9 +219,13 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
               ) : !data || data.rows.length === 0 ? (
                 <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No completed SOV items in this date range.</td></tr>
               ) : (
-                data.rows.map((project) =>
-                  project.items.map((item, idx) => (
-                    <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50">
+                data.rows.map((project) => {
+                  const allProjectRows = [
+                    ...project.items.map((item) => ({ type: "sov" as const, item })),
+                    ...(project.changeOrders ?? []).map((co) => ({ type: "co" as const, co })),
+                  ];
+                  return allProjectRows.map((row, idx) => (
+                    <tr key={row.type === "sov" ? row.item.id : row.co.id} className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {idx === 0 ? (
                           <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
@@ -181,29 +235,54 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
                           <span className="text-gray-300 select-none">↳</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{item.description}</td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">{fmt(item.scheduledValueCents)}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.type === "sov" ? row.item.description : (
+                          <span className="flex items-center gap-1.5">
+                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-600">CO</span>
+                            <Link href={`/erp/projects/${project.projectId}/change-orders/${row.co.id}`} className="hover:text-pink-600 hover:underline">
+                              {row.co.title}
+                            </Link>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                        {row.type === "sov" ? fmt(row.item.scheduledValueCents) : fmt(row.co.contractValueCents)}
+                      </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={item.billingStatus}
-                          onChange={(e) => updateBillingStatus(project.projectId, item.id, e.target.value)}
-                          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(item.billingStatus)}`}
-                        >
-                          {BILLING_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                        {row.type === "sov" ? (
+                          <select
+                            value={row.item.billingStatus}
+                            onChange={(e) => updateBillingStatus(project.projectId, row.item.id, e.target.value)}
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.item.billingStatus)}`}
+                          >
+                            {BILLING_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select
+                            value={row.co.billingStatus}
+                            onChange={(e) => updateCOBillingStatus(project.projectId, row.co.id, e.target.value)}
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.co.billingStatus)}`}
+                          >
+                            {BILLING_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     </tr>
-                  ))
-                )
+                  ));
+                })
               )}
             </tbody>
             {data && data.rows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>
-                    Total — {allItems.length} item{allItems.length !== 1 ? "s" : ""} across {data.rows.length} project{data.rows.length !== 1 ? "s" : ""}
+                    Total — {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
+                    {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
+                    {" "}across {data.rows.length} project{data.rows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
                   <td className="px-4 py-3" />
