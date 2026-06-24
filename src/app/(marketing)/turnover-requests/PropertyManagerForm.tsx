@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DocusealForm } from "@docuseal/react";
-import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -21,8 +19,8 @@ const UNIT_FEATURE_OPTIONS = [
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 
-const TOTAL_STEPS = 4;
-const STEP_LABELS = ["Building", "Unit & Services", "Your Info", "Sign & Submit"] as const;
+const TOTAL_STEPS = 3;
+const STEP_LABELS = ["Building", "Unit & Services", "Your Info"] as const;
 
 export interface BuildingOption {
   id: string;
@@ -32,29 +30,6 @@ export interface BuildingOption {
   pmEmail?: string | null;
   pmPhone?: string | null;
   pricingPackage?: unknown;
-}
-
-function featureToBedsBaths(value: string) {
-  if (value === "studio") return { bedrooms: 0, bathrooms: 1 };
-  if (value === "common-area") return { bedrooms: null, bathrooms: null };
-  const match = value.match(/^(\d+)\/(\d+)$/);
-  if (!match) return { bedrooms: 1, bathrooms: 1 };
-  return { bedrooms: Number(match[1]), bathrooms: Number(match[2]) };
-}
-
-function computePrice(form: FormState, pricingPackage: unknown) {
-  const { bedrooms, bathrooms } = featureToBedsBaths(form.features);
-  return computeTurnoverPricing({
-    requestType: "TURNOVER",
-    pricingPackage,
-    bedrooms,
-    bathrooms,
-    fullClean: form.fullClean,
-    fullPaint: form.fullPaint,
-    touchUpPaint: form.touchUpPaint ? 1 : 0,
-    carpetCleaning: form.carpetCleaning,
-    materialsAdditional: false,
-  });
 }
 
 interface FormState {
@@ -159,11 +134,6 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
-  const [signingLoading, setSigningLoading] = useState(false);
-  const [docusealSubmissionId, setDocusealSubmissionId] = useState<number | null>(null);
-  const [projectSubmitted, setProjectSubmitted] = useState(false);
-
   const selectedBuilding = buildings.find((b) => b.id === form.buildingId) ?? null;
 
   function patch(updates: Partial<FormState>) {
@@ -189,70 +159,24 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
     return "";
   }
 
+  function handleBack() {
+    setError("");
+    if (step === 1) { onBack(); return; }
+    setStep((s) => s - 1);
+  }
+
   async function handleNext() {
     const err = validateStep(step);
     if (err) { setError(err); return; }
     setError("");
-
-    if (step === 3) {
-      setSigningLoading(true);
-      const pricing = computePrice(form, selectedBuilding?.pricingPackage);
-      try {
-        const res = await fetch("/api/property-manager-signing-embed", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            pmName: form.pmName.trim(),
-            pmEmail: form.pmEmail.trim(),
-            pmPhone: form.pmPhone.trim() || undefined,
-            buildingName: selectedBuilding?.name,
-            buildingAddress: selectedBuilding?.address,
-            fullClean: form.fullClean,
-            touchUpPaint: form.touchUpPaint,
-            fullPaint: form.fullPaint,
-            carpetCleaning: form.carpetCleaning,
-            startDate: form.startDate || undefined,
-            priceCents: pricing.priceCents > 0 ? pricing.priceCents : undefined,
-          }),
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          embedSrc?: string;
-          submissionId?: number;
-          error?: string;
-        };
-        if (!res.ok || !data.embedSrc) {
-          setError(data.error || "Could not load contract. Please try again.");
-          setSigningLoading(false);
-          return;
-        }
-        setSigningEmbedSrc(data.embedSrc);
-        setDocusealSubmissionId(data.submissionId ?? null);
-        setStep(4);
-      } catch {
-        setError("Network error. Please try again.");
-      } finally {
-        setSigningLoading(false);
-      }
-      return;
-    }
-
     setStep((s) => s + 1);
   }
 
-  function handleBack() {
-    setError("");
-    if (step === 1) { onBack(); return; }
-    if (step === 4) {
-      setSigningEmbedSrc("");
-      setDocusealSubmissionId(null);
-    }
-    setStep((s) => s - 1);
-  }
-
   async function handleSubmit() {
-    if (projectSubmitted) return;
-    setLoading(true);
+    const err = validateStep(3);
+    if (err) { setError(err); return; }
     setError("");
+    setLoading(true);
 
     const payload = {
       buildingId: form.buildingId,
@@ -274,7 +198,6 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
       sueepPmName: "David Rodriguez",
       sueepPmEmail: "david@sueep.com",
       source: "external",
-      docusealSubmissionId: docusealSubmissionId ?? undefined,
     };
 
     try {
@@ -288,7 +211,6 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
         setError(data.error || "Submission failed. Please try again.");
         return;
       }
-      setProjectSubmitted(true);
       setSubmitted(true);
     } catch {
       setError("Network error. Please try again.");
@@ -306,21 +228,14 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
+          <p className="text-lg font-semibold text-green-900">Request submitted!</p>
           <p className="mt-2 max-w-sm text-sm text-green-700">
-            Your service agreement has been signed and your turnover request sent to Sueep. Your PM has been notified.
+            Your turnover request has been sent to Sueep. Your PM has been notified.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => {
-            setForm(initial);
-            setStep(1);
-            setSubmitted(false);
-            setSigningEmbedSrc("");
-            setDocusealSubmissionId(null);
-            setProjectSubmitted(false);
-          }}
+          onClick={() => { setForm(initial); setStep(1); setSubmitted(false); }}
           className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
         >
           Submit another request
@@ -463,7 +378,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           <>
             {(selectedBuilding?.pmName || selectedBuilding?.pmEmail) && (
               <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-                We pre-filled your info from the building record. Please confirm or update before signing.
+                We pre-filled your info from the building record. Please confirm or update before submitting.
               </div>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
@@ -508,74 +423,37 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
             </div>
           </>
         )}
-
-        {/* Step 4 — Sign & Submit */}
-        {step === 4 && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-              <p className="text-sm font-medium text-blue-900">
-                Please sign the service agreement below.
-              </p>
-              <p className="mt-1 text-xs text-blue-700">
-                Your request will be submitted automatically once you sign. Sueep will countersign and send you a copy.
-              </p>
-            </div>
-            <DocusealForm
-              src={signingEmbedSrc}
-              email={form.pmEmail}
-              withTitle={false}
-              onComplete={() => { void handleSubmit(); }}
-              className="w-full"
-            />
-          </div>
-        )}
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      {step < 4 && (
-        <div className="mt-6 flex gap-3">
+      <div className="mt-6 flex gap-3">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Back
+        </button>
+        {step < 3 ? (
           <button
             type="button"
-            onClick={handleBack}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            onClick={() => { void handleNext(); }}
+            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            Back
+            Next
           </button>
-          {step < 3 ? (
-            <button
-              type="button"
-              onClick={() => { void handleNext(); }}
-              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={signingLoading}
-              onClick={() => { void handleNext(); }}
-              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {signingLoading ? "Loading contract…" : "Review & Sign"}
-            </button>
-          )}
-        </div>
-      )}
-      {step === 4 && (
-        <div className="mt-4">
+        ) : (
           <button
             type="button"
-            onClick={handleBack}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            disabled={loading}
+            onClick={() => { void handleSubmit(); }}
+            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            Back
+            {loading ? "Submitting…" : "Submit request"}
           </button>
-        </div>
-      )}
-      {loading && (
-        <p className="mt-3 text-xs text-gray-500">Submitting your request…</p>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default async function TurnoverRequestsPage() {
   const buildings = await prisma.building.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, pricingPackage: true },
+    select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
   });
 
   return (
