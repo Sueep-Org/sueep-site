@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Janitorial Requests | Sueep",
+  title: "Submit a Request | Sueep",
   description:
-    "Submit a janitorial turnover request to Sueep. For property managers and real estate agents — fast scheduling, detailed scope tracking, and direct PM notification.",
+    "Submit a service request to Sueep. For property managers, real estate agents, and project managers — fast scheduling, detailed scope tracking, and direct PM notification.",
   alternates: { canonical: "/turnover-requests" },
 };
 
@@ -27,9 +27,9 @@ export default async function TurnoverRequestsPage() {
       {/* Hero */}
       <section className="bg-[#E73C6E] px-6 py-16 text-center text-white">
         <p className="text-xs font-semibold uppercase tracking-widest text-white/80">Sueep</p>
-        <h1 className="mt-3 text-3xl font-extrabold md:text-5xl">Janitorial Requests</h1>
+        <h1 className="mt-3 text-3xl font-extrabold md:text-5xl">Submit a Request</h1>
         <p className="mx-auto mt-4 max-w-2xl text-base text-white/90 md:text-lg">
-          For property managers and real estate agents. Submit your unit details and scope directly to your Sueep PM. We&apos;ll confirm and get you scheduled fast.
+          For property managers, real estate agents, and project managers. Submit your details directly to your Sueep PM and we&apos;ll get you scheduled fast.
         </p>
       </section>
 
