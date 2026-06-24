@@ -311,7 +311,15 @@
         <!-- UPLOAD -->
         <!-- ========================= -->
 
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6" style="position:relative;">
+
+            <button
+                id="sovBtnHeader"
+                class="mini-btn"
+                style="position:absolute;top:16px;right:16px;background:#2563eb;color:white;border-color:#2563eb;font-weight:700;padding:8px 12px;box-shadow:0 2px 8px rgba(37,99,235,.25);"
+            >
+                SOV
+            </button>
 
             <h2 class="text-xl font-semibold mb-4">
                 Upload Your Drawing
@@ -430,9 +438,18 @@
 
                 <div id="viewerRow" class="flex flex-col lg:flex-row gap-6">
                   <div id="pdfPanel" class="flex-1">
-                    <h2 class="text-xl font-semibold mb-2">
-                        PDF Preview
-                    </h2>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                      <h2 class="text-xl font-semibold">
+                          PDF Preview
+                      </h2>
+                      <button
+                        id="sovBtn"
+                        class="mini-btn"
+                        style="background:#2563eb;color:white;border-color:#2563eb;font-weight:700;padding:8px 12px;box-shadow:0 2px 8px rgba(37,99,235,.25);"
+                      >
+                        SOV
+                      </button>
+                    </div>
 
                     <!-- PDF CONTAINER -->
                     <div id="pdfContainer">

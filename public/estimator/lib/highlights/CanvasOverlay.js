@@ -546,7 +546,81 @@ export class CanvasOverlay {
     }
   };
 
-  _onDoubleClick = () => {
+  _findMeasurementAtPoint(x, y) {
+    const w = this.overlay?.width || 0;
+    const h = this.overlay?.height || 0;
+    if (!w || !h) return null;
+
+    const measurements = this.store.listMeasurements(this.currentPage) || [];
+    if (!measurements.length) return null;
+
+    let nearestLineMeasurement = null;
+    let nearestLineMeasurementDist = Infinity;
+    let nearestAreaMeasurement = null;
+    let nearestAreaMeasurementDist = Infinity;
+
+    const getSegmentsForMeasurement = (m) => {
+      const polygonPoints = Array.isArray(m.shapePoints) && m.shapePoints.length
+        ? m.shapePoints
+        : (Array.isArray(m.polygonPoints) && m.polygonPoints.length ? m.polygonPoints : null);
+
+      if (polygonPoints && polygonPoints.length >= 2) {
+        const points = polygonPoints.map(point => ({ x: point.x * w, y: point.y * h }));
+        return points.map((point, index) => {
+          const nextPoint = points[(index + 1) % points.length];
+          return { a: point, b: nextPoint };
+        });
+      }
+
+      return (Array.isArray(m.pts) ? m.pts : []).map(seg => ({
+        a: { x: seg.x1 * w, y: seg.y1 * h },
+        b: { x: seg.x2 * w, y: seg.y2 * h }
+      }));
+    };
+
+    for (const m of measurements) {
+      const isAreaMeasurement = m.area != null || m.areaLabel != null || m.areaPx != null || m.shapeType === 'polygon' ||
+        (Array.isArray(m.shapePoints) && m.shapePoints.length >= 3) ||
+        (Array.isArray(m.polygonPoints) && m.polygonPoints.length >= 3);
+
+      const segments = getSegmentsForMeasurement(m);
+      for (const seg of segments) {
+        const d = pointToSegmentDistance({ x, y }, seg.a, seg.b);
+
+        if (isAreaMeasurement) {
+          if (d < nearestAreaMeasurementDist) {
+            nearestAreaMeasurementDist = d;
+            nearestAreaMeasurement = m;
+          }
+        } else if (d < nearestLineMeasurementDist) {
+          nearestLineMeasurementDist = d;
+          nearestLineMeasurement = m;
+        }
+      }
+    }
+
+    const deleteThreshold = Math.max(10, 10 * (this.zoom || 1));
+    return nearestLineMeasurement && nearestLineMeasurementDist <= deleteThreshold
+      ? nearestLineMeasurement
+      : (nearestAreaMeasurement && nearestAreaMeasurementDist <= deleteThreshold ? nearestAreaMeasurement : null);
+  }
+
+  _onDoubleClick = (e) => {
+    if (!this.active) return;
+
+    const rect = this.overlay.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const targetMeasurement = this._findMeasurementAtPoint(x, y);
+    if (targetMeasurement) {
+      this.store.removeMeasurement(this.currentPage, targetMeasurement.id);
+      this.onMeasurementsChanged?.();
+      toast('Measurement removed', 'info');
+      this.redraw();
+      return;
+    }
+
     if (this.tool === 'irregular' && this._pendingPolygonPoints.length >= 3) {
       this._finalizeIrregularPolygon();
     }

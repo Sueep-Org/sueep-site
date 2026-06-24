@@ -33,6 +33,29 @@ window.addEventListener('unhandledrejection', (e)=>{
   console.warn('Unhandled promise (suppressed):', e.reason);
 });
 
+function ensureSovButton(){
+  if (document.getElementById('sovBtn')) return;
+  const toolbar = document.getElementById('toolbar');
+  if (!toolbar) return;
+  const btn = document.createElement('button');
+  btn.id = 'sovBtn';
+  btn.type = 'button';
+  btn.textContent = 'SOV';
+  btn.className = 'mini-btn';
+  btn.style.cssText = 'background:white;color:#111827;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;';
+  btn.addEventListener('click', () => {
+    if (window.__openSovModal) window.__openSovModal();
+  });
+  const target = toolbar.querySelector('#nextPageBtn') || toolbar.lastElementChild;
+  if (target) {
+    toolbar.insertBefore(btn, target.nextSibling);
+  } else {
+    toolbar.appendChild(btn);
+  }
+}
+
+ensureSovButton();
+
 // ======================================================
 // SIDEBAR
 // ======================================================
@@ -287,7 +310,9 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
+  const sovBtn = $('sovBtn') || $('sovBtnHeader');
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
+  let sovModal = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -367,6 +392,119 @@ async function initApp(){
   if (savePdfBtn) {
     savePdfBtn.addEventListener('click', exportAllPagesWithAnnotations);
   }
+
+  function formatSovCurrency(value) {
+    const numberValue = Number(value || 0);
+    if (!Number.isFinite(numberValue)) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(numberValue);
+  }
+
+  function getSovFinalPrice() {
+    const fromLoadedProject = Number(_loadedProjectData?.quote ?? 0);
+    if (Number.isFinite(fromLoadedProject) && fromLoadedProject > 0) return fromLoadedProject;
+
+    const quoteEl = document.getElementById('analysisViewQuote');
+    const quoteText = quoteEl?.textContent || '';
+    const parsedQuote = Number(String(quoteText).replace(/[^0-9.-]/g, ''));
+    if (Number.isFinite(parsedQuote) && parsedQuote > 0) return parsedQuote;
+
+    return null;
+  }
+
+  function getSovPageRows() {
+    const totalPages = Number(pdfDoc?.numPages || 0);
+    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
+    const totalArea = allPageMeasurements.reduce((sum, pageEntry) => {
+      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
+    }, 0);
+    const finalPrice = getSovFinalPrice();
+
+    const rows = [];
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      const pageMeasurements = highlightsStore.listMeasurements(pageNum) || [];
+      const pageArea = pageMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+      const percent = totalArea > 0 ? (pageArea / totalArea) * 100 : 0;
+      const value = finalPrice != null && totalArea > 0 ? (pageArea / totalArea) * finalPrice : null;
+      rows.push({
+        page: pageNum,
+        description: `Page ${pageNum}`,
+        cost: value != null ? formatSovCurrency(value) : `${percent.toFixed(2)}%`
+      });
+    }
+    return rows;
+  }
+
+  function openSovModal() {
+    if (!pdfDoc) {
+      toast('Load a PDF before opening SOV.', 'info');
+      return;
+    }
+
+    if (sovModal) {
+      sovModal.remove();
+      sovModal = null;
+    }
+
+    const rows = getSovPageRows();
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10000;';
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'width:min(860px, 100%);max-height:85vh;overflow:auto;background:white;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.25);padding:18px;';
+
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#111827;">Schedule of Values</div>
+          <div style="font-size:12px;color:#111827;">One row per PDF page. Surface-area percentages are prefilled from current measurements.</div>
+        </div>
+        <button class="mini-btn" data-close-sov>Close</button>
+      </div>
+      <div style="overflow:auto;border:1px solid #e5e7eb;border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f9fafb;">
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Page</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Description</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Cost</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
+
+    const tbody = panel.querySelector('tbody');
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.page}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;"><input type="text" value="${row.description}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" /></td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;"><input type="text" value="${row.cost}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" /></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    panel.querySelector('[data-close-sov]').addEventListener('click', () => {
+      modal.remove();
+      sovModal = null;
+    });
+
+    modal.appendChild(panel);
+    document.body.appendChild(modal);
+    sovModal = modal;
+  }
+
+  if (sovBtn) {
+    sovBtn.addEventListener('click', openSovModal);
+  }
+
+  window.__openSovModal = openSovModal;
 
   let __renderSeq = 0;
 
@@ -621,7 +759,7 @@ async function initApp(){
     const PDFLib = await loadPdfLib();
     if (!PDFLib) throw new Error('PDFLib unavailable');
 
-    const { PDFDocument } = PDFLib;
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
     const outPdfDoc = await PDFDocument.create();
 
     const pageCanvases = [];
@@ -642,6 +780,72 @@ async function initApp(){
         y: 0,
         width: img.width,
         height: img.height
+      });
+    }
+
+    if (pageCanvases.length) {
+      const rows = getSovPageRows();
+      const lastCanvas = pageCanvases[pageCanvases.length - 1];
+      const sovPage = outPdfDoc.addPage([lastCanvas.width, lastCanvas.height]);
+      const regularFont = await outPdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await outPdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const marginX = 48;
+      const startY = lastCanvas.height - 60;
+
+      sovPage.drawText('Schedule of Values', {
+        x: marginX,
+        y: startY,
+        size: 18,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+
+      sovPage.drawText('Page', {
+        x: marginX,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+      sovPage.drawText('Description', {
+        x: marginX + 72,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+      sovPage.drawText('Cost', {
+        x: marginX + 350,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+
+      let currentY = startY - 56;
+      rows.forEach((row) => {
+        sovPage.drawText(String(row.page), {
+          x: marginX,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        sovPage.drawText(String(row.description), {
+          x: marginX + 72,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        sovPage.drawText(String(row.cost), {
+          x: marginX + 350,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        currentY -= 18;
       });
     }
 
@@ -669,6 +873,8 @@ async function initApp(){
       if (!jsPDF) throw new Error('jsPDF unavailable');
 
       let doc;
+      let lastPageWidth = 0;
+      let lastPageHeight = 0;
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
         if (!rendered) {
@@ -679,6 +885,8 @@ async function initApp(){
         const imageUrl = exportCanvas.toDataURL('image/jpeg', 0.85);
         const pageWidth = Math.ceil(viewport.width);
         const pageHeight = Math.ceil(viewport.height);
+        lastPageWidth = pageWidth;
+        lastPageHeight = pageHeight;
 
         if (!doc) {
           doc = new jsPDF({ unit: 'px', format: [pageWidth, pageHeight], compress: true });
@@ -692,6 +900,29 @@ async function initApp(){
       if (!doc) {
         throw new Error('No pages to export.');
       }
+
+      const sovPageWidth = lastPageWidth || 612;
+      const sovPageHeight = lastPageHeight || 792;
+      const sovRows = getSovPageRows();
+      doc.addPage([sovPageWidth, sovPageHeight]);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Schedule of Values', 40, 48);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.text('Page', 40, 78);
+      doc.text('Description', 100, 78);
+      doc.text('Cost', 360, 78);
+      doc.setLineWidth(0.5);
+      doc.line(40, 84, sovPageWidth - 40, 84);
+
+      let nextY = 104;
+      sovRows.forEach((row) => {
+        doc.text(String(row.page), 40, nextY);
+        doc.text(String(row.description), 100, nextY);
+        doc.text(String(row.cost), 360, nextY);
+        nextY += 16;
+      });
 
       const filename = `annotated-${Date.now()}.pdf`;
       if (typeof doc.save === 'function') {
