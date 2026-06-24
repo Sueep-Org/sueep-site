@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { TurnoverRequestsGate } from "./TurnoverRequestsGate";
 import { MarketingNav } from "../components/MarketingNav";
 
@@ -16,25 +15,10 @@ export const metadata: Metadata = {
 
 
 export default async function TurnoverRequestsPage() {
-  const cfg = parseHubSpotPipelineStageMap();
-
-  const [buildings, scheduleBuildings] = await Promise.all([
-    prisma.building.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
-    }),
-    prisma.project.findMany({
-      where: {
-        status: { notIn: ["COMPLETE", "ARCHIVED"] },
-        OR: [
-          { segment: { in: ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"] } },
-          ...(cfg?.janitorial.pipelineId ? [{ hubspotPipelineId: cfg.janitorial.pipelineId }] : []),
-        ],
-      },
-      orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-      select: { id: true, jobTitle: true, description: true, supervisor: true },
-    }),
-  ]);
+  const buildings = await prisma.building.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, pricingPackage: true },
+  });
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -51,11 +35,7 @@ export default async function TurnoverRequestsPage() {
 
       {/* Form */}
       <section className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
-        <TurnoverRequestsGate
-          buildings={buildings}
-          scheduleBuildings={scheduleBuildings}
-          janitorialPipelineId={cfg?.janitorial.pipelineId || null}
-        />
+        <TurnoverRequestsGate buildings={buildings} />
       </section>
 
       {/* Footer */}

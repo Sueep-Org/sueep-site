@@ -1,31 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { NewProjectForm } from "@/app/erp/(shell)/projects/new/NewProjectForm";
 import { RealEstateForm } from "./RealEstateForm";
+import { PropertyManagerForm, type BuildingOption } from "./PropertyManagerForm";
 
 type Role = "property-manager" | "real-estate-agent" | null;
 
-interface BuildingOption {
-  id: string;
-  name: string;
-  address: string;
-  pmName?: string | null;
-  pmEmail?: string | null;
-  pmPhone?: string | null;
-}
-
-interface ScheduleBuildingOption {
-  id: string;
-  jobTitle: string;
-  description?: string | null;
-  supervisor?: string | null;
-}
-
 interface Props {
   buildings: BuildingOption[];
-  scheduleBuildings: ScheduleBuildingOption[];
-  janitorialPipelineId: string | null;
 }
 
 function RoleCard({
@@ -90,7 +72,7 @@ function WipScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-export function TurnoverRequestsGate({ buildings, scheduleBuildings, janitorialPipelineId }: Props) {
+export function TurnoverRequestsGate({ buildings }: Props) {
   const [role, setRole] = useState<Role>(null);
 
   if (role === "real-estate-agent") {
@@ -98,22 +80,7 @@ export function TurnoverRequestsGate({ buildings, scheduleBuildings, janitorialP
   }
 
   if (role === "property-manager") {
-    return (
-      <NewProjectForm
-        initialBuildings={buildings}
-        initialScheduleBuildings={scheduleBuildings}
-        janitorialPipelineId={janitorialPipelineId}
-        initialSegment="JANITORIAL_TURNOVER_REQUESTS"
-        lockedSegment
-        allowErpDataFetch={false}
-        submitEndpoint="/api/janitorial-turnover-projects"
-        successMessage="Your turnover request was submitted. Your Sueep PM has been notified."
-        submitLabel="Submit turnover request"
-        lockedSueepPm={{ name: "David Rodriguez", email: "david@sueep.com" }}
-        disableNewBuilding
-        payloadExtra={{ source: "external" }}
-      />
-    );
+    return <PropertyManagerForm onBack={() => setRole(null)} buildings={buildings} />;
   }
 
   return (
