@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { DocusealForm } from "@docuseal/react";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -19,8 +22,8 @@ const UNIT_FEATURE_OPTIONS = [
 
 type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
 
-const TOTAL_STEPS = 3;
-const STEP_LABELS = ["Building", "Unit & Services", "Your Info"] as const;
+const TOTAL_STEPS = 4;
+const STEP_LABELS = ["Building", "Unit & Services", "Your Info", "Sign Contract"] as const;
 
 export interface BuildingOption {
   id: string;
@@ -122,6 +125,13 @@ function ServiceCheckbox({
   );
 }
 
+function parseFeaturesForPricing(features: UnitFeatureValue): { bedrooms?: number; bathrooms?: number } {
+  if (features === "studio") return { bedrooms: 0, bathrooms: 1 };
+  if (features === "common-area") return {};
+  const [beds, baths] = features.split("/").map(Number);
+  return { bedrooms: beds || undefined, bathrooms: baths || undefined };
+}
+
 interface Props {
   onBack: () => void;
   buildings: BuildingOption[];
@@ -133,6 +143,8 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
+  const [signingLoading, setSigningLoading] = useState(false);
 
   const selectedBuilding = buildings.find((b) => b.id === form.buildingId) ?? null;
 
@@ -162,6 +174,11 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   function handleBack() {
     setError("");
     if (step === 1) { onBack(); return; }
+    if (step === 4) {
+      setSigningEmbedSrc("");
+      setStep(3);
+      return;
+    }
     setStep((s) => s - 1);
   }
 
@@ -176,47 +193,90 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
     const err = validateStep(3);
     if (err) { setError(err); return; }
     setError("");
-    setLoading(true);
+    setSigningLoading(true);
 
-    const payload = {
-      buildingId: form.buildingId,
-      unitScopes: [
-        {
-          unitNumber: form.unitNumber.trim() || "Unit TBD",
-          features: form.features,
+    const pricingPackage = getTurnoverPricingPackage(selectedBuilding?.name ?? "");
+    const { bedrooms, bathrooms } = parseFeaturesForPricing(form.features);
+    const pricing = computeTurnoverPricing({
+      requestType: "TURNOVER",
+      pricingPackage,
+      bedrooms,
+      bathrooms,
+      fullClean: form.fullClean,
+      fullPaint: form.fullPaint,
+      touchUpPaint: form.touchUpPaint ? 1 : 0,
+      carpetCleaning: form.carpetCleaning,
+      materialsAdditional: false,
+    });
+
+    try {
+      const signingRes = await fetch("/api/real-estate-signing-embed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agentName: form.pmName.trim(),
+          agentEmail: form.pmEmail.trim(),
+          address: selectedBuilding?.address ?? "",
           fullClean: form.fullClean,
           touchUpPaint: form.touchUpPaint,
           fullPaint: form.fullPaint,
           carpetCleaning: form.carpetCleaning,
-          startDate: form.startDate || undefined,
-          endDate: form.endDate || undefined,
-        },
-      ],
-      pmName: form.pmName.trim(),
-      pmEmail: form.pmEmail.trim(),
-      pmPhone: form.pmPhone.trim() || undefined,
-      sueepPmName: "David Rodriguez",
-      sueepPmEmail: "david@sueep.com",
-      source: "external",
-    };
+          priceCents: pricing.priceCents,
+          cleanDate: form.startDate || undefined,
+          depositNA: true,
+          isPropertyManager: true,
+        }),
+      });
+      const signingData = (await signingRes.json().catch(() => ({}))) as { embedSrc?: string; error?: string };
+      if (!signingRes.ok || !signingData.embedSrc) {
+        setError(signingData.error || "Could not load contract. Please try again.");
+        return;
+      }
+      setSigningEmbedSrc(signingData.embedSrc);
+      setStep(4);
+    } catch {
+      setError("Network error loading contract. Please try again.");
+    } finally {
+      setSigningLoading(false);
+    }
+  }
 
+  async function handleSigningComplete() {
+    // Submit the project only after the contract is signed
     try {
       const res = await fetch("/api/janitorial-turnover-projects", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          buildingId: form.buildingId,
+          unitScopes: [
+            {
+              unitNumber: form.unitNumber.trim() || "Unit TBD",
+              features: form.features,
+              fullClean: form.fullClean,
+              touchUpPaint: form.touchUpPaint,
+              fullPaint: form.fullPaint,
+              carpetCleaning: form.carpetCleaning,
+              startDate: form.startDate || undefined,
+              endDate: form.endDate || undefined,
+            },
+          ],
+          pmName: form.pmName.trim(),
+          pmEmail: form.pmEmail.trim(),
+          pmPhone: form.pmPhone.trim() || undefined,
+          sueepPmName: "David Rodriguez",
+          sueepPmEmail: "david@sueep.com",
+          source: "external",
+        }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setError(data.error || "Submission failed. Please try again.");
-        return;
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error || "Submission failed. Please contact Sueep directly.");
       }
-      setSubmitted(true);
     } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
+      setError("Network error. Please contact Sueep directly.");
     }
+    setSubmitted(true);
   }
 
   if (submitted) {
@@ -228,9 +288,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold text-green-900">Request submitted!</p>
+          <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
           <p className="mt-2 max-w-sm text-sm text-green-700">
-            Your turnover request has been sent to Sueep. Your PM has been notified.
+            Your agreement has been signed and your request sent to Sueep. We&apos;ll be in touch shortly.
           </p>
         </div>
         <button
@@ -373,6 +433,25 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           </>
         )}
 
+        {/* Step 4 — Sign Contract */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-medium text-blue-900">Almost done — please sign the service agreement below.</p>
+              <p className="mt-1 text-xs text-blue-700">
+                Sueep will countersign and send you a copy once your request is confirmed.
+              </p>
+            </div>
+            <DocusealForm
+              src={signingEmbedSrc}
+              email={form.pmEmail}
+              withTitle={false}
+              onComplete={() => { void handleSigningComplete(); }}
+              className="w-full"
+            />
+          </div>
+        )}
+
         {/* Step 3 — Your Info */}
         {step === 3 && (
           <>
@@ -427,33 +506,46 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      <div className="mt-6 flex gap-3">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Back
-        </button>
-        {step < 3 ? (
+      {step < 4 && (
+        <div className="mt-6 flex gap-3">
           <button
             type="button"
-            onClick={() => { void handleNext(); }}
-            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            onClick={handleBack}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Next
+            Back
           </button>
-        ) : (
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={() => { void handleNext(); }}
+              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={loading || signingLoading}
+              onClick={() => { void handleSubmit(); }}
+              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {loading ? "Submitting…" : signingLoading ? "Loading contract…" : "Review & Sign"}
+            </button>
+          )}
+        </div>
+      )}
+      {step === 4 && (
+        <div className="mt-4">
           <button
             type="button"
-            disabled={loading}
-            onClick={() => { void handleSubmit(); }}
-            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            onClick={handleBack}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            {loading ? "Submitting…" : "Submit request"}
+            Back
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

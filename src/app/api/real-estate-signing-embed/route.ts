@@ -13,6 +13,8 @@ type Body = {
   carpetCleaning?: boolean;
   priceCents?: number;
   cleanDate?: string;
+  depositNA?: boolean;
+  isPropertyManager?: boolean;
 };
 
 // Number fields in DocuSeal require plain decimal strings — no currency symbols or commas
@@ -83,8 +85,9 @@ export async function POST(req: Request) {
   const prefillFields = [
     { name: "client_name", default_value: body.agentName?.trim() ?? "" },
     { name: "project_address", default_value: body.address?.trim() ?? "" },
-    // Client type — pre-select "Real Estate Agent"
-    { name: "real_estate_agent", default_value: "true" },
+    // Client type checkboxes
+    { name: "real_estate_agent", default_value: body.isPropertyManager ? "false" : "true" },
+    { name: "property_manager", default_value: body.isPropertyManager ? "true" : "false" },
     // Service type checkboxes
     { name: "turnover_cleaning", default_value: checkboxValue(body.fullClean) },
     { name: "paint_touch_up", default_value: checkboxValue(body.touchUpPaint) },
@@ -92,11 +95,18 @@ export async function POST(req: Request) {
     { name: "other_service", default_value: checkboxValue(body.carpetCleaning) },
     ...(body.carpetCleaning ? [{ name: "other_service_text", default_value: "Carpet cleaning" }] : []),
     // Payment — $ sign is already printed in the contract, so send only the number
-    ...(totalCents > 0 ? [
-      { name: "project_cost", default_value: formatAmount(totalCents) },
-      { name: "project_deposit", default_value: formatAmount(depositCents) },
-      { name: "project_final", default_value: formatAmount(finalCents) },
-    ] : []),
+    ...(totalCents > 0 ? [{ name: "project_cost", default_value: formatAmount(totalCents) }] : []),
+    ...(body.depositNA
+      ? [
+          { name: "project_deposit", default_value: "N/A" },
+          ...(totalCents > 0 ? [{ name: "project_final", default_value: formatAmount(totalCents) }] : []),
+        ]
+      : totalCents > 0
+        ? [
+            { name: "project_deposit", default_value: formatAmount(depositCents) },
+            { name: "project_final", default_value: formatAmount(finalCents) },
+          ]
+        : []),
     // Sales tax based on property state
     ...(body.address ? (() => {
       const tax = getSalesTax(body.address);

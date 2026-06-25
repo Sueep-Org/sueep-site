@@ -15,9 +15,8 @@ const PROPERTY_TYPES = ["House", "Condo", "Apartment", "Townhouse", "Multi-famil
 const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
 const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
 
-const TOTAL_STEPS = 5;
-
-const STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract", "Pay Deposit"] as const;
+const ALL_STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract", "Pay Deposit"] as const;
+const NO_DEPOSIT_STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract"] as const;
 
 interface FormState {
   // Step 1 — property
@@ -60,10 +59,11 @@ const initial: FormState = {
   comments: "",
 };
 
-function StepIndicator({ current }: { current: number }) {
+function StepIndicator({ current, stepLabels }: { current: number; stepLabels: readonly string[] }) {
+  const total = stepLabels.length;
   return (
     <div className="flex items-center gap-1.5 border-b border-gray-100 pb-4">
-      {STEP_LABELS.map((stepLabel, i) => {
+      {stepLabels.map((stepLabel, i) => {
         const s = i + 1;
         const done = s < current;
         const active = s === current;
@@ -77,7 +77,7 @@ function StepIndicator({ current }: { current: number }) {
               {done ? "✓" : s}
             </div>
             {active && <span className="text-xs font-medium text-[#E73C6E]">{stepLabel}</span>}
-            {s < TOTAL_STEPS && (
+            {s < total && (
               <div className={`h-px w-4 shrink-0 ${done ? "bg-[#E73C6E]" : "bg-gray-200"}`} />
             )}
           </div>
@@ -130,9 +130,11 @@ function computePricing(form: FormState) {
 
 interface Props {
   onBack: () => void;
+  hidePricing?: boolean;
+  skipDeposit?: boolean;
 }
 
-export function RealEstateForm({ onBack }: Props) {
+export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = false }: Props) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState("");
@@ -150,6 +152,8 @@ export function RealEstateForm({ onBack }: Props) {
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const [checkoutDepositCents, setCheckoutDepositCents] = useState(0);
   const [checkoutPhase, setCheckoutPhase] = useState<"loading" | "ready" | "test" | "error">("loading");
+
+  const stepLabels = skipDeposit ? NO_DEPOSIT_STEP_LABELS : ALL_STEP_LABELS;
 
   function patch(updates: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...updates }));
@@ -191,6 +195,7 @@ export function RealEstateForm({ onBack }: Props) {
             carpetCleaning: form.carpetCleaning,
             priceCents: pricing.priceCents,
             cleanDate: form.cleanDate || undefined,
+            depositNA: skipDeposit || undefined,
           }),
         });
         const data = await res.json().catch(() => ({})) as { embedSrc?: string; submissionId?: number; error?: string };
@@ -289,6 +294,13 @@ export function RealEstateForm({ onBack }: Props) {
         setProjectId(data.projectId ?? data.id ?? null);
       }
 
+      // Skip deposit entirely for no-deposit flows
+      if (skipDeposit) {
+        setSubmitted(true);
+        setLoading(false);
+        return;
+      }
+
       // Set up Stripe checkout for the deposit
       setCheckoutPhase("loading");
       const checkoutRes = await fetch("/api/real-estate-checkout", {
@@ -358,7 +370,7 @@ export function RealEstateForm({ onBack }: Props) {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-      <StepIndicator current={step} />
+      <StepIndicator current={step} stepLabels={stepLabels} />
 
       <div className="mt-6 space-y-5">
         {/* Step 1 — Property Info */}
@@ -455,7 +467,7 @@ export function RealEstateForm({ onBack }: Props) {
           }).filter(Boolean) as { label: string; price: string }[];
 
           return (
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+            <div className={`flex flex-col gap-5 ${!hidePricing ? "lg:flex-row lg:items-start" : ""}`}>
               {/* Left — inputs */}
               <div className="flex-1 space-y-5">
                 <div>
@@ -489,8 +501,8 @@ export function RealEstateForm({ onBack }: Props) {
                 </div>
               </div>
 
-              {/* Right — order summary */}
-              <div className="w-full lg:w-64 lg:shrink-0">
+              {/* Right — order summary (hidden when hidePricing) */}
+              {!hidePricing && <div className="w-full lg:w-64 lg:shrink-0">
                 <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="border-b border-gray-100 px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">Order summary</p>
@@ -516,7 +528,7 @@ export function RealEstateForm({ onBack }: Props) {
                     </span>
                   </div>
                 </div>
-              </div>
+              </div>}
             </div>
           );
         })()}
