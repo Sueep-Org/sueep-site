@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import {
   classifyHubSpotDealStage,
   erpStatusFromPhase,
-  parseHubSpotPipelineStageMap,
   shouldSyncDealToErp,
   type DealLifecyclePhase,
 } from "@/lib/hubspot/pipelineStages";
@@ -67,7 +66,6 @@ async function isDealClosedLost(dealId: string): Promise<boolean> {
 export async function syncHubSpotDealsToProjects(): Promise<{
   synced: SyncDealResult[];
   errors: string[];
-  reconciledJanitorial?: Array<{ hubspotDealId: string; projectId: string }>;
   removedLostDeals?: string[];
 }> {
   const startDateProperty = process.env.HUBSPOT_PROJECT_START_DATE_PROPERTY?.trim() || null;
@@ -77,7 +75,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     searchDealsInConfiguredStages(200, extraProperties),
     fetchAllOwners(),
   ]);
-  const cfg = parseHubSpotPipelineStageMap();
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
   const errors: string[] = [];
@@ -190,29 +187,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
   }
 
-  const reconciledJanitorial: Array<{ hubspotDealId: string; projectId: string }> = [];
-  const janitorialId = cfg?.janitorial.pipelineId;
-  const janitorialNoCompleted = cfg && !cfg.janitorial.stages.workCompleted?.trim();
-  if (janitorialId && janitorialNoCompleted) {
-    const orphans = await prisma.project.findMany({
-      where: {
-        hubspotPipelineId: janitorialId,
-        hubspotDealId: { not: null },
-        status: "ACTIVE",
-      },
-      select: { id: true, hubspotDealId: true },
-    });
-    for (const row of orphans) {
-      const hid = row.hubspotDealId;
-      if (!hid || seenDealIds.has(hid)) continue;
-      await prisma.project.update({
-        where: { id: row.id },
-        data: { status: "COMPLETE" },
-      });
-      reconciledJanitorial.push({ hubspotDealId: hid, projectId: row.id });
-    }
-  }
-
   // Remove projects whose HubSpot deal is now closed-lost (no longer in any active stage)
   const removedLostDeals: string[] = [];
   const orphanedProjects = await prisma.project.findMany({
@@ -224,7 +198,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   });
   for (const project of orphanedProjects) {
     const hid = project.hubspotDealId!;
-    if (reconciledJanitorial.some((r) => r.projectId === project.id)) continue;
     const lost = await isDealClosedLost(hid);
     if (lost) {
       try {
@@ -239,7 +212,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   return {
     synced,
     errors,
-    ...(reconciledJanitorial.length > 0 ? { reconciledJanitorial } : {}),
     ...(removedLostDeals.length > 0 ? { removedLostDeals } : {}),
     ...(contactScopesError ? { contactScopesError } : {}),
   };

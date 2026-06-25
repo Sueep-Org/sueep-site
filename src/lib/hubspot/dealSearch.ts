@@ -11,7 +11,7 @@ function collectAllDealStageIds(cfg: HubSpotPipelineStageMap): string[] {
     }
   };
   add(cfg.postConstruction.stages);
-  add(cfg.janitorial.stages);
+  // Janitorial pipeline excluded — units are now managed via the external PM form, not HubSpot sync
   if (cfg.realEstate) add(cfg.realEstate.stages);
   return [...ids];
 }
