@@ -67,8 +67,12 @@ export default async function RealEstateThankyouPage({ searchParams }: Props) {
           <div className="flex flex-col items-center justify-center gap-3">
             <Image src="/sueeplogo.png" alt="Sueep logo" width={64} height={64} className="h-12 w-auto" />
           </div>
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-col items-center justify-between gap-2 sm:flex-row">
             <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>
+            <div className="flex gap-4">
+              <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
+              <a href="mailto:contact@sueep.com" className="hover:text-white">Contact</a>
+            </div>
           </div>
         </div>
       </footer>
