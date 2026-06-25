@@ -100,106 +100,69 @@ async function refreshDrawer(){
     }
 
     for (const project of projects) {
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;padding:.4rem .5rem;background:#f3f4f6;border-radius:6px;margin-bottom:.3rem;margin-top:.6rem;';
+      const projRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
+      if (!projRes.ok) continue;
+      const projData = await projRes.json();
+      const files = projData.files || [];
+      const blueprint = files.find(f => f.file_type === 'blueprint') || files[0] || null;
 
-      const headerLabel = document.createElement('span');
-      headerLabel.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      headerLabel.textContent = `📁 ${project.name}`;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;';
 
-      const projDelBtn = document.createElement('button');
-      projDelBtn.textContent = '🗑';
-      projDelBtn.title = 'Delete project';
-      projDelBtn.style.cssText = 'flex-shrink:0;padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;cursor:pointer;font-size:12px;color:#ef4444;';
-      projDelBtn.onclick = async (e) => {
+      const nameBtn = document.createElement('button');
+      nameBtn.textContent = `📄 ${project.name}`;
+      nameBtn.title = project.name;
+      nameBtn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:6px;background:white;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:' + (blueprint ? 'pointer' : 'default') + ';';
+
+      if (blueprint) {
+        nameBtn.onclick = async () => {
+          try {
+            const resp = await fetch(`${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`, { redirect: 'follow' });
+            if (!resp.ok) throw new Error('Download failed');
+            const blob = await resp.blob();
+            const fileObj = new File([blob], blueprint.filename);
+            await window.__handleFile?.(fileObj);
+            activeProjectId = project.id;
+            window.__restoreAnnotations?.(project.id);
+            window.__showProjectLoadedCard?.(projData, blueprint.filename);
+            closeSidebar();
+          } catch(e) {
+            toast(e.message, 'error');
+          }
+        };
+      }
+
+      row.appendChild(nameBtn);
+
+      if (blueprint) {
+        const dlBtn = document.createElement('a');
+        dlBtn.textContent = '⬇';
+        dlBtn.href = `${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`;
+        dlBtn.target = '_blank';
+        dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#3b82f6;text-decoration:none;';
+        row.appendChild(dlBtn);
+      }
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Delete project';
+      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
+      delBtn.onclick = async (e) => {
         e.stopPropagation();
         if (!confirm(`Delete project "${project.name}" and all its files?`)) return;
         try {
           const r = await fetch(`${API_BASE}/api/projects/${project.id}`, { method: 'DELETE' });
           if (!r.ok) throw new Error('Delete failed');
-          toast(`Deleted project "${project.name}"`, 'info');
+          toast(`Deleted "${project.name}"`, 'info');
         } catch(e) {
           toast(e.message, 'error');
           return;
         }
         try { await refreshDrawer(); } catch(_) {}
       };
+      row.appendChild(delBtn);
 
-      header.appendChild(headerLabel);
-      header.appendChild(projDelBtn);
-      savedSec.appendChild(header);
-
-      const projRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
-      if (!projRes.ok) continue;
-      const projData = await projRes.json();
-      const files = projData.files || [];
-
-      if (files.length === 0) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'font-size:12px;color:#aaa;padding:.3rem .5rem;';
-        empty.textContent = 'No files';
-        savedSec.appendChild(empty);
-        continue;
-      }
-
-      for (const f of files) {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;padding-left:.5rem;';
-
-        const isBlueprint = f.file_type === 'blueprint';
-        const isQuotation = f.file_type === 'quotation';
-
-        const btn = document.createElement('button');
-        btn.textContent = `${isBlueprint ? '📄' : '📊'} ${f.filename}`;
-        btn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:6px;background:white;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;' + (isBlueprint ? 'cursor:pointer;' : 'cursor:default;color:#6b7280;');
-
-        if (isBlueprint) {
-          btn.onclick = async () => {
-            try {
-              const resp = await fetch(`${API_BASE}/api/projects/${project.id}/files/${f.id}/download`, { redirect: 'follow' });
-              if (!resp.ok) throw new Error('Download failed');
-              const blob = await resp.blob();
-              const fileObj = new File([blob], f.filename);
-              await window.__handleFile?.(fileObj);
-              activeProjectId = project.id;
-              window.__showProjectLoadedCard?.(projData, f.filename);
-              closeSidebar();
-            } catch(e) {
-              toast(e.message, 'error');
-            }
-          };
-        }
-
-        const delBtn = document.createElement('button');
-        delBtn.textContent = '🗑';
-        delBtn.title = 'Delete';
-        delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
-        delBtn.onclick = async (e) => {
-          e.stopPropagation();
-          if (!confirm(`Delete "${f.filename}"?`)) return;
-          try {
-            const r = await fetch(`${API_BASE}/api/projects/${project.id}/files/${f.id}`, { method: 'DELETE' });
-            if (!r.ok) throw new Error('Delete failed');
-            toast(`Deleted ${f.filename}`, 'info');
-          } catch(e) {
-            toast(e.message, 'error');
-            return;
-          }
-          try { await refreshDrawer(); } catch(_) {}
-        };
-
-        row.appendChild(btn);
-        if (isBlueprint) {
-          const dlBtn = document.createElement('a');
-          dlBtn.textContent = '⬇';
-          dlBtn.href = `${API_BASE}/api/projects/${project.id}/files/${f.id}/download`;
-          dlBtn.target = '_blank';
-          dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#3b82f6;text-decoration:none;';
-          row.appendChild(dlBtn);
-        }
-        row.appendChild(delBtn);
-        savedSec.appendChild(row);
-      }
+      savedSec.appendChild(row);
     }
   } catch(e) {
     console.error(e);
@@ -383,6 +346,17 @@ async function initApp(){
   overlay.setActive(false);
 
   overlay.setTool('area');
+
+  // Per-project annotation persistence via localStorage
+  window.__saveAnnotations = function() {
+    if (!activeProjectId) return;
+    try { localStorage.setItem(`annotations_${activeProjectId}`, highlightsStore.serialize()); } catch(_) {}
+  };
+  window.__restoreAnnotations = function(projectId) {
+    const json = localStorage.getItem(`annotations_${projectId}`);
+    if (json) highlightsStore.deserialize(json);
+    overlay.redraw();
+  };
 
   if (downloadPdfBtn) {
     downloadPdfBtn.disabled = true;
@@ -1186,6 +1160,10 @@ async function initApp(){
 
   async function handleFile(file){
 
+    // Save current project's annotations before switching, then clear
+    window.__saveAnnotations?.();
+    highlightsStore.clearAll();
+
     try{
 
       const ab = await file.arrayBuffer();
@@ -1284,9 +1262,7 @@ async function initApp(){
   function showEditProjectForm() {
     if (!_loadedProjectData) return;
     const nameEl = document.getElementById('editProjectNameInput');
-    const addrEl = document.getElementById('editProjectAddressInput');
     if (nameEl) nameEl.value = _loadedProjectData.name || '';
-    if (addrEl) addrEl.value = _loadedProjectData.address || '';
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'none';
     document.getElementById('editProjectForm').style.display = 'block';
@@ -1450,7 +1426,6 @@ async function initApp(){
     saveProjectBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
       const nameVal = document.getElementById('editProjectNameInput')?.value?.trim();
-      const addrVal = document.getElementById('editProjectAddressInput')?.value?.trim() || '';
       if (!nameVal) { toast('Project name cannot be empty', 'error'); return; }
 
       saveProjectBtn.textContent = 'Saving…';
@@ -1459,7 +1434,7 @@ async function initApp(){
         const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: nameVal, address: addrVal }),
+          body: JSON.stringify({ name: nameVal }),
         });
         if (r.status === 409) { toast('A project with that name already exists', 'error'); return; }
         if (!r.ok) throw new Error('Save failed');
@@ -1799,6 +1774,7 @@ async function initApp(){
     }
 
     setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
+    setVal('analysisAddressInput', _loadedProjectData.address);
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
@@ -1842,10 +1818,13 @@ async function initApp(){
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
+      const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
+      const prevAddr = _loadedProjectData.address || '';
       const body = {
         labor: totLabor > 0 ? totLabor : null,
         labor_breakdown: laborBreakdown,
         quote: totFinalPrice > 0 ? totFinalPrice : null,
+        address: addrVal,
       };
       if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
 
@@ -1860,6 +1839,10 @@ async function initApp(){
         if (!r.ok) throw new Error('Save failed');
         const updated = await r.json();
         _loadedProjectData = { ..._loadedProjectData, ...updated };
+        // refresh drive distance if address changed
+        if (addrVal && addrVal !== prevAddr) {
+          document.getElementById('refreshDistanceBtn')?.click();
+        }
         showAnalysisCard(_loadedProjectData);
         toast('Analysis saved', 'info');
       } catch (e) {
@@ -2167,11 +2150,10 @@ async function initApp(){
         return;
       }
       console.log('[upload] creating project:', projectName);
-      const projectAddress = document.getElementById('projectAddressInput')?.value?.trim() || '';
       const projectRes = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: projectName, address: projectAddress })
+        body: JSON.stringify({ name: projectName })
       });
       if (projectRes.status === 409) {
         toast(`Project "${projectName}" already exists. Please use a different name.`, 'error');

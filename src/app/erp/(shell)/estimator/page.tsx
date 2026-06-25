@@ -95,7 +95,6 @@ export default function EstimatorPage() {
               {/* PDF row + actions */}
               <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
                 <span id="loadedPdfName" className="text-sm text-gray-600 flex-1 truncate"></span>
-                <button id="refreshDistanceBtn" className="mini-btn">↻ Distance</button>
                 <button id="changePdfBtn" className="mini-btn">Change PDF</button>
               </div>
             </div>
@@ -109,19 +108,6 @@ export default function EstimatorPage() {
                   type="text"
                   id="projectNameInput"
                   placeholder="Enter project name"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-
-              {/* PROJECT ADDRESS */}
-              <div className="mb-4" id="projectAddressInputWrapper">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Address <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  id="projectAddressInput"
-                  placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
@@ -168,16 +154,6 @@ export default function EstimatorPage() {
                 <input
                   type="text"
                   id="editProjectNameInput"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Address <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  id="editProjectAddressInput"
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
@@ -450,7 +426,10 @@ export default function EstimatorPage() {
           <div id="analysisCard" className="bg-white rounded-lg shadow-md p-6 mt-6" style={{ display: "none" }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-800">Analysis</h3>
-              <button id="editAnalysisBtn" className="mini-btn">Edit</button>
+              <div className="flex gap-2">
+                <button id="refreshDistanceBtn" className="mini-btn">↻ Distance</button>
+                <button id="editAnalysisBtn" className="mini-btn">Edit</button>
+              </div>
             </div>
 
             {/* READ-ONLY VIEW */}
@@ -496,6 +475,12 @@ export default function EstimatorPage() {
 
             {/* EDIT FORM */}
             <div id="analysisEditForm" style={{ display: "none" }}>
+              {/* Address */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">Project Address</label>
+                <input type="text" id="analysisAddressInput" placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+              </div>
               {/* Global rates */}
               <div className="grid grid-cols-3 gap-3 mb-5 pb-4 border-b border-gray-100">
                 <div>

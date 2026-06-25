@@ -114,6 +114,47 @@ export class HighlightsStore {
   toggleProposedSelection(page, id) { this._ensure(page); const arr=this._pageToProposed.get(page); const idx=arr.findIndex(p=>p.__id===id); if(idx>=0){ const p=arr[idx]; arr.splice(idx,1); const acc=this._pageToStrokes.get(page); acc.push({ points:p.points, areaPx:p.areaPx, areaUnits:p.areaUnits, unit:p.unit }); this._pageToRedo.set(page, []); } }
   acceptAllProposed(page) { this._ensure(page); const arr=this._pageToProposed.get(page); const acc=this._pageToStrokes.get(page); arr.forEach(p=>{ acc.push({ points:p.points, areaPx:p.areaPx, areaUnits:p.areaUnits, unit:p.unit }); }); this._pageToProposed.set(page, []); this._pageToRedo.set(page, []); }
 
+  // Serialization (for per-project localStorage persistence)
+  serialize() {
+    const strokes = {};
+    for (const [page, arr] of this._pageToStrokes.entries()) strokes[page] = arr;
+    const measurements = {};
+    for (const [page, arr] of this._pageToMeasurements.entries()) measurements[page] = arr;
+    const scales = {};
+    for (const [page, s] of this._pageToScale.entries()) if (s != null) scales[page] = s;
+    return JSON.stringify({ v: this._version, strokes, measurements, scales });
+  }
+
+  deserialize(json) {
+    try {
+      const data = typeof json === 'string' ? JSON.parse(json) : json;
+      if (!data || typeof data !== 'object') return false;
+      this._pageToStrokes = new Map();
+      this._pageToRedo = new Map();
+      this._pageToProposed = new Map();
+      this._pageToLines = new Map();
+      this._pageToScale = new Map();
+      this._pageToMeasurements = new Map();
+      for (const k of Object.keys(data.strokes || {})) {
+        const p = Number(k);
+        this._pageToStrokes.set(p, data.strokes[k] || []);
+        this._pageToRedo.set(p, []);
+        this._pageToProposed.set(p, []);
+        this._pageToLines.set(p, []);
+      }
+      for (const k of Object.keys(data.scales || {})) {
+        this._pageToScale.set(Number(k), data.scales[k]);
+      }
+      for (const k of Object.keys(data.measurements || {})) {
+        this._pageToMeasurements.set(Number(k), data.measurements[k] || []);
+      }
+      return true;
+    } catch(e) {
+      console.error('deserialize failed', e);
+      return false;
+    }
+  }
+
   // Vector line API
   setLines(page, lines){ this._ensure(page); // expected: [{ id, x1,y1,x2,y2 } with normalized coords 0..1]
     this._pageToLines.set(page, Array.isArray(lines)?lines.slice():[]);
