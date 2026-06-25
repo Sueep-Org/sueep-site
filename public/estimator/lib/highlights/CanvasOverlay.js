@@ -298,7 +298,7 @@ export class CanvasOverlay {
             const perimeterScaled = applyScaleLength(perimeterPx, this._pxPerPt);
 
             toast(
-              `Area: ${areaScaled.toFixed(2)} sq units | Perimeter: ${perimeterScaled.toFixed(2)} units`,
+              `Area: ${areaScaled.toFixed(2)} sq | Perimeter: ${perimeterScaled.toFixed(2)} units`,
               'info'
             );
 
@@ -948,7 +948,7 @@ function applyScale(areaPx, pxPerPt, scaleFactor = null) {
   const pageAreaPoints = areaPx / (pxPerPtValue * pxPerPtValue);
   if (scaleFactor && Number(scaleFactor) > 0) {
     const scaleValue = Number(scaleFactor);
-    return pageAreaPoints * scaleValue * scaleValue;
+    return pageAreaPoints * scaleValue * scaleValue / 144;
   }
   return pageAreaPoints / (72 * 72);
 }
