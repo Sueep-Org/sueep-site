@@ -91,7 +91,6 @@ export default function ContactForm() {
             id="sms-consent"
             name="sms_consent"
             type="checkbox"
-            required
             className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[#E73C6E] focus:ring-[#E73C6E]/50 cursor-pointer"
           />
           <label htmlFor="sms-consent" className="text-xs text-gray-500 leading-relaxed">
