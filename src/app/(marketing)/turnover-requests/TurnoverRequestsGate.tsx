@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { RealEstateForm } from "./RealEstateForm";
 import { PropertyManagerForm, type BuildingOption } from "./PropertyManagerForm";
+import { ProjectManagerForm } from "./ProjectManagerForm";
 
 type Role = "property-manager" | "real-estate-agent" | "project-manager" | null;
 
@@ -94,13 +95,7 @@ export function TurnoverRequestsGate({ buildings }: Props) {
   }
 
   if (role === "project-manager") {
-    return (
-      <WipScreen
-        onBack={() => setRole(null)}
-        title="Project Manager requests — coming soon"
-        description="We're building a dedicated flow for project managers to request change orders and manage approvals. Check back soon or reach out to your Sueep contact directly."
-      />
-    );
+    return <ProjectManagerForm onBack={() => setRole(null)} />;
   }
 
   return (

@@ -322,6 +322,79 @@ export function buildRealEstateConfirmationEmail(params: {
   `;
 }
 
+export function buildProjectRequestEmail(params: {
+  type: "change-order" | "sov-schedule";
+  projectTitle: string;
+  requesterName: string;
+  requesterEmail: string;
+  // CO fields
+  coTitle?: string;
+  coDescription?: string;
+  // SOV fields
+  sovDescription?: string;
+  desiredDate?: string;
+  comments?: string;
+  projectUrl: string | null;
+}) {
+  const typeLabel = params.type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
+
+  const details =
+    params.type === "change-order"
+      ? `
+        <p><strong>Change Order Title:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
+        ${params.coDescription ? `<p><strong>Description / Scope:</strong> ${escapeHtml(params.coDescription)}</p>` : ""}
+      `
+      : `
+        <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
+        ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
+        ${params.comments ? `<p><strong>Comments:</strong> ${escapeHtml(params.comments)}</p>` : ""}
+      `;
+
+  const ctaLabel = params.type === "change-order" ? "View change order in ERP" : "View project in ERP";
+  const cta = params.projectUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${ctaLabel}</a></p>`
+    : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">${typeLabel}</h2>
+      <p>A request has been submitted by <strong>${escapeHtml(params.requesterName)}</strong> (${escapeHtml(params.requesterEmail)}) for the following project.</p>
+      <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
+      ${details}
+      ${cta}
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">— The Sueep Team</p>
+    </div>
+  `;
+}
+
+export function buildProjectRequestConfirmationEmail(params: {
+  type: "change-order" | "sov-schedule";
+  projectTitle: string;
+  requesterName: string;
+  coTitle?: string;
+  sovDescription?: string;
+  desiredDate?: string;
+}) {
+  const typeLabel = params.type === "change-order" ? "change order request" : "scheduling request";
+  const detail =
+    params.type === "change-order"
+      ? `<p><strong>Change Order:</strong> ${escapeHtml(params.coTitle ?? "")}</p>`
+      : `
+          <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
+          ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
+        `;
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Request received</h2>
+      <p>Hi ${escapeHtml(params.requesterName)},</p>
+      <p>We've received your ${typeLabel} for <strong>${escapeHtml(params.projectTitle)}</strong>. The project supervisor and Sueep PM have been notified and will be in touch shortly.</p>
+      ${detail}
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">— The Sueep Team</p>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
