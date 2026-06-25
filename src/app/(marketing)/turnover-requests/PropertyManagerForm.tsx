@@ -145,6 +145,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
   const [signingLoading, setSigningLoading] = useState(false);
+  const [signingSubmissionId, setSigningSubmissionId] = useState<number | null>(null);
 
   const selectedBuilding = buildings.find((b) => b.id === form.buildingId) ?? null;
 
@@ -227,12 +228,13 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           isPropertyManager: true,
         }),
       });
-      const signingData = (await signingRes.json().catch(() => ({}))) as { embedSrc?: string; error?: string };
+      const signingData = (await signingRes.json().catch(() => ({}))) as { embedSrc?: string; submissionId?: number; error?: string };
       if (!signingRes.ok || !signingData.embedSrc) {
         setError(signingData.error || "Could not load contract. Please try again.");
         return;
       }
       setSigningEmbedSrc(signingData.embedSrc);
+      setSigningSubmissionId(signingData.submissionId ?? null);
       setStep(4);
     } catch {
       setError("Network error loading contract. Please try again.");
@@ -267,6 +269,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           sueepPmName: "David Rodriguez",
           sueepPmEmail: "david@sueep.com",
           source: "external",
+          docusealSubmissionId: signingSubmissionId ?? undefined,
         }),
       });
       if (!res.ok) {

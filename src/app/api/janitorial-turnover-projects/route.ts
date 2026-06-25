@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
 import { notifyJanitorialTurnoverCreated } from "@/lib/erp/notifyJanitorialTurnover";
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
 
   const cfg = parseHubSpotPipelineStageMap();
   const notifyEmployeeIds = Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [];
+  const docusealSubmissionId = typeof body.docusealSubmissionId === "number" ? body.docusealSubmissionId : null;
+  const pmEmail = typeof body.pmEmail === "string" ? body.pmEmail.trim() : null;
   
   const payload = {
     ...body,
@@ -34,6 +37,28 @@ export async function POST(req: Request) {
         requests: result.turnoverRequests,
         notifyEmployeeIds,
       });
+
+      // Create a signed contract record for each project (one per unit)
+      if (docusealSubmissionId) {
+        const projectIds = result.projects.map((p) => p.id);
+        for (const [i, pid] of projectIds.entries()) {
+          try {
+            await prisma.projectContract.create({
+              data: {
+                projectId: pid,
+                signingStatus: "SIGNED",
+                customerEmail: pmEmail,
+                // Only attach the submission ID to the first project to keep the unique constraint
+                docusealSubmissionId: i === 0 ? docusealSubmissionId : null,
+                signedAt: new Date(),
+              },
+            });
+          } catch (err) {
+            console.error("Failed to create ProjectContract (non-fatal):", err);
+          }
+        }
+      }
+
       const projectIds = result.projects.map((p) => p.id);
       return NextResponse.json({
         projectId: projectIds[0] ?? null,

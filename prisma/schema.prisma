@@ -73,6 +73,7 @@ model Project {
   workOrderRecord ProjectWorkOrderRecord?
   qualityChecks QualityCheck[]
   dailySafetyChecks DailySafetyCheck[]
+  contracts ProjectContract[]
   safetyIncidents SafetyIncident[]
   sov ProjectSOV?
 
@@ -463,6 +464,20 @@ model ProjectChangeOrderLaborer {
   completed     Boolean @default(false)
 
   @@index([changeOrderId])
+}
+
+model ProjectContract {
+  id                   String    @id @default(cuid())
+  createdAt            DateTime  @default(now())
+  projectId            String
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  signingStatus        String    @default("SIGNED")
+  customerEmail        String?
+  docusealSubmissionId Int?      @unique
+  signedAt             DateTime?
+  signedDocumentUrl    String?
+
+  @@index([projectId])
 }
 
 model ChangeOrderContract {

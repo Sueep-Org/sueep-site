@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
 import { sendEmail, buildRealEstateConfirmationEmail } from "@/lib/email";
 
@@ -24,6 +25,25 @@ export async function POST(req: Request) {
     }
 
     const projectId = "project" in result ? result.project?.id ?? null : result.projects?.[0]?.id ?? null;
+
+    // Store the DocuSeal submission as a signed contract record
+    const submissionId = typeof body.docusealSubmissionId === "number" ? body.docusealSubmissionId : null;
+    const agentEmailStr = typeof body.agentEmail === "string" ? body.agentEmail.trim() : null;
+    if (projectId && submissionId) {
+      try {
+        await prisma.projectContract.create({
+          data: {
+            projectId,
+            signingStatus: "SIGNED",
+            customerEmail: agentEmailStr,
+            docusealSubmissionId: submissionId,
+            signedAt: new Date(),
+          },
+        });
+      } catch (contractErr) {
+        console.error("Failed to create ProjectContract (non-fatal):", contractErr);
+      }
+    }
 
     // Send confirmation email to the agent (non-fatal)
     const agentEmail = typeof body.agentEmail === "string" ? body.agentEmail.trim() : "";

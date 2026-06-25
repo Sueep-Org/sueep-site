@@ -77,11 +77,12 @@ export async function POST(req: Request) {
   const signedAt = completedAt ? new Date(completedAt) : new Date();
   const updateData = { signingStatus: "SIGNED", signedAt, signedDocumentUrl };
 
-  const [coContract, empContract, contractorContract, candidateContract] = await Promise.all([
+  const [coContract, empContract, contractorContract, candidateContract, projectContract] = await Promise.all([
     prisma.changeOrderContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
     prisma.employeeContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
     prisma.contractorContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
     prisma.candidateContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
+    prisma.projectContract.findFirst({ where: { docusealSubmissionId: submission.id }, select: { id: true, signingStatus: true } }),
   ]);
 
   if (coContract && coContract.signingStatus !== "SIGNED") {
@@ -92,6 +93,8 @@ export async function POST(req: Request) {
     await prisma.contractorContract.update({ where: { id: contractorContract.id }, data: updateData });
   } else if (candidateContract && candidateContract.signingStatus !== "SIGNED") {
     await prisma.candidateContract.update({ where: { id: candidateContract.id }, data: updateData });
+  } else if (projectContract && projectContract.signingStatus !== "SIGNED") {
+    await prisma.projectContract.update({ where: { id: projectContract.id }, data: updateData });
   }
 
   return NextResponse.json({ ok: true });

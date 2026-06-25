@@ -26,6 +26,7 @@ import { RealEstateProjectDetails } from "./RealEstateProjectDetails";
 import { RealEstatePricingPackageEditor } from "./RealEstatePricingPackageEditor";
 import { NewQualityCheckForm } from "@/app/erp/(shell)/quality-checks/NewQualityCheckForm";
 import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChecksTable";
+import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSigningSection";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
         building: { select: { id: true, name: true, pricingPackage: true } },
+        contracts: { orderBy: { createdAt: "asc" } },
         turnoverRequest: {
           select: {
             id: true,
@@ -549,6 +551,27 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
+    ...((project.segment === "REAL_ESTATE" || project.segment === "JANITORIAL_TURNOVER_REQUESTS")
+      ? [
+          {
+            label: "Signing",
+            content: (
+              <ProjectSigningSection
+                contracts={(project.contracts ?? []).map((c): ProjectContractItem => ({
+                  id: c.id,
+                  signingStatus: c.signingStatus,
+                  customerEmail: c.customerEmail,
+                  docusealSubmissionId: c.docusealSubmissionId,
+                  signedAt: c.signedAt?.toISOString() ?? null,
+                  signedDocumentUrl: c.signedDocumentUrl,
+                }))}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(project.segment !== "JANITORIAL_TURNOVER_REQUESTS"
+      ? [
     {
       label: "Quality Checks",
       content: (() => {
@@ -572,6 +595,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         );
       })(),
     },
+        ]
+      : []),
   ];
 
   const tabs = isEmployee
