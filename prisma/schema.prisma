@@ -411,6 +411,8 @@ model ProjectChangeOrder {
   requestedBy        String?
   supervisor         String?
   status             String   @default("DRAFT")
+  requestedDate      DateTime? @default(now())
+  startDate          DateTime?
   billingStatus      String?
   percentInvoiced    Int      @default(0)
   completedAt        DateTime?

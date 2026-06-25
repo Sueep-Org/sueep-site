@@ -29,6 +29,8 @@ const STATUS_COLORS: Record<Status, string> = {
 export type ChangeOrderDetailData = {
   id: string;
   createdAt: string;
+  requestedDate: string | null;
+  startDate: string | null;
   completedAt: string | null;
   title: string;
   description: string | null;
@@ -258,6 +260,12 @@ export function ChangeOrderDetailEditor({
 
   const [title, setTitle] = useState(data.title);
   const [status, setStatus] = useState<Status>(data.status);
+  const [requestedDate, setRequestedDate] = useState(
+    data.requestedDate ? data.requestedDate.slice(0, 10) : "",
+  );
+  const [startDate, setStartDate] = useState(
+    data.startDate ? data.startDate.slice(0, 10) : "",
+  );
   const [completedAt, setCompletedAt] = useState(
     data.completedAt ? data.completedAt.slice(0, 10) : "",
   );
@@ -314,6 +322,8 @@ export function ChangeOrderDetailEditor({
         body: JSON.stringify({
           title: title.trim(),
           status,
+          requestedDate: requestedDate || null,
+          startDate: startDate || null,
           completedAt: completedAt || null,
           requestedBy: requestedBy.trim() || null,
           supervisor: supervisor.trim() || null,
@@ -427,6 +437,29 @@ export function ChangeOrderDetailEditor({
                   <select id="co-status" className={input} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-requested-date">Requested date</label>
+                  <input
+                    id="co-requested-date"
+                    type="date"
+                    className={input}
+                    value={requestedDate}
+                    onChange={(e) => setRequestedDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-start-date">
+                    Start date
+                    <span className="ml-1 text-gray-400 font-normal">(auto-set on first labor log)</span>
+                  </label>
+                  <input
+                    id="co-start-date"
+                    type="date"
+                    className={input}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className={label} htmlFor="co-completed-at">

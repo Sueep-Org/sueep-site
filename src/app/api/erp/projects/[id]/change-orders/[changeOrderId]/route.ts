@@ -92,6 +92,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.estSupervisors !== undefined) {
     data.estSupervisors = body.estSupervisors === null || body.estSupervisors === "" ? null : Math.max(0, Math.round(Number(body.estSupervisors)));
   }
+  if (body.requestedDate !== undefined) {
+    if (body.requestedDate === null || body.requestedDate === "") {
+      data.requestedDate = null;
+    } else {
+      const d = new Date(String(body.requestedDate));
+      if (!isNaN(d.getTime())) data.requestedDate = d;
+    }
+  }
+  if (body.startDate !== undefined) {
+    if (body.startDate === null || body.startDate === "") {
+      data.startDate = null;
+    } else {
+      const d = new Date(String(body.startDate));
+      if (!isNaN(d.getTime())) data.startDate = d;
+    }
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;

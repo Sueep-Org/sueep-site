@@ -119,6 +119,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
   const data = {
     id: changeOrder.id,
     createdAt: changeOrder.createdAt.toISOString(),
+    requestedDate: changeOrder.requestedDate?.toISOString() ?? null,
+    startDate: changeOrder.startDate?.toISOString() ?? null,
     completedAt: changeOrder.completedAt?.toISOString() ?? null,
     title: changeOrder.title,
     description: changeOrder.description,

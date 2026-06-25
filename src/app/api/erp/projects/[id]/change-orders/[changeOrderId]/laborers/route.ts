@@ -72,17 +72,33 @@ export async function POST(req: Request, ctx: Ctx) {
   if (hourlyRateCents < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
 
   try {
-    const laborer = await prisma.projectChangeOrderLaborer.create({
-      data: {
-        changeOrderId,
-        employeeId: employeeId || null,
-        name,
-        role: body.role != null ? String(body.role).trim() || null : null,
-        workDate,
-        hours,
-        hourlyRateCents,
-        taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
-      },
+    const laborer = await prisma.$transaction(async (tx) => {
+      const created = await tx.projectChangeOrderLaborer.create({
+        data: {
+          changeOrderId,
+          employeeId: employeeId || null,
+          name,
+          role: body.role != null ? String(body.role).trim() || null : null,
+          workDate,
+          hours,
+          hourlyRateCents,
+          taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
+        },
+      });
+
+      // Auto-set startDate on first labor log entry
+      const co = await tx.projectChangeOrder.findUnique({
+        where: { id: changeOrderId },
+        select: { startDate: true },
+      });
+      if (!co?.startDate) {
+        await tx.projectChangeOrder.update({
+          where: { id: changeOrderId },
+          data: { startDate: workDate },
+        });
+      }
+
+      return created;
     });
     return NextResponse.json(laborer);
   } catch (e) {
