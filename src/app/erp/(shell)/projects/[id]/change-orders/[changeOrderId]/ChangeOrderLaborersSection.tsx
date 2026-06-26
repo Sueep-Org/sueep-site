@@ -44,6 +44,20 @@ export type ChangeOrderLaborerEmployeeOption = {
 
 const OTHER_VALUE = "__other__";
 
+function calcHours(clockIn: string, clockOut: string): number {
+  if (!clockIn || !clockOut) return 0;
+  const [inH, inM] = clockIn.split(":").map(Number);
+  const [outH, outM] = clockOut.split(":").map(Number);
+  const diff = outH * 60 + outM - (inH * 60 + inM);
+  return diff > 0 ? Math.round(diff) / 60 : 0;
+}
+
+function hoursToClockOut(clockIn: string, hours: number): string {
+  const [h, m] = clockIn.split(":").map(Number);
+  const total = h * 60 + m + Math.round(hours * 60);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const editInput =
@@ -172,8 +186,10 @@ export function ChangeOrderLaborersSection({
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
   const [roleStr, setRoleStr] = useState("");
+  const [clockInStr, setClockInStr] = useState("08:00");
+  const [clockOutStr, setClockOutStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState({ workDate: "", name: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
+  const [editFields, setEditFields] = useState({ workDate: "", name: "", role: "", clockIn: "", clockOut: "", hourlyRate: "", taskDescription: "" });
   const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityRating ?? ""]))
   );
@@ -266,11 +282,15 @@ export function ChangeOrderLaborersSection({
       setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
+    const hours = calcHours(clockInStr, clockOutStr);
+    if (hours <= 0) {
+      setError("Clock-out must be after clock-in.");
+      return;
+    }
     setLoading(true);
     const form = e.currentTarget;
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
-    const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const taskDescription = String(fd.get("taskDescription") || "").trim();
     const workerName = employeePick === OTHER_VALUE ? String(fd.get("workerName") || "").trim() : undefined;
@@ -317,6 +337,8 @@ export function ChangeOrderLaborersSection({
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
+      setClockInStr("08:00");
+      setClockOutStr("");
       setMarkCompleteOnAdd(false);
       router.refresh();
     } catch {
@@ -328,17 +350,20 @@ export function ChangeOrderLaborersSection({
 
   function startEdit(l: ChangeOrderLaborerRow) {
     setEditingId(l.id);
+    const defaultIn = "08:00";
     setEditFields({
       workDate: new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       name: l.name,
       role: l.role ?? "",
-      hours: String(l.hours),
+      clockIn: defaultIn,
+      clockOut: hoursToClockOut(defaultIn, l.hours),
       hourlyRate: (l.hourlyRateCents / 100).toFixed(2),
       taskDescription: l.taskDescription ?? "",
     });
   }
 
   async function onSaveEdit(entryId: string) {
+    const hours = calcHours(editFields.clockIn, editFields.clockOut);
     const res = await fetch(`/api/erp/change-order-laborers/${entryId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -346,7 +371,7 @@ export function ChangeOrderLaborersSection({
         workDate: editFields.workDate,
         name: editFields.name,
         role: editFields.role || null,
-        hours: Number(editFields.hours),
+        hours,
         hourlyRate: editFields.hourlyRate,
         taskDescription: editFields.taskDescription || null,
       }),
@@ -451,8 +476,20 @@ export function ChangeOrderLaborersSection({
             <input id="col-role" name="role" className={input} placeholder="PM, Cleaner…" value={roleStr} onChange={(e) => setRoleStr(e.target.value)} />
           </div>
           <div>
-            <label className={label} htmlFor="col-hours">Hours *</label>
-            <input id="col-hours" name="hours" type="number" min={0.25} step={0.25} required className={input} />
+            <label className={label} htmlFor="col-clock-in">Clock in *</label>
+            <input id="col-clock-in" type="time" required className={input} value={clockInStr} onChange={(e) => setClockInStr(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="col-clock-out">Clock out *</label>
+            <input id="col-clock-out" type="time" required className={input} value={clockOutStr} onChange={(e) => setClockOutStr(e.target.value)} />
+          </div>
+          <div>
+            <p className={label}>Hours</p>
+            <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+              {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
+                ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
+                : <span className="text-gray-400">—</span>}
+            </p>
           </div>
           <div>
             <label className={label} htmlFor="col-rate">Hourly rate (USD) *</label>
@@ -586,7 +623,14 @@ export function ChangeOrderLaborersSection({
                         <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                        <div className="flex items-center gap-1">
+                          <input type="time" className={editInput} value={editFields.clockIn} onChange={(e) => setEditFields((f) => ({ ...f, clockIn: e.target.value }))} />
+                          <span className="text-gray-400 text-xs">–</span>
+                          <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
+                          <span className="ml-1 shrink-0 text-xs text-gray-500">
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                          </span>
+                        </div>
                       </td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
@@ -594,7 +638,7 @@ export function ChangeOrderLaborersSection({
                         </td>
                       )}
                       {showFinancials && (
-                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(Number(editFields.hours), Number(editFields.hourlyRate) * 100))}</td>
+                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(calcHours(editFields.clockIn, editFields.clockOut), Number(editFields.hourlyRate) * 100))}</td>
                       )}
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />

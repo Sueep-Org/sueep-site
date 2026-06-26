@@ -65,6 +65,20 @@ function lineCostCents(hours: string, rateCents: number): number {
   return Math.round(h * rateCents);
 }
 
+function calcHours(clockIn: string, clockOut: string): number {
+  if (!clockIn || !clockOut) return 0;
+  const [inH, inM] = clockIn.split(":").map(Number);
+  const [outH, outM] = clockOut.split(":").map(Number);
+  const diff = outH * 60 + outM - (inH * 60 + inM);
+  return diff > 0 ? Math.round(diff) / 60 : 0;
+}
+
+function hoursToClockOut(clockIn: string, hours: number): string {
+  const [h, m] = clockIn.split(":").map(Number);
+  const total = h * 60 + m + Math.round(hours * 60);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 function employeeLabel(e: LaborEmployeeOption): string {
   const name = `${e.firstName} ${e.lastName}`.trim();
   return e.status === "INACTIVE" ? `${name} (inactive)` : name;
@@ -268,8 +282,10 @@ export function ProjectLaborSection({
   const [roleStr, setRoleStr] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterLaborer, setFilterLaborer] = useState("");
+  const [clockInStr, setClockInStr] = useState("08:00");
+  const [clockOutStr, setClockOutStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
   const [sovPick, setSovPick] = useState<string>("");
   const [sovMarkComplete, setSovMarkComplete] = useState(false);
   const [unitCompleted, setUnitCompleted] = useState(false);
@@ -347,11 +363,13 @@ export function ProjectLaborSection({
 
   function startEdit(r: LaborRow) {
     setEditingId(r.id);
+    const defaultIn = "08:00";
     setEditFields({
       workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       workerName: r.workerName,
       role: r.role ?? "",
-      hours: r.hours,
+      clockIn: defaultIn,
+      clockOut: hoursToClockOut(defaultIn, Number(r.hours)),
       hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
       taskDescription: r.taskDescription ?? "",
       sovItemId: r.sovItemId ?? "",
@@ -370,7 +388,7 @@ export function ProjectLaborSection({
         workDate: editFields.workDate,
         workerName: editFields.workerName,
         role: editFields.role || null,
-        hours: Number(editFields.hours),
+        hours: calcHours(editFields.clockIn, editFields.clockOut),
         hourlyRate: editFields.hourlyRate,
         taskDescription: taskDesc,
         sovItemId: sovItemId,
@@ -398,11 +416,15 @@ export function ProjectLaborSection({
       setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
+    const hours = calcHours(clockInStr, clockOutStr);
+    if (hours <= 0) {
+      setError("Clock-out must be after clock-in.");
+      return;
+    }
     setLoading(true);
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
-    const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const sovItemId = sovPick && sovPick !== SOV_OTHER ? sovPick : null;
     const taskDescription = (!sovItemId) ? String(fd.get("taskDescription") || "").trim() : null;
@@ -489,6 +511,8 @@ export function ProjectLaborSection({
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
+      setClockInStr("08:00");
+      setClockOutStr("");
       setSovPick("");
       setSovMarkComplete(false);
       setUnitCompleted(false);
@@ -574,10 +598,20 @@ export function ProjectLaborSection({
             />
           </div>
           <div>
-            <label className={label} htmlFor="l-hours">
-              Hours *
-            </label>
-            <input id="l-hours" name="hours" type="number" min={0.25} step={0.25} required className={input} />
+            <label className={label} htmlFor="l-clock-in">Clock in *</label>
+            <input id="l-clock-in" type="time" required className={input} value={clockInStr} onChange={(e) => setClockInStr(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="l-clock-out">Clock out *</label>
+            <input id="l-clock-out" type="time" required className={input} value={clockOutStr} onChange={(e) => setClockOutStr(e.target.value)} />
+          </div>
+          <div>
+            <p className={label}>Hours</p>
+            <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+              {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
+                ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
+                : <span className="text-gray-400">—</span>}
+            </p>
           </div>
           {showFinancials ? (
             <div>
@@ -756,7 +790,14 @@ export function ProjectLaborSection({
                         <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                        <div className="flex items-center gap-1">
+                          <input type="time" className={editInput} value={editFields.clockIn} onChange={(e) => setEditFields((f) => ({ ...f, clockIn: e.target.value }))} />
+                          <span className="text-gray-400 text-xs">–</span>
+                          <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
+                          <span className="ml-1 shrink-0 text-xs text-gray-500">
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                          </span>
+                        </div>
                       </td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
@@ -764,7 +805,7 @@ export function ProjectLaborSection({
                         </td>
                       )}
                       {showFinancials && (
-                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(editFields.hours, Number(editFields.hourlyRate) * 100))}</td>
+                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(String(calcHours(editFields.clockIn, editFields.clockOut)), Number(editFields.hourlyRate) * 100))}</td>
                       )}
                       <td className="py-1 pr-2">
                         {sovItems.length > 0 ? (

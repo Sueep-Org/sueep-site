@@ -12,6 +12,7 @@ type Body = {
   // CO fields
   coTitle?: string;
   coDescription?: string;
+  coEstimatedStartDate?: string;
   // SOV fields
   sovItemId?: string;
   desiredDate?: string;
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
   // Create a change order record when type is change-order
   let changeOrderId: string | null = null;
   if (type === "change-order") {
+    const estimatedStartDate = body.coEstimatedStartDate
+      ? new Date(`${body.coEstimatedStartDate}T00:00:00Z`)
+      : null;
     const co = await prisma.projectChangeOrder.create({
       data: {
         projectId,
@@ -59,7 +63,7 @@ export async function POST(req: Request) {
         description: body.coDescription?.trim() || null,
         requestedBy: `${requesterName.trim()} <${requesterEmail.trim()}>`,
         status: "SUBMITTED",
-        requestedDate: new Date(),
+        requestedDate: estimatedStartDate ?? new Date(),
       },
       select: { id: true },
     });
@@ -109,6 +113,10 @@ export async function POST(req: Request) {
   const sueepEmail = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
   if (!recipients.includes(sueepEmail)) recipients.push(sueepEmail);
 
+  // Estimating always CC'd
+  const estimatingEmail = "estimating@sueep.com";
+  if (!recipients.includes(estimatingEmail)) recipients.push(estimatingEmail);
+
   const typeLabel = type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
   const html = buildProjectRequestEmail({
     type,
@@ -117,6 +125,7 @@ export async function POST(req: Request) {
     requesterEmail: requesterEmail.trim(),
     coTitle: body.coTitle,
     coDescription: body.coDescription,
+    coEstimatedStartDate: body.coEstimatedStartDate,
     sovDescription,
     desiredDate: body.desiredDate,
     comments: body.comments,
@@ -128,6 +137,7 @@ export async function POST(req: Request) {
     projectTitle: project.jobTitle,
     requesterName: requesterName.trim(),
     coTitle: body.coTitle,
+    coEstimatedStartDate: body.coEstimatedStartDate,
     sovDescription,
     desiredDate: body.desiredDate,
   });

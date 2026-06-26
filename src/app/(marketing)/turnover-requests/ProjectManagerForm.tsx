@@ -64,6 +64,7 @@ export function ProjectManagerForm({ onBack }: Props) {
   // Step 3 — CO fields
   const [coTitle, setCoTitle] = useState("");
   const [coDescription, setCoDescription] = useState("");
+  const [coEstimatedStartDate, setCoEstimatedStartDate] = useState("");
 
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
@@ -155,6 +156,7 @@ export function ProjectManagerForm({ onBack }: Props) {
           requesterEmail: requesterEmail.trim(),
           coTitle: coTitle.trim() || undefined,
           coDescription: coDescription.trim() || undefined,
+          coEstimatedStartDate: coEstimatedStartDate || undefined,
           sovItemId: selectedSovId || undefined,
           desiredDate: desiredDate || undefined,
           comments: comments.trim() || undefined,
@@ -195,7 +197,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setProjects([]);
             setSelectedProjectId("");
             setRequestType(null);
-            setCoTitle(""); setCoDescription("");
+            setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate("");
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
           }}
@@ -280,14 +282,14 @@ export function ProjectManagerForm({ onBack }: Props) {
             <div className="grid gap-3 sm:grid-cols-2">
               {([
                 {
-                  value: "change-order" as const,
-                  title: "Change Order",
-                  description: "Request work outside the original scope. Sueep will follow up with pricing.",
-                },
-                {
                   value: "sov-schedule" as const,
                   title: "Schedule SOV Work",
                   description: "Select a line item from your Schedule of Values and tell us when you'd like it done.",
+                },
+                {
+                  value: "change-order" as const,
+                  title: "Change Order",
+                  description: "Request work outside the original scope. Sueep will follow up with pricing.",
                 },
               ] as const).map((opt) => (
                 <label
@@ -337,6 +339,16 @@ export function ProjectManagerForm({ onBack }: Props) {
                 value={coDescription}
                 onChange={(e) => setCoDescription(e.target.value)}
                 placeholder="Describe what needs to be done and why…"
+              />
+            </div>
+            <div>
+              <label className={label} htmlFor="co-start-date">Estimated start date</label>
+              <input
+                id="co-start-date"
+                type="date"
+                className={input}
+                value={coEstimatedStartDate}
+                onChange={(e) => setCoEstimatedStartDate(e.target.value)}
               />
             </div>
             <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">

@@ -330,6 +330,7 @@ export function buildProjectRequestEmail(params: {
   // CO fields
   coTitle?: string;
   coDescription?: string;
+  coEstimatedStartDate?: string;
   // SOV fields
   sovDescription?: string;
   desiredDate?: string;
@@ -343,6 +344,7 @@ export function buildProjectRequestEmail(params: {
       ? `
         <p><strong>Change Order Title:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
         ${params.coDescription ? `<p><strong>Description / Scope:</strong> ${escapeHtml(params.coDescription)}</p>` : ""}
+        ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}
       `
       : `
         <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
@@ -372,13 +374,15 @@ export function buildProjectRequestConfirmationEmail(params: {
   projectTitle: string;
   requesterName: string;
   coTitle?: string;
+  coEstimatedStartDate?: string;
   sovDescription?: string;
   desiredDate?: string;
 }) {
   const typeLabel = params.type === "change-order" ? "change order request" : "scheduling request";
   const detail =
     params.type === "change-order"
-      ? `<p><strong>Change Order:</strong> ${escapeHtml(params.coTitle ?? "")}</p>`
+      ? `<p><strong>Change Order:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
+         ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}`
       : `
           <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
           ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
