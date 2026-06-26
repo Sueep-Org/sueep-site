@@ -126,7 +126,7 @@ export type ProjectChangeOrderRow = {
   description: string | null;
   requestedBy: string | null;
   supervisor: string | null;
-  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING";
+  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED";
   estimatedCostCents: number | null;
   estimatedDays: number | null;
   reason: string | null;
@@ -142,7 +142,7 @@ export type ProjectChangeOrderRow = {
 };
 
 
-const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"];
+const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"];
 
 
 const input =
@@ -433,6 +433,7 @@ const STATUS_COLORS: Record<ProjectChangeOrderRow["status"], string> = {
   REJECTED: "bg-red-100 text-red-700",
   VOID: "bg-amber-100 text-amber-700",
   BILLING: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
 function ChangeOrderEditor({

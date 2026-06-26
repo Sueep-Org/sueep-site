@@ -254,7 +254,7 @@ export default async function ErpProjectsPage() {
       changeOrders: p.changeOrders.map((co) => ({
         id: co.id,
         title: co.title,
-        status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING",
+        status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED",
         billingStatus: co.billingStatus,
         percentInvoiced: co.percentInvoiced,
         estimatedCostCents: co.estimatedCostCents,

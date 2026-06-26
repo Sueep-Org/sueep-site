@@ -70,7 +70,7 @@ export type ProjectTableRow = {
   changeOrders: {
     id: string;
     title: string;
-    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING";
+    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED";
     billingStatus: string | null;
     percentInvoiced: number;
     estimatedCostCents: number | null;
@@ -93,13 +93,14 @@ export type ProjectTableRow = {
   }[];
 };
 
-export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
+export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED", string> = {
   DRAFT: "bg-gray-200 text-gray-600",
   SUBMITTED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-600",
   VOID: "bg-gray-100 text-gray-500",
   BILLING: "bg-purple-100 text-purple-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
 export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {

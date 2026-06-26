@@ -14,7 +14,7 @@ const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -24,6 +24,7 @@ const STATUS_COLORS: Record<Status, string> = {
   REJECTED: "bg-red-100 text-red-700",
   VOID: "bg-amber-100 text-amber-700",
   BILLING: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
 export type ChangeOrderDetailData = {
@@ -474,19 +475,38 @@ export function ChangeOrderDetailEditor({
                       value={completedAt}
                       onChange={(e) => setCompletedAt(e.target.value)}
                     />
-                    {status !== "BILLING" && (
+                    {status !== "COMPLETED" && status !== "BILLING" && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setStatus("BILLING");
-                          if (!completedAt) setCompletedAt(new Date().toISOString().slice(0, 10));
+                        disabled={saving}
+                        onClick={async () => {
+                          const date = completedAt || new Date().toISOString().slice(0, 10);
+                          setStatus("COMPLETED");
+                          setCompletedAt(date);
+                          setSaving(true);
+                          setError("");
+                          try {
+                            const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${data.id}`, {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ status: "COMPLETED", completedAt: date }),
+                            });
+                            const json = (await res.json()) as { error?: string };
+                            if (!res.ok) { setError(json.error || "Failed to save"); setStatus(data.status); return; }
+                            router.refresh();
+                          } catch {
+                            setError("Network error");
+                            setStatus(data.status);
+                          } finally {
+                            setSaving(false);
+                          }
                         }}
-                        className="shrink-0 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500"
+                        className="shrink-0 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                       >
-                        Mark complete
+                        {saving ? "Saving…" : "Mark complete"}
                       </button>
                     )}
-                    {status === "BILLING" && (
+                    {(status === "COMPLETED" || status === "BILLING") && (
                       <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                         Complete ✓
                       </span>

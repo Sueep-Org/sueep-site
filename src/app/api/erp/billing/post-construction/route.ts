@@ -49,11 +49,15 @@ export async function GET(req: Request) {
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
-  // Fetch completed change orders in the same date range
+  // Fetch completed change orders in the same date range.
+  // Use completedAt when set; fall back to updatedAt for older records where completedAt was never populated.
   const changeOrders = await prisma.projectChangeOrder.findMany({
     where: {
-      status: "BILLING",
-      completedAt: { gte: start, lte: end },
+      status: { in: ["BILLING", "COMPLETED"] },
+      OR: [
+        { completedAt: { gte: start, lte: end } },
+        { completedAt: null, updatedAt: { gte: start, lte: end } },
+      ],
       ...(postConPipelineId ? { project: { hubspotPipelineId: postConPipelineId } } : {}),
     },
     select: {
@@ -62,6 +66,7 @@ export async function GET(req: Request) {
       contractValueCents: true,
       billingStatus: true,
       completedAt: true,
+      updatedAt: true,
       projectId: true,
       project: { select: { id: true, jobTitle: true, billingStatus: true } },
     },
@@ -117,7 +122,7 @@ export async function GET(req: Request) {
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: co.billingStatus ?? "NOT_BILLED",
-      completedAt: co.completedAt!.toISOString(),
+      completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
     });
   }
 

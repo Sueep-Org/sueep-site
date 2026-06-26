@@ -6,7 +6,7 @@ import { centsToDollars } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"] as const;
 // BILLING/INVOICE_PAID/INACTIVE: used by the billing editor tab
 // NOT_BILLED/BILLED/PAID: used by the billing table (same vocabulary as SOV items / turnover requests)
 const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE", "NOT_BILLED", "BILLED", "PAID"] as const;
@@ -44,8 +44,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
-    // Auto-set completedAt when marking as complete (BILLING) for the first time
-    if (statusRaw === "BILLING" && !existing.completedAt && body.completedAt === undefined) {
+    // Auto-set completedAt when marking as complete for the first time
+    if (
+      (statusRaw === "BILLING" || statusRaw === "COMPLETED") &&
+      !(existing as Record<string, unknown>).completedAt &&
+      (body.completedAt === undefined || body.completedAt === null || body.completedAt === "")
+    ) {
       data.completedAt = new Date();
     }
   }

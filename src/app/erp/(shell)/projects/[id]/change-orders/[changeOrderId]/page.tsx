@@ -126,7 +126,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     description: changeOrder.description,
     requestedBy: changeOrder.requestedBy,
     supervisor: changeOrder.supervisor,
-    status: changeOrder.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING",
+    status: changeOrder.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED",
     billingStatus: changeOrder.billingStatus,
     percentInvoiced: changeOrder.percentInvoiced,
     estimatedCostCents: changeOrder.estimatedCostCents,
