@@ -12,6 +12,8 @@ export type LaborRow = {
   workerName: string;
   role: string | null;
   hours: string;
+  regHours: number;
+  otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
   sovItemId: string | null;
@@ -59,10 +61,9 @@ const editInput =
   "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
-function lineCostCents(hours: string, rateCents: number): number {
-  const h = Number(hours);
-  if (!Number.isFinite(h)) return 0;
-  return Math.round(h * rateCents);
+function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
+  if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
+  return Math.round(regHours * rateCents + otHours * rateCents * 1.5);
 }
 
 function calcHours(clockIn: string, clockOut: string): number {
@@ -524,7 +525,7 @@ export function ProjectLaborSection({
     }
   }
 
-  const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
+  const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.regHours, e.otHours, e.hourlyRateCents), 0);
 
   const visibleEntries = entries.filter((r) => {
     if (filterDate) {
@@ -538,9 +539,9 @@ export function ProjectLaborSection({
     return true;
   });
 
-  const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
+  const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.regHours, e.otHours, e.hourlyRateCents), 0);
 
-  const colCount = 7 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
+  const colCount = 8 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
 
   return (
     <>
@@ -752,6 +753,7 @@ export function ProjectLaborSection({
                 <th className="py-2 pr-2 font-medium">Worker</th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
+                <th className="py-2 pr-2 font-medium text-amber-600">OT Hrs</th>
                 {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
                 {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
@@ -799,13 +801,14 @@ export function ProjectLaborSection({
                           </span>
                         </div>
                       </td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
                           <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
                         </td>
                       )}
                       {showFinancials && (
-                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(String(calcHours(editFields.clockIn, editFields.clockOut)), Number(editFields.hourlyRate) * 100))}</td>
+                        <td className="py-1 pr-2 text-gray-800 text-xs">{centsToDollars(lineCostCents(calcHours(editFields.clockIn ?? "", editFields.clockOut ?? ""), 0, Number(editFields.hourlyRate) * 100))}<span className="ml-1 text-gray-400">(est.)</span></td>
                       )}
                       <td className="py-1 pr-2">
                         {sovItems.length > 0 ? (
@@ -880,8 +883,13 @@ export function ProjectLaborSection({
                       </td>
                       <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
+                      <td className="py-2 pr-2">
+                        {r.otHours > 0
+                          ? <span className="font-medium text-amber-600">{r.otHours.toFixed(2)}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>}
-                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>}
+                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.regHours, r.otHours, r.hourlyRateCents))}</td>}
                       <td className="py-2 pr-2">
                         {r.sovItemId ? (
                           <div className="flex items-center gap-1.5">

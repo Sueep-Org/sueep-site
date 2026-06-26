@@ -4,7 +4,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
-const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID"] as const;
+const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };
 

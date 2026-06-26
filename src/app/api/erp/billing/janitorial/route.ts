@@ -106,7 +106,7 @@ export async function GET(req: Request) {
       bathrooms: tr?.bathrooms ?? null,
       completedAt: (project.projectEndDate ?? project.updatedAt).toISOString(),
       contractCents,
-      billingStatus: tr?.billingStatus ?? "NOT_BILLED",
+      billingStatus: tr?.billingStatus ?? project.billingStatus ?? "NOT_BILLED",
     });
   }
 

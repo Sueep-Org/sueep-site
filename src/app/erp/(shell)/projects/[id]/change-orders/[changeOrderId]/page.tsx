@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
+import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
 import { ChangeOrderSigningSection, type ContractItem } from "./ChangeOrderSigningSection";
 
@@ -110,8 +111,20 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     return checkStr === todayDateStr && check.approvedForWork;
   });
 
+  const laborOtSplits = await calcOtSplits(
+    changeOrder.laborers.map((l) => ({
+      id: l.id,
+      employeeId: l.employeeId,
+      workDate: l.workDate,
+      hours: l.hours,
+      createdAt: l.createdAt,
+    }))
+  );
   const computedLaborCents = changeOrder.laborers.reduce(
-    (s, l) => s + Math.round(l.hours * l.hourlyRateCents),
+    (s, l) => {
+      const split = laborOtSplits.get(l.id) ?? { regHours: l.hours, otHours: 0 };
+      return s + otLineCents(split.regHours, split.otHours, l.hourlyRateCents);
+    },
     0,
   );
   const computedMaterialCents = materialEntries.reduce((s, e) => s + e.costCents, 0);
@@ -154,19 +167,24 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
       costCents: e.costCents,
       notes: e.notes,
     })),
-    laborers: changeOrder.laborers.map((l) => ({
-      id: l.id,
-      employeeId: l.employeeId,
-      name: l.name,
-      role: l.role,
-      workDate: l.workDate.toISOString(),
-      hours: l.hours,
-      hourlyRateCents: l.hourlyRateCents,
-      taskDescription: l.taskDescription,
-      qualityRating: l.qualityRating ?? null,
-      qualityNotes: l.qualityNotes ?? null,
-      completed: l.completed ?? false,
-    })),
+    laborers: changeOrder.laborers.map((l) => {
+      const split = laborOtSplits.get(l.id) ?? { regHours: l.hours, otHours: 0 };
+      return {
+        id: l.id,
+        employeeId: l.employeeId,
+        name: l.name,
+        role: l.role,
+        workDate: l.workDate.toISOString(),
+        hours: l.hours,
+        regHours: split.regHours,
+        otHours: split.otHours,
+        hourlyRateCents: l.hourlyRateCents,
+        taskDescription: l.taskDescription,
+        qualityRating: l.qualityRating ?? null,
+        qualityNotes: l.qualityNotes ?? null,
+        completed: l.completed ?? false,
+      };
+    }),
   };
 
   const initialContracts: ContractItem[] = contracts.map((c) => ({

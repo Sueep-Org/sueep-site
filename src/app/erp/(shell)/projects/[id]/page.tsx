@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { getErpAuth } from "@/lib/erpAuth";
+import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
@@ -217,7 +218,19 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const sueepPm = isTurnover ? (project.supervisor || getDescLine(project.description, "SUEEP PM")) : null;
 
   const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
-  const laborCentsFromLogs = project.laborEntries.reduce((s, e) => s + Math.round(e.hours * e.hourlyRateCents), 0);
+  const laborOtSplits = await calcOtSplits(
+    project.laborEntries.map((e) => ({
+      id: e.id,
+      employeeId: e.employeeId,
+      workDate: e.workDate,
+      hours: e.hours,
+      createdAt: e.createdAt,
+    }))
+  );
+  const laborCentsFromLogs = project.laborEntries.reduce((s, e) => {
+    const split = laborOtSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
+    return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
+  }, 0);
   const hoursFromLogs = project.laborEntries.reduce((s, e) => s + e.hours, 0);
 
   const isManual = !project.hubspotDealId;
@@ -238,20 +251,25 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       ].filter((o) => o.id?.trim())
     : [];
 
-  const laborRows = project.laborEntries.map((e) => ({
-    id: e.id,
-    employeeId: e.employeeId,
-    employeeName: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() || null : null,
-    workDate: e.workDate.toISOString(),
-    workerName: e.workerName,
-    role: e.role,
-    hours: e.hours.toString(),
-    hourlyRateCents: e.hourlyRateCents,
-    taskDescription: e.taskDescription,
-    sovItemId: e.sovItemId ?? null,
-    qualityRating: e.qualityRating ?? null,
-    qualityNotes: e.qualityNotes ?? null,
-  }));
+  const laborRows = project.laborEntries.map((e) => {
+    const split = laborOtSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
+    return {
+      id: e.id,
+      employeeId: e.employeeId,
+      employeeName: e.employee ? `${e.employee.firstName} ${e.employee.lastName}`.trim() || null : null,
+      workDate: e.workDate.toISOString(),
+      workerName: e.workerName,
+      role: e.role,
+      hours: e.hours.toString(),
+      regHours: split.regHours,
+      otHours: split.otHours,
+      hourlyRateCents: e.hourlyRateCents,
+      taskDescription: e.taskDescription,
+      sovItemId: e.sovItemId ?? null,
+      qualityRating: e.qualityRating ?? null,
+      qualityNotes: e.qualityNotes ?? null,
+    };
+  });
 
   const changeOrderRows = changeOrders.map((co) => ({
     id: co.id,

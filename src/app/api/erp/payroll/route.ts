@@ -155,9 +155,24 @@ export async function GET(req: Request) {
     });
   }
 
+  const OT_THRESHOLD = 40;
+  const OT_MULTIPLIER = 1.5;
+
   const employeeRows = Array.from(employeeMap.values()).map((emp) => {
-    const totalHours = Array.from(emp.weeklyHours.values()).reduce((s, h) => s + h, 0);
-    const grossPayCents = Math.round(totalHours * emp.hourlyRateCents);
+    let regHours = 0;
+    let otHours = 0;
+    for (const weekHours of emp.weeklyHours.values()) {
+      if (weekHours <= OT_THRESHOLD) {
+        regHours += weekHours;
+      } else {
+        regHours += OT_THRESHOLD;
+        otHours += weekHours - OT_THRESHOLD;
+      }
+    }
+    const totalHours = regHours + otHours;
+    const grossPayCents = Math.round(
+      regHours * emp.hourlyRateCents + otHours * emp.hourlyRateCents * OT_MULTIPLIER
+    );
 
     return {
       isContractor: false as const,
@@ -167,8 +182,8 @@ export async function GET(req: Request) {
       payType: emp.payType,
       hourlyRateCents: emp.hourlyRateCents,
       totalHours,
-      regHours: totalHours,
-      otHours: 0,
+      regHours,
+      otHours,
       grossPayCents,
       projects: Array.from(emp.projects).join(", "),
       entries: emp.entries,

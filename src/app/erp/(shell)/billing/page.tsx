@@ -377,13 +377,20 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
         })),
       };
     });
-    if (!unit.turnoverRequestId) return;
     try {
-      await fetch(`/api/erp/turnover-requests/${unit.turnoverRequestId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
-      });
+      if (unit.turnoverRequestId) {
+        await fetch(`/api/erp/turnover-requests/${unit.turnoverRequestId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ billingStatus }),
+        });
+      } else {
+        await fetch(`/api/erp/projects/${unit.projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ billingStatus }),
+        });
+      }
     } catch {
       fetch(`/api/erp/billing/janitorial?start=${start}&end=${end}`)
         .then((r) => r.json()).then((d: JanResponse) => setData(d)).catch(() => {});

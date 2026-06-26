@@ -11,6 +11,8 @@ export type ChangeOrderLaborerRow = {
   role: string | null;
   workDate: string;
   hours: number;
+  regHours: number;
+  otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
   qualityRating: string | null;
@@ -64,9 +66,9 @@ const editInput =
   "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const label = "block text-xs font-medium text-gray-600";
 
-function lineCostCents(hours: number, rateCents: number): number {
-  if (!Number.isFinite(hours)) return 0;
-  return Math.round(hours * rateCents);
+function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
+  if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
+  return Math.round(regHours * rateCents + otHours * rateCents * 1.5);
 }
 
 function employeeLabel(e: ChangeOrderLaborerEmployeeOption): string {
@@ -413,7 +415,7 @@ export function ChangeOrderLaborersSection({
     }
   }
 
-  const totalCents = laborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
+  const totalCents = laborers.reduce((s, l) => s + lineCostCents(l.regHours, l.otHours, l.hourlyRateCents), 0);
 
   let visibleLaborers = laborers.filter((l) => {
     if (filterDate) {
@@ -434,9 +436,9 @@ export function ChangeOrderLaborersSection({
     );
   }
 
-  const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
+  const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.regHours, l.otHours, l.hourlyRateCents), 0);
 
-  const colCount = 8 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
+  const colCount = 9 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
 
   return (
     <>
@@ -585,6 +587,7 @@ export function ChangeOrderLaborersSection({
                 </th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
+                <th className="py-2 pr-2 font-medium text-amber-600">OT Hrs</th>
                 {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
                 {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
@@ -632,13 +635,14 @@ export function ChangeOrderLaborersSection({
                           </span>
                         </div>
                       </td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
                           <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
                         </td>
                       )}
                       {showFinancials && (
-                        <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(calcHours(editFields.clockIn, editFields.clockOut), Number(editFields.hourlyRate) * 100))}</td>
+                        <td className="py-1 pr-2 text-gray-800 text-xs">{centsToDollars(lineCostCents(calcHours(editFields.clockIn, editFields.clockOut), 0, Number(editFields.hourlyRate) * 100))}<span className="ml-1 text-gray-400">(est.)</span></td>
                       )}
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
@@ -685,8 +689,13 @@ export function ChangeOrderLaborersSection({
                       </td>
                       <td className="py-2 pr-2 text-gray-500">{l.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{l.hours}</td>
+                      <td className="py-2 pr-2">
+                        {l.otHours > 0
+                          ? <span className="font-medium text-amber-600">{l.otHours.toFixed(2)}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>}
-                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.hours, l.hourlyRateCents))}</td>}
+                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.regHours, l.otHours, l.hourlyRateCents))}</td>}
                       <td className="py-2 pr-2 text-gray-500">{l.taskDescription || "—"}</td>
                       <td className="py-2 pr-2">
                         {canEdit ? (
