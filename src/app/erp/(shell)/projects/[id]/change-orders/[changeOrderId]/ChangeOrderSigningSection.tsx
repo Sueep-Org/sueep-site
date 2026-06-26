@@ -115,6 +115,12 @@ export function ChangeOrderSigningSection({
   const [contracts, setContracts] = useState<ContractItem[]>(initialContracts);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [showPresigned, setShowPresigned] = useState(false);
+  const [presignedFile, setPresignedFile] = useState<File | null>(null);
+  const [presignedDate, setPresignedDate] = useState("");
+  const [presignedUploading, setPresignedUploading] = useState(false);
+  const [presignedError, setPresignedError] = useState("");
+  const presignedFileRef = useRef<HTMLInputElement>(null);
 
   const hasPending = contracts.some((c) => c.signingStatus === "SENT");
   useEffect(() => {
@@ -126,6 +132,42 @@ export function ChangeOrderSigningSection({
   function removeContract(id: string) {
     setContracts((cs) => cs.filter((c) => c.id !== id));
     router.refresh();
+  }
+
+  async function handlePresignedSubmit() {
+    if (!presignedFile) { setPresignedError("Please select a PDF file."); return; }
+    setPresignedError("");
+    setPresignedUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", presignedFile);
+      fd.append("presigned", "true");
+      if (presignedDate) fd.append("signedAt", presignedDate);
+      const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contract`, { method: "POST", body: fd });
+      const data = (await res.json().catch(() => ({}))) as { contractId?: string; error?: string };
+      if (!res.ok) { setPresignedError(data.error ?? "Upload failed"); return; }
+      setContracts((cs) => [
+        ...cs,
+        {
+          id: data.contractId!,
+          contractPdfFilename: presignedFile.name,
+          docusealTemplateId: null,
+          signingStatus: "SIGNED",
+          customerEmail: null,
+          signedAt: presignedDate || new Date().toISOString().slice(0, 10),
+          signedDocumentUrl: null,
+        },
+      ]);
+      setShowPresigned(false);
+      setPresignedFile(null);
+      setPresignedDate("");
+      if (presignedFileRef.current) presignedFileRef.current.value = "";
+      router.refresh();
+    } catch {
+      setPresignedError("Upload failed — please try again.");
+    } finally {
+      setPresignedUploading(false);
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -199,6 +241,61 @@ export function ChangeOrderSigningSection({
           onChange={handleUpload}
         />
         {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
+
+        {!uploading && (
+          <>
+            {/* Pre-signed upload */}
+            {showPresigned ? (
+              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <p className="text-xs font-medium text-gray-700">Upload already-signed contract</p>
+                <div>
+                  <input
+                    ref={presignedFileRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-pink-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-pink-700 hover:file:bg-pink-100"
+                    onChange={(e) => { setPresignedFile(e.target.files?.[0] ?? null); setPresignedError(""); }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600">Signed on (optional)</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                    value={presignedDate}
+                    onChange={(e) => setPresignedDate(e.target.value)}
+                  />
+                </div>
+                {presignedError && <p className="text-xs text-red-500" role="alert">{presignedError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={presignedUploading}
+                    onClick={handlePresignedSubmit}
+                    className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                  >
+                    {presignedUploading ? "Uploading…" : "Save signed contract"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowPresigned(false); setPresignedFile(null); setPresignedDate(""); setPresignedError(""); }}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowPresigned(true)}
+                className="mt-4 block text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                Already signed? Upload here →
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

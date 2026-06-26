@@ -37,6 +37,19 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
   }
 
+  // Pre-signed path: store the PDF as a base64 data URL, skip DocuSeal
+  if (fd.get("presigned") === "true") {
+    const signedAtRaw = fd.get("signedAt");
+    const signedAt = typeof signedAtRaw === "string" && signedAtRaw
+      ? new Date(`${signedAtRaw}T00:00:00Z`)
+      : new Date();
+    const dataUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
+    const contract = await prisma.candidateContract.create({
+      data: { candidateId: id, contractPdfFilename: file.name, signingStatus: "SIGNED", signedAt, signedDocumentUrl: dataUrl },
+    });
+    return NextResponse.json({ contractId: contract.id });
+  }
+
   const contract = await prisma.candidateContract.create({
     data: { candidateId: id, contractPdfFilename: file.name, signingStatus: "UPLOADED" },
   });
