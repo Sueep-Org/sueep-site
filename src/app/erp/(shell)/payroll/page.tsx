@@ -11,6 +11,8 @@ type PayrollRow = {
   payType: string;
   hourlyRateCents: number;
   totalHours: number;
+  regHours: number;
+  otHours: number;
   grossPayCents: number;
   projects: string;
 };
