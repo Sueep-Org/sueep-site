@@ -67,14 +67,24 @@ function ContractRow({
 
         <div className="flex flex-wrap items-center gap-2">
           {contract.signingStatus === "SIGNED" && contract.signedDocumentUrl && (
-            <a
-              href={contract.signedDocumentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-medium text-pink-600 hover:underline"
-            >
-              Download →
-            </a>
+            contract.signedDocumentUrl.startsWith("data:") ? (
+              <a
+                href={contract.signedDocumentUrl}
+                download={contract.contractPdfFilename ?? "contract.pdf"}
+                className="text-xs font-medium text-pink-600 hover:underline"
+              >
+                Download →
+              </a>
+            ) : (
+              <a
+                href={contract.signedDocumentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-pink-600 hover:underline"
+              >
+                Download →
+              </a>
+            )
           )}
           {contract.signingStatus !== "SIGNED" && contract.docusealTemplateId && (
             <a
@@ -246,7 +256,7 @@ export function ChangeOrderSigningSection({
           <>
             {/* Pre-signed upload */}
             {showPresigned ? (
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
                 <p className="text-xs font-medium text-gray-700">Upload already-signed contract</p>
                 <div>
                   <input
