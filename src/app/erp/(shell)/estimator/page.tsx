@@ -101,17 +101,6 @@ export default function EstimatorPage() {
 
             {/* NEW PROJECT FORM — shown when creating a new project */}
             <div id="newProjectForm">
-              {/* PROJECT NAME */}
-              <div className="mb-4" id="projectNameInputWrapper">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
-                <input
-                  type="text"
-                  id="projectNameInput"
-                  placeholder="Enter project name"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-
               {/* PDF FILE UPLOAD */}
               <label className="block text-sm font-medium text-gray-700 mb-1">PDF File</label>
               <div
