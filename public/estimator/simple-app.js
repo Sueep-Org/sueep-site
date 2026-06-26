@@ -2123,8 +2123,6 @@ async function initApp(){
       if (dropZone) dropZone.style.display = '';
       if (uploadCollapsed) uploadCollapsed.style.display = 'none';
 
-      const projectNameInput = document.getElementById('projectNameInput');
-      if (projectNameInput) projectNameInput.value = '';
       const addrInput = document.getElementById('projectAddressInput');
       if (addrInput) addrInput.value = '';
       activeProjectId = null;
@@ -2183,12 +2181,8 @@ async function initApp(){
 
     try {
 
-      // 1. Create project
-      const projectName = document.getElementById('projectNameInput')?.value?.trim();
-      if (!projectName) {
-        toast('Please enter a project name before uploading.', 'error');
-        return;
-      }
+      // 1. Create project using filename as project name
+      const projectName = file.name.replace(/\.pdf$/i, '').trim() || file.name;
       console.log('[upload] creating project:', projectName);
       const projectRes = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
@@ -2196,7 +2190,7 @@ async function initApp(){
         body: JSON.stringify({ name: projectName })
       });
       if (projectRes.status === 409) {
-        toast(`Project "${projectName}" already exists. Please use a different name.`, 'error');
+        toast(`A project named "${projectName}" already exists.`, 'error');
         return;
       }
       if (!projectRes.ok) {
