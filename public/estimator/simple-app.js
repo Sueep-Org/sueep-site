@@ -1102,21 +1102,61 @@ async function initApp(){
     updateMeasurementList();
   }
 
+  function getMeasurementPixelLength(measurement) {
+    if (!measurement || measurement.area != null || !Array.isArray(measurement.pts) || !measurement.pts.length) return 0;
+
+    const seg = measurement.pts[0];
+    const width = overlay?.overlay?.width || overlay?.canvasEl?.width || 0;
+    const height = overlay?.overlay?.height || overlay?.canvasEl?.height || 0;
+    if (!width || !height) return 0;
+
+    return Math.hypot(((Number(seg.x2) || 0) - (Number(seg.x1) || 0)) * width, ((Number(seg.y2) || 0) - (Number(seg.y1) || 0)) * height) || 0;
+  }
+
+  function updateLastMeasurementForScale(page, scaleFactor) {
+    const measurements = highlightsStore.listMeasurements(page) || [];
+    const targetMeasurement = [...measurements].reverse().find((m) => m && m.area == null && Array.isArray(m.pts) && m.pts.length);
+    if (!targetMeasurement) return;
+
+    const pixelLength = getMeasurementPixelLength(targetMeasurement);
+    if (pixelLength <= 0) return;
+
+    const pageLengthPoints = pixelLength / (overlay._pxPerPt || 1);
+    let realInches = pageLengthPoints * Number(scaleFactor || 0);
+    if (targetMeasurement.doubleSided) {
+      realInches *= 2;
+    }
+
+    targetMeasurement.inches = realInches;
+    targetMeasurement.label = targetMeasurement.doubleSided ? `${formatInches(realInches)} (double-sided)` : formatInches(realInches);
+  }
+
   function parseMeasurementToInches(str) {
     if (!str) return null;
     str = String(str).trim().toLowerCase();
-    str = str.replace(',', '.');
+    str = str.replace(/,/g, '.').replace(/\s+/g, ' ').replace(/\s+and\s+/g, ' ');
+    const parseNumericValue = (value) => {
+      if (value == null || value === '') return null;
+      if (value.indexOf('/') >= 0) {
+        const parts = value.split('/').map(Number);
+        if (!parts[1] || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return null;
+        return parts[0] / parts[1];
+      }
+      const num = parseFloat(value);
+      return Number.isFinite(num) ? num : null;
+    };
+    const feetAndInchesMatch = str.match(/^([0-9]+(?:\.[0-9]+)?|[0-9]+\/[0-9]+)\s*(ft|feet|foot|')\s*([0-9]+(?:\.[0-9]+)?|[0-9]+\/[0-9]+)?\s*(in|inch|inches|")?$/i);
+    if (feetAndInchesMatch) {
+      const feet = parseNumericValue(feetAndInchesMatch[1]);
+      const inches = feetAndInchesMatch[3] ? parseNumericValue(feetAndInchesMatch[3]) : 0;
+      if (feet == null || inches == null) return null;
+      return feet * 12 + inches;
+    }
     const m = str.match(/^([0-9]+\/[0-9]+|[0-9]*\.?[0-9]+)\s*(in|inch|inches|ft|feet|cm|mm|m)?$/i);
     if (!m) return null;
     const val = m[1];
-    let num = 0;
-    if (val.indexOf('/') >= 0) {
-      const parts = val.split('/').map(Number);
-      if (!parts[1]) return null;
-      num = parts[0] / parts[1];
-    } else {
-      num = parseFloat(val);
-    }
+    const num = parseNumericValue(val);
+    if (num == null) return null;
     const unit = (m[2] || 'in').toLowerCase();
     switch (unit) {
       case 'ft': case 'feet': return num * 12;
@@ -2377,14 +2417,20 @@ async function initApp(){
     changeScaleBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const entry = window.prompt('Enter page scale (example: "1/16 in = 1 ft"). This must contain "=".');
+      const entry = window.prompt('Enter a real-world length (for example: "22 ft 10 in") or a scale expression (for example: "1/16 in = 1 ft").');
       if (!entry || !entry.trim()) return;
-      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), 72, overlay._pxPerPt);
+
+      const measurements = highlightsStore.listMeasurements(currentPage) || [];
+      const targetMeasurement = [...measurements].reverse().find((m) => m && m.area == null && Array.isArray(m.pts) && m.pts.length);
+      const referencePixelLength = targetMeasurement ? getMeasurementPixelLength(targetMeasurement) : 0;
+      const referenceLength = referencePixelLength > 0 ? referencePixelLength : 72;
+      const scaleFactor = computeScaleFactorFromExpression(entry.trim(), referenceLength, overlay._pxPerPt);
       if (!scaleFactor || scaleFactor <= 0) {
         toast('Invalid scale expression', 'error');
         return;
       }
       highlightsStore.setScale(currentPage, { factor: scaleFactor, unit: 'in' });
+      updateLastMeasurementForScale(currentPage, scaleFactor);
       updateMeasurementList();
       overlay.redraw();
       toast('Page scale updated', 'success');
