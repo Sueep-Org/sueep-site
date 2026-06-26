@@ -327,6 +327,8 @@ export function ChangeOrderLaborersSection({
         role: data.role ?? null,
         workDate: data.workDate ?? workDate,
         hours: data.hours ?? hours,
+        regHours: data.hours ?? hours,
+        otHours: 0,
         hourlyRateCents: data.hourlyRateCents ?? Math.round(Number(hourlyRate) * 100),
         taskDescription: data.taskDescription ?? null,
         qualityRating: null,

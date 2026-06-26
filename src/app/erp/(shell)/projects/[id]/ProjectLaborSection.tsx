@@ -489,6 +489,8 @@ export function ProjectLaborSection({
         workerName: data.workerName!,
         role: data.role ?? null,
         hours: String(data.hours),
+        regHours: Number(data.hours),
+        otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,
         taskDescription: data.taskDescription ?? null,
         sovItemId: data.sovItemId ?? null,
