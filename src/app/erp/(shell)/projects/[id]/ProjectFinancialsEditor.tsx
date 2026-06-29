@@ -104,20 +104,83 @@ export function ProjectFinancialsEditor({
     }
   }
 
-  async function importEstimatorProject(id: string) {
+  async function importEstimatorProject(estId: string) {
     const anonId = localStorage.getItem("ai_estimator_anon_id")!;
     setEstModalLoading(true);
     setEstModalError("");
     try {
-      const res = await fetch(`${ESTIMATOR_API}/api/projects/${id}`, {
-        headers: { "x-anon-id": anonId },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load project");
-      const proj = (await res.json()) as { labor?: number; quote?: number };
+      const [projRes, quotRes] = await Promise.all([
+        fetch(`${ESTIMATOR_API}/api/projects/${estId}`, {
+          headers: { "x-anon-id": anonId }, cache: "no-store",
+        }),
+        fetch(`${ESTIMATOR_API}/api/projects/${estId}/quotation-data`, {
+          headers: { "x-anon-id": anonId }, cache: "no-store",
+        }),
+      ]);
+      if (!projRes.ok) throw new Error("Failed to load project");
+
+      const proj = (await projRes.json()) as {
+        labor?: number;
+        quote?: number;
+        labor_breakdown?: {
+          cleaner_rate?: number;
+          foreman_rate?: number;
+          phases?: { persons?: number; days?: number }[];
+        };
+      };
+
+      // Labor and contract value
       if (proj.labor != null) setEstLab(proj.labor.toFixed(2));
       if (proj.quote != null) setContractValue(proj.quote.toFixed(2));
+
+      // Materials — recalculate from phases (5% of labor per phase)
+      const lb = proj.labor_breakdown;
+      if (lb) {
+        const cleanerRate = lb.cleaner_rate ?? 0;
+        const foremanRate = lb.foreman_rate ?? 0;
+        let totalMaterials = 0;
+        for (const phase of lb.phases ?? []) {
+          const laborCost = (phase.persons ?? 0) * (phase.days ?? 0) * cleanerRate * 8
+            + (phase.days ?? 0) * foremanRate;
+          totalMaterials += laborCost * 0.05;
+        }
+        if (totalMaterials > 0) setEstMat(totalMaterials.toFixed(2));
+      }
+
+      // SOV items from quotation-data
+      if (quotRes.ok) {
+        const quot = (await quotRes.json()) as {
+          analysis?: {
+            quote_items?: {
+              sheet: string;
+              items: { service?: string; description?: string; total?: number }[];
+            }[];
+          };
+        };
+        const sovItems: { description: string; scheduledValueCents: number; order: number }[] = [];
+        let order = 0;
+        for (const sheet of quot.analysis?.quote_items ?? []) {
+          for (const item of sheet.items) {
+            if ((item.service ?? "").toLowerCase() === "total") continue;
+            const description = (item.description || item.service || "").trim();
+            const cents = Math.round((item.total ?? 0) * 100);
+            if (!description || cents <= 0) continue;
+            sovItems.push({ description, scheduledValueCents: cents, order: order++ });
+          }
+        }
+        await Promise.all(
+          sovItems.map((item) =>
+            fetch(`/api/erp/projects/${projectId}/sov/items`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(item),
+            })
+          )
+        );
+      }
+
       setEstModalOpen(false);
+      router.refresh();
     } catch {
       setEstModalError("Could not load that project. Try again.");
     } finally {
@@ -174,7 +237,7 @@ export function ProjectFinancialsEditor({
               </button>
             </div>
             <p className="mb-3 text-xs text-gray-500">
-              Select a project to pull est. labor and contract value. You can review before saving.
+              Select a project to pull est. labor, materials, contract value, and SOV line items.
             </p>
             {estModalLoading ? (
               <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
