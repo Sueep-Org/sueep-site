@@ -508,6 +508,18 @@ export default function BillingPage() {
   const [start, setStart] = useState(monthStartISO);
   const [end, setEnd] = useState(todayISO);
 
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    if (t === "post-construction" || t === "janitorial") setTab(t);
+  }, []);
+
+  function updateTab(t: Tab) {
+    setTab(t);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", t);
+    history.replaceState(null, "", `?${params.toString()}`);
+  }
+
   const TABS: { id: Tab; label: string }[] = [
     { id: "post-construction", label: "Post-Construction" },
     { id: "janitorial", label: "Janitorial" },
@@ -548,7 +560,7 @@ export default function BillingPage() {
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => updateTab(t.id)}
               className={[
                 "px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors",
                 tab === t.id

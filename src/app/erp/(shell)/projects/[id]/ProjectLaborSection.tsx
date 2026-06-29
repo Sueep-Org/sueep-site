@@ -567,7 +567,7 @@ export function ProjectLaborSection({
             <label className={label} htmlFor="l-workDate">
               Work date *
             </label>
-            <input id="l-workDate" name="workDate" type="date" required className={input} />
+            <input id="l-workDate" name="workDate" type="date" required className={input} defaultValue={new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" })} />
           </div>
           <div className="sm:col-span-2 lg:col-span-2">
             <label className={label} htmlFor="l-employee">
