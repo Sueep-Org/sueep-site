@@ -445,19 +445,6 @@ export default function EstimatorPage() {
             </div>
           </div>
 
-          {/* ALL PAGES TOTAL */}
-          <div
-            id="allPagesTotalContainer"
-            className="bg-white rounded-lg shadow-md p-4 mt-6"
-            style={{ display: "none" }}
-          >
-            <div
-              id="measurementTotalAggregateInfo"
-              style={{ fontSize: "14px", color: "#374151", fontWeight: 600 }}
-            >
-              All pages total: 0&quot;
-            </div>
-          </div>
 
           {/* ANALYSIS CARD — below canvas, shown after project loaded */}
           <div id="analysisCard" className="bg-white rounded-lg shadow-md p-6 mt-6" style={{ display: "none" }}>
@@ -536,6 +523,13 @@ export default function EstimatorPage() {
                 <button id="cancelAnalysisBtn" className="mini-btn">Cancel</button>
               </div>
             </div>
+          </div>
+
+          <div id="sovCard" className="bg-white rounded-lg shadow-md p-6 mt-4" style={{ display: "none" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-800">Schedule of Values</h3>
+            </div>
+            <div id="sovTableContainer"></div>
           </div>
         </div>
       </div>

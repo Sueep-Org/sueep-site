@@ -33,29 +33,6 @@ window.addEventListener('unhandledrejection', (e)=>{
   console.warn('Unhandled promise (suppressed):', e.reason);
 });
 
-function ensureSovButton(){
-  if (document.getElementById('sovBtn')) return;
-  const toolbar = document.getElementById('toolbar');
-  if (!toolbar) return;
-  const btn = document.createElement('button');
-  btn.id = 'sovBtn';
-  btn.type = 'button';
-  btn.textContent = 'SOV';
-  btn.className = 'mini-btn';
-  btn.style.cssText = 'background:white;color:#111827;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;';
-  btn.addEventListener('click', () => {
-    if (window.__openSovModal) window.__openSovModal();
-  });
-  const target = toolbar.querySelector('#nextPageBtn') || toolbar.lastElementChild;
-  if (target) {
-    toolbar.insertBefore(btn, target.nextSibling);
-  } else {
-    toolbar.appendChild(btn);
-  }
-}
-
-ensureSovButton();
-
 // ======================================================
 // SIDEBAR
 // ======================================================
@@ -310,7 +287,6 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
-  const sovBtn = $('sovBtn') || $('sovBtnHeader');
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   console.log('ZOOM BUTTON CHECK:', {
@@ -439,9 +415,69 @@ async function initApp(){
     return rows;
   }
 
+  function renderSovTable(containerEl) {
+    if (!containerEl) return;
+
+    const rows = getSovPageRows();
+    containerEl.innerHTML = '';
+
+    if (!rows.length) {
+      containerEl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No schedule data available yet.</div>';
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'overflow:auto;border:1px solid #e5e7eb;border-radius:8px;';
+
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    headRow.style.cssText = 'background:#f9fafb;';
+    ['Page', 'Description', 'Cost'].forEach((label) => {
+      const th = document.createElement('th');
+      th.textContent = label;
+      th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;';
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.page}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.description}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.cost}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    wrapper.appendChild(table);
+    containerEl.appendChild(wrapper);
+  }
+
+  function renderSovCard() {
+    const card = document.getElementById('sovCard');
+    const container = document.getElementById('sovTableContainer');
+    if (!card || !container) return;
+
+    if (!pdfDoc || !_loadedProjectData) {
+      card.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+
+    card.style.display = 'block';
+    renderSovTable(container);
+  }
+
   function openSovModal() {
     if (!pdfDoc) {
-      toast('Load a PDF before opening SOV.', 'info');
+      toast('Load a PDF before viewing SOV.', 'info');
       return;
     }
 
@@ -450,7 +486,6 @@ async function initApp(){
       sovModal = null;
     }
 
-    const rows = getSovPageRows();
     const modal = document.createElement('div');
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10000;';
 
@@ -465,30 +500,11 @@ async function initApp(){
         </div>
         <button class="mini-btn" data-close-sov>Close</button>
       </div>
-      <div style="overflow:auto;border:1px solid #e5e7eb;border-radius:8px;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="background:#f9fafb;">
-              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Page</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Description</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;">Cost</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div data-sov-modal-body></div>
     `;
 
-    const tbody = panel.querySelector('tbody');
-    rows.forEach((row) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.page}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;"><input type="text" value="${row.description}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" /></td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;"><input type="text" value="${row.cost}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" /></td>
-      `;
-      tbody.appendChild(tr);
-    });
+    const body = panel.querySelector('[data-sov-modal-body]');
+    renderSovTable(body);
 
     panel.querySelector('[data-close-sov]').addEventListener('click', () => {
       modal.remove();
@@ -498,10 +514,6 @@ async function initApp(){
     modal.appendChild(panel);
     document.body.appendChild(modal);
     sovModal = modal;
-  }
-
-  if (sovBtn) {
-    sovBtn.addEventListener('click', openSovModal);
   }
 
   window.__openSovModal = openSovModal;
@@ -597,19 +609,9 @@ async function initApp(){
     if (!pdfDoc || !pdfCanvas || !overlay) return;
 
     try {
-      const page = await pdfDoc.getPage(currentPage);
-      const viewport = page.getViewport({ scale: zoom });
-      const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = Math.ceil(viewport.width);
-      exportCanvas.height = Math.ceil(viewport.height);
-      const exportCtx = exportCanvas.getContext('2d');
-
-      exportCtx.save();
-      exportCtx.translate(panOffset.x, panOffset.y);
-      await page.render({ canvasContext: exportCtx, viewport }).promise;
-      overlay.renderToContext(exportCtx, { width: viewport.width, height: viewport.height });
-      exportCtx.restore();
-
+      const rendered = await renderPageWithAnnotationsToCanvas(currentPage);
+      if (!rendered) throw new Error('Failed to render current page for export.');
+      const { exportCanvas } = rendered;
       const printWindow = window.open('', '_blank', 'width=1200,height=900');
       if (!printWindow) {
         toast('Please allow popups to download the PDF view.', 'error');
@@ -1029,9 +1031,6 @@ async function initApp(){
     // Page totals: include both length and area
     const pageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
     const pageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
-    if (measurementPageAggregateInfo) {
-      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
-    }
 
     // All pages totals including area
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
@@ -1041,9 +1040,15 @@ async function initApp(){
     const allTotalArea = allPageMeasurements.reduce((sum, pageEntry) => {
       return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
     }, 0);
+
+    if (measurementPageAggregateInfo) {
+      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
+    }
     if (measurementTotalAggregateInfo) {
       measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
     }
+
+    renderSovCard();
   }
 
   // ======================================================
@@ -1711,6 +1716,7 @@ async function initApp(){
     document.getElementById('analysisEditForm').style.display = 'none';
     document.getElementById('editAnalysisBtn').style.display = '';
     card.style.display = 'block';
+    renderSovCard();
   }
 
   function showAnalysisEditForm() {
