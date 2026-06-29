@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
@@ -36,6 +36,40 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
   const [activeLifecycle, setActiveLifecycle] = useState<Lifecycle | null>(null);
   const [search, setSearch] = useState("");
 
+  // On mount, restore tab and status filter from URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab") as Tab | null;
+    if (tab && TABS.some((t) => t.id === tab)) setActiveTab(tab);
+    const status = params.get("status") as Lifecycle | null;
+    if (status && LIFECYCLE_FILTERS.some((f) => f.id === status)) setActiveLifecycle(status);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateTab(tab: Tab) {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", tab);
+    params.delete("status"); // reset lifecycle filter when switching tabs
+    setActiveLifecycle(null);
+    history.replaceState(null, "", `?${params.toString()}`);
+  }
+
+  function updateLifecycle(lc: Lifecycle | null) {
+    setActiveLifecycle(lc);
+    const params = new URLSearchParams(window.location.search);
+    if (lc) {
+      params.set("status", lc);
+    } else {
+      params.delete("status");
+    }
+    history.replaceState(null, "", `?${params.toString()}`);
+  }
+
+  function toggleLifecycle(lc: Lifecycle) {
+    updateLifecycle(activeLifecycle === lc ? null : lc);
+  }
+
   function getTab(row: ProjectTableRow): Tab {
     const pid = row.hubspotPipelineId;
     const segment = normalizeProjectSegment(row.segment);
@@ -61,10 +95,6 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     return getLifecycle(row) === lc;
   }
 
-  function toggleLifecycle(lc: Lifecycle) {
-    setActiveLifecycle((prev) => (prev === lc ? null : lc));
-  }
-
   const query = search.trim().toLowerCase();
 
   const filtered = rows.filter((r) => {
@@ -82,7 +112,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
       <div className="flex flex-col gap-2 md:hidden mb-3">
         <select
           value={activeTab}
-          onChange={(e) => setActiveTab(e.target.value as Tab)}
+          onChange={(e) => updateTab(e.target.value as Tab)}
           className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         >
           {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
@@ -99,7 +129,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
           />
           <select
             value={activeLifecycle ?? ""}
-            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            onChange={(e) => updateLifecycle((e.target.value as Lifecycle) || null)}
             className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           >
             <option value="">All statuses</option>
@@ -120,7 +150,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => updateTab(tab.id)}
                 className={[
                   "flex items-center gap-1 px-2 py-2 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
                   isActive
@@ -146,7 +176,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
           />
           <select
             value={activeLifecycle ?? ""}
-            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            onChange={(e) => updateLifecycle((e.target.value as Lifecycle) || null)}
             className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           >
             <option value="">All statuses</option>

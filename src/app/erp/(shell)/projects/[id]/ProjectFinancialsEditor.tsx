@@ -196,10 +196,6 @@ export function ProjectFinancialsEditor({
                 <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
                 <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
               </div>
-              <div className="invisible">
-                <label className={labelCls}>Travel ($)</label>
-                <input type="number" className={inputCls} disabled tabIndex={-1} />
-              </div>
               <div>
                 <label className={labelCls}>Hours</label>
                 {hasLaborLogs ? (

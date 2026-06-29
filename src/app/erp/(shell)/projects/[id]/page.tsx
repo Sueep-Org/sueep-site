@@ -307,7 +307,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
   const allTabs = [
     {
-      label: "Details",
+      label: "Overview",
       content: (
         <>
           {project.segment === "REAL_ESTATE" && project.description && (
@@ -327,6 +327,24 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               />
             </div>
           )}
+          <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Project Setup</p>
+          <ProjectSetupEditor
+            projectId={project.id}
+            status={project.status}
+            segment={project.segment}
+            hubspotPipelineId={project.hubspotPipelineId ?? null}
+            isManual={isManual}
+            pipelineOptions={pipelineOptions}
+            supervisor={project.supervisor}
+            supervisorUserId={project.supervisorUserId ?? null}
+            employees={laborEmployees}
+            erpSupervisors={erpSupervisors}
+            projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
+            projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
+            description={project.description}
+            showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS" && project.segment !== "REAL_ESTATE"}
+          />
+          <hr className="my-6 border-gray-200" />
           <ProjectWorkOrderNotifier
             projectId={project.id}
             segment={project.segment}
@@ -398,46 +416,34 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         ]
       : []),
     {
-      label: "Setup",
+      label: "Financials",
       content: (
-        <ProjectSetupEditor
-          projectId={project.id}
-          status={project.status}
-          segment={project.segment}
-          hubspotPipelineId={project.hubspotPipelineId ?? null}
-          isManual={isManual}
-          pipelineOptions={pipelineOptions}
-          supervisor={project.supervisor}
-          supervisorUserId={project.supervisorUserId ?? null}
-          employees={laborEmployees}
-          erpSupervisors={erpSupervisors}
-          projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
-          projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
-          description={project.description}
-          showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS" && project.segment !== "REAL_ESTATE"}
-        />
-      ),
-    },
-    {
-      label: "Money",
-      content: (
-        <ProjectFinancialsEditor
-          projectId={project.id}
-          contractValueCents={project.contractValueCents}
-          percentDone={project.percentDone}
-          percentInvoiced={project.percentInvoiced}
-          billingStatus={project.billingStatus}
-          estMaterialCents={project.estMaterialCents}
-          estTravelCents={project.estTravelCents}
-          estLaborCents={project.estLaborCents}
-          actualLaborCents={project.actualLaborCents}
-          contractorCostCents={contractorCostCents}
-          actualMaterialCents={project.actualMaterialCents}
-          estHours={project.estHours}
-          actualHours={project.actualHours}
-          laborCentsFromLogs={laborCentsFromLogs}
-          hoursFromLogs={hoursFromLogs}
-        />
+        <>
+          <ProjectFinancialsEditor
+            projectId={project.id}
+            contractValueCents={project.contractValueCents}
+            percentDone={project.percentDone}
+            percentInvoiced={project.percentInvoiced}
+            billingStatus={project.billingStatus}
+            estMaterialCents={project.estMaterialCents}
+            estTravelCents={project.estTravelCents}
+            estLaborCents={project.estLaborCents}
+            actualLaborCents={project.actualLaborCents}
+            contractorCostCents={contractorCostCents}
+            actualMaterialCents={project.actualMaterialCents}
+            estHours={project.estHours}
+            actualHours={project.actualHours}
+            laborCentsFromLogs={laborCentsFromLogs}
+            hoursFromLogs={hoursFromLogs}
+          />
+          <hr className="my-6 border-gray-200" />
+          <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
+          <ProjectSOVSection
+            projectId={project.id}
+            initialItems={sovItems}
+            canEdit={canEditSOV}
+          />
+        </>
       ),
     },
     {
@@ -554,16 +560,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   lastName: e.lastName,
                   email: e.email ?? null,
                 }))}
-              />
-            ),
-          },
-          {
-            label: "SOVs",
-            content: (
-              <ProjectSOVSection
-                projectId={project.id}
-                initialItems={sovItems}
-                canEdit={canEditSOV}
               />
             ),
           },
