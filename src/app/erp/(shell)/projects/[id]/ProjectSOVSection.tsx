@@ -41,6 +41,8 @@ type Props = {
 export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
   const [items, setItems] = useState<SOVItem[]>(initialItems);
   const [adding, setAdding] = useState(false);
+
+  useEffect(() => { setItems(initialItems); }, [initialItems]);
   const [newDesc, setNewDesc] = useState("");
   const [newValue, setNewValue] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
