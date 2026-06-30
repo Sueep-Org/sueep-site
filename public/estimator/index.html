@@ -313,14 +313,6 @@
 
         <div class="bg-white rounded-lg shadow-md p-6 mb-6" style="position:relative;">
 
-            <button
-                id="sovBtnHeader"
-                class="mini-btn"
-                style="position:absolute;top:16px;right:16px;background:#2563eb;color:white;border-color:#2563eb;font-weight:700;padding:8px 12px;box-shadow:0 2px 8px rgba(37,99,235,.25);"
-            >
-                SOV
-            </button>
-
             <h2 class="text-xl font-semibold mb-4">
                 Upload Your Drawing
             </h2>
@@ -442,13 +434,6 @@
                       <h2 class="text-xl font-semibold">
                           PDF Preview
                       </h2>
-                      <button
-                        id="sovBtn"
-                        class="mini-btn"
-                        style="background:#2563eb;color:white;border-color:#2563eb;font-weight:700;padding:8px 12px;box-shadow:0 2px 8px rgba(37,99,235,.25);"
-                      >
-                        SOV
-                      </button>
                     </div>
 
                     <!-- PDF CONTAINER -->
@@ -469,6 +454,8 @@
                         <div>
                           <h3 class="text-lg font-semibold">Measurements</h3>
                           <div id="measurementScaleInfo" style="font-size:12px;color:#6b7280;">Scale not set</div>
+                          <div id="measurementPageAggregateInfo" style="font-size:12px;color:#6b7280;margin-top:4px;">Page total: 0&quot;</div>
+                          <div id="measurementTotalAggregateInfo" style="font-size:12px;color:#6b7280;margin-top:4px;">All pages total: 0&quot;</div>
                         </div>
                       </div>
                       <div class="flex gap-2 flex-wrap mb-3">
@@ -476,7 +463,16 @@
                         <button id="doubleSideToggle" class="mini-btn" style="flex:1;min-width:110px;">Single sided</button>
                       </div>
                       <button id="downloadPdfBtn" class="mini-btn" style="width:100%;margin-bottom:10px;" disabled>Download PDF</button>
-                      <div id="measurementList" style="font-size:13px;color:#374151;min-height:120px;">No saved measurements</div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;color:#374151;min-height:120px;">
+                        <div>
+                          <div style="font-weight:600;font-size:13px;margin-bottom:8px;border-bottom:2px solid #3b82f6;padding-bottom:4px;">Line Measurements</div>
+                          <div id="measurementListLeft" style="min-height:120px;">No measurements</div>
+                        </div>
+                        <div>
+                          <div style="font-weight:600;font-size:13px;margin-bottom:8px;border-bottom:2px solid #10b981;padding-bottom:4px;">Surface Area</div>
+                          <div id="measurementListRight" style="min-height:120px;">No surface areas</div>
+                        </div>
+                      </div>
                     </div>
                   </aside>
                 </div>
