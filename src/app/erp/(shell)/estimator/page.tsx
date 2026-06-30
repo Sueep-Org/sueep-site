@@ -5,6 +5,36 @@ import { useEffect, useRef } from "react";
 export default function EstimatorPage() {
   const loaded = useRef(false);
 
+  // Warn on refresh / tab close / Next.js navigation if analysis is unsaved
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if ((window as unknown as Record<string, unknown>).__analysisDirty) {
+        e.preventDefault();
+      }
+    };
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href || href.includes('/estimator')) return;
+      if ((window as unknown as Record<string, unknown>).__analysisDirty) {
+        if (!window.confirm('Have you saved your analysis figures? Unsaved changes will be lost.')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleLinkClick, true);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleLinkClick, true);
+    };
+  }, []);
+
   useEffect(() => {
     if (loaded.current) return;
     loaded.current = true;

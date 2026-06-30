@@ -1959,10 +1959,14 @@ async function initApp(){
   }
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
-  if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => showAnalysisEditForm());
+  if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
+    window.__analysisDirty = true;
+    showAnalysisEditForm();
+  });
 
   const cancelAnalysisBtn = document.getElementById('cancelAnalysisBtn');
   if (cancelAnalysisBtn) cancelAnalysisBtn.addEventListener('click', () => {
+    window.__analysisDirty = false;
     if (_loadedProjectData) showAnalysisCard(_loadedProjectData);
   });
 
@@ -2022,6 +2026,7 @@ async function initApp(){
         if (addrVal && addrVal !== prevAddr) {
           document.getElementById('refreshDistanceBtn')?.click();
         }
+        window.__analysisDirty = false;
         showAnalysisCard(_loadedProjectData);
         toast('Analysis saved', 'info');
       } catch (e) {
