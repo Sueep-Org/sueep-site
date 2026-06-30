@@ -176,6 +176,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         role: l.role,
         workDate: l.workDate.toISOString(),
         hours: l.hours,
+        clockIn: l.clockIn ?? null,
         regHours: split.regHours,
         otHours: split.otHours,
         hourlyRateCents: l.hourlyRateCents,

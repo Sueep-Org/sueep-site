@@ -11,6 +11,7 @@ export type ChangeOrderLaborerRow = {
   role: string | null;
   workDate: string;
   hours: number;
+  clockIn: string | null;
   regHours: number;
   otHours: number;
   hourlyRateCents: number;
@@ -313,6 +314,7 @@ export function ChangeOrderLaborersSection({
           workDate,
           role: roleStr.trim() || undefined,
           hours,
+          clockIn: clockInStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
         }),
@@ -327,6 +329,7 @@ export function ChangeOrderLaborersSection({
         role: data.role ?? null,
         workDate: data.workDate ?? workDate,
         hours: data.hours ?? hours,
+        clockIn: data.clockIn ?? clockInStr,
         regHours: data.hours ?? hours,
         otHours: 0,
         hourlyRateCents: data.hourlyRateCents ?? Math.round(Number(hourlyRate) * 100),
@@ -354,7 +357,7 @@ export function ChangeOrderLaborersSection({
 
   function startEdit(l: ChangeOrderLaborerRow) {
     setEditingId(l.id);
-    const defaultIn = "08:00";
+    const defaultIn = l.clockIn || "08:00";
     setEditFields({
       workDate: new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       name: l.name,
@@ -376,6 +379,7 @@ export function ChangeOrderLaborersSection({
         name: editFields.name,
         role: editFields.role || null,
         hours,
+        clockIn: editFields.clockIn || null,
         hourlyRate: editFields.hourlyRate,
         taskDescription: editFields.taskDescription || null,
       }),
@@ -385,7 +389,7 @@ export function ChangeOrderLaborersSection({
       setLaborers((prev) =>
         prev.map((l) =>
           l.id === entryId
-            ? { ...l, workDate: updated.workDate ?? l.workDate, name: updated.name ?? l.name, role: updated.role ?? null, hours: updated.hours ?? l.hours, hourlyRateCents: updated.hourlyRateCents ?? l.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
+            ? { ...l, workDate: updated.workDate ?? l.workDate, name: updated.name ?? l.name, role: updated.role ?? null, hours: updated.hours ?? l.hours, clockIn: updated.clockIn ?? null, hourlyRateCents: updated.hourlyRateCents ?? l.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
             : l,
         ),
       );

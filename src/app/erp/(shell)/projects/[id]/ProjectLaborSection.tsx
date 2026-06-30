@@ -12,6 +12,7 @@ export type LaborRow = {
   workerName: string;
   role: string | null;
   hours: string;
+  clockIn: string | null;
   regHours: number;
   otHours: number;
   hourlyRateCents: number;
@@ -364,7 +365,7 @@ export function ProjectLaborSection({
 
   function startEdit(r: LaborRow) {
     setEditingId(r.id);
-    const defaultIn = "08:00";
+    const defaultIn = r.clockIn || "08:00";
     setEditFields({
       workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       workerName: r.workerName,
@@ -390,17 +391,18 @@ export function ProjectLaborSection({
         workerName: editFields.workerName,
         role: editFields.role || null,
         hours: calcHours(editFields.clockIn, editFields.clockOut),
+        clockIn: editFields.clockIn || null,
         hourlyRate: editFields.hourlyRate,
         taskDescription: taskDesc,
         sovItemId: sovItemId,
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
             : e,
         ),
       );
@@ -454,6 +456,7 @@ export function ProjectLaborSection({
           employeeId: employeePick !== OTHER_VALUE ? employeePick : undefined,
           role: role || undefined,
           hours,
+          clockIn: clockInStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
           sovItemId: sovItemId || undefined,
@@ -468,6 +471,7 @@ export function ProjectLaborSection({
         workerName?: string;
         role?: string | null;
         hours?: unknown;
+        clockIn?: string | null;
         hourlyRateCents?: number;
         taskDescription?: string | null;
         sovItemId?: string | null;
@@ -489,6 +493,7 @@ export function ProjectLaborSection({
         workerName: data.workerName!,
         role: data.role ?? null,
         hours: String(data.hours),
+        clockIn: data.clockIn ?? clockInStr,
         regHours: Number(data.hours),
         otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,

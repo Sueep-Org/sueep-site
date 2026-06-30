@@ -33,6 +33,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!Number.isFinite(h) || h <= 0) return NextResponse.json({ error: "Invalid hours" }, { status: 400 });
     data.hours = h;
   }
+  if (body.clockIn !== undefined) {
+    data.clockIn = typeof body.clockIn === "string" && /^\d{2}:\d{2}$/.test(body.clockIn) ? body.clockIn : null;
+  }
   if (body.hourlyRate !== undefined) {
     const rate = typeof body.hourlyRate === "string"
       ? Number(String(body.hourlyRate).replace(/[$,]/g, ""))

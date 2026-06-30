@@ -56,6 +56,8 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "hours must be a positive number" }, { status: 400 });
   }
 
+  const clockIn = typeof body.clockIn === "string" && /^\d{2}:\d{2}$/.test(body.clockIn) ? body.clockIn : null;
+
   // hourlyRate → cents
   let hourlyRateCents: number;
   if (typeof body.hourlyRateCents === "number" && Number.isFinite(body.hourlyRateCents)) {
@@ -81,6 +83,7 @@ export async function POST(req: Request, ctx: Ctx) {
           role: body.role != null ? String(body.role).trim() || null : null,
           workDate,
           hours,
+          clockIn,
           hourlyRateCents,
           taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
         },

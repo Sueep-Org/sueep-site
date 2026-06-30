@@ -261,6 +261,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       workerName: e.workerName,
       role: e.role,
       hours: e.hours.toString(),
+      clockIn: e.clockIn ?? null,
       regHours: split.regHours,
       otHours: split.otHours,
       hourlyRateCents: e.hourlyRateCents,

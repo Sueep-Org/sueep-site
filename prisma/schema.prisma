@@ -455,6 +455,8 @@ model ProjectChangeOrderLaborer {
   role            String?
   workDate        DateTime @default(now())
   hours           Float    @default(0)
+  /// Clock-in time as "HH:MM" (24h), e.g. "08:00". Null for entries logged before this field existed.
+  clockIn         String?
   /// Cents per hour (e.g. $28.84/hr → 2884)
   hourlyRateCents Int      @default(0)
   taskDescription String?
@@ -541,6 +543,8 @@ model LaborEntry {
   workerName String
   role       String?
   hours      Float
+  /// Clock-in time as "HH:MM" (24h), e.g. "08:00". Null for entries logged before this field existed.
+  clockIn    String?
   /// Cents per hour (e.g. $28.84/hr → 2884)
   hourlyRateCents Int
 

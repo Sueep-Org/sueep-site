@@ -56,7 +56,7 @@ export type ChangeOrderDetailData = {
   computedLaborCents: number;
   computedMaterialCents: number;
   materialEntries: CoMaterialRow[];
-  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; regHours: number; otHours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null; completed: boolean }[];
+  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; clockIn: string | null; regHours: number; otHours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null; completed: boolean }[];
 };
 
 export type EmployeeOption = {
