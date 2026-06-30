@@ -85,6 +85,9 @@ type UnitScope = {
   materialsAdditional: boolean;
   fullClean: boolean;
   carpetCleaning: boolean;
+  otherWork: boolean;
+  otherDescription: string;
+  otherPrice: string;
 };
 
 function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(2)}`): UnitScope {
@@ -104,6 +107,9 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     materialsAdditional: false,
     fullClean: false,
     carpetCleaning: false,
+    otherWork: false,
+    otherDescription: "",
+    otherPrice: "",
   };
 }
 
@@ -153,6 +159,7 @@ function unitScopeSummary(unit: UnitScope) {
     unit.lightWallTouchUps ? "light wall touch-ups" : null,
     unit.materialsAdditional ? "additional materials" : null,
     unit.carpetCleaning ? "carpet cleaning" : null,
+    unit.otherWork ? `other: ${unit.otherDescription.trim() || "unspecified"}` : null,
   ].filter(Boolean);
 
   const unitLabel = unit.unitNumber || (unit.features === "common-area" ? "Common Area" : "Unit");
@@ -647,18 +654,28 @@ export function NewProjectForm({
 
   const unitCount = Math.max(1, unitScopes.length);
   const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
+  const firstUnitIsCommonArea = unitScopes[0]?.features === "common-area";
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
   const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
   const defaultPricePackageValues = useMemo<PricePackageValues>(
-    () => ({
-      fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
-      fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
-      touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
-      additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
-      carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
-    }),
-    [normalizedBeds, pricingPackage]
+    () =>
+      firstUnitIsCommonArea
+        ? {
+            fullClean: centsToDollarInput((pricingPackage.cleaningLayoutRates?.["common-area"] ?? 0) * 100),
+            fullPaint: centsToDollarInput((pricingPackage.paintingLayoutRates?.["common-area"] ?? 0) * 100),
+            touchUpPaint: centsToDollarInput((pricingPackage.touchUpPaintLayoutRates?.["common-area"] ?? 0) * 100),
+            additionalMaterials: centsToDollarInput((pricingPackage.additionalMaterialsLayoutRates?.["common-area"] ?? 0) * 100),
+            carpetCleaning: centsToDollarInput((pricingPackage.carpetCleaningLayoutRates?.["common-area"] ?? 0) * 100),
+          }
+        : {
+            fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
+            fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
+            touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
+            additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
+            carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
+          },
+    [normalizedBeds, pricingPackage, firstUnitIsCommonArea]
   );
   const [pricePackageValues, setPricePackageValues] = useState<PricePackageValues>(() => defaultPricePackageValues);
   const [pricePackageTouched, setPricePackageTouched] = useState(false);
@@ -813,6 +830,12 @@ export function NewProjectForm({
 
       if (unit.lightWallTouchUps) {
         unitLines.push("light wall touch-ups not priced");
+      }
+
+      if (unit.otherWork) {
+        const otherCents = dollarsToCents(unit.otherPrice || "0");
+        unitTotal += otherCents;
+        unitLines.push(`${unit.otherDescription.trim() || "other"} ${formatUsd(otherCents)}`);
       }
 
       totalPrice += unitTotal;
@@ -1474,19 +1497,56 @@ export function NewProjectForm({
                       { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
                       { key: "materialsAdditional", text: "Additional materials" },
                       { key: "carpetCleaning", text: "Carpet cleaning" },
+                      { key: "otherWork", text: "Other" },
                     ].map(({ key, text, disabled }) => (
                       <label key={key} className={`flex min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(unit[key as keyof UnitScope])}
                           disabled={disabled}
-                          onChange={(e) => updateUnitScope(unit.id, { [key]: e.target.checked } as Partial<UnitScope>)}
+                          onChange={(e) =>
+                            updateUnitScope(unit.id, {
+                              [key]: e.target.checked,
+                              ...(key === "otherWork" && !e.target.checked ? { otherDescription: "", otherPrice: "" } : {}),
+                            } as Partial<UnitScope>)
+                          }
                           className="h-4 w-4 text-pink-600"
                         />
                         <span className={`${checkboxLabel} break-words`}>{text}</span>
                       </label>
                     ))}
                   </div>
+                  {unit.otherWork && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <label className={label} htmlFor={`other-description-${unit.id}`}>
+                          Describe the other work
+                        </label>
+                        <input
+                          id={`other-description-${unit.id}`}
+                          className={input}
+                          value={unit.otherDescription}
+                          onChange={(e) => updateUnitScope(unit.id, { otherDescription: e.target.value })}
+                          placeholder="e.g. Window cleaning"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <label className={label} htmlFor={`other-price-${unit.id}`}>
+                          Price ($)
+                        </label>
+                        <input
+                          id={`other-price-${unit.id}`}
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className={input}
+                          value={unit.otherPrice}
+                          onChange={(e) => updateUnitScope(unit.id, { otherPrice: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1533,7 +1593,7 @@ export function NewProjectForm({
                     <p className="text-sm font-semibold text-gray-900">{lockedSueepPm ? "Unit Summary" : "Order summary"}</p>
                   </div>
                   <div className="divide-y divide-gray-50 px-4">
-                    {unitScopes.every((u) => !u.fullClean && !u.fullPaint && !u.touchUpPaint && !u.materialsAdditional && !u.carpetCleaning && !u.lightWallTouchUps) ? (
+                    {unitScopes.every((u) => !u.fullClean && !u.fullPaint && !u.touchUpPaint && !u.materialsAdditional && !u.carpetCleaning && !u.lightWallTouchUps && !u.otherWork) ? (
                       <p className="py-4 text-xs italic text-gray-400">Select services to see {lockedSueepPm ? "a summary" : "pricing"}.</p>
                     ) : (
                       unitScopes.map((unit, index) => {
@@ -1547,6 +1607,7 @@ export function NewProjectForm({
                         if (unit.materialsAdditional) items.push({ label: "Additional materials", cents: pc.additionalMaterials });
                         if (unit.carpetCleaning) items.push({ label: "Carpet cleaning", cents: pc.carpetCleaning });
                         if (unit.lightWallTouchUps) items.push({ label: "Light wall touch-ups", cents: 0 });
+                        if (unit.otherWork) items.push({ label: unit.otherDescription.trim() || "Other", cents: dollarsToCents(unit.otherPrice || "0") });
                         if (items.length === 0) return null;
                         const subtotal = items.reduce((s, item) => s + item.cents, 0);
                         return (

@@ -43,6 +43,9 @@ interface FormState {
   touchUpPaint: boolean;
   fullPaint: boolean;
   carpetCleaning: boolean;
+  otherWork: boolean;
+  otherDescription: string;
+  otherPrice: string;
   startDate: string;
   endDate: string;
   pmName: string;
@@ -58,6 +61,9 @@ const initial: FormState = {
   touchUpPaint: false,
   fullPaint: false,
   carpetCleaning: false,
+  otherWork: false,
+  otherDescription: "",
+  otherPrice: "",
   startDate: "",
   endDate: "",
   pmName: "",
@@ -125,6 +131,13 @@ function ServiceCheckbox({
   );
 }
 
+function dollarsToCents(value: string): number {
+  const normalized = value.replace(/[$,\s]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100);
+}
+
 function parseFeaturesForPricing(features: UnitFeatureValue): { bedrooms?: number; bathrooms?: number } {
   if (features === "studio") return { bedrooms: 0, bathrooms: 1 };
   if (features === "common-area") return {};
@@ -165,6 +178,10 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
 
   function validateStep(s: number): string {
     if (s === 1 && !form.buildingId) return "Please select a building.";
+    if (s === 2 && form.otherWork) {
+      if (!form.otherDescription.trim()) return "Please describe the other work needed.";
+      if (!form.otherPrice.trim() || Number(form.otherPrice) <= 0) return "Please enter a price for the other work.";
+    }
     if (s === 3) {
       if (!form.pmName.trim()) return "Your name is required.";
       if (!form.pmEmail.trim()) return "Your email is required.";
@@ -198,17 +215,21 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
 
     const pricingPackage = getTurnoverPricingPackage(selectedBuilding?.name ?? "");
     const { bedrooms, bathrooms } = parseFeaturesForPricing(form.features);
+    const isCommonArea = form.features === "common-area";
     const pricing = computeTurnoverPricing({
       requestType: "TURNOVER",
       pricingPackage,
       bedrooms,
       bathrooms,
+      isCommonArea,
       fullClean: form.fullClean,
       fullPaint: form.fullPaint,
       touchUpPaint: form.touchUpPaint ? 1 : 0,
       carpetCleaning: form.carpetCleaning,
       materialsAdditional: false,
     });
+    const otherCents = form.otherWork ? dollarsToCents(form.otherPrice) : 0;
+    const totalPriceCents = pricing.priceCents + otherCents;
 
     try {
       const signingRes = await fetch("/api/real-estate-signing-embed", {
@@ -222,7 +243,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           touchUpPaint: form.touchUpPaint,
           fullPaint: form.fullPaint,
           carpetCleaning: form.carpetCleaning,
-          priceCents: pricing.priceCents,
+          otherWork: form.otherWork,
+          otherDescription: form.otherWork ? form.otherDescription.trim() : undefined,
+          priceCents: totalPriceCents,
           cleanDate: form.startDate || undefined,
           depositNA: true,
           isPropertyManager: true,
@@ -259,6 +282,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
               touchUpPaint: form.touchUpPaint,
               fullPaint: form.fullPaint,
               carpetCleaning: form.carpetCleaning,
+              otherWork: form.otherWork,
+              otherDescription: form.otherWork ? form.otherDescription.trim() : undefined,
+              otherPrice: form.otherWork ? form.otherPrice : undefined,
               startDate: form.startDate || undefined,
               endDate: form.endDate || undefined,
             },
@@ -404,7 +430,43 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                   onChange={(v) => patch({ carpetCleaning: v })}
                   label="Carpet cleaning"
                 />
+                <ServiceCheckbox
+                  checked={form.otherWork}
+                  onChange={(v) => patch({ otherWork: v, ...(!v && { otherDescription: "", otherPrice: "" }) })}
+                  label="Other"
+                />
               </div>
+              {form.otherWork && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className={label} htmlFor="pm-other-description">
+                      Describe the work *
+                    </label>
+                    <input
+                      id="pm-other-description"
+                      className={input}
+                      value={form.otherDescription}
+                      onChange={(e) => patch({ otherDescription: e.target.value })}
+                      placeholder="e.g. Window cleaning"
+                    />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="pm-other-price">
+                      Price ($) *
+                    </label>
+                    <input
+                      id="pm-other-price"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className={input}
+                      value={form.otherPrice}
+                      onChange={(e) => patch({ otherPrice: e.target.value })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

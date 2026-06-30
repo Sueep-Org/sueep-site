@@ -13,6 +13,7 @@ export type TurnoverPricingInput = {
   pricingPackage?: unknown;
   bedrooms?: number | null;
   bathrooms?: number | null;
+  isCommonArea?: boolean;
   fullPaint: boolean;
   touchUpPaint: number;
   fullClean: boolean;
@@ -40,7 +41,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   let priceCents = 0;
 
   if (input.fullClean) {
-    const cleaningRate = getTurnoverCleaningRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const cleaningRate = getTurnoverCleaningRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
     const cleaningPrice = cleaningRate.dollars * 100;
     services.push("Full cleaning");
     priceCents += cleaningPrice;
@@ -48,7 +49,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.fullPaint) {
-    const paintingRate = getTurnoverPaintingRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const paintingRate = getTurnoverPaintingRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
     const paintingPrice = paintingRate.dollars * 100;
     services.push("Full painting");
     priceCents += paintingPrice;
@@ -56,7 +57,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.touchUpPaint > 0 && !input.fullPaint) {
-    const touchUpRate = getTurnoverTouchUpPaintRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const touchUpRate = getTurnoverTouchUpPaintRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
     const touchUpPrice = input.touchUpPaint * touchUpRate.dollars * 100;
     services.push(`${input.touchUpPaint} touch-up paint item${input.touchUpPaint === 1 ? "" : "s"}`);
     priceCents += touchUpPrice;
@@ -64,7 +65,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.carpetCleaning) {
-    const carpetRate = getTurnoverCarpetCleaningRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const carpetRate = getTurnoverCarpetCleaningRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
     const carpetPrice = carpetRate.dollars * 100;
     services.push("Carpet cleaning");
     priceCents += carpetPrice;
@@ -72,7 +73,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.materialsAdditional) {
-    const materialsRate = getTurnoverAdditionalMaterialsRate(pricingPackage, input.bedrooms, input.bathrooms);
+    const materialsRate = getTurnoverAdditionalMaterialsRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
     const materialsPrice = materialsRate.dollars * 100;
     services.push("Additional materials");
     priceCents += materialsPrice;

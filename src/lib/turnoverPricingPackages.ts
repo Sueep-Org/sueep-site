@@ -9,9 +9,9 @@ export type TurnoverPricingPackage = {
   label: string;
 };
 
-export type TurnoverUnitLayout = "studio" | "1/1" | "2/1" | "2/2" | "3/1" | "3/2" | "3/3";
+export type TurnoverUnitLayout = "studio" | "1/1" | "2/1" | "2/2" | "3/1" | "3/2" | "3/3" | "common-area";
 
-export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["studio", "1/1", "2/1", "2/2", "3/1", "3/2", "3/3"];
+export const TURNOVER_UNIT_LAYOUTS: TurnoverUnitLayout[] = ["studio", "1/1", "2/1", "2/2", "3/1", "3/2", "3/3", "common-area"];
 
 export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
   label: "Standard turnover pricing",
@@ -25,6 +25,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 385,
     "3/2": 385,
     "3/3": 385,
+    "common-area": 0,
   },
   paintingLayoutRates: {
     "studio": 280,
@@ -34,6 +35,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 450,
     "3/2": 450,
     "3/3": 450,
+    "common-area": 0,
   },
   touchUpPaintLayoutRates: {
     "studio": 125,
@@ -43,6 +45,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 125,
     "3/2": 125,
     "3/3": 125,
+    "common-area": 0,
   },
   carpetCleaningLayoutRates: {
     "studio": 100,
@@ -52,6 +55,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 100,
     "3/2": 100,
     "3/3": 100,
+    "common-area": 0,
   },
   additionalMaterialsLayoutRates: {
     "studio": 85,
@@ -61,6 +65,7 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 85,
     "3/2": 85,
     "3/3": 85,
+    "common-area": 0,
   },
 };
 
@@ -76,6 +81,7 @@ export const REAL_ESTATE_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 770,
     "3/2": 770,
     "3/3": 770,
+    "common-area": 0,
   },
   paintingLayoutRates: {
     "studio": 560,
@@ -85,6 +91,7 @@ export const REAL_ESTATE_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 900,
     "3/2": 900,
     "3/3": 900,
+    "common-area": 0,
   },
   carpetCleaningLayoutRates: {
     "studio": 200,
@@ -94,6 +101,7 @@ export const REAL_ESTATE_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 200,
     "3/2": 200,
     "3/3": 200,
+    "common-area": 0,
   },
 };
 
@@ -109,6 +117,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 200,
     "3/2": 200,
     "3/3": 200,
+    "common-area": 0,
   },
   paintingLayoutRates: {
     "studio": 400,
@@ -118,6 +127,7 @@ const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 600,
     "3/2": 600,
     "3/3": 600,
+    "common-area": 0,
   },
 };
 
@@ -194,7 +204,12 @@ export function normalizePricingBedrooms(value?: number | null): 1 | 2 | 3 {
   return beds === 2 ? 2 : 1;
 }
 
-export function getTurnoverUnitLayout(bedrooms?: number | null, bathrooms?: number | null): TurnoverUnitLayout {
+export function getTurnoverUnitLayout(
+  bedrooms?: number | null,
+  bathrooms?: number | null,
+  isCommonArea?: boolean
+): TurnoverUnitLayout {
+  if (isCommonArea) return "common-area";
   const rawBeds = Number(bedrooms ?? 1);
   if (rawBeds <= 0) return "studio";
   const beds = normalizePricingBedrooms(bedrooms);
@@ -210,9 +225,10 @@ export function getTurnoverUnitLayout(bedrooms?: number | null, bathrooms?: numb
 export function getTurnoverCleaningRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
-  bathrooms?: number | null
+  bathrooms?: number | null,
+  isCommonArea?: boolean
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
   const beds = normalizePricingBedrooms(bedrooms);
   return {
     layout,
@@ -223,9 +239,10 @@ export function getTurnoverCleaningRate(
 export function getTurnoverPaintingRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
-  bathrooms?: number | null
+  bathrooms?: number | null,
+  isCommonArea?: boolean
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
   const beds = normalizePricingBedrooms(bedrooms);
   return {
     layout,
@@ -236,36 +253,39 @@ export function getTurnoverPaintingRate(
 export function getTurnoverTouchUpPaintRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
-  bathrooms?: number | null
+  bathrooms?: number | null,
+  isCommonArea?: boolean
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
   return {
     layout,
-    dollars: pricingPackage.touchUpPaintLayoutRates?.[layout] ?? 125,
+    dollars: pricingPackage.touchUpPaintLayoutRates?.[layout] ?? (isCommonArea ? 0 : 125),
   };
 }
 
 export function getTurnoverCarpetCleaningRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
-  bathrooms?: number | null
+  bathrooms?: number | null,
+  isCommonArea?: boolean
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
   return {
     layout,
-    dollars: pricingPackage.carpetCleaningLayoutRates?.[layout] ?? 100,
+    dollars: pricingPackage.carpetCleaningLayoutRates?.[layout] ?? (isCommonArea ? 0 : 100),
   };
 }
 
 export function getTurnoverAdditionalMaterialsRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
-  bathrooms?: number | null
+  bathrooms?: number | null,
+  isCommonArea?: boolean
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
   return {
     layout,
-    dollars: pricingPackage.additionalMaterialsLayoutRates?.[layout] ?? 85,
+    dollars: pricingPackage.additionalMaterialsLayoutRates?.[layout] ?? (isCommonArea ? 0 : 85),
   };
 }
 

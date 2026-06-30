@@ -150,6 +150,11 @@ model TurnoverRequest {
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
 
+  otherWork        Boolean @default(false)
+  otherDescription String?
+  /// Manually entered price for the "Other" line item, in cents.
+  otherCents       Int?
+
   startDate DateTime?
   endDate   DateTime?
   priceCents Int?

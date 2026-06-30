@@ -18,6 +18,9 @@ type UnitScopePayload = {
   materialsAdditional?: unknown;
   fullClean?: unknown;
   carpetCleaning?: unknown;
+  otherWork?: unknown;
+  otherDescription?: unknown;
+  otherPrice?: unknown;
 };
 
 function stringValue(value: unknown) {
@@ -144,6 +147,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
 
   const requests = await Promise.all(
     units.map((unit, index) => {
+      const isCommonArea = stringValue(unit.features) === "common-area";
       const { bedrooms, bathrooms } = featureToBedsBaths(unit.features);
       const { startDate, endDate } = unitDateRange(unit);
       const fullPaint = Boolean(unit.fullPaint);
@@ -151,24 +155,29 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const fullClean = Boolean(unit.fullClean);
       const carpetCleaning = Boolean(unit.carpetCleaning);
       const materialsAdditional = Boolean(unit.materialsAdditional);
+      const otherWork = Boolean(unit.otherWork);
+      const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
+      const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
       const pricing = computeTurnoverPricing({
         requestType: "TURNOVER",
         buildingName: building.name,
         pricingPackage,
         bedrooms,
         bathrooms,
+        isCommonArea,
         fullPaint,
         touchUpPaint,
         fullClean,
         carpetCleaning,
         materialsAdditional,
       });
+      const priceCents = (pricing.priceCents || 0) + otherCents;
 
       return prisma.turnoverRequest.create({
         data: {
           buildingId: building.id,
           requestType: "TURNOVER",
-          unitNumber: stringValue(unit.unitNumber) || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`),
+          unitNumber: stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`),
           bedrooms,
           bathrooms,
           fullPaint,
@@ -176,9 +185,12 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           fullClean,
           carpetCleaning,
           materialsAdditional,
+          otherWork,
+          otherDescription: otherDescription || null,
+          otherCents: otherWork ? otherCents : null,
           startDate,
           endDate,
-          priceCents: pricing.priceCents || null,
+          priceCents: priceCents || null,
           createdBy: stringValue(body.sueepPmEmail) || stringValue(body.pmEmail) || null,
         },
       });
