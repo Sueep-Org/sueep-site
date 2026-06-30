@@ -49,6 +49,8 @@ function renderDrawerSkeleton(){
 
   libraryMount.innerHTML = `
     <div id="listContainer" style="padding:.5rem;">
+      <input id="librarySearch" type="text" placeholder="Search projects…"
+        style="width:100%;box-sizing:border-box;padding:6px 10px;margin-bottom:.5rem;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none;" />
       <div id="listLoading">Loading…</div>
       <div id="savedSection"></div>
     </div>
@@ -84,7 +86,8 @@ async function refreshDrawer(){
       const blueprint = files.find(f => f.file_type === 'blueprint') || files[0] || null;
 
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;';
+      row.dataset.name = (project.name || '').toLowerCase();
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;flex-wrap:nowrap;min-width:0;';
 
       const nameBtn = document.createElement('button');
       nameBtn.textContent = `📄 ${project.name}`;
@@ -101,7 +104,9 @@ async function refreshDrawer(){
             await window.__handleFile?.(fileObj);
             activeProjectId = project.id;
             window.__restoreAnnotations?.(project.id);
-            window.__showProjectLoadedCard?.(projData, blueprint.filename);
+            const freshRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
+            const freshData = freshRes.ok ? await freshRes.json() : projData;
+            window.__showProjectLoadedCard?.(freshData, blueprint.filename);
             closeSidebar();
           } catch(e) {
             toast(e.message, 'error');
@@ -140,6 +145,16 @@ async function refreshDrawer(){
       row.appendChild(delBtn);
 
       savedSec.appendChild(row);
+    }
+
+    const searchInput = document.getElementById('librarySearch');
+    if (searchInput) {
+      searchInput.oninput = () => {
+        const q = searchInput.value.toLowerCase().trim();
+        savedSec.querySelectorAll('[data-name]').forEach(r => {
+          r.style.display = !q || r.dataset.name.includes(q) ? '' : 'none';
+        });
+      };
     }
   } catch(e) {
     console.error(e);
@@ -1211,25 +1226,32 @@ async function initApp(){
 
     try{
 
-      const ab = await file.arrayBuffer();
+      const isImage = file.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(file.name);
 
-      const lib = window.pdfjsLib;
-
-      pdfDoc = await lib.getDocument({
-        data: ab
-      }).promise;
-
-      currentPage = 1;
-      measurementViewPage = 1;
-
-      zoom = 1;
-
-      panOffset = {
-        x: 0,
-        y: 0
-      };
-
-      await renderPage();
+      if (isImage) {
+        // Render image directly onto the PDF canvas — no PDF.js needed
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+        pdfDoc = null;
+        pdfCanvas.width = img.naturalWidth;
+        pdfCanvas.height = img.naturalHeight;
+        pdfCanvas.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        // hide page nav since there's only one "page"
+        document.getElementById('prevPageBtn').style.display = 'none';
+        document.getElementById('nextPageBtn').style.display = 'none';
+        document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+      } else {
+        const ab = await file.arrayBuffer();
+        const lib = window.pdfjsLib;
+        pdfDoc = await lib.getDocument({ data: ab }).promise;
+        currentPage = 1;
+        measurementViewPage = 1;
+        zoom = 1;
+        panOffset = { x: 0, y: 0 };
+        await renderPage();
+      }
 
       if (downloadPdfBtn) {
         downloadPdfBtn.disabled = false;
@@ -1241,9 +1263,6 @@ async function initApp(){
       if (mainContent){
 
         mainContent.classList.remove('hidden');
-        // resizeToMatchCanvas was called during renderPage while mainContent was hidden
-        // (clientWidth=0). Re-call now that the element is visible so the overlay
-        // canvas gets the correct CSS dimensions and can receive pointer events.
         overlay.resizeToMatchCanvas();
       }
 
@@ -1838,6 +1857,7 @@ async function initApp(){
   if (saveAnalysisBtn) {
     saveAnalysisBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
+      if (!window.confirm('Are you sure you want to save this analysis?')) return;
       const rates = _getRates();
       const phases = _getPhaseInputs();
 
@@ -2183,6 +2203,8 @@ async function initApp(){
       file.name
     );
 
+    if (!window.confirm(`Are you sure you want to upload "${file.name}"?`)) return;
+
     await handleFile(file);
 
     try {
@@ -2196,7 +2218,25 @@ async function initApp(){
         body: JSON.stringify({ name: projectName })
       });
       if (projectRes.status === 409) {
-        toast(`A project named "${projectName}" already exists.`, 'error');
+        const openExisting = window.confirm(`A project named "${projectName}" already exists.\n\nWould you like to open the existing project?`);
+        if (!openExisting) return;
+        const listRes = await fetch(`${API_BASE}/api/projects`, { cache: 'no-store' });
+        const listData = await listRes.json();
+        const existing = (listData.projects || []).find(p => p.name === projectName);
+        if (!existing) { toast('Could not find the existing project.', 'error'); return; }
+        const freshRes = await fetch(`${API_BASE}/api/projects/${existing.id}`, { cache: 'no-store' });
+        if (!freshRes.ok) { toast('Failed to load existing project.', 'error'); return; }
+        const freshData = await freshRes.json();
+        const blueprint = (freshData.files || []).find(f => f.file_type === 'blueprint') || freshData.files?.[0];
+        if (blueprint) {
+          const resp = await fetch(`${API_BASE}/api/projects/${existing.id}/files/${blueprint.id}/download`, { redirect: 'follow' });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            await handleFile(new File([blob], blueprint.filename));
+          }
+        }
+        activeProjectId = existing.id;
+        showProjectLoadedCard(freshData, blueprint?.filename || projectName);
         return;
       }
       if (!projectRes.ok) {
