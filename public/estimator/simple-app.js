@@ -392,6 +392,11 @@ async function initApp(){
     }[char]));
   }
 
+  function isZeroSovCost(cost) {
+    const normalized = String(cost ?? '').trim().replace(/[$,]/g, '');
+    return normalized === '0' || normalized === '0.00';
+  }
+
   function getSovPageRows() {
     const totalPages = Number(pdfDoc?.numPages || 0);
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
@@ -438,9 +443,10 @@ async function initApp(){
     if (!containerEl) return;
 
     const rows = getSovPageRows();
+    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost));
     containerEl.innerHTML = '';
 
-    if (!rows.length) {
+    if (!visibleRows.length) {
       containerEl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No schedule data available yet.</div>';
       return;
     }
@@ -464,7 +470,7 @@ async function initApp(){
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    rows.forEach((row) => {
+    visibleRows.forEach((row) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
