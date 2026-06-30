@@ -109,14 +109,9 @@ export function ProjectFinancialsEditor({
     setEstModalLoading(true);
     setEstModalError("");
     try {
-      const [projRes, quotRes] = await Promise.all([
-        fetch(`${ESTIMATOR_API}/api/projects/${estId}`, {
-          headers: { "x-anon-id": anonId }, cache: "no-store",
-        }),
-        fetch(`${ESTIMATOR_API}/api/projects/${estId}/quotation-data`, {
-          headers: { "x-anon-id": anonId }, cache: "no-store",
-        }),
-      ]);
+      const projRes = await fetch(`${ESTIMATOR_API}/api/projects/${estId}`, {
+        headers: { "x-anon-id": anonId }, cache: "no-store",
+      });
       if (!projRes.ok) throw new Error("Failed to load project");
 
       const proj = (await projRes.json()) as {
@@ -147,39 +142,59 @@ export function ProjectFinancialsEditor({
         if (totalMaterials > 0) setEstMat(totalMaterials.toFixed(2));
       }
 
-      // SOV items from quotation-data
-      if (quotRes.ok) {
-        const quot = (await quotRes.json()) as {
-          analysis?: {
-            quote_items?: {
-              sheet: string;
-              items: { service?: string; description?: string; total?: number }[];
-            }[];
-          };
-        };
-        const sovItems: { description: string; scheduledValueCents: number; order: number }[] = [];
-        let order = 0;
-        for (const sheet of quot.analysis?.quote_items ?? []) {
-          for (const item of sheet.items) {
-            if ((item.service ?? "").toLowerCase() === "total") continue;
-            const description = (item.description || item.service || "").trim();
-            const cents = Math.round((item.total ?? 0) * 100);
-            if (!description || cents <= 0) continue;
-            sovItems.push({ description, scheduledValueCents: cents, order: order++ });
-          }
+      // SOV items — one row per measured PDF page, from the estimator's own
+      // "Schedule of Values" feature. That feature never saves to the estimator's
+      // server; it's computed client-side from page measurements stored in this
+      // browser's localStorage (key: annotations_<estimatorProjectId>). Since the
+      // estimator UI is served from this same app/origin, we can read it directly.
+      let sovNote = "";
+      const annotJson = localStorage.getItem(`annotations_${estId}`);
+      if (!annotJson) {
+        sovNote = "SOV not imported: no page measurements found in this browser for that estimator project. Measurements only exist on the device/browser where the PDF was measured.";
+      } else {
+        let measurementsByPage: Record<string, { area?: number }[]> = {};
+        try {
+          const parsed = JSON.parse(annotJson) as { measurements?: Record<string, { area?: number }[]> };
+          measurementsByPage = parsed.measurements ?? {};
+        } catch {
+          measurementsByPage = {};
         }
-        await Promise.all(
-          sovItems.map((item) =>
-            fetch(`/api/erp/projects/${projectId}/sov/items`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(item),
-            })
-          )
-        );
+
+        const pageAreas = Object.entries(measurementsByPage)
+          .map(([page, items]) => ({
+            page: Number(page),
+            area: items.reduce((sum, m) => sum + (Number(m.area) || 0), 0),
+          }))
+          .filter((p) => p.area > 0)
+          .sort((a, b) => a.page - b.page);
+        const totalArea = pageAreas.reduce((s, p) => s + p.area, 0);
+
+        if (pageAreas.length === 0) {
+          sovNote = "SOV not imported: no measured pages found for that estimator project in this browser.";
+        } else if (!proj.quote || proj.quote <= 0) {
+          sovNote = "SOV not imported: the estimator project has no contract value set, so per-page dollar amounts can't be calculated.";
+        } else {
+          const sovItems = pageAreas
+            .map((p, idx) => ({
+              description: `Page ${p.page}`,
+              scheduledValueCents: Math.round((p.area / totalArea) * proj.quote! * 100),
+              order: idx,
+            }))
+            .filter((item) => item.scheduledValueCents > 0);
+          await Promise.all(
+            sovItems.map((item) =>
+              fetch(`/api/erp/projects/${projectId}/sov/items`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(item),
+              })
+            )
+          );
+        }
       }
 
       setEstModalOpen(false);
+      setError(sovNote);
       router.refresh();
     } catch {
       setEstModalError("Could not load that project. Try again.");
@@ -237,7 +252,8 @@ export function ProjectFinancialsEditor({
               </button>
             </div>
             <p className="mb-3 text-xs text-gray-500">
-              Select a project to pull est. labor, materials, contract value, and SOV line items.
+              Select a project to pull est. labor, materials, contract value, and SOV (one line per measured PDF
+              page — only works if this browser was used to measure that project in the estimator).
             </p>
             {estModalLoading ? (
               <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
