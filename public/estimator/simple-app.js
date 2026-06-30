@@ -267,6 +267,7 @@ async function initApp(){
   const downloadPdfBtn = $('downloadPdfBtn');
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
+  let _sovRows = [];
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -381,6 +382,16 @@ async function initApp(){
     return null;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+  }
+
   function getSovPageRows() {
     const totalPages = Number(pdfDoc?.numPages || 0);
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
@@ -401,7 +412,26 @@ async function initApp(){
         cost: value != null ? formatSovCurrency(value) : `${percent.toFixed(2)}%`
       });
     }
-    return rows;
+
+    if (!_sovRows.length) {
+      _sovRows = rows.map((row) => ({ ...row, deleted: false }));
+      return _sovRows.filter((row) => !row.deleted);
+    }
+
+    const existingByPage = new Map(_sovRows.map((row) => [row.page, row]));
+    const syncedRows = rows.map((row) => {
+      const existing = existingByPage.get(row.page);
+      return {
+        page: row.page,
+        description: existing?.description ?? row.description,
+        cost: row.cost,
+        deleted: existing?.deleted ?? false,
+      };
+    });
+
+    const removedRows = _sovRows.filter((row) => !rows.some((baseRow) => baseRow.page === row.page));
+    _sovRows = [...syncedRows, ...removedRows.filter((row) => row.deleted)];
+    return _sovRows.filter((row) => !row.deleted);
   }
 
   function renderSovTable(containerEl) {
@@ -437,10 +467,35 @@ async function initApp(){
     rows.forEach((row) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.page}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.description}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${row.cost}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="mini-btn" data-delete-sov-row="${row.page}" style="padding:2px 6px;min-width:auto;font-size:11px;line-height:1;">×</button>
+            <span>${escapeHtml(row.page)}</span>
+          </div>
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${escapeHtml(row.cost)}</td>
       `;
+
+      const deleteBtn = tr.querySelector('[data-delete-sov-row]');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+          const storedRow = _sovRows.find((entry) => entry.page === row.page);
+          if (storedRow) storedRow.deleted = true;
+          renderSovTable(containerEl);
+        });
+      }
+
+      const descriptionInput = tr.querySelector('[data-sov-description]');
+      if (descriptionInput) {
+        descriptionInput.addEventListener('input', (event) => {
+          const storedRow = _sovRows.find((entry) => entry.page === row.page);
+          if (storedRow) storedRow.description = event.target.value;
+        });
+      }
+
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
