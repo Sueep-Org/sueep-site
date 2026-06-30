@@ -268,6 +268,7 @@ async function initApp(){
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   let _sovRows = [];
+  let _lastDeletedSovRow = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -439,6 +440,32 @@ async function initApp(){
     return _sovRows.filter((row) => !row.deleted);
   }
 
+  function addSovRow() {
+    const nextPage = (_sovRows.length ? Math.max(..._sovRows.map((row) => Number(row.page) || 0)) : 0) + 1;
+    const newRow = {
+      page: nextPage,
+      description: `New Row ${nextPage}`,
+      cost: '$0.00',
+      deleted: false,
+    };
+    _sovRows.push(newRow);
+    renderSovTable(document.getElementById('sovTableContainer'));
+  }
+
+  function undoSovRowDelete() {
+    if (!_lastDeletedSovRow) return;
+    const target = _sovRows.find((row) => row.page === _lastDeletedSovRow.page);
+    if (target) {
+      target.deleted = false;
+      target.description = _lastDeletedSovRow.description;
+      target.cost = _lastDeletedSovRow.cost;
+    } else {
+      _sovRows.push({ ..._lastDeletedSovRow, deleted: false });
+    }
+    _lastDeletedSovRow = null;
+    renderSovTable(document.getElementById('sovTableContainer'));
+  }
+
   function renderSovTable(containerEl) {
     if (!containerEl) return;
 
@@ -489,7 +516,10 @@ async function initApp(){
       if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
           const storedRow = _sovRows.find((entry) => entry.page === row.page);
-          if (storedRow) storedRow.deleted = true;
+          if (storedRow) {
+            _lastDeletedSovRow = { ...storedRow };
+            storedRow.deleted = true;
+          }
           renderSovTable(containerEl);
         });
       }
@@ -513,6 +543,8 @@ async function initApp(){
   function renderSovCard() {
     const card = document.getElementById('sovCard');
     const container = document.getElementById('sovTableContainer');
+    const undoBtn = document.getElementById('undoSovRowBtn');
+    const addBtn = document.getElementById('addSovRowBtn');
     if (!card || !container) return;
 
     if (!pdfDoc || !_loadedProjectData) {
@@ -522,6 +554,13 @@ async function initApp(){
     }
 
     card.style.display = 'block';
+    if (undoBtn) {
+      undoBtn.disabled = !_lastDeletedSovRow;
+      undoBtn.onclick = undoSovRowDelete;
+    }
+    if (addBtn) {
+      addBtn.onclick = addSovRow;
+    }
     renderSovTable(container);
   }
 

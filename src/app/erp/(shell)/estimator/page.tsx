@@ -668,9 +668,17 @@ export default function EstimatorPage() {
             style={{ display: "none" }}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800">
-                Schedule of Values
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-gray-800">
+                  Schedule of Values
+                </h3>
+                <button id="undoSovRowBtn" className="mini-btn" type="button">
+                  Undo
+                </button>
+                <button id="addSovRowBtn" className="mini-btn" type="button">
+                  +
+                </button>
+              </div>
             </div>
             <div id="sovTableContainer"></div>
           </div>
