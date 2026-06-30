@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
 import { BuildingPricingPackageEditor } from "../../BuildingPricingPackageEditor";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +43,7 @@ export default async function BuildingPricingPackagePage({ params }: PageProps) 
           buildingId={building.id}
           buildingName={building.name}
           initialPackage={building.pricingPackage}
+          canEdit={auth ? canEditPricing(auth.role) : false}
         />
       </div>
     </div>

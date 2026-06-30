@@ -17,9 +17,10 @@ type Props = {
   };
   initialPackage: unknown;
   isSupervisor?: boolean;
+  canEditPricing?: boolean;
 };
 
-export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor }: Props) {
+export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor, canEditPricing = false }: Props) {
   const allTabs = [
     {
       label: "Details",
@@ -35,6 +36,7 @@ export function BuildingTabs({ buildingId, buildingName, initial, initialPackage
             buildingId={buildingId}
             buildingName={buildingName}
             initialPackage={initialPackage}
+            canEdit={canEditPricing}
           />
         </div>
       ),

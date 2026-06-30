@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import type { ErpRole } from "@/lib/erpSession";
 
 export async function GET() {
   const buildings = await prisma.building.findMany({ orderBy: { name: "asc" } });
@@ -21,8 +22,8 @@ export async function POST(req: Request) {
   if (!name || !address) {
     return NextResponse.json({ error: "name and address are required" }, { status: 400 });
   }
-  if (body.pricingPackage !== undefined && !isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-    return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+  if (body.pricingPackage !== undefined && !canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+    return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
   }
 
   try {

@@ -59,29 +59,36 @@ export async function POST(req: Request) {
   const unitNumber = body.unitNumber != null ? String(body.unitNumber).trim() : null;
   const bedrooms = parseIntValue(body.bedrooms);
   const bathrooms = parseIntValue(body.bathrooms);
+  const isCommonArea = Boolean(body.isCommonArea) || (bedrooms === null && bathrooms === null && body.isCommonArea !== false);
   const fullPaint = Boolean(body.fullPaint);
   const touchUpPaint = parseIntValue(body.touchUpPaint) ?? 0;
   const fullClean = Boolean(body.fullClean);
   const carpetCleaning = Boolean(body.carpetCleaning);
   const materialsAdditional = Boolean(body.materialsAdditional);
+  const otherWork = Boolean(body.otherWork);
+  const otherDescription = otherWork && body.otherDescription ? String(body.otherDescription).trim() : null;
+  const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
+  const otherCents = otherCentsRaw ?? (otherWork && body.otherPrice ? Math.round((Number(String(body.otherPrice).replace(/[$,\s]/g, "")) || 0) * 100) : 0);
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
   const createdBy = body.createdBy != null ? String(body.createdBy).trim() : null;
   const sueepPmName = stringValue(body.sueepPmName);
   const sueepPmEmail = stringValue(body.sueepPmEmail);
 
-  const pricing = computeTurnoverPricing({
+  const basePricing = computeTurnoverPricing({
     requestType,
     buildingName: building.name,
     pricingPackage: building.pricingPackage,
     bedrooms,
     bathrooms,
+    isCommonArea,
     fullPaint,
     touchUpPaint,
     fullClean,
     carpetCleaning,
     materialsAdditional,
   });
+  const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
   try {
     const request = await prisma.turnoverRequest.create({
@@ -89,16 +96,19 @@ export async function POST(req: Request) {
         buildingId,
         requestType,
         unitNumber: unitNumber || null,
-        bedrooms: bedrooms ?? null,
-        bathrooms: bathrooms ?? null,
+        bedrooms: isCommonArea ? null : (bedrooms ?? null),
+        bathrooms: isCommonArea ? null : (bathrooms ?? null),
         fullPaint,
         touchUpPaint,
         fullClean,
         carpetCleaning,
         materialsAdditional,
+        otherWork,
+        otherDescription,
+        otherCents: otherWork ? otherCents : null,
         startDate,
         endDate,
-        priceCents: pricing.priceCents || null,
+        priceCents: totalPriceCents || null,
         approvedPriceCents: null,
         createdBy: createdBy || null,
       },
@@ -111,10 +121,10 @@ export async function POST(req: Request) {
       requestType,
       bedrooms,
       bathrooms,
-      services: pricing.services,
+      services: basePricing.services,
       startDate: startDate ? startDate.toISOString().split("T")[0] : null,
       endDate: endDate ? endDate.toISOString().split("T")[0] : null,
-      priceLabel: pricing.priceLabel,
+      priceLabel: basePricing.priceLabel,
       createdBy,
       sueepPmName,
     });

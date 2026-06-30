@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
@@ -39,6 +39,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
+  const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks] = await Promise.all([
     prisma.project.findUnique({
@@ -69,6 +70,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             touchUpPaint: true,
             carpetCleaning: true,
             materialsAdditional: true,
+            otherWork: true,
+            otherDescription: true,
+            otherCents: true,
             priceCents: true,
           },
         },
@@ -325,6 +329,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 touchUpPaint={project.turnoverRequest.touchUpPaint}
                 carpetCleaning={project.turnoverRequest.carpetCleaning}
                 materialsAdditional={project.turnoverRequest.materialsAdditional}
+                otherWork={project.turnoverRequest.otherWork}
+                otherDescription={project.turnoverRequest.otherDescription}
               />
             </div>
           )}
@@ -411,6 +417,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 touchUpPaint={project.turnoverRequest?.touchUpPaint ?? null}
                 carpetCleaning={project.turnoverRequest?.carpetCleaning ?? false}
                 materialsAdditional={project.turnoverRequest?.materialsAdditional ?? false}
+                otherWork={project.turnoverRequest?.otherWork ?? false}
+                otherDescription={project.turnoverRequest?.otherDescription ?? null}
+                otherCents={project.turnoverRequest?.otherCents ?? null}
               />
             ),
           },
@@ -511,6 +520,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   buildingId={project.building.id}
                   buildingName={project.building.name}
                   initialPackage={project.building.pricingPackage}
+                  canEdit={canEditPricingForRole}
                 />
               </div>
             ),

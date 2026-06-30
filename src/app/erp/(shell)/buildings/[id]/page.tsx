@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         buildingId={building.id}
         buildingName={building.name}
         isSupervisor={isSupervisor || isEmployee}
+        canEditPricing={auth ? canEditPricing(auth.role) : false}
         initial={{
           name: building.name,
           builder: building.builder,

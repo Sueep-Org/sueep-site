@@ -7,6 +7,8 @@ type Props = {
   touchUpPaint: number | null;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  otherWork: boolean;
+  otherDescription: string | null;
 };
 
 function Check() {
@@ -27,6 +29,8 @@ export function UnitScopeCard({
   touchUpPaint,
   carpetCleaning,
   materialsAdditional,
+  otherWork,
+  otherDescription,
 }: Props) {
   const workItems = [
     fullClean ? "Full Clean" : null,
@@ -34,6 +38,7 @@ export function UnitScopeCard({
     touchUpPaint ? `Touch-Up Paint (${touchUpPaint} rooms)` : null,
     carpetCleaning ? "Carpet Cleaning" : null,
     materialsAdditional ? "Materials" : null,
+    otherWork ? (otherDescription?.trim() || "Other") : null,
   ].filter(Boolean) as string[];
 
   const isCommonArea = bedrooms === null && bathrooms === null;

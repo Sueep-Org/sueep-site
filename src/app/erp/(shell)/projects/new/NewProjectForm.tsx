@@ -2,12 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -227,6 +224,8 @@ interface NewProjectFormProps {
   disableNewBuilding?: boolean;
   /** Arbitrary extra fields merged into the submission payload */
   payloadExtra?: Record<string, unknown>;
+  /** Allow editing the pricing package rates (Admin / PM / Estimation) */
+  canEditPricing?: boolean;
 }
 
 function normalizeBuildingName(value: string) {
@@ -498,6 +497,7 @@ export function NewProjectForm({
   lockedSueepPm,
   disableNewBuilding = false,
   payloadExtra,
+  canEditPricing: canEditPricingProp = false,
 }: NewProjectFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -515,13 +515,7 @@ export function NewProjectForm({
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
 
-  const [currentEmail, setCurrentEmail] = useState(auth?.currentUser?.email ?? "");
-  const canEditPricing = !lockedSueepPm && isTurnoverPricingAdmin(currentEmail);
-
-  useEffect(() => {
-    if (!auth) return;
-    return onAuthStateChanged(auth, (user) => setCurrentEmail(user?.email ?? ""));
-  }, []);
+  const canEditPricing = !lockedSueepPm && canEditPricingProp;
 
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {

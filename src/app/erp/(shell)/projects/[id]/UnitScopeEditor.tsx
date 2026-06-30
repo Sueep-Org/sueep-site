@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverPricingPackageQuestions } from "@/app/erp/(shell)/turnover-requests/TurnoverPricingPackageQuestions";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
+import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 type Props = {
   projectId: string;
@@ -19,6 +20,9 @@ type Props = {
   touchUpPaint: number | null;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  otherWork: boolean;
+  otherDescription: string | null;
+  otherCents: number | null;
 };
 
 export function UnitScopeEditor({
@@ -35,10 +39,14 @@ export function UnitScopeEditor({
   touchUpPaint,
   carpetCleaning,
   materialsAdditional,
+  otherWork,
+  otherDescription,
+  otherCents,
 }: Props) {
   const router = useRouter();
   const [turnoverRequestId, setTurnoverRequestId] = useState(initialTurnoverRequestId);
   const [unitNumberVal, setUnitNumberVal] = useState(unitNumber ?? "");
+  const [isCommonArea, setIsCommonArea] = useState(bedrooms === null && bathrooms === null);
   const [bedroomsStr, setBedroomsStr] = useState(bedrooms?.toString() ?? "");
   const [bathroomsStr, setBathroomsStr] = useState(bathrooms?.toString() ?? "");
   const [fullCleanVal, setFullClean] = useState(fullClean);
@@ -46,25 +54,71 @@ export function UnitScopeEditor({
   const [touchUpPaintStr, setTouchUpPaint] = useState(touchUpPaint?.toString() ?? "0");
   const [carpetCleaningVal, setCarpetCleaning] = useState(carpetCleaning);
   const [materialsAdditionalVal, setMaterialsAdditional] = useState(materialsAdditional);
+  const [otherWorkVal, setOtherWork] = useState(otherWork);
+  const [otherDescriptionVal, setOtherDescription] = useState(otherDescription ?? "");
+  const [otherPriceVal, setOtherPrice] = useState(otherCents != null ? (otherCents / 100).toFixed(2) : "");
+  const [commonAreaRates, setCommonAreaRates] = useState(() => {
+    const pkg = getTurnoverPricingPackage(buildingName, pricingPackage);
+    const d = (v: number | undefined) => String(v ?? 0);
+    return {
+      fullClean: d(pkg.cleaningLayoutRates?.["common-area"]),
+      fullPaint: d(pkg.paintingLayoutRates?.["common-area"]),
+      touchUpPaint: d(pkg.touchUpPaintLayoutRates?.["common-area"]),
+      carpetCleaning: d(pkg.carpetCleaningLayoutRates?.["common-area"]),
+      additionalMaterials: d(pkg.additionalMaterialsLayoutRates?.["common-area"]),
+    };
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  function buildCommonAreaPricingPackage() {
+    const pkg = getTurnoverPricingPackage(buildingName, pricingPackage);
+    const n = (v: string) => Math.max(0, Math.round(Number(v.replace(/[$,\s]/g, "")) || 0));
+    return {
+      ...pkg,
+      cleaningLayoutRates: { ...pkg.cleaningLayoutRates, "common-area": n(commonAreaRates.fullClean) },
+      paintingLayoutRates: { ...pkg.paintingLayoutRates, "common-area": n(commonAreaRates.fullPaint) },
+      touchUpPaintLayoutRates: { ...pkg.touchUpPaintLayoutRates, "common-area": n(commonAreaRates.touchUpPaint) },
+      carpetCleaningLayoutRates: { ...pkg.carpetCleaningLayoutRates, "common-area": n(commonAreaRates.carpetCleaning) },
+      additionalMaterialsLayoutRates: { ...pkg.additionalMaterialsLayoutRates, "common-area": n(commonAreaRates.additionalMaterials) },
+    };
+  }
 
   async function onSave() {
     setSaving(true);
     setError("");
     setSuccess(false);
     try {
-      const newUnitNumber = unitNumberVal.trim() || null;
+      // If common area, save rates back to building first so the TurnoverRequest PATCH can use them.
+      if (isCommonArea && buildingId) {
+        const buildingRes = await fetch(`/api/erp/buildings/${buildingId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ pricingPackage: buildCommonAreaPricingPackage() }),
+        });
+        if (!buildingRes.ok) {
+          const d = (await buildingRes.json().catch(() => ({}))) as { error?: string };
+          setError(d.error ?? "Failed to save pricing rates");
+          return;
+        }
+      }
+      const newUnitNumber = unitNumberVal.trim() || (isCommonArea ? "Common Area" : null);
+      const otherCentsVal = otherWorkVal ? Math.round((Number(otherPriceVal.replace(/[$,\s]/g, "")) || 0) * 100) : 0;
       const layoutPayload = {
         unitNumber: newUnitNumber,
-        bedrooms: bedroomsStr !== "" ? Number(bedroomsStr) : null,
-        bathrooms: bathroomsStr !== "" ? Number(bathroomsStr) : null,
+        bedrooms: isCommonArea ? null : (bedroomsStr !== "" ? Number(bedroomsStr) : null),
+        bathrooms: isCommonArea ? null : (bathroomsStr !== "" ? Number(bathroomsStr) : null),
         fullClean: fullCleanVal,
         fullPaint: fullPaintVal,
         touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
         carpetCleaning: carpetCleaningVal,
         materialsAdditional: materialsAdditionalVal,
+        otherWork: otherWorkVal,
+        otherDescription: otherWorkVal ? otherDescriptionVal.trim() || null : null,
+        otherCents: otherWorkVal ? otherCentsVal : null,
+        otherPrice: otherWorkVal ? otherPriceVal : undefined,
+        isCommonArea,
       };
       const newJobTitle = `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`;
 
@@ -144,18 +198,28 @@ export function UnitScopeEditor({
         pricingPackage={pricingPackage}
         bedrooms={bedroomsStr}
         bathrooms={bathroomsStr}
+        isCommonArea={isCommonArea}
         fullPaint={fullPaintVal}
         touchUpPaint={touchUpPaintStr}
         fullClean={fullCleanVal}
         carpetCleaning={carpetCleaningVal}
         materialsAdditional={materialsAdditionalVal}
+        otherWork={otherWorkVal}
+        otherDescription={otherDescriptionVal}
+        otherPrice={otherPriceVal}
+        commonAreaRates={commonAreaRates}
         setBedrooms={setBedroomsStr}
         setBathrooms={setBathroomsStr}
+        setIsCommonArea={setIsCommonArea}
         setFullPaint={setFullPaint}
         setTouchUpPaint={setTouchUpPaint}
         setFullClean={setFullClean}
         setCarpetCleaning={setCarpetCleaning}
         setMaterialsAdditional={setMaterialsAdditional}
+        setOtherWork={setOtherWork}
+        setOtherDescription={setOtherDescription}
+        setOtherPrice={setOtherPrice}
+        setCommonAreaRates={setCommonAreaRates}
       />
 
       {error && <p className="text-xs text-red-500">{error}</p>}

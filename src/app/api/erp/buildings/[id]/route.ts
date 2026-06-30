@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import type { ErpRole } from "@/lib/erpSession";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -56,8 +57,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.pmPhone = trimmed || null;
   }
   if (body.pricingPackage !== undefined) {
-    if (!isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-      return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+    if (!canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+      return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
     }
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);

@@ -32,3 +32,7 @@ export function canManageUsers(role: ErpRole): boolean {
 export function canAddLaborLogs(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SUPERVISOR";
 }
+
+export function canEditPricing(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "ESTIMATION";
+}

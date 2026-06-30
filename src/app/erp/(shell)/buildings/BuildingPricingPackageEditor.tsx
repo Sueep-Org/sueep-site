@@ -2,10 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { useEffect } from "react";
-import { auth } from "@/lib/firebase";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
 import {
   TURNOVER_UNIT_LAYOUTS,
   getTurnoverPricingPackage,
@@ -18,13 +14,14 @@ type Props = {
   buildingId: string;
   buildingName: string;
   initialPackage: unknown;
+  canEdit: boolean;
 };
 
 function dollars(value: number | undefined) {
   return String(value ?? 0);
 }
 
-export function BuildingPricingPackageEditor({ buildingId, buildingName, initialPackage }: Props) {
+export function BuildingPricingPackageEditor({ buildingId, buildingName, initialPackage, canEdit }: Props) {
   const router = useRouter();
   const initial = useMemo(
     () => getTurnoverPricingPackage(buildingName, initialPackage),
@@ -49,13 +46,6 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [currentEmail, setCurrentEmail] = useState(auth?.currentUser?.email ?? "");
-  const canEdit = isTurnoverPricingAdmin(currentEmail);
-
-  useEffect(() => {
-    if (!auth) return;
-    return onAuthStateChanged(auth, (user) => setCurrentEmail(user?.email ?? ""));
-  }, []);
 
   function packagePayload(): TurnoverPricingPackage {
     const cleaningLayoutRates = Object.fromEntries(
@@ -91,7 +81,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     try {
       const res = await fetch(`/api/erp/buildings/${buildingId}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json", "x-erp-user-email": currentEmail },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ pricingPackage: packagePayload() }),
       });
       const data = await res.json().catch(() => ({}));
@@ -113,10 +103,10 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Pricing package</h2>
-          <p className="mt-1 text-xs text-gray-500">Editable by approved pricing admins.</p>
+          <p className="mt-1 text-xs text-gray-500">Editable by Admin, Project Manager, or Estimation.</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-          {canEdit ? "Admin editable" : "View only"}
+          {canEdit ? "Editable" : "View only"}
         </span>
       </div>
 

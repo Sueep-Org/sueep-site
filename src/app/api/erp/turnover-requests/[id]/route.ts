@@ -68,6 +68,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.fullClean !== undefined) data.fullClean = Boolean(body.fullClean);
   if (body.carpetCleaning !== undefined) data.carpetCleaning = Boolean(body.carpetCleaning);
   if (body.materialsAdditional !== undefined) data.materialsAdditional = Boolean(body.materialsAdditional);
+  if (body.otherWork !== undefined) data.otherWork = Boolean(body.otherWork);
+  if (body.otherDescription !== undefined) data.otherDescription = body.otherDescription ? String(body.otherDescription).trim() || null : null;
+  if (body.otherCents !== undefined) data.otherCents = typeof body.otherCents === "number" ? body.otherCents : null;
 
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
@@ -103,12 +106,21 @@ export async function PATCH(req: Request, ctx: Ctx) {
     pricingPackage = nextBuilding.pricingPackage;
   }
 
+  const effectiveBedrooms = body.bedrooms !== undefined ? parseIntValue(body.bedrooms) : existing.bedrooms;
+  const effectiveBathrooms = body.bathrooms !== undefined ? parseIntValue(body.bathrooms) : existing.bathrooms;
+  const isCommonArea = body.isCommonArea !== undefined
+    ? Boolean(body.isCommonArea)
+    : (effectiveBedrooms === null && effectiveBathrooms === null);
+  const effectiveOtherWork = data.otherWork !== undefined ? Boolean(data.otherWork) : existing.otherWork;
+  const effectiveOtherCents = data.otherCents !== undefined ? (data.otherCents as number | null) : existing.otherCents;
+
   const pricingInput = {
     requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
     buildingName: pricingBuildingName,
     pricingPackage,
-    bedrooms: body.bedrooms !== undefined ? parseIntValue(body.bedrooms) : existing.bedrooms,
-    bathrooms: body.bathrooms !== undefined ? parseIntValue(body.bathrooms) : existing.bathrooms,
+    bedrooms: effectiveBedrooms,
+    bathrooms: effectiveBathrooms,
+    isCommonArea,
     fullPaint: data.fullPaint !== undefined ? Boolean(data.fullPaint) : existing.fullPaint,
     touchUpPaint:
       body.touchUpPaint !== undefined ? parseIntValue(body.touchUpPaint) ?? 0 : existing.touchUpPaint ?? 0,
@@ -119,7 +131,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   };
 
   const pricing = computeTurnoverPricing(pricingInput);
-  data.priceCents = pricing.priceCents || null;
+  const otherAddOn = effectiveOtherWork ? (effectiveOtherCents ?? 0) : 0;
+  data.priceCents = (pricing.priceCents + otherAddOn) || null;
   if (body.pmSignatureUrl !== undefined && data.pmSignatureUrl) {
     data.approvedPriceCents = pricing.priceCents || null;
   }

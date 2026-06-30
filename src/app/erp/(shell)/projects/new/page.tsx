@@ -2,11 +2,13 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { NewProjectForm } from "./NewProjectForm";
+import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function NewProjectPage() {
+  const auth = await getErpAuth();
   const cfg = parseHubSpotPipelineStageMap();
   const janitorialSegments = cfg?.janitorial.pipelineId
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
@@ -74,6 +76,7 @@ export default async function NewProjectPage() {
         janitorialPipelineId={cfg?.janitorial.pipelineId || null}
         allProjects={allProjects}
         employees={employees}
+        canEditPricing={auth ? canEditPricing(auth.role) : false}
       />
     </div>
   );
