@@ -15,8 +15,8 @@ const PROPERTY_TYPES = ["House", "Condo", "Apartment", "Townhouse", "Multi-famil
 const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
 const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
 
-const ALL_STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract", "Pay Deposit"] as const;
-const NO_DEPOSIT_STEP_LABELS = ["Property Info", "Services", "Agent Info", "Sign Contract"] as const;
+const ALL_STEP_LABELS = ["Your Info", "Property Info", "Services", "Sign Contract", "Pay Deposit"] as const;
+const NO_DEPOSIT_STEP_LABELS = ["Your Info", "Property Info", "Services", "Sign Contract"] as const;
 
 interface FormState {
   // Step 1 — property
@@ -161,12 +161,12 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
 
   function validateStep(s: number): string {
     if (s === 1) {
-      if (!form.address.trim()) return "Property address is required.";
-      if (!form.propertyType) return "Please select a property type.";
-    }
-    if (s === 3) {
       if (!form.agentName.trim()) return "Your name is required.";
       if (!form.agentEmail.trim()) return "Your email is required.";
+    }
+    if (s === 2) {
+      if (!form.address.trim()) return "Property address is required.";
+      if (!form.propertyType) return "Please select a property type.";
     }
     return "";
   }
@@ -373,8 +373,59 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
       <StepIndicator current={step} stepLabels={stepLabels} />
 
       <div className="mt-6 space-y-5">
-        {/* Step 1 — Property Info */}
+        {/* Step 1 — Your Info */}
         {step === 1 && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="re-agent-name">Your name *</label>
+                <input
+                  id="re-agent-name"
+                  className={input}
+                  value={form.agentName}
+                  onChange={(e) => patch({ agentName: e.target.value })}
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="re-agent-email">Your email *</label>
+                <input
+                  id="re-agent-email"
+                  type="email"
+                  className={input}
+                  value={form.agentEmail}
+                  onChange={(e) => patch({ agentEmail: e.target.value })}
+                  placeholder="jane@realty.com"
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="re-agent-phone">Your phone</label>
+                <input
+                  id="re-agent-phone"
+                  type="tel"
+                  className={input}
+                  value={form.agentPhone}
+                  onChange={(e) => patch({ agentPhone: e.target.value })}
+                  placeholder="(215) 555-0100"
+                />
+              </div>
+            </div>
+            <div>
+              <label className={label} htmlFor="re-comments">Additional notes</label>
+              <textarea
+                id="re-comments"
+                rows={3}
+                className={input}
+                value={form.comments}
+                onChange={(e) => patch({ comments: e.target.value })}
+                placeholder="Access instructions, special requirements, or anything else we should know"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Step 2 — Property Info */}
+        {step === 2 && (
           <>
             <div>
               <label className={label} htmlFor="re-address">Property address *</label>
@@ -458,8 +509,8 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
           </>
         )}
 
-        {/* Step 2 — Services */}
-        {step === 2 && (() => {
+        {/* Step 3 — Services */}
+        {step === 3 && (() => {
           const livePricing = computePricing(form);
           const lineItems = livePricing.breakdown.filter((l) => !l.startsWith("No ")).map((line) => {
             const match = line.match(/^(.+?):\s+(\$.+)$/);
@@ -532,57 +583,6 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
             </div>
           );
         })()}
-
-        {/* Step 3 — Agent Info */}
-        {step === 3 && (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="re-agent-name">Your name *</label>
-                <input
-                  id="re-agent-name"
-                  className={input}
-                  value={form.agentName}
-                  onChange={(e) => patch({ agentName: e.target.value })}
-                  placeholder="Jane Smith"
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="re-agent-email">Your email *</label>
-                <input
-                  id="re-agent-email"
-                  type="email"
-                  className={input}
-                  value={form.agentEmail}
-                  onChange={(e) => patch({ agentEmail: e.target.value })}
-                  placeholder="jane@realty.com"
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="re-agent-phone">Your phone</label>
-                <input
-                  id="re-agent-phone"
-                  type="tel"
-                  className={input}
-                  value={form.agentPhone}
-                  onChange={(e) => patch({ agentPhone: e.target.value })}
-                  placeholder="(215) 555-0100"
-                />
-              </div>
-            </div>
-            <div>
-              <label className={label} htmlFor="re-comments">Additional notes</label>
-              <textarea
-                id="re-comments"
-                rows={3}
-                className={input}
-                value={form.comments}
-                onChange={(e) => patch({ comments: e.target.value })}
-                placeholder="Access instructions, special requirements, or anything else we should know"
-              />
-            </div>
-          </>
-        )}
 
         {/* Step 4 — Sign Contract */}
         {step === 4 && (
