@@ -268,6 +268,7 @@ async function initApp(){
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   let _sovRows = [];
+  let _sovUndoStack = [];
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -392,6 +393,11 @@ async function initApp(){
     }[char]));
   }
 
+  function isZeroSovCost(cost) {
+    const normalized = String(cost ?? '').trim().replace(/[$,]/g, '');
+    return normalized === '0' || normalized === '0.00';
+  }
+
   function getSovPageRows() {
     const totalPages = Number(pdfDoc?.numPages || 0);
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
@@ -414,7 +420,7 @@ async function initApp(){
     }
 
     if (!_sovRows.length) {
-      _sovRows = rows.map((row) => ({ ...row, deleted: false }));
+      _sovRows = rows.map((row) => ({ ...row, deleted: false, forceVisible: false }));
       return _sovRows.filter((row) => !row.deleted);
     }
 
@@ -426,21 +432,61 @@ async function initApp(){
         description: existing?.description ?? row.description,
         cost: row.cost,
         deleted: existing?.deleted ?? false,
+        forceVisible: existing?.forceVisible ?? false,
       };
     });
 
-    const removedRows = _sovRows.filter((row) => !rows.some((baseRow) => baseRow.page === row.page));
-    _sovRows = [...syncedRows, ...removedRows.filter((row) => row.deleted)];
+    const preservedCustomRows = _sovRows.filter((row) => !row.deleted && !rows.some((baseRow) => baseRow.page === row.page));
+    _sovRows = [...syncedRows, ...preservedCustomRows];
     return _sovRows.filter((row) => !row.deleted);
+  }
+
+  function addSovRow() {
+    const nextPage = (_sovRows.length ? Math.max(..._sovRows.map((row) => Number(row.page) || 0)) : 0) + 1;
+    const newRow = {
+      page: nextPage,
+      description: `New Row ${nextPage}`,
+      cost: '$0.00',
+      deleted: false,
+      forceVisible: true,
+    };
+    _sovRows.push(newRow);
+    _sovUndoStack.push({ type: 'add', page: newRow.page });
+    renderSovCard();
+  }
+
+  function undoSovRowDelete() {
+    const lastAction = _sovUndoStack.pop();
+    if (!lastAction) return;
+
+    if (lastAction.type === 'add') {
+      const index = _sovRows.findIndex((row) => row.page === lastAction.page);
+      if (index >= 0) {
+        _sovRows.splice(index, 1);
+      }
+    } else if (lastAction.type === 'delete') {
+      const target = _sovRows.find((row) => row.page === lastAction.row.page);
+      if (target) {
+        target.deleted = false;
+        target.description = lastAction.row.description;
+        target.cost = lastAction.row.cost;
+        target.forceVisible = true;
+      } else {
+        _sovRows.push({ ...lastAction.row, deleted: false, forceVisible: true });
+      }
+    }
+
+    renderSovCard();
   }
 
   function renderSovTable(containerEl) {
     if (!containerEl) return;
 
     const rows = getSovPageRows();
+    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost) || row.forceVisible);
     containerEl.innerHTML = '';
 
-    if (!rows.length) {
+    if (!visibleRows.length) {
       containerEl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No schedule data available yet.</div>';
       return;
     }
@@ -464,7 +510,7 @@ async function initApp(){
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    rows.forEach((row) => {
+    visibleRows.forEach((row) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
@@ -483,8 +529,11 @@ async function initApp(){
       if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
           const storedRow = _sovRows.find((entry) => entry.page === row.page);
-          if (storedRow) storedRow.deleted = true;
-          renderSovTable(containerEl);
+          if (storedRow) {
+            _sovUndoStack.push({ type: 'delete', row: { ...storedRow } });
+            storedRow.deleted = true;
+          }
+          renderSovCard();
         });
       }
 
@@ -507,6 +556,8 @@ async function initApp(){
   function renderSovCard() {
     const card = document.getElementById('sovCard');
     const container = document.getElementById('sovTableContainer');
+    const undoBtn = document.getElementById('undoSovRowBtn');
+    const addBtn = document.getElementById('addSovRowBtn');
     if (!card || !container) return;
 
     if (!pdfDoc || !_loadedProjectData) {
@@ -516,6 +567,13 @@ async function initApp(){
     }
 
     card.style.display = 'block';
+    if (undoBtn) {
+      undoBtn.disabled = !_sovUndoStack.length;
+      undoBtn.onclick = undoSovRowDelete;
+    }
+    if (addBtn) {
+      addBtn.onclick = addSovRow;
+    }
     renderSovTable(container);
   }
 
@@ -1901,10 +1959,14 @@ async function initApp(){
   }
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
-  if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => showAnalysisEditForm());
+  if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
+    window.__analysisDirty = true;
+    showAnalysisEditForm();
+  });
 
   const cancelAnalysisBtn = document.getElementById('cancelAnalysisBtn');
   if (cancelAnalysisBtn) cancelAnalysisBtn.addEventListener('click', () => {
+    window.__analysisDirty = false;
     if (_loadedProjectData) showAnalysisCard(_loadedProjectData);
   });
 
@@ -1964,6 +2026,7 @@ async function initApp(){
         if (addrVal && addrVal !== prevAddr) {
           document.getElementById('refreshDistanceBtn')?.click();
         }
+        window.__analysisDirty = false;
         showAnalysisCard(_loadedProjectData);
         toast('Analysis saved', 'info');
       } catch (e) {
