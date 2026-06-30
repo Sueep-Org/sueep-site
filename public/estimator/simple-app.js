@@ -268,7 +268,7 @@ async function initApp(){
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   let _sovRows = [];
-  let _lastDeletedSovRow = null;
+  let _sovUndoStack = [];
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -420,7 +420,7 @@ async function initApp(){
     }
 
     if (!_sovRows.length) {
-      _sovRows = rows.map((row) => ({ ...row, deleted: false }));
+      _sovRows = rows.map((row) => ({ ...row, deleted: false, forceVisible: false }));
       return _sovRows.filter((row) => !row.deleted);
     }
 
@@ -432,11 +432,12 @@ async function initApp(){
         description: existing?.description ?? row.description,
         cost: row.cost,
         deleted: existing?.deleted ?? false,
+        forceVisible: existing?.forceVisible ?? false,
       };
     });
 
-    const removedRows = _sovRows.filter((row) => !rows.some((baseRow) => baseRow.page === row.page));
-    _sovRows = [...syncedRows, ...removedRows.filter((row) => row.deleted)];
+    const preservedCustomRows = _sovRows.filter((row) => !row.deleted && !rows.some((baseRow) => baseRow.page === row.page));
+    _sovRows = [...syncedRows, ...preservedCustomRows];
     return _sovRows.filter((row) => !row.deleted);
   }
 
@@ -447,30 +448,42 @@ async function initApp(){
       description: `New Row ${nextPage}`,
       cost: '$0.00',
       deleted: false,
+      forceVisible: true,
     };
     _sovRows.push(newRow);
-    renderSovTable(document.getElementById('sovTableContainer'));
+    _sovUndoStack.push({ type: 'add', page: newRow.page });
+    renderSovCard();
   }
 
   function undoSovRowDelete() {
-    if (!_lastDeletedSovRow) return;
-    const target = _sovRows.find((row) => row.page === _lastDeletedSovRow.page);
-    if (target) {
-      target.deleted = false;
-      target.description = _lastDeletedSovRow.description;
-      target.cost = _lastDeletedSovRow.cost;
-    } else {
-      _sovRows.push({ ..._lastDeletedSovRow, deleted: false });
+    const lastAction = _sovUndoStack.pop();
+    if (!lastAction) return;
+
+    if (lastAction.type === 'add') {
+      const index = _sovRows.findIndex((row) => row.page === lastAction.page);
+      if (index >= 0) {
+        _sovRows.splice(index, 1);
+      }
+    } else if (lastAction.type === 'delete') {
+      const target = _sovRows.find((row) => row.page === lastAction.row.page);
+      if (target) {
+        target.deleted = false;
+        target.description = lastAction.row.description;
+        target.cost = lastAction.row.cost;
+        target.forceVisible = true;
+      } else {
+        _sovRows.push({ ...lastAction.row, deleted: false, forceVisible: true });
+      }
     }
-    _lastDeletedSovRow = null;
-    renderSovTable(document.getElementById('sovTableContainer'));
+
+    renderSovCard();
   }
 
   function renderSovTable(containerEl) {
     if (!containerEl) return;
 
     const rows = getSovPageRows();
-    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost));
+    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost) || row.forceVisible);
     containerEl.innerHTML = '';
 
     if (!visibleRows.length) {
@@ -517,10 +530,10 @@ async function initApp(){
         deleteBtn.addEventListener('click', () => {
           const storedRow = _sovRows.find((entry) => entry.page === row.page);
           if (storedRow) {
-            _lastDeletedSovRow = { ...storedRow };
+            _sovUndoStack.push({ type: 'delete', row: { ...storedRow } });
             storedRow.deleted = true;
           }
-          renderSovTable(containerEl);
+          renderSovCard();
         });
       }
 
@@ -555,7 +568,7 @@ async function initApp(){
 
     card.style.display = 'block';
     if (undoBtn) {
-      undoBtn.disabled = !_lastDeletedSovRow;
+      undoBtn.disabled = !_sovUndoStack.length;
       undoBtn.onclick = undoSovRowDelete;
     }
     if (addBtn) {
