@@ -86,8 +86,8 @@ export async function GET(req: Request) {
   const buildingMap = new Map<string, BuildingRow>();
 
   for (const project of projects) {
-    const buildingId = project.building?.id ?? project.turnoverRequest?.building?.id ?? project.buildingId ?? "unknown";
-    const buildingName = project.building?.name ?? project.turnoverRequest?.building?.name ?? "No building";
+    const buildingId = project.building?.id ?? project.turnoverRequest?.building?.id ?? project.buildingId ?? `project:${project.id}`;
+    const buildingName = project.building?.name ?? project.turnoverRequest?.building?.name ?? project.jobTitle;
 
     if (!buildingMap.has(buildingId)) {
       buildingMap.set(buildingId, { buildingId, buildingName, units: [] });
