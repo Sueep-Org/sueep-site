@@ -6,6 +6,7 @@ import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe
 import { paintingStripePromise } from "@/lib/stripePublishableClient";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { REAL_ESTATE_PRICING_PACKAGE } from "@/lib/turnoverPricingPackages";
+import { RealEstatePixelEvents } from "./RealEstatePixelEvents";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -345,31 +346,36 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center gap-6 rounded-xl border border-green-200 bg-green-50 px-6 py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-7 w-7">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-          </svg>
+      <>
+        <RealEstatePixelEvents leadSubmitted={projectSubmitted} />
+        <div className="flex flex-col items-center gap-6 rounded-xl border border-green-200 bg-green-50 px-6 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-7 w-7">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
+            <p className="mt-2 max-w-sm text-sm text-green-700">
+              Your agreement has been signed and your request sent to Sueep. We&apos;ll be in touch shortly.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setForm(initial); setStep(1); setSubmitted(false); setSigningEmbedSrc(""); setDocusealSubmissionId(null); }}
+            className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+          >
+            Submit another request
+          </button>
         </div>
-        <div>
-          <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
-          <p className="mt-2 max-w-sm text-sm text-green-700">
-            Your agreement has been signed and your request sent to Sueep. We&apos;ll be in touch shortly.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => { setForm(initial); setStep(1); setSubmitted(false); setSigningEmbedSrc(""); setDocusealSubmissionId(null); }}
-          className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-        >
-          Submit another request
-        </button>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+    <>
+      <RealEstatePixelEvents leadSubmitted={projectSubmitted} />
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
       <StepIndicator current={step} stepLabels={stepLabels} />
 
       <div className="mt-6 space-y-5">
@@ -701,6 +707,7 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
           {projectSubmitted ? "Setting up payment…" : "Submitting your request…"}
         </p>
       )}
-    </div>
+      </div>
+    </>
   );
 }
