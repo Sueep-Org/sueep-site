@@ -310,6 +310,8 @@ async function initApp(){
     y: 0
   };
 
+  let zoomAnchor = null;
+
   // ======================================================
   // DRAG / PAN
   // ======================================================
@@ -410,8 +412,9 @@ async function initApp(){
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
       const pageMeasurements = highlightsStore.listMeasurements(pageNum) || [];
       const pageArea = pageMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
-      const percent = totalArea > 0 ? (pageArea / totalArea) * 100 : 0;
-      const value = finalPrice != null && totalArea > 0 ? (pageArea / totalArea) * finalPrice : null;
+      const percentShare = totalArea > 0 ? (pageArea / totalArea) : 0;
+      const percent = totalArea > 0 ? percentShare * 100 : 0;
+      const value = finalPrice != null && totalArea > 0 ? percentShare * finalPrice : null;
       rows.push({
         page: pageNum,
         description: `Page ${pageNum}`,
@@ -2042,44 +2045,56 @@ async function initApp(){
   // ZOOM HELPERS
   // ======================================================
 
-  async function zoomIn(){
+  function getZoomAnchorPoint(anchor = null){
+    if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
+      return anchor;
+    }
 
+    if (zoomAnchor && typeof zoomAnchor.x === 'number' && typeof zoomAnchor.y === 'number') {
+      return zoomAnchor;
+    }
+
+    const rect = (pdfWrapper || pdfContainer)?.getBoundingClientRect();
+    if (rect) {
+      return {
+        x: rect.width / 2,
+        y: rect.height / 2
+      };
+    }
+
+    return { x: 0, y: 0 };
+  }
+
+  async function applyZoom(nextZoom, anchor = null){
     if (!pdfDoc) return;
 
-    zoom += 0.1;
+    const targetAnchor = getZoomAnchorPoint(anchor);
+    const worldX = (targetAnchor.x - panOffset.x) / zoom;
+    const worldY = (targetAnchor.y - panOffset.y) / zoom;
 
-    if (zoom > 5){
-      zoom = 5;
-    }
+    zoom = Math.max(0.25, Math.min(5, nextZoom));
+
+    panOffset = {
+      x: targetAnchor.x - worldX * zoom,
+      y: targetAnchor.y - worldY * zoom
+    };
+
+    zoomAnchor = targetAnchor;
 
     await renderPage();
   }
 
-  async function zoomOut(){
+  async function zoomIn(anchor = null){
+    await applyZoom(zoom + 0.1, anchor);
+  }
 
-    if (!pdfDoc) return;
-
-    zoom -= 0.1;
-
-    if (zoom < 0.25){
-      zoom = 0.25;
-    }
-
-    await renderPage();
+  async function zoomOut(anchor = null){
+    await applyZoom(zoom - 0.1, anchor);
   }
 
   async function zoomReset(){
-
     if (!pdfDoc) return;
-
-    zoom = 1;
-
-    panOffset = {
-      x: 0,
-      y: 0
-    };
-
-    await renderPage();
+    await applyZoom(1, zoomAnchor);
   }
 
   // PAGE NAV
@@ -2131,10 +2146,13 @@ async function initApp(){
 
       e.preventDefault();
 
+      const rect = (pdfWrapper || pdfContainer)?.getBoundingClientRect();
+      const anchor = rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null;
+
       if (e.deltaY < 0){
-        await zoomIn();
+        await zoomIn(anchor);
       } else {
-        await zoomOut();
+        await zoomOut(anchor);
       }
 
     }, { passive: false });
