@@ -148,6 +148,7 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
   const [docusealSubmissionId, setDocusealSubmissionId] = useState<number | null>(null);
   const [projectSubmitted, setProjectSubmitted] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [contactInfoCaptured, setContactInfoCaptured] = useState(false);
 
   // Payment state
   const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
@@ -176,6 +177,8 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
     const err = validateStep(step);
     if (err) { setError(err); return; }
     setError("");
+
+    if (step === 1) setContactInfoCaptured(true);
 
     if (step === 3) {
       // Fetch DocuSeal embed URL before advancing to signing step
@@ -347,7 +350,7 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
   if (submitted) {
     return (
       <>
-        <RealEstatePixelEvents leadSubmitted={projectSubmitted} />
+        <RealEstatePixelEvents leadSubmitted={contactInfoCaptured} />
         <div className="flex flex-col items-center gap-6 rounded-xl border border-green-200 bg-green-50 px-6 py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-7 w-7">
@@ -374,7 +377,7 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
 
   return (
     <>
-      <RealEstatePixelEvents leadSubmitted={projectSubmitted} />
+      <RealEstatePixelEvents leadSubmitted={contactInfoCaptured} />
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
       <StepIndicator current={step} stepLabels={stepLabels} />
 

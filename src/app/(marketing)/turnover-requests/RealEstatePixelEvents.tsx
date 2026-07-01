@@ -22,8 +22,8 @@ export function RealEstatePixelEvents({ leadSubmitted }: { leadSubmitted: boolea
 
   useEffect(() => {
     if (!leadSubmitted || !window.fbq) return;
-    // Fired once the turnover request + signed contract are successfully submitted —
-    // the conversion event this dataset uses to optimise real estate lead ads.
+    // Fired as soon as the agent enters their contact info (step 1) — the
+    // earliest point we know someone is a real lead, ahead of full submission.
     window.fbq("trackSingle", REAL_ESTATE_DATASET_ID, "Lead", {
       content_name: "Real Estate Turnover Request",
       content_category: "Turnover Requests",
