@@ -314,6 +314,77 @@ function ProjectSearchDropdown({
   );
 }
 
+function PmSearchDropdown({
+  employees,
+  value,
+  onSelect,
+  onClear,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onSelect: (employee: EmployeeOption) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) =>
+        `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={value || "Search by name…"}
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onClear(); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No employees found</li>
+          ) : (
+            filtered.map((emp) => (
+              <li
+                key={emp.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(emp);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                <span>{emp.firstName} {emp.lastName}</span>
+                {emp.email && <span className="text-xs text-gray-400">{emp.email}</span>}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function NotifyMultiSelect({
   employees,
   selectedIds,
@@ -555,8 +626,20 @@ export function NewProjectForm({
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
-  const [sueepPmName, setSueepPmName] = useState(lockedSueepPm?.name ?? "");
-  const [sueepPmEmail, setSueepPmEmail] = useState(lockedSueepPm?.email ?? "");
+  const [sueepPmName, setSueepPmName] = useState(() => {
+    if (lockedSueepPm?.name) return lockedSueepPm.name;
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david ? `${david.firstName} ${david.lastName}` : "";
+  });
+  const [sueepPmEmail, setSueepPmEmail] = useState(() => {
+    if (lockedSueepPm?.email) return lockedSueepPm.email;
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david?.email ?? "";
+  });
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
@@ -1700,34 +1783,20 @@ export function NewProjectForm({
             <p className={sectionHeader}>{lockedSueepPm ? "Step 3 - Review & Submit" : "Step 4 - Estimated total"}</p>
             {!lockedSueepPm && (
               <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="min-w-0">
-                    <label className={label} htmlFor="sueepPmName">
-                      SUEEP PM name
-                    </label>
-                    <input
-                      id="sueepPmName"
-                      name="sueepPmName"
-                      required
-                      className={input}
-                      value={sueepPmName}
-                      onChange={(e) => setSueepPmName(e.target.value)}
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <label className={label} htmlFor="sueepPmEmail">
-                      SUEEP PM email
-                    </label>
-                    <input
-                      id="sueepPmEmail"
-                      name="sueepPmEmail"
-                      type="email"
-                      required
-                      className={input}
-                      value={sueepPmEmail}
-                      onChange={(e) => setSueepPmEmail(e.target.value)}
-                    />
-                  </div>
+                <div className="min-w-0">
+                  <label className={label} htmlFor="sueepPmName">
+                    SUEEP PM
+                  </label>
+                  <PmSearchDropdown
+                    employees={notifiableEmployees}
+                    value={sueepPmName}
+                    onSelect={(emp) => {
+                      setSueepPmName(`${emp.firstName} ${emp.lastName}`.trim());
+                      setSueepPmEmail(emp.email ?? "");
+                    }}
+                    onClear={() => { setSueepPmName(""); setSueepPmEmail(""); }}
+                  />
+                  {sueepPmEmail && <p className="mt-1 text-xs text-gray-500">{sueepPmEmail}</p>}
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>

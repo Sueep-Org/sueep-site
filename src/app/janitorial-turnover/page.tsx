@@ -19,7 +19,7 @@ export default async function JanitorialTurnoverPage() {
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
-  const [buildings, scheduleBuildings] = await Promise.all([
+  const [buildings, scheduleBuildings, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
@@ -40,6 +40,11 @@ export default async function JanitorialTurnoverPage() {
         supervisor: true,
       },
     }),
+    prisma.employee.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: { id: true, firstName: true, lastName: true, email: true },
+    }),
   ]);
 
   return (
@@ -56,6 +61,7 @@ export default async function JanitorialTurnoverPage() {
           <JanitorialTurnoverGate
             buildings={buildings}
             scheduleBuildings={scheduleBuildings}
+            employees={employees}
             janitorialPipelineId={cfg?.janitorial.pipelineId || null}
           />
         </div>

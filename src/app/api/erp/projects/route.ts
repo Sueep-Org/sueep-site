@@ -54,6 +54,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const notifyEmployeeIds = Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [];
+
   try {
     const result = await createProjectFromPayload(body);
     if ("error" in result) {
@@ -64,6 +66,7 @@ export async function POST(req: Request) {
         body,
         building: result.building,
         requests: result.turnoverRequests,
+        notifyEmployeeIds,
       });
       const projectIds = result.projects.map((p) => p.id);
       return NextResponse.json({

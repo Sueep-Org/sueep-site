@@ -93,18 +93,19 @@ export async function notifyJanitorialTurnoverCreated(params: {
     projectUrl: projectUrl(building.id),
   });
 
-  try {
-    await Promise.all(
-      recipients.map((to) =>
-        sendEmail({
-          to,
-          subject: `New Janitorial Turnover Submitted - ${building.name}`,
-          html,
-          replyTo: stringValue(body.sueepPmEmail) || undefined,
-        })
-      )
-    );
-  } catch (error) {
-    console.error("janitorial turnover notification email", error);
-  }
+  const results = await Promise.allSettled(
+    recipients.map((to) =>
+      sendEmail({
+        to,
+        subject: `New Janitorial Turnover Submitted - ${building.name}`,
+        html,
+        replyTo: stringValue(body.sueepPmEmail) || undefined,
+      })
+    )
+  );
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`janitorial turnover notification email failed for ${recipients[i]}`, result.reason);
+    }
+  });
 }

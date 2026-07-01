@@ -22,9 +22,17 @@ interface ScheduleBuildingOption {
   supervisor?: string | null;
 }
 
+interface EmployeeOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+}
+
 interface Props {
   buildings: BuildingOption[];
   scheduleBuildings: ScheduleBuildingOption[];
+  employees: EmployeeOption[];
   janitorialPipelineId: string | null;
 }
 
@@ -90,7 +98,7 @@ function WipScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-export function JanitorialTurnoverGate({ buildings, scheduleBuildings, janitorialPipelineId }: Props) {
+export function JanitorialTurnoverGate({ buildings, scheduleBuildings, employees, janitorialPipelineId }: Props) {
   const [role, setRole] = useState<Role>(null);
 
   if (role === "real-estate-agent") {
@@ -102,6 +110,7 @@ export function JanitorialTurnoverGate({ buildings, scheduleBuildings, janitoria
       <NewProjectForm
         initialBuildings={buildings}
         initialScheduleBuildings={scheduleBuildings}
+        employees={employees}
         janitorialPipelineId={janitorialPipelineId}
         initialSegment="JANITORIAL_TURNOVER_REQUESTS"
         lockedSegment
