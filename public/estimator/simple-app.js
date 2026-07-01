@@ -269,6 +269,7 @@ async function initApp(){
   let sovModal = null;
   let _sovRows = [];
   let _sovUndoStack = [];
+  let _sovStateProjectId = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -400,7 +401,47 @@ async function initApp(){
     return normalized === '0' || normalized === '0.00';
   }
 
+  function getSovStorageKey() {
+    const projectKey = activeProjectId ? String(activeProjectId) : 'unsaved';
+    return `sov_rows_${projectKey}`;
+  }
+
+  function ensureSovStateLoaded() {
+    if (activeProjectId && _sovStateProjectId === activeProjectId) return;
+
+    if (!activeProjectId) {
+      _sovRows = [];
+      _sovUndoStack = [];
+      _sovStateProjectId = null;
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(getSovStorageKey());
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        _sovRows = Array.isArray(parsed) ? parsed : [];
+      } else {
+        _sovRows = [];
+      }
+    } catch (_) {
+      _sovRows = [];
+    }
+
+    _sovUndoStack = [];
+    _sovStateProjectId = activeProjectId;
+  }
+
+  function persistSovState() {
+    if (!activeProjectId) return;
+    try {
+      localStorage.setItem(getSovStorageKey(), JSON.stringify(_sovRows));
+    } catch (_) {}
+  }
+
   function getSovPageRows() {
+    ensureSovStateLoaded();
+
     const totalPages = Number(pdfDoc?.numPages || 0);
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
     const totalArea = allPageMeasurements.reduce((sum, pageEntry) => {
@@ -424,6 +465,7 @@ async function initApp(){
 
     if (!_sovRows.length) {
       _sovRows = rows.map((row) => ({ ...row, deleted: false, forceVisible: false }));
+      persistSovState();
       return _sovRows.filter((row) => !row.deleted);
     }
 
@@ -441,6 +483,7 @@ async function initApp(){
 
     const preservedCustomRows = _sovRows.filter((row) => !row.deleted && !rows.some((baseRow) => baseRow.page === row.page));
     _sovRows = [...syncedRows, ...preservedCustomRows];
+    persistSovState();
     return _sovRows.filter((row) => !row.deleted);
   }
 
@@ -455,6 +498,7 @@ async function initApp(){
     };
     _sovRows.push(newRow);
     _sovUndoStack.push({ type: 'add', page: newRow.page });
+    persistSovState();
     renderSovCard();
   }
 
@@ -479,6 +523,7 @@ async function initApp(){
       }
     }
 
+    persistSovState();
     renderSovCard();
   }
 
@@ -535,6 +580,7 @@ async function initApp(){
           if (storedRow) {
             _sovUndoStack.push({ type: 'delete', row: { ...storedRow } });
             storedRow.deleted = true;
+            persistSovState();
           }
           renderSovCard();
         });
@@ -542,10 +588,15 @@ async function initApp(){
 
       const descriptionInput = tr.querySelector('[data-sov-description]');
       if (descriptionInput) {
-        descriptionInput.addEventListener('input', (event) => {
+        const saveDescription = (value) => {
           const storedRow = _sovRows.find((entry) => entry.page === row.page);
-          if (storedRow) storedRow.description = event.target.value;
-        });
+          if (storedRow) {
+            storedRow.description = value;
+            persistSovState();
+          }
+        };
+        descriptionInput.addEventListener('input', (event) => saveDescription(event.target.value));
+        descriptionInput.addEventListener('change', (event) => saveDescription(event.target.value));
       }
 
       tbody.appendChild(tr);
