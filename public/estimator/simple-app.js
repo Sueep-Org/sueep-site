@@ -1497,6 +1497,7 @@ async function initApp(){
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'none';
     document.getElementById('editProjectForm').style.display = 'block';
+    window.__projectNameDirty = true;
   }
 
   window.__showProjectLoadedCard = showProjectLoadedCard;
@@ -1642,6 +1643,7 @@ async function initApp(){
   const cancelEditBtn = document.getElementById('cancelEditBtn');
   if (cancelEditBtn) {
     cancelEditBtn.addEventListener('click', () => {
+      window.__projectNameDirty = false;
       if (_loadedProjectData) {
         const files = _loadedProjectData.files || [];
         const bp = files.find(f => f.file_type === 'blueprint');
@@ -1675,6 +1677,7 @@ async function initApp(){
         const projRes = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, { cache: 'no-store' });
         const projData = projRes.ok ? await projRes.json() : updated;
         const bp = (projData.files || []).find(f => f.file_type === 'blueprint');
+        window.__projectNameDirty = false;
         _loadedProjectData = projData;
         showProjectLoadedCard(projData, bp?.filename || '');
         updateProjectDetails(projData);
@@ -1749,18 +1752,19 @@ async function initApp(){
 
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
-    let cleanersPay = 0, foremanPay = 0;
+    let cleanersPay = 0, foremanPay = 0, pmPay = 0;
     if (crew.length > 0) {
       for (const m of crew) {
-        if (m.role === 'cleaner') cleanersPay += (m.rate || 0) * (m.days || 0) * 8;
+        if (m.role === 'cleaner') cleanersPay += (m.rate || 0) * (m.days || 0);
+        else if (m.role === 'project_manager') pmPay += (m.rate || 0) * (m.days || 0);
         else foremanPay += (m.rate || 0) * (m.days || 0);
       }
     } else {
       // backward compat: old format with persons/days + global rates
-      cleanersPay = (p.persons || 0) * (p.days || 0) * (rates.cleanerRate || 0) * 8;
+      cleanersPay = (p.persons || 0) * (p.days || 0) * (rates.cleanerRate || 0);
       foremanPay = (p.days || 0) * (rates.foremanRate || 0);
     }
-    const laborCost = cleanersPay + foremanPay;
+    const laborCost = cleanersPay + foremanPay + pmPay;
     const materials = laborCost * 0.05;
     const subtotal = laborCost + materials;
     const oh = subtotal * rates.overhead;
@@ -1769,7 +1773,7 @@ async function initApp(){
     const taxes = price * rates.tax;
     const comm = price * rates.commission;
     const finalPrice = price + taxes;
-    return { cleanersPay, foremanPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
+    return { cleanersPay, foremanPay, pmPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
   }
 
   function _getRates() {
@@ -1809,7 +1813,7 @@ async function initApp(){
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
       crew.forEach((m, idx) => {
-        const pay = m.role === 'cleaner' ? (m.rate||0)*(m.days||0)*8 : (m.rate||0)*(m.days||0);
+        const pay = (m.rate||0)*(m.days||0);
         const el = document.getElementById(`crew_pay_${pid}_${idx}`);
         if (el) el.textContent = fmt$(pay);
       });
@@ -1817,6 +1821,7 @@ async function initApp(){
       const setFoot = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt$(val); };
       setFoot(`phase_cleaners_${pid}`, c.cleanersPay);
       setFoot(`phase_foreman_${pid}`, c.foremanPay);
+      setFoot(`phase_pm_${pid}`, c.pmPay);
       setFoot(`phase_labor_${pid}`, c.laborCost);
       setFoot(`phase_materials_${pid}`, c.materials);
       setFoot(`phase_subtotal_${pid}`, c.subtotal);
@@ -1864,21 +1869,19 @@ async function initApp(){
       const addBtns = document.createElement('div');
       addBtns.style.cssText = 'display:flex;gap:6px;';
 
-      const mkAddBtn = (label, role, color, bg, border) => {
+      const mkAddBtn = (label, role, color, bg, border, defaultRate) => {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.textContent = label;
         btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
         btn.onclick = () => {
-          const defaultRate = role === 'cleaner'
-            ? (parseFloat(document.getElementById('cleanerRateInput')?.value) || 22)
-            : (parseFloat(document.getElementById('foremanRateInput')?.value) || 220);
           _phaseCrews[pid].push({ role, rate: defaultRate, days: 1 });
           _renderPhaseTable();
         };
         return btn;
       };
-      addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd'));
-      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac'));
+      addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
+      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 220));
+      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 300));
       header.appendChild(nameEl); header.appendChild(addBtns);
       section.appendChild(header);
 
@@ -1906,9 +1909,11 @@ async function initApp(){
 
           const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
           const badge = document.createElement('span');
-          badge.textContent = member.role === 'cleaner' ? 'Cleaner' : 'Foreman';
+          badge.textContent = member.role === 'cleaner' ? 'Cleaner' : member.role === 'project_manager' ? 'Project Manager' : 'Foreman';
           badge.style.cssText = member.role === 'cleaner'
             ? 'padding:2px 7px;border-radius:10px;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:500;'
+            : member.role === 'project_manager'
+            ? 'padding:2px 7px;border-radius:10px;background:#f5f3ff;color:#7c3aed;font-size:11px;font-weight:500;'
             : 'padding:2px 7px;border-radius:10px;background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:500;';
           roleTd.appendChild(badge);
 
@@ -1919,7 +1924,7 @@ async function initApp(){
           rateInput.style.cssText = iStyle + 'width:64px;';
           rateInput.addEventListener('input', () => { _phaseCrews[pid][idx].rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
           const rateLabel = document.createElement('span');
-          rateLabel.textContent = member.role === 'cleaner' ? '$/hr' : '$/day';
+          rateLabel.textContent = '$/day';
           rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
           rateWrap.appendChild(rateInput); rateWrap.appendChild(rateLabel);
           rateTd.appendChild(rateWrap);
@@ -1953,6 +1958,7 @@ async function initApp(){
       [
         ['Cleaners Pay', `phase_cleaners_${pid}`],
         ['Foreman Pay', `phase_foreman_${pid}`],
+        ['PM Pay', `phase_pm_${pid}`],
         ['Labor', `phase_labor_${pid}`],
         ['Materials', `phase_materials_${pid}`],
         ['Subtotal', `phase_subtotal_${pid}`],
@@ -2045,6 +2051,7 @@ async function initApp(){
     setText('analysisViewQuote', fmt$(projData.quote));
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
     setText('analysisViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
+    setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
 
     document.getElementById('analysisView').style.display = 'block';
     document.getElementById('analysisEditForm').style.display = 'none';
@@ -2096,6 +2103,7 @@ async function initApp(){
     setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
     setVal('analysisAddressInput', _loadedProjectData.address);
     setVal('gasolineInput', _loadedProjectData.gasoline);
+    setVal('marginInput', _loadedProjectData.margin);
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
@@ -2147,6 +2155,7 @@ async function initApp(){
       const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
       const prevAddr = _loadedProjectData.address || '';
       const gasolineVal = document.getElementById('gasolineInput')?.value;
+      const marginVal = document.getElementById('marginInput')?.value;
       const body = {
         labor: totLabor > 0 ? totLabor : null,
         labor_breakdown: laborBreakdown,
@@ -2155,6 +2164,7 @@ async function initApp(){
       };
       if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
       if (gasolineVal !== '') body.gasoline = parseFloat(gasolineVal) || null;
+      if (marginVal !== '') body.margin = parseFloat(marginVal) || null;
 
       saveAnalysisBtn.textContent = 'Saving…';
       saveAnalysisBtn.disabled = true;

@@ -7,8 +7,9 @@ export default function EstimatorPage() {
 
   // Warn on refresh / tab close / Next.js navigation if analysis is unsaved
   useEffect(() => {
+    const w = window as unknown as Record<string, unknown>;
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if ((window as unknown as Record<string, unknown>).__analysisDirty) {
+      if (w.__analysisDirty || w.__projectNameDirty) {
         e.preventDefault();
       }
     };
@@ -18,7 +19,14 @@ export default function EstimatorPage() {
       if (!anchor) return;
       const href = anchor.getAttribute('href');
       if (!href || href.includes('/estimator')) return;
-      if ((window as unknown as Record<string, unknown>).__analysisDirty) {
+      if (w.__projectNameDirty) {
+        if (!window.confirm('Project name has not been saved. Unsaved changes will be lost.')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+      if (w.__analysisDirty) {
         if (!window.confirm('Have you saved your analysis figures? Unsaved changes will be lost.')) {
           e.preventDefault();
           e.stopPropagation();
@@ -510,7 +518,7 @@ export default function EstimatorPage() {
               {/* Labor breakdown table — rendered by JS */}
               <div id="analysisViewBreakdown" className="mb-4"></div>
               {/* Summary row */}
-              <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
                     Total Labor
@@ -566,6 +574,17 @@ export default function EstimatorPage() {
                     —
                   </div>
                 </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Margin
+                  </span>
+                  <div
+                    id="analysisViewMargin"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -583,17 +602,30 @@ export default function EstimatorPage() {
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Gasoline */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
-                <input
-                  type="number"
-                  id="gasolineInput"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
+              {/* Gasoline + Margin */}
+              <div className="flex gap-4 mb-4 pb-4 border-b border-gray-100">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
+                  <input
+                    type="number"
+                    id="gasolineInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
+                  <input
+                    type="number"
+                    id="marginInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
               </div>
               {/* Global rates */}
               {/* Hidden inputs keep default values for new crew members */}
