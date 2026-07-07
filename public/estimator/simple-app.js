@@ -45,6 +45,7 @@ let activeProjectId = null;
 
 function renderDrawerSkeleton(){
 
+  const libraryMount = document.getElementById('libraryMount');
   if (!libraryMount) return;
 
   libraryMount.innerHTML = `
@@ -164,6 +165,11 @@ async function refreshDrawer(){
 
 async function ensureDrawer(){
 
+  // Reset if libraryMount was re-created by soft navigation
+  if (drawerLoaded && !document.getElementById('savedSection')) {
+    drawerLoaded = false;
+  }
+
   if (!drawerLoaded){
 
     drawerLoaded = true;
@@ -176,9 +182,10 @@ async function ensureDrawer(){
 
 function openSidebar(){
 
-  if (!sidebarRoot) return;
+  const root = document.getElementById('sidebarRoot') || sidebarRoot;
+  if (!root) return;
 
-  sidebarRoot.dataset.open = 'true';
+  root.dataset.open = 'true';
 
   const toggle = document.querySelector('.sidebar-toggle');
   if (toggle) toggle.style.display = 'none';
@@ -188,9 +195,10 @@ function openSidebar(){
 
 function closeSidebar(){
 
-  if (!sidebarRoot) return;
+  const root = document.getElementById('sidebarRoot') || sidebarRoot;
+  if (!root) return;
 
-  sidebarRoot.dataset.open = 'false';
+  root.dataset.open = 'false';
 
   const toggle = document.querySelector('.sidebar-toggle');
   if (toggle) toggle.style.display = '';
@@ -1215,6 +1223,9 @@ async function initApp(){
 
     if(!pdfDoc) return;
 
+    localStorage.setItem('estimator_last_page', currentPage);
+    localStorage.setItem('estimator_last_zoom', zoom);
+
     const seq = ++__renderSeq;
 
     const page = await pdfDoc.getPage(currentPage);
@@ -1468,6 +1479,7 @@ async function initApp(){
 
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
+    if (projData?.id) localStorage.setItem('estimator_last_project_id', projData.id);
 
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
     setText('loadedProjectName', projData.name);
@@ -1483,6 +1495,9 @@ async function initApp(){
   }
 
   function showNewProjectForm() {
+    localStorage.removeItem('estimator_last_project_id');
+    localStorage.removeItem('estimator_last_page');
+    localStorage.removeItem('estimator_last_zoom');
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'block';
     document.getElementById('editProjectForm').style.display = 'none';
@@ -2045,6 +2060,8 @@ async function initApp(){
     }
 
     setText('analysisViewAddress', projData.address || '');
+    const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
+    setText('analysisViewStartAddress', projData.start_address || DEFAULT_OFFICE);
     const lps = (projData.labor != null && projData.total_area) ? (projData.labor / projData.total_area) : null;
     setText('analysisViewLabor', fmt$(projData.labor));
     setText('analysisViewTotalArea', fmtSF(projData.total_area));
@@ -2104,6 +2121,27 @@ async function initApp(){
     setVal('analysisAddressInput', _loadedProjectData.address);
     setVal('gasolineInput', _loadedProjectData.gasoline);
     setVal('marginInput', _loadedProjectData.margin);
+
+    // Start address dropdown
+    const sel = document.getElementById('startAddressSelect');
+    const customInput = document.getElementById('startAddressInput');
+    const savedStart = _loadedProjectData.start_address;
+    if (sel && customInput) {
+      if (savedStart) {
+        sel.value = 'custom';
+        customInput.style.display = '';
+        customInput.value = savedStart;
+      } else {
+        sel.value = 'default';
+        customInput.style.display = 'none';
+        customInput.value = '';
+      }
+      sel.onchange = () => {
+        customInput.style.display = sel.value === 'custom' ? '' : 'none';
+        if (sel.value === 'default') customInput.value = '';
+      };
+    }
+
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
@@ -2156,11 +2194,15 @@ async function initApp(){
       const prevAddr = _loadedProjectData.address || '';
       const gasolineVal = document.getElementById('gasolineInput')?.value;
       const marginVal = document.getElementById('marginInput')?.value;
+      const startSel = document.getElementById('startAddressSelect');
+      const startCustom = document.getElementById('startAddressInput');
+      const startAddrVal = (startSel?.value === 'custom' ? startCustom?.value?.trim() : '') || '';
       const body = {
         labor: totLabor > 0 ? totLabor : null,
         labor_breakdown: laborBreakdown,
         quote: totFinalPrice > 0 ? totFinalPrice : null,
         address: addrVal,
+        start_address: startAddrVal || null,
       };
       if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
       if (gasolineVal !== '') body.gasoline = parseFloat(gasolineVal) || null;
@@ -2817,6 +2859,61 @@ async function initApp(){
   }
 
   updateZoomLabel();
+
+  // Auto-restore last open project — also callable from outside (soft navigation)
+  let _restoring = false;
+  async function restoreLastProject() {
+    if (_restoring) return;
+    _restoring = true;
+    const lastId = localStorage.getItem('estimator_last_project_id');
+    if (!lastId) { _restoring = false; return; }
+
+    // After Next.js soft navigation, DOM elements are recreated but the JS closure
+    // still holds stale references. Reload the page — sessionStorage flag ensures
+    // the restore runs correctly after the fresh initApp.
+    if (pdfCanvas && !document.contains(pdfCanvas)) {
+      window.location.reload();
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${lastId}`, { cache: 'no-store' });
+      if (!res.ok) { localStorage.removeItem('estimator_last_project_id'); return; }
+      const projData = await res.json();
+      const bp = (projData.files || []).find(f => f.file_type === 'blueprint');
+      if (!bp) return;
+      const resp = await fetch(`${API_BASE}/api/projects/${projData.id}/files/${bp.id}/download`, { redirect: 'follow' });
+      if (!resp.ok) return;
+      const blob = await resp.blob();
+      const fileObj = new File([blob], bp.filename);
+      await handleFile(fileObj);
+      activeProjectId = projData.id;
+      window.__restoreAnnotations?.(projData.id);
+      // Restore page and zoom
+      const savedPage = parseInt(localStorage.getItem('estimator_last_page') || '1', 10);
+      const savedZoom = parseFloat(localStorage.getItem('estimator_last_zoom') || '1');
+      if (pdfDoc && savedPage > 1 && savedPage <= pdfDoc.numPages) {
+        currentPage = savedPage;
+        zoom = savedZoom || 1;
+        await renderPage();
+      } else if (savedZoom && savedZoom !== 1) {
+        zoom = savedZoom;
+        await renderPage();
+      }
+      window.__showProjectLoadedCard?.(projData, bp.filename);
+    } catch (e) {
+      console.warn('Failed to restore last project', e);
+    } finally {
+      _restoring = false;
+    }
+  }
+
+  window.__restoreLastProject = restoreLastProject;
+
+  // After soft-nav reload, sessionStorage flag persists — run restore from initApp
+  // since useEffect fires before this script finishes loading
+  if (sessionStorage.getItem('estimator_visited') && localStorage.getItem('estimator_last_project_id')) {
+    restoreLastProject();
+  }
 }
 
 // ======================================================

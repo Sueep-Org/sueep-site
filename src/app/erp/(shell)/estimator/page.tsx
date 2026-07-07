@@ -5,6 +5,16 @@ import { useEffect, useRef } from "react";
 export default function EstimatorPage() {
   const loaded = useRef(false);
 
+  // Restore last project on soft navigation back (not on hard refresh)
+  useEffect(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const isSoftNav = sessionStorage.getItem('estimator_visited');
+    sessionStorage.setItem('estimator_visited', '1');
+    if (isSoftNav && typeof w.__restoreLastProject === 'function') {
+      (w.__restoreLastProject as () => void)();
+    }
+  }, []);
+
   // Warn on refresh / tab close / Next.js navigation if analysis is unsaved
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
@@ -482,10 +492,19 @@ export default function EstimatorPage() {
             {/* READ-ONLY VIEW */}
             <div id="analysisView">
               {/* Address + Drive info */}
-              <div className="grid grid-cols-4 gap-x-6 gap-y-3 text-sm mb-4">
+              <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Address
+                    Start Address
+                  </span>
+                  <div
+                    id="analysisViewStartAddress"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >—</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Project Address
                   </span>
                   <div
                     id="analysisViewAddress"
@@ -590,7 +609,25 @@ export default function EstimatorPage() {
 
             {/* EDIT FORM */}
             <div id="analysisEditForm" style={{ display: "none" }}>
-              {/* Address */}
+              {/* Start Address */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">Start Address</label>
+                <select
+                  id="startAddressSelect"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                >
+                  <option value="default">Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004</option>
+                  <option value="custom">Custom address…</option>
+                </select>
+                <input
+                  type="text"
+                  id="startAddressInput"
+                  placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
+                  style={{ display: "none" }}
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              {/* Project Address */}
               <div className="mb-4 pb-4 border-b border-gray-100">
                 <label className="block text-xs text-gray-500 mb-1">
                   Project Address
