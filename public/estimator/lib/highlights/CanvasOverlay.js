@@ -546,11 +546,16 @@ export class CanvasOverlay {
     event.stopPropagation();
 
     if (isCopy) {
-      const target = this._copiedMeasurement || this._lastClickedCopyTarget || this._findCopyTargetAtPoint(this._lastPointerPosition?.x || this.overlay.width / 2, this._lastPointerPosition?.y || this.overlay.height / 2) || this._getSelectedCopyTarget();
-      this._copiedMeasurement = target;
-      this._lastClickedCopyTarget = target;
-      if (this._copiedMeasurement) {
-        toast(target.type === 'line' ? 'Line copied' : 'Measurement copied', 'info');
+      // Find shape at current pointer position first, then fall back to selected
+      const target = (this._lastPointerPosition
+        ? this._findCopyTargetAtPoint(this._lastPointerPosition.x, this._lastPointerPosition.y)
+        : null) || this._getSelectedCopyTarget();
+      if (target) {
+        this._copiedMeasurement = target;
+        this._lastClickedCopyTarget = target;
+        toast(target.type === 'line' ? 'Line copied' : 'Shape copied', 'info');
+      } else {
+        toast('Hover over a shape and press Cmd+C to copy', 'info');
       }
       return;
     }
@@ -842,15 +847,16 @@ export class CanvasOverlay {
   };
 
   _onPointerUp = (e) => {
-    if (!this.active) return;
-
+    // Always handle drag end regardless of drawing mode
     if (this._dragState) {
       this._dragState = null;
       try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
+      this.onMeasurementsChanged?.();
       this.redraw();
       return;
     }
 
+    if (!this.active) return;
     if ((this.tool !== 'measure' && this.tool !== 'rect')) return;
 
     if (!this._isDraggingMeasure || !this._measureStart) return;
@@ -1137,11 +1143,12 @@ export class CanvasOverlay {
   };
 
   _onClick = (e) => {
-    if (!this.active) return;
     if (this._suppressNextClick) {
       this._suppressNextClick = false;
       return;
     }
+    // Drawing tool clicks handled below; selection works in any mode
+    if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
