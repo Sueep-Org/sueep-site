@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import {
@@ -93,6 +93,21 @@ function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
   return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
 }
 
+// "CO" (ProjectChangeOrder, blue) isn't a project segment — it's layered on
+// top as its own filterable type alongside the segment-based groups.
+type ProjectTypeFilter = CalendarSegmentGroup | "CO";
+
+const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; swatch: string }[] = [
+  { value: "POST_CONSTRUCTION", label: CALENDAR_GROUP_LABEL.POST_CONSTRUCTION, swatch: CALENDAR_GROUP_SWATCH_CLASS.POST_CONSTRUCTION },
+  { value: "CHANGE_ORDER", label: CALENDAR_GROUP_LABEL.CHANGE_ORDER, swatch: CALENDAR_GROUP_SWATCH_CLASS.CHANGE_ORDER },
+  { value: "CO", label: CHANGE_ORDER_LABEL, swatch: CHANGE_ORDER_SWATCH_CLASS },
+  { value: "JANITORIAL_TURNOVER_REQUESTS", label: CALENDAR_GROUP_LABEL.JANITORIAL_TURNOVER_REQUESTS, swatch: CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS },
+  { value: "REAL_ESTATE", label: CALENDAR_GROUP_LABEL.REAL_ESTATE, swatch: CALENDAR_GROUP_SWATCH_CLASS.REAL_ESTATE },
+  { value: "OTHER", label: CALENDAR_GROUP_LABEL.OTHER, swatch: CALENDAR_GROUP_SWATCH_CLASS.OTHER },
+];
+
+const ALL_PROJECT_TYPE_FILTERS = PROJECT_TYPE_FILTER_OPTIONS.map((o) => o.value);
+
 function monthLabel(d: Date): string {
   return d.toLocaleString("en-US", { month: "long", year: "numeric" });
 }
@@ -114,6 +129,30 @@ export function SchedulePlanner({
 }) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
+  const [selectedTypes, setSelectedTypes] = useState<Set<ProjectTypeFilter>>(() => new Set(ALL_PROJECT_TYPE_FILTERS));
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const filtersActive = selectedSupervisorId !== "" || selectedTypes.size < ALL_PROJECT_TYPE_FILTERS.length;
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [filterOpen]);
+
+  function toggleType(t: ProjectTypeFilter) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  }
 
   // Planned (future) supervisor assignments — click a day to add one. Local
   // state so create/delete reflect immediately without a full page reload.
@@ -262,36 +301,113 @@ export function SchedulePlanner({
   const todayKey = dayKey(new Date());
 
   const calendarNav = (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={prevMonth}
-        className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-      >
-        ← Prev
-      </button>
-      <span className="min-w-[140px] text-center text-sm font-semibold text-gray-800">{monthLabel(cursor)}</span>
-      <button
-        type="button"
-        onClick={nextMonth}
-        className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-      >
-        Next →
-      </button>
-      {canFilterBySupervisor ? (
-        <select
-          value={selectedSupervisorId}
-          onChange={(e) => setSelectedSupervisorId(e.target.value)}
-          className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={prevMonth}
+          aria-label="Previous month"
+          className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
         >
-          <option value="">All supervisors</option>
-          {supervisors.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.displayName}
-            </option>
-          ))}
-        </select>
-      ) : null}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="min-w-[120px] text-center text-sm font-semibold text-gray-800">{monthLabel(cursor)}</span>
+        <button
+          type="button"
+          onClick={nextMonth}
+          aria-label="Next month"
+          className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+      <div className="relative" ref={filterRef}>
+        <button
+          type="button"
+          onClick={() => setFilterOpen((v) => !v)}
+          aria-label="Filter calendar"
+          className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+            filtersActive
+              ? "border-pink-300 bg-pink-50 text-pink-600"
+              : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+          }`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 4.5h18M6.75 12h10.5M10.5 19.5h3"
+            />
+          </svg>
+        </button>
+        {filterOpen ? (
+          <div className="absolute right-0 z-20 mt-2 w-60 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+            {canFilterBySupervisor ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
+                <div className="mt-1.5 max-h-36 space-y-1 overflow-y-auto">
+                  <label className="flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="radio"
+                      name="supervisor-filter"
+                      checked={selectedSupervisorId === ""}
+                      onChange={() => setSelectedSupervisorId("")}
+                      className="h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400"
+                    />
+                    All supervisors
+                  </label>
+                  {supervisors.map((s) => (
+                    <label key={s.id} className="flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="radio"
+                        name="supervisor-filter"
+                        checked={selectedSupervisorId === s.id}
+                        onChange={() => setSelectedSupervisorId(s.id)}
+                        className="h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400"
+                      />
+                      {s.displayName}
+                    </label>
+                  ))}
+                </div>
+                <div className="my-3 border-t border-gray-100" />
+              </div>
+            ) : null}
+
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Project type</p>
+            <div className="mt-1.5 space-y-1">
+              {PROJECT_TYPE_FILTER_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedTypes.has(opt.value)}
+                    onChange={() => toggleType(opt.value)}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-400"
+                  />
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${opt.swatch}`} />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSupervisorId("");
+                  setSelectedTypes(new Set(ALL_PROJECT_TYPE_FILTERS));
+                }}
+                className="mt-3 w-full rounded border border-gray-200 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 
@@ -327,6 +443,13 @@ export function SchedulePlanner({
                     (co) => projectSupervisorOnDay(co.projectId, k) === selectedSupervisorId,
                   );
                 }
+
+                dayProjects = dayProjects.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
+                dayChangeOrders = selectedTypes.has("CO") ? dayChangeOrders : [];
+                dayPlannedRaw = dayPlannedRaw.filter((a) => {
+                  const project = projectById.get(a.projectId);
+                  return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
+                });
 
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
                 // Planned assignments are only shown when there's no confirmed
