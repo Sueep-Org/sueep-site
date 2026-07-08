@@ -104,19 +104,41 @@ export function SchedulePlanner({
   supervisors,
   changeOrders,
   initialDayAssignments,
+  canFilterBySupervisor,
 }: {
   projects: ScheduleProject[];
   supervisors: Supervisor[];
   changeOrders: ScheduleChangeOrder[];
   initialDayAssignments: ScheduleDayAssignment[];
+  canFilterBySupervisor: boolean;
 }) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
 
   // Planned (future) supervisor assignments — click a day to add one. Local
   // state so create/delete reflect immediately without a full page reload.
   const [dayAssignments, setDayAssignments] = useState(initialDayAssignments);
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+
+  // Deletes a planned (ProjectDayAssignment) entry directly from its chip —
+  // works on any day, including past ones where the "+" button is hidden, so
+  // stale planned entries that never got a real labor log can still be
+  // cleared. Never touches confirmed (labor-log-based) calendar entries.
+  async function handleDeleteAssignment(id: string) {
+    setDeletingAssignmentId(id);
+    const previous = dayAssignments;
+    setDayAssignments((prev) => prev.filter((a) => a.id !== id));
+    try {
+      const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+    } catch {
+      setDayAssignments(previous);
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  }
 
   // Local overrides so reassigning a supervisor updates the dropdown right
   // away, without waiting on a full server round-trip / router.refresh().
@@ -219,6 +241,16 @@ export function SchedulePlanner({
     return map;
   }, [dayAssignments]);
 
+  // Which supervisor covers a project on a given day, for the supervisor
+  // filter — prefers that day's specific planned assignment, falling back to
+  // the project's overall supervisor when no day-level assignment exists.
+  function projectSupervisorOnDay(projectId: string, k: string): string {
+    const dayAssignment = (plannedByDay.get(k) ?? []).find((a) => a.projectId === projectId);
+    if (dayAssignment) return dayAssignment.supervisorUserId;
+    const project = projectById.get(projectId);
+    return project ? currentSupervisorId(project) : "";
+  }
+
   function prevMonth() {
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
   }
@@ -246,6 +278,20 @@ export function SchedulePlanner({
       >
         Next →
       </button>
+      {canFilterBySupervisor ? (
+        <select
+          value={selectedSupervisorId}
+          onChange={(e) => setSelectedSupervisorId(e.target.value)}
+          className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+        >
+          <option value="">All supervisors</option>
+          {supervisors.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.displayName}
+            </option>
+          ))}
+        </select>
+      ) : null}
     </div>
   );
 
@@ -268,16 +314,28 @@ export function SchedulePlanner({
                 const isToday = k === todayKey;
                 const isFutureOrToday = k >= todayKey;
 
-                const dayProjects = projectsByDay.get(k) ?? [];
+                let dayProjects = projectsByDay.get(k) ?? [];
+                let dayPlannedRaw = plannedByDay.get(k) ?? [];
+                let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
+
+                if (selectedSupervisorId) {
+                  dayProjects = dayProjects.filter(
+                    (p) => projectSupervisorOnDay(p.id, k) === selectedSupervisorId,
+                  );
+                  dayPlannedRaw = dayPlannedRaw.filter((a) => a.supervisorUserId === selectedSupervisorId);
+                  dayChangeOrders = dayChangeOrders.filter(
+                    (co) => projectSupervisorOnDay(co.projectId, k) === selectedSupervisorId,
+                  );
+                }
+
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
                 // Planned assignments are only shown when there's no confirmed
                 // labor log yet for that project/day — once real work is
                 // logged, the confirmed chip takes over.
-                const dayPlanned = (plannedByDay.get(k) ?? [])
+                const dayPlanned = dayPlannedRaw
                   .filter((a) => !confirmedProjectIds.has(a.projectId))
                   .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
                   .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
-                const dayChangeOrders = changeOrdersByDay.get(k) ?? [];
 
                 const totalCount = dayProjects.length + dayPlanned.length + dayChangeOrders.length;
                 const visibleProjects = dayProjects.slice(0, 4);
@@ -306,7 +364,7 @@ export function SchedulePlanner({
                           type="button"
                           onClick={() => setOpenDayKey(k)}
                           title="Assign a supervisor to a project on this day"
-                          className="rounded px-1 text-xs font-medium text-gray-300 hover:bg-pink-50 hover:text-pink-500"
+                          className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-bold leading-none text-gray-400 hover:border-pink-400 hover:bg-pink-50 hover:text-pink-500"
                         >
                           +
                         </button>
@@ -325,14 +383,26 @@ export function SchedulePlanner({
                         </li>
                       ))}
                       {visiblePlanned.map(({ assignment, project }) => (
-                        <li key={`plan-${assignment.id}`}>
+                        <li key={`plan-${assignment.id}`} className="relative">
                           <Link
                             href={`/erp/projects/${project.id}`}
                             title={`${project.jobTitle} — planned, not yet logged`}
-                            className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${PLANNED_CHIP_EXTRA_CLASS}`}
+                            className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
                           </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleDeleteAssignment(assignment.id);
+                            }}
+                            disabled={deletingAssignmentId === assignment.id}
+                            title="Remove this scheduled assignment"
+                            className="absolute right-0.5 top-1/2 -translate-y-1/2 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                          >
+                            ×
+                          </button>
                         </li>
                       ))}
                       {visibleChangeOrders.map((co) => (
@@ -477,7 +547,12 @@ export function SchedulePlanner({
           supervisors={supervisors}
           existing={plannedByDay.get(openDayKey) ?? []}
           onClose={() => setOpenDayKey(null)}
-          onCreated={(a) => setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a])}
+          onCreated={(a) => {
+            setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
+            // Assigning here also sets the project's supervisor server-side —
+            // mirror that in the Gantt's inline dropdown right away.
+            setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
+          }}
           onDeleted={(id) => setDayAssignments((prev) => prev.filter((a) => a.id !== id))}
         />
       ) : null}

@@ -36,3 +36,7 @@ export function canAddLaborLogs(role: ErpRole): boolean {
 export function canEditPricing(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "ESTIMATION";
 }
+
+export function canFilterScheduleBySupervisor(role: ErpRole): boolean {
+  return role !== "SUPERVISOR" && role !== "EMPLOYEE";
+}

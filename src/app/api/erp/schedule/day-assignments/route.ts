@@ -26,11 +26,18 @@ export async function POST(req: Request) {
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (!supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
 
-  const assignment = await prisma.projectDayAssignment.upsert({
-    where: { projectId_date: { projectId, date } },
-    create: { projectId, date, supervisorUserId },
-    update: { supervisorUserId },
-  });
+  // Assigning a supervisor here also makes them the project's supervisor on
+  // the project details page (Project.supervisorUserId) — same field the
+  // Gantt's inline reassignment dropdown writes to. Last assignment wins,
+  // consistent with that dropdown's behavior.
+  const [assignment] = await prisma.$transaction([
+    prisma.projectDayAssignment.upsert({
+      where: { projectId_date: { projectId, date } },
+      create: { projectId, date, supervisorUserId },
+      update: { supervisorUserId },
+    }),
+    prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }),
+  ]);
 
   return NextResponse.json(assignment, { status: 201 });
 }

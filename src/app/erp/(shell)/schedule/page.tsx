@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { dayKey, type ScheduleChangeOrder, type ScheduleDayAssignment, type ScheduleProject } from "@/lib/erp/schedule";
+import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 
 export const metadata: Metadata = {
@@ -14,6 +15,9 @@ export const runtime = "nodejs";
 const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
 
 export default async function SchedulePage() {
+  const auth = await getErpAuth();
+  const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
+
   const [projectRows, supervisorUsers, laborEntryRows, changeOrderRows, coLaborerRows, dayAssignmentRows] = await Promise.all([
     prisma.project.findMany({
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
@@ -125,6 +129,7 @@ export default async function SchedulePage() {
         supervisors={supervisors}
         changeOrders={changeOrders}
         initialDayAssignments={dayAssignments}
+        canFilterBySupervisor={canFilterBySupervisor}
       />
     </div>
   );
