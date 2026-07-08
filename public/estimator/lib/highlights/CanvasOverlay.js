@@ -20,6 +20,7 @@ export class CanvasOverlay {
     this._selectedLineIds = new Set();
     this._hoverMeasurementId = null;
     this._selectedMeasurementId = null;
+    this._selectedPolygonId = null;
 
     this._edgeWorker = null;
     this._fillWorker = null;
@@ -36,6 +37,11 @@ export class CanvasOverlay {
     this._measurePreview = null; // {x1,y1,x2,y2}
     this._pendingPolygonPoints = [];
     this._irregularPreview = null;
+    this._copiedMeasurement = null;
+    this._lastPointerPosition = null;
+    this._dragState = null;
+    this._suppressNextClick = false;
+    this._lastClickedCopyTarget = null;
   }
 
   attach() {
@@ -67,7 +73,9 @@ export class CanvasOverlay {
 
   setActive(active) {
     this.active = active;
-    this.overlay.style.pointerEvents = active ? 'auto' : 'none';
+    // Always keep pointer events on so users can select/copy/drag existing shapes
+    // even when no drawing tool is active
+    this.overlay.style.pointerEvents = 'auto';
     if (!active) {
       this._pendingPolygonPoints = [];
       this._irregularPreview = null;
@@ -108,6 +116,7 @@ export class CanvasOverlay {
     this._hoverLineId = null;
     this._hoverMeasurementId = null;
     this._selectedMeasurementId = null;
+    this._selectedPolygonId = null;
     this._selectedLineIds.clear();
     this.redraw();
   }
@@ -121,7 +130,9 @@ export class CanvasOverlay {
     const items = this.store.getPage(this.currentPage) || [];
     for (const it of items) {
       const pts = (it.points || []).map(p => ({ x: p.x * w, y: p.y * h }));
-      drawPolygon(ctx, pts, true);
+      const isSelected = this._selectedPolygonId &&
+        (it.id === this._selectedPolygonId || it.measurementId === this._selectedPolygonId);
+      drawPolygon(ctx, pts, true, { selected: !!isSelected });
     }
     if (this.hoverPoly) drawPolygon(ctx, this.hoverPoly, false);
 
@@ -338,32 +349,420 @@ export class CanvasOverlay {
     this.overlay.addEventListener('click', this._onClick);
     this.overlay.addEventListener('dblclick', this._onDoubleClick);
     this.overlay.addEventListener('pointercancel', this._onPointerCancel);
+    this.overlay.addEventListener('contextmenu', this._onContextMenu);
+    window.addEventListener('keydown', this._onWindowKeyDown);
+  }
+
+  _cloneMeasurement(measurement, { offsetX = 0, offsetY = 0, assignNewId = true } = {}) {
+    if (!measurement) return null;
+
+    const clone = JSON.parse(JSON.stringify(measurement));
+    const clamp = (value) => Math.min(1, Math.max(0, value));
+
+    if (assignNewId) {
+      clone.id = `${clone.id || 'measurement'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    clone.at = Date.now();
+
+    if (Array.isArray(clone.pts)) {
+      clone.pts = clone.pts.map((seg) => ({
+        ...seg,
+        x1: clamp((seg.x1 || 0) + offsetX),
+        y1: clamp((seg.y1 || 0) + offsetY),
+        x2: clamp((seg.x2 || 0) + offsetX),
+        y2: clamp((seg.y2 || 0) + offsetY)
+      }));
+    }
+
+    if (Array.isArray(clone.shapePoints)) {
+      clone.shapePoints = clone.shapePoints.map((point) => ({
+        ...point,
+        x: clamp((point.x || 0) + offsetX),
+        y: clamp((point.y || 0) + offsetY)
+      }));
+    }
+
+    if (Array.isArray(clone.polygonPoints)) {
+      clone.polygonPoints = clone.polygonPoints.map((point) => ({
+        ...point,
+        x: clamp((point.x || 0) + offsetX),
+        y: clamp((point.y || 0) + offsetY)
+      }));
+    }
+
+    return clone;
+  }
+
+  _isAreaMeasurement(measurement) {
+    return Boolean(
+      measurement?.area != null ||
+      measurement?.areaLabel != null ||
+      measurement?.areaPx != null ||
+      measurement?.shapeType === 'polygon' ||
+      (Array.isArray(measurement?.shapePoints) && measurement.shapePoints.length >= 3) ||
+      (Array.isArray(measurement?.polygonPoints) && measurement.polygonPoints.length >= 3)
+    );
+  }
+
+  _storeMeasurement(measurement, { select = true } = {}) {
+    if (!measurement) return null;
+
+    this.store.addMeasurement(this.currentPage, measurement);
+
+    if (this._isAreaMeasurement(measurement)) {
+      const points = Array.isArray(measurement.shapePoints) && measurement.shapePoints.length
+        ? measurement.shapePoints
+        : (Array.isArray(measurement.polygonPoints) && measurement.polygonPoints.length
+          ? measurement.polygonPoints
+          : []);
+      this.store.addPolygon(this.currentPage, {
+        points,
+        measurementId: measurement.id,
+        id: measurement.id
+      });
+    }
+
+    if (select) {
+      this._selectedMeasurementId = measurement.id;
+    }
+
+    return measurement;
+  }
+
+  // Find the measurement linked to a polygon (for copy/paste of rect/irreg shapes)
+  _findLinkedMeasurement(polygon) {
+    const measurements = this.store.listMeasurements(this.currentPage) || [];
+    return measurements.find(m =>
+      m.id === polygon.measurementId ||
+      m.id === polygon.id ||
+      m.polygonId === polygon.id
+    ) || null;
+  }
+
+  _pasteMeasurement() {
+    const source = this._copiedMeasurement || this._lastClickedCopyTarget || (this._selectedMeasurementId
+      ? { type: 'measurement', value: (this.store.listMeasurements(this.currentPage) || []).find((entry) => entry.id === this._selectedMeasurementId) }
+      : null);
+    if (!source || !source.value) {
+      toast('Nothing to paste — select or right-click a shape first', 'info');
+      return;
+    }
+
+    const OFF = 0.03;
+
+    // Paste a vector line (from RulerOverlay)
+    if (source.type === 'line') {
+      const line = JSON.parse(JSON.stringify(source.value));
+      const lineId = line.id || line.__id || 'line';
+      line.id = `${lineId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      if (line.__id != null) delete line.__id;
+      line.x1 = Math.min(1, Math.max(0, (line.x1 || 0) + OFF));
+      line.y1 = Math.min(1, Math.max(0, (line.y1 || 0) + OFF));
+      line.x2 = Math.min(1, Math.max(0, (line.x2 || 0) + OFF));
+      line.y2 = Math.min(1, Math.max(0, (line.y2 || 0) + OFF));
+      this.store.getLines(this.currentPage).push(line);
+      this.redraw();
+      this.onMeasurementsChanged?.();
+      toast('Line pasted', 'info');
+      return;
+    }
+
+    // Paste a polygon (rect or irreg) — also copy its linked measurement
+    if (source.type === 'polygon') {
+      const linkedMeasurement = this._findLinkedMeasurement(source.value);
+      if (linkedMeasurement) {
+        // Clone the measurement (which also re-creates the polygon via _storeMeasurement)
+        const cloned = this._cloneMeasurement(linkedMeasurement, { offsetX: OFF, offsetY: OFF });
+        this._storeMeasurement(cloned);
+        this._selectedMeasurementId = cloned.id;
+        this._selectedPolygonId = cloned.id;
+        this.redraw();
+        this.onMeasurementsChanged?.();
+        toast('Shape pasted', 'info');
+      } else {
+        // Orphan polygon with no measurement — just clone the visual shape
+        const polygon = JSON.parse(JSON.stringify(source.value));
+        polygon.id = `${polygon.id || 'polygon'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (Array.isArray(polygon.points)) {
+          polygon.points = polygon.points.map((p) => ({
+            ...p,
+            x: Math.min(1, Math.max(0, (p.x || 0) + OFF)),
+            y: Math.min(1, Math.max(0, (p.y || 0) + OFF))
+          }));
+        }
+        this.store.addPolygon(this.currentPage, polygon);
+        this._selectedPolygonId = polygon.id;
+        this.redraw();
+        this.onMeasurementsChanged?.();
+        toast('Shape pasted', 'info');
+      }
+      return;
+    }
+
+    // Paste a measurement (line measurement, rect area, or irreg area)
+    const cloned = this._cloneMeasurement(source.value, { offsetX: OFF, offsetY: OFF });
+    this._storeMeasurement(cloned);
+    this._selectedMeasurementId = cloned.id;
+    this.redraw();
+    this.onMeasurementsChanged?.();
+    toast('Measurement pasted', 'info');
+  }
+
+  _onContextMenu = (event) => {
+    if (!this.overlay) return;
+
+    const rect = this.overlay.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const target = this._findCopyTargetAtPoint(x, y) || this._getSelectedCopyTarget();
+
+    if (!target) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this._copiedMeasurement = target;
+    this._lastClickedCopyTarget = target;
+    if (target.type === 'measurement') {
+      this._selectedMeasurementId = target.value.id;
+      this._selectedPolygonId = null;
+    } else if (target.type === 'polygon') {
+      this._selectedPolygonId = target.value.id || target.value.measurementId || null;
+      this._selectedMeasurementId = null;
+    }
+    this.redraw();
+    toast(target.type === 'line' ? 'Line copied' : 'Measurement copied', 'info');
+  };
+
+  _onWindowKeyDown = (event) => {
+    if (!this.overlay) return;
+
+    const target = event.target;
+    const tagName = target?.tagName?.toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return;
+
+    const isCopy = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'c';
+    const isPaste = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'v';
+    if (!isCopy && !isPaste) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isCopy) {
+      // Find shape at current pointer position first, then fall back to selected
+      const target = (this._lastPointerPosition
+        ? this._findCopyTargetAtPoint(this._lastPointerPosition.x, this._lastPointerPosition.y)
+        : null) || this._getSelectedCopyTarget();
+      if (target) {
+        this._copiedMeasurement = target;
+        this._lastClickedCopyTarget = target;
+        toast(target.type === 'line' ? 'Line copied' : 'Shape copied', 'info');
+      } else {
+        toast('Hover over a shape and press Cmd+C to copy', 'info');
+      }
+      return;
+    }
+
+    if (isPaste) {
+      this._pasteMeasurement();
+    }
+  };
+
+  _getSelectedCopyTarget() {
+    // Check selected polygon first (rect / irreg)
+    if (this._selectedPolygonId) {
+      const polygon = (this.store.getPage(this.currentPage) || []).find(
+        (p) => p.id === this._selectedPolygonId || p.measurementId === this._selectedPolygonId
+      );
+      if (polygon) return { type: 'polygon', value: polygon };
+    }
+
+    // Check selected measurement (line measurement)
+    const selectedMeasurement = this._selectedMeasurementId
+      ? (this.store.listMeasurements(this.currentPage) || []).find((entry) => entry.id === this._selectedMeasurementId)
+      : null;
+    if (selectedMeasurement) {
+      return { type: 'measurement', value: selectedMeasurement };
+    }
+
+    // Check selected vector line
+    const selectedLineId = this._selectedLineIds.size ? Array.from(this._selectedLineIds)[0] : null;
+    if (selectedLineId) {
+      const line = (this.store.getLines(this.currentPage) || []).find((entry) => (entry.id || entry.__id) === selectedLineId);
+      if (line) return { type: 'line', value: line };
+    }
+
+    return null;
+  }
+
+  _findCopyTargetAtPoint(x, y) {
+    const polygon = this._findPolygonAtPoint(x, y);
+    if (polygon) {
+      const linkedMeasurement = this._findLinkedMeasurement(polygon);
+      if (linkedMeasurement) {
+        return { type: 'measurement', value: linkedMeasurement };
+      }
+      return { type: 'polygon', value: polygon };
+    }
+
+    const measurement = this._findMeasurementAtPoint(x, y);
+    if (measurement) {
+      return { type: 'measurement', value: measurement };
+    }
+
+    const w = this.overlay?.width || 0;
+    const h = this.overlay?.height || 0;
+    if (!w || !h) return null;
+
+    const lines = this.store.getLines(this.currentPage) || [];
+    let nearestLine = null;
+    let nearestLineDist = Infinity;
+
+    for (const line of lines) {
+      const a = { x: (line.x1 || line.x) * w, y: (line.y1 || line.y) * h };
+      const b = { x: (line.x2 || line.x1) * w, y: (line.y2 || line.y1) * h };
+      const d = pointToSegmentDistance({ x, y }, a, b);
+      if (d < nearestLineDist) {
+        nearestLineDist = d;
+        nearestLine = line;
+      }
+    }
+
+    const hitThreshold = Math.max(14, 14 * (this.zoom || 1));
+    return nearestLine && nearestLineDist <= hitThreshold ? { type: 'line', value: nearestLine } : null;
+  }
+
+  _captureDragSnapshot(item, type) {
+    if (type === 'line') {
+      return {
+        x1: item.x1 ?? item.x ?? 0,
+        y1: item.y1 ?? item.y ?? 0,
+        x2: item.x2 ?? item.x1 ?? item.x ?? 0,
+        y2: item.y2 ?? item.y1 ?? item.y ?? 0
+      };
+    }
+
+    if (type === 'polygon') {
+      return {
+        points: Array.isArray(item.points) ? item.points.map((point) => ({ ...point })) : []
+      };
+    }
+
+    if (type === 'measurement') {
+      return {
+        pts: Array.isArray(item.pts) ? item.pts.map((seg) => ({ ...seg })) : [],
+        shapePoints: Array.isArray(item.shapePoints) ? item.shapePoints.map((point) => ({ ...point })) : [],
+        polygonPoints: Array.isArray(item.polygonPoints) ? item.polygonPoints.map((point) => ({ ...point })) : []
+      };
+    }
+
+    return null;
+  }
+
+  _updateDragTarget(deltaX, deltaY) {
+    if (!this._dragState) return;
+
+    const clamp = (value) => Math.min(1, Math.max(0, value));
+    const { type, item, initialSnapshot } = this._dragState;
+
+    const applyToPoints = (points) => points.map((point) => ({
+      ...point,
+      x: clamp((point.x || 0) + deltaX),
+      y: clamp((point.y || 0) + deltaY)
+    }));
+
+    if (type === 'line') {
+      item.x1 = clamp((initialSnapshot.x1 || 0) + deltaX);
+      item.y1 = clamp((initialSnapshot.y1 || 0) + deltaY);
+      item.x2 = clamp((initialSnapshot.x2 || 0) + deltaX);
+      item.y2 = clamp((initialSnapshot.y2 || 0) + deltaY);
+      this.redraw();
+      return;
+    }
+
+    if (type === 'polygon') {
+      if (Array.isArray(item.points)) {
+        item.points = applyToPoints(initialSnapshot.points || []);
+      }
+
+      const measurement = (this.store.listMeasurements(this.currentPage) || []).find((entry) => entry.id === item.measurementId || entry.id === item.id || entry.polygonId === item.id || entry.id === (item.measurementId || item.id));
+      if (measurement) {
+        if (Array.isArray(measurement.shapePoints)) {
+          measurement.shapePoints = applyToPoints(initialSnapshot.points || []);
+        }
+        if (Array.isArray(measurement.polygonPoints)) {
+          measurement.polygonPoints = applyToPoints(initialSnapshot.points || []);
+        }
+      }
+
+      this.redraw();
+      return;
+    }
+
+    if (type === 'measurement') {
+      const measurement = item;
+      if (Array.isArray(measurement.pts)) {
+        measurement.pts = (initialSnapshot.pts || []).map((seg) => ({
+          ...seg,
+          x1: clamp((seg.x1 || 0) + deltaX),
+          y1: clamp((seg.y1 || 0) + deltaY),
+          x2: clamp((seg.x2 || 0) + deltaX),
+          y2: clamp((seg.y2 || 0) + deltaY)
+        }));
+      }
+
+      if (Array.isArray(measurement.shapePoints)) {
+        measurement.shapePoints = applyToPoints(initialSnapshot.shapePoints || []);
+      }
+
+      if (Array.isArray(measurement.polygonPoints)) {
+        measurement.polygonPoints = applyToPoints(initialSnapshot.polygonPoints || []);
+      }
+
+      const polygons = this.store.getPage(this.currentPage) || [];
+      const polygon = polygons.find((entry) => entry.measurementId === measurement.id || entry.id === measurement.id || entry.id === (measurement.polygonId || measurement.id));
+      if (polygon && Array.isArray(polygon.points)) {
+        polygon.points = applyToPoints(initialSnapshot.shapePoints || initialSnapshot.polygonPoints || []);
+      }
+
+      this.redraw();
+    }
   }
 
   _onPointerMove = (e) => {
-    if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    this._lastPointerPosition = { x, y };
 
-    // if user is dragging a measure line or rect, update preview and skip hover logic
-    if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
-      this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
-      this.redraw();
+    if (this._dragState && this._dragState.startPoint) {
+      const startPoint = this._dragState.startPoint;
+      const dx = (x - startPoint.x) / Math.max(1, this.overlay.width || 1);
+      const dy = (y - startPoint.y) / Math.max(1, this.overlay.height || 1);
+      this._dragState.lastPoint = { x, y };
+      this._updateDragTarget(dx, dy);
       return;
     }
 
-    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
-      this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
-      this.redraw();
-      return;
-    }
+    // Drawing-specific hover logic — only when a drawing tool is active
+    if (this.active) {
+      if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
+        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
 
-    if (this.tool === 'area') {
-      if (!this._barrierState) return;
-      this._fillWorker.postMessage({ type: 'preview', seedX: x, seedY: y, ...this._barrierState });
-      return;
+      if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+        this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
+
+      if (this.tool === 'area') {
+        if (!this._barrierState) return;
+        this._fillWorker.postMessage({ type: 'preview', seedX: x, seedY: y, ...this._barrierState });
+        return;
+      }
     }
 
     const w = this.overlay.width;
@@ -406,15 +805,61 @@ export class CanvasOverlay {
       this._hoverMeasurementId = hoverMeasurementId;
       this.redraw();
     }
+
+    // Show move cursor when hovering over a draggable shape
+    const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
+    if (!isAddingIrregPoints) {
+      const hoverTarget = this._findCopyTargetAtPoint(x, y);
+      this.overlay.style.cursor = hoverTarget ? 'move' : '';
+    }
   };
 
   _onPointerDown = (e) => {
-    if (!this.active) return;
-    if (this.tool !== 'measure' && this.tool !== 'rect') return;
-
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    this._lastPointerPosition = { x, y };
+
+    // In irregular mode while actively adding points, never intercept for drag
+    const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
+
+    // Always allow drag/select on existing shapes, regardless of drawing mode
+    if (!isAddingIrregPoints) {
+      const target = this._findCopyTargetAtPoint(x, y);
+      if (target) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._copiedMeasurement = target;
+        this._lastClickedCopyTarget = target;
+        this._dragState = {
+          type: target.type,
+          item: target.value,
+          startPoint: { x, y },
+          lastPoint: { x, y },
+          initialSnapshot: this._captureDragSnapshot(target.value, target.type)
+        };
+        this._suppressNextClick = true;
+        this._selectedMeasurementId = target.type === 'measurement' ? target.value.id : null;
+        if (target.type === 'polygon') {
+          this._selectedPolygonId = target.value.id || target.value.measurementId || null;
+        } else if (target.type === 'measurement' && this._isAreaMeasurement(target.value)) {
+          this._selectedPolygonId = target.value.id;
+        } else {
+          this._selectedPolygonId = null;
+        }
+        if (target.type === 'line') {
+          const lineId = target.value.id || target.value.__id;
+          if (lineId) this._selectedLineIds = new Set([lineId]);
+        }
+        try { if (this.overlay.setPointerCapture) this.overlay.setPointerCapture(e.pointerId); } catch (err) {}
+        this.redraw();
+        return;
+      }
+    }
+
+    // Not clicking on a shape — start drawing (only if drawing mode is active)
+    if (!this.active) return;
+    if (this.tool !== 'measure' && this.tool !== 'rect') return;
 
     this._isDraggingMeasure = true;
     this._measureStart = { x, y };
@@ -424,6 +869,15 @@ export class CanvasOverlay {
   };
 
   _onPointerUp = (e) => {
+    // Always handle drag end regardless of drawing mode
+    if (this._dragState) {
+      this._dragState = null;
+      try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
+      this.onMeasurementsChanged?.();
+      this.redraw();
+      return;
+    }
+
     if (!this.active) return;
     if ((this.tool !== 'measure' && this.tool !== 'rect')) return;
 
@@ -537,6 +991,13 @@ export class CanvasOverlay {
   };
 
   _onPointerCancel = (e) => {
+    if (this._dragState) {
+      this._dragState = null;
+      try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
+      this.redraw();
+      return;
+    }
+
     if (this._isDraggingMeasure) {
       this._isDraggingMeasure = false;
       this._measureStart = null;
@@ -545,6 +1006,39 @@ export class CanvasOverlay {
       this.redraw();
     }
   };
+
+  _findPolygonAtPoint(x, y) {
+    const w = this.overlay?.width || 0;
+    const h = this.overlay?.height || 0;
+    if (!w || !h) return null;
+
+    const polygons = this.store.getPage(this.currentPage) || [];
+    if (!polygons.length) return null;
+
+    const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
+
+    for (const polygon of polygons) {
+      const points = Array.isArray(polygon.points) ? polygon.points : [];
+      if (points.length < 2) continue;
+      const screenPoints = points.map((p) => ({ x: p.x * w, y: p.y * h }));
+
+      // Check if point is inside the polygon (ray casting)
+      if (screenPoints.length >= 3 && pointInPolygon({ x, y }, screenPoints)) {
+        return polygon;
+      }
+
+      // Fallback: check proximity to edges
+      for (let i = 0; i < screenPoints.length; i++) {
+        const a = screenPoints[i];
+        const b = screenPoints[(i + 1) % screenPoints.length];
+        if (pointToSegmentDistance({ x, y }, a, b) <= hitThreshold) {
+          return polygon;
+        }
+      }
+    }
+
+    return null;
+  }
 
   _findMeasurementAtPoint(x, y) {
     const w = this.overlay?.width || 0;
@@ -599,14 +1093,13 @@ export class CanvasOverlay {
       }
     }
 
-    const deleteThreshold = Math.max(10, 10 * (this.zoom || 1));
-    return nearestLineMeasurement && nearestLineMeasurementDist <= deleteThreshold
+    const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
+    return nearestLineMeasurement && nearestLineMeasurementDist <= hitThreshold
       ? nearestLineMeasurement
-      : (nearestAreaMeasurement && nearestAreaMeasurementDist <= deleteThreshold ? nearestAreaMeasurement : null);
+      : (nearestAreaMeasurement && nearestAreaMeasurementDist <= hitThreshold ? nearestAreaMeasurement : null);
   }
 
   _onDoubleClick = (e) => {
-    if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -672,6 +1165,11 @@ export class CanvasOverlay {
   };
 
   _onClick = (e) => {
+    if (this._suppressNextClick) {
+      this._suppressNextClick = false;
+      return;
+    }
+    // Drawing tool clicks handled below; selection works in any mode
     if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
@@ -876,27 +1374,29 @@ function drawHint(ctx, x, y, txt) {
   ctx.restore();
 }
 
-function drawPolygon(ctx, pts, solid) {
+function drawPolygon(ctx, pts, solid, { selected = false } = {}) {
   if (!pts.length) return;
 
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
-
-  for (let i = 1; i < pts.length; i++) {
-    ctx.lineTo(pts[i].x, pts[i].y);
-  }
-
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.closePath();
 
-  ctx.fillStyle = solid
-    ? 'rgba(255,214,10,0.35)'
-    : 'rgba(255,214,10,0.15)';
-
-  ctx.strokeStyle = 'rgba(255,195,0,0.9)';
-  ctx.lineWidth = 2;
+  if (selected) {
+    ctx.fillStyle = 'rgba(99,102,241,0.25)';
+    ctx.strokeStyle = 'rgba(99,102,241,0.95)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 3]);
+  } else {
+    ctx.fillStyle = solid ? 'rgba(255,214,10,0.35)' : 'rgba(255,214,10,0.15)';
+    ctx.strokeStyle = 'rgba(255,195,0,0.9)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+  }
 
   ctx.fill();
   ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 // =========================
@@ -1065,6 +1565,18 @@ function drawIrregularPath(ctx, points, preview) {
   ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.restore();
+}
+
+function pointInPolygon(p, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y;
+    const xj = pts[j].x, yj = pts[j].y;
+    if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 function samePoints(a, b) {
