@@ -23,12 +23,8 @@ export function CollapsibleSection({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex flex-1 items-center justify-between gap-3 text-left"
+          className="flex flex-1 items-center gap-3 text-left"
         >
-          <div>
-            <h2 className="text-base font-semibold text-gray-800">{title}</h2>
-            {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
-          </div>
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className={["h-4 w-4 shrink-0 text-gray-400 transition-transform", open ? "rotate-180" : ""].join(" ")}
@@ -39,6 +35,10 @@ export function CollapsibleSection({
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
+          <div>
+            <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
+          </div>
         </button>
         {headerExtra && <div className="shrink-0">{headerExtra}</div>}
       </div>
