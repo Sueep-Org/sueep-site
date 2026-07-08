@@ -201,6 +201,20 @@ export function ProjectFinancialsEditor({
               order: idx,
             }))
             .filter((item) => item.scheduledValueCents > 0);
+
+          // Overwrite: clear out any SOV items already on this project before
+          // creating the freshly imported ones, so re-importing (or importing
+          // a different estimator project) doesn't just pile up duplicates.
+          const existingSovRes = await fetch(`/api/erp/projects/${projectId}/sov`, { cache: "no-store" });
+          const existingSov = existingSovRes.ok
+            ? ((await existingSovRes.json()) as { items?: { id: string }[] })
+            : { items: [] };
+          await Promise.all(
+            (existingSov.items ?? []).map((item) =>
+              fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, { method: "DELETE" })
+            )
+          );
+
           await Promise.all(
             sovItems.map((item) =>
               fetch(`/api/erp/projects/${projectId}/sov/items`, {
