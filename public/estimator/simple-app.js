@@ -2418,6 +2418,8 @@ async function initApp(){
       // do not start panning while measurement tools are active
       if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
 
+      if (overlay && overlay.active && overlay._dragState) return;
+
       if (!pdfDoc) return;
 
       isDragging = true;
@@ -2443,6 +2445,7 @@ async function initApp(){
 
   window.addEventListener('mousemove', (e)=>{
 
+    if (overlay && overlay.active && overlay._dragState) return;
     if (!isDragging) return;
 
     panOffset.x =
