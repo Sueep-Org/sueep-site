@@ -405,8 +405,14 @@ async function initApp(){
   }
 
   function isZeroSovCost(cost) {
-    const normalized = String(cost ?? '').trim().replace(/[$,]/g, '');
-    return normalized === '0' || normalized === '0.00';
+    const rawValue = String(cost ?? '').trim();
+    if (!rawValue) return true;
+
+    const normalized = rawValue.replace(/[$,%\s]/g, '');
+    if (!normalized) return true;
+
+    const numericValue = Number(normalized);
+    return Number.isFinite(numericValue) && numericValue <= 0;
   }
 
   function getSovStorageKey() {
@@ -628,7 +634,11 @@ async function initApp(){
       return;
     }
 
+    const rows = getSovPageRows();
+    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost) || row.forceVisible);
     card.style.display = 'block';
+    container.innerHTML = '';
+
     if (undoBtn) {
       undoBtn.disabled = !_sovUndoStack.length;
       undoBtn.onclick = undoSovRowDelete;
@@ -636,6 +646,11 @@ async function initApp(){
     if (addBtn) {
       addBtn.onclick = addSovRow;
     }
+
+    if (!visibleRows.length) {
+      return;
+    }
+
     renderSovTable(container);
   }
 
