@@ -53,6 +53,30 @@ export type ScheduleProject = {
   projectEndDate: string | null;
   createdAt: string;
   percentDone: number;
+  supervisorUserId: string | null;
+  /** Day keys (YYYY-MM-DD) this project actually has logged labor on. */
+  workDayKeys: string[];
+};
+
+/** A ProjectChangeOrder (CO), shown on the month calendar separately from
+ * its parent project — driven by its estimated start date plus any days its
+ * own laborers have logged work. */
+export type ScheduleChangeOrder = {
+  id: string;
+  projectId: string;
+  title: string;
+  status: string;
+  workDayKeys: string[];
+};
+
+/** A planned supervisor coverage of a project on a future day (before any
+ * labor has actually been logged for it). */
+export type ScheduleDayAssignment = {
+  id: string;
+  projectId: string;
+  /** Day key (YYYY-MM-DD) this assignment is for. */
+  dateKey: string;
+  supervisorUserId: string;
 };
 
 export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {
@@ -70,8 +94,4 @@ export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {
 
 export function dayKey(d: Date): string {
   return startOfDay(d).toISOString().slice(0, 10);
-}
-
-export function overlapsRange(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
-  return aStart <= bEnd && bStart <= aEnd;
 }

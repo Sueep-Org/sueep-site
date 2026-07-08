@@ -76,6 +76,7 @@ model Project {
   contracts ProjectContract[]
   safetyIncidents SafetyIncident[]
   sov ProjectSOV?
+  dayAssignments ProjectDayAssignment[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -625,8 +626,32 @@ model ErpUser {
   role        String   @default("EMPLOYEE")
 
   supervisorProjects Project[]
+  dayAssignments     ProjectDayAssignment[]
 
   @@index([firebaseUid])
+}
+
+/// A supervisor's planned coverage of a project on a specific future day —
+/// distinct from LaborEntry (which records work that already happened).
+/// Lets a PM click a day on the schedule calendar, pick a project, and
+/// assign the supervisor who'll be there, before any labor is logged.
+model ProjectDayAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// The calendar date this assignment is for (stored as midnight UTC)
+  date DateTime
+
+  supervisorUserId String
+  supervisorUser   ErpUser @relation(fields: [supervisorUserId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@index([date])
+  @@index([supervisorUserId])
 }
 
 model Employee {
