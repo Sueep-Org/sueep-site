@@ -147,8 +147,28 @@ export function ProjectFinancialsEditor({
       // server; it's computed client-side from page measurements stored in this
       // browser's localStorage (key: annotations_<estimatorProjectId>). Since the
       // estimator UI is served from this same app/origin, we can read it directly.
+      // The user-typed descriptions for each page live separately, under
+      // sov_rows_<estimatorProjectId>, and are read here so real descriptions
+      // (not just "Page N") carry over into the imported SOV items.
       let sovNote = "";
       const annotJson = localStorage.getItem(`annotations_${estId}`);
+      const sovRowsJson = localStorage.getItem(`sov_rows_${estId}`);
+      const descriptionByPage = new Map<number, string>();
+      if (sovRowsJson) {
+        try {
+          const parsedRows = JSON.parse(sovRowsJson) as {
+            page?: number;
+            description?: string;
+            deleted?: boolean;
+          }[];
+          for (const row of parsedRows) {
+            if (row.deleted || row.page == null || !row.description) continue;
+            descriptionByPage.set(Number(row.page), row.description);
+          }
+        } catch {
+          // ignore malformed SOV row cache
+        }
+      }
       if (!annotJson) {
         sovNote = "SOV not imported: no page measurements found in this browser for that estimator project. Measurements only exist on the device/browser where the PDF was measured.";
       } else {
@@ -176,7 +196,7 @@ export function ProjectFinancialsEditor({
         } else {
           const sovItems = pageAreas
             .map((p, idx) => ({
-              description: `Page ${p.page}`,
+              description: descriptionByPage.get(p.page) ?? `Page ${p.page}`,
               scheduledValueCents: Math.round((p.area / totalArea) * proj.quote! * 100),
               order: idx,
             }))
