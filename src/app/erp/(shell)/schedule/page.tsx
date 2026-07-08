@@ -117,11 +117,9 @@ export default async function SchedulePage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-pink-600">Schedule & Labor</h1>
+          <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
         </div>
       </div>
-
-      <hr className="border-pink-200" />
 
       {/* Project Schedule */}
       <SchedulePlanner
