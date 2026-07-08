@@ -130,7 +130,9 @@ export class CanvasOverlay {
     const items = this.store.getPage(this.currentPage) || [];
     for (const it of items) {
       const pts = (it.points || []).map(p => ({ x: p.x * w, y: p.y * h }));
-      drawPolygon(ctx, pts, true);
+      const isSelected = this._selectedPolygonId &&
+        (it.id === this._selectedPolygonId || it.measurementId === this._selectedPolygonId);
+      drawPolygon(ctx, pts, true, { selected: !!isSelected });
     }
     if (this.hoverPoly) drawPolygon(ctx, this.hoverPoly, false);
 
@@ -1362,27 +1364,29 @@ function drawHint(ctx, x, y, txt) {
   ctx.restore();
 }
 
-function drawPolygon(ctx, pts, solid) {
+function drawPolygon(ctx, pts, solid, { selected = false } = {}) {
   if (!pts.length) return;
 
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
-
-  for (let i = 1; i < pts.length; i++) {
-    ctx.lineTo(pts[i].x, pts[i].y);
-  }
-
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.closePath();
 
-  ctx.fillStyle = solid
-    ? 'rgba(255,214,10,0.35)'
-    : 'rgba(255,214,10,0.15)';
-
-  ctx.strokeStyle = 'rgba(255,195,0,0.9)';
-  ctx.lineWidth = 2;
+  if (selected) {
+    ctx.fillStyle = 'rgba(99,102,241,0.25)';
+    ctx.strokeStyle = 'rgba(99,102,241,0.95)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 3]);
+  } else {
+    ctx.fillStyle = solid ? 'rgba(255,214,10,0.35)' : 'rgba(255,214,10,0.15)';
+    ctx.strokeStyle = 'rgba(255,195,0,0.9)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+  }
 
   ctx.fill();
   ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 // =========================
