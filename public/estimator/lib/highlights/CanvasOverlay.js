@@ -1536,6 +1536,18 @@ function drawIrregularPath(ctx, points, preview) {
   ctx.restore();
 }
 
+function pointInPolygon(p, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y;
+    const xj = pts[j].x, yj = pts[j].y;
+    if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 function samePoints(a, b) {
   return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((pt, i) => {
     const other = b[i] || {};
