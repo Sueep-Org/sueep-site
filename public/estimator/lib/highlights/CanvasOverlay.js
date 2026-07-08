@@ -566,6 +566,15 @@ export class CanvasOverlay {
   };
 
   _getSelectedCopyTarget() {
+    // Check selected polygon first (rect / irreg)
+    if (this._selectedPolygonId) {
+      const polygon = (this.store.getPage(this.currentPage) || []).find(
+        (p) => p.id === this._selectedPolygonId || p.measurementId === this._selectedPolygonId
+      );
+      if (polygon) return { type: 'polygon', value: polygon };
+    }
+
+    // Check selected measurement (line measurement)
     const selectedMeasurement = this._selectedMeasurementId
       ? (this.store.listMeasurements(this.currentPage) || []).find((entry) => entry.id === this._selectedMeasurementId)
       : null;
@@ -573,6 +582,7 @@ export class CanvasOverlay {
       return { type: 'measurement', value: selectedMeasurement };
     }
 
+    // Check selected vector line
     const selectedLineId = this._selectedLineIds.size ? Array.from(this._selectedLineIds)[0] : null;
     if (selectedLineId) {
       const line = (this.store.getLines(this.currentPage) || []).find((entry) => (entry.id || entry.__id) === selectedLineId);
