@@ -73,7 +73,9 @@ export class CanvasOverlay {
 
   setActive(active) {
     this.active = active;
-    this.overlay.style.pointerEvents = active ? 'auto' : 'none';
+    // Always keep pointer events on so users can select/copy/drag existing shapes
+    // even when no drawing tool is active
+    this.overlay.style.pointerEvents = 'auto';
     if (!active) {
       this._pendingPolygonPoints = [];
       this._irregularPreview = null;
@@ -505,7 +507,7 @@ export class CanvasOverlay {
   }
 
   _onContextMenu = (event) => {
-    if (!this.active || !this.overlay) return;
+    if (!this.overlay) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -530,7 +532,6 @@ export class CanvasOverlay {
   };
 
   _onWindowKeyDown = (event) => {
-    if (!this.active) return;
     if (!this.overlay) return;
 
     const target = event.target;
@@ -707,7 +708,6 @@ export class CanvasOverlay {
   }
 
   _onPointerMove = (e) => {
-    if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -723,23 +723,25 @@ export class CanvasOverlay {
       return;
     }
 
-    // if user is dragging a measure line or rect, update preview and skip hover logic
-    if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
-      this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
-      this.redraw();
-      return;
-    }
+    // Drawing-specific hover logic — only when a drawing tool is active
+    if (this.active) {
+      if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
+        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
 
-    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
-      this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
-      this.redraw();
-      return;
-    }
+      if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+        this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
 
-    if (this.tool === 'area') {
-      if (!this._barrierState) return;
-      this._fillWorker.postMessage({ type: 'preview', seedX: x, seedY: y, ...this._barrierState });
-      return;
+      if (this.tool === 'area') {
+        if (!this._barrierState) return;
+        this._fillWorker.postMessage({ type: 'preview', seedX: x, seedY: y, ...this._barrierState });
+        return;
+      }
     }
 
     const w = this.overlay.width;
@@ -792,8 +794,6 @@ export class CanvasOverlay {
   };
 
   _onPointerDown = (e) => {
-    if (!this.active) return;
-
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -802,7 +802,7 @@ export class CanvasOverlay {
     // In irregular mode while actively adding points, never intercept for drag
     const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
 
-    // Check if clicking directly ON an existing shape — if so, drag it (any mode except mid-irreg)
+    // Always allow drag/select on existing shapes, regardless of drawing mode
     if (!isAddingIrregPoints) {
       const target = this._findCopyTargetAtPoint(x, y);
       if (target) {
@@ -830,7 +830,8 @@ export class CanvasOverlay {
       }
     }
 
-    // Not clicking on a shape — start drawing (measure/rect only; irregular handled via click)
+    // Not clicking on a shape — start drawing (only if drawing mode is active)
+    if (!this.active) return;
     if (this.tool !== 'measure' && this.tool !== 'rect') return;
 
     this._isDraggingMeasure = true;
@@ -986,26 +987,29 @@ export class CanvasOverlay {
     const polygons = this.store.getPage(this.currentPage) || [];
     if (!polygons.length) return null;
 
-    let nearestPolygon = null;
-    let nearestPolygonDist = Infinity;
+    const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
 
     for (const polygon of polygons) {
       const points = Array.isArray(polygon.points) ? polygon.points : [];
       if (points.length < 2) continue;
-      const screenPoints = points.map((point) => ({ x: point.x * w, y: point.y * h }));
+      const screenPoints = points.map((p) => ({ x: p.x * w, y: p.y * h }));
+
+      // Check if point is inside the polygon (ray casting)
+      if (screenPoints.length >= 3 && pointInPolygon({ x, y }, screenPoints)) {
+        return polygon;
+      }
+
+      // Fallback: check proximity to edges
       for (let i = 0; i < screenPoints.length; i++) {
         const a = screenPoints[i];
         const b = screenPoints[(i + 1) % screenPoints.length];
-        const d = pointToSegmentDistance({ x, y }, a, b);
-        if (d < nearestPolygonDist) {
-          nearestPolygonDist = d;
-          nearestPolygon = polygon;
+        if (pointToSegmentDistance({ x, y }, a, b) <= hitThreshold) {
+          return polygon;
         }
       }
     }
 
-    const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
-    return nearestPolygon && nearestPolygonDist <= hitThreshold ? nearestPolygon : null;
+    return null;
   }
 
   _findMeasurementAtPoint(x, y) {
@@ -1068,7 +1072,6 @@ export class CanvasOverlay {
   }
 
   _onDoubleClick = (e) => {
-    if (!this.active) return;
 
     const rect = this.overlay.getBoundingClientRect();
     const x = e.clientX - rect.left;
