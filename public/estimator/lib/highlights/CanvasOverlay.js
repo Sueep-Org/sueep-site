@@ -403,17 +403,15 @@ export class CanvasOverlay {
   _storeMeasurement(measurement, { select = true } = {}) {
     if (!measurement) return null;
 
-    const measurements = this.store.listMeasurements(this.currentPage) || [];
-    measurements.push(measurement);
+    this.store.addMeasurement(this.currentPage, measurement);
 
     if (this._isAreaMeasurement(measurement)) {
-      const polygons = this.store.getPage(this.currentPage) || [];
       const points = Array.isArray(measurement.shapePoints) && measurement.shapePoints.length
         ? measurement.shapePoints
         : (Array.isArray(measurement.polygonPoints) && measurement.polygonPoints.length
           ? measurement.polygonPoints
           : []);
-      polygons.push({
+      this.store.addPolygon(this.currentPage, {
         points,
         measurementId: measurement.id,
         id: measurement.id
@@ -427,21 +425,37 @@ export class CanvasOverlay {
     return measurement;
   }
 
+  // Find the measurement linked to a polygon (for copy/paste of rect/irreg shapes)
+  _findLinkedMeasurement(polygon) {
+    const measurements = this.store.listMeasurements(this.currentPage) || [];
+    return measurements.find(m =>
+      m.id === polygon.measurementId ||
+      m.id === polygon.id ||
+      m.polygonId === polygon.id
+    ) || null;
+  }
+
   _pasteMeasurement() {
     const source = this._copiedMeasurement || this._lastClickedCopyTarget || (this._selectedMeasurementId
       ? { type: 'measurement', value: (this.store.listMeasurements(this.currentPage) || []).find((entry) => entry.id === this._selectedMeasurementId) }
       : null);
-    if (!source || !source.value) return;
+    if (!source || !source.value) {
+      toast('Nothing to paste — select or right-click a shape first', 'info');
+      return;
+    }
 
+    const OFF = 0.03;
+
+    // Paste a vector line (from RulerOverlay)
     if (source.type === 'line') {
       const line = JSON.parse(JSON.stringify(source.value));
       const lineId = line.id || line.__id || 'line';
       line.id = `${lineId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       if (line.__id != null) delete line.__id;
-      line.x1 = Math.min(1, Math.max(0, (line.x1 || 0) + 0.02));
-      line.y1 = Math.min(1, Math.max(0, (line.y1 || 0) + 0.02));
-      line.x2 = Math.min(1, Math.max(0, (line.x2 || 0) + 0.02));
-      line.y2 = Math.min(1, Math.max(0, (line.y2 || 0) + 0.02));
+      line.x1 = Math.min(1, Math.max(0, (line.x1 || 0) + OFF));
+      line.y1 = Math.min(1, Math.max(0, (line.y1 || 0) + OFF));
+      line.x2 = Math.min(1, Math.max(0, (line.x2 || 0) + OFF));
+      line.y2 = Math.min(1, Math.max(0, (line.y2 || 0) + OFF));
       this.store.getLines(this.currentPage).push(line);
       this.redraw();
       this.onMeasurementsChanged?.();
@@ -449,27 +463,42 @@ export class CanvasOverlay {
       return;
     }
 
+    // Paste a polygon (rect or irreg) — also copy its linked measurement
     if (source.type === 'polygon') {
-      const polygon = JSON.parse(JSON.stringify(source.value));
-      polygon.id = `${polygon.id || 'polygon'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      if (Array.isArray(polygon.points)) {
-        polygon.points = polygon.points.map((point) => ({
-          ...point,
-          x: Math.min(1, Math.max(0, (point.x || 0) + 0.02)),
-          y: Math.min(1, Math.max(0, (point.y || 0) + 0.02))
-        }));
+      const linkedMeasurement = this._findLinkedMeasurement(source.value);
+      if (linkedMeasurement) {
+        // Clone the measurement (which also re-creates the polygon via _storeMeasurement)
+        const cloned = this._cloneMeasurement(linkedMeasurement, { offsetX: OFF, offsetY: OFF });
+        this._storeMeasurement(cloned);
+        this._selectedMeasurementId = cloned.id;
+        this._selectedPolygonId = cloned.id;
+        this.redraw();
+        this.onMeasurementsChanged?.();
+        toast('Shape pasted', 'info');
+      } else {
+        // Orphan polygon with no measurement — just clone the visual shape
+        const polygon = JSON.parse(JSON.stringify(source.value));
+        polygon.id = `${polygon.id || 'polygon'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (Array.isArray(polygon.points)) {
+          polygon.points = polygon.points.map((p) => ({
+            ...p,
+            x: Math.min(1, Math.max(0, (p.x || 0) + OFF)),
+            y: Math.min(1, Math.max(0, (p.y || 0) + OFF))
+          }));
+        }
+        this.store.addPolygon(this.currentPage, polygon);
+        this._selectedPolygonId = polygon.id;
+        this.redraw();
+        this.onMeasurementsChanged?.();
+        toast('Shape pasted', 'info');
       }
-      this.store.getPage(this.currentPage).push(polygon);
-      this._selectedPolygonId = polygon.id;
-      this.redraw();
-      this.onMeasurementsChanged?.();
-      toast('Shape pasted', 'info');
       return;
     }
 
-    const pastedMeasurement = this._cloneMeasurement(source.value, { offsetX: 0.02, offsetY: 0.02 });
-    this._storeMeasurement(pastedMeasurement);
-    this._selectedMeasurementId = pastedMeasurement.id;
+    // Paste a measurement (line measurement, rect area, or irreg area)
+    const cloned = this._cloneMeasurement(source.value, { offsetX: OFF, offsetY: OFF });
+    this._storeMeasurement(cloned);
+    this._selectedMeasurementId = cloned.id;
     this.redraw();
     this.onMeasurementsChanged?.();
     toast('Measurement pasted', 'info');
@@ -753,6 +782,13 @@ export class CanvasOverlay {
       this._hoverMeasurementId = hoverMeasurementId;
       this.redraw();
     }
+
+    // Show move cursor when hovering over a draggable shape
+    const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
+    if (!isAddingIrregPoints) {
+      const hoverTarget = this._findCopyTargetAtPoint(x, y);
+      this.overlay.style.cursor = hoverTarget ? 'move' : '';
+    }
   };
 
   _onPointerDown = (e) => {
@@ -763,33 +799,38 @@ export class CanvasOverlay {
     const y = e.clientY - rect.top;
     this._lastPointerPosition = { x, y };
 
-    const target = this._findCopyTargetAtPoint(x, y) || this._getSelectedCopyTarget();
-    if (target && this.tool !== 'measure' && this.tool !== 'rect' && this.tool !== 'irregular') {
-      e.preventDefault();
-      e.stopPropagation();
-      this._copiedMeasurement = target;
-      this._lastClickedCopyTarget = target;
-      this._dragState = {
-        type: target.type,
-        item: target.value,
-        startPoint: { x, y },
-        lastPoint: { x, y },
-        initialSnapshot: this._captureDragSnapshot(target.value, target.type)
-      };
-      this._suppressNextClick = true;
-      this._selectedMeasurementId = target.type === 'measurement' ? target.value.id : null;
-      this._selectedPolygonId = target.type === 'polygon' ? (target.value.id || target.value.measurementId || null) : null;
-      if (target.type === 'line') {
-        const lineId = target.value.id || target.value.__id;
-        if (lineId) {
-          this._selectedLineIds = new Set([lineId]);
+    // In irregular mode while actively adding points, never intercept for drag
+    const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
+
+    // Check if clicking directly ON an existing shape — if so, drag it (any mode except mid-irreg)
+    if (!isAddingIrregPoints) {
+      const target = this._findCopyTargetAtPoint(x, y);
+      if (target) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._copiedMeasurement = target;
+        this._lastClickedCopyTarget = target;
+        this._dragState = {
+          type: target.type,
+          item: target.value,
+          startPoint: { x, y },
+          lastPoint: { x, y },
+          initialSnapshot: this._captureDragSnapshot(target.value, target.type)
+        };
+        this._suppressNextClick = true;
+        this._selectedMeasurementId = target.type === 'measurement' ? target.value.id : null;
+        this._selectedPolygonId = target.type === 'polygon' ? (target.value.id || target.value.measurementId || null) : null;
+        if (target.type === 'line') {
+          const lineId = target.value.id || target.value.__id;
+          if (lineId) this._selectedLineIds = new Set([lineId]);
         }
+        try { if (this.overlay.setPointerCapture) this.overlay.setPointerCapture(e.pointerId); } catch (err) {}
+        this.redraw();
+        return;
       }
-      try { if (this.overlay.setPointerCapture) this.overlay.setPointerCapture(e.pointerId); } catch (err) {}
-      this.redraw();
-      return;
     }
 
+    // Not clicking on a shape — start drawing (measure/rect only; irregular handled via click)
     if (this.tool !== 'measure' && this.tool !== 'rect') return;
 
     this._isDraggingMeasure = true;
