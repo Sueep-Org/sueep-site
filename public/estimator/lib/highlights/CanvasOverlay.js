@@ -597,6 +597,10 @@ export class CanvasOverlay {
   _findCopyTargetAtPoint(x, y) {
     const polygon = this._findPolygonAtPoint(x, y);
     if (polygon) {
+      const linkedMeasurement = this._findLinkedMeasurement(polygon);
+      if (linkedMeasurement) {
+        return { type: 'measurement', value: linkedMeasurement };
+      }
       return { type: 'polygon', value: polygon };
     }
 
@@ -836,7 +840,13 @@ export class CanvasOverlay {
         };
         this._suppressNextClick = true;
         this._selectedMeasurementId = target.type === 'measurement' ? target.value.id : null;
-        this._selectedPolygonId = target.type === 'polygon' ? (target.value.id || target.value.measurementId || null) : null;
+        if (target.type === 'polygon') {
+          this._selectedPolygonId = target.value.id || target.value.measurementId || null;
+        } else if (target.type === 'measurement' && this._isAreaMeasurement(target.value)) {
+          this._selectedPolygonId = target.value.id;
+        } else {
+          this._selectedPolygonId = null;
+        }
         if (target.type === 'line') {
           const lineId = target.value.id || target.value.__id;
           if (lineId) this._selectedLineIds = new Set([lineId]);
