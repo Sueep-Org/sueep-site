@@ -1,7 +1,14 @@
 /** Minimal RFC 5545 (.ics) builder for single-day "supervisor assigned to a
  * project" calendar invites. Hand-rolled rather than a dependency since the
- * format needed here (one all-day VEVENT, REQUEST or CANCEL) is small and
- * well-specified. */
+ * format needed here (one VEVENT — all-day or timed — REQUEST or CANCEL) is
+ * small and well-specified. */
+
+// Business operates on the US East Coast — used for timed events. Calendar
+// clients resolve this from their own IANA tzdata even without an embedded
+// VTIMEZONE block, so DST is handled correctly without us tracking offsets.
+const DEFAULT_TZID = "America/New_York";
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function icsDate(dateKey: string): string {
   return dateKey.replace(/-/g, "");
@@ -12,6 +19,11 @@ function nextDayIcsDate(dateKey: string): string {
   const d = new Date(`${dateKey}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+/** Local wall-clock datetime for a TZID-qualified DTSTART/DTEND, e.g. "20260715T080000". */
+function icsLocalDateTime(dateKey: string, time: string): string {
+  return `${icsDate(dateKey)}T${time.replace(":", "")}00`;
 }
 
 function icsTimestamp(d: Date): string {
@@ -40,8 +52,11 @@ function foldLine(line: string): string {
 export function buildDayAssignmentInvite(params: {
   /** Stable per-assignment id — reuse across updates/cancellations so calendar apps update the same event instead of duplicating it. */
   uid: string;
-  /** Day key (YYYY-MM-DD) — rendered as an all-day event. */
+  /** Day key (YYYY-MM-DD). */
   dateKey: string;
+  /** Optional "HH:MM" (24h) local times — event is all-day unless both are set and valid. */
+  startTime?: string | null;
+  endTime?: string | null;
   summary: string;
   description?: string;
   url?: string;
@@ -54,6 +69,17 @@ export function buildDayAssignmentInvite(params: {
 }): string {
   const method = params.cancelled ? "CANCEL" : "REQUEST";
   const status = params.cancelled ? "CANCELLED" : "CONFIRMED";
+
+  const hasTimes =
+    !!params.startTime && !!params.endTime && TIME_RE.test(params.startTime) && TIME_RE.test(params.endTime);
+
+  const dtStartLine = hasTimes
+    ? `DTSTART;TZID=${DEFAULT_TZID}:${icsLocalDateTime(params.dateKey, params.startTime!)}`
+    : `DTSTART;VALUE=DATE:${icsDate(params.dateKey)}`;
+  const dtEndLine = hasTimes
+    ? `DTEND;TZID=${DEFAULT_TZID}:${icsLocalDateTime(params.dateKey, params.endTime!)}`
+    : `DTEND;VALUE=DATE:${nextDayIcsDate(params.dateKey)}`;
+
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -63,8 +89,8 @@ export function buildDayAssignmentInvite(params: {
     "BEGIN:VEVENT",
     `UID:${params.uid}`,
     `DTSTAMP:${icsTimestamp(new Date())}`,
-    `DTSTART;VALUE=DATE:${icsDate(params.dateKey)}`,
-    `DTEND;VALUE=DATE:${nextDayIcsDate(params.dateKey)}`,
+    dtStartLine,
+    dtEndLine,
     `SUMMARY:${escapeIcsText(params.summary)}`,
     ...(params.description ? [`DESCRIPTION:${escapeIcsText(params.description)}`] : []),
     ...(params.url ? [`URL:${escapeIcsText(params.url)}`] : []),

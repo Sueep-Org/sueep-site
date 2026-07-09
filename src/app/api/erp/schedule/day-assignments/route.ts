@@ -4,6 +4,8 @@ import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
 function extractEmailAddress(raw: string | undefined): string {
   if (!raw) return "noreply@sueep.com";
   const match = raw.match(/<([^>]+)>/);
@@ -28,6 +30,19 @@ export async function POST(req: Request) {
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
 
+  let startTime: string | null = null;
+  let endTime: string | null = null;
+  if (body.startTime || body.endTime) {
+    startTime = String(body.startTime || "").trim();
+    endTime = String(body.endTime || "").trim();
+    if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime)) {
+      return NextResponse.json({ error: "startTime and endTime must both be HH:MM" }, { status: 400 });
+    }
+    if (endTime <= startTime) {
+      return NextResponse.json({ error: "endTime must be after startTime" }, { status: 400 });
+    }
+  }
+
   const [project, supervisor] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true, jobTitle: true } }),
     prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }),
@@ -42,8 +57,8 @@ export async function POST(req: Request) {
   const [assignment] = await prisma.$transaction([
     prisma.projectDayAssignment.upsert({
       where: { projectId_date: { projectId, date } },
-      create: { projectId, date, supervisorUserId },
-      update: { supervisorUserId },
+      create: { projectId, date, supervisorUserId, startTime, endTime },
+      update: { supervisorUserId, startTime, endTime },
     }),
     prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }),
   ]);
@@ -57,6 +72,8 @@ export async function POST(req: Request) {
     const ics = buildDayAssignmentInvite({
       uid: `day-assignment-${assignment.id}@sueep.com`,
       dateKey: dayKey(assignment.date),
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
       summary: `Supervising: ${project.jobTitle}`,
       description: appUrl ? `Project: ${project.jobTitle}\n${appUrl}/erp/projects/${projectId}` : `Project: ${project.jobTitle}`,
       url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,

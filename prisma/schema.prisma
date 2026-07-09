@@ -646,6 +646,11 @@ model ProjectDayAssignment {
   /// The calendar date this assignment is for (stored as midnight UTC)
   date DateTime
 
+  /// Optional "HH:MM" (24h) local time, e.g. "08:00". All-day event on the
+  /// calendar invite if either time is unset.
+  startTime String?
+  endTime   String?
+
   supervisorUserId String
   supervisorUser   ErpUser @relation(fields: [supervisorUserId], references: [id], onDelete: Cascade)
 

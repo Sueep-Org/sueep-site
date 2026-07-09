@@ -16,6 +16,18 @@ function dateLabel(dateKey: string): string {
   });
 }
 
+function formatTime(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const period = h! >= 12 ? "PM" : "AM";
+  const hour12 = h! % 12 === 0 ? 12 : h! % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function formatTimeRange(startTime: string | null, endTime: string | null): string | null {
+  if (!startTime || !endTime) return null;
+  return `${formatTime(startTime)}–${formatTime(endTime)}`;
+}
+
 export function DayAssignmentModal({
   dateKey,
   projects,
@@ -36,6 +48,8 @@ export function DayAssignmentModal({
   const [projectId, setProjectId] = useState("");
   const [projectQuery, setProjectQuery] = useState("");
   const [supervisorUserId, setSupervisorUserId] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -51,19 +65,42 @@ export function DayAssignmentModal({
       setError("Pick a project and a supervisor");
       return;
     }
+    if ((startTime && !endTime) || (endTime && !startTime)) {
+      setError("Set both a start and end time, or leave both blank for an all-day event");
+      return;
+    }
+    if (startTime && endTime && endTime <= startTime) {
+      setError("End time must be after start time");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/erp/schedule/day-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, supervisorUserId, date: dateKey }),
+        body: JSON.stringify({
+          projectId,
+          supervisorUserId,
+          date: dateKey,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { id: string; error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to assign");
-      onCreated({ id: data.id, projectId, dateKey, supervisorUserId });
+      onCreated({
+        id: data.id,
+        projectId,
+        dateKey,
+        supervisorUserId,
+        startTime: startTime || null,
+        endTime: endTime || null,
+      });
       setProjectId("");
       setProjectQuery("");
       setSupervisorUserId("");
+      setStartTime("");
+      setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
     } finally {
@@ -106,6 +143,9 @@ export function DayAssignmentModal({
                   <span className="truncate">
                     <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                     <span className="text-gray-500"> — {supervisor?.displayName ?? "Unknown supervisor"}</span>
+                    {formatTimeRange(a.startTime, a.endTime) ? (
+                      <span className="text-gray-400"> ({formatTimeRange(a.startTime, a.endTime)})</span>
+                    ) : null}
                   </span>
                   <button
                     type="button"
@@ -170,6 +210,25 @@ export function DayAssignmentModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Time (optional — leave blank for all-day)</label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+              />
+              <span className="text-xs text-gray-400">to</span>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+              />
+            </div>
           </div>
 
           {error ? (

@@ -77,6 +77,9 @@ export type ScheduleDayAssignment = {
   /** Day key (YYYY-MM-DD) this assignment is for. */
   dateKey: string;
   supervisorUserId: string;
+  /** Optional "HH:MM" (24h) local times — all-day on the calendar invite if either is unset. */
+  startTime: string | null;
+  endTime: string | null;
 };
 
 export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {

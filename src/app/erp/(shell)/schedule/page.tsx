@@ -44,7 +44,9 @@ export default async function SchedulePage() {
       select: { id: true, projectId: true, title: true, status: true, startDate: true },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true } }),
-    prisma.projectDayAssignment.findMany({ select: { id: true, projectId: true, date: true, supervisorUserId: true } }),
+    prisma.projectDayAssignment.findMany({
+      select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true },
+    }),
   ]);
 
   const dayAssignments: ScheduleDayAssignment[] = dayAssignmentRows.map((a) => ({
@@ -52,6 +54,8 @@ export default async function SchedulePage() {
     projectId: a.projectId,
     dateKey: dayKey(a.date),
     supervisorUserId: a.supervisorUserId,
+    startTime: a.startTime,
+    endTime: a.endTime,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full

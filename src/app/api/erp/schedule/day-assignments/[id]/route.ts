@@ -32,6 +32,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     const ics = buildDayAssignmentInvite({
       uid: `day-assignment-${id}@sueep.com`,
       dateKey: dayKey(existing.date),
+      startTime: existing.startTime,
+      endTime: existing.endTime,
       summary: `Supervising: ${existing.project.jobTitle}`,
       organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
       organizerName: "Sueep Schedule",
