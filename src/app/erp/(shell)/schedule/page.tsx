@@ -38,7 +38,7 @@ export default async function SchedulePage() {
       select: { id: true, email: true },
       orderBy: { email: "asc" },
     }),
-    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true } }),
+    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
       select: { id: true, projectId: true, title: true, status: true, startDate: true },
@@ -151,6 +151,39 @@ export default async function SchedulePage() {
     };
   });
 
+  // Supervisors only see projects they're assigned to (project-level or a
+  // specific day) or have personally logged labor on — everyone else (PM,
+  // admin, etc.) sees the full calendar.
+  let visibleProjects = projects;
+  let visibleChangeOrders = changeOrders;
+  let visibleDayAssignments = dayAssignments;
+  if (auth?.role === "SUPERVISOR") {
+    const supervisorEmployee = await prisma.employee.findFirst({
+      where: { email: { equals: auth.email, mode: "insensitive" } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    const supervisorFullName = supervisorEmployee
+      ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim().toLowerCase()
+      : null;
+
+    const allowedProjectIds = new Set<string>();
+    for (const p of projects) {
+      if (p.supervisorUserId === auth.uid) allowedProjectIds.add(p.id);
+    }
+    for (const a of dayAssignments) {
+      if (a.supervisorUserId === auth.uid) allowedProjectIds.add(a.projectId);
+    }
+    for (const le of laborEntryRows) {
+      const matchesEmployee = supervisorEmployee != null && le.employeeId === supervisorEmployee.id;
+      const matchesName = supervisorFullName != null && le.workerName.trim().toLowerCase() === supervisorFullName;
+      if (matchesEmployee || matchesName) allowedProjectIds.add(le.projectId);
+    }
+
+    visibleProjects = projects.filter((p) => allowedProjectIds.has(p.id));
+    visibleChangeOrders = changeOrders.filter((co) => allowedProjectIds.has(co.projectId));
+    visibleDayAssignments = dayAssignments.filter((a) => allowedProjectIds.has(a.projectId));
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -161,10 +194,10 @@ export default async function SchedulePage() {
 
       {/* Project Schedule */}
       <SchedulePlanner
-        projects={projects}
+        projects={visibleProjects}
         supervisors={supervisors}
-        changeOrders={changeOrders}
-        initialDayAssignments={dayAssignments}
+        changeOrders={visibleChangeOrders}
+        initialDayAssignments={visibleDayAssignments}
         canFilterBySupervisor={canFilterBySupervisor}
       />
     </div>
