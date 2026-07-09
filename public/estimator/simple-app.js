@@ -1842,9 +1842,9 @@ async function initApp(){
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
-      crew.forEach((m, idx) => {
-        const pay = (m.rate||0)*(m.days||0);
-        const el = document.getElementById(`crew_pay_${pid}_${idx}`);
+      crew.forEach((m) => {
+        const pay = m.role === 'cleaner' ? (m.rate||0)*(m.days||0)*8 : (m.rate||0)*(m.days||0);
+        const el = document.getElementById(`crew_pay_${m._uid}`);
         if (el) el.textContent = fmt$(pay);
       });
 
@@ -1904,7 +1904,7 @@ async function initApp(){
         btn.type = 'button'; btn.textContent = label;
         btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
         btn.onclick = () => {
-          _phaseCrews[pid].push({ role, rate: defaultRate, days: 1 });
+          _phaseCrews[pid].push({ role, rate: defaultRate, days: 1, _uid: Math.random().toString(36).slice(2) });
           _renderPhaseTable();
         };
         return btn;
@@ -1926,14 +1926,16 @@ async function initApp(){
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Role', 'Rate', 'Days', 'Pay', ''].forEach((h, hi) => {
+        ['Role', 'Name', 'Rate', 'Days', 'Pay', ''].forEach((h, hi) => {
           const th = document.createElement('th');
           th.textContent = h;
-          th.style.cssText = `text-align:${hi >= 2 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+          th.style.cssText = `text-align:${hi >= 3 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
           hrow.appendChild(th);
         });
+        const roleOrder = { cleaner: 0, foreman: 1, project_manager: 2 };
+        const sortedCrew = [...crew].sort((a, b) => (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1));
         const tbody = table.createTBody();
-        crew.forEach((member, idx) => {
+        sortedCrew.forEach((member, idx) => {
           const tr = tbody.insertRow();
           tr.style.cssText = 'border-top:1px solid #f3f4f6;';
 
@@ -1947,12 +1949,19 @@ async function initApp(){
             : 'padding:2px 7px;border-radius:10px;background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:500;';
           roleTd.appendChild(badge);
 
+          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+          const nameInput = document.createElement('input');
+          nameInput.type = 'text'; nameInput.placeholder = 'Name'; nameInput.value = member.name || '';
+          nameInput.style.cssText = iStyle + 'width:100px;';
+          nameInput.addEventListener('input', () => { member.name = nameInput.value.trim(); });
+          nameTd.appendChild(nameInput);
+
           const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
           const rateWrap = document.createElement('div'); rateWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
           const rateInput = document.createElement('input');
           rateInput.type = 'number'; rateInput.min = '0'; rateInput.step = '0.01'; rateInput.value = member.rate;
           rateInput.style.cssText = iStyle + 'width:64px;';
-          rateInput.addEventListener('input', () => { _phaseCrews[pid][idx].rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
+          rateInput.addEventListener('input', () => { member.rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
           const rateLabel = document.createElement('span');
           rateLabel.textContent = '$/day';
           rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
@@ -1963,11 +1972,11 @@ async function initApp(){
           const daysInput = document.createElement('input');
           daysInput.type = 'number'; daysInput.min = '0'; daysInput.step = '0.5'; daysInput.value = member.days;
           daysInput.style.cssText = iStyle + 'width:56px;';
-          daysInput.addEventListener('input', () => { _phaseCrews[pid][idx].days = parseFloat(daysInput.value) || 0; _updateCrewCalcs(); });
+          daysInput.addEventListener('input', () => { member.days = parseFloat(daysInput.value) || 0; _updateCrewCalcs(); });
           daysTd.appendChild(daysInput);
 
           const payTd = tr.insertCell();
-          payTd.id = `crew_pay_${pid}_${idx}`;
+          payTd.id = `crew_pay_${member._uid || idx}`;
           payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
           const pay = member.role === 'cleaner' ? (member.rate||0)*(member.days||0)*8 : (member.rate||0)*(member.days||0);
           payTd.textContent = fmt$(pay);
@@ -1976,7 +1985,7 @@ async function initApp(){
           const delBtn = document.createElement('button');
           delBtn.type = 'button'; delBtn.textContent = '\u00d7';
           delBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;line-height:1;';
-          delBtn.onclick = () => { _phaseCrews[pid].splice(idx, 1); _renderPhaseTable(); };
+          delBtn.onclick = () => { const realIdx = _phaseCrews[pid].indexOf(member); if (realIdx !== -1) _phaseCrews[pid].splice(realIdx, 1); _renderPhaseTable(); };
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
@@ -2114,19 +2123,19 @@ async function initApp(){
         const pid = phaseMap[p.name];
         if (!pid) continue;
         if (p.crew && p.crew.length > 0) {
-          _phaseCrews[pid] = p.crew.map(m => ({ ...m }));
+          _phaseCrews[pid] = p.crew.map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
         } else {
           // Convert old format (persons/days + global rates) to crew
           const cr = bd.cleaner_rate || 22;
           const fr = bd.foreman_rate || 220;
           const days = p.days || 1;
-          for (let k = 0; k < (p.persons || 1); k++) _phaseCrews[pid].push({ role: 'cleaner', rate: cr, days });
-          _phaseCrews[pid].push({ role: 'foreman', rate: fr, days });
+          for (let k = 0; k < (p.persons || 1); k++) _phaseCrews[pid].push({ role: 'cleaner', rate: cr, days, _uid: Math.random().toString(36).slice(2) });
+          _phaseCrews[pid].push({ role: 'foreman', rate: fr, days, _uid: Math.random().toString(36).slice(2) });
         }
       }
     } else {
       ['rough', 'final', 'touchup'].forEach(pid => {
-        _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2 }, { role: 'foreman', rate: 220, days: 2 }];
+        _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 220, days: 2, _uid: Math.random().toString(36).slice(2) }];
       });
     }
 
