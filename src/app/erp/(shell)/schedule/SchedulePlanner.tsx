@@ -210,7 +210,19 @@ export function SchedulePlanner({
     }
   }
 
-  const windows = useMemo(() => projects.map((p) => ({ p, ...projectWindow(p) })), [projects]);
+  // Gantt only shows active projects — on hold / complete / archived jobs
+  // don't need a place on the timeline. Open-ended projects (no end date —
+  // i.e. not finished) are listed first; sort is stable so the existing
+  // start-date ordering is preserved within each group.
+  const windows = useMemo(
+    () =>
+      projects
+        .filter((p) => p.status === "ACTIVE")
+        .slice()
+        .sort((a, b) => (a.projectEndDate ? 1 : 0) - (b.projectEndDate ? 1 : 0))
+        .map((p) => ({ p, ...projectWindow(p) })),
+    [projects],
+  );
 
   const ganttRange = useMemo(() => {
     if (windows.length === 0) {
@@ -234,6 +246,28 @@ export function SchedulePlanner({
 
   const dayOffset = (d: Date) =>
     Math.floor((startOfDay(d).getTime() - ganttRange.start.getTime()) / 86400000);
+
+  const todayOffsetPx = dayOffset(startOfDay(new Date())) * PX_PER_DAY;
+
+  const ganttScrollRef = useRef<HTMLDivElement>(null);
+
+  function scrollGanttToToday(behavior: ScrollBehavior = "auto") {
+    const el = ganttScrollRef.current;
+    if (!el) return;
+    const target = Math.max(0, todayOffsetPx - PX_PER_DAY * 3);
+    el.scrollTo({ left: target, behavior });
+  }
+
+  function scrollGanttBy(days: number) {
+    ganttScrollRef.current?.scrollBy({ left: days * PX_PER_DAY, behavior: "smooth" });
+  }
+
+  // Default the Gantt to today on first load, rather than wherever the
+  // earliest project happens to start (which could be months back).
+  useEffect(() => {
+    scrollGanttToToday();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const matrix = useMemo(() => monthMatrix(cursor), [cursor]);
 
@@ -411,6 +445,38 @@ export function SchedulePlanner({
     </div>
   );
 
+  const ganttNav = (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => scrollGanttBy(-14)}
+        aria-label="Scroll timeline earlier"
+        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollGanttToToday("smooth")}
+        className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-pink-300 hover:text-pink-600"
+      >
+        Today
+      </button>
+      <button
+        type="button"
+        onClick={() => scrollGanttBy(14)}
+        aria-label="Scroll timeline later"
+        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
@@ -573,7 +639,11 @@ export function SchedulePlanner({
         ) : null}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Gantt" description="Bars use start / end dates; without an end date a 14-day window is assumed.">
+      <CollapsibleSection
+        title="Gantt"
+        description="Bars use start / end dates; without an end date a 14-day window is assumed."
+        headerExtra={windows.length > 0 ? ganttNav : undefined}
+      >
         {windows.length === 0 ? (
           <p className="text-sm text-gray-500">No projects yet. Create one in Projects → New project.</p>
         ) : (
@@ -583,10 +653,12 @@ export function SchedulePlanner({
                 <div className="flex h-14 items-center border-b border-gray-200 px-3 text-[10px] font-semibold uppercase text-gray-500">
                   Project
                 </div>
-                {windows.map(({ p }) => (
+                {windows.map(({ p }, idx) => (
                   <div
                     key={p.id}
-                    className="flex h-14 flex-col justify-center gap-0.5 border-b border-gray-100 px-3 text-xs text-gray-800"
+                    className={`flex h-14 flex-col justify-center gap-0.5 border-b border-gray-100 px-3 text-xs text-gray-800 ${
+                      idx % 2 === 1 ? "bg-gray-50/60" : "bg-white"
+                    }`}
                   >
                     <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-600 hover:underline">
                       {p.jobTitle}
@@ -610,17 +682,27 @@ export function SchedulePlanner({
                   </div>
                 ))}
               </div>
-              <div className="min-w-0 flex-1 overflow-x-auto">
+              <div ref={ganttScrollRef} className="min-w-0 flex-1 overflow-x-auto">
                 <div style={{ width: timelineWidth }} className="relative">
+                  {/* Today column — highlighted so "where are we now" is obvious at a glance */}
+                  {todayOffsetPx >= 0 && todayOffsetPx < timelineWidth ? (
+                    <div
+                      className="pointer-events-none absolute inset-y-0 z-0 border-x border-pink-200 bg-pink-50/70"
+                      style={{ left: todayOffsetPx, width: PX_PER_DAY }}
+                    />
+                  ) : null}
                   <div
-                    className="flex h-14 items-end border-b border-gray-200 bg-white/80 text-[10px] text-gray-500"
+                    className="relative flex h-14 items-end border-b border-gray-200 bg-white/80 text-[10px] text-gray-500"
                     style={{ width: timelineWidth }}
                   >
                     {Array.from({ length: totalDays }).map((_, i) => {
                       const d = addDays(ganttRange.start, i);
+                      const isTodayCol = i * PX_PER_DAY === todayOffsetPx;
                       const show =
-                        d.getDate() === 1 || i === 0 || d.getDay() === 0
-                          ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        isTodayCol || d.getDate() === 1 || i === 0 || d.getDay() === 0
+                          ? isTodayCol
+                            ? "Today"
+                            : d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                           : "";
                       return (
                         <div
@@ -628,12 +710,14 @@ export function SchedulePlanner({
                           style={{ width: PX_PER_DAY, minWidth: PX_PER_DAY }}
                           className={`shrink-0 border-l border-gray-100 ${d.getDay() === 0 ? "bg-gray-50" : ""}`}
                         >
-                          {show ? <span className="pl-0.5">{show}</span> : null}
+                          {show ? (
+                            <span className={`pl-0.5 ${isTodayCol ? "font-semibold text-pink-600" : ""}`}>{show}</span>
+                          ) : null}
                         </div>
                       );
                     })}
                   </div>
-                  {windows.map((w) => {
+                  {windows.map((w, idx) => {
                     const startOff = Math.max(0, dayOffset(w.start));
                     const endOff = Math.min(totalDays - 1, dayOffset(w.end));
                     const left = startOff * PX_PER_DAY;
@@ -641,13 +725,13 @@ export function SchedulePlanner({
                     return (
                       <div
                         key={w.p.id}
-                        className="relative h-14 border-b border-gray-100"
+                        className={`relative h-14 border-b border-gray-100 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
                         style={{ width: timelineWidth }}
                       >
                         <Link
                           href={`/erp/projects/${w.p.id}`}
                           title={`${w.p.jobTitle} — ${w.p.percentDone}% done`}
-                          className={`absolute top-3 flex h-8 items-center rounded px-2 text-[11px] font-medium text-white shadow ${statusBarClass(w.p.status)}`}
+                          className={`absolute top-3 z-10 flex h-8 items-center rounded px-2 text-[11px] font-medium text-white shadow ring-1 ring-black/5 ${statusBarClass(w.p.status)}`}
                           style={{ left, width: Math.min(width, timelineWidth - left) }}
                         >
                           <span className="truncate">{w.p.segment}</span>
