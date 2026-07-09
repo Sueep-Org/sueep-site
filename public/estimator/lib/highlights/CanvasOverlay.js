@@ -294,6 +294,7 @@ export class CanvasOverlay {
             }));
 
             this.store.addPolygon(this.currentPage, {
+              id: makeStableId('area'),
               points: norm
             });
 
@@ -601,12 +602,17 @@ export class CanvasOverlay {
       if (linkedMeasurement) {
         return { type: 'measurement', value: linkedMeasurement };
       }
-      return { type: 'polygon', value: polygon };
+      // polygon found but no linked measurement — fall through to measurement-based detection
     }
 
     const measurement = this._findMeasurementAtPoint(x, y);
     if (measurement) {
       return { type: 'measurement', value: measurement };
+    }
+
+    // If polygon was found but had no linked measurement, return it as-is
+    if (polygon) {
+      return { type: 'polygon', value: polygon };
     }
 
     const w = this.overlay?.width || 0;
@@ -857,7 +863,15 @@ export class CanvasOverlay {
       }
     }
 
-    // Not clicking on a shape — start drawing (only if drawing mode is active)
+    // Not clicking on a shape — clear selection
+    if (this._selectedPolygonId || this._selectedMeasurementId || this._selectedLineIds?.size) {
+      this._selectedPolygonId = null;
+      this._selectedMeasurementId = null;
+      this._selectedLineIds = new Set();
+      this.redraw();
+    }
+
+    // Start drawing (only if drawing mode is active)
     if (!this.active) return;
     if (this.tool !== 'measure' && this.tool !== 'rect') return;
 
@@ -1017,26 +1031,57 @@ export class CanvasOverlay {
 
     const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
 
+    // Collect all candidates; prefer interior hits, then smallest area (most specific shape wins)
+    const interiorHits = [];
+    const edgeHits = [];
+
     for (const polygon of polygons) {
+      // Skip unlinked polygons (legacy smart fill with no id/measurementId) — can't be selected
+      if (!polygon.id && !polygon.measurementId) continue;
       const points = Array.isArray(polygon.points) ? polygon.points : [];
       if (points.length < 2) continue;
       const screenPoints = points.map((p) => ({ x: p.x * w, y: p.y * h }));
 
-      // Check if point is inside the polygon (ray casting)
       if (screenPoints.length >= 3 && pointInPolygon({ x, y }, screenPoints)) {
-        return polygon;
+        // Compute approximate area so smaller shapes win when overlapping
+        let area = 0;
+        for (let i = 0, j = screenPoints.length - 1; i < screenPoints.length; j = i++) {
+          area += (screenPoints[j].x + screenPoints[i].x) * (screenPoints[j].y - screenPoints[i].y);
+        }
+        interiorHits.push({ polygon, area: Math.abs(area) });
+        continue;
       }
 
-      // Fallback: check proximity to edges
       for (let i = 0; i < screenPoints.length; i++) {
         const a = screenPoints[i];
         const b = screenPoints[(i + 1) % screenPoints.length];
-        if (pointToSegmentDistance({ x, y }, a, b) <= hitThreshold) {
-          return polygon;
+        const d = pointToSegmentDistance({ x, y }, a, b);
+        if (d <= hitThreshold) {
+          edgeHits.push({ polygon, dist: d });
+          break;
         }
       }
     }
 
+    if (interiorHits.length) {
+      // Prefer linked (rect/irreg) over unlinked (smart fill)
+      // Among linked: deprioritize the currently-selected shape so clicking on overlapping shapes cycles to others
+      // Then sort by smallest area (most specific shape wins)
+      interiorHits.sort((a, b) => {
+        const aLinked = a.polygon.measurementId ? 0 : 1;
+        const bLinked = b.polygon.measurementId ? 0 : 1;
+        if (aLinked !== bLinked) return aLinked - bLinked;
+        const aSelected = (a.polygon.id === this._selectedPolygonId || a.polygon.measurementId === this._selectedPolygonId) ? 1 : 0;
+        const bSelected = (b.polygon.id === this._selectedPolygonId || b.polygon.measurementId === this._selectedPolygonId) ? 1 : 0;
+        if (aSelected !== bSelected) return aSelected - bSelected;
+        return a.area - b.area;
+      });
+      return interiorHits[0].polygon;
+    }
+    if (edgeHits.length) {
+      edgeHits.sort((a, b) => a.dist - b.dist);
+      return edgeHits[0].polygon;
+    }
     return null;
   }
 
@@ -1072,10 +1117,30 @@ export class CanvasOverlay {
       }));
     };
 
+    // Interior hits: area measurements where the point is inside the polygon
+    const areaInteriorHits = [];
+
     for (const m of measurements) {
       const isAreaMeasurement = m.area != null || m.areaLabel != null || m.areaPx != null || m.shapeType === 'polygon' ||
         (Array.isArray(m.shapePoints) && m.shapePoints.length >= 3) ||
         (Array.isArray(m.polygonPoints) && m.polygonPoints.length >= 3);
+
+      if (isAreaMeasurement) {
+        const polygonPoints = Array.isArray(m.shapePoints) && m.shapePoints.length >= 3
+          ? m.shapePoints
+          : (Array.isArray(m.polygonPoints) && m.polygonPoints.length >= 3 ? m.polygonPoints : null);
+        if (polygonPoints) {
+          const screenPts = polygonPoints.map(p => ({ x: p.x * w, y: p.y * h }));
+          if (pointInPolygon({ x, y }, screenPts)) {
+            let area = 0;
+            for (let i = 0, j = screenPts.length - 1; i < screenPts.length; j = i++) {
+              area += (screenPts[j].x + screenPts[i].x) * (screenPts[j].y - screenPts[i].y);
+            }
+            areaInteriorHits.push({ m, area: Math.abs(area) });
+            continue;
+          }
+        }
+      }
 
       const segments = getSegmentsForMeasurement(m);
       for (const seg of segments) {
@@ -1091,6 +1156,17 @@ export class CanvasOverlay {
           nearestLineMeasurement = m;
         }
       }
+    }
+
+    // Interior hits take priority over edge hits; prefer non-selected + smallest area
+    if (areaInteriorHits.length) {
+      areaInteriorHits.sort((a, b) => {
+        const aSelected = (a.m.id === this._selectedMeasurementId || a.m.id === this._selectedPolygonId) ? 1 : 0;
+        const bSelected = (b.m.id === this._selectedMeasurementId || b.m.id === this._selectedPolygonId) ? 1 : 0;
+        if (aSelected !== bSelected) return aSelected - bSelected;
+        return a.area - b.area;
+      });
+      return areaInteriorHits[0].m;
     }
 
     const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
