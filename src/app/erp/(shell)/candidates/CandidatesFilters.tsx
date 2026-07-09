@@ -18,6 +18,8 @@ export function CandidatesFilters({ search, status }: { search: string; status: 
     } else {
       next.delete(key);
     }
+    // Changing a filter invalidates whatever page the user was on.
+    next.delete("page");
     startTransition(() => {
       router.replace(`${pathname}?${next.toString()}`);
     });
