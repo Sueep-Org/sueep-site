@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
@@ -224,9 +225,34 @@ export default async function ErpDashboardPage() {
 
     // ── Supervisor ─────────────────────────────────────────────────────────
     if (role === "SUPERVISOR") {
+      // auth.uid is the Firebase UID from the session token, not the
+      // ErpUser.id that Project.supervisorUserId actually references.
       const supervisorUser = auth?.uid
         ? await prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } })
         : null;
+      const supervisorEmployee = auth?.email
+        ? await prisma.employee.findFirst({
+            where: { email: { equals: auth.email, mode: "insensitive" } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : null;
+      const supervisorFullName = supervisorEmployee
+        ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim()
+        : null;
+
+      // "My projects" = assigned to (project-level or a specific scheduled
+      // day) or personally logged labor on — same rule as the schedule page.
+      const assignmentOr: Prisma.ProjectWhereInput[] = [];
+      if (supervisorUser) {
+        assignmentOr.push({ supervisorUserId: supervisorUser.id });
+        assignmentOr.push({ dayAssignments: { some: { supervisorUserId: supervisorUser.id } } });
+      }
+      if (supervisorEmployee) {
+        assignmentOr.push({ laborEntries: { some: { employeeId: supervisorEmployee.id } } });
+      }
+      if (supervisorFullName) {
+        assignmentOr.push({ laborEntries: { some: { workerName: { equals: supervisorFullName, mode: "insensitive" } } } });
+      }
 
       const _now = new Date();
       const todayStart = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate(), 0, 0, 0, 0));
@@ -234,8 +260,8 @@ export default async function ErpDashboardPage() {
 
       const [myProjects, openIncidents] = await Promise.all([
         prisma.project.findMany({
-          where: supervisorUser
-            ? { supervisorUserId: supervisorUser.id, NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } }
+          where: assignmentOr.length > 0
+            ? { OR: assignmentOr, NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } }
             : { NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } },
           select: {
             id: true, jobTitle: true, status: true, projectDate: true, segment: true,
@@ -248,8 +274,8 @@ export default async function ErpDashboardPage() {
           orderBy: [{ projectDate: "asc" }, { updatedAt: "desc" }],
         }),
         prisma.safetyIncident.findMany({
-          where: supervisorUser
-            ? { status: { in: ["OPEN", "ESCALATED"] }, project: { supervisorUserId: supervisorUser.id } }
+          where: assignmentOr.length > 0
+            ? { status: { in: ["OPEN", "ESCALATED"] }, project: { OR: assignmentOr } }
             : { status: { in: ["OPEN", "ESCALATED"] } },
           orderBy: { createdAt: "desc" },
           take: 20,
@@ -316,8 +342,8 @@ export default async function ErpDashboardPage() {
             <div className="rounded-lg border border-gray-200 bg-white">
               <div className="border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900">My projects</h2>
-                {!supervisorUser && (
-                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
+                {assignmentOr.length === 0 && (
+                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
                 )}
               </div>
               {myProjects.length === 0 ? (

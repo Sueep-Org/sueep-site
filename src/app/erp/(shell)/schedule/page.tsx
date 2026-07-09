@@ -158,20 +158,28 @@ export default async function SchedulePage() {
   let visibleChangeOrders = changeOrders;
   let visibleDayAssignments = dayAssignments;
   if (auth?.role === "SUPERVISOR") {
-    const supervisorEmployee = await prisma.employee.findFirst({
-      where: { email: { equals: auth.email, mode: "insensitive" } },
-      select: { id: true, firstName: true, lastName: true },
-    });
+    // auth.uid is the Firebase UID (from the session token), not the
+    // ErpUser.id that Project.supervisorUserId / ProjectDayAssignment.supervisorUserId
+    // actually reference — has to be resolved first, same as the dashboard does.
+    const [supervisorErpUser, supervisorEmployee] = await Promise.all([
+      auth.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : null,
+      prisma.employee.findFirst({
+        where: { email: { equals: auth.email, mode: "insensitive" } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    ]);
     const supervisorFullName = supervisorEmployee
       ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim().toLowerCase()
       : null;
 
     const allowedProjectIds = new Set<string>();
-    for (const p of projects) {
-      if (p.supervisorUserId === auth.uid) allowedProjectIds.add(p.id);
-    }
-    for (const a of dayAssignments) {
-      if (a.supervisorUserId === auth.uid) allowedProjectIds.add(a.projectId);
+    if (supervisorErpUser) {
+      for (const p of projects) {
+        if (p.supervisorUserId === supervisorErpUser.id) allowedProjectIds.add(p.id);
+      }
+      for (const a of dayAssignments) {
+        if (a.supervisorUserId === supervisorErpUser.id) allowedProjectIds.add(a.projectId);
+      }
     }
     for (const le of laborEntryRows) {
       const matchesEmployee = supervisorEmployee != null && le.employeeId === supervisorEmployee.id;
