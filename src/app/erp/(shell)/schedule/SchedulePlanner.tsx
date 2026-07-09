@@ -57,8 +57,11 @@ const CHANGE_ORDER_LABEL = "Change order (CO)";
 
 // Dashed border marks a chip as "planned" (a supervisor was assigned ahead
 // of time via ProjectDayAssignment) as opposed to "confirmed" (an actual
-// LaborEntry was logged for that project on that day).
+// LaborEntry was logged for that project on that day). Red instead of gray
+// once that day has passed with no log — it's a missed assignment, not just
+// an upcoming plan.
 const PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-gray-500";
+const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
 
 // Muted, pastel-ish colors keyed by calendar group — used for the
 // month-calendar chips, which need to read as a scannable legend rather than
@@ -617,12 +620,14 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
-                      {visiblePlanned.map(({ assignment, project }) => (
+                      {visiblePlanned.map(({ assignment, project }) => {
+                        const isOverdue = !isFutureOrToday;
+                        return (
                         <li key={`plan-${assignment.id}`} className="relative">
                           <Link
                             href={`/erp/projects/${project.id}`}
-                            title={`${project.jobTitle} — planned, not yet logged`}
-                            className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${PLANNED_CHIP_EXTRA_CLASS}`}
+                            title={isOverdue ? `${project.jobTitle} — scheduled but never logged` : `${project.jobTitle} — planned, not yet logged`}
+                            className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
                           </Link>
@@ -639,7 +644,8 @@ export function SchedulePlanner({
                             ×
                           </button>
                         </li>
-                      ))}
+                        );
+                      })}
                       {visibleChangeOrders.map((co) => {
                         const summary = co.laborByDay[k];
                         const parentProject = projectById.get(co.projectId);
@@ -701,7 +707,11 @@ export function SchedulePlanner({
                                 ))}
                                 {dayPlanned.map(({ assignment, project }) => (
                                   <li key={`ov-plan-${assignment.id}`} className="flex items-center gap-1.5">
-                                    <span className={`h-2 w-2 shrink-0 rounded-sm border border-dashed border-gray-400 ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(project.segment)]}`} />
+                                    <span
+                                      className={`h-2 w-2 shrink-0 rounded-sm border border-dashed ${
+                                        isFutureOrToday ? "border-gray-400" : "border-red-500"
+                                      } ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(project.segment)]}`}
+                                    />
                                     <Link
                                       href={`/erp/projects/${project.id}`}
                                       onClick={() => setExpandedDayKey(null)}
@@ -709,7 +719,9 @@ export function SchedulePlanner({
                                     >
                                       {project.jobTitle}
                                     </Link>
-                                    <span className="shrink-0 text-gray-400">(planned)</span>
+                                    <span className={`shrink-0 ${isFutureOrToday ? "text-gray-400" : "text-red-400"}`}>
+                                      {isFutureOrToday ? "(planned)" : "(missed)"}
+                                    </span>
                                   </li>
                                 ))}
                                 {dayChangeOrders.map((co) => (
@@ -754,6 +766,12 @@ export function SchedulePlanner({
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${PLANNED_CHIP_EXTRA_CLASS}`} />
                 Dashed = planned, not yet logged
+              </div>
+            ) : null}
+            {dayAssignments.some((a) => a.dateKey < todayKey) ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`} />
+                Red dashed = scheduled but never logged
               </div>
             ) : null}
           </div>
