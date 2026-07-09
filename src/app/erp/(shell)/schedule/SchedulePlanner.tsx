@@ -162,6 +162,22 @@ export function SchedulePlanner({
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
+  // "+N more" popover — lists everything on a day without needing the full
+  // assign-a-supervisor modal. Only one open at a time, closes on outside click.
+  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expandedDayKey) return;
+    function onMouseDown(e: MouseEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setExpandedDayKey(null);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [expandedDayKey]);
+
   // Deletes a planned (ProjectDayAssignment) entry directly from its chip —
   // works on any day, including past ones where the "+" button is hidden, so
   // stale planned entries that never got a real labor log can still be
@@ -654,7 +670,64 @@ export function SchedulePlanner({
                         );
                       })}
                       {overflow > 0 ? (
-                        <li className="px-1 text-[10px] font-medium text-gray-500">+{overflow} more</li>
+                        <li className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedDayKey((prev) => (prev === k ? null : k))}
+                            className="px-1 text-[10px] font-medium text-gray-500 hover:text-pink-600 hover:underline"
+                          >
+                            +{overflow} more
+                          </button>
+                          {expandedDayKey === k ? (
+                            <div
+                              ref={overflowRef}
+                              className={`absolute z-40 w-56 rounded-md bg-gray-900 px-2.5 py-2 text-[10px] leading-snug text-white shadow-lg ${tooltipPositionClass}`}
+                            >
+                              <div className="mb-1.5 font-semibold text-gray-300">
+                                {cell.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                              </div>
+                              <ul className="max-h-48 space-y-1 overflow-y-auto">
+                                {dayProjects.map((p) => (
+                                  <li key={`ov-p-${p.id}`} className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(p.segment)]}`} />
+                                    <Link
+                                      href={`/erp/projects/${p.id}`}
+                                      onClick={() => setExpandedDayKey(null)}
+                                      className="truncate hover:underline"
+                                    >
+                                      {p.jobTitle}
+                                    </Link>
+                                  </li>
+                                ))}
+                                {dayPlanned.map(({ assignment, project }) => (
+                                  <li key={`ov-plan-${assignment.id}`} className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 shrink-0 rounded-sm border border-dashed border-gray-400 ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(project.segment)]}`} />
+                                    <Link
+                                      href={`/erp/projects/${project.id}`}
+                                      onClick={() => setExpandedDayKey(null)}
+                                      className="truncate hover:underline"
+                                    >
+                                      {project.jobTitle}
+                                    </Link>
+                                    <span className="shrink-0 text-gray-400">(planned)</span>
+                                  </li>
+                                ))}
+                                {dayChangeOrders.map((co) => (
+                                  <li key={`ov-co-${co.id}`} className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
+                                    <Link
+                                      href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
+                                      onClick={() => setExpandedDayKey(null)}
+                                      className="truncate hover:underline"
+                                    >
+                                      {co.title}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </li>
                       ) : null}
                     </ul>
                   </div>
