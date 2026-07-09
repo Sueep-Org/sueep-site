@@ -38,12 +38,12 @@ export default async function SchedulePage() {
       select: { id: true, email: true },
       orderBy: { email: "asc" },
     }),
-    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true } }),
+    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
       select: { id: true, projectId: true, title: true, status: true, startDate: true },
     }),
-    prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true } }),
+    prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
     prisma.projectDayAssignment.findMany({
       select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true },
     }),
@@ -61,29 +61,56 @@ export default async function SchedulePage() {
   // Calendar day cells are driven by actual logged work, not a project's full
   // start/end span — a project spanning two weeks isn't worked every day.
   const workDayKeysByProject = new Map<string, Set<string>>();
+  // Per-project, per-day breakdown of hours/workers — powers the richer
+  // tooltip on confirmed calendar chips.
+  const laborSummaryByProject = new Map<string, Map<string, { hours: number; workers: Set<string> }>>();
   for (const le of laborEntryRows) {
+    const k = dayKey(le.workDate);
     const set = workDayKeysByProject.get(le.projectId) ?? new Set<string>();
-    set.add(dayKey(le.workDate));
+    set.add(k);
     workDayKeysByProject.set(le.projectId, set);
+
+    const byDay = laborSummaryByProject.get(le.projectId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+    const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+    entry.hours += le.hours;
+    if (le.workerName) entry.workers.add(le.workerName);
+    byDay.set(k, entry);
+    laborSummaryByProject.set(le.projectId, byDay);
   }
 
   const workDayKeysByChangeOrder = new Map<string, Set<string>>();
+  // Per-change-order, per-day breakdown of hours/workers — same tooltip data
+  // as projects, sourced from ProjectChangeOrderLaborer instead of LaborEntry.
+  const laborSummaryByChangeOrder = new Map<string, Map<string, { hours: number; workers: Set<string> }>>();
   for (const cl of coLaborerRows) {
+    const k = dayKey(cl.workDate);
     const set = workDayKeysByChangeOrder.get(cl.changeOrderId) ?? new Set<string>();
-    set.add(dayKey(cl.workDate));
+    set.add(k);
     workDayKeysByChangeOrder.set(cl.changeOrderId, set);
+
+    const byDay = laborSummaryByChangeOrder.get(cl.changeOrderId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+    const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+    entry.hours += cl.hours;
+    if (cl.name) entry.workers.add(cl.name);
+    byDay.set(k, entry);
+    laborSummaryByChangeOrder.set(cl.changeOrderId, byDay);
   }
 
   const changeOrders: ScheduleChangeOrder[] = changeOrderRows
     .map((co) => {
       const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
       if (co.startDate) days.add(dayKey(co.startDate));
+      const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
+      for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
+        laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
+      }
       return {
         id: co.id,
         projectId: co.projectId,
         title: co.title,
         status: co.status,
         workDayKeys: Array.from(days),
+        laborByDay,
       };
     })
     .filter((co) => co.workDayKeys.length > 0);
@@ -104,18 +131,25 @@ export default async function SchedulePage() {
     displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
   }));
 
-  const projects: ScheduleProject[] = projectRows.map((r) => ({
-    id: r.id,
-    jobTitle: r.jobTitle,
-    segment: r.segment,
-    status: r.status,
-    projectDate: r.projectDate ? r.projectDate.toISOString() : null,
-    projectEndDate: r.projectEndDate ? r.projectEndDate.toISOString() : null,
-    createdAt: r.createdAt.toISOString(),
-    percentDone: r.percentDone,
-    supervisorUserId: r.supervisorUserId,
-    workDayKeys: Array.from(workDayKeysByProject.get(r.id) ?? []),
-  }));
+  const projects: ScheduleProject[] = projectRows.map((r) => {
+    const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
+    for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
+      laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
+    }
+    return {
+      id: r.id,
+      jobTitle: r.jobTitle,
+      segment: r.segment,
+      status: r.status,
+      projectDate: r.projectDate ? r.projectDate.toISOString() : null,
+      projectEndDate: r.projectEndDate ? r.projectEndDate.toISOString() : null,
+      createdAt: r.createdAt.toISOString(),
+      percentDone: r.percentDone,
+      supervisorUserId: r.supervisorUserId,
+      workDayKeys: Array.from(workDayKeysByProject.get(r.id) ?? []),
+      laborByDay,
+    };
+  });
 
   return (
     <div className="space-y-8">

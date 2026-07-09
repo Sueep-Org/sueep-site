@@ -93,6 +93,11 @@ function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
   return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
 }
 
+function formatHours(hours: number): string {
+  const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
+  return `${n} hr${hours === 1 ? "" : "s"}`;
+}
+
 // "CO" (ProjectChangeOrder, blue) isn't a project segment — it's layered on
 // top as its own filterable type alongside the segment-based groups.
 type ProjectTypeFilter = CalendarSegmentGroup | "CO";
@@ -495,6 +500,19 @@ export function SchedulePlanner({
                 const inMonth = sameMonth(cell, cursor);
                 const isToday = k === todayKey;
                 const isFutureOrToday = k >= todayKey;
+                // The grid sits in an overflow-x-auto wrapper, which per the
+                // CSS spec also clips overflow on both axes — so a tooltip
+                // that opens downward off the last row, or rightward off a
+                // column too close to the right edge, gets cut off. Flip
+                // direction near those edges. Tooltip is up to 220px wide and
+                // each of the 7 columns is only ~103px (720px grid), so it
+                // needs ~2.2 columns of room — the last TWO columns (not just
+                // Saturday) have to open leftward instead.
+                const isLastRow = Math.floor(i / 7) === matrix.length - 1;
+                const isNearRightEdge = i % 7 >= 5;
+                const tooltipPositionClass = `${isLastRow ? "bottom-full mb-1" : "top-full mt-1"} ${
+                  isNearRightEdge ? "right-0" : "left-0"
+                }`;
 
                 let dayProjects = projectsByDay.get(k) ?? [];
                 let dayPlannedRaw = plannedByDay.get(k) ?? [];
@@ -560,17 +578,33 @@ export function SchedulePlanner({
                       ) : null}
                     </div>
                     <ul className="mt-1 space-y-1">
-                      {visibleProjects.map((p) => (
-                        <li key={`p-${p.id}`}>
-                          <Link
-                            href={`/erp/projects/${p.id}`}
-                            title={`${p.jobTitle} — ${CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}`}
-                            className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
-                          >
-                            <span className="truncate">{p.jobTitle}</span>
-                          </Link>
-                        </li>
-                      ))}
+                      {visibleProjects.map((p) => {
+                        const summary = p.laborByDay[k];
+                        return (
+                          <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
+                            <Link
+                              href={`/erp/projects/${p.id}`}
+                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
+                            >
+                              <span className="truncate">{p.jobTitle}</span>
+                            </Link>
+                            {inMonth ? (
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                <div className="font-semibold">{p.jobTitle}</div>
+                                <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
+                                {summary ? (
+                                  <>
+                                    <div className="mt-1">{formatHours(summary.hours)} logged</div>
+                                    {summary.workers.length > 0 ? (
+                                      <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                       {visiblePlanned.map(({ assignment, project }) => (
                         <li key={`plan-${assignment.id}`} className="relative">
                           <Link
@@ -594,17 +628,35 @@ export function SchedulePlanner({
                           </button>
                         </li>
                       ))}
-                      {visibleChangeOrders.map((co) => (
-                        <li key={`co-${co.id}`}>
-                          <Link
-                            href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
-                            title={`${co.title} — ${CHANGE_ORDER_LABEL}`}
-                            className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CHANGE_ORDER_CHIP_CLASS}`}
-                          >
-                            <span className="truncate">{co.title}</span>
-                          </Link>
-                        </li>
-                      ))}
+                      {visibleChangeOrders.map((co) => {
+                        const summary = co.laborByDay[k];
+                        const parentProject = projectById.get(co.projectId);
+                        return (
+                          <li key={`co-${co.id}`} className={inMonth ? "group relative" : "relative"}>
+                            <Link
+                              href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
+                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CHANGE_ORDER_CHIP_CLASS}`}
+                            >
+                              <span className="truncate">{co.title}</span>
+                            </Link>
+                            {inMonth ? (
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                <div className="font-semibold">{co.title}</div>
+                                <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
+                                {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
+                                {summary ? (
+                                  <>
+                                    <div className="mt-1">{formatHours(summary.hours)} logged</div>
+                                    {summary.workers.length > 0 ? (
+                                      <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                       {overflow > 0 ? (
                         <li className="px-1 text-[10px] font-medium text-gray-500">+{overflow} more</li>
                       ) : null}

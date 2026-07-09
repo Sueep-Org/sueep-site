@@ -56,6 +56,8 @@ export type ScheduleProject = {
   supervisorUserId: string | null;
   /** Day keys (YYYY-MM-DD) this project actually has logged labor on. */
   workDayKeys: string[];
+  /** Per-day hours/workers breakdown, keyed by the same day keys as workDayKeys — powers the calendar chip tooltip. */
+  laborByDay: Record<string, { hours: number; workers: string[] }>;
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
@@ -67,6 +69,8 @@ export type ScheduleChangeOrder = {
   title: string;
   status: string;
   workDayKeys: string[];
+  /** Per-day hours/workers breakdown, from ProjectChangeOrderLaborer — powers the calendar chip tooltip. */
+  laborByDay: Record<string, { hours: number; workers: string[] }>;
 };
 
 /** A planned supervisor coverage of a project on a future day (before any
