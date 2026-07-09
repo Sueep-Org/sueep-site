@@ -38,15 +38,14 @@ function statusBarClass(status: string): string {
 // Calendar-only grouping of project types — commercial painting and
 // commercial cleaning are shown together as "Post-construction" here, even
 // though they remain distinct segments everywhere else in the app (forms,
-// filters, billing).
-type CalendarSegmentGroup = "POST_CONSTRUCTION" | "CHANGE_ORDER" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
+// filters, billing). Projects whose segment is itself CHANGE_ORDER are
+// folded into "Other" here — that's a different, rarely-used thing from the
+// blue "Change order (CO)" items below (ProjectChangeOrder records attached
+// to a parent project), and not worth its own filter/legend entry.
+type CalendarSegmentGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
 
-// Note: "Change order project" (amber, a Project whose segment is itself
-// CHANGE_ORDER) is a different thing from the blue "Change order (CO)" items
-// below, which are ProjectChangeOrder records attached to a parent project.
 const CALENDAR_GROUP_LABEL: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "Post-construction",
-  CHANGE_ORDER: "Change order project",
   JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
   REAL_ESTATE: "Real estate",
   OTHER: "Other",
@@ -66,7 +65,6 @@ const PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-gray-500";
 // compete for attention the way the status-colored Gantt bars do.
 const CALENDAR_GROUP_CHIP_CLASS: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "bg-pink-200 text-pink-900 hover:bg-pink-300",
-  CHANGE_ORDER: "bg-amber-200 text-amber-900 hover:bg-amber-300",
   JANITORIAL_TURNOVER_REQUESTS: "bg-green-200 text-green-900 hover:bg-green-300",
   REAL_ESTATE: "bg-purple-200 text-purple-900 hover:bg-purple-300",
   OTHER: "bg-slate-200 text-slate-800 hover:bg-slate-300",
@@ -74,7 +72,6 @@ const CALENDAR_GROUP_CHIP_CLASS: Record<CalendarSegmentGroup, string> = {
 
 const CALENDAR_GROUP_SWATCH_CLASS: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "bg-pink-200",
-  CHANGE_ORDER: "bg-amber-200",
   JANITORIAL_TURNOVER_REQUESTS: "bg-green-200",
   REAL_ESTATE: "bg-purple-200",
   OTHER: "bg-slate-200",
@@ -83,7 +80,7 @@ const CALENDAR_GROUP_SWATCH_CLASS: Record<CalendarSegmentGroup, string> = {
 const SEGMENT_TO_CALENDAR_GROUP: Record<ProjectSegment, CalendarSegmentGroup> = {
   COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
   COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
-  CHANGE_ORDER: "CHANGE_ORDER",
+  CHANGE_ORDER: "OTHER",
   JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
   REAL_ESTATE: "REAL_ESTATE",
   OTHER: "OTHER",
@@ -104,7 +101,6 @@ type ProjectTypeFilter = CalendarSegmentGroup | "CO";
 
 const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; swatch: string }[] = [
   { value: "POST_CONSTRUCTION", label: CALENDAR_GROUP_LABEL.POST_CONSTRUCTION, swatch: CALENDAR_GROUP_SWATCH_CLASS.POST_CONSTRUCTION },
-  { value: "CHANGE_ORDER", label: CALENDAR_GROUP_LABEL.CHANGE_ORDER, swatch: CALENDAR_GROUP_SWATCH_CLASS.CHANGE_ORDER },
   { value: "CO", label: CHANGE_ORDER_LABEL, swatch: CHANGE_ORDER_SWATCH_CLASS },
   { value: "JANITORIAL_TURNOVER_REQUESTS", label: CALENDAR_GROUP_LABEL.JANITORIAL_TURNOVER_REQUESTS, swatch: CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS },
   { value: "REAL_ESTATE", label: CALENDAR_GROUP_LABEL.REAL_ESTATE, swatch: CALENDAR_GROUP_SWATCH_CLASS.REAL_ESTATE },
