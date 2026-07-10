@@ -748,6 +748,10 @@ export function ProjectsExpandableTable({
                       const coActualMaterial = co.materialCostCents > 0 ? co.materialCostCents : (co.actualMaterialCents ?? 0);
                       const coActualCost = coActualLabor + coActualMaterial;
                       const coMargin = co.contractValueCents == null ? null : co.contractValueCents - coActualCost;
+                      const coMarginPercent =
+                        coMargin != null && co.contractValueCents
+                          ? `${Math.round((coMargin / co.contractValueCents) * 100)}%`
+                          : null;
                       return (
                         <Fragment key={co.id}>
                           <tr
@@ -816,7 +820,16 @@ export function ProjectsExpandableTable({
                             )}
                             {canSeeFinancials && (
                               <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${marginClass(coMargin)}`}>
-                                {coMargin == null ? <span className="text-gray-400">-</span> : centsToDollars(coMargin)}
+                                {coMargin == null ? (
+                                  <span className="text-gray-400">-</span>
+                                ) : (
+                                  <>
+                                    {centsToDollars(coMargin)}
+                                    {coMarginPercent ? (
+                                      <span className="ml-1 text-xs font-normal text-gray-500">({coMarginPercent})</span>
+                                    ) : null}
+                                  </>
+                                )}
                               </td>
                             )}
                             <td className="px-3 py-1.5 text-gray-900">
