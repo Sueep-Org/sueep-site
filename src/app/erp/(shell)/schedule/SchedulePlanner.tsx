@@ -638,16 +638,11 @@ export function SchedulePlanner({
                       {visiblePlanned.map(({ assignment, project }) => {
                         const isOverdue = !isFutureOrToday;
                         const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
-                        const baseTitle = isOverdue
-                          ? `${project.jobTitle} — scheduled but never logged`
-                          : `${project.jobTitle} — planned, not yet logged`;
-                        const chipTitle =
-                          plannedWorkers.length > 0 ? `${baseTitle}\nPlanned workers: ${plannedWorkers.join(", ")}` : baseTitle;
+                        const supervisor = supervisors.find((s) => s.id === assignment.supervisorUserId);
                         return (
-                        <li key={`plan-${assignment.id}`} className="relative">
+                        <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
                           <Link
                             href={`/erp/projects/${project.id}`}
-                            title={chipTitle}
                             className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
@@ -660,10 +655,22 @@ export function SchedulePlanner({
                             }}
                             disabled={deletingAssignmentId === assignment.id}
                             title="Remove this scheduled assignment"
-                            className="absolute right-0.5 top-1/2 -translate-y-1/2 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                            className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
                           >
                             ×
                           </button>
+                          {inMonth ? (
+                            <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                              <div className="font-semibold">{project.jobTitle}</div>
+                              <div className="text-gray-300">
+                                {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
+                              </div>
+                              {supervisor ? <div className="text-gray-300">Supervisor: {supervisor.displayName}</div> : null}
+                              {plannedWorkers.length > 0 ? (
+                                <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </li>
                         );
                       })}
