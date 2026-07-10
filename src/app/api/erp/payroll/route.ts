@@ -162,7 +162,11 @@ export async function GET(req: Request) {
     let regHours = 0;
     let otHours = 0;
     for (const weekHours of emp.weeklyHours.values()) {
-      if (weekHours <= OT_THRESHOLD) {
+      if (emp.payType === "SALARY") {
+        // Salaried employees don't earn OT — hours past 40/week are still
+        // logged elsewhere but don't add to gross pay here.
+        regHours += Math.min(weekHours, OT_THRESHOLD);
+      } else if (weekHours <= OT_THRESHOLD) {
         regHours += weekHours;
       } else {
         regHours += OT_THRESHOLD;

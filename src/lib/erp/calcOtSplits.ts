@@ -54,7 +54,7 @@ export async function calcOtSplits(viewEntries: OtEntry[]): Promise<Map<string, 
   maxWeekMonday.setUTCHours(23, 59, 59, 999);
   const minDate = new Date(`${minWeekStart}T00:00:00Z`);
 
-  const [projectEntries, coEntries] = await Promise.all([
+  const [projectEntries, coEntries, salaryEmployees] = await Promise.all([
     prisma.laborEntry.findMany({
       where: {
         employeeId: { in: employeeIds },
@@ -69,7 +69,15 @@ export async function calcOtSplits(viewEntries: OtEntry[]): Promise<Map<string, 
       },
       select: { id: true, employeeId: true, workDate: true, hours: true, createdAt: true },
     }),
+    // Salaried employees don't earn OT — hours beyond 40/week are still
+    // logged (for hours tracking) but shouldn't add to cost/margin at all,
+    // not even at the regular rate.
+    prisma.employee.findMany({
+      where: { id: { in: employeeIds }, payType: "SALARY" },
+      select: { id: true },
+    }),
   ]);
+  const salaryEmployeeIds = new Set(salaryEmployees.map((e) => e.id));
 
   type BucketEntry = { id: string; hours: number; workDate: Date; createdAt: Date };
   const buckets = new Map<string, BucketEntry[]>();
@@ -81,7 +89,9 @@ export async function calcOtSplits(viewEntries: OtEntry[]): Promise<Map<string, 
     buckets.get(key)!.push({ id: e.id, hours: e.hours, workDate: e.workDate, createdAt: e.createdAt });
   }
 
-  for (const bucket of buckets.values()) {
+  for (const [key, bucket] of buckets) {
+    const employeeId = key.split("::")[0]!;
+    const isSalaried = salaryEmployeeIds.has(employeeId);
     bucket.sort((a, b) =>
       a.workDate.getTime() !== b.workDate.getTime()
         ? a.workDate.getTime() - b.workDate.getTime()
@@ -90,7 +100,9 @@ export async function calcOtSplits(viewEntries: OtEntry[]): Promise<Map<string, 
     let cumulative = 0;
     for (const entry of bucket) {
       const reg = Math.max(0, Math.min(entry.hours, OT_THRESHOLD - cumulative));
-      const ot = entry.hours - reg;
+      // Salaried: hours past the 40/week cap contribute nothing to cost.
+      // Hourly: they're paid at 1.5x as overtime.
+      const ot = isSalaried ? 0 : entry.hours - reg;
       if (viewIds.has(entry.id)) result.set(entry.id, { regHours: reg, otHours: ot });
       cumulative += entry.hours;
     }

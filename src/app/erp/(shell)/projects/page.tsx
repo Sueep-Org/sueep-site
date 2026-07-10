@@ -3,7 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canSeeFinancials as checkFinancials } from "@/lib/erpAuth";
+import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
 import { ProjectsTabs } from "./ProjectsTabs";
+
+// Sums labor cost the same OT-aware way the project/CO detail pages do
+// (1.5x pay for hours over 40/week per employee) — a plain hours*rate sum
+// under-reports cost for anyone with overtime that week.
+function otAwareLaborCents(
+  entries: { id: string; hours: number; hourlyRateCents: number }[],
+  otSplits: Map<string, OtSplit>,
+): number {
+  return entries.reduce((s, e) => {
+    const split = otSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
+    return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
+  }, 0);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +58,9 @@ export default async function ErpProjectsPage() {
       laborEntries: {
         select: {
           id: true,
+          employeeId: true,
           workDate: true,
+          createdAt: true,
           workerName: true,
           role: true,
           hours: true,
@@ -95,7 +111,7 @@ export default async function ErpProjectsPage() {
           actualHours: true,
           materialEntries: { select: { costCents: true } },
           laborers: {
-            select: { id: true, name: true, role: true, workDate: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
+            select: { id: true, employeeId: true, name: true, role: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
             orderBy: { workDate: "desc" },
           },
         },
@@ -121,6 +137,16 @@ export default async function ErpProjectsPage() {
   const buildingIdByName = new Map(buildings.map((building) => [normalizeMatchValue(building.name), building.id]));
   const buildingNameById = new Map(buildings.map((building) => [building.id, building.name]));
 
+  // One batched OT-splits call for every labor entry across every project/CO
+  // on this page, instead of one call per project — calcOtSplits queries the
+  // full LaborEntry/ProjectChangeOrderLaborer tables per employee/week
+  // regardless, so batching the "view" doesn't change results, just avoids
+  // an N+1 query pattern across up to 300 projects.
+  const otSplits = await calcOtSplits([
+    ...projects.flatMap((p) => p.laborEntries),
+    ...projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
+  ]);
+
   const lifecycleRank = (p: (typeof projects)[number]) => {
     const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null);
     if (lifecycle === "ACTIVE") return 0;
@@ -136,7 +162,7 @@ export default async function ErpProjectsPage() {
 
   const rows = projects.map((p) => {
     const totalHours = p.laborEntries.reduce((s, e) => s + e.hours, 0);
-    const laborCents = p.laborEntries.reduce((s, e) => s + Math.round(e.hours * e.hourlyRateCents), 0);
+    const laborCents = otAwareLaborCents(p.laborEntries, otSplits);
     const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
     const paintCents = p.materialEntries.filter((e) => e.category === "PAINT").reduce((s, e) => s + e.costCents, 0);
     const cleaningCents = p.materialEntries
@@ -158,7 +184,7 @@ export default async function ErpProjectsPage() {
     }, 0);
     const coEstLaborCents = qualifyingCOs.reduce((s, co) => s + (co.estLaborCents ?? 0), 0);
     const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
-      const lab = co.laborers.reduce((ls, l) => ls + Math.round(l.hours * l.hourlyRateCents), 0);
+      const lab = otAwareLaborCents(co.laborers, otSplits);
       return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0));
     }, 0);
     const coEstHours = qualifyingCOs.reduce((s, co) => s + (co.estHours ?? 0), 0);
@@ -283,7 +309,7 @@ export default async function ErpProjectsPage() {
           qualityRating: l.qualityRating ?? null,
           qualityNotes: l.qualityNotes ?? null,
         })),
-        laborCostCents: co.laborers.reduce((s, l) => s + Math.round(l.hours * l.hourlyRateCents), 0),
+        laborCostCents: otAwareLaborCents(co.laborers, otSplits),
         materialCostCents: co.materialEntries.reduce((s, e) => s + e.costCents, 0),
       })),
       contractorEntries: p.contractorAssignments.map((a) => ({
