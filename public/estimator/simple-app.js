@@ -374,6 +374,7 @@ async function initApp(){
         if (data.annotations) {
           highlightsStore.deserialize(JSON.stringify(data.annotations));
           overlay.redraw();
+          updateMeasurementList();
           return;
         }
       }
@@ -381,6 +382,7 @@ async function initApp(){
     const json = localStorage.getItem(`annotations_${projectId}`);
     if (json) highlightsStore.deserialize(json);
     overlay.redraw();
+    updateMeasurementList();
   };
 
   if (downloadPdfBtn) {
