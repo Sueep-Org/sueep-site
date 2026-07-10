@@ -383,6 +383,41 @@ async function initApp(){
     }).format(numberValue);
   }
 
+  function parseSovAmount(value) {
+    if (value == null || value === '') return null;
+    const sanitized = String(value).replace(/[^0-9.-]/g, '');
+    if (!sanitized) return null;
+    const numericValue = Number(sanitized);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  function getSovAnalysisPhaseValues() {
+    const breakdown = _loadedProjectData?.labor_breakdown;
+    if (!breakdown || !Array.isArray(breakdown.phases) || !breakdown.phases.length) {
+      return { rough: 0, final: 0, touchup: 0 };
+    }
+
+    const rates = {
+      cleanerRate: breakdown.cleaner_rate || 0,
+      foremanRate: breakdown.foreman_rate || 0,
+      overhead: (breakdown.overhead_pct || 0) / 100,
+      profit: (breakdown.profit_pct || 0) / 100,
+      tax: (breakdown.tax_pct || 0) / 100,
+      commission: (breakdown.commission_pct || 0) / 100,
+    };
+
+    const values = { rough: 0, final: 0, touchup: 0 };
+    breakdown.phases.forEach((phase) => {
+      const name = String(phase.name || '').toLowerCase();
+      const subtotal = _calcPhase(phase, rates).subtotal;
+      if (name.includes('rough')) values.rough = subtotal;
+      else if (name.includes('final')) values.final = subtotal;
+      else if (name.includes('touch')) values.touchup = subtotal;
+    });
+
+    return values;
+  }
+
   function getSovFinalPrice() {
     const fromLoadedProject = Number(_loadedProjectData?.quote ?? 0);
     if (Number.isFinite(fromLoadedProject) && fromLoadedProject > 0) return fromLoadedProject;
@@ -405,8 +440,12 @@ async function initApp(){
     }[char]));
   }
 
-  function isZeroSovCost(cost) {
-    const rawValue = String(cost ?? '').trim();
+  function getDefaultSovManualOverrides() {
+    return { rough: false, final: false, touchup: false, quote: false };
+  }
+
+  function isZeroSovAmount(value) {
+    const rawValue = String(value ?? '').trim();
     if (!rawValue) return true;
 
     const normalized = rawValue.replace(/[$,%\s]/g, '');
@@ -414,6 +453,10 @@ async function initApp(){
 
     const numericValue = Number(normalized);
     return Number.isFinite(numericValue) && numericValue <= 0;
+  }
+
+  function hasVisibleSovRow(row) {
+    return Boolean(row?.forceVisible) || ['rough', 'final', 'touchup', 'quote'].some((key) => !isZeroSovAmount(row?.[key]));
   }
 
   function getSovStorageKey() {
@@ -464,22 +507,29 @@ async function initApp(){
     }
     const totalArea = pageAggregateAreas.reduce((sum, value) => sum + Number(value || 0), 0);
     const finalPrice = getSovFinalPrice();
+    const phaseValues = getSovAnalysisPhaseValues();
 
     const rows = [];
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
       const pageArea = pageAggregateAreas[pageNum - 1] || 0;
       const percentShare = totalArea > 0 ? (pageArea / totalArea) : 0;
       const percent = totalArea > 0 ? percentShare * 100 : 0;
-      const value = finalPrice != null && totalArea > 0 ? percentShare * finalPrice : null;
+      const quoteValue = finalPrice != null && totalArea > 0 ? percentShare * finalPrice : null;
+      const roughValue = phaseValues.rough != null && totalArea > 0 ? percentShare * phaseValues.rough : null;
+      const finalValue = phaseValues.final != null && totalArea > 0 ? percentShare * phaseValues.final : null;
+      const touchupValue = phaseValues.touchup != null && totalArea > 0 ? percentShare * phaseValues.touchup : null;
       rows.push({
         page: pageNum,
         description: `Page ${pageNum}`,
-        cost: value != null ? formatSovCurrency(value) : `${percent.toFixed(2)}%`
+        rough: roughValue,
+        final: finalValue,
+        touchup: touchupValue,
+        quote: quoteValue,
       });
     }
 
     if (!_sovRows.length) {
-      _sovRows = rows.map((row) => ({ ...row, deleted: false, forceVisible: false }));
+      _sovRows = rows.map((row) => ({ ...row, deleted: false, forceVisible: false, manualOverrides: getDefaultSovManualOverrides() }));
       persistSovState();
       return _sovRows.filter((row) => !row.deleted);
     }
@@ -487,12 +537,17 @@ async function initApp(){
     const existingByPage = new Map(_sovRows.map((row) => [row.page, row]));
     const syncedRows = rows.map((row) => {
       const existing = existingByPage.get(row.page);
+      const manualOverrides = existing?.manualOverrides || getDefaultSovManualOverrides();
       return {
         page: row.page,
         description: existing?.description ?? row.description,
-        cost: row.cost,
+        rough: manualOverrides.rough ? existing?.rough : row.rough,
+        final: manualOverrides.final ? existing?.final : row.final,
+        touchup: manualOverrides.touchup ? existing?.touchup : row.touchup,
+        quote: manualOverrides.quote ? existing?.quote : row.quote,
         deleted: existing?.deleted ?? false,
         forceVisible: existing?.forceVisible ?? false,
+        manualOverrides,
       };
     });
 
@@ -507,9 +562,13 @@ async function initApp(){
     const newRow = {
       page: nextPage,
       description: `New Row ${nextPage}`,
-      cost: '$0.00',
+      rough: 0,
+      final: 0,
+      touchup: 0,
+      quote: 0,
       deleted: false,
       forceVisible: true,
+      manualOverrides: getDefaultSovManualOverrides(),
     };
     _sovRows.push(newRow);
     _sovUndoStack.push({ type: 'add', page: newRow.page });
@@ -531,8 +590,12 @@ async function initApp(){
       if (target) {
         target.deleted = false;
         target.description = lastAction.row.description;
-        target.cost = lastAction.row.cost;
+        target.rough = lastAction.row.rough;
+        target.final = lastAction.row.final;
+        target.touchup = lastAction.row.touchup;
+        target.quote = lastAction.row.quote;
         target.forceVisible = true;
+        target.manualOverrides = lastAction.row.manualOverrides || getDefaultSovManualOverrides();
       } else {
         _sovRows.push({ ...lastAction.row, deleted: false, forceVisible: true });
       }
@@ -546,7 +609,7 @@ async function initApp(){
     if (!containerEl) return;
 
     const rows = getSovPageRows();
-    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost) || row.forceVisible);
+    const visibleRows = rows.filter((row) => hasVisibleSovRow(row));
     containerEl.innerHTML = '';
 
     if (!visibleRows.length) {
@@ -563,10 +626,10 @@ async function initApp(){
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
     headRow.style.cssText = 'background:#f9fafb;';
-    ['Page', 'Description', 'Cost'].forEach((label) => {
+    ['Page', 'Description', 'Rough', 'Final', 'Touch up', 'Quote'].forEach((label) => {
       const th = document.createElement('th');
       th.textContent = label;
-      th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;';
+      th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;white-space:nowrap;';
       headRow.appendChild(th);
     });
     thead.appendChild(headRow);
@@ -585,7 +648,18 @@ async function initApp(){
         <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
           <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
         </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">${escapeHtml(row.cost)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <input type="text" value="${escapeHtml(formatSovCurrency(row.rough))}" data-sov-amount="${row.page}" data-sov-key="rough" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <input type="text" value="${escapeHtml(formatSovCurrency(row.final))}" data-sov-amount="${row.page}" data-sov-key="final" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <input type="text" value="${escapeHtml(formatSovCurrency(row.touchup))}" data-sov-amount="${row.page}" data-sov-key="touchup" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+          <input type="text" value="${escapeHtml(formatSovCurrency(row.quote))}" data-sov-amount="${row.page}" data-sov-key="quote" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+        </td>
       `;
 
       const deleteBtn = tr.querySelector('[data-delete-sov-row]');
@@ -614,6 +688,24 @@ async function initApp(){
         descriptionInput.addEventListener('change', (event) => saveDescription(event.target.value));
       }
 
+      tr.querySelectorAll('[data-sov-amount]').forEach((amountInput) => {
+        const key = amountInput.getAttribute('data-sov-key');
+        const saveAmount = (value) => {
+          const storedRow = _sovRows.find((entry) => entry.page === row.page);
+          if (storedRow) {
+            storedRow[key] = parseSovAmount(value);
+            storedRow.forceVisible = true;
+            storedRow.manualOverrides = {
+              ...(storedRow.manualOverrides || getDefaultSovManualOverrides()),
+              [key]: true,
+            };
+            persistSovState();
+          }
+        };
+        amountInput.addEventListener('input', (event) => saveAmount(event.target.value));
+        amountInput.addEventListener('change', (event) => saveAmount(event.target.value));
+      });
+
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -636,7 +728,7 @@ async function initApp(){
     }
 
     const rows = getSovPageRows();
-    const visibleRows = rows.filter((row) => !isZeroSovCost(row.cost) || row.forceVisible);
+    const visibleRows = rows.filter((row) => hasVisibleSovRow(row));
     card.style.display = 'block';
     container.innerHTML = '';
 
@@ -996,8 +1088,29 @@ async function initApp(){
         font: boldFont,
         color: rgb(0, 0, 0)
       });
-      sovPage.drawText('Cost', {
-        x: marginX + 350,
+      sovPage.drawText('Rough', {
+        x: marginX + 220,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+      sovPage.drawText('Final', {
+        x: marginX + 300,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+      sovPage.drawText('Touch up', {
+        x: marginX + 380,
+        y: startY - 32,
+        size: 12,
+        font: boldFont,
+        color: rgb(0, 0, 0)
+      });
+      sovPage.drawText('Quote', {
+        x: marginX + 460,
         y: startY - 32,
         size: 12,
         font: boldFont,
@@ -1020,8 +1133,29 @@ async function initApp(){
           font: regularFont,
           color: rgb(0, 0, 0)
         });
-        sovPage.drawText(String(row.cost), {
-          x: marginX + 350,
+        sovPage.drawText(String(formatSovCurrency(row.rough)), {
+          x: marginX + 220,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        sovPage.drawText(String(formatSovCurrency(row.final)), {
+          x: marginX + 300,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        sovPage.drawText(String(formatSovCurrency(row.touchup)), {
+          x: marginX + 380,
+          y: currentY,
+          size: 11,
+          font: regularFont,
+          color: rgb(0, 0, 0)
+        });
+        sovPage.drawText(String(formatSovCurrency(row.quote)), {
+          x: marginX + 460,
           y: currentY,
           size: 11,
           font: regularFont,
@@ -1094,7 +1228,10 @@ async function initApp(){
       doc.setFontSize(11);
       doc.text('Page', 40, 78);
       doc.text('Description', 100, 78);
-      doc.text('Cost', 360, 78);
+      doc.text('Rough', 220, 78);
+      doc.text('Final', 300, 78);
+      doc.text('Touch up', 380, 78);
+      doc.text('Quote', 460, 78);
       doc.setLineWidth(0.5);
       doc.line(40, 84, sovPageWidth - 40, 84);
 
@@ -1102,7 +1239,10 @@ async function initApp(){
       sovRows.forEach((row) => {
         doc.text(String(row.page), 40, nextY);
         doc.text(String(row.description), 100, nextY);
-        doc.text(String(row.cost), 360, nextY);
+        doc.text(String(formatSovCurrency(row.rough)), 220, nextY);
+        doc.text(String(formatSovCurrency(row.final)), 300, nextY);
+        doc.text(String(formatSovCurrency(row.touchup)), 380, nextY);
+        doc.text(String(formatSovCurrency(row.quote)), 460, nextY);
         nextY += 16;
       });
 
