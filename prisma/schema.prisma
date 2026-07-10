@@ -443,9 +443,34 @@ model ProjectChangeOrder {
   laborers        ProjectChangeOrderLaborer[]
   contracts       ChangeOrderContract[]
   materialEntries ChangeOrderMaterialEntry[]
+  contractorAssignments ChangeOrderContractorAssignment[]
 
   @@index([projectId, createdAt])
   @@index([status])
+}
+
+/// A contractor logged on a change order — same idea as ContractorAssignment
+/// on Project, but scoped to the CO instead.
+model ChangeOrderContractorAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  changeOrderId String
+  changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  role         String?
+  assignedDate DateTime?
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?
+  costCents    Int?
+
+  @@index([changeOrderId])
+  @@index([contractorId])
 }
 
 model ProjectChangeOrderLaborer {
@@ -793,6 +818,7 @@ model Contractor {
   documents   ContractorDocument[]
   assignments ContractorAssignment[]
   contracts   ContractorContract[]
+  changeOrderAssignments ChangeOrderContractorAssignment[]
 
   @@index([status])
   @@index([name])

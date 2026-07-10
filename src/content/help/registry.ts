@@ -12,6 +12,7 @@ import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
+import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -132,5 +133,13 @@ export const registry: ArticleEntry[] = [
     order: 4,
     component: LoggingContractors,
     roles: ["ADMIN", "PROJECT_MANAGER"],
+  },
+  {
+    slug: "schedule/calendar-overview",
+    title: "Using the Schedule Calendar",
+    category: "Schedule",
+    description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",
+    order: 1,
+    component: ScheduleCalendarOverview,
   },
 ];

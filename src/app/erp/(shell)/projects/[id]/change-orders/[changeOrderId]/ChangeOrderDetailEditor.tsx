@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
 import { ChangeOrderMaterialsSection, type CoMaterialRow } from "./ChangeOrderMaterialsSection";
+import { ChangeOrderContractorsSection, type ContractorRow, type ContractorOption } from "./ChangeOrderContractorsSection";
 import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
@@ -241,6 +242,8 @@ export function ChangeOrderDetailEditor({
   safetyChecks = [],
   safetyPassedKeys = [],
   hasApprovedCheckToday,
+  contractors = [],
+  contractorRows = [],
 }: {
   projectId: string;
   projectTitle: string;
@@ -252,6 +255,8 @@ export function ChangeOrderDetailEditor({
   safetyChecks?: SafetyCheck[];
   safetyPassedKeys?: string[];
   hasApprovedCheckToday?: boolean;
+  contractors?: ContractorOption[];
+  contractorRows?: ContractorRow[];
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -699,6 +704,17 @@ export function ChangeOrderDetailEditor({
               initialCompletedAt={data.completedAt}
               safetyPassedKeys={safetyPassedKeys}
               hasApprovedCheckToday={hasApprovedCheckToday}
+            />
+          ),
+        },
+        {
+          label: "Contractors",
+          content: (
+            <ChangeOrderContractorsSection
+              projectId={projectId}
+              changeOrderId={data.id}
+              initialAssignments={contractorRows}
+              contractors={contractors}
             />
           ),
         },

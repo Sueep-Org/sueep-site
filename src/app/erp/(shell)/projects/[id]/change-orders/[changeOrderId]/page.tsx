@@ -4,6 +4,7 @@ import { getErpAuth } from "@/lib/erpAuth";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
 import { ChangeOrderSigningSection, type ContractItem } from "./ChangeOrderSigningSection";
+import type { ContractorRow } from "./ChangeOrderContractorsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,16 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
 
-  const [changeOrder, project, employees, contracts, materialEntries, safetyChecks] = await Promise.all([
+  const [changeOrder, project, employees, contracts, materialEntries, safetyChecks, contractors] = await Promise.all([
     prisma.projectChangeOrder.findFirst({
       where: { id: changeOrderId, projectId: id },
-      include: { laborers: { orderBy: { createdAt: "asc" } } },
+      include: {
+        laborers: { orderBy: { createdAt: "asc" } },
+        contractorAssignments: {
+          orderBy: { createdAt: "desc" },
+          include: { contractor: { select: { id: true, name: true } } },
+        },
+      },
     }),
     prisma.project.findUnique({
       where: { id },
@@ -60,9 +67,25 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         },
       },
     }),
+    prisma.contractor.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, status: true },
+    }),
   ]);
 
   if (!changeOrder || !project) notFound();
+
+  const contractorRows: ContractorRow[] = changeOrder.contractorAssignments.map((a) => ({
+    id: a.id,
+    contractorId: a.contractorId,
+    contractorName: a.contractor.name,
+    role: a.role,
+    assignedDate: a.assignedDate ? a.assignedDate.toISOString() : null,
+    startDate: a.startDate ? a.startDate.toISOString() : null,
+    endDate: a.endDate ? a.endDate.toISOString() : null,
+    notes: a.notes,
+    costCents: a.costCents ?? null,
+  }));
 
   const todayDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
   const safetyPassedKeysArr: string[] = [];
@@ -210,6 +233,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         safetyChecks={safetyCheckRows}
         safetyPassedKeys={safetyPassedKeysArr}
         hasApprovedCheckToday={hasApprovedCheckToday}
+        contractors={contractors}
+        contractorRows={contractorRows}
         signingContent={
           <ChangeOrderSigningSection
             projectId={id}
