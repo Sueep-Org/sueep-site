@@ -104,7 +104,7 @@ async function refreshDrawer(){
             const fileObj = new File([blob], blueprint.filename);
             await window.__handleFile?.(fileObj);
             activeProjectId = project.id;
-            window.__restoreAnnotations?.(project.id);
+            await window.__restoreAnnotations?.(project.id);
             const freshRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
             const freshData = freshRes.ok ? await freshRes.json() : projData;
             window.__showProjectLoadedCard?.(freshData, blueprint.filename);
@@ -342,7 +342,7 @@ async function initApp(){
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
     store: highlightsStore,
-    onMeasurementsChanged: updateMeasurementList
+    onMeasurementsChanged: () => { updateMeasurementList(); window.__saveAnnotations?.(); }
   });
 
   overlay.attach();
@@ -351,12 +351,32 @@ async function initApp(){
 
   overlay.setTool('area');
 
-  // Per-project annotation persistence via localStorage
-  window.__saveAnnotations = function() {
+  // Per-project annotation persistence via API (with localStorage fallback)
+  window.__saveAnnotations = async function() {
     if (!activeProjectId) return;
-    try { localStorage.setItem(`annotations_${activeProjectId}`, highlightsStore.serialize()); } catch(_) {}
+    const json = highlightsStore.serialize();
+    try { localStorage.setItem(`annotations_${activeProjectId}`, json); } catch(_) {}
+    try {
+      await fetch(`${API_BASE}/api/projects/${activeProjectId}/annotations`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ annotations: JSON.parse(json) }),
+      });
+    } catch(_) {}
   };
-  window.__restoreAnnotations = function(projectId) {
+  window.__restoreAnnotations = async function(projectId) {
+    highlightsStore.clearAll();
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.annotations) {
+          highlightsStore.deserialize(JSON.stringify(data.annotations));
+          overlay.redraw();
+          return;
+        }
+      }
+    } catch(_) {}
     const json = localStorage.getItem(`annotations_${projectId}`);
     if (json) highlightsStore.deserialize(json);
     overlay.redraw();
@@ -1412,9 +1432,6 @@ async function initApp(){
   // ======================================================
 
   async function handleFile(file){
-
-    // Save current project's annotations before switching, then clear
-    window.__saveAnnotations?.();
     highlightsStore.clearAll();
 
     try{
@@ -2093,6 +2110,8 @@ async function initApp(){
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
     setText('analysisViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
     setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
+    setText('detailTollCost', projData.toll_cost != null ? fmt$(projData.toll_cost) : '—');
+    setText('analysisViewExpectedDays', projData.expected_days != null ? `${projData.expected_days} days` : '—');
 
     document.getElementById('analysisView').style.display = 'block';
     document.getElementById('analysisEditForm').style.display = 'none';
@@ -2144,6 +2163,8 @@ async function initApp(){
     setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
     setVal('analysisAddressInput', _loadedProjectData.address);
     setVal('gasolineInput', _loadedProjectData.gasoline);
+    setVal('tollCostInput', _loadedProjectData.toll_cost);
+    setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
 
     // Start address dropdown
@@ -2217,6 +2238,7 @@ async function initApp(){
       const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
       const prevAddr = _loadedProjectData.address || '';
       const gasolineVal = document.getElementById('gasolineInput')?.value;
+      const tollCostVal = document.getElementById('tollCostInput')?.value;
       const marginVal = document.getElementById('marginInput')?.value;
       const startSel = document.getElementById('startAddressSelect');
       const startCustom = document.getElementById('startAddressInput');
@@ -2228,9 +2250,12 @@ async function initApp(){
         address: addrVal,
         start_address: startAddrVal || null,
       };
-      if (areaVal !== '') body.total_area = parseFloat(areaVal) || null;
-      if (gasolineVal !== '') body.gasoline = parseFloat(gasolineVal) || null;
-      if (marginVal !== '') body.margin = parseFloat(marginVal) || null;
+      if (areaVal !== '' && areaVal !== undefined) body.total_area = parseFloat(areaVal) ?? null;
+      if (gasolineVal !== '' && gasolineVal !== undefined) body.gasoline = parseFloat(gasolineVal) ?? null;
+      if (tollCostVal !== '' && tollCostVal !== undefined) body.toll_cost = parseFloat(tollCostVal) ?? null;
+      const expectedDaysVal = document.getElementById('expectedDaysInput')?.value;
+      if (expectedDaysVal !== '' && expectedDaysVal !== undefined) body.expected_days = parseInt(expectedDaysVal) || null;
+      if (marginVal !== '' && marginVal !== undefined) body.margin = parseFloat(marginVal) ?? null;
 
       saveAnalysisBtn.textContent = 'Saving…';
       saveAnalysisBtn.disabled = true;
@@ -2914,7 +2939,7 @@ async function initApp(){
       const fileObj = new File([blob], bp.filename);
       await handleFile(fileObj);
       activeProjectId = projData.id;
-      window.__restoreAnnotations?.(projData.id);
+      await window.__restoreAnnotations?.(projData.id);
       // Restore page and zoom
       const savedPage = parseInt(localStorage.getItem('estimator_last_page') || '1', 10);
       const savedZoom = parseFloat(localStorage.getItem('estimator_last_zoom') || '1');

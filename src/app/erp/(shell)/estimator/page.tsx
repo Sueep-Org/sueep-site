@@ -491,6 +491,18 @@ export default function EstimatorPage() {
 
             {/* READ-ONLY VIEW */}
             <div id="analysisView">
+              {/* Expected days — single row above address block */}
+              <div className="text-sm mb-4 pb-3 border-b border-gray-100">
+                <span className="text-gray-400 text-xs uppercase tracking-wide">
+                  Expected Days to Complete
+                </span>
+                <div
+                  id="analysisViewExpectedDays"
+                  className="text-gray-800 font-semibold mt-0.5"
+                >
+                  —
+                </div>
+              </div>
               {/* Address + Drive info */}
               <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                 <div>
@@ -528,6 +540,17 @@ export default function EstimatorPage() {
                   </span>
                   <div
                     id="detailDuration"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Toll Cost
+                  </span>
+                  <div
+                    id="detailTollCost"
                     className="text-gray-800 font-semibold mt-0.5"
                   >
                     —
@@ -639,13 +662,38 @@ export default function EstimatorPage() {
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Gasoline + Margin */}
+              {/* Expected Days to Complete */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Expected Days to Complete
+                </label>
+                <input
+                  type="number"
+                  id="expectedDaysInput"
+                  placeholder="0"
+                  min="0"
+                  step="1"
+                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              {/* Gasoline + Toll Cost + Margin */}
               <div className="flex gap-4 mb-4 pb-4 border-b border-gray-100">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
                   <input
                     type="number"
                     id="gasolineInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Toll Cost ($)</label>
+                  <input
+                    type="number"
+                    id="tollCostInput"
                     placeholder="0.00"
                     min="0"
                     step="0.01"
