@@ -46,9 +46,14 @@ model Project {
 
   actualLaborCents    Int?
   actualMaterialCents Int?
+  actualTravelCents   Int?
 
   estHours    Float?
   actualHours Float?
+
+  /// Estimated duration in days. Actual days worked is computed from labor
+  /// logs (distinct dates with a LaborEntry), not stored.
+  estimatedDays Int?
 
   /// Optional link to a Building (set for janitorial turnover projects)
   buildingId String?

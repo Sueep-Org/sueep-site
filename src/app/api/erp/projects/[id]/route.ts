@@ -102,6 +102,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.estLabor !== undefined) data.estLaborCents = cents(body.estLabor);
   if (body.actualLabor !== undefined) data.actualLaborCents = cents(body.actualLabor);
   if (body.actualMaterial !== undefined) data.actualMaterialCents = cents(body.actualMaterial);
+  if (body.actualTravel !== undefined) data.actualTravelCents = cents(body.actualTravel);
   if (body.estHours !== undefined) {
     data.estHours =
       body.estHours === null || body.estHours === "" ? null : Number(body.estHours);
@@ -109,6 +110,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.actualHours !== undefined) {
     data.actualHours =
       body.actualHours === null || body.actualHours === "" ? null : Number(body.actualHours);
+  }
+  if (body.estimatedDays !== undefined) {
+    data.estimatedDays =
+      body.estimatedDays === null || body.estimatedDays === "" ? null : Math.round(Number(body.estimatedDays));
   }
 
   try {

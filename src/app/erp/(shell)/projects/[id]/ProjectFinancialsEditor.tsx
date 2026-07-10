@@ -27,11 +27,14 @@ type Props = {
   estLaborCents: number | null;
   actualLaborCents: number | null;
   actualMaterialCents: number | null;
+  actualTravelCents: number | null;
   estHours: number | null;
   actualHours: number | null;
   contractorCostCents: number;
   laborCentsFromLogs: number;
   hoursFromLogs: number;
+  estimatedDays: number | null;
+  daysFromLogs: number;
 };
 
 function centsToInput(cents: number | null): string {
@@ -50,11 +53,14 @@ export function ProjectFinancialsEditor({
   estLaborCents,
   actualLaborCents,
   actualMaterialCents,
+  actualTravelCents,
   estHours,
   actualHours,
   contractorCostCents,
   laborCentsFromLogs,
   hoursFromLogs,
+  estimatedDays,
+  daysFromLogs,
 }: Props) {
   const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
@@ -67,8 +73,10 @@ export function ProjectFinancialsEditor({
   const [estLab, setEstLab] = useState(centsToInput(estLaborCents));
   const [actLab, setActLab] = useState(centsToInput(actualLaborCents));
   const [actMat, setActMat] = useState(centsToInput(actualMaterialCents));
+  const [actTravel, setActTravel] = useState(centsToInput(actualTravelCents));
   const [estHrs, setEstHrs] = useState(estHours != null ? String(estHours) : "");
   const [actHrs, setActHrs] = useState(actualHours != null ? String(actualHours) : "");
+  const [estDays, setEstDays] = useState(estimatedDays != null ? String(estimatedDays) : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -255,8 +263,10 @@ export function ProjectFinancialsEditor({
           estLabor: estLab === "" ? null : Number(estLab),
           actualLabor: actLab === "" ? null : Number(actLab),
           actualMaterial: actMat === "" ? null : Number(actMat),
+          actualTravel: actTravel === "" ? null : Number(actTravel),
           estHours: estHrs === "" ? null : Number(estHrs),
           actualHours: actHrs === "" ? null : Number(actHrs),
+          estimatedDays: estDays === "" ? null : Number(estDays),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -372,6 +382,10 @@ export function ProjectFinancialsEditor({
                   <label className={labelCls} htmlFor="fin-est-hrs">Hours</label>
                   <input id="fin-est-hrs" type="number" min={0} step={0.5} className={inputCls} value={estHrs} onChange={(e) => setEstHrs(e.target.value)} placeholder="0" />
                 </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-days">Days</label>
+                  <input id="fin-est-days" type="number" min={0} step={1} className={inputCls} value={estDays} onChange={(e) => setEstDays(e.target.value)} placeholder="0" />
+                </div>
               </div>
             </div>
 
@@ -418,6 +432,10 @@ export function ProjectFinancialsEditor({
                   <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
                 </div>
                 <div>
+                  <label className={labelCls} htmlFor="fin-act-travel">Travel ($)</label>
+                  <input id="fin-act-travel" type="number" min={0} step={0.01} className={inputCls} value={actTravel} onChange={(e) => setActTravel(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
                   <label className={labelCls}>Hours</label>
                   {hasLaborLogs ? (
                     <>
@@ -432,6 +450,13 @@ export function ProjectFinancialsEditor({
                       <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
                     </>
                   )}
+                </div>
+                <div>
+                  <label className={labelCls}>Days</label>
+                  <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                    {daysFromLogs}
+                  </div>
+                  <p className="mt-0.5 text-xs text-emerald-600">Distinct dates with a work log</p>
                 </div>
               </div>
             </div>

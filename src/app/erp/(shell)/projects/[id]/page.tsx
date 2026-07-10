@@ -236,6 +236,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
   }, 0);
   const hoursFromLogs = project.laborEntries.reduce((s, e) => s + e.hours, 0);
+  // Actual days worked = distinct calendar dates with a labor log, not a
+  // simple date-span — a project can run for weeks without being worked every day.
+  const daysFromLogs = new Set(project.laborEntries.map((e) => e.workDate.toISOString().slice(0, 10))).size;
 
   const isManual = !project.hubspotDealId;
   const isPostConstruction = cfg?.postConstruction.pipelineId
@@ -441,10 +444,13 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             actualLaborCents={project.actualLaborCents}
             contractorCostCents={contractorCostCents}
             actualMaterialCents={project.actualMaterialCents}
+            actualTravelCents={project.actualTravelCents}
             estHours={project.estHours}
             actualHours={project.actualHours}
             laborCentsFromLogs={laborCentsFromLogs}
             hoursFromLogs={hoursFromLogs}
+            estimatedDays={project.estimatedDays}
+            daysFromLogs={daysFromLogs}
           />
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
