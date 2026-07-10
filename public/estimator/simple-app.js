@@ -276,6 +276,7 @@ async function initApp(){
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   let _sovRows = [];
+  let _pageAggregateOverrides = {};
   let _sovUndoStack = [];
   let _sovStateProjectId = null;
   console.log('ZOOM BUTTON CHECK:', {
@@ -457,16 +458,16 @@ async function initApp(){
     ensureSovStateLoaded();
 
     const totalPages = Number(pdfDoc?.numPages || 0);
-    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
-    const totalArea = allPageMeasurements.reduce((sum, pageEntry) => {
-      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
-    }, 0);
+    const pageAggregateAreas = [];
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      pageAggregateAreas.push(getPageAggregateTotals(pageNum).area);
+    }
+    const totalArea = pageAggregateAreas.reduce((sum, value) => sum + Number(value || 0), 0);
     const finalPrice = getSovFinalPrice();
 
     const rows = [];
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-      const pageMeasurements = highlightsStore.listMeasurements(pageNum) || [];
-      const pageArea = pageMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+      const pageArea = pageAggregateAreas[pageNum - 1] || 0;
       const percentShare = totalArea > 0 ? (pageArea / totalArea) : 0;
       const percent = totalArea > 0 ? percentShare * 100 : 0;
       const value = finalPrice != null && totalArea > 0 ? percentShare * finalPrice : null;
@@ -1130,6 +1131,19 @@ async function initApp(){
     }
   }
 
+  function getPageAggregateTotals(pageNum) {
+    const measurements = highlightsStore.listMeasurements(pageNum) || [];
+    const lineMeasurements = measurements.filter((item) => item.area == null);
+    const areaMeasurements = measurements.filter((item) => item.area != null);
+    const computedPageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
+    const computedPageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+    const override = _pageAggregateOverrides[pageNum] || {};
+    return {
+      length: override.length != null ? Number(override.length) : computedPageTotalInches,
+      area: override.area != null ? Number(override.area) : computedPageTotalArea
+    };
+  }
+
   function updateMeasurementList(){
     // Get measurements for the viewed page (not current PDF page)
     const measurements = highlightsStore.listMeasurements(measurementViewPage) || [];
@@ -1208,8 +1222,9 @@ async function initApp(){
     }
 
     // Page totals: include both length and area
-    const pageTotalInches = lineMeasurements.reduce((sum, item) => sum + (Number(item.inches) || 0), 0);
-    const pageTotalArea = areaMeasurements.reduce((sum, item) => sum + (Number(item.area) || 0), 0);
+    const aggregateTotals = getPageAggregateTotals(measurementViewPage);
+    const pageTotalInches = aggregateTotals.length;
+    const pageTotalArea = aggregateTotals.area;
 
     // All pages totals including area
     const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
@@ -1221,7 +1236,50 @@ async function initApp(){
     }, 0);
 
     if (measurementPageAggregateInfo) {
-      measurementPageAggregateInfo.textContent = `Page ${measurementViewPage} total: ${formatInches(pageTotalInches)} | Area: ${pageTotalArea.toFixed(2)} sq`;
+      measurementPageAggregateInfo.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>Page ${measurementViewPage} total:</span>
+          <input type="number" step="0.01" value="${escapeHtml(pageTotalInches)}" data-aggregate-kind="length" style="width:72px;font-size:11px;padding:2px 4px;" />
+          <span>| Area:</span>
+          <input type="number" step="0.01" value="${escapeHtml(pageTotalArea)}" data-aggregate-kind="area" style="width:72px;font-size:11px;padding:2px 4px;" />
+          <span>sq</span>
+        </div>
+      `;
+      measurementPageAggregateInfo.querySelectorAll('input[data-aggregate-kind]').forEach((input) => {
+        input.onchange = () => {
+          const parsedValue = Number(input.value);
+          if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+            toast('Please enter a valid non-negative value', 'error');
+            updateMeasurementList();
+            return;
+          }
+
+          const pageTotalDisplay = measurementPageAggregateInfo?.querySelector('input[data-aggregate-kind="length"]');
+          const pageAreaDisplay = measurementPageAggregateInfo?.querySelector('input[data-aggregate-kind="area"]');
+          if (input.dataset.aggregateKind === 'length') {
+            _pageAggregateOverrides[measurementViewPage] = {
+              ...( _pageAggregateOverrides[measurementViewPage] || {}),
+              length: parsedValue
+            };
+            if (pageTotalDisplay) pageTotalDisplay.value = parsedValue;
+            if (pageAreaDisplay) pageAreaDisplay.value = pageAreaDisplay.value ?? pageTotalArea;
+          } else {
+            _pageAggregateOverrides[measurementViewPage] = {
+              ...( _pageAggregateOverrides[measurementViewPage] || {}),
+              area: parsedValue
+            };
+            if (pageAreaDisplay) pageAreaDisplay.value = parsedValue;
+            if (pageTotalDisplay) pageTotalDisplay.value = pageTotalDisplay.value ?? pageTotalInches;
+          }
+
+          updateMeasurementList();
+          overlay.redraw();
+          toast('Page total updated', 'info');
+        };
+        input.onkeydown = (event) => {
+          if (event.key === 'Enter') input.blur();
+        };
+      });
     }
     if (measurementTotalAggregateInfo) {
       measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
