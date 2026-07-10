@@ -18,11 +18,19 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   const existing = await prisma.projectDayAssignment.findUnique({
     where: { id },
     include: {
-      project: { select: { jobTitle: true } },
+      project: {
+        select: {
+          jobTitle: true,
+          building: { select: { address: true } },
+          workOrderRecord: { select: { siteAddress: true } },
+        },
+      },
       supervisorUser: { select: { email: true } },
     },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
 
   await prisma.projectDayAssignment.delete({ where: { id } });
 
@@ -35,6 +43,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       startTime: existing.startTime,
       endTime: existing.endTime,
       summary: `Supervising: ${existing.project.jobTitle}`,
+      location,
       organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
       organizerName: "Sueep Schedule",
       attendeeEmail: existing.supervisorUser.email,

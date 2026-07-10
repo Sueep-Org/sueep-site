@@ -59,6 +59,7 @@ export function buildDayAssignmentInvite(params: {
   endTime?: string | null;
   summary: string;
   description?: string;
+  location?: string;
   url?: string;
   organizerEmail: string;
   organizerName?: string;
@@ -93,6 +94,7 @@ export function buildDayAssignmentInvite(params: {
     dtEndLine,
     `SUMMARY:${escapeIcsText(params.summary)}`,
     ...(params.description ? [`DESCRIPTION:${escapeIcsText(params.description)}`] : []),
+    ...(params.location ? [`LOCATION:${escapeIcsText(params.location)}`] : []),
     ...(params.url ? [`URL:${escapeIcsText(params.url)}`] : []),
     `ORGANIZER;CN=${escapeIcsText(params.organizerName ?? "Sueep")}:mailto:${params.organizerEmail}`,
     `ATTENDEE;CN=${escapeIcsText(params.attendeeName ?? params.attendeeEmail)};RSVP=TRUE:mailto:${params.attendeeEmail}`,

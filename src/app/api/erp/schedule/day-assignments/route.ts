@@ -44,11 +44,23 @@ export async function POST(req: Request) {
   }
 
   const [project, supervisor] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { id: true, jobTitle: true } }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        jobTitle: true,
+        building: { select: { address: true } },
+        workOrderRecord: { select: { siteAddress: true } },
+      },
+    }),
     prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }),
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (!supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
+
+  // Building.address has far broader coverage than the work-order siteAddress
+  // (most projects are linked to a Building), so prefer it and fall back.
+  const location = project.building?.address || project.workOrderRecord?.siteAddress || undefined;
 
   // Assigning a supervisor here also makes them the project's supervisor on
   // the project details page (Project.supervisorUserId) — same field the
@@ -76,6 +88,7 @@ export async function POST(req: Request) {
       endTime: assignment.endTime,
       summary: `Supervising: ${project.jobTitle}`,
       description: appUrl ? `Project: ${project.jobTitle}\n${appUrl}/erp/projects/${projectId}` : `Project: ${project.jobTitle}`,
+      location,
       url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
       organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
       organizerName: "Sueep Schedule",
