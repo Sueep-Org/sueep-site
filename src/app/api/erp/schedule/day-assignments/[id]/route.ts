@@ -32,7 +32,13 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
 
-  await prisma.projectDayAssignment.delete({ where: { id } });
+  // Removing the planned supervisor event also clears any planned workers
+  // for that same project/day — they were only ever assigned in the context
+  // of this event, not the project as a whole.
+  await prisma.$transaction([
+    prisma.projectDayAssignment.delete({ where: { id } }),
+    prisma.projectWorkerDayAssignment.deleteMany({ where: { projectId: existing.projectId, date: existing.date } }),
+  ]);
 
   // Send a cancellation for the invite sent when this assignment was
   // created, reusing the same UID so calendar apps remove the right event.

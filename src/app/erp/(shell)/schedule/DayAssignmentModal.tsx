@@ -133,6 +133,14 @@ export function DayAssignmentModal({
       const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to remove");
       onDeleted(id);
+      // The server also clears planned workers for this project/day — mirror
+      // that here so the list doesn't show now-deleted worker assignments.
+      const deleted = existing.find((a) => a.id === id);
+      if (deleted) {
+        existingWorkers
+          .filter((w) => w.projectId === deleted.projectId && w.dateKey === deleted.dateKey)
+          .forEach((w) => onWorkerDeleted(w.id));
+      }
     } catch {
       // leave it in place; user can retry
     } finally {
