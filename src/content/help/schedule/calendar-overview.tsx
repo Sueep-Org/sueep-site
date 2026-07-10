@@ -31,10 +31,6 @@ export function ScheduleCalendarOverview() {
               <strong>Dashed chip (red):</strong> the same as above, except the day has already
               passed and it never got logged. This flags a missed assignment.
             </LI>
-            <LI>
-              <strong>Blue chip:</strong> a change order (CO), shown on its estimated start date
-              and/or any day its own crew logged work.
-            </LI>
           </UL>
           <Callout type="tip">
             A day cell only shows up to 4 chips at once. If there&apos;s more, click{" "}
@@ -47,7 +43,7 @@ export function ScheduleCalendarOverview() {
         </Step>
 
         <Step n={2} title="Hovering for details">
-          Hover over any chip to see more without clicking into the project. Solid and blue chips
+          Hover over any chip to see more without clicking into the project. Solid chips
           show hours logged and who logged them; dashed chips show who&apos;s assigned and any
           workers planned for that day.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_4.png" alt="Chip tooltip showing hours and workers" />
