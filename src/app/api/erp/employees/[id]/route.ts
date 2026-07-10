@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth, canViewEmployeeSsn } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,9 @@ export async function GET(_req: Request, ctx: Ctx) {
     include: { documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] } },
   });
   if (!employee) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(employee);
+  // ssn is only ever exposed via the dedicated, role-gated reveal endpoint.
+  const { ssn: _ssn, ...safeEmployee } = employee;
+  return NextResponse.json(safeEmployee);
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -92,6 +95,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;
+  if (body.ssn !== undefined) {
+    const auth = await getErpAuth();
+    if (!auth || !canViewEmployeeSsn(auth.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    data.ssn = body.ssn ? String(body.ssn).trim() : null;
+  }
   if (body.requiredDocuments !== undefined) {
     if (!Array.isArray(body.requiredDocuments)) {
       return NextResponse.json({ error: "requiredDocuments must be an array" }, { status: 400 });
@@ -108,7 +118,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const employee = await prisma.employee.update({ where: { id }, data });
-    return NextResponse.json(employee);
+    const { ssn: _ssn, ...safeEmployee } = employee;
+    return NextResponse.json(safeEmployee);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });

@@ -22,7 +22,7 @@ export function canSeeFinancials(role: ErpRole): boolean {
 }
 
 export function canEditEmployeePayInfo(role: ErpRole): boolean {
-  return role === "ADMIN" || role === "FINANCE";
+  return role === "ADMIN" || role === "FINANCE" || role === "PROJECT_MANAGER";
 }
 
 export function canManageUsers(role: ErpRole): boolean {
@@ -39,4 +39,8 @@ export function canEditPricing(role: ErpRole): boolean {
 
 export function canFilterScheduleBySupervisor(role: ErpRole): boolean {
   return role !== "SUPERVISOR" && role !== "EMPLOYEE";
+}
+
+export function canViewEmployeeSsn(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
 }

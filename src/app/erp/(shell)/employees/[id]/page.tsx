@@ -7,7 +7,8 @@ import { ContractSigningSection } from "@/app/erp/components/ContractSigningSect
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
-import { getErpAuth, canEditEmployeePayInfo } from "@/lib/erpAuth";
+import { EmployeeSsnSection } from "./EmployeeSsnSection";
+import { getErpAuth, canEditEmployeePayInfo, canViewEmployeeSsn } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const { id } = await params;
   const auth = await getErpAuth();
   const canSeePay = canEditEmployeePayInfo(auth?.role ?? "EMPLOYEE");
+  const canSeeSsn = canViewEmployeeSsn(auth?.role ?? "EMPLOYEE");
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -88,6 +90,10 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
               }}
             />
           ),
+        }] : []),
+        ...(canSeeSsn ? [{
+          label: "SSN",
+          content: <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />,
         }] : []),
         {
           label: "Documents",

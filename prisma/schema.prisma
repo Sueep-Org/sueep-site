@@ -740,6 +740,10 @@ model Employee {
   bankAccountNumber String?
   bankRoutingNumber String?
 
+  /// Social Security Number. Masked by default in the UI; only revealed
+  /// on-demand via a role-gated endpoint (never shipped in the initial page load).
+  ssn String?
+
   /// ADP Run employee file number for payroll export
   adpFileNumber String?
 
