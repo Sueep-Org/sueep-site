@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { ScheduleDayAssignment } from "@/lib/erp/schedule";
+import type { ScheduleDayAssignment, ScheduleWorkerAssignment } from "@/lib/erp/schedule";
 
 type ProjectOption = { id: string; jobTitle: string };
 type Supervisor = { id: string; displayName: string };
+type Employee = { id: string; displayName: string };
 
 function dateLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
@@ -32,18 +33,26 @@ export function DayAssignmentModal({
   dateKey,
   projects,
   supervisors,
+  employees,
   existing,
+  existingWorkers,
   onClose,
   onCreated,
   onDeleted,
+  onWorkerCreated,
+  onWorkerDeleted,
 }: {
   dateKey: string;
   projects: ProjectOption[];
   supervisors: Supervisor[];
+  employees: Employee[];
   existing: ScheduleDayAssignment[];
+  existingWorkers: ScheduleWorkerAssignment[];
   onClose: () => void;
   onCreated: (assignment: ScheduleDayAssignment) => void;
   onDeleted: (id: string) => void;
+  onWorkerCreated: (assignment: ScheduleWorkerAssignment) => void;
+  onWorkerDeleted: (id: string) => void;
 }) {
   const [projectId, setProjectId] = useState("");
   const [projectQuery, setProjectQuery] = useState("");
@@ -54,9 +63,19 @@ export function DayAssignmentModal({
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const [employeeId, setEmployeeId] = useState("");
+  const [employeeQuery, setEmployeeQuery] = useState("");
+  const [addingWorker, setAddingWorker] = useState(false);
+  const [workerError, setWorkerError] = useState("");
+  const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
+
   const filteredProjects = projectQuery.trim()
     ? projects.filter((p) => p.jobTitle.toLowerCase().includes(projectQuery.toLowerCase()))
     : projects;
+
+  const filteredEmployees = employeeQuery.trim()
+    ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
+    : employees;
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -121,13 +140,55 @@ export function DayAssignmentModal({
     }
   }
 
+  async function handleAddWorker() {
+    setWorkerError("");
+    if (!projectId) {
+      setWorkerError("Pick a project above first");
+      return;
+    }
+    if (!employeeId) {
+      setWorkerError("Pick a worker");
+      return;
+    }
+    setAddingWorker(true);
+    try {
+      const res = await fetch("/api/erp/schedule/worker-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, employeeId, date: dateKey }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { id: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to assign worker");
+      onWorkerCreated({ id: data.id, projectId, employeeId, dateKey });
+      setEmployeeId("");
+      setEmployeeQuery("");
+    } catch (err) {
+      setWorkerError(err instanceof Error ? err.message : "Failed to assign worker");
+    } finally {
+      setAddingWorker(false);
+    }
+  }
+
+  async function handleDeleteWorker(id: string) {
+    setDeletingWorkerId(id);
+    try {
+      const res = await fetch(`/api/erp/schedule/worker-assignments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+      onWorkerDeleted(id);
+    } catch {
+      // leave it in place; user can retry
+    } finally {
+      setDeletingWorkerId(null);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Assign supervisor</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Assign to this day</h2>
         <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
 
         {existing.length > 0 ? (
@@ -248,10 +309,92 @@ export function DayAssignmentModal({
               disabled={saving}
               className="flex-1 rounded bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              {saving ? "Assigning..." : "Assign"}
+              {saving ? "Assigning..." : "Assign supervisor"}
             </button>
           </div>
         </form>
+
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <label className="block text-xs font-medium text-gray-600">Workers scheduled</label>
+          {existingWorkers.length > 0 ? (
+            <ul className="mt-1.5 space-y-1.5">
+              {existingWorkers.map((w) => {
+                const project = projects.find((p) => p.id === w.projectId);
+                const employee = employees.find((e) => e.id === w.employeeId);
+                return (
+                  <li
+                    key={w.id}
+                    className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs"
+                  >
+                    <span className="truncate">
+                      <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
+                      <span className="text-gray-500"> — {employee?.displayName ?? "Unknown worker"}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteWorker(w.id)}
+                      disabled={deletingWorkerId === w.id}
+                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-50"
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-1.5 text-xs text-gray-400">No workers scheduled yet for this day.</p>
+          )}
+
+          <p className="mt-3 text-[11px] text-gray-400">
+            Uses the project selected above. Not emailed — for planning only.
+          </p>
+          <div className="mt-1.5 flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={employeeId ? employees.find((e) => e.id === employeeId)?.displayName ?? "" : employeeQuery}
+                onChange={(e) => {
+                  setEmployeeQuery(e.target.value);
+                  setEmployeeId("");
+                }}
+                placeholder="Search workers..."
+                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+              />
+              {employeeQuery && !employeeId ? (
+                <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                  {filteredEmployees.slice(0, 8).map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => {
+                        setEmployeeId(e.id);
+                        setEmployeeQuery(e.displayName);
+                      }}
+                      className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
+                    >
+                      {e.displayName}
+                    </button>
+                  ))}
+                  {filteredEmployees.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-gray-400">No matching workers</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={handleAddWorker}
+              disabled={addingWorker}
+              className="shrink-0 rounded bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600 disabled:opacity-50"
+            >
+              {addingWorker ? "Adding..." : "Add"}
+            </button>
+          </div>
+          {workerError ? (
+            <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{workerError}</div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import {
   type ScheduleChangeOrder,
   type ScheduleDayAssignment,
   type ScheduleProject,
+  type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
 
@@ -117,6 +118,7 @@ function monthLabel(d: Date): string {
 }
 
 type Supervisor = { id: string; displayName: string };
+type Employee = { id: string; displayName: string };
 
 export function SchedulePlanner({
   projects,
@@ -124,12 +126,16 @@ export function SchedulePlanner({
   changeOrders,
   initialDayAssignments,
   canFilterBySupervisor,
+  employees,
+  initialWorkerAssignments,
 }: {
   projects: ScheduleProject[];
   supervisors: Supervisor[];
   changeOrders: ScheduleChangeOrder[];
   initialDayAssignments: ScheduleDayAssignment[];
   canFilterBySupervisor: boolean;
+  employees: Employee[];
+  initialWorkerAssignments: ScheduleWorkerAssignment[];
 }) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
@@ -164,6 +170,10 @@ export function SchedulePlanner({
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+
+  // Planned worker (crew) assignments — same local-state pattern as supervisor
+  // day assignments, but no invite email is sent for these.
+  const [workerAssignments, setWorkerAssignments] = useState(initialWorkerAssignments);
 
   // "+N more" popover — lists everything on a day without needing the full
   // assign-a-supervisor modal. Only one open at a time, closes on outside click.
@@ -595,6 +605,8 @@ export function SchedulePlanner({
                     <ul className="mt-1 space-y-1">
                       {visibleProjects.map((p) => {
                         const summary = p.laborByDay[k];
+                        const loggedWorkers = new Set(summary?.workers ?? []);
+                        const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
                         return (
                           <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <Link
@@ -615,6 +627,9 @@ export function SchedulePlanner({
                                     ) : null}
                                   </>
                                 ) : null}
+                                {plannedWorkers.length > 0 ? (
+                                  <div className="mt-1 text-gray-300">Planned: {plannedWorkers.join(", ")}</div>
+                                ) : null}
                               </div>
                             ) : null}
                           </li>
@@ -622,11 +637,17 @@ export function SchedulePlanner({
                       })}
                       {visiblePlanned.map(({ assignment, project }) => {
                         const isOverdue = !isFutureOrToday;
+                        const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
+                        const baseTitle = isOverdue
+                          ? `${project.jobTitle} — scheduled but never logged`
+                          : `${project.jobTitle} — planned, not yet logged`;
+                        const chipTitle =
+                          plannedWorkers.length > 0 ? `${baseTitle}\nPlanned workers: ${plannedWorkers.join(", ")}` : baseTitle;
                         return (
                         <li key={`plan-${assignment.id}`} className="relative">
                           <Link
                             href={`/erp/projects/${project.id}`}
-                            title={isOverdue ? `${project.jobTitle} — scheduled but never logged` : `${project.jobTitle} — planned, not yet logged`}
+                            title={chipTitle}
                             className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
@@ -891,7 +912,9 @@ export function SchedulePlanner({
           dateKey={openDayKey}
           projects={projects}
           supervisors={supervisors}
+          employees={employees}
           existing={plannedByDay.get(openDayKey) ?? []}
+          existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
           onClose={() => setOpenDayKey(null)}
           onCreated={(a) => {
             setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
@@ -900,6 +923,8 @@ export function SchedulePlanner({
             setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
           }}
           onDeleted={(id) => setDayAssignments((prev) => prev.filter((a) => a.id !== id))}
+          onWorkerCreated={(a) => setWorkerAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a])}
+          onWorkerDeleted={(id) => setWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
         />
       ) : null}
     </div>

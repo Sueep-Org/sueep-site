@@ -77,6 +77,7 @@ model Project {
   safetyIncidents SafetyIncident[]
   sov ProjectSOV?
   dayAssignments ProjectDayAssignment[]
+  workerDayAssignments ProjectWorkerDayAssignment[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -659,6 +660,30 @@ model ProjectDayAssignment {
   @@index([supervisorUserId])
 }
 
+/// A worker planned to be on a project on a future day, before any labor is
+/// logged — same idea as ProjectDayAssignment but for crew (Employee) rather
+/// than supervisors, and multiple per project/day since a crew has more than
+/// one person. No notification is sent when these are created (unlike the
+/// supervisor calendar invite) — may be added later.
+model ProjectWorkerDayAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// The calendar date this assignment is for (stored as midnight UTC)
+  date DateTime
+
+  @@unique([projectId, employeeId, date])
+  @@index([date])
+  @@index([employeeId])
+}
+
 model Employee {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -698,6 +723,7 @@ model Employee {
   documents EmployeeDocument[]
   laborAssignments LaborAssignment[]
   projectLaborAssignments ProjectLaborAssignment[]
+  workerDayAssignments ProjectWorkerDayAssignment[]
   changeOrderAssignments ProjectChangeOrderLaborer[]
   contracts EmployeeContract[]
   safetyCheckWorkers SafetyCheckWorker[]

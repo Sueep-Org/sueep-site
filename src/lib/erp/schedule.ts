@@ -58,6 +58,8 @@ export type ScheduleProject = {
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, keyed by the same day keys as workDayKeys — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
+  /** Planned (not-yet-logged) worker names per day, from ProjectWorkerDayAssignment. */
+  plannedWorkersByDay: Record<string, string[]>;
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
@@ -84,6 +86,17 @@ export type ScheduleDayAssignment = {
   /** Optional "HH:MM" (24h) local times — all-day on the calendar invite if either is unset. */
   startTime: string | null;
   endTime: string | null;
+};
+
+/** A worker (Employee) planned to be on a project on a future day — same
+ * idea as ScheduleDayAssignment but for crew rather than supervisors, and
+ * there can be several per project/day. */
+export type ScheduleWorkerAssignment = {
+  id: string;
+  projectId: string;
+  employeeId: string;
+  /** Day key (YYYY-MM-DD) this assignment is for. */
+  dateKey: string;
 };
 
 export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {
