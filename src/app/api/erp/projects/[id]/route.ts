@@ -115,6 +115,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.estimatedDays =
       body.estimatedDays === null || body.estimatedDays === "" ? null : Math.round(Number(body.estimatedDays));
   }
+  if (body.commissionPaid !== undefined) {
+    data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+  }
+  if (body.commissionEmployeeId !== undefined) {
+    data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;
+  }
 
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });

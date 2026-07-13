@@ -64,6 +64,13 @@ const CHANGE_ORDER_LABEL = "Change order (CO)";
 const PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-gray-500";
 const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
 
+// A project with a future (or today's) start date that has never had a
+// supervisor assigned and has no logged work at all — solid, loud, and
+// rendered above everything else in the cell so it can't be missed or
+// buried behind "+N more" the way a low-priority item could be.
+const NEEDS_SUPERVISOR_CHIP_CLASS =
+  "flex items-center gap-1 truncate rounded border-2 border-amber-600 bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-950 shadow transition-colors hover:bg-amber-300";
+
 // Muted, pastel-ish colors keyed by calendar group — used for the
 // month-calendar chips, which need to read as a scannable legend rather than
 // compete for attention the way the status-colored Gantt bars do.
@@ -168,6 +175,7 @@ export function SchedulePlanner({
   // state so create/delete reflect immediately without a full page reload.
   const [dayAssignments, setDayAssignments] = useState(initialDayAssignments);
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
+  const [openDayInitialProjectId, setOpenDayInitialProjectId] = useState<string | null>(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
@@ -333,6 +341,32 @@ export function SchedulePlanner({
     }
     return map;
   }, [changeOrders]);
+
+  // Projects starting today or later that have never had a supervisor
+  // assigned and have no logged work yet — otherwise these are invisible on
+  // the calendar until someone happens to notice and assign a supervisor.
+  // Anchored to the project's own start date since there's no day
+  // assignment or labor log to place them by.
+  const needsSupervisorByDay = useMemo(() => {
+    const map = new Map<string, ScheduleProject[]>();
+    const todayK = dayKey(new Date());
+    for (const p of projects) {
+      // Reads through supervisorOverrides (not just p.supervisorUserId) so
+      // the alert disappears the moment a supervisor is assigned, instead of
+      // waiting on a full page refresh.
+      const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
+      if (supervisorId) continue;
+      if (p.workDayKeys.length > 0) continue;
+      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
+      if (!p.projectDate) continue;
+      const k = dayKey(new Date(p.projectDate));
+      if (k < todayK) continue;
+      const list = map.get(k) ?? [];
+      list.push(p);
+      map.set(k, list);
+    }
+    return map;
+  }, [projects, supervisorOverrides]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -542,6 +576,9 @@ export function SchedulePlanner({
                 let dayProjects = projectsByDay.get(k) ?? [];
                 let dayPlannedRaw = plannedByDay.get(k) ?? [];
                 let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
+                // Unassigned by definition, so a supervisor filter can never
+                // match one — hide rather than show under the wrong supervisor.
+                let dayNeedsSupervisor = selectedSupervisorId ? [] : needsSupervisorByDay.get(k) ?? [];
 
                 if (selectedSupervisorId) {
                   dayProjects = dayProjects.filter(
@@ -559,6 +596,7 @@ export function SchedulePlanner({
                   const project = projectById.get(a.projectId);
                   return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
                 });
+                dayNeedsSupervisor = dayNeedsSupervisor.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
 
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
                 // Planned assignments are only shown when there's no confirmed
@@ -594,7 +632,10 @@ export function SchedulePlanner({
                       {isFutureOrToday ? (
                         <button
                           type="button"
-                          onClick={() => setOpenDayKey(k)}
+                          onClick={() => {
+                            setOpenDayKey(k);
+                            setOpenDayInitialProjectId(null);
+                          }}
                           title="Assign a supervisor to a project on this day"
                           className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-bold leading-none text-gray-400 hover:border-pink-400 hover:bg-pink-50 hover:text-pink-500"
                         >
@@ -602,6 +643,34 @@ export function SchedulePlanner({
                         </button>
                       ) : null}
                     </div>
+                    {dayNeedsSupervisor.length > 0 ? (
+                      <ul className="mt-1 space-y-1">
+                        {dayNeedsSupervisor.map((p) => (
+                          <li key={`needs-${p.id}`} className={inMonth ? "group relative" : "relative"}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenDayKey(k);
+                                setOpenDayInitialProjectId(p.id);
+                              }}
+                              className={`w-full ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
+                            >
+                              <span aria-hidden>⚠</span>
+                              <span className="truncate">{p.jobTitle}</span>
+                            </button>
+                            {inMonth ? (
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                <div className="font-semibold">{p.jobTitle}</div>
+                                <div className="text-amber-300">
+                                  {isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                                </div>
+                                <div className="mt-1 text-gray-300">Click to assign one</div>
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     <ul className="mt-1 space-y-1">
                       {visibleProjects.map((p) => {
                         const summary = p.laborByDay[k];
@@ -802,6 +871,12 @@ export function SchedulePlanner({
                 Red dashed = scheduled but never logged
               </div>
             ) : null}
+            {needsSupervisorByDay.size > 0 ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
+                ⚠ = starting soon, needs a supervisor
+              </div>
+            ) : null}
           </div>
         ) : null}
       </CollapsibleSection>
@@ -922,7 +997,11 @@ export function SchedulePlanner({
           employees={employees}
           existing={plannedByDay.get(openDayKey) ?? []}
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
-          onClose={() => setOpenDayKey(null)}
+          initialProjectId={openDayInitialProjectId ?? undefined}
+          onClose={() => {
+            setOpenDayKey(null);
+            setOpenDayInitialProjectId(null);
+          }}
           onCreated={(a) => {
             setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
             // Assigning here also sets the project's supervisor server-side —

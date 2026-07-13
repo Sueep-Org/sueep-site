@@ -36,6 +36,7 @@ export function DayAssignmentModal({
   employees,
   existing,
   existingWorkers,
+  initialProjectId,
   onClose,
   onCreated,
   onDeleted,
@@ -48,14 +49,18 @@ export function DayAssignmentModal({
   employees: Employee[];
   existing: ScheduleDayAssignment[];
   existingWorkers: ScheduleWorkerAssignment[];
+  /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
+  initialProjectId?: string;
   onClose: () => void;
   onCreated: (assignment: ScheduleDayAssignment) => void;
   onDeleted: (id: string) => void;
   onWorkerCreated: (assignment: ScheduleWorkerAssignment) => void;
   onWorkerDeleted: (id: string) => void;
 }) {
-  const [projectId, setProjectId] = useState("");
-  const [projectQuery, setProjectQuery] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId ?? "");
+  const [projectQuery, setProjectQuery] = useState(
+    () => projects.find((p) => p.id === initialProjectId)?.jobTitle ?? ""
+  );
   const [supervisorUserId, setSupervisorUserId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");

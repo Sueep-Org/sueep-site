@@ -99,7 +99,17 @@ model Project {
   hubspotOwnerName  String?
   hubspotOwnerEmail String?
 
+  /// Sales commission (flat 10% of contractValueCents) is marked paid here.
+  /// The salesperson defaults to matching hubspotOwnerEmail/hubspotOwnerName
+  /// to an Employee, but that match can be wrong (e.g. the HubSpot deal
+  /// owner is an estimator, not the salesperson who should get credit) —
+  /// commissionEmployeeId lets that be overridden per project.
+  commissionPaidAt    DateTime?
+  commissionEmployeeId String?
+  commissionEmployee   Employee? @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+
   @@index([segment])
+  @@index([commissionEmployeeId])
   @@index([status])
   @@index([projectDate])
 }
@@ -762,6 +772,7 @@ model Employee {
   contracts EmployeeContract[]
   safetyCheckWorkers SafetyCheckWorker[]
   safetyIncidents SafetyIncident[]
+  commissionProjects Project[]
 
   @@index([status])
   @@index([defaultProject])

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canEditEmployeePayInfo } from "@/lib/erpAuth";
+import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
@@ -28,6 +29,7 @@ import { RealEstatePricingPackageEditor } from "./RealEstatePricingPackageEditor
 import { NewQualityCheckForm } from "@/app/erp/(shell)/quality-checks/NewQualityCheckForm";
 import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChecksTable";
 import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSigningSection";
+import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +42,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
+  const canSeeCommission = auth ? canEditEmployeePayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -138,8 +141,25 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         project: { select: { id: true, jobTitle: true } },
       },
     }),
+    prisma.erpUser.findMany({ select: { email: true } }),
   ]);
   if (!project) notFound();
+
+  // Commission owner must be someone with an ERP login — most Employee rows
+  // are crew (painters/cleaners) with no ErpUser account at all.
+  const erpUserEmails = new Set(erpUsers.map((u) => u.email.toLowerCase()));
+  const commissionEligibleEmployees = laborEmployees.filter(
+    (e) => e.email && erpUserEmails.has(e.email.toLowerCase())
+  );
+
+  // What the editor's "Auto" option resolves to absent an explicit override
+  // — same resolver the Employee "Commission" tab uses, so the two always agree.
+  const autoMatchedEmployeeId = resolveCommissionEmployeeId(
+    { commissionEmployeeId: null, hubspotOwnerEmail: project.hubspotOwnerEmail, hubspotOwnerName: project.hubspotOwnerName },
+    commissionEligibleEmployees
+  );
+  const autoMatchedCommissionEmployee =
+    commissionEligibleEmployees.find((e) => e.id === autoMatchedEmployeeId) ?? null;
 
   // Resolve display names for ERP supervisors from employee records
   const erpSupervisors = await Promise.all(
@@ -654,6 +674,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   </a>
                 )}
               </p>
+            )}
+            {canSeeCommission && (
+              <ProjectCommissionOwnerEditor
+                projectId={project.id}
+                employees={commissionEligibleEmployees.map((e) => ({ id: e.id, firstName: e.firstName, lastName: e.lastName }))}
+                commissionEmployeeId={project.commissionEmployeeId}
+                autoMatchedEmployee={autoMatchedCommissionEmployee}
+              />
             )}
           </div>
           {!isSupervisor && !isEmployee && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
