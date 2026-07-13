@@ -2,6 +2,7 @@
 
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
+import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
 
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
@@ -55,6 +56,16 @@ function janitorialRowDescription(_row: ProjectTableRow) {
   return null;
 }
 
+// WIP (active) first, then upcoming, then completed — matches the order
+// David works units in: finish what's in progress, then what's coming up,
+// with wrapped-up units sorted to the bottom out of the way.
+function lifecycleRank(row: ProjectTableRow): number {
+  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate);
+  if (lifecycle === "ACTIVE") return 0;
+  if (lifecycle === "UPCOMING") return 1;
+  return 2;
+}
+
 export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
   // Legacy: projects created before one-per-unit architecture may have multiple units in
   // description — expand those into separate display rows for backward compatibility.
@@ -78,10 +89,13 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
 
   const visibleRows = expandedRows
     .sort((a, b) => {
-      const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));
+      const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b), undefined, { numeric: true });
       if (buildingCompare !== 0) return buildingCompare;
 
-      return a.jobTitle.localeCompare(b.jobTitle);
+      const rankCompare = lifecycleRank(a) - lifecycleRank(b);
+      if (rankCompare !== 0) return rankCompare;
+
+      return janitorialRowTitle(a).localeCompare(janitorialRowTitle(b), undefined, { numeric: true });
     });
 
   return (

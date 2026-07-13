@@ -359,7 +359,13 @@ export function SchedulePlanner({
       if (p.workDayKeys.length > 0) continue;
       if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
       if (!p.projectDate) continue;
-      const k = dayKey(new Date(p.projectDate));
+      // projectDate is stored as UTC midnight for the intended calendar day
+      // (e.g. "2026-07-27T00:00:00.000Z" means July 27, full stop) — slicing
+      // the ISO string directly reads that day back out. Routing it through
+      // `new Date(...)` + dayKey() instead would re-interpret it in the
+      // browser's local timezone, shifting it a day earlier for anyone west
+      // of UTC (confirmed: shifted 7/27 to 7/26 in America/New_York).
+      const k = p.projectDate.slice(0, 10);
       if (k < todayK) continue;
       const list = map.get(k) ?? [];
       list.push(p);
