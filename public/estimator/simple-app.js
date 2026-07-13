@@ -634,19 +634,10 @@ async function initApp(){
     const numericMatch = normalized.match(/((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?=\s*(?:sf|sq\.?\s*ft|sqft|square feet|square footage)\b)/i);
     if (!numericMatch) return null;
 
-    let labelText = normalized
+    const labelText = normalized
       .replace(numericMatch[0], '')
       .replace(unitMatch[0], '')
       .replace(/[:\-–—]/g, ' ')
-      .trim();
-
-    labelText = labelText
-      .replace(/\b(?:total\s+)?building\s+area\b/i, 'Total Building Area')
-      .replace(/\b(?:total\s+)?building\s+gross\s+area\b/i, 'Total Building Area')
-      .replace(/\b(?:total\s+)?gross\s+area\b/i, 'Gross Area')
-      .replace(/\b(?:total\s+)?site\s+area\b/i, 'Site Area')
-      .replace(/\b(?:total\s+)?area\b/i, 'Area')
-      .replace(/\s+/g, ' ')
       .trim();
 
     if (!labelText || /^(total|area|square feet|sq ft|sf|project data|code summary)$/i.test(labelText)) {
@@ -744,13 +735,15 @@ async function initApp(){
         <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
         <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
       </div>
-      <div class="space-y-2">
-        ${meta.extractedMeasurements.map((row) => `
-          <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-            <div class="text-[11px] text-gray-500">${escapeHtml(row.label)}</div>
-            <div class="text-sm text-gray-800 font-semibold">${escapeHtml(row.value)}${row.page ? ` <span class="text-[10px] text-gray-400">p${row.page}</span>` : ''}</div>
-          </div>
-        `).join('')}
+      <div class="max-h-48 overflow-y-auto pr-1">
+        <div class="space-y-2">
+          ${meta.extractedMeasurements.map((row) => `
+            <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
+              <div class="text-[11px] text-gray-500">${escapeHtml(row.label)}</div>
+              <div class="text-sm text-gray-800 font-semibold">${escapeHtml(row.value)}${row.page ? ` <span class="text-[10px] text-gray-400">p${row.page}</span>` : ''}</div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
