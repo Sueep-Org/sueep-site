@@ -23,6 +23,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
       select: {
         id: true,
         jobTitle: true,
+        segment: true,
         contractValueCents: true,
         actualLaborCents: true,
         actualMaterialCents: true,
@@ -31,6 +32,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
         hubspotOwnerEmail: true,
         hubspotOwnerName: true,
         projectDate: true,
+        projectEndDate: true,
         createdAt: true,
         laborEntries: {
           select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true },
@@ -73,12 +75,14 @@ export default async function CommissionPage({ searchParams }: PageProps) {
     return {
       projectId: p.id,
       jobTitle: p.jobTitle,
+      segment: p.segment,
       ownerId,
       ownerName: owner ? `${owner.firstName} ${owner.lastName}`.trim() : null,
       contractValueCents: p.contractValueCents!,
       marginCents: margin?.marginCents ?? null,
       commissionCents: commissionCentsByDeal.get(p.id) ?? 0,
       paidAt: p.commissionPaidAt ? p.commissionPaidAt.toISOString() : null,
+      completedAt: (p.projectEndDate ?? p.projectDate ?? p.createdAt).toISOString(),
       year: yearByDeal.get(p.id)!,
     };
   });

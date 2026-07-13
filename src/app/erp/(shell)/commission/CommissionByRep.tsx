@@ -1,20 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
+import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 
 export type CommissionDealRow = {
   projectId: string;
   jobTitle: string;
+  segment: string;
   ownerName: string | null;
   contractValueCents: number;
   marginCents: number | null;
   commissionCents: number;
   paidAt: string | null;
+  completedAt: string;
 };
+
+// Same calendar-style grouping the Schedule page uses — painting/cleaning
+// folded into one "Post-construction" bucket rather than shown separately.
+type ProjectTypeGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
+
+const SEGMENT_TO_TYPE_GROUP: Record<ProjectSegment, ProjectTypeGroup> = {
+  COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
+  COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
+  CHANGE_ORDER: "OTHER",
+  JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
+  REAL_ESTATE: "REAL_ESTATE",
+  OTHER: "OTHER",
+};
+
+const PROJECT_TYPE_OPTIONS: { value: ProjectTypeGroup; label: string }[] = [
+  { value: "POST_CONSTRUCTION", label: "Post-construction" },
+  { value: "JANITORIAL_TURNOVER_REQUESTS", label: "Janitorial" },
+  { value: "REAL_ESTATE", label: "Real estate" },
+  { value: "OTHER", label: "Other" },
+];
+
+const ALL_PROJECT_TYPES = PROJECT_TYPE_OPTIONS.map((o) => o.value);
+
+function projectTypeGroup(segment: string): ProjectTypeGroup {
+  return SEGMENT_TO_TYPE_GROUP[normalizeProjectSegment(segment)];
+}
 
 export type RepGroup = {
   ownerId: string | null;
@@ -26,10 +55,82 @@ export type RepGroup = {
 };
 
 type PaidFilter = "all" | "paid" | "unpaid";
+type SortKey = "date" | "margin" | "commission";
+type SortState = { key: SortKey; dir: "asc" | "desc" };
 
 function marginPercentOf(row: CommissionDealRow): number | null {
   if (row.marginCents == null || row.contractValueCents === 0) return null;
   return (row.marginCents / row.contractValueCents) * 100;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+function sortValue(row: CommissionDealRow, key: SortKey): number {
+  if (key === "date") return new Date(row.completedAt).getTime();
+  if (key === "margin") return row.marginCents ?? -Infinity;
+  return row.commissionCents;
+}
+
+const SORT_OPTIONS: { value: SortState; label: string }[] = [
+  { value: { key: "commission", dir: "desc" }, label: "Commission: High to low" },
+  { value: { key: "commission", dir: "asc" }, label: "Commission: Low to high" },
+  { value: { key: "margin", dir: "desc" }, label: "Margin: High to low" },
+  { value: { key: "margin", dir: "asc" }, label: "Margin: Low to high" },
+  { value: { key: "date", dir: "desc" }, label: "Date: Newest first" },
+  { value: { key: "date", dir: "asc" }, label: "Date: Oldest first" },
+];
+
+function SortPopover({ sort, onChange }: { sort: SortState; onChange: (v: SortState) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Sort"
+        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 transition-colors hover:border-gray-300"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h11M3 12h7.5M3 16.5h4M16.5 6v12m0 0l-3.5-3.5M16.5 18l3.5-3.5" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-52 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Sort by</p>
+          <div className="mt-1.5 space-y-1">
+            {SORT_OPTIONS.map((opt) => (
+              <label key={opt.label} className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="radio"
+                  name="commission-sort"
+                  checked={sort.key === opt.value.key && sort.dir === opt.value.dir}
+                  onChange={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className="h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function YearTabs({ years, selectedYear }: { years: number[]; selectedYear: number }) {
@@ -51,103 +152,177 @@ function YearTabs({ years, selectedYear }: { years: number[]; selectedYear: numb
   );
 }
 
-function SegmentedControl<T extends string>({
-  value,
-  options,
-  onChange,
+function FilterPopover({
+  paidFilter,
+  onPaidFilterChange,
+  selectedTypes,
+  onToggleType,
+  onClear,
 }: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
+  paidFilter: PaidFilter;
+  onPaidFilterChange: (v: PaidFilter) => void;
+  selectedTypes: Set<ProjectTypeGroup>;
+  onToggleType: (t: ProjectTypeGroup) => void;
+  onClear: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const filtersActive = paidFilter !== "all" || selectedTypes.size < ALL_PROJECT_TYPES.length;
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
   return (
-    <div className="flex gap-0.5 rounded-md bg-gray-100 p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-            value === o.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Filter"
+        className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+          filtersActive ? "border-pink-300 bg-pink-50 text-pink-600" : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+        }`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h18M6.75 12h10.5M10.5 19.5h3" />
+        </svg>
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Paid status</p>
+          <div className="mt-1.5 space-y-1">
+            {([
+              { value: "all", label: "All" },
+              { value: "unpaid", label: "Unpaid" },
+              { value: "paid", label: "Paid" },
+            ] as const).map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="radio"
+                  name="commission-paid-filter"
+                  checked={paidFilter === opt.value}
+                  onChange={() => onPaidFilterChange(opt.value)}
+                  className="h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+
+          <div className="my-3 border-t border-gray-100" />
+
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Project type</p>
+          <div className="mt-1.5 space-y-1">
+            {PROJECT_TYPE_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={selectedTypes.has(opt.value)}
+                  onChange={() => onToggleType(opt.value)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-400"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+
+          {filtersActive ? (
+            <button
+              type="button"
+              onClick={onClear}
+              className="mt-3 w-full rounded border border-gray-200 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function RevenueLine({ revenueCents }: { revenueCents: number }) {
   const overThreshold = revenueCents > ANNUAL_ACCELERATOR_THRESHOLD_CENTS;
+  const pct = Math.min(100, (revenueCents / ANNUAL_ACCELERATOR_THRESHOLD_CENTS) * 100);
   return (
-    <span className="text-xs text-gray-500">
-      {centsToDollars(revenueCents)} closed this year
-      {overThreshold ? (
-        <span className="ml-1 font-semibold text-pink-600">· accelerator active</span>
-      ) : (
-        <span className="ml-1">of {centsToDollars(ANNUAL_ACCELERATOR_THRESHOLD_CENTS)} threshold</span>
-      )}
-    </span>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500">
+        {centsToDollars(revenueCents)} paid this year
+        {overThreshold ? (
+          <span className="ml-1 font-semibold text-pink-600">· accelerator active</span>
+        ) : (
+          <span className="ml-1">of {centsToDollars(ANNUAL_ACCELERATOR_THRESHOLD_CENTS)} threshold</span>
+        )}
+      </span>
+      <div className="h-1 w-16 overflow-hidden rounded-full bg-gray-200">
+        <div className={`h-full rounded-full ${overThreshold ? "bg-pink-600" : "bg-gray-400"}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function OwedPaidStats({ totalCents, paidCents }: { totalCents: number; paidCents: number }) {
+  const unpaidCents = totalCents - paidCents;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs tabular-nums text-gray-700">{centsToDollars(unpaidCents)} unpaid</span>
+      <span className="text-xs tabular-nums text-emerald-600">{centsToDollars(paidCents)} paid</span>
+    </div>
   );
 }
 
 function RepPanel({
   yearRevenueCents,
   deals,
-  onMarkAllPaid,
   onTogglePaid,
   savingId,
 }: {
   yearRevenueCents: number;
   deals: CommissionDealRow[];
-  onMarkAllPaid: () => void;
   onTogglePaid: (row: CommissionDealRow) => void;
   savingId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
+  const [selectedTypes, setSelectedTypes] = useState<Set<ProjectTypeGroup>>(() => new Set(ALL_PROJECT_TYPES));
+  const [sort, setSort] = useState<SortState>({ key: "commission", dir: "desc" });
+
+  function toggleType(t: ProjectTypeGroup) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  }
 
   const totalCents = deals.reduce((s, d) => s + d.commissionCents, 0);
   const paidCents = deals.filter((d) => d.paidAt).reduce((s, d) => s + d.commissionCents, 0);
-  const unpaidCents = totalCents - paidCents;
 
   const query = search.trim().toLowerCase();
   const visibleDeals = deals
     .filter((d) => !query || d.jobTitle.toLowerCase().includes(query))
     .filter((d) => paidFilter === "all" || (paidFilter === "paid" ? !!d.paidAt : !d.paidAt))
-    .sort((a, b) => b.commissionCents - a.commissionCents);
+    .filter((d) => selectedTypes.has(projectTypeGroup(d.segment)))
+    .sort((a, b) => (sort.dir === "desc" ? sortValue(b, sort.key) - sortValue(a, sort.key) : sortValue(a, sort.key) - sortValue(b, sort.key)));
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-        <div className="space-y-1">
-          <div className="flex gap-5 text-sm">
-            <span className="tabular-nums text-gray-700">{centsToDollars(totalCents)} owed</span>
-            <span className="tabular-nums text-gray-500">{centsToDollars(paidCents)} paid</span>
-          </div>
-          <RevenueLine revenueCents={yearRevenueCents} />
-        </div>
-        {unpaidCents > 0 ? (
-          <button
-            type="button"
-            onClick={onMarkAllPaid}
-            className="rounded-full border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-700 hover:bg-pink-100"
-          >
-            Mark {centsToDollars(unpaidCents)} paid
-          </button>
-        ) : (
-          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            All paid
-          </span>
-        )}
+      <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+        <OwedPaidStats totalCents={totalCents} paidCents={paidCents} />
+        <RevenueLine revenueCents={yearRevenueCents} />
       </div>
 
       {deals.length === 0 ? (
         <p className="text-sm text-gray-400">No deals.</p>
       ) : (
         <div className="rounded-lg border border-gray-200 bg-white">
-          <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-3 py-2">
+          <div className="flex items-center gap-3 border-b border-gray-100 px-3 py-2">
             <input
               type="text"
               value={search}
@@ -155,15 +330,19 @@ function RepPanel({
               placeholder="Search projects…"
               className="w-52 rounded-md border border-gray-300 px-2.5 py-1 text-sm focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
             />
-            <SegmentedControl
-              value={paidFilter}
-              onChange={setPaidFilter}
-              options={[
-                { value: "all", label: "All" },
-                { value: "unpaid", label: "Unpaid" },
-                { value: "paid", label: "Paid" },
-              ]}
-            />
+            <div className="ml-auto flex items-center gap-2">
+              <SortPopover sort={sort} onChange={setSort} />
+              <FilterPopover
+                paidFilter={paidFilter}
+                onPaidFilterChange={setPaidFilter}
+                selectedTypes={selectedTypes}
+                onToggleType={toggleType}
+                onClear={() => {
+                  setPaidFilter("all");
+                  setSelectedTypes(new Set(ALL_PROJECT_TYPES));
+                }}
+              />
+            </div>
           </div>
 
           {visibleDeals.length === 0 ? (
@@ -174,6 +353,7 @@ function RepPanel({
                 <thead>
                   <tr className="text-xs font-medium text-gray-500">
                     <th className="px-3 py-2 text-left">Project</th>
+                    <th className="px-3 py-2 text-right">Date</th>
                     <th className="px-3 py-2 text-right">Contract</th>
                     <th className="px-3 py-2 text-right">Margin</th>
                     <th className="px-3 py-2 text-right">Rate</th>
@@ -192,6 +372,7 @@ function RepPanel({
                             {d.jobTitle}
                           </Link>
                         </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
                         <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
                           {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
@@ -266,11 +447,6 @@ export function CommissionByRep({
     }
   }
 
-  async function markAllPaid(ownerKey: string) {
-    const unpaid = (dealsByOwner[ownerKey] ?? []).filter((d) => !d.paidAt);
-    await Promise.all(unpaid.map((d) => setPaid(d, ownerKey, true)));
-  }
-
   const totalCommission = reps.reduce((s, r) => s + r.totalCommissionCents, 0);
   const totalPaid = reps.reduce((s, r) => s + r.paidCommissionCents, 0);
 
@@ -300,7 +476,6 @@ export function CommissionByRep({
                   deals={dealsByOwner[key] ?? []}
                   savingId={savingId}
                   onTogglePaid={(row) => setPaid(row, key, !row.paidAt)}
-                  onMarkAllPaid={() => markAllPaid(key)}
                 />
               ),
             };
