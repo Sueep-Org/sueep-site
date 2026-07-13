@@ -374,6 +374,7 @@ async function initApp(){
         if (data.annotations) {
           highlightsStore.deserialize(JSON.stringify(data.annotations));
           overlay.redraw();
+          updateMeasurementList();
           return;
         }
       }
@@ -381,6 +382,7 @@ async function initApp(){
     const json = localStorage.getItem(`annotations_${projectId}`);
     if (json) highlightsStore.deserialize(json);
     overlay.redraw();
+    updateMeasurementList();
   };
 
   if (downloadPdfBtn) {
@@ -1964,13 +1966,29 @@ async function initApp(){
       refreshDistanceBtn.textContent = '↻ Refreshing...';
       refreshDistanceBtn.disabled = true;
       try {
-        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, { method: 'POST' });
+        const isEditMode = document.getElementById('analysisEditForm')?.style.display !== 'none';
+        const body = {};
+        if (isEditMode) {
+          const addrInput = document.getElementById('analysisAddressInput')?.value?.trim();
+          const startSel = document.getElementById('startAddressSelect');
+          const startCustom = document.getElementById('startAddressInput');
+          if (addrInput) body.address = addrInput;
+          if (startSel?.value === 'custom' && startCustom?.value?.trim()) body.start_address = startCustom.value.trim();
+        }
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
         if (!r.ok) throw new Error('Failed to refresh');
         const data = await r.json();
         const di = data.driving_info || {};
         const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
         setText('detailDistance', di.distance);
         setText('detailDuration', di.duration);
+        setText('editDriveDistance', di.distance);
+        setText('editDriveTime', di.duration);
+        if (_loadedProjectData) _loadedProjectData.driving_info = di;
         toast('Distance updated', 'info');
       } catch (e) {
         toast(e.message, 'error');
@@ -1994,6 +2012,7 @@ async function initApp(){
 
   // Per-phase crew state: each entry is { role: 'cleaner'|'foreman', rate: number, days: number }
   let _phaseCrews = { rough: [], final: [], touchup: [] };
+  let _deletedPhaseIds = new Set();
 
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
@@ -2034,12 +2053,17 @@ async function initApp(){
   }
 
   function _getPhaseInputs() {
-    return PHASE_IDS.map((pid, i) => ({
-      name: PHASES[i],
-      crew: (_phaseCrews[pid] || []).map(m => ({ ...m })),
-      persons: (_phaseCrews[pid] || []).filter(m => m.role === 'cleaner').length,
-      days: Math.max(0, ...(_phaseCrews[pid] || []).map(m => m.days || 0), 0),
-    }));
+    return PHASE_IDS
+      .filter(pid => !_deletedPhaseIds.has(pid))
+      .map((pid, i) => {
+        const actualIdx = PHASE_IDS.indexOf(pid);
+        return {
+          name: PHASES[actualIdx],
+          crew: (_phaseCrews[pid] || []).map(m => ({ ...m })),
+          persons: (_phaseCrews[pid] || []).filter(m => m.role === 'cleaner').length,
+          days: Math.max(0, ...(_phaseCrews[pid] || []).map(m => m.days || 0), 0),
+        };
+      });
   }
 
   function _updateCrewCalcs() {
@@ -2051,7 +2075,7 @@ async function initApp(){
 
     let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
 
-    PHASE_IDS.forEach((pid) => {
+    PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid) => {
       const crew = _phaseCrews[pid] || [];
       const c = _calcPhase({ crew }, rates);
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
@@ -2102,6 +2126,25 @@ async function initApp(){
     const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
 
     PHASE_IDS.forEach((pid, i) => {
+      if (_deletedPhaseIds.has(pid)) {
+        // Render collapsed row with restore button
+        const collapsed = document.createElement('div');
+        collapsed.style.cssText = 'margin-bottom:10px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;opacity:0.5;';
+        const collapsedHeader = document.createElement('div');
+        collapsedHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#f9fafb;';
+        const collapsedName = document.createElement('span');
+        collapsedName.textContent = PHASES[i] + ' (removed)';
+        collapsedName.style.cssText = 'font-weight:600;font-size:13px;color:#9ca3af;';
+        const restoreBtn = document.createElement('button');
+        restoreBtn.type = 'button'; restoreBtn.textContent = 'Restore';
+        restoreBtn.style.cssText = 'padding:3px 10px;border:1px solid #6ee7b7;border-radius:4px;background:white;color:#059669;font-size:11px;cursor:pointer;';
+        restoreBtn.onclick = () => { _deletedPhaseIds.delete(pid); _renderPhaseTable(); _updateCrewCalcs(); };
+        collapsedHeader.appendChild(collapsedName); collapsedHeader.appendChild(restoreBtn);
+        collapsed.appendChild(collapsedHeader);
+        container.appendChild(collapsed);
+        return;
+      }
+
       const section = document.createElement('div');
       section.style.cssText = 'margin-bottom:10px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
 
@@ -2127,7 +2170,16 @@ async function initApp(){
       addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
       addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 220));
       addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 300));
-      header.appendChild(nameEl); header.appendChild(addBtns);
+
+      const delPhaseBtn = document.createElement('button');
+      delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
+      delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
+      delPhaseBtn.onclick = () => { _deletedPhaseIds.add(pid); _renderPhaseTable(); _updateCrewCalcs(); };
+
+      const leftGroup = document.createElement('div');
+      leftGroup.style.cssText = 'display:flex;align-items:center;';
+      leftGroup.appendChild(nameEl); leftGroup.appendChild(delPhaseBtn);
+      header.appendChild(leftGroup); header.appendChild(addBtns);
       section.appendChild(header);
 
       const crew = _phaseCrews[pid] || [];
@@ -2327,6 +2379,7 @@ async function initApp(){
 
     // Reset then restore crew from saved data
     _phaseCrews = { rough: [], final: [], touchup: [] };
+    _deletedPhaseIds = new Set();
 
     if (bd && bd.phases) {
       setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
@@ -2336,9 +2389,11 @@ async function initApp(){
       setVal('taxInput', bd.tax_pct ?? 6);
       setVal('commissionInput', bd.commission_pct ?? 10);
 
+      const savedPids = new Set();
       for (const p of bd.phases) {
         const pid = phaseMap[p.name];
         if (!pid) continue;
+        savedPids.add(pid);
         if (p.crew && p.crew.length > 0) {
           _phaseCrews[pid] = p.crew.map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
         } else {
@@ -2349,6 +2404,10 @@ async function initApp(){
           for (let k = 0; k < (p.persons || 1); k++) _phaseCrews[pid].push({ role: 'cleaner', rate: cr, days, _uid: Math.random().toString(36).slice(2) });
           _phaseCrews[pid].push({ role: 'foreman', rate: fr, days, _uid: Math.random().toString(36).slice(2) });
         }
+      }
+      // Restore previously deleted phases
+      for (const pid of ['rough', 'final', 'touchup']) {
+        if (!savedPids.has(pid)) _deletedPhaseIds.add(pid);
       }
     } else {
       ['rough', 'final', 'touchup'].forEach(pid => {
@@ -2364,6 +2423,11 @@ async function initApp(){
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
+
+    const di = _loadedProjectData.driving_info || {};
+    const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    setEditText('editDriveDistance', di.distance);
+    setEditText('editDriveTime', di.duration);
 
     // Start address dropdown
     const sel = document.getElementById('startAddressSelect');
@@ -2406,7 +2470,6 @@ async function initApp(){
   if (saveAnalysisBtn) {
     saveAnalysisBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
-      if (!window.confirm('Are you sure you want to save this analysis?')) return;
       const rates = _getRates();
       const phases = _getPhaseInputs();
 
