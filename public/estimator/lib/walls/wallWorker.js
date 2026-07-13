@@ -13,12 +13,11 @@ self.onmessage = (e)=>{
     const { ds, dsW, dsH, scale } = downsampleRGBA(src, width, height, m.maxDim || MAX_DIM);
     const gray = toGray(ds, dsW, dsH);
     const thr = otsu(gray);
-    const bin = threshold(gray, dsW, dsH, Math.max(8, Math.floor(thr*0.95)));
-    // morphology: open then close
+    const bin = threshold(gray, dsW, dsH, Math.max(38, Math.min(180, thr + 25)));
     const opened = dilate(erode(bin, dsW, dsH, 1), dsW, dsH, 1);
     const closed = erode(dilate(opened, dsW, dsH, 1), dsW, dsH, 1);
-    const skel = thinZhangSuen(closed, dsW, dsH, 15);
-    const segments = traceSegments(skel, dsW, dsH, scale, 20);
+    const components = connectedComponents(closed, dsW, dsH);
+    const segments = traceComponents(components, dsW, dsH, scale, Math.max(45, Math.ceil(Math.min(dsW, dsH) * 0.06)));
     self.postMessage({ type:'walls', segments });
   }catch(err){ self.postMessage({ type:'walls', segments: [], error: String(err&&err.message||err) }); }
 };
@@ -58,20 +57,63 @@ function thinZhangSuen(bin,w,h,maxIters){ const a=new Uint8ClampedArray(bin); co
   return a;
 }
 
-function traceSegments(skel,w,h,scale,minLen){
-  const deg = new Uint8ClampedArray(w*h);
-  const nbrs=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
-  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ if(!skel[y*w+x]) continue; let d=0; for(const [dx,dy] of nbrs){ const xx=x+dx, yy=y+dy; if(xx>=0&&xx<w&&yy>=0&&yy<h && skel[yy*w+xx]) d++; } deg[y*w+x]=d; }
-  const visited=new Uint8ClampedArray(w*h); const segs=[]; let sid=1;
-  function walk(x,y){ const pts=[]; let cx=x, cy=y, last=-1; while(true){ const idx=cy*w+cx; if(visited[idx]) break; visited[idx]=1; pts.push({ x: cx*scale, y: cy*scale }); let next=-1, nx=0, ny=0; for(let k=0;k<nbrs.length;k++){ const dx=nbrs[k][0], dy=nbrs[k][1]; const xx=cx+dx, yy=cy+dy; if(xx<0||xx>=w||yy<0||yy>=h) continue; const ii=yy*w+xx; if(!skel[ii] || visited[ii]) continue; next=ii; nx=xx; ny=yy; break; } if(next<0) break; cx=nx; cy=ny; }
-    return pts;
+function connectedComponents(mask,w,h){
+  const visited=new Uint8ClampedArray(w*h);
+  const comps=[];
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const idx=y*w+x;
+      if(!mask[idx] || visited[idx]) continue;
+      const stack=[[x,y]];
+      const pixels=[];
+      visited[idx]=1;
+      while(stack.length){
+        const [cx,cy]=stack.pop();
+        const pidx=cy*w+cx;
+        pixels.push({ x: cx, y: cy });
+        for(let dy=-1;dy<=1;dy++){
+          for(let dx=-1;dx<=1;dx++){
+            if(!dx&&!dy) continue;
+            const nx=cx+dx, ny=cy+dy;
+            if(nx<0||nx>=w||ny<0||ny>=h) continue;
+            const nidx=ny*w+nx;
+            if(mask[nidx] && !visited[nidx]){ visited[nidx]=1; stack.push([nx,ny]); }
+          }
+        }
+      }
+      comps.push(pixels);
+    }
   }
-  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if(!skel[i]||visited[i]) continue; if(deg[i]!==1){ continue; } const pts=walk(x,y); if(pts.length*scale >= minLen) segs.push({ id: String(sid++), points: simplify(pts, 1.2*scale) }); }
-  return segs;
+  return comps;
 }
 
-// RDP simplify
-function simplify(pts, eps){ if(!pts||pts.length<3) return pts||[]; function d(p,a,b){ const num=Math.abs((b.y-a.y)*p.x - (b.x-a.x)*p.y + b.x*a.y - b.y*a.x); const den=Math.hypot(b.y-a.y, b.x-a.x)||1; return num/den; } function rdp(arr,i,j){ let max=0,idx=i; for(let k=i+1;k<j;k++){ const v=d(arr[k], arr[i], arr[j]); if(v>max){ max=v; idx=k; } } if(max>eps){ const L=rdp(arr,i,idx), R=rdp(arr,idx,j); return L.slice(0,-1).concat(R); } return [arr[i], arr[j]]; } return rdp(pts,0,pts.length-1); }
+function traceComponents(components,w,h,scale,minLen){
+  const segs=[];
+  let sid=1;
+  for(const pixels of components){
+    if(pixels.length < 4) continue;
+    const xs=pixels.map(p=>p.x);
+    const ys=pixels.map(p=>p.y);
+    const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+    const width=maxX-minX+1;
+    const height=maxY-minY+1;
+    const length=Math.max(width, height) * scale;
+    if(length < minLen) continue;
+    const aspect = Math.max(width, height) / Math.max(1, Math.min(width, height));
+    if(aspect < 3) continue;
+    const centerX=(minX+maxX)/2;
+    const centerY=(minY+maxY)/2;
+    const isHorizontal = width >= height * 2;
+    const start = isHorizontal
+      ? { x: minX * scale, y: centerY * scale }
+      : { x: centerX * scale, y: minY * scale };
+    const end = isHorizontal
+      ? { x: maxX * scale, y: centerY * scale }
+      : { x: centerX * scale, y: maxY * scale };
+    segs.push({ id: String(sid++), points: [start, end] });
+  }
+  return segs;
+}
 
 
 

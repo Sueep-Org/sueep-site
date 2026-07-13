@@ -8,9 +8,9 @@ export default function EstimatorPage() {
   // Restore last project on soft navigation back (not on hard refresh)
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
-    const isSoftNav = sessionStorage.getItem('estimator_visited');
-    sessionStorage.setItem('estimator_visited', '1');
-    if (isSoftNav && typeof w.__restoreLastProject === 'function') {
+    const isSoftNav = sessionStorage.getItem("estimator_visited");
+    sessionStorage.setItem("estimator_visited", "1");
+    if (isSoftNav && typeof w.__restoreLastProject === "function") {
       (w.__restoreLastProject as () => void)();
     }
   }, []);
@@ -25,31 +25,39 @@ export default function EstimatorPage() {
     };
 
     const handleLinkClick = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest('a');
+      const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor) return;
-      const href = anchor.getAttribute('href');
-      if (!href || href.includes('/estimator')) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.includes("/estimator")) return;
       if (w.__projectNameDirty) {
-        if (!window.confirm('Project name has not been saved. Unsaved changes will be lost.')) {
+        if (
+          !window.confirm(
+            "Project name has not been saved. Unsaved changes will be lost.",
+          )
+        ) {
           e.preventDefault();
           e.stopPropagation();
           return;
         }
       }
       if (w.__analysisDirty) {
-        if (!window.confirm('Have you saved your analysis figures? Unsaved changes will be lost.')) {
+        if (
+          !window.confirm(
+            "Have you saved your analysis figures? Unsaved changes will be lost.",
+          )
+        ) {
           e.preventDefault();
           e.stopPropagation();
         }
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('click', handleLinkClick, true);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleLinkClick, true);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('click', handleLinkClick, true);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleLinkClick, true);
     };
   }, []);
 
@@ -232,6 +240,9 @@ export default function EstimatorPage() {
                 <button id="measureToggle" className="mini-btn">
                   Measure
                 </button>
+                <button id="detectWallsBtn" className="mini-btn">
+                  Detect Walls
+                </button>
                 <button id="drawRectBtn" className="mini-btn">
                   Draw Rect
                 </button>
@@ -406,6 +417,11 @@ export default function EstimatorPage() {
                         </span>
                       </div>
 
+                      <div
+                        id="extractedMeasurementsContainer"
+                        style={{ display: "none", marginBottom: "12px" }}
+                      />
+
                       {/* TWO-COLUMN MEASUREMENT LIST */}
                       <div
                         style={{
@@ -512,7 +528,9 @@ export default function EstimatorPage() {
                   <div
                     id="analysisViewStartAddress"
                     className="text-gray-800 font-semibold mt-0.5"
-                  >—</div>
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
@@ -634,12 +652,16 @@ export default function EstimatorPage() {
             <div id="analysisEditForm" style={{ display: "none" }}>
               {/* Start Address */}
               <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Start Address</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Start Address
+                </label>
                 <select
                   id="startAddressSelect"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
                 >
-                  <option value="default">Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004</option>
+                  <option value="default">
+                    Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
+                  </option>
                   <option value="custom">Custom address…</option>
                 </select>
                 <input
