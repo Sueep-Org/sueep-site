@@ -245,6 +245,7 @@ async function initApp(){
   // ======================================================
 
   const measureToggle = $('measureToggle');
+  const detectWallsBtn = $('detectWallsBtn');
   const drawRectBtn = $('drawRectBtn');
   const drawIrregBtn = $('drawIrregBtn');
 
@@ -276,6 +277,7 @@ async function initApp(){
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   let sovModal = null;
   let _sovRows = [];
+  let _pdfMetadataSummary = null;
   let _pageAggregateOverrides = {};
   let _sovUndoStack = [];
   let _sovStateProjectId = null;
@@ -460,6 +462,374 @@ async function initApp(){
       '"': '&quot;',
       "'": '&#39;'
     }[char]));
+  }
+
+  function normalizeTextLine(value) {
+    return String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function extractNumberFromText(value) {
+    const matches = String(value ?? '').match(/(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/g);
+    if (!matches || !matches.length) return null;
+    const parsed = Number(matches[matches.length - 1].replace(/,/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function isPdfAreaUnitLine(line) {
+    return /\b(?:sf|sq\.?\s*ft|sqft|square feet|square footage|area)\b/i.test(line);
+  }
+
+  function isFloorLikeLine(line) {
+    return /\b(?:floor|level|suite)\b/i.test(line) || /^\d+(?:st|nd|rd|th)?\s+(?:floor|level)/i.test(line);
+  }
+
+  function groupPdfTextLines(items = [], pageNum = 1) {
+    const buckets = [];
+    for (const item of items) {
+      const text = normalizeTextLine(item?.str);
+      if (!text) continue;
+      const y = Number(item?.transform?.[5] ?? 0);
+      const x = Number(item?.transform?.[4] ?? 0);
+      const bucket = buckets.find((entry) => Math.abs(entry.y - y) <= 4);
+      if (bucket) {
+        bucket.items.push({ x, text });
+      } else {
+        buckets.push({ y, items: [{ x, text }] });
+      }
+    }
+    buckets.sort((a, b) => b.y - a.y);
+    return buckets.map((bucket) => {
+      const text = bucket.items.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(' ').trim();
+      return text ? { text, page: pageNum } : null;
+    }).filter(Boolean);
+  }
+
+  function looksLikeAddress(text) {
+    const clean = normalizeTextLine(text);
+    if (!clean) return false;
+    const hasNumber = /\d/.test(clean);
+    const hasStreetType = /\b(?:st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|way|ct|court|ter|terrace|pkwy|parkway|trl|trail|cir|circle|hwy|highway)\b/i.test(clean);
+    return hasNumber && hasStreetType;
+  }
+
+  function inferProjectNameFromLines(entries = []) {
+    return null;
+  }
+
+  function inferAddressFromLines(entries = []) {
+    return null;
+  }
+
+  function inferTotalAreaFromLines(entries = []) {
+    const candidates = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const line = normalizeTextLine(entry?.text ?? entry);
+      if (!line) continue;
+
+      const nextEntry = entries[i + 1];
+      const nextLine = normalizeTextLine(nextEntry?.text ?? nextEntry);
+      const combined = [line, nextLine].filter(Boolean).join(' ');
+      const areaText = /\b(?:total|gross|building|site|area|square|footage|sq|sf)\b/i.test(combined) ? combined : line;
+      const numeric = extractNumberFromText(areaText);
+      const areaScale = isPdfAreaUnitLine(areaText);
+      const hasAreaKeyword = /\b(?:total|gross|building|site|area|square|footage|sq|sf)\b/i.test(areaText);
+      const hasTotalHint = /\b(?:total|gross)\b/i.test(areaText);
+      const isFloorLine = isFloorLikeLine(areaText);
+
+      if (numeric && areaScale && hasAreaKeyword && hasTotalHint && !isFloorLine) {
+        candidates.push({ numeric, page: entry?.page || 1, line: areaText });
+      }
+    }
+
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => b.numeric - a.numeric || a.page - b.page);
+    return candidates[0].numeric;
+  }
+
+  function looksLikeMeasurementSectionHeader(text = '') {
+    const normalized = normalizeTextLine(text)
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return false;
+
+    const hasSectionKeyword = /\b(project|code|building|site|area)\b/.test(normalized);
+    const hasTableKeyword = /\b(data|summary|table|section)\b/.test(normalized);
+    if (!hasSectionKeyword || !hasTableKeyword) return false;
+
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    return wordCount <= 6;
+  }
+
+  function findMeasurementTableRanges(entries = []) {
+    const ranges = [];
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const text = normalizeTextLine(entries[i]?.text ?? entries[i]);
+      if (!text || !looksLikeMeasurementSectionHeader(text)) continue;
+
+      let end = i + 1;
+      while (end < entries.length) {
+        const nextText = normalizeTextLine(entries[end]?.text ?? entries[end]);
+        if (!nextText) {
+          end += 1;
+          continue;
+        }
+
+        const isAnotherHeader = looksLikeMeasurementSectionHeader(nextText);
+        const looksLikeNewSection = /^[A-Z][A-Za-z0-9&/()\-\s]{2,}$/.test(nextText) && nextText.length <= 40 && !/\d/.test(nextText);
+        if (isAnotherHeader || looksLikeNewSection) break;
+        end += 1;
+      }
+
+      ranges.push({ start: i + 1, end });
+    }
+
+    if (ranges.length) return ranges;
+
+    const candidateRows = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const line = normalizeTextLine(entries[i]?.text ?? entries[i]);
+      if (!line) continue;
+
+      const nextLine = normalizeTextLine(entries[i + 1]?.text ?? entries[i + 1]);
+      const combined = [line, nextLine].filter(Boolean).join(' ');
+      if (parseTableAreaRow(combined)) {
+        candidateRows.push(i);
+      }
+    }
+
+    if (candidateRows.length < 2) return ranges;
+
+    let currentGroup = [candidateRows[0]];
+    for (let i = 1; i < candidateRows.length; i += 1) {
+      const prev = candidateRows[i - 1];
+      const current = candidateRows[i];
+      if (current - prev <= 4) {
+        currentGroup.push(current);
+      } else {
+        if (currentGroup.length >= 2) ranges.push({ start: currentGroup[0], end: currentGroup[currentGroup.length - 1] + 2 });
+        currentGroup = [current];
+      }
+    }
+
+    if (currentGroup.length >= 2) {
+      ranges.push({ start: currentGroup[0], end: currentGroup[currentGroup.length - 1] + 2 });
+    }
+
+    return ranges;
+  }
+
+  function parseTableAreaRow(text = '') {
+    const normalized = normalizeTextLine(text);
+    if (!normalized) return null;
+
+    const unitMatch = normalized.match(/\b(sf|sq\.?\s*ft|sqft|square feet|square footage)\b/i);
+    if (!unitMatch) return null;
+
+    const numericMatch = normalized.match(/((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?=\s*(?:sf|sq\.?\s*ft|sqft|square feet|square footage)\b)/i);
+    if (!numericMatch) return null;
+
+    const labelText = normalized
+      .replace(numericMatch[0], '')
+      .replace(unitMatch[0], '')
+      .replace(/[:\-–—]/g, ' ')
+      .trim();
+
+    if (!labelText || /^(total|area|square feet|sq ft|sf|project data|code summary)$/i.test(labelText)) {
+      return null;
+    }
+
+    return {
+      label: labelText,
+      value: `${numericMatch[1]} ${unitMatch[1].replace(/\s+/g, ' ').trim()}`
+    };
+  }
+
+  function inferSquareFootageRows(entries = []) {
+    const rows = [];
+    const seen = new Set();
+
+    const addRow = (label, value, page = 1) => {
+      const normalizedLabel = normalizeTextLine(label);
+      const normalizedValue = normalizeTextLine(value);
+      if (!normalizedLabel || !normalizedValue) return;
+      const dedupeKey = `${normalizedLabel}|${normalizedValue}|${page}`;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      rows.push({ label: normalizedLabel, value: normalizedValue, page });
+    };
+
+    const tableRanges = findMeasurementTableRanges(entries);
+    if (!tableRanges.length) return rows;
+
+    tableRanges.forEach((range) => {
+      for (let i = range.start; i < range.end; i += 1) {
+        const line = normalizeTextLine(entries[i]?.text ?? entries[i]);
+        if (!line) continue;
+
+        const nextLine = normalizeTextLine(entries[i + 1]?.text ?? entries[i + 1]);
+        const combined = [line, nextLine].filter(Boolean).join(' ');
+        const parsedRow = parseTableAreaRow(combined);
+        if (!parsedRow) continue;
+
+        addRow(parsedRow.label, parsedRow.value, entries[i]?.page || 1);
+      }
+    });
+
+    return rows;
+  }
+
+  function inferExtractedMeasurements(entries = []) {
+    return inferSquareFootageRows(entries);
+  }
+
+  async function extractPdfMetadataFromFile(file) {
+    if (!file || !/\.pdf$/i.test(file.name) || !window.pdfjsLib) {
+      return null;
+    }
+
+    try {
+      const bytes = await file.arrayBuffer();
+      const pdfDoc = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+      const entries = [];
+
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum += 1) {
+        const page = await pdfDoc.getPage(pageNum);
+        const text = await page.getTextContent();
+        const pageLines = groupPdfTextLines(text.items || [], pageNum);
+        entries.push(...pageLines);
+      }
+
+      if (!entries.length) return null;
+
+      const projectName = inferProjectNameFromLines(entries);
+      const address = inferAddressFromLines(entries);
+      const totalArea = inferTotalAreaFromLines(entries);
+      const extractedMeasurements = inferExtractedMeasurements(entries);
+
+      return { projectName, address, totalArea, extractedMeasurements };
+    } catch (error) {
+      console.warn('[pdf metadata] extract failed', error);
+      return null;
+    }
+  }
+
+  function renderExtractedMeasurements(meta) {
+    const container = document.getElementById('extractedMeasurementsContainer');
+    if (!container) return;
+
+    if (!meta || !Array.isArray(meta.extractedMeasurements) || !meta.extractedMeasurements.length) {
+      container.style.display = 'none';
+      container.innerHTML = '';
+      return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML = `
+      <div class="mb-2">
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
+        <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
+      </div>
+      <div class="max-h-48 overflow-y-auto pr-1">
+        <div class="space-y-2">
+          ${meta.extractedMeasurements.map((row) => `
+            <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
+              <div class="text-[11px] text-gray-500">${escapeHtml(row.label)}</div>
+              <div class="text-sm text-gray-800 font-semibold">${escapeHtml(row.value)}${row.page ? ` <span class="text-[10px] text-gray-400">p${row.page}</span>` : ''}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function getVectorPayloadLines(pageData = {}) {
+    const candidates = [
+      pageData.lines,
+      pageData.lineData,
+      pageData.vectorLines,
+      pageData.wallLines,
+      pageData.walls,
+      pageData.vector,
+      pageData.pageLines
+    ];
+
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return candidate;
+    }
+
+    return [];
+  }
+
+  function coerceLineCoordinates(rawLine = {}, pageWidth = 0, pageHeight = 0) {
+    const x1 = Number(rawLine.x1 ?? rawLine.x ?? rawLine.startX ?? rawLine.start?.x ?? rawLine.pt1?.x ?? rawLine.points?.[0]?.x ?? 0);
+    const y1 = Number(rawLine.y1 ?? rawLine.y ?? rawLine.startY ?? rawLine.start?.y ?? rawLine.pt1?.y ?? rawLine.points?.[0]?.y ?? 0);
+    const x2 = Number(rawLine.x2 ?? rawLine.x ?? rawLine.endX ?? rawLine.end?.x ?? rawLine.pt2?.x ?? rawLine.points?.[1]?.x ?? rawLine.points?.[2]?.x ?? 0);
+    const y2 = Number(rawLine.y2 ?? rawLine.y ?? rawLine.endY ?? rawLine.end?.y ?? rawLine.pt2?.y ?? rawLine.points?.[1]?.y ?? rawLine.points?.[2]?.y ?? 0);
+
+    const normalize = (value, dimension) => {
+      if (!Number.isFinite(value)) return 0;
+      if (dimension > 0 && value > 1) return value / dimension;
+      return value;
+    };
+
+    return {
+      id: rawLine.id || rawLine.__id || rawLine.lineId || rawLine.uuid || `${Math.random().toString(36).slice(2, 9)}`,
+      x1: normalize(x1, pageWidth),
+      y1: normalize(y1, pageHeight),
+      x2: normalize(x2, pageWidth),
+      y2: normalize(y2, pageHeight)
+    };
+  }
+
+  async function hydrateDetectedWallsFromResult(result) {
+    if (!pdfDoc || !result) return;
+
+    const pages = result?.pages || result;
+    const pageEntries = Array.isArray(pages)
+      ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
+      : Object.keys(pages || {}).map((key) => ({ page: Number(key), data: pages[key] }));
+
+    for (const entry of pageEntries) {
+      const pageNum = Number(entry.page || 1);
+      const pageData = entry.data || {};
+      const lines = getVectorPayloadLines(pageData);
+      if (!Array.isArray(lines) || !lines.length) continue;
+
+      const pageViewport = await pdfDoc.getPage(pageNum).then((page) => page.getViewport({ scale: zoom })).catch(() => null);
+      const pageWidth = pageViewport?.width || pdfCanvas?.width || 0;
+      const pageHeight = pageViewport?.height || pdfCanvas?.height || 0;
+      const normalized = lines.map((line, idx) => coerceLineCoordinates(line, pageWidth, pageHeight));
+      highlightsStore.setLines(pageNum, normalized);
+      console.log(`[vector] loaded ${normalized.length} wall lines for page ${pageNum}`);
+    }
+
+    overlay.redraw();
+    updateVectorLineInfo();
+  }
+
+  async function patchProjectDetails(projectId, payload) {
+    if (!projectId) return null;
+    try {
+      const response = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        console.warn('[project patch] failed', response.status);
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn('[project patch] exception', error);
+      return null;
+    }
   }
 
   function getDefaultSovManualOverrides() {
@@ -1633,6 +2003,7 @@ async function initApp(){
 
   async function handleFile(file){
     highlightsStore.clearAll();
+    _pdfMetadataSummary = null;
 
     try{
 
@@ -1661,6 +2032,8 @@ async function initApp(){
         zoom = 1;
         panOffset = { x: 0, y: 0 };
         await renderPage();
+        _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
+        renderExtractedMeasurements(_pdfMetadataSummary);
       }
 
       if (downloadPdfBtn) {
@@ -2289,6 +2662,10 @@ async function initApp(){
     if (!card) return;
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
+    const resolvedAddress = _pdfMetadataSummary?.address || projData.address || '';
+    const resolvedArea = _pdfMetadataSummary?.totalArea ?? projData.total_area;
+    const resolvedName = _pdfMetadataSummary?.projectName || projData.name || '';
+
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
@@ -2350,18 +2727,33 @@ async function initApp(){
       }
     }
 
-    setText('analysisViewAddress', projData.address || '');
+    setText('analysisViewAddress', resolvedAddress || '');
     const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
     setText('analysisViewStartAddress', projData.start_address || DEFAULT_OFFICE);
-    const lps = (projData.labor != null && projData.total_area) ? (projData.labor / projData.total_area) : null;
+    const lps = (projData.labor != null && resolvedArea) ? (projData.labor / resolvedArea) : null;
     setText('analysisViewLabor', fmt$(projData.labor));
-    setText('analysisViewTotalArea', fmtSF(projData.total_area));
+    setText('analysisViewTotalArea', fmtSF(resolvedArea));
     setText('analysisViewQuote', fmt$(projData.quote));
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
     setText('analysisViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
     setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
     setText('detailTollCost', projData.toll_cost != null ? fmt$(projData.toll_cost) : '—');
     setText('analysisViewExpectedDays', projData.expected_days != null ? `${projData.expected_days} days` : '—');
+
+    const totalAreaInput = document.getElementById('analysisTotalAreaInput');
+    if (totalAreaInput) totalAreaInput.value = resolvedArea ?? '';
+
+    const addressInput = document.getElementById('analysisAddressInput');
+    if (addressInput) addressInput.value = resolvedAddress;
+
+    if (resolvedName && activeProjectId) {
+      const loadedNameEl = document.getElementById('loadedProjectName');
+      const editNameEl = document.getElementById('editProjectNameInput');
+      if (loadedNameEl) loadedNameEl.textContent = resolvedName;
+      if (editNameEl) editNameEl.value = resolvedName;
+    }
+
+    renderExtractedMeasurements(_pdfMetadataSummary);
 
     document.getElementById('analysisView').style.display = 'block';
     document.getElementById('analysisEditForm').style.display = 'none';
@@ -2417,8 +2809,8 @@ async function initApp(){
 
     _renderPhaseTable();
 
-    setVal('analysisTotalAreaInput', _loadedProjectData.total_area);
-    setVal('analysisAddressInput', _loadedProjectData.address);
+    setVal('analysisTotalAreaInput', _pdfMetadataSummary?.totalArea ?? _loadedProjectData.total_area);
+    setVal('analysisAddressInput', _pdfMetadataSummary?.address || _loadedProjectData.address);
     setVal('gasolineInput', _loadedProjectData.gasoline);
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
@@ -2852,8 +3244,13 @@ async function initApp(){
 
     try {
 
-      // 1. Create project using filename as project name
-      const projectName = file.name.replace(/\.pdf$/i, '').trim() || file.name;
+      const fallbackProjectName = file.name.replace(/\.pdf$/i, '').trim() || file.name;
+      const extractedProjectName = fallbackProjectName;
+      const extractedAddress = '';
+      const extractedArea = _pdfMetadataSummary?.totalArea ?? null;
+
+      // 1. Create project using the uploaded filename as the initial project name
+      const projectName = extractedProjectName.trim() || fallbackProjectName;
       console.log('[upload] creating project:', projectName);
       const projectRes = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
@@ -2892,6 +3289,10 @@ async function initApp(){
       updateProjectDetails(project);
       console.log('[upload] project created:', projectId);
 
+      if (extractedArea != null) {
+        await patchProjectDetails(projectId, { total_area: Number(extractedArea) });
+      }
+
       // 2. Upload blueprint
       const formData = new FormData();
       formData.append('file', file);
@@ -2916,44 +3317,7 @@ async function initApp(){
       // If backend returned vector lines per page, try to load them into the overlay store.
       try {
         const pages = data.result && (data.result.pages || data.result);
-        if (pages) {
-          // pages may be an array or an object keyed by page number
-          const pageEntries = Array.isArray(pages) ? pages.map((p, i) => ({ page: i + 1, data: p })) : Object.keys(pages).map(k => ({ page: Number(k), data: pages[k] }));
-
-          for (const pe of pageEntries) {
-            const p = pe.data || {};
-            const pageNum = pe.page || p.page || 1;
-            if (!p.lines || !Array.isArray(p.lines)) continue;
-
-            const normLines = p.lines.map((ln, idx) => {
-              // expected formats: { x1,y1,x2,y2 } either normalized (0..1) or absolute pixels/points
-              const x1 = Number(ln.x1 ?? ln.x ?? ln.x0 ?? 0);
-              const y1 = Number(ln.y1 ?? ln.y ?? ln.y0 ?? 0);
-              const x2 = Number(ln.x2 ?? ln.x ?? 0);
-              const y2 = Number(ln.y2 ?? ln.y ?? 0);
-
-              // if coordinates look normalized (<=1), keep. Otherwise attempt to normalize using current canvas size
-              const normalize = (v, dim) => (v > 1 ? (dim && dim > 0 ? v / dim : v) : v);
-
-              const dimW = pdfCanvas?.width || 0;
-              const dimH = pdfCanvas?.height || 0;
-
-              const nx1 = normalize(x1, dimW);
-              const ny1 = normalize(y1, dimH);
-              const nx2 = normalize(x2, dimW);
-              const ny2 = normalize(y2, dimH);
-
-              return { id: ln.id || idx + 1, x1: nx1, y1: ny1, x2: nx2, y2: ny2 };
-            });
-
-            highlightsStore.setLines(pageNum, normLines);
-            console.log(`Loaded ${normLines.length} vector lines for page ${pageNum}`);
-          }
-
-          // redraw overlay for current page
-          overlay.redraw();
-          updateVectorLineInfo();
-          }
+        await hydrateDetectedWallsFromResult(pages || data.result);
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);
       }
@@ -3095,6 +3459,47 @@ async function initApp(){
         toggleSidebarBtn.classList.toggle('active', isHidden);
       };
     }
+
+  if (detectWallsBtn) {
+    detectWallsBtn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!pdfDoc) {
+        toast('Upload a PDF before detecting walls.', 'info');
+        return;
+      }
+
+      const lines = await overlay.detectWallsOnCurrentPage();
+      const hasLines = Array.isArray(lines) && lines.length > 0;
+
+      if (!hasLines) {
+        toast('No wall lines were detected in the uploaded PDF yet.', 'info');
+        return;
+      }
+
+      currentPage = overlay.currentPage;
+      measurementViewPage = overlay.currentPage;
+      if (measurementPageInput) measurementPageInput.value = measurementViewPage;
+      if (measureToggle) measureToggle.classList.toggle('active', true);
+      if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+      if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+
+      await renderPage();
+      overlay.setActive(true);
+      overlay.setTool('measure');
+      overlay.redraw();
+      updateVectorLineInfo();
+      updateMeasurementList();
+
+      const scale = highlightsStore.getScale(currentPage);
+      if (scale && scale.factor) {
+        toast('Detected wall lines and prepared them for measurement.', 'success');
+      } else {
+        toast('Detected wall lines; set the page scale to extract measurements.', 'info');
+      }
+    };
+  }
 
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
