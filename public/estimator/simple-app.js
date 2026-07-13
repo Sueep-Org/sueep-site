@@ -548,13 +548,29 @@ async function initApp(){
     return candidates[0].numeric;
   }
 
+  function looksLikeMeasurementSectionHeader(text = '') {
+    const normalized = normalizeTextLine(text)
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return false;
+
+    const hasSectionKeyword = /\b(project|code|building|site|area)\b/.test(normalized);
+    const hasTableKeyword = /\b(data|summary|table|section)\b/.test(normalized);
+    if (!hasSectionKeyword || !hasTableKeyword) return false;
+
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    return wordCount <= 6;
+  }
+
   function findMeasurementTableRanges(entries = []) {
     const ranges = [];
-    const headerPattern = /\b(project\s+data|code\s+summary|project\s+summary|building\s+summary|site\s+summary|summary\s+table)\b/i;
 
     for (let i = 0; i < entries.length; i += 1) {
       const text = normalizeTextLine(entries[i]?.text ?? entries[i]);
-      if (!text || !headerPattern.test(text)) continue;
+      if (!text || !looksLikeMeasurementSectionHeader(text)) continue;
 
       let end = i + 1;
       while (end < entries.length) {
@@ -564,13 +580,45 @@ async function initApp(){
           continue;
         }
 
-        const isAnotherHeader = headerPattern.test(nextText);
+        const isAnotherHeader = looksLikeMeasurementSectionHeader(nextText);
         const looksLikeNewSection = /^[A-Z][A-Za-z0-9&/()\-\s]{2,}$/.test(nextText) && nextText.length <= 40 && !/\d/.test(nextText);
         if (isAnotherHeader || looksLikeNewSection) break;
         end += 1;
       }
 
       ranges.push({ start: i + 1, end });
+    }
+
+    if (ranges.length) return ranges;
+
+    const candidateRows = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const line = normalizeTextLine(entries[i]?.text ?? entries[i]);
+      if (!line) continue;
+
+      const nextLine = normalizeTextLine(entries[i + 1]?.text ?? entries[i + 1]);
+      const combined = [line, nextLine].filter(Boolean).join(' ');
+      if (parseTableAreaRow(combined)) {
+        candidateRows.push(i);
+      }
+    }
+
+    if (candidateRows.length < 2) return ranges;
+
+    let currentGroup = [candidateRows[0]];
+    for (let i = 1; i < candidateRows.length; i += 1) {
+      const prev = candidateRows[i - 1];
+      const current = candidateRows[i];
+      if (current - prev <= 4) {
+        currentGroup.push(current);
+      } else {
+        if (currentGroup.length >= 2) ranges.push({ start: currentGroup[0], end: currentGroup[currentGroup.length - 1] + 2 });
+        currentGroup = [current];
+      }
+    }
+
+    if (currentGroup.length >= 2) {
+      ranges.push({ start: currentGroup[0], end: currentGroup[currentGroup.length - 1] + 2 });
     }
 
     return ranges;
@@ -586,10 +634,19 @@ async function initApp(){
     const numericMatch = normalized.match(/((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?=\s*(?:sf|sq\.?\s*ft|sqft|square feet|square footage)\b)/i);
     if (!numericMatch) return null;
 
-    const labelText = normalized
+    let labelText = normalized
       .replace(numericMatch[0], '')
       .replace(unitMatch[0], '')
       .replace(/[:\-–—]/g, ' ')
+      .trim();
+
+    labelText = labelText
+      .replace(/\b(?:total\s+)?building\s+area\b/i, 'Total Building Area')
+      .replace(/\b(?:total\s+)?building\s+gross\s+area\b/i, 'Total Building Area')
+      .replace(/\b(?:total\s+)?gross\s+area\b/i, 'Gross Area')
+      .replace(/\b(?:total\s+)?site\s+area\b/i, 'Site Area')
+      .replace(/\b(?:total\s+)?area\b/i, 'Area')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!labelText || /^(total|area|square feet|sq ft|sf|project data|code summary)$/i.test(labelText)) {
