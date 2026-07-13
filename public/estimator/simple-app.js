@@ -1966,13 +1966,29 @@ async function initApp(){
       refreshDistanceBtn.textContent = '↻ Refreshing...';
       refreshDistanceBtn.disabled = true;
       try {
-        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, { method: 'POST' });
+        const isEditMode = document.getElementById('analysisEditForm')?.style.display !== 'none';
+        const body = {};
+        if (isEditMode) {
+          const addrInput = document.getElementById('analysisAddressInput')?.value?.trim();
+          const startSel = document.getElementById('startAddressSelect');
+          const startCustom = document.getElementById('startAddressInput');
+          if (addrInput) body.address = addrInput;
+          if (startSel?.value === 'custom' && startCustom?.value?.trim()) body.start_address = startCustom.value.trim();
+        }
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
         if (!r.ok) throw new Error('Failed to refresh');
         const data = await r.json();
         const di = data.driving_info || {};
         const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
         setText('detailDistance', di.distance);
         setText('detailDuration', di.duration);
+        setText('editDriveDistance', di.distance);
+        setText('editDriveTime', di.duration);
+        if (_loadedProjectData) _loadedProjectData.driving_info = di;
         toast('Distance updated', 'info');
       } catch (e) {
         toast(e.message, 'error');
@@ -2367,6 +2383,11 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
 
+    const di = _loadedProjectData.driving_info || {};
+    const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    setEditText('editDriveDistance', di.distance);
+    setEditText('editDriveTime', di.duration);
+
     // Start address dropdown
     const sel = document.getElementById('startAddressSelect');
     const customInput = document.getElementById('startAddressInput');
@@ -2408,7 +2429,6 @@ async function initApp(){
   if (saveAnalysisBtn) {
     saveAnalysisBtn.addEventListener('click', async () => {
       if (!activeProjectId) return;
-      if (!window.confirm('Are you sure you want to save this analysis?')) return;
       const rates = _getRates();
       const phases = _getPhaseInputs();
 

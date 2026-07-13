@@ -676,41 +676,19 @@ export default function EstimatorPage() {
                   className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Gasoline + Toll Cost + Margin */}
-              <div className="flex gap-4 mb-4 pb-4 border-b border-gray-100">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
-                  <input
-                    type="number"
-                    id="gasolineInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Toll Cost ($)</label>
-                  <input
-                    type="number"
-                    id="tollCostInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
-                  <input
-                    type="number"
-                    id="marginInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
+              {/* Total Area */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Total Area (SF)
+                </label>
+                <input
+                  type="number"
+                  id="analysisTotalAreaInput"
+                  placeholder="0"
+                  min="0"
+                  step="1"
+                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                />
               </div>
               {/* Global rates */}
               {/* Hidden inputs keep default values for new crew members */}
@@ -780,19 +758,60 @@ export default function EstimatorPage() {
               {/* Calc summary — rendered by JS */}
               <div id="calcSummaryContainer" className="mb-4"></div>
 
-              {/* Total Area */}
-              <div className="mb-4 pt-4 border-t border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Total Area (SF)
-                </label>
+              {/* Margin — single row */}
+              <div className="mb-3 pt-4 border-t border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
                 <input
                   type="number"
-                  id="analysisTotalAreaInput"
-                  placeholder="0"
+                  id="marginInput"
+                  placeholder="0.00"
                   min="0"
-                  step="1"
-                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  step="0.01"
+                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
+              </div>
+              {/* Gasoline + Toll Cost + Drive info (read-only) */}
+              <div className="flex flex-wrap gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
+                  <input
+                    type="number"
+                    id="gasolineInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Toll Cost ($)</label>
+                  <input
+                    type="number"
+                    id="tollCostInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Drive Distance</label>
+                  <div
+                    id="editDriveDistance"
+                    className="w-40 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded text-gray-600"
+                  >
+                    —
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Drive Time</label>
+                  <div
+                    id="editDriveTime"
+                    className="w-40 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded text-gray-600"
+                  >
+                    —
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-2">
