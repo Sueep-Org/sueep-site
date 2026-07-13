@@ -150,66 +150,58 @@ export function ProjectFinancialsEditor({
         if (totalMaterials > 0) setEstMat(totalMaterials.toFixed(2));
       }
 
-      // SOV items — one row per measured PDF page, from the estimator's own
-      // "Schedule of Values" feature. That feature never saves to the estimator's
-      // server; it's computed client-side from page measurements stored in this
-      // browser's localStorage (key: annotations_<estimatorProjectId>). Since the
-      // estimator UI is served from this same app/origin, we can read it directly.
-      // The user-typed descriptions for each page live separately, under
-      // sov_rows_<estimatorProjectId>, and are read here so real descriptions
-      // (not just "Page N") carry over into the imported SOV items.
+      // SOV items — from the estimator's own "Schedule of Values" feature,
+      // which bills each phase separately (rough/final/touch up). That
+      // feature never saves to the estimator's server; it's computed
+      // client-side and stored in this browser's localStorage under
+      // sov_rows_<estimatorProjectId>. Since the estimator UI is served from
+      // this same app/origin, we can read it directly. Each row already
+      // carries the per-phase dollar amounts the estimator computed (or the
+      // user manually overrode), so we import one SOV item per non-zero
+      // phase per page — e.g. "Floor 1: Rough", "Floor 1: Final",
+      // "Floor 1: Touch up" — so each phase can be billed independently.
       let sovNote = "";
-      const annotJson = localStorage.getItem(`annotations_${estId}`);
       const sovRowsJson = localStorage.getItem(`sov_rows_${estId}`);
-      const descriptionByPage = new Map<number, string>();
-      if (sovRowsJson) {
-        try {
-          const parsedRows = JSON.parse(sovRowsJson) as {
-            page?: number;
-            description?: string;
-            deleted?: boolean;
-          }[];
-          for (const row of parsedRows) {
-            if (row.deleted || row.page == null || !row.description) continue;
-            descriptionByPage.set(Number(row.page), row.description);
-          }
-        } catch {
-          // ignore malformed SOV row cache
-        }
-      }
-      if (!annotJson) {
-        sovNote = "SOV not imported: no page measurements found in this browser for that estimator project. Measurements only exist on the device/browser where the PDF was measured.";
+      const PHASE_LABELS: Record<"rough" | "final" | "touchup", string> = {
+        rough: "Rough",
+        final: "Final",
+        touchup: "Touch up",
+      };
+      if (!sovRowsJson) {
+        sovNote = "SOV not imported: no Schedule of Values found in this browser for that estimator project. The SOV only exists on the device/browser where it was set up.";
       } else {
-        let measurementsByPage: Record<string, { area?: number }[]> = {};
+        let parsedRows: {
+          page?: number;
+          description?: string;
+          rough?: number | null;
+          final?: number | null;
+          touchup?: number | null;
+          deleted?: boolean;
+        }[] = [];
         try {
-          const parsed = JSON.parse(annotJson) as { measurements?: Record<string, { area?: number }[]> };
-          measurementsByPage = parsed.measurements ?? {};
+          parsedRows = JSON.parse(sovRowsJson);
         } catch {
-          measurementsByPage = {};
+          parsedRows = [];
         }
 
-        const pageAreas = Object.entries(measurementsByPage)
-          .map(([page, items]) => ({
-            page: Number(page),
-            area: items.reduce((sum, m) => sum + (Number(m.area) || 0), 0),
-          }))
-          .filter((p) => p.area > 0)
-          .sort((a, b) => a.page - b.page);
-        const totalArea = pageAreas.reduce((s, p) => s + p.area, 0);
+        const sovItems: { description: string; scheduledValueCents: number; order: number }[] = [];
+        for (const row of parsedRows) {
+          if (row.deleted || row.page == null) continue;
+          const desc = row.description?.trim() || `Page ${row.page}`;
+          for (const key of Object.keys(PHASE_LABELS) as (keyof typeof PHASE_LABELS)[]) {
+            const amount = Number(row[key]);
+            if (!Number.isFinite(amount) || amount <= 0) continue;
+            sovItems.push({
+              description: `${desc}: ${PHASE_LABELS[key]}`,
+              scheduledValueCents: Math.round(amount * 100),
+              order: sovItems.length,
+            });
+          }
+        }
 
-        if (pageAreas.length === 0) {
-          sovNote = "SOV not imported: no measured pages found for that estimator project in this browser.";
-        } else if (!proj.quote || proj.quote <= 0) {
-          sovNote = "SOV not imported: the estimator project has no contract value set, so per-page dollar amounts can't be calculated.";
+        if (sovItems.length === 0) {
+          sovNote = "SOV not imported: no rough/final/touch up amounts found for that estimator project in this browser.";
         } else {
-          const sovItems = pageAreas
-            .map((p, idx) => ({
-              description: descriptionByPage.get(p.page) ?? `Page ${p.page}`,
-              scheduledValueCents: Math.round((p.area / totalArea) * proj.quote! * 100),
-              order: idx,
-            }))
-            .filter((item) => item.scheduledValueCents > 0);
-
           // Overwrite: clear out any SOV items already on this project before
           // creating the freshly imported ones, so re-importing (or importing
           // a different estimator project) doesn't just pile up duplicates.
@@ -296,8 +288,8 @@ export function ProjectFinancialsEditor({
               </button>
             </div>
             <p className="mb-3 text-xs text-gray-500">
-              Select a project to pull est. labor, materials, contract value, and SOV (one line per measured PDF
-              page — only works if this browser was used to measure that project in the estimator).
+              Select a project to pull est. labor, materials, contract value, and SOV (one line per page per phase —
+              Rough, Final, Touch up — only works if this browser was used to set up the SOV in the estimator).
             </p>
             {estModalLoading ? (
               <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
