@@ -673,7 +673,7 @@ export default function EstimatorPage() {
                 />
               </div>
               {/* Project Address */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
+              <div className="mb-3">
                 <label className="block text-xs text-gray-500 mb-1">
                   Project Address
                 </label>
@@ -684,19 +684,48 @@ export default function EstimatorPage() {
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
+              {/* Drive info (read-only, below address) */}
+              <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Drive Distance</label>
+                  <div id="editDriveDistance" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Drive Time</label>
+                  <div id="editDriveTime" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                </div>
+              </div>
               {/* Expected Days to Complete */}
               <div className="mb-4 pb-4 border-b border-gray-100">
                 <label className="block text-xs text-gray-500 mb-1">
                   Expected Days to Complete
                 </label>
-                <input
-                  type="number"
-                  id="expectedDaysInput"
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    id="expectedDaysInput"
+                    placeholder="—"
+                    min="0"
+                    step="1"
+                    readOnly
+                    className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    id="expectedDaysModifyBtn"
+                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                  >
+                    Modify
+                  </button>
+                  <button
+                    type="button"
+                    id="expectedDaysResetBtn"
+                    style={{ display: "none" }}
+                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                  >
+                    Reset to auto
+                  </button>
+                </div>
               </div>
               {/* Total Area */}
               <div className="mb-4 pb-4 border-b border-gray-100">
@@ -712,10 +741,20 @@ export default function EstimatorPage() {
                   className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Global rates */}
               {/* Hidden inputs keep default values for new crew members */}
               <input type="hidden" id="cleanerRateInput" defaultValue="22" />
               <input type="hidden" id="foremanRateInput" defaultValue="220" />
+
+              {/* Phase table — rendered by JS */}
+              <div
+                id="phaseTableContainer"
+                className="mb-4 overflow-x-auto"
+              ></div>
+
+              {/* Calc summary — rendered by JS */}
+              <div id="calcSummaryContainer" className="mb-4"></div>
+
+              {/* Global rates */}
               <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
@@ -771,15 +810,6 @@ export default function EstimatorPage() {
                 </div>
               </div>
 
-              {/* Phase table — rendered by JS */}
-              <div
-                id="phaseTableContainer"
-                className="mb-4 overflow-x-auto"
-              ></div>
-
-              {/* Calc summary — rendered by JS */}
-              <div id="calcSummaryContainer" className="mb-4"></div>
-
               {/* Margin — single row */}
               <div className="mb-3 pt-4 border-t border-gray-100">
                 <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
@@ -815,24 +845,6 @@ export default function EstimatorPage() {
                     step="0.01"
                     className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Distance</label>
-                  <div
-                    id="editDriveDistance"
-                    className="w-40 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded text-gray-600"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Time</label>
-                  <div
-                    id="editDriveTime"
-                    className="w-40 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded text-gray-600"
-                  >
-                    —
-                  </div>
                 </div>
               </div>
 

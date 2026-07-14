@@ -2386,6 +2386,7 @@ async function initApp(){
   // Per-phase crew state: each entry is { role: 'cleaner'|'foreman', rate: number, days: number }
   let _phaseCrews = { rough: [], final: [], touchup: [] };
   let _deletedPhaseIds = new Set();
+  let _expectedDaysManual = false;
 
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
@@ -2486,6 +2487,17 @@ async function initApp(){
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
+    }
+
+    // Auto-calculate expected days from phases (sum of max days per active phase)
+    if (!_expectedDaysManual) {
+      let totalDays = 0;
+      PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach(pid => {
+        const crew = _phaseCrews[pid] || [];
+        if (crew.length > 0) totalDays += Math.max(...crew.map(m => m.days || 0));
+      });
+      const daysEl = document.getElementById('expectedDaysInput');
+      if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
     }
   }
 
@@ -2808,6 +2820,34 @@ async function initApp(){
     }
 
     _renderPhaseTable();
+
+    // Reset expected days manual override state
+    _expectedDaysManual = !!_loadedProjectData.expected_days;
+    const daysInput = document.getElementById('expectedDaysInput');
+    const modifyBtn = document.getElementById('expectedDaysModifyBtn');
+    const resetBtn = document.getElementById('expectedDaysResetBtn');
+    if (daysInput) {
+      daysInput.readOnly = !_expectedDaysManual;
+      daysInput.className = _expectedDaysManual
+        ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'
+        : 'w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
+    }
+    if (modifyBtn) modifyBtn.style.display = _expectedDaysManual ? 'none' : '';
+    if (resetBtn) resetBtn.style.display = _expectedDaysManual ? '' : 'none';
+
+    if (modifyBtn) modifyBtn.onclick = () => {
+      _expectedDaysManual = true;
+      if (daysInput) { daysInput.readOnly = false; daysInput.className = 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; daysInput.focus(); }
+      modifyBtn.style.display = 'none';
+      if (resetBtn) resetBtn.style.display = '';
+    };
+    if (resetBtn) resetBtn.onclick = () => {
+      _expectedDaysManual = false;
+      if (daysInput) { daysInput.readOnly = true; daysInput.className = 'w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none'; }
+      resetBtn.style.display = 'none';
+      if (modifyBtn) modifyBtn.style.display = '';
+      _updateCrewCalcs();
+    };
 
     setVal('analysisTotalAreaInput', _pdfMetadataSummary?.totalArea ?? _loadedProjectData.total_area);
     setVal('analysisAddressInput', _pdfMetadataSummary?.address || _loadedProjectData.address);
