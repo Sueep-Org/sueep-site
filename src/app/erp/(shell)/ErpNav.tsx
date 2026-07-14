@@ -32,8 +32,7 @@ const projectGroupItems: NavItem[] = [
 
 const billingGroupItems: NavItem[] = [
   { href: "/erp/billing", label: "Project Billing", roles: FINANCE_UP },
-  { href: "/erp/commission", label: "Commission", roles: FINANCE_UP },
-  { href: "/erp/payroll", label: "Payroll Export", roles: FINANCE_UP },
+  { href: "/erp/payroll", label: "Compensation", roles: FINANCE_UP },
 ];
 
 const employmentGroupItems: NavItem[] = [

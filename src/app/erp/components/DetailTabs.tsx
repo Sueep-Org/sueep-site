@@ -9,14 +9,16 @@ type Tab = {
 
 type Props = {
   tabs: Tab[];
+  /** URL query param to sync the active tab to. Defaults to "tab" — override when nesting DetailTabs so the outer and inner switchers don't collide on the same param. */
+  paramName?: string;
 };
 
-export function DetailTabs({ tabs }: Props) {
+export function DetailTabs({ tabs, paramName = "tab" }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // On mount, read ?tab= from the URL and jump to that tab.
+  // On mount, read the URL param and jump to that tab.
   useEffect(() => {
-    const label = new URLSearchParams(window.location.search).get("tab");
+    const label = new URLSearchParams(window.location.search).get(paramName);
     if (!label) return;
     const idx = tabs.findIndex((t) => t.label === label);
     if (idx >= 0) setActiveIndex(idx);
@@ -27,7 +29,7 @@ export function DetailTabs({ tabs }: Props) {
   function setTab(index: number) {
     setActiveIndex(index);
     const params = new URLSearchParams(window.location.search);
-    params.set("tab", tabs[index].label);
+    params.set(paramName, tabs[index].label);
     history.replaceState(null, "", `?${params.toString()}`);
   }
 

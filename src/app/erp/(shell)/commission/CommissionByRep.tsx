@@ -140,7 +140,7 @@ function YearTabs({ years, selectedYear }: { years: number[]; selectedYear: numb
       {years.map((y) => (
         <Link
           key={y}
-          href={`/erp/commission?year=${y}`}
+          href={`/erp/payroll?view=Commission&year=${y}`}
           className={`rounded-md px-3 py-1.5 text-sm font-medium ${
             y === selectedYear ? "bg-pink-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
           }`}

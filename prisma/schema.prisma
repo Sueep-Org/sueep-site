@@ -773,6 +773,7 @@ model Employee {
   safetyCheckWorkers SafetyCheckWorker[]
   safetyIncidents SafetyIncident[]
   commissionProjects Project[]
+  reimbursements Reimbursement[]
 
   @@index([status])
   @@index([defaultProject])
@@ -802,6 +803,32 @@ model EmployeeDocument {
   @@index([employeeId])
   @@index([documentType])
   @@index([expiresAt])
+}
+
+model Reimbursement {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  date       DateTime
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// Who/what the expense was for (e.g. "J Centra - Miyanna Nelson"), not necessarily the employee being reimbursed
+  companyOrTeam String
+  description   String
+  amountCents   Int
+
+  receiptUrl      String?
+  receiptData     Bytes?
+  receiptMimeType String?
+  receiptFilename String?
+
+  /// Set once Finance has paid the employee back
+  paidAt DateTime?
+
+  @@index([employeeId])
+  @@index([paidAt])
 }
 
 model Contractor {
