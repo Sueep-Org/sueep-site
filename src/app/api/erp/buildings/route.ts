@@ -5,7 +5,14 @@ import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import type { ErpRole } from "@/lib/erpSession";
 
 export async function GET() {
-  const buildings = await prisma.building.findMany({ orderBy: { name: "asc" } });
+  const buildings = await prisma.building.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      recurringContract: {
+        select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
+      },
+    },
+  });
   return NextResponse.json(buildings);
 }
 

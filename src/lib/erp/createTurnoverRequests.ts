@@ -21,6 +21,8 @@ type UnitScopePayload = {
   otherWork?: unknown;
   otherDescription?: unknown;
   otherPrice?: unknown;
+  /** Covered by the building's flat monthly recurring contract — skips pricing-package pricing. */
+  recurringContractUnit?: unknown;
 };
 
 function stringValue(value: unknown) {
@@ -145,8 +147,12 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
   const units = parseUnitScopes(body.unitScopes);
   const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage);
 
+  const recurringContract = units.some((u) => Boolean(u.recurringContractUnit))
+    ? await prisma.recurringContract.findUnique({ where: { buildingId: building.id } })
+    : null;
+
   const requests = await Promise.all(
-    units.map((unit, index) => {
+    units.map(async (unit, index) => {
       const isCommonArea = stringValue(unit.features) === "common-area";
       const { bedrooms, bathrooms } = featureToBedsBaths(unit.features);
       const { startDate, endDate } = unitDateRange(unit);
@@ -158,26 +164,46 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const otherWork = Boolean(unit.otherWork);
       const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
       const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
-      const pricing = computeTurnoverPricing({
-        requestType: "TURNOVER",
-        buildingName: building.name,
-        pricingPackage,
-        bedrooms,
-        bathrooms,
-        isCommonArea,
-        fullPaint,
-        touchUpPaint,
-        fullClean,
-        carpetCleaning,
-        materialsAdditional,
-      });
-      const priceCents = (pricing.priceCents || 0) + otherCents;
+      const unitNumber = stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`);
+
+      // Units covered by an active recurring contract skip the pricing-package
+      // rate card entirely — they're already paid for by the flat monthly fee.
+      // An explicit "other work" charge (a one-off extra, not from the rate
+      // card) still applies since it's a manually-typed override, not a
+      // pricing-package lookup.
+      const isRecurringContractUnit = Boolean(unit.recurringContractUnit) && recurringContract?.status === "ACTIVE";
+      const priceCents = isRecurringContractUnit
+        ? otherCents || null
+        : (() => {
+            const pricing = computeTurnoverPricing({
+              requestType: "TURNOVER",
+              buildingName: building.name,
+              pricingPackage,
+              bedrooms,
+              bathrooms,
+              isCommonArea,
+              fullPaint,
+              touchUpPaint,
+              fullClean,
+              carpetCleaning,
+              materialsAdditional,
+            });
+            return (pricing.priceCents || 0) + otherCents || null;
+          })();
+
+      if (isRecurringContractUnit && recurringContract) {
+        await prisma.recurringContractUnit.upsert({
+          where: { recurringContractId_unitNumber: { recurringContractId: recurringContract.id, unitNumber } },
+          update: { active: true, bedrooms, bathrooms, isCommonArea, fullClean, carpetCleaning },
+          create: { recurringContractId: recurringContract.id, unitNumber, bedrooms, bathrooms, isCommonArea, fullClean, carpetCleaning },
+        });
+      }
 
       return prisma.turnoverRequest.create({
         data: {
           buildingId: building.id,
           requestType: "TURNOVER",
-          unitNumber: stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`),
+          unitNumber,
           bedrooms,
           bathrooms,
           fullPaint,
@@ -190,7 +216,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           otherCents: otherWork ? otherCents : null,
           startDate,
           endDate,
-          priceCents: priceCents || null,
+          priceCents,
           createdBy: stringValue(body.sueepPmEmail) || stringValue(body.pmEmail) || null,
         },
       });

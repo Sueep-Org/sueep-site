@@ -85,6 +85,8 @@ type UnitScope = {
   otherWork: boolean;
   otherDescription: string;
   otherPrice: string;
+  /** Covered by the building's flat monthly recurring contract — skips per-unit pricing-package pricing. */
+  recurringContractUnit: boolean;
 };
 
 function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(2)}`): UnitScope {
@@ -107,6 +109,7 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     otherWork: false,
     otherDescription: "",
     otherPrice: "",
+    recurringContractUnit: false,
   };
 }
 
@@ -183,6 +186,11 @@ interface BuildingOption {
   pmName?: string | null;
   pmEmail?: string | null;
   pmPhone?: string | null;
+  recurringContract?: {
+    id: string;
+    status: string;
+    units: { id: string; unitNumber: string }[];
+  } | null;
 }
 
 interface ScheduleBuildingOption {
@@ -735,6 +743,11 @@ export function NewProjectForm({
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
   const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
+  const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
+  const activeRecurringContractUnits = useMemo(
+    () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
+    [selectedBuilding]
+  );
   const defaultPricePackageValues = useMemo<PricePackageValues>(
     () =>
       firstUnitIsCommonArea
@@ -882,31 +895,35 @@ export function NewProjectForm({
       const unitLines: string[] = [];
       let unitTotal = 0;
 
-      if (unit.fullClean) {
-        unitTotal += pricePackageCents.fullClean;
-        unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
-      }
+      if (unit.recurringContractUnit) {
+        unitLines.push("covered by recurring contract — no charge");
+      } else {
+        if (unit.fullClean) {
+          unitTotal += pricePackageCents.fullClean;
+          unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
+        }
 
-      if (unit.fullPaint) {
-        unitTotal += pricePackageCents.fullPaint;
-        unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
-      } else if (unit.touchUpPaint) {
-        unitTotal += pricePackageCents.touchUpPaint;
-        unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
-      }
+        if (unit.fullPaint) {
+          unitTotal += pricePackageCents.fullPaint;
+          unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
+        } else if (unit.touchUpPaint) {
+          unitTotal += pricePackageCents.touchUpPaint;
+          unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
+        }
 
-      if (unit.materialsAdditional) {
-        unitTotal += pricePackageCents.additionalMaterials;
-        unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
-      }
+        if (unit.materialsAdditional) {
+          unitTotal += pricePackageCents.additionalMaterials;
+          unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
+        }
 
-      if (unit.carpetCleaning) {
-        unitTotal += pricePackageCents.carpetCleaning;
-        unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
-      }
+        if (unit.carpetCleaning) {
+          unitTotal += pricePackageCents.carpetCleaning;
+          unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
+        }
 
-      if (unit.lightWallTouchUps) {
-        unitLines.push("light wall touch-ups not priced");
+        if (unit.lightWallTouchUps) {
+          unitLines.push("light wall touch-ups not priced");
+        }
       }
 
       if (unit.otherWork) {
@@ -1593,6 +1610,20 @@ export function NewProjectForm({
                       </label>
                     ))}
                   </div>
+                  {selectedBuilding?.recurringContract?.status === "ACTIVE" && (
+                    <label className="mt-3 flex min-w-0 items-center rounded-md border border-pink-200 bg-pink-50 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={unit.recurringContractUnit}
+                        onChange={(e) => updateUnitScope(unit.id, { recurringContractUnit: e.target.checked })}
+                        className="h-4 w-4 text-pink-600"
+                      />
+                      <span className={`${checkboxLabel} break-words`}>
+                        Part of this building&apos;s recurring contract — covered by the flat monthly rate, no per-unit charge
+                        {unit.unitNumber.trim() && activeRecurringContractUnits.has(unit.unitNumber.trim()) ? " (already enrolled)" : ""}
+                      </span>
+                    </label>
+                  )}
                   {unit.otherWork && (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="min-w-0">

@@ -3,6 +3,7 @@
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { BuildingProfileEditor } from "./BuildingProfileEditor";
 import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
+import { RecurringContractEditor } from "./RecurringContractEditor";
 
 type Props = {
   buildingId: string;
@@ -40,6 +41,10 @@ export function BuildingTabs({ buildingId, buildingName, initial, initialPackage
           />
         </div>
       ),
+    },
+    {
+      label: "Recurring Contract",
+      content: <RecurringContractEditor buildingId={buildingId} canEdit={canEditPricing} />,
     },
   ];
 
