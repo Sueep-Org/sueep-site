@@ -31,13 +31,24 @@ export function ScheduleCalendarOverview() {
               <strong>Dashed chip (red):</strong> the same as above, except the day has already
               passed and it never got logged. This flags a missed assignment.
             </LI>
+            <LI>
+              <strong>Amber warning chip (⚠):</strong> a project starting today or soon that has
+              never had a supervisor assigned and has no logged work yet. It&apos;s rendered above
+              the other chips in the cell so it can&apos;t be missed. Click it to jump straight to
+              the assignment panel for that project/day (see Step 4).
+            </LI>
           </UL>
+          <Callout type="warning">
+            Amber warning chips only appear for projects that are still active (not Complete or
+            Archived) and starting today or in the future. Once a supervisor is assigned or work
+            is logged, the warning clears automatically.
+          </Callout>
           <Callout type="tip">
             A day cell only shows up to 4 chips at once. If there&apos;s more, click{" "}
             <strong>&quot;+N more&quot;</strong> at the bottom of the cell to see everything
             scheduled that day in a popover.
           </Callout>
-          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_2.png" alt="+N more popover listing everything on a day" />
+          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_2.png" alt="+N more popover listing everything on a day" size="sm" />
           The color key at the bottom of the Calendar section explains what each color/style means.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_3.png" alt="Calendar legend" />
         </Step>
@@ -52,7 +63,7 @@ export function ScheduleCalendarOverview() {
         <Step n={3} title="Filtering the calendar">
           Click the filter icon (top right of the Calendar section) to narrow down what&apos;s
           shown.
-          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_5.png" alt="Filter panel with supervisor and project type options" />
+          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_5.png" alt="Filter panel with supervisor and project type options" size="sm" />
           <UL>
             <LI>
               <strong>Supervisor:</strong> show only one supervisor&apos;s projects. Only
@@ -71,7 +82,9 @@ export function ScheduleCalendarOverview() {
         <Step n={4} title="Assigning a supervisor to a future day">
           Click the <strong>+</strong> button in the top-right corner of any today-or-future day
           cell to open the assignment panel for that day.
-          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_6.png" alt="Plus button on a day cell" />
+          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_6.png" alt="Plus button on a day cell" size="sm" />
+          You can also click directly on an amber warning chip (see Step 1) to open this same
+          panel with that project already selected.
           Search for a project, pick a supervisor, and optionally set a time range (leave blank for
           an all-day event). Click <strong>Assign supervisor</strong>.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_7.png" alt="Assign supervisor form" />
@@ -99,7 +112,7 @@ export function ScheduleCalendarOverview() {
           <strong>×</strong> button next to their name, either from inside the day panel or
           directly on a dashed chip&apos;s calendar entry. Removing a supervisor assignment also
           sends a cancellation to their calendar invite.
-          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_9.png" alt="Removing an assignment with the x button" />
+          <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_9.png" alt="Removing an assignment with the x button" size="sm" />
         </Step>
 
         <Step n={7} title="What supervisors see">

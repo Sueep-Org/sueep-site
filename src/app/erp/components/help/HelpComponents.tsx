@@ -32,9 +32,10 @@ export function A({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-export function Img({ src, alt }: { src: string; alt?: string }) {
+export function Img({ src, alt, size = "full" }: { src: string; alt?: string; size?: "full" | "sm" }) {
+  const width = size === "sm" ? "max-w-xs w-full" : "w-full";
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt ?? ""} className="my-4 w-full rounded-xl border border-gray-200 shadow-sm" />;
+  return <img src={src} alt={alt ?? ""} className={`my-4 ${width} rounded-xl border border-gray-200 shadow-sm`} />;
 }
 
 export function Table({ children }: { children: React.ReactNode }) {
