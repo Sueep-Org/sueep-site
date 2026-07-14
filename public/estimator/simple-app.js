@@ -468,6 +468,45 @@ async function initApp(){
     return String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  function compactMeasurementLabel(label = '') {
+    const normalized = normalizeTextLine(label)
+      .replace(/[:\-–—]/g, ' ')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) return '';
+
+    const stopWords = new Set([
+      'the', 'and', 'of', 'for', 'with', 'to', 'in', 'on', 'from', 'a', 'an',
+      'project', 'code', 'summary', 'data', 'section', 'table', 'measurements', 'measurement'
+    ]);
+    const descriptiveWhitelist = new Set([
+      'suite', 'floor', 'ground', 'level', 'main', 'upper', 'lower', 'mezzanine', 'basement',
+      'garage', 'deck', 'patio', 'porch', 'yard', 'room', 'hall', 'entry', 'office',
+      'storage', 'bath', 'bathroom', 'kitchen', 'living', 'dining', 'bedroom', 'wall',
+      'ceiling', 'window', 'door', 'exterior', 'interior', 'front', 'rear', 'side',
+      'north', 'south', 'east', 'west', 'total', 'area', 'gross', 'net'
+    ]);
+
+    const words = normalized
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((word) => {
+        const lower = word.toLowerCase();
+        if (stopWords.has(lower) || /^\d+$/.test(lower)) return false;
+        if (lower.length <= 2 && !descriptiveWhitelist.has(lower)) return false;
+        return true;
+      });
+
+    if (!words.length) return '';
+
+    const keepWords = words.length <= 4 ? words : words.slice(0, 4);
+    const joined = keepWords.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+    return joined.length > 1 ? joined : '';
+  }
+
   function extractNumberFromText(value) {
     const matches = String(value ?? '').match(/(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/g);
     if (!matches || !matches.length) return null;
@@ -644,8 +683,10 @@ async function initApp(){
       return null;
     }
 
+    const compactLabel = compactMeasurementLabel(labelText);
+
     return {
-      label: labelText,
+      label: compactLabel || (labelText.split(/\s+/).filter(Boolean).length > 1 ? labelText : ''),
       value: `${numericMatch[1]} ${unitMatch[1].replace(/\s+/g, ' ').trim()}`
     };
   }
@@ -664,20 +705,21 @@ async function initApp(){
       rows.push({ label: normalizedLabel, value: normalizedValue, page });
     };
 
-    const tableRanges = findMeasurementTableRanges(entries);
+    const relevantEntries = entries.filter((entry) => (entry?.page || 1) === 1);
+    const tableRanges = findMeasurementTableRanges(relevantEntries.length ? relevantEntries : entries);
     if (!tableRanges.length) return rows;
 
     tableRanges.forEach((range) => {
       for (let i = range.start; i < range.end; i += 1) {
-        const line = normalizeTextLine(entries[i]?.text ?? entries[i]);
+        const line = normalizeTextLine(relevantEntries[i]?.text ?? relevantEntries[i]);
         if (!line) continue;
 
-        const nextLine = normalizeTextLine(entries[i + 1]?.text ?? entries[i + 1]);
+        const nextLine = normalizeTextLine(relevantEntries[i + 1]?.text ?? relevantEntries[i + 1]);
         const combined = [line, nextLine].filter(Boolean).join(' ');
         const parsedRow = parseTableAreaRow(combined);
         if (!parsedRow) continue;
 
-        addRow(parsedRow.label, parsedRow.value, entries[i]?.page || 1);
+        addRow(parsedRow.label, parsedRow.value, relevantEntries[i]?.page || 1);
       }
     });
 
@@ -739,7 +781,7 @@ async function initApp(){
         <div class="space-y-2">
           ${meta.extractedMeasurements.map((row) => `
             <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-              <div class="text-[11px] text-gray-500">${escapeHtml(row.label)}</div>
+              <div class="text-[11px] text-gray-500">${escapeHtml(compactMeasurementLabel(row.label) || row.label)}</div>
               <div class="text-sm text-gray-800 font-semibold">${escapeHtml(row.value)}${row.page ? ` <span class="text-[10px] text-gray-400">p${row.page}</span>` : ''}</div>
             </div>
           `).join('')}
