@@ -69,7 +69,10 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       contractValueCents: p.contractValueCents!,
       marginPercent: (marginCents / p.contractValueCents!) * 100,
       ownerId: ownerIdByProject.get(p.id) ?? null,
-      date: p.projectDate ?? p.createdAt,
+      // Must match the `completedAt` precedence below — otherwise a deal can be
+      // bucketed into one year (e.g. by projectDate) while displaying a date
+      // from a different year (projectEndDate), which looks like a bug in the UI.
+      date: p.projectEndDate ?? p.projectDate ?? p.createdAt,
     };
   });
   const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc);

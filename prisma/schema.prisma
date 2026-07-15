@@ -89,6 +89,7 @@ model Project {
   sov ProjectSOV?
   dayAssignments ProjectDayAssignment[]
   workerDayAssignments ProjectWorkerDayAssignment[]
+  notes ProjectNote[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -744,8 +745,31 @@ model ErpUser {
 
   supervisorProjects Project[]
   dayAssignments     ProjectDayAssignment[]
+  projectNotes       ProjectNote[]
 
   @@index([firebaseUid])
+}
+
+/// A team-visible, timestamped note on a project (e.g. "had to pause cleaning
+/// due to maintenance needed before we finish the unit") — an append-only log,
+/// not a single editable description. Shown in the project's Overview tab.
+model ProjectNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  body String
+
+  /// Snapshot of the author's name at post time, so the note stays readable
+  /// even if their ERP account is later removed.
+  authorName   String
+  authorUserId String?
+  authorUser   ErpUser? @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }
 
 /// A supervisor's planned coverage of a project on a specific future day —
@@ -829,9 +853,6 @@ model Employee {
   /// Social Security Number. Masked by default in the UI; only revealed
   /// on-demand via a role-gated endpoint (never shipped in the initial page load).
   ssn String?
-
-  /// ADP Run employee file number for payroll export
-  adpFileNumber String?
 
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")

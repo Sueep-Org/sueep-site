@@ -29,6 +29,7 @@ import { RealEstatePricingPackageEditor } from "./RealEstatePricingPackageEditor
 import { NewQualityCheckForm } from "@/app/erp/(shell)/quality-checks/NewQualityCheckForm";
 import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChecksTable";
 import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSigningSection";
+import { ProjectNotesSection } from "./ProjectNotesSection";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   const canSeeCommission = auth ? canEditEmployeePayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -78,6 +79,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             otherCents: true,
             priceCents: true,
           },
+        },
+        notes: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
         },
       },
     }),
@@ -142,6 +147,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       },
     }),
     prisma.erpUser.findMany({ select: { email: true } }),
+    // auth.uid is the Firebase UID (from the session token), not the ErpUser.id — resolve the actual row.
+    auth?.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : Promise.resolve(null),
   ]);
   if (!project) notFound();
 
@@ -418,6 +425,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
             </div>
           ) : null}
+          <ProjectNotesSection
+            projectId={project.id}
+            initialNotes={project.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
+            currentUserId={currentErpUser?.id ?? null}
+          />
         </>
       ),
     },

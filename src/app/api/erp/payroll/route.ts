@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     prisma.laborEntry.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
       include: {
-        employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
+        employee: { select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, payType: true } },
         project: { select: { id: true, jobTitle: true } },
       },
       orderBy: { workDate: "asc" },
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
     prisma.projectChangeOrderLaborer.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
       include: {
-        employee: { select: { id: true, firstName: true, lastName: true, adpFileNumber: true, hourlyPayCents: true, payType: true } },
+        employee: { select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, payType: true } },
         changeOrder: { select: { project: { select: { jobTitle: true } } } },
       },
       orderBy: { workDate: "asc" },
@@ -82,7 +82,6 @@ export async function GET(req: Request) {
 
   const employeeMap = new Map<EmployeeKey, {
     employeeId: string | null;
-    adpFileNumber: string | null;
     name: string;
     payType: string;
     hourlyRateCents: number;
@@ -100,7 +99,6 @@ export async function GET(req: Request) {
     if (!employeeMap.has(key)) {
       employeeMap.set(key, {
         employeeId: entry.employeeId,
-        adpFileNumber: entry.employee?.adpFileNumber ?? null,
         name,
         payType: entry.employee?.payType ?? "HOURLY",
         hourlyRateCents: entry.hourlyRateCents,
@@ -133,7 +131,6 @@ export async function GET(req: Request) {
     if (!employeeMap.has(key)) {
       employeeMap.set(key, {
         employeeId: entry.employeeId,
-        adpFileNumber: entry.employee?.adpFileNumber ?? null,
         name,
         payType: entry.employee?.payType ?? "HOURLY",
         hourlyRateCents: entry.hourlyRateCents,
@@ -181,7 +178,6 @@ export async function GET(req: Request) {
     return {
       isContractor: false as const,
       employeeId: emp.employeeId,
-      adpFileNumber: emp.adpFileNumber,
       name: emp.name,
       payType: emp.payType,
       hourlyRateCents: emp.hourlyRateCents,
@@ -210,7 +206,6 @@ export async function GET(req: Request) {
   const contractorRows = Array.from(contractorMap.values()).map((c) => ({
     isContractor: true as const,
     employeeId: null,
-    adpFileNumber: null,
     name: c.name,
     payType: "CONTRACTOR",
     hourlyRateCents: 0,

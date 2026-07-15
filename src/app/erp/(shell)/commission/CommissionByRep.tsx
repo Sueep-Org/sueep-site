@@ -250,28 +250,18 @@ function RevenueLine({ revenueCents }: { revenueCents: number }) {
   const overThreshold = revenueCents > ANNUAL_ACCELERATOR_THRESHOLD_CENTS;
   const pct = Math.min(100, (revenueCents / ANNUAL_ACCELERATOR_THRESHOLD_CENTS) * 100);
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-500">
-        {centsToDollars(revenueCents)} paid this year
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs font-semibold tabular-nums text-gray-700">{centsToDollars(revenueCents)}</span>
         {overThreshold ? (
-          <span className="ml-1 font-semibold text-pink-600">· accelerator active</span>
+          <span className="text-xs font-semibold text-pink-600">Accelerator active</span>
         ) : (
-          <span className="ml-1">of {centsToDollars(ANNUAL_ACCELERATOR_THRESHOLD_CENTS)} threshold</span>
+          <span className="text-xs tabular-nums text-gray-400">of {centsToDollars(ANNUAL_ACCELERATOR_THRESHOLD_CENTS)}</span>
         )}
-      </span>
-      <div className="h-1 w-16 overflow-hidden rounded-full bg-gray-200">
+      </div>
+      <div className={`mt-1.5 h-2.5 w-full overflow-hidden rounded-full ${overThreshold ? "bg-pink-100" : "bg-gray-100"}`}>
         <div className={`h-full rounded-full ${overThreshold ? "bg-pink-600" : "bg-gray-400"}`} style={{ width: `${pct}%` }} />
       </div>
-    </div>
-  );
-}
-
-function OwedPaidStats({ totalCents, paidCents }: { totalCents: number; paidCents: number }) {
-  const unpaidCents = totalCents - paidCents;
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs tabular-nums text-gray-700">{centsToDollars(unpaidCents)} unpaid</span>
-      <span className="text-xs tabular-nums text-emerald-600">{centsToDollars(paidCents)} paid</span>
     </div>
   );
 }
@@ -301,9 +291,6 @@ function RepPanel({
     });
   }
 
-  const totalCents = deals.reduce((s, d) => s + d.commissionCents, 0);
-  const paidCents = deals.filter((d) => d.paidAt).reduce((s, d) => s + d.commissionCents, 0);
-
   const query = search.trim().toLowerCase();
   const visibleDeals = deals
     .filter((d) => !query || d.jobTitle.toLowerCase().includes(query))
@@ -313,8 +300,7 @@ function RepPanel({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-        <OwedPaidStats totalCents={totalCents} paidCents={paidCents} />
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
         <RevenueLine revenueCents={yearRevenueCents} />
       </div>
 

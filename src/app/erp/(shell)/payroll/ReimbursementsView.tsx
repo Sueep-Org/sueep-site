@@ -121,10 +121,6 @@ export function ReimbursementsView({ employees, reimbursements }: { employees: E
     .filter((r) => employeeFilter === "all" || r.employeeId === employeeFilter)
     .filter((r) => paidFilter === "all" || (paidFilter === "paid" ? !!r.paidAt : !r.paidAt));
 
-  const totalCents = visibleRows.reduce((s, r) => s + r.amountCents, 0);
-  const paidCents = visibleRows.filter((r) => r.paidAt).reduce((s, r) => s + r.amountCents, 0);
-  const unpaidCents = totalCents - paidCents;
-
   async function togglePaid(row: ReimbursementRow) {
     const nextPaid = !row.paidAt;
     setSavingId(row.id);
@@ -208,17 +204,41 @@ export function ReimbursementsView({ employees, reimbursements }: { employees: E
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-          <p>Unpaid: <span className="font-semibold text-gray-900">{centsToDollars(unpaidCents)}</span></p>
-          <p>Paid: <span className="font-semibold text-emerald-600">{centsToDollars(paidCents)}</span></p>
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={employeeFilter}
+          onChange={(e) => setEmployeeFilter(e.target.value)}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        >
+          <option value="all">All employees</option>
+          {employees.map((e) => (
+            <option key={e.id} value={e.id}>{e.name}</option>
+          ))}
+        </select>
+        <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
+          {([["all", "All"], ["unpaid", "Unpaid"], ["paid", "Paid"]] as [PaidFilter, string][]).map(([f, label]) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setPaidFilter(f)}
+              className={`px-3 py-1.5 transition-colors ${paidFilter === f ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <button
           type="button"
           onClick={() => setShowAddForm((v) => !v)}
-          className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-500"
+          aria-label={showAddForm ? "Cancel adding reimbursement" : "Add reimbursement"}
+          title={showAddForm ? "Cancel" : "Add reimbursement"}
+          className={`ml-auto flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+            showAddForm ? "border-pink-300 bg-pink-50 text-pink-600" : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+          }`}
         >
-          {showAddForm ? "Cancel" : "+ Add reimbursement"}
+          <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 transition-transform ${showAddForm ? "rotate-45" : ""}`}>
+            <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+          </svg>
         </button>
       </div>
 
@@ -293,31 +313,6 @@ export function ReimbursementsView({ employees, reimbursements }: { employees: E
           </button>
         </form>
       )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={employeeFilter}
-          onChange={(e) => setEmployeeFilter(e.target.value)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-        >
-          <option value="all">All employees</option>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>{e.name}</option>
-          ))}
-        </select>
-        <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
-          {([["all", "All"], ["unpaid", "Unpaid"], ["paid", "Paid"]] as [PaidFilter, string][]).map(([f, label]) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setPaidFilter(f)}
-              className={`px-3 py-1.5 transition-colors ${paidFilter === f ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">

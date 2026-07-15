@@ -23,7 +23,6 @@ type Props = {
     status: string;
     hireDate: string | null;
     notes: string | null;
-    adpFileNumber: string | null;
   };
 };
 
@@ -55,7 +54,6 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
       status: fd.get("status"),
       hireDate: fd.get("hireDate") || null,
       notes: fd.get("notes") || null,
-      adpFileNumber: fd.get("adpFileNumber") || null,
     };
 
     try {
@@ -198,12 +196,6 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
               Hire date
             </label>
             <input id="hireDate" name="hireDate" type="date" defaultValue={hireDate} className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="adpFileNumber">
-              ADP file #
-            </label>
-            <input id="adpFileNumber" name="adpFileNumber" defaultValue={initial.adpFileNumber ?? ""} placeholder="e.g. 12345" className={input} />
           </div>
         </div>
         <div>
