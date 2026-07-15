@@ -23,6 +23,8 @@ type Props = {
     status: string;
     hireDate: string | null;
     notes: string | null;
+    isOffshore: boolean;
+    offshoreMonthlyRateCents: number | null;
   };
 };
 
@@ -33,6 +35,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [payType, setPayType] = useState<"HOURLY" | "SALARY">(initial.payType === "SALARY" ? "SALARY" : "HOURLY");
+  const [isOffshore, setIsOffshore] = useState(initial.isOffshore);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -54,6 +57,8 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
       status: fd.get("status"),
       hireDate: fd.get("hireDate") || null,
       notes: fd.get("notes") || null,
+      isOffshore,
+      offshoreMonthlyRate: isOffshore ? (fd.get("offshoreMonthlyRate") || null) : null,
     };
 
     try {
@@ -98,6 +103,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
   const hireDate = initial.hireDate ? initial.hireDate.slice(0, 10) : "";
   const hourlyPay = initial.hourlyPayCents != null ? (initial.hourlyPayCents / 100).toFixed(2) : "";
   const annualSalary = initial.annualSalaryCents != null ? (initial.annualSalaryCents / 100).toFixed(2) : "";
+  const offshoreMonthlyRate = initial.offshoreMonthlyRateCents != null ? (initial.offshoreMonthlyRateCents / 100).toFixed(2) : "";
 
   return (
     <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -198,6 +204,20 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
             <input id="hireDate" name="hireDate" type="date" defaultValue={hireDate} className={input} />
           </div>
         </div>
+        {canSeePay && (
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
+              <input type="checkbox" checked={isOffshore} onChange={(e) => setIsOffshore(e.target.checked)} />
+              Offshore employee (paid a fixed monthly rate via the Offshore Payroll tab, not hours-based)
+            </label>
+            {isOffshore && (
+              <div className="mt-3">
+                <label className={label} htmlFor="offshoreMonthlyRate">Fixed monthly rate</label>
+                <input id="offshoreMonthlyRate" name="offshoreMonthlyRate" type="number" min="0" step="0.01" defaultValue={offshoreMonthlyRate} className={input} placeholder="e.g. 1200.00" />
+              </div>
+            )}
+          </div>
+        )}
         <div>
           <label className={label} htmlFor="notes">
             Notes

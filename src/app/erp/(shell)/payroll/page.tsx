@@ -6,6 +6,7 @@ import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveC
 import { CommissionByRep, type CommissionDealRow, type RecurringCommissionRow, type RepGroup } from "../commission/CommissionByRep";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
+import { OffshorePayrollView } from "./OffshorePayrollView";
 import { ReimbursementsView, type ReimbursementRow } from "./ReimbursementsView";
 
 export const dynamic = "force-dynamic";
@@ -213,6 +214,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         paramName="view"
         tabs={[
           { label: "Payroll", content: <PayrollView /> },
+          { label: "Offshore Payroll", content: <OffshorePayrollView /> },
           {
             label: "Commission",
             content: <CommissionByRep years={availableYears} selectedYear={selectedYear} reps={repGroups} />,

@@ -91,6 +91,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hireDate = d;
   }
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).trim() : null;
+  if (body.isOffshore !== undefined) data.isOffshore = Boolean(body.isOffshore);
+  if (body.offshoreMonthlyRate !== undefined) {
+    const cents = parseHourlyPayCents(body.offshoreMonthlyRate);
+    if (cents === undefined) return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
+    data.offshoreMonthlyRateCents = cents;
+  }
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;

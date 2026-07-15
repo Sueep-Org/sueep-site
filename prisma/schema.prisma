@@ -853,6 +853,13 @@ model Employee {
   hourlyPayCents Int?
   /// Annual salary in cents (e.g. $50,000 => 5000000)
   annualSalaryCents Int?
+
+  /// Paid a fixed amount every month via the Offshore Payroll tab, not tied
+  /// to logged hours — a distinct concept from HOURLY/SALARY payType.
+  isOffshore Boolean @default(false)
+  /// Fixed monthly pay in cents, only used when isOffshore is true.
+  offshoreMonthlyRateCents Int?
+
   defaultProject String?
   /// ACTIVE | INACTIVE
   status String @default("ACTIVE")
@@ -885,11 +892,30 @@ model Employee {
   commissionProjects Project[]
   reimbursements Reimbursement[]
   recurringContractCommissions RecurringContract[]
+  offshorePayrollPayments OffshorePayrollPayment[]
 
   @@index([status])
   @@index([defaultProject])
   @@index([hourlyPayCents])
   @@index([lastName, firstName])
+}
+
+/// Tracks whether an offshore employee's fixed monthly pay has been paid for
+/// a given month. The rate itself isn't snapshotted here — Employee.offshoreMonthlyRateCents
+/// is read live, since a rate change should apply going forward without
+/// needing a "contract" concept the way recurring janitorial contracts do.
+model OffshorePayrollPayment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// First of the paid month
+  periodStart DateTime
+  paidAt      DateTime?
+
+  @@unique([employeeId, periodStart])
 }
 
 model EmployeeDocument {

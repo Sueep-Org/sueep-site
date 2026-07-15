@@ -73,6 +73,8 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 status: employee.status,
                 hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
                 notes: employee.notes,
+                isOffshore: employee.isOffshore,
+                offshoreMonthlyRateCents: employee.offshoreMonthlyRateCents,
               }}
             />
           ),
