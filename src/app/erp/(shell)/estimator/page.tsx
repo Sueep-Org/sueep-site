@@ -15,11 +15,12 @@ export default function EstimatorPage() {
     }
   }, []);
 
-  // Warn on refresh / tab close / Next.js navigation if analysis is unsaved
+  // Warn on refresh / tab close / Next.js navigation if a project is open
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (w.__analysisDirty || w.__projectNameDirty) {
+      if (w.__estimatorProjectLoaded) {
         e.preventDefault();
       }
     };
@@ -29,23 +30,8 @@ export default function EstimatorPage() {
       if (!anchor) return;
       const href = anchor.getAttribute("href");
       if (!href || href.includes("/estimator")) return;
-      if (w.__projectNameDirty) {
-        if (
-          !window.confirm(
-            "Project name has not been saved. Unsaved changes will be lost.",
-          )
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-      }
-      if (w.__analysisDirty) {
-        if (
-          !window.confirm(
-            "Have you saved your analysis figures? Unsaved changes will be lost.",
-          )
-        ) {
+      if (w.__estimatorProjectLoaded) {
+        if (!window.confirm("Are you sure you want to leave? Any unsaved changes will be lost.")) {
           e.preventDefault();
           e.stopPropagation();
         }
@@ -650,8 +636,22 @@ export default function EstimatorPage() {
 
             {/* EDIT FORM */}
             <div id="analysisEditForm" style={{ display: "none" }}>
-              {/* Start Address */}
+              {/* Total Area */}
               <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Total Area (SF)
+                </label>
+                <input
+                  type="number"
+                  id="analysisTotalAreaInput"
+                  placeholder="0"
+                  min="0"
+                  step="1"
+                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              {/* Start Address */}
+              <div className="mb-4">
                 <label className="block text-xs text-gray-500 mb-1">
                   Start Address
                 </label>
@@ -726,20 +726,6 @@ export default function EstimatorPage() {
                     Reset to auto
                   </button>
                 </div>
-              </div>
-              {/* Total Area */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Total Area (SF)
-                </label>
-                <input
-                  type="number"
-                  id="analysisTotalAreaInput"
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
               </div>
               {/* Hidden inputs keep default values for new crew members */}
               <input type="hidden" id="cleanerRateInput" defaultValue="22" />
