@@ -1870,8 +1870,8 @@ async function initApp(){
 
     if(!pdfDoc) return;
 
-    localStorage.setItem('estimator_last_page', currentPage);
-    localStorage.setItem('estimator_last_zoom', zoom);
+    sessionStorage.setItem('estimator_last_page', currentPage);
+    sessionStorage.setItem('estimator_last_zoom', zoom);
 
     const seq = ++__renderSeq;
 
@@ -2126,7 +2126,8 @@ async function initApp(){
 
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
-    if (projData?.id) localStorage.setItem('estimator_last_project_id', projData.id);
+    if (projData?.id) sessionStorage.setItem('estimator_last_project_id', projData.id);
+    window.__estimatorProjectLoaded = true;
 
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
     setText('loadedProjectName', projData.name);
@@ -2142,9 +2143,10 @@ async function initApp(){
   }
 
   function showNewProjectForm() {
-    localStorage.removeItem('estimator_last_project_id');
-    localStorage.removeItem('estimator_last_page');
-    localStorage.removeItem('estimator_last_zoom');
+    window.__estimatorProjectLoaded = false;
+    sessionStorage.removeItem('estimator_last_project_id');
+    sessionStorage.removeItem('estimator_last_page');
+    sessionStorage.removeItem('estimator_last_zoom');
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'block';
     document.getElementById('editProjectForm').style.display = 'none';
@@ -3665,7 +3667,7 @@ async function initApp(){
   async function restoreLastProject() {
     if (_restoring) return;
     _restoring = true;
-    const lastId = localStorage.getItem('estimator_last_project_id');
+    const lastId = sessionStorage.getItem('estimator_last_project_id');
     if (!lastId) { _restoring = false; return; }
 
     // After Next.js soft navigation, DOM elements are recreated but the JS closure
@@ -3677,7 +3679,7 @@ async function initApp(){
     }
     try {
       const res = await fetch(`${API_BASE}/api/projects/${lastId}`, { cache: 'no-store' });
-      if (!res.ok) { localStorage.removeItem('estimator_last_project_id'); return; }
+      if (!res.ok) { sessionStorage.removeItem('estimator_last_project_id'); return; }
       const projData = await res.json();
       const bp = (projData.files || []).find(f => f.file_type === 'blueprint');
       if (!bp) return;
@@ -3689,8 +3691,8 @@ async function initApp(){
       activeProjectId = projData.id;
       await window.__restoreAnnotations?.(projData.id);
       // Restore page and zoom
-      const savedPage = parseInt(localStorage.getItem('estimator_last_page') || '1', 10);
-      const savedZoom = parseFloat(localStorage.getItem('estimator_last_zoom') || '1');
+      const savedPage = parseInt(sessionStorage.getItem('estimator_last_page') || '1', 10);
+      const savedZoom = parseFloat(sessionStorage.getItem('estimator_last_zoom') || '1');
       if (pdfDoc && savedPage > 1 && savedPage <= pdfDoc.numPages) {
         currentPage = savedPage;
         zoom = savedZoom || 1;
@@ -3711,7 +3713,7 @@ async function initApp(){
 
   // After soft-nav reload, sessionStorage flag persists — run restore from initApp
   // since useEffect fires before this script finishes loading
-  if (sessionStorage.getItem('estimator_visited') && localStorage.getItem('estimator_last_project_id')) {
+  if (sessionStorage.getItem('estimator_last_project_id')) {
     restoreLastProject();
   }
 }
