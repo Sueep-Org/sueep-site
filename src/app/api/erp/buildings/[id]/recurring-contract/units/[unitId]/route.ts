@@ -27,6 +27,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!v) return NextResponse.json({ error: "unitNumber cannot be empty" }, { status: 400 });
     data.unitNumber = v;
   }
+  if (body.bedrooms !== undefined) {
+    data.bedrooms = body.bedrooms != null && body.bedrooms !== "" ? Number(body.bedrooms) : null;
+  }
+  if (body.bathrooms !== undefined) {
+    data.bathrooms = body.bathrooms != null && body.bathrooms !== "" ? Number(body.bathrooms) : null;
+  }
 
   try {
     const unit = await prisma.recurringContractUnit.update({ where: { id: unitId }, data });

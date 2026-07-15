@@ -45,6 +45,9 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
       .split(/\r?\n/)
       .find((l) => l.trim().toLowerCase().startsWith("price package:"))
       ?.trim() ?? null;
+    const bodyDescLines = bodyDesc.split(/\r?\n/);
+    const commentsStart = bodyDescLines.findIndex((l) => l.trim().toLowerCase().startsWith("comments:"));
+    const commentsLine = commentsStart === -1 ? null : bodyDescLines.slice(commentsStart).join("\n").trim();
 
     // One project per unit so each unit has its own checklist, labor, and materials
     const projects = await Promise.all(
@@ -57,6 +60,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
           `Units: ${request.unitNumber}${request.bedrooms === null ? " (Common Area)" : ""}`,
           pricePackageLine,
           unitTotal,
+          commentsLine,
         ].filter(Boolean);
 
         return prisma.project.create({

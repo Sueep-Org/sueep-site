@@ -1866,6 +1866,7 @@ export function NewProjectForm({
                 rows={3}
                 className={input}
                 placeholder="Access notes, special instructions, timing details, or anything the PM should know"
+                defaultValue="Scope and expectations have been reviewed with the Project Supervisor and production team to ensure delivery of a move-in ready unit. Any conditions or services identified outside of the approved turnover scope will be documented and communicated for authorization prior to proceeding. Once completion of Unit, sign off by Property Management is needed."
               />
             </div>
           </div>
