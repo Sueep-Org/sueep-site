@@ -7,6 +7,7 @@ type Props = {
   touchUpPaint: number | null;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  ceilingPaint: boolean;
   otherWork: boolean;
   otherDescription: string | null;
 };
@@ -29,6 +30,7 @@ export function UnitScopeCard({
   touchUpPaint,
   carpetCleaning,
   materialsAdditional,
+  ceilingPaint,
   otherWork,
   otherDescription,
 }: Props) {
@@ -38,6 +40,7 @@ export function UnitScopeCard({
     touchUpPaint ? `Touch-Up Paint (${touchUpPaint} rooms)` : null,
     carpetCleaning ? "Carpet Cleaning" : null,
     materialsAdditional ? "Materials" : null,
+    ceilingPaint ? "Ceiling Painting" : null,
     otherWork ? (otherDescription?.trim() || "Other") : null,
   ].filter(Boolean) as string[];
 

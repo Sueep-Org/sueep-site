@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
-import { marginTierFor, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
+import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
 import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 
@@ -45,6 +45,19 @@ function projectTypeGroup(segment: string): ProjectTypeGroup {
   return SEGMENT_TO_TYPE_GROUP[normalizeProjectSegment(segment)];
 }
 
+export type RecurringCommissionRow = {
+  contractId: string;
+  buildingId: string;
+  periodId: string;
+  buildingName: string;
+  periodStart: string;
+  monthlyRateCents: number;
+  /** 0-based month index of the contract this period falls in — drives the 5% / 2% / $0 tier. */
+  monthIndex: number;
+  commissionCents: number;
+  paidAt: string | null;
+};
+
 export type RepGroup = {
   ownerId: string | null;
   ownerName: string;
@@ -52,6 +65,7 @@ export type RepGroup = {
   totalCommissionCents: number;
   paidCommissionCents: number;
   deals: CommissionDealRow[];
+  recurringRows: RecurringCommissionRow[];
 };
 
 type PaidFilter = "all" | "paid" | "unpaid";
@@ -67,10 +81,42 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
+function formatMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function recurringTierLabel(monthIndex: number): string {
+  const rate = recurringCommissionRateForMonth(monthIndex);
+  const yearLabel = monthIndex < 12 ? "Year 1" : monthIndex < 24 ? "Year 2" : "Year 3+";
+  return `${yearLabel} · ${rate > 0 ? `${(rate * 100).toFixed(0)}%` : "$0"}`;
+}
+
 function sortValue(row: CommissionDealRow, key: SortKey): number {
   if (key === "date") return new Date(row.completedAt).getTime();
   if (key === "margin") return row.marginCents ?? -Infinity;
   return row.commissionCents;
+}
+
+type CombinedRow =
+  | { kind: "deal"; deal: CommissionDealRow }
+  | { kind: "recurring"; recurring: RecurringCommissionRow };
+
+function combinedDateIso(row: CombinedRow): string {
+  return row.kind === "deal" ? row.deal.completedAt : row.recurring.periodStart;
+}
+function combinedPaidAt(row: CombinedRow): string | null {
+  return row.kind === "deal" ? row.deal.paidAt : row.recurring.paidAt;
+}
+function combinedTypeGroup(row: CombinedRow): ProjectTypeGroup {
+  return row.kind === "deal" ? projectTypeGroup(row.deal.segment) : "JANITORIAL_TURNOVER_REQUESTS";
+}
+function combinedSearchText(row: CombinedRow): string {
+  return row.kind === "deal" ? row.deal.jobTitle : row.recurring.buildingName;
+}
+function combinedSortValue(row: CombinedRow, key: SortKey): number {
+  if (key === "date") return new Date(combinedDateIso(row)).getTime();
+  if (key === "margin") return row.kind === "deal" ? (row.deal.marginCents ?? -Infinity) : -Infinity;
+  return row.kind === "deal" ? row.deal.commissionCents : row.recurring.commissionCents;
 }
 
 const SORT_OPTIONS: { value: SortState; label: string }[] = [
@@ -271,11 +317,17 @@ function RepPanel({
   deals,
   onTogglePaid,
   savingId,
+  recurringRows,
+  onToggleRecurringPaid,
+  savingRecurringId,
 }: {
   yearRevenueCents: number;
   deals: CommissionDealRow[];
   onTogglePaid: (row: CommissionDealRow) => void;
   savingId: string | null;
+  recurringRows: RecurringCommissionRow[];
+  onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
+  savingRecurringId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
@@ -291,12 +343,21 @@ function RepPanel({
     });
   }
 
+  const combined: CombinedRow[] = [
+    ...deals.map((d) => ({ kind: "deal" as const, deal: d })),
+    ...recurringRows.map((r) => ({ kind: "recurring" as const, recurring: r })),
+  ];
+
   const query = search.trim().toLowerCase();
-  const visibleDeals = deals
-    .filter((d) => !query || d.jobTitle.toLowerCase().includes(query))
-    .filter((d) => paidFilter === "all" || (paidFilter === "paid" ? !!d.paidAt : !d.paidAt))
-    .filter((d) => selectedTypes.has(projectTypeGroup(d.segment)))
-    .sort((a, b) => (sort.dir === "desc" ? sortValue(b, sort.key) - sortValue(a, sort.key) : sortValue(a, sort.key) - sortValue(b, sort.key)));
+  const visibleRows = combined
+    .filter((row) => !query || combinedSearchText(row).toLowerCase().includes(query))
+    .filter((row) => paidFilter === "all" || (paidFilter === "paid" ? !!combinedPaidAt(row) : !combinedPaidAt(row)))
+    .filter((row) => selectedTypes.has(combinedTypeGroup(row)))
+    .sort((a, b) =>
+      sort.dir === "desc"
+        ? combinedSortValue(b, sort.key) - combinedSortValue(a, sort.key)
+        : combinedSortValue(a, sort.key) - combinedSortValue(b, sort.key)
+    );
 
   return (
     <div className="space-y-4">
@@ -304,7 +365,7 @@ function RepPanel({
         <RevenueLine revenueCents={yearRevenueCents} />
       </div>
 
-      {deals.length === 0 ? (
+      {combined.length === 0 ? (
         <p className="text-sm text-gray-400">No deals.</p>
       ) : (
         <div className="rounded-lg border border-gray-200 bg-white">
@@ -331,7 +392,7 @@ function RepPanel({
             </div>
           </div>
 
-          {visibleDeals.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <p className="p-4 text-center text-sm text-gray-400">No deals match the current filters.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -348,37 +409,71 @@ function RepPanel({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {visibleDeals.map((d) => {
-                    const marginPct = marginPercentOf(d);
-                    const tier = marginPct == null ? null : marginTierFor(marginPct);
+                  {visibleRows.map((row) => {
+                    if (row.kind === "deal") {
+                      const d = row.deal;
+                      const marginPct = marginPercentOf(d);
+                      const tier = marginPct == null ? null : marginTierFor(marginPct);
+                      return (
+                        <tr key={d.projectId} className="hover:bg-gray-50">
+                          <td className="max-w-xs truncate px-3 py-2">
+                            <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
+                              {d.jobTitle}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
+                          <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
+                            {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                            {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => onTogglePaid(d)}
+                              disabled={savingId === d.projectId}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
+                                d.paidAt
+                                  ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                                  : "border-gray-300 bg-gray-100 text-gray-600"
+                              }`}
+                            >
+                              {d.paidAt ? "Paid" : "Not paid"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const r = row.recurring;
                     return (
-                      <tr key={d.projectId} className="hover:bg-gray-50">
+                      <tr key={r.periodId} className="bg-violet-50/50 hover:bg-violet-100/60">
                         <td className="max-w-xs truncate px-3 py-2">
-                          <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
-                            {d.jobTitle}
+                          <Link href={`/erp/buildings/${r.buildingId}`} className="text-pink-600 hover:underline">
+                            {r.buildingName}
                           </Link>
+                          <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Recurring</span>
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
-                          {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">
-                          {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatMonth(r.periodStart)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(r.monthlyRateCents)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-400">—</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
                         <td className="px-3 py-2">
                           <button
                             type="button"
-                            onClick={() => onTogglePaid(d)}
-                            disabled={savingId === d.projectId}
+                            onClick={() => onToggleRecurringPaid(r)}
+                            disabled={savingRecurringId === r.periodId}
                             className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-                              d.paidAt
+                              r.paidAt
                                 ? "border-emerald-300 bg-emerald-100 text-emerald-800"
                                 : "border-gray-300 bg-gray-100 text-gray-600"
                             }`}
                           >
-                            {d.paidAt ? "Paid" : "Not paid"}
+                            {r.paidAt ? "Paid" : "Not paid"}
                           </button>
                         </td>
                       </tr>
@@ -408,6 +503,11 @@ export function CommissionByRep({
   );
   const [savingId, setSavingId] = useState<string | null>(null);
 
+  const [recurringByOwner, setRecurringByOwner] = useState<Record<string, RecurringCommissionRow[]>>(() =>
+    Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.recurringRows]))
+  );
+  const [savingRecurringId, setSavingRecurringId] = useState<string | null>(null);
+
   async function setPaid(row: CommissionDealRow, ownerKey: string, paid: boolean) {
     setSavingId(row.projectId);
     setDealsByOwner((prev) => ({
@@ -430,6 +530,31 @@ export function CommissionByRep({
       }));
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function setRecurringPaid(row: RecurringCommissionRow, ownerKey: string, paid: boolean) {
+    setSavingRecurringId(row.periodId);
+    setRecurringByOwner((prev) => ({
+      ...prev,
+      [ownerKey]: prev[ownerKey].map((r) =>
+        r.periodId === row.periodId ? { ...r, paidAt: paid ? new Date().toISOString() : null } : r
+      ),
+    }));
+    try {
+      const res = await fetch(`/api/erp/buildings/${row.buildingId}/recurring-contract/periods/${row.periodId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commissionPaid: paid }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+    } catch {
+      setRecurringByOwner((prev) => ({
+        ...prev,
+        [ownerKey]: prev[ownerKey].map((r) => (r.periodId === row.periodId ? { ...r, paidAt: row.paidAt } : r)),
+      }));
+    } finally {
+      setSavingRecurringId(null);
     }
   }
 
@@ -462,6 +587,9 @@ export function CommissionByRep({
                   deals={dealsByOwner[key] ?? []}
                   savingId={savingId}
                   onTogglePaid={(row) => setPaid(row, key, !row.paidAt)}
+                  recurringRows={recurringByOwner[key] ?? []}
+                  savingRecurringId={savingRecurringId}
+                  onToggleRecurringPaid={(row) => setRecurringPaid(row, key, !row.paidAt)}
                 />
               ),
             };

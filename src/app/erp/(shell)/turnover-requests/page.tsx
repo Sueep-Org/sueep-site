@@ -21,6 +21,7 @@ function formatTurnoverInfo(request: RequestWithBuilding) {
     request.touchUpPaint ? `${request.touchUpPaint} touch-up` : null,
     request.carpetCleaning ? "Carpet" : null,
     request.materialsAdditional ? "Materials" : null,
+    request.ceilingPaint ? "Ceiling paint" : null,
   ].filter(Boolean);
   return services.length ? `${unit} - ${services.join(", ")}` : unit;
 }

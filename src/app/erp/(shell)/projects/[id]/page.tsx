@@ -74,6 +74,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             touchUpPaint: true,
             carpetCleaning: true,
             materialsAdditional: true,
+            ceilingPaint: true,
             otherWork: true,
             otherDescription: true,
             otherCents: true,
@@ -359,6 +360,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 touchUpPaint={project.turnoverRequest.touchUpPaint}
                 carpetCleaning={project.turnoverRequest.carpetCleaning}
                 materialsAdditional={project.turnoverRequest.materialsAdditional}
+                ceilingPaint={project.turnoverRequest.ceilingPaint}
                 otherWork={project.turnoverRequest.otherWork}
                 otherDescription={project.turnoverRequest.otherDescription}
               />
@@ -452,6 +454,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 touchUpPaint={project.turnoverRequest?.touchUpPaint ?? null}
                 carpetCleaning={project.turnoverRequest?.carpetCleaning ?? false}
                 materialsAdditional={project.turnoverRequest?.materialsAdditional ?? false}
+                ceilingPaint={project.turnoverRequest?.ceilingPaint ?? false}
                 otherWork={project.turnoverRequest?.otherWork ?? false}
                 otherDescription={project.turnoverRequest?.otherDescription ?? null}
                 otherCents={project.turnoverRequest?.otherCents ?? null}

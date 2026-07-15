@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { computeProjectMargins } from "@/lib/erp/projectMargin";
-import { computeCommissionCentsByDeal, resolveCommissionEmployeeId } from "@/lib/erp/commission";
-import { CommissionByRep, type CommissionDealRow, type RepGroup } from "../commission/CommissionByRep";
+import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveCommissionEmployeeId } from "@/lib/erp/commission";
+import { CommissionByRep, type CommissionDealRow, type RecurringCommissionRow, type RepGroup } from "../commission/CommissionByRep";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
 import { ReimbursementsView, type ReimbursementRow } from "./ReimbursementsView";
@@ -16,7 +16,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [projects, employees, erpUsers, reimbursements] = await Promise.all([
+  const [projects, employees, erpUsers, reimbursements, recurringPeriods] = await Promise.all([
     prisma.project.findMany({
       // Only fully-billed deals count toward commission — unbilled revenue
       // isn't tracked here at all, so it also doesn't count toward the
@@ -50,6 +50,14 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       orderBy: { date: "desc" },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     }),
+    prisma.recurringContractPeriod.findMany({
+      include: {
+        recurringContract: {
+          select: { buildingId: true, startDate: true, commissionEmployeeId: true, building: { select: { name: true } } },
+        },
+        projects: { select: { id: true, contractValueCents: true } },
+      },
+    }),
   ]);
 
   const erpUserEmails = new Set(erpUsers.map((u) => u.email.toLowerCase()));
@@ -58,6 +66,35 @@ export default async function PayrollPage({ searchParams }: PageProps) {
 
   const margins = await computeProjectMargins(projects);
   const ownerIdByProject = new Map(projects.map((p) => [p.id, resolveCommissionEmployeeId(p, eligibleEmployees)]));
+
+  // Recurring janitorial contract commission: 5% of ACV months 1-12, 2%
+  // months 13-24, $0 after — a separate schedule from one-time deals, keyed
+  // off each period's own snapshotted rate rather than margin. See
+  // computeRecurringCommissionCents. Computed before the one-time-deal
+  // commission calc below, since recurring revenue also counts toward the
+  // $1.5M cumulative threshold that unlocks the accelerator rate on deals.
+  const recurringRowsAll: (RecurringCommissionRow & { ownerId: string | null; year: number })[] = recurringPeriods
+    .map((period) => {
+      const billingProject = period.projects.find((p) => p.id === period.billingProjectId);
+      if (!billingProject?.contractValueCents) return null;
+      const monthIndex =
+        (period.periodStart.getUTCFullYear() - period.recurringContract.startDate.getUTCFullYear()) * 12 +
+        (period.periodStart.getUTCMonth() - period.recurringContract.startDate.getUTCMonth());
+      return {
+        contractId: period.recurringContractId,
+        buildingId: period.recurringContract.buildingId,
+        periodId: period.id,
+        buildingName: period.recurringContract.building.name,
+        periodStart: period.periodStart.toISOString(),
+        monthlyRateCents: billingProject.contractValueCents,
+        monthIndex,
+        commissionCents: computeRecurringCommissionCents(billingProject.contractValueCents, monthIndex),
+        paidAt: period.commissionPaidAt ? period.commissionPaidAt.toISOString() : null,
+        ownerId: period.recurringContract.commissionEmployeeId,
+        year: period.periodStart.getUTCFullYear(),
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
 
   // Commission rate depends on margin % and is applied to contract value
   // (not margin dollars), plus an accelerator once a rep's cumulative
@@ -75,7 +112,12 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       date: p.projectEndDate ?? p.projectDate ?? p.createdAt,
     };
   });
-  const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc);
+  const recurringRevenueForCalc = recurringRowsAll.map((r) => ({
+    contractValueCents: r.monthlyRateCents,
+    ownerId: r.ownerId,
+    date: new Date(r.periodStart),
+  }));
+  const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc, recurringRevenueForCalc);
   const yearByDeal = new Map(dealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
 
   const allRows: (CommissionDealRow & { ownerId: string | null; year: number })[] = projects.map((p) => {
@@ -97,7 +139,9 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     };
   });
 
-  const availableYears = [...new Set(allRows.map((r) => r.year))].sort((a, b) => b - a);
+  const availableYears = [...new Set([...allRows.map((r) => r.year), ...recurringRowsAll.map((r) => r.year)])].sort(
+    (a, b) => b - a
+  );
   const { year: yearParam } = await searchParams;
   const selectedYear = yearParam && availableYears.includes(Number(yearParam))
     ? Number(yearParam)
@@ -114,6 +158,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       totalCommissionCents: 0,
       paidCommissionCents: 0,
       deals: [],
+      recurringRows: [],
     };
     group.yearRevenueCents += row.contractValueCents;
     group.totalCommissionCents += row.commissionCents;
@@ -121,6 +166,27 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     group.deals.push(row);
     groupsByOwner.set(key, group);
   }
+
+  const recurringYearRows = recurringRowsAll.filter((r) => r.year === selectedYear);
+  for (const row of recurringYearRows) {
+    const key = row.ownerId ?? "unassigned";
+    const owner = row.ownerId ? employeeById.get(row.ownerId) : null;
+    const group = groupsByOwner.get(key) ?? {
+      ownerId: row.ownerId,
+      ownerName: owner ? `${owner.firstName} ${owner.lastName}`.trim() : "Unassigned",
+      yearRevenueCents: 0,
+      totalCommissionCents: 0,
+      paidCommissionCents: 0,
+      deals: [],
+      recurringRows: [],
+    };
+    group.yearRevenueCents += row.monthlyRateCents;
+    group.totalCommissionCents += row.commissionCents;
+    if (row.paidAt) group.paidCommissionCents += row.commissionCents;
+    group.recurringRows.push(row);
+    groupsByOwner.set(key, group);
+  }
+
   const repGroups = [...groupsByOwner.values()].sort((a, b) => b.totalCommissionCents - a.totalCommissionCents);
 
   const activeEmployeeOptions = employees

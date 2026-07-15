@@ -126,6 +126,7 @@ function computePricing(form: FormState) {
     touchUpPaint: form.touchUpPaint ? 1 : 0,
     carpetCleaning: form.carpetCleaning,
     materialsAdditional: false,
+    ceilingPaint: false,
   });
 }
 

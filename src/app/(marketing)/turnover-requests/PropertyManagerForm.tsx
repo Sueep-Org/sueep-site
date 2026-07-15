@@ -227,6 +227,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
       touchUpPaint: form.touchUpPaint ? 1 : 0,
       carpetCleaning: form.carpetCleaning,
       materialsAdditional: false,
+      ceilingPaint: false,
     });
     const otherCents = form.otherWork ? dollarsToCents(form.otherPrice) : 0;
     const totalPriceCents = pricing.priceCents + otherCents;

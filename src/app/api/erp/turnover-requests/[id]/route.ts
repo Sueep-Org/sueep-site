@@ -68,6 +68,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.fullClean !== undefined) data.fullClean = Boolean(body.fullClean);
   if (body.carpetCleaning !== undefined) data.carpetCleaning = Boolean(body.carpetCleaning);
   if (body.materialsAdditional !== undefined) data.materialsAdditional = Boolean(body.materialsAdditional);
+  if (body.ceilingPaint !== undefined) data.ceilingPaint = Boolean(body.ceilingPaint);
   if (body.otherWork !== undefined) data.otherWork = Boolean(body.otherWork);
   if (body.otherDescription !== undefined) data.otherDescription = body.otherDescription ? String(body.otherDescription).trim() || null : null;
   if (body.otherCents !== undefined) data.otherCents = typeof body.otherCents === "number" ? body.otherCents : null;
@@ -128,6 +129,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     carpetCleaning: data.carpetCleaning !== undefined ? Boolean(data.carpetCleaning) : existing.carpetCleaning,
     materialsAdditional:
       data.materialsAdditional !== undefined ? Boolean(data.materialsAdditional) : existing.materialsAdditional,
+    ceilingPaint: data.ceilingPaint !== undefined ? Boolean(data.ceilingPaint) : existing.ceilingPaint,
   };
 
   const pricing = computeTurnoverPricing(pricingInput);

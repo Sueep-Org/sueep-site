@@ -6,6 +6,7 @@ export type TurnoverPricingPackage = {
   touchUpPaintLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   carpetCleaningLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   additionalMaterialsLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  ceilingPaintLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   label: string;
 };
 
@@ -65,6 +66,16 @@ export const DEFAULT_TURNOVER_PRICING_PACKAGE: TurnoverPricingPackage = {
     "3/1": 85,
     "3/2": 85,
     "3/3": 85,
+    "common-area": 0,
+  },
+  ceilingPaintLayoutRates: {
+    "studio": 75,
+    "1/1": 75,
+    "2/1": 75,
+    "2/2": 75,
+    "3/1": 75,
+    "3/2": 75,
+    "3/3": 75,
     "common-area": 0,
   },
 };
@@ -176,6 +187,7 @@ export function sanitizeTurnoverPricingPackage(
   const touchUpPaintLayoutRates = { ...fallback.touchUpPaintLayoutRates, ...readLayoutRates(raw.touchUpPaintLayoutRates) };
   const carpetCleaningLayoutRates = { ...fallback.carpetCleaningLayoutRates, ...readLayoutRates(raw.carpetCleaningLayoutRates) };
   const additionalMaterialsLayoutRates = { ...fallback.additionalMaterialsLayoutRates, ...readLayoutRates(raw.additionalMaterialsLayoutRates) };
+  const ceilingPaintLayoutRates = { ...fallback.ceilingPaintLayoutRates, ...readLayoutRates(raw.ceilingPaintLayoutRates) };
 
   return {
     label: String(raw.label || fallback.label).trim() || fallback.label,
@@ -194,6 +206,7 @@ export function sanitizeTurnoverPricingPackage(
     touchUpPaintLayoutRates,
     carpetCleaningLayoutRates,
     additionalMaterialsLayoutRates,
+    ceilingPaintLayoutRates,
   };
 }
 
@@ -286,6 +299,19 @@ export function getTurnoverAdditionalMaterialsRate(
   return {
     layout,
     dollars: pricingPackage.additionalMaterialsLayoutRates?.[layout] ?? (isCommonArea ? 0 : 85),
+  };
+}
+
+export function getTurnoverCeilingPaintRate(
+  pricingPackage: TurnoverPricingPackage,
+  bedrooms?: number | null,
+  bathrooms?: number | null,
+  isCommonArea?: boolean
+) {
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  return {
+    layout,
+    dollars: pricingPackage.ceilingPaintLayoutRates?.[layout] ?? (isCommonArea ? 0 : 75),
   };
 }
 

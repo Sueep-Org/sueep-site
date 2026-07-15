@@ -15,7 +15,14 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
-  const building = await prisma.building.findUnique({ where: { id } });
+  const [building, employees] = await Promise.all([
+    prisma.building.findUnique({ where: { id } }),
+    prisma.employee.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+  ]);
   if (!building) notFound();
 
   const backHref = from === "projects" ? "/erp/projects" : "/erp/buildings";
@@ -46,6 +53,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           pmPhone: building.pmPhone,
         }}
         initialPackage={building.pricingPackage}
+        employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
       />
     </div>
   );

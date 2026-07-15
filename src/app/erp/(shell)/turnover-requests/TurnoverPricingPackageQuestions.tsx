@@ -17,6 +17,7 @@ type CommonAreaRates = {
   touchUpPaint: string;
   carpetCleaning: string;
   additionalMaterials: string;
+  ceilingPaint: string;
 };
 
 type TurnoverPricingPackageQuestionsProps = {
@@ -32,6 +33,7 @@ type TurnoverPricingPackageQuestionsProps = {
   fullClean: boolean;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  ceilingPaint: boolean;
   otherWork?: boolean;
   otherDescription?: string;
   otherPrice?: string;
@@ -43,6 +45,7 @@ type TurnoverPricingPackageQuestionsProps = {
   setFullClean: (value: boolean) => void;
   setCarpetCleaning: (value: boolean) => void;
   setMaterialsAdditional: (value: boolean) => void;
+  setCeilingPaint: (value: boolean) => void;
   setOtherWork?: (value: boolean) => void;
   setOtherDescription?: (value: string) => void;
   setOtherPrice?: (value: string) => void;
@@ -73,6 +76,7 @@ export function TurnoverPricingPackageQuestions({
   fullClean,
   carpetCleaning,
   materialsAdditional,
+  ceilingPaint,
   otherWork = false,
   otherDescription = "",
   otherPrice = "",
@@ -84,6 +88,7 @@ export function TurnoverPricingPackageQuestions({
   setFullClean,
   setCarpetCleaning,
   setMaterialsAdditional,
+  setCeilingPaint,
   setOtherWork = () => {},
   setOtherDescription = () => {},
   setOtherPrice = () => {},
@@ -98,6 +103,7 @@ export function TurnoverPricingPackageQuestions({
         touchUpPaintLayoutRates: { "common-area": n(commonAreaRates.touchUpPaint) },
         carpetCleaningLayoutRates: { "common-area": n(commonAreaRates.carpetCleaning) },
         additionalMaterialsLayoutRates: { "common-area": n(commonAreaRates.additionalMaterials) },
+        ceilingPaintLayoutRates: { "common-area": n(commonAreaRates.ceilingPaint) },
       }
     : storedPricingPackage;
   const basePricing = computeTurnoverPricing({
@@ -112,6 +118,7 @@ export function TurnoverPricingPackageQuestions({
     fullClean,
     carpetCleaning,
     materialsAdditional,
+    ceilingPaint,
   });
   const otherCents = otherWork ? dollarsToCents(otherPrice) : 0;
   const pricing = { ...basePricing, priceCents: basePricing.priceCents + otherCents };
@@ -203,6 +210,7 @@ export function TurnoverPricingPackageQuestions({
               { key: "touchUpPaint", label: "Touch-up paint" },
               { key: "carpetCleaning", label: "Carpet cleaning" },
               { key: "additionalMaterials", label: "Add. materials" },
+              { key: "ceilingPaint", label: "Ceiling painting" },
             ] as const).map(({ key, label }) => (
               <label key={key} className="block text-[11px] font-medium text-blue-700">
                 {label}
@@ -268,6 +276,16 @@ export function TurnoverPricingPackageQuestions({
               className="h-4 w-4 rounded border-gray-300 text-pink-600"
             />
             Additional materials
+          </label>
+          <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <input
+              name="ceilingPaint"
+              checked={ceilingPaint}
+              onChange={(event) => setCeilingPaint(event.target.checked)}
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-pink-600"
+            />
+            Ceiling painting
           </label>
           <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <input

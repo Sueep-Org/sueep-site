@@ -20,6 +20,7 @@ type Props = {
   touchUpPaint: number | null;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  ceilingPaint: boolean;
   otherWork: boolean;
   otherDescription: string | null;
   otherCents: number | null;
@@ -39,6 +40,7 @@ export function UnitScopeEditor({
   touchUpPaint,
   carpetCleaning,
   materialsAdditional,
+  ceilingPaint,
   otherWork,
   otherDescription,
   otherCents,
@@ -54,6 +56,7 @@ export function UnitScopeEditor({
   const [touchUpPaintStr, setTouchUpPaint] = useState(touchUpPaint?.toString() ?? "0");
   const [carpetCleaningVal, setCarpetCleaning] = useState(carpetCleaning);
   const [materialsAdditionalVal, setMaterialsAdditional] = useState(materialsAdditional);
+  const [ceilingPaintVal, setCeilingPaint] = useState(ceilingPaint);
   const [otherWorkVal, setOtherWork] = useState(otherWork);
   const [otherDescriptionVal, setOtherDescription] = useState(otherDescription ?? "");
   const [otherPriceVal, setOtherPrice] = useState(otherCents != null ? (otherCents / 100).toFixed(2) : "");
@@ -66,6 +69,7 @@ export function UnitScopeEditor({
       touchUpPaint: d(pkg.touchUpPaintLayoutRates?.["common-area"]),
       carpetCleaning: d(pkg.carpetCleaningLayoutRates?.["common-area"]),
       additionalMaterials: d(pkg.additionalMaterialsLayoutRates?.["common-area"]),
+      ceilingPaint: d(pkg.ceilingPaintLayoutRates?.["common-area"]),
     };
   });
   const [saving, setSaving] = useState(false);
@@ -82,6 +86,7 @@ export function UnitScopeEditor({
       touchUpPaintLayoutRates: { ...pkg.touchUpPaintLayoutRates, "common-area": n(commonAreaRates.touchUpPaint) },
       carpetCleaningLayoutRates: { ...pkg.carpetCleaningLayoutRates, "common-area": n(commonAreaRates.carpetCleaning) },
       additionalMaterialsLayoutRates: { ...pkg.additionalMaterialsLayoutRates, "common-area": n(commonAreaRates.additionalMaterials) },
+      ceilingPaintLayoutRates: { ...pkg.ceilingPaintLayoutRates, "common-area": n(commonAreaRates.ceilingPaint) },
     };
   }
 
@@ -114,6 +119,7 @@ export function UnitScopeEditor({
         touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
         carpetCleaning: carpetCleaningVal,
         materialsAdditional: materialsAdditionalVal,
+        ceilingPaint: ceilingPaintVal,
         otherWork: otherWorkVal,
         otherDescription: otherWorkVal ? otherDescriptionVal.trim() || null : null,
         otherCents: otherWorkVal ? otherCentsVal : null,
@@ -204,6 +210,7 @@ export function UnitScopeEditor({
         fullClean={fullCleanVal}
         carpetCleaning={carpetCleaningVal}
         materialsAdditional={materialsAdditionalVal}
+        ceilingPaint={ceilingPaintVal}
         otherWork={otherWorkVal}
         otherDescription={otherDescriptionVal}
         otherPrice={otherPriceVal}
@@ -216,6 +223,7 @@ export function UnitScopeEditor({
         setFullClean={setFullClean}
         setCarpetCleaning={setCarpetCleaning}
         setMaterialsAdditional={setMaterialsAdditional}
+        setCeilingPaint={setCeilingPaint}
         setOtherWork={setOtherWork}
         setOtherDescription={setOtherDescription}
         setOtherPrice={setOtherPrice}

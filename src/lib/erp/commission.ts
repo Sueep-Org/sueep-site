@@ -1,12 +1,13 @@
 export type MarginTier = { minMarginPercent: number; baseRate: number; acceleratorRate: number };
 
 /**
- * Sales comp plan (one-time project deals only — janitorial/recurring
- * contracts use a separate ACV + retention-tail model, not implemented
- * here). Commission rate depends on Sueep's margin % on the deal, and is
- * applied against the deal's contract value — not against margin dollars.
- * Checked highest-first; the first tier whose minMarginPercent the deal's
- * margin meets or exceeds wins. Below 10% margin, no commission at all.
+ * Sales comp plan for one-time project deals. Recurring janitorial
+ * contracts use a separate ACV + retention-tail model — see
+ * `recurringCommissionRateForMonth` below. Commission rate depends on
+ * Sueep's margin % on the deal, and is applied against the deal's contract
+ * value — not against margin dollars. Checked highest-first; the first tier
+ * whose minMarginPercent the deal's margin meets or exceeds wins. Below 10%
+ * margin, no commission at all.
  */
 export const MARGIN_TIERS: MarginTier[] = [
   { minMarginPercent: 30, baseRate: 0.05, acceleratorRate: 0.1 },
@@ -31,42 +32,84 @@ export type CommissionDealInput = {
   date: Date;
 };
 
+/** Revenue that counts toward a rep's cumulative annual threshold but is commissioned on its own separate schedule (e.g. recurring contracts) rather than a margin tier. */
+export type ExtraRevenueInput = {
+  contractValueCents: number;
+  ownerId: string | null;
+  date: Date;
+};
+
+type RevenueEvent =
+  | (CommissionDealInput & { kind: "deal" })
+  | (ExtraRevenueInput & { kind: "extra" });
+
 /**
  * Splits each deal's contract value into the portion under vs. over the
  * owning rep's $1.5M annual cumulative-revenue threshold, taxing each
- * portion at that deal's own margin-tier base/accelerator rate. Deals are
- * walked chronologically per (owner, calendar year) so a single deal that
- * straddles the threshold is split correctly. A deal below the 10%-margin
- * cutoff earns $0 but its value still counts toward the cumulative total,
- * since the threshold is about revenue closed, not commissionable revenue.
+ * portion at that deal's own margin-tier base/accelerator rate. Deals (and
+ * any `extraRevenue`, e.g. recurring-contract billing, which counts toward
+ * the cumulative total but is commissioned separately and so earns $0 here)
+ * are walked chronologically per (owner, calendar year) so a single deal
+ * that straddles the threshold is split correctly. A deal below the
+ * 10%-margin cutoff earns $0 but its value still counts toward the
+ * cumulative total, since the threshold is about revenue closed, not
+ * commissionable revenue.
  */
-export function computeCommissionCentsByDeal(deals: CommissionDealInput[]): Map<string, number> {
+export function computeCommissionCentsByDeal(
+  deals: CommissionDealInput[],
+  extraRevenue: ExtraRevenueInput[] = []
+): Map<string, number> {
   const result = new Map<string, number>();
-  const byOwnerYear = new Map<string, CommissionDealInput[]>();
-  for (const d of deals) {
-    if (!d.ownerId) continue;
-    const key = `${d.ownerId}::${d.date.getUTCFullYear()}`;
+  const events: RevenueEvent[] = [
+    ...deals.map((d) => ({ ...d, kind: "deal" as const })),
+    ...extraRevenue.map((r) => ({ ...r, kind: "extra" as const })),
+  ];
+
+  const byOwnerYear = new Map<string, RevenueEvent[]>();
+  for (const e of events) {
+    if (!e.ownerId) continue;
+    const key = `${e.ownerId}::${e.date.getUTCFullYear()}`;
     const list = byOwnerYear.get(key) ?? [];
-    list.push(d);
+    list.push(e);
     byOwnerYear.set(key, list);
   }
 
   for (const list of byOwnerYear.values()) {
     list.sort((a, b) => a.date.getTime() - b.date.getTime());
     let cumulativeCents = 0;
-    for (const d of list) {
-      const tier = marginTierFor(d.marginPercent);
-      const underThresholdCents = Math.max(
-        0,
-        Math.min(d.contractValueCents, ANNUAL_ACCELERATOR_THRESHOLD_CENTS - cumulativeCents)
-      );
-      const overThresholdCents = d.contractValueCents - underThresholdCents;
-      const commissionForDeal = Math.round(underThresholdCents * tier.baseRate + overThresholdCents * tier.acceleratorRate);
-      result.set(d.id, commissionForDeal);
-      cumulativeCents += d.contractValueCents;
+    for (const e of list) {
+      if (e.kind === "deal") {
+        const tier = marginTierFor(e.marginPercent);
+        const underThresholdCents = Math.max(
+          0,
+          Math.min(e.contractValueCents, ANNUAL_ACCELERATOR_THRESHOLD_CENTS - cumulativeCents)
+        );
+        const overThresholdCents = e.contractValueCents - underThresholdCents;
+        const commissionForDeal = Math.round(underThresholdCents * tier.baseRate + overThresholdCents * tier.acceleratorRate);
+        result.set(e.id, commissionForDeal);
+      }
+      cumulativeCents += e.contractValueCents;
     }
   }
   return result;
+}
+
+/**
+ * Recurring janitorial contract commission (ACV + retention-tail model):
+ * 5% of ACV — i.e. 5% of the monthly rate — paid monthly for the contract's
+ * first 12 months (Year 1, acquisition), 2% for months 13-24 (Year 2,
+ * retention tail), then $0 from month 25 on (Year 3+, fully transitioned to
+ * Operations). `monthIndex` is 0-based: 0 is the contract's first billed month.
+ */
+export function recurringCommissionRateForMonth(monthIndex: number): number {
+  if (monthIndex < 12) return 0.05;
+  if (monthIndex < 24) return 0.02;
+  return 0;
+}
+
+/** monthlyRateCents is the specific period's snapshotted rate (a billing project's contractValueCents), not necessarily the contract's current live rate. */
+export function computeRecurringCommissionCents(monthlyRateCents: number, monthIndex: number): number {
+  return Math.round(monthlyRateCents * recurringCommissionRateForMonth(monthIndex));
 }
 
 /** Deals with no resolvable HubSpot owner default here rather than going uncredited. */

@@ -24,6 +24,7 @@ type CreatedRequest = {
   fullClean?: boolean;
   carpetCleaning?: boolean;
   materialsAdditional?: boolean;
+  ceilingPaint?: boolean;
   touchUpPaint?: number | string;
   building?: { name?: string };
 };
@@ -43,6 +44,7 @@ export function NewTurnoverRequestForm() {
   const [fullClean, setFullClean] = useState(false);
   const [carpetCleaning, setCarpetCleaning] = useState(false);
   const [materialsAdditional, setMaterialsAdditional] = useState(false);
+  const [ceilingPaint, setCeilingPaint] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -62,6 +64,7 @@ export function NewTurnoverRequestForm() {
       fullClean,
       carpetCleaning,
       materialsAdditional,
+      ceilingPaint,
       startDate: formData.get("startDate") || undefined,
       endDate: formData.get("endDate") || undefined,
       sueepPmName: formData.get("sueepPmName") || undefined,
@@ -115,7 +118,7 @@ Type: ${createdRequest.requestType}
 Dates: ${createdRequest.startDate ? new Date(createdRequest.startDate).toLocaleDateString() : 'TBD'} → ${createdRequest.endDate ? new Date(createdRequest.endDate).toLocaleDateString() : 'TBD'}
 
 Services requested:
-${createdRequest.fullPaint ? '- Full Paint\n' : ''}${createdRequest.fullClean ? '- Full Clean\n' : ''}${createdRequest.carpetCleaning ? '- Carpet Cleaning\n' : ''}${createdRequest.materialsAdditional ? '- Additional Materials\n' : ''}${createdRequest.touchUpPaint ? `- Touch-up paint (${createdRequest.touchUpPaint} qty)\n` : ''}
+${createdRequest.fullPaint ? '- Full Paint\n' : ''}${createdRequest.fullClean ? '- Full Clean\n' : ''}${createdRequest.carpetCleaning ? '- Carpet Cleaning\n' : ''}${createdRequest.materialsAdditional ? '- Additional Materials\n' : ''}${createdRequest.ceilingPaint ? '- Ceiling Painting\n' : ''}${createdRequest.touchUpPaint ? `- Touch-up paint (${createdRequest.touchUpPaint} qty)\n` : ''}
 
 Next steps:
 - PM has been notified
@@ -184,6 +187,7 @@ Sueep Operations
             fullClean={fullClean}
             carpetCleaning={carpetCleaning}
             materialsAdditional={materialsAdditional}
+            ceilingPaint={ceilingPaint}
             setBedrooms={setBedrooms}
             setBathrooms={setBathrooms}
             setFullPaint={setFullPaint}
@@ -191,6 +195,7 @@ Sueep Operations
             setFullClean={setFullClean}
             setCarpetCleaning={setCarpetCleaning}
             setMaterialsAdditional={setMaterialsAdditional}
+            setCeilingPaint={setCeilingPaint}
           />
 
           <div className="grid gap-3 sm:grid-cols-2">

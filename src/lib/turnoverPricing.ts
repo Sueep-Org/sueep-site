@@ -4,6 +4,7 @@ import {
   getTurnoverTouchUpPaintRate,
   getTurnoverCarpetCleaningRate,
   getTurnoverAdditionalMaterialsRate,
+  getTurnoverCeilingPaintRate,
   getTurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
 
@@ -19,6 +20,7 @@ export type TurnoverPricingInput = {
   fullClean: boolean;
   carpetCleaning: boolean;
   materialsAdditional: boolean;
+  ceilingPaint: boolean;
 };
 
 export type TurnoverPricingResult = {
@@ -78,6 +80,14 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Additional materials");
     priceCents += materialsPrice;
     breakdown.push(`Additional materials: ${formatUsd(materialsPrice)}`);
+  }
+
+  if (input.ceilingPaint) {
+    const ceilingPaintRate = getTurnoverCeilingPaintRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea);
+    const ceilingPaintPrice = ceilingPaintRate.dollars * 100;
+    services.push("Ceiling painting");
+    priceCents += ceilingPaintPrice;
+    breakdown.push(`Ceiling painting: ${formatUsd(ceilingPaintPrice)}`);
   }
 
   if (services.length === 0) {

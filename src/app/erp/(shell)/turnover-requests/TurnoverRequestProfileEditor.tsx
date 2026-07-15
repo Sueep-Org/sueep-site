@@ -30,6 +30,7 @@ interface RequestEditorProps {
     fullClean: boolean;
     carpetCleaning: boolean;
     materialsAdditional: boolean;
+    ceilingPaint: boolean;
     startDate: string | null;
     endDate: string | null;
     createdBy: string | null;
@@ -55,6 +56,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
   const [fullClean, setFullClean] = useState(initial.fullClean);
   const [carpetCleaning, setCarpetCleaning] = useState(initial.carpetCleaning);
   const [materialsAdditional, setMaterialsAdditional] = useState(initial.materialsAdditional);
+  const [ceilingPaint, setCeilingPaint] = useState(initial.ceilingPaint);
   const [startDate, setStartDate] = useState(initial.startDate ?? "");
   const [endDate, setEndDate] = useState(initial.endDate ?? "");
   const [status, setStatus] = useState(initial.status);
@@ -80,6 +82,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
       fullClean,
       carpetCleaning,
       materialsAdditional,
+      ceilingPaint,
       startDate: startDate || null,
       endDate: endDate || null,
       status,
@@ -186,6 +189,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         fullClean={fullClean}
         carpetCleaning={carpetCleaning}
         materialsAdditional={materialsAdditional}
+        ceilingPaint={ceilingPaint}
         setBedrooms={setBedrooms}
         setBathrooms={setBathrooms}
         setFullPaint={setFullPaint}
@@ -193,6 +197,7 @@ export function TurnoverRequestProfileEditor({ requestId, initial }: RequestEdit
         setFullClean={setFullClean}
         setCarpetCleaning={setCarpetCleaning}
         setMaterialsAdditional={setMaterialsAdditional}
+        setCeilingPaint={setCeilingPaint}
       />
 
       <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">

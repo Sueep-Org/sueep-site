@@ -22,8 +22,11 @@ type Contract = {
   startDate: string;
   endDate: string | null;
   notes: string | null;
+  commissionEmployeeId: string | null;
   units: Unit[];
 };
+
+type EmployeeOption = { id: string; name: string };
 
 type Period = {
   id: string;
@@ -42,7 +45,15 @@ function formatMonth(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: string; canEdit: boolean }) {
+export function RecurringContractEditor({
+  buildingId,
+  canEdit,
+  employees,
+}: {
+  buildingId: string;
+  canEdit: boolean;
+  employees: EmployeeOption[];
+}) {
   const [contract, setContract] = useState<Contract | null | undefined>(undefined);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [error, setError] = useState("");
@@ -50,6 +61,7 @@ export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: s
   const [rateInput, setRateInput] = useState("");
   const [dayInput, setDayInput] = useState("5");
   const [startInput, setStartInput] = useState(new Date().toISOString().slice(0, 10));
+  const [salespersonInput, setSalespersonInput] = useState("");
   const [creating, setCreating] = useState(false);
 
   const [unitNumber, setUnitNumber] = useState("");
@@ -81,7 +93,12 @@ export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: s
       const res = await fetch(`/api/erp/buildings/${buildingId}/recurring-contract`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ monthlyRate: rateInput, billingDayOfMonth: Number(dayInput), startDate: startInput }),
+        body: JSON.stringify({
+          monthlyRate: rateInput,
+          billingDayOfMonth: Number(dayInput),
+          startDate: startInput,
+          commissionEmployeeId: salespersonInput || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -102,6 +119,17 @@ export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: s
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (res.ok) setContract(data);
+  }
+
+  async function updateSalesperson(employeeId: string) {
+    if (!contract) return;
+    const res = await fetch(`/api/erp/buildings/${buildingId}/recurring-contract`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ commissionEmployeeId: employeeId || null }),
     });
     const data = await res.json();
     if (res.ok) setContract(data);
@@ -177,6 +205,15 @@ export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: s
           <label className={labelClass} htmlFor="rc-start">Start date</label>
           <input id="rc-start" type="date" value={startInput} onChange={(e) => setStartInput(e.target.value)} className={inputClass} />
         </div>
+        <div>
+          <label className={labelClass} htmlFor="rc-salesperson">Salesperson (for commission)</label>
+          <select id="rc-salesperson" value={salespersonInput} onChange={(e) => setSalespersonInput(e.target.value)} className={inputClass}>
+            <option value="">Unassigned</option>
+            {employees.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+        </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
         <button type="submit" disabled={creating} className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
           {creating ? "Saving…" : "Create contract"}
@@ -192,10 +229,31 @@ export function RecurringContractEditor({ buildingId, canEdit }: { buildingId: s
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap gap-6 text-sm text-gray-700">
+        <div className="flex flex-wrap items-center gap-6 text-sm text-gray-700">
           <p>Monthly rate: <span className="font-semibold text-gray-900">{centsToDollars(contract.monthlyRateCents)}</span></p>
           <p>Billing day: <span className="font-semibold text-gray-900">{contract.billingDayOfMonth}</span></p>
           <p>Status: <span className="font-semibold text-gray-900">{contract.status}</span></p>
+          {canEdit ? (
+            <label className="flex items-center gap-1.5">
+              Salesperson:
+              <select
+                value={contract.commissionEmployeeId ?? ""}
+                onChange={(e) => updateSalesperson(e.target.value)}
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+              >
+                <option value="">Unassigned</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p>
+              Salesperson: <span className="font-semibold text-gray-900">
+                {employees.find((e) => e.id === contract.commissionEmployeeId)?.name ?? "Unassigned"}
+              </span>
+            </p>
+          )}
         </div>
         {canEdit && (
           <div className="flex gap-2">

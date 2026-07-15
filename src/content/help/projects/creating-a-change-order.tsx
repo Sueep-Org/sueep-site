@@ -33,7 +33,7 @@ export function CreatingAChangeOrder() {
                 <Img src="/help/change_order/new_project_2.png" alt="New Projects form" />
                 Fill out your change order information
                 <Img src="/help/change_order/new_project_3.png" alt="Change Order form" />
-                Upon creation this is the email notification your chosen recipient (default Sergio and David) will get.
+                Upon creation this is the email notification your chosen recipient (default Sergio, David, and Nick) will get.
                 <Img src="/help/change_order/new_project_4.png" alt="Email" />
             </Step>
             </div>

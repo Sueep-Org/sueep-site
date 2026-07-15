@@ -44,6 +44,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const monthlyRateCents = inputToCents(body.monthlyRate);
   const billingDayOfMonth = parseBillingDay(body.billingDayOfMonth);
   const startDate = new Date(String(body.startDate ?? ""));
+  const commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;
 
   if (monthlyRateCents === null || monthlyRateCents <= 0) {
     return NextResponse.json({ error: "monthlyRate must be a positive number" }, { status: 400 });
@@ -57,7 +58,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   try {
     const contract = await prisma.recurringContract.create({
-      data: { buildingId: id, monthlyRateCents, billingDayOfMonth, startDate },
+      data: { buildingId: id, monthlyRateCents, billingDayOfMonth, startDate, commissionEmployeeId },
       include: { units: true },
     });
     return NextResponse.json(contract);
@@ -111,6 +112,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.notes !== undefined) {
     data.notes = body.notes ? String(body.notes).trim() : null;
+  }
+  if (body.commissionEmployeeId !== undefined) {
+    data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;
   }
 
   try {

@@ -65,6 +65,7 @@ export async function POST(req: Request) {
   const fullClean = Boolean(body.fullClean);
   const carpetCleaning = Boolean(body.carpetCleaning);
   const materialsAdditional = Boolean(body.materialsAdditional);
+  const ceilingPaint = Boolean(body.ceilingPaint);
   const otherWork = Boolean(body.otherWork);
   const otherDescription = otherWork && body.otherDescription ? String(body.otherDescription).trim() : null;
   const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
@@ -87,6 +88,7 @@ export async function POST(req: Request) {
     fullClean,
     carpetCleaning,
     materialsAdditional,
+    ceilingPaint,
   });
   const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
@@ -103,6 +105,7 @@ export async function POST(req: Request) {
         fullClean,
         carpetCleaning,
         materialsAdditional,
+        ceilingPaint,
         otherWork,
         otherDescription,
         otherCents: otherWork ? otherCents : null,

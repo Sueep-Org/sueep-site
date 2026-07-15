@@ -43,6 +43,9 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
   const [additionalMaterials, setAdditionalMaterials] = useState<Record<string, string>>(() =>
     Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.additionalMaterialsLayoutRates?.[layout])]))
   );
+  const [ceilingPaint, setCeilingPaint] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.ceilingPaintLayoutRates?.[layout])]))
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -63,6 +66,9 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     const additionalMaterialsLayoutRates = Object.fromEntries(
       TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(additionalMaterials[layout]) || 0))])
     );
+    const ceilingPaintLayoutRates = Object.fromEntries(
+      TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(ceilingPaint[layout]) || 0))])
+    );
 
     return sanitizeTurnoverPricingPackage({
       label,
@@ -71,6 +77,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       touchUpPaintLayoutRates,
       carpetCleaningLayoutRates,
       additionalMaterialsLayoutRates,
+      ceilingPaintLayoutRates,
     });
   }
 
@@ -129,7 +136,8 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
               <th className="py-2 pr-3">Painting</th>
               <th className="py-2 pr-3">Touch-up Paint</th>
               <th className="py-2 pr-3">Carpet Cleaning</th>
-              <th className="py-2">Add. Materials</th>
+              <th className="py-2 pr-3">Add. Materials</th>
+              <th className="py-2">Ceiling Paint</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -176,10 +184,20 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
                   />
                 </td>
-                <td className="py-2">
+                <td className="py-2 pr-3">
                   <input
                     value={additionalMaterials[layout]}
                     onChange={(event) => setAdditionalMaterials((current) => ({ ...current, [layout]: event.target.value }))}
+                    disabled={!canEdit || loading}
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                  />
+                </td>
+                <td className="py-2">
+                  <input
+                    value={ceilingPaint[layout]}
+                    onChange={(event) => setCeilingPaint((current) => ({ ...current, [layout]: event.target.value }))}
                     disabled={!canEdit || loading}
                     type="number"
                     min="0"

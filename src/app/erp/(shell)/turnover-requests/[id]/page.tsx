@@ -46,6 +46,7 @@ export default async function TurnoverRequestDetailPage({ params }: PageProps) {
               fullClean: request.fullClean,
               carpetCleaning: request.carpetCleaning,
               materialsAdditional: request.materialsAdditional,
+              ceilingPaint: request.ceilingPaint,
               startDate: request.startDate ? request.startDate.toISOString().split("T")[0] : null,
               endDate: request.endDate ? request.endDate.toISOString().split("T")[0] : null,
               createdBy: request.createdBy,

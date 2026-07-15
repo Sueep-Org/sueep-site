@@ -175,6 +175,7 @@ model TurnoverRequest {
   fullClean           Boolean @default(false)
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
+  ceilingPaint        Boolean @default(false)
 
   otherWork        Boolean @default(false)
   otherDescription String?
@@ -227,10 +228,17 @@ model RecurringContract {
   endDate   DateTime?
   notes     String?
 
+  /// Salesperson who gets commission credit — manually assigned, since
+  /// recurring contracts are created directly in the ERP rather than
+  /// synced from a HubSpot deal with an owner.
+  commissionEmployeeId String?
+  commissionEmployee   Employee? @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+
   units   RecurringContractUnit[]
   periods RecurringContractPeriod[]
 
   @@index([status])
+  @@index([commissionEmployeeId])
 }
 
 model RecurringContractUnit {
@@ -267,6 +275,11 @@ model RecurringContractPeriod {
   /// First of the billing month this period covers
   periodStart      DateTime
   billingProjectId String   @unique
+
+  /// Recurring-contract commission (5% of ACV months 1-12, 2% months
+  /// 13-24, $0 after) is computed at read time from monthlyRateCents and
+  /// elapsed months — only paid status needs to be persisted per period.
+  commissionPaidAt DateTime?
 
   projects Project[]
 
@@ -871,6 +884,7 @@ model Employee {
   safetyIncidents SafetyIncident[]
   commissionProjects Project[]
   reimbursements Reimbursement[]
+  recurringContractCommissions RecurringContract[]
 
   @@index([status])
   @@index([defaultProject])

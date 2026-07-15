@@ -83,6 +83,7 @@ export default async function PmViewPage({ searchParams }: PageProps) {
           touchUpPaint: true,
           carpetCleaning: true,
           materialsAdditional: true,
+          ceilingPaint: true,
           bedrooms: true,
           bathrooms: true,
           unitNumber: true,
@@ -157,6 +158,7 @@ export default async function PmViewPage({ searchParams }: PageProps) {
                 tr.touchUpPaint ? "Touch-up paint" : null,
                 tr.carpetCleaning ? "Carpet cleaning" : null,
                 tr.materialsAdditional ? "Additional materials" : null,
+                tr.ceilingPaint ? "Ceiling painting" : null,
               ].filter((s): s is string => Boolean(s)) : [];
 
               const statusKey = project.status ?? "ACTIVE";

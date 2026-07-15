@@ -186,6 +186,7 @@ interface BuildingOption {
   pmName?: string | null;
   pmEmail?: string | null;
   pmPhone?: string | null;
+  pricingPackage?: unknown;
   recurringContract?: {
     id: string;
     status: string;
@@ -601,7 +602,7 @@ export function NewProjectForm({
     const ids: string[] = [];
     for (const e of notifiableEmployees) {
       const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio") ids.push(e.id);
+      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio" || e.firstName.toLowerCase() === "nick") ids.push(e.id);
     }
     return ids;
   }, [notifiableEmployees]);
@@ -742,8 +743,11 @@ export function NewProjectForm({
   const firstUnitIsCommonArea = unitScopes[0]?.features === "common-area";
   const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
   const normalizedBathrooms = firstUnitFeature.bathrooms;
-  const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
+  const pricingPackage = useMemo(
+    () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
+    [buildingName, selectedBuilding]
+  );
   const activeRecurringContractUnits = useMemo(
     () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
     [selectedBuilding]

@@ -19,9 +19,10 @@ type Props = {
   initialPackage: unknown;
   isSupervisor?: boolean;
   canEditPricing?: boolean;
+  employees: { id: string; name: string }[];
 };
 
-export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor, canEditPricing = false }: Props) {
+export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor, canEditPricing = false, employees }: Props) {
   const allTabs = [
     {
       label: "Details",
@@ -44,7 +45,7 @@ export function BuildingTabs({ buildingId, buildingName, initial, initialPackage
     },
     {
       label: "Recurring Contract",
-      content: <RecurringContractEditor buildingId={buildingId} canEdit={canEditPricing} />,
+      content: <RecurringContractEditor buildingId={buildingId} canEdit={canEditPricing} employees={employees} />,
     },
   ];
 
