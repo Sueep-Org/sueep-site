@@ -281,6 +281,8 @@ async function initApp(){
   let _pageAggregateOverrides = {};
   let _sovUndoStack = [];
   let _sovStateProjectId = null;
+  let _activeExtractedMeasurementQuery = '';
+  let _extractedMeasurementHighlightCanvas = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
     zoomOutBtn,
@@ -522,24 +524,51 @@ async function initApp(){
     return /\b(?:floor|level|suite)\b/i.test(line) || /^\d+(?:st|nd|rd|th)?\s+(?:floor|level)/i.test(line);
   }
 
-  function groupPdfTextLines(items = [], pageNum = 1) {
+  function groupPdfTextLines(items = [], pageNum = 1, viewport = null) {
     const buckets = [];
+    const pageWidth = Number(viewport?.width || 0);
+    const pageHeight = Number(viewport?.height || 0);
+
     for (const item of items) {
       const text = normalizeTextLine(item?.str);
       if (!text) continue;
-      const y = Number(item?.transform?.[5] ?? 0);
-      const x = Number(item?.transform?.[4] ?? 0);
+      const y = Number(item?.transform?.[5] ?? item?.y ?? 0);
+      const x = Number(item?.transform?.[4] ?? item?.x ?? 0);
       const bucket = buckets.find((entry) => Math.abs(entry.y - y) <= 4);
       if (bucket) {
-        bucket.items.push({ x, text });
+        bucket.items.push({ x, y, text });
       } else {
-        buckets.push({ y, items: [{ x, text }] });
+        buckets.push({ y, items: [{ x, y, text }] });
       }
     }
+
     buckets.sort((a, b) => b.y - a.y);
     return buckets.map((bucket) => {
-      const text = bucket.items.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(' ').trim();
-      return text ? { text, page: pageNum } : null;
+      const sortedItems = bucket.items.sort((a, b) => a.x - b.x);
+      const text = sortedItems.map((entry) => entry.text).join(' ').trim();
+      if (!text) return null;
+
+      const minX = Math.min(...sortedItems.map((entry) => entry.x));
+      const maxX = Math.max(...sortedItems.map((entry) => entry.x + 40));
+      const minY = Math.min(...sortedItems.map((entry) => entry.y));
+      const maxY = Math.max(...sortedItems.map((entry) => entry.y + 12));
+      const width = Math.max(24, maxX - minX + 8);
+      const height = Math.max(12, maxY - minY + 4);
+      const normalizedBox = {
+        x: pageWidth > 0 ? (minX / pageWidth) : 0,
+        y: pageHeight > 0 ? (minY / pageHeight) : 0,
+        width: pageWidth > 0 ? (width / pageWidth) : 0,
+        height: pageHeight > 0 ? (height / pageHeight) : 0,
+        pageWidth,
+        pageHeight,
+      };
+
+      return {
+        text,
+        page: pageNum,
+        ...normalizedBox,
+        sourceItems: sortedItems,
+      };
     }).filter(Boolean);
   }
 
@@ -695,14 +724,14 @@ async function initApp(){
     const rows = [];
     const seen = new Set();
 
-    const addRow = (label, value, page = 1) => {
+    const addRow = (label, value, page = 1, sourceEntry = null) => {
       const normalizedLabel = normalizeTextLine(label);
       const normalizedValue = normalizeTextLine(value);
       if (!normalizedLabel || !normalizedValue) return;
       const dedupeKey = `${normalizedLabel}|${normalizedValue}|${page}`;
       if (seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
-      rows.push({ label: normalizedLabel, value: normalizedValue, page });
+      rows.push({ label: normalizedLabel, value: normalizedValue, page, sourceEntry });
     };
 
     const relevantEntries = entries.filter((entry) => (entry?.page || 1) === 1);
@@ -719,7 +748,7 @@ async function initApp(){
         const parsedRow = parseTableAreaRow(combined);
         if (!parsedRow) continue;
 
-        addRow(parsedRow.label, parsedRow.value, relevantEntries[i]?.page || 1);
+        addRow(parsedRow.label, parsedRow.value, relevantEntries[i]?.page || 1, relevantEntries[i] || null);
       }
     });
 
@@ -742,8 +771,9 @@ async function initApp(){
 
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum += 1) {
         const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
         const text = await page.getTextContent();
-        const pageLines = groupPdfTextLines(text.items || [], pageNum);
+        const pageLines = groupPdfTextLines(text.items || [], pageNum, viewport);
         entries.push(...pageLines);
       }
 
@@ -754,11 +784,115 @@ async function initApp(){
       const totalArea = inferTotalAreaFromLines(entries);
       const extractedMeasurements = inferExtractedMeasurements(entries);
 
-      return { projectName, address, totalArea, extractedMeasurements };
+      return { projectName, address, totalArea, extractedMeasurements, pdfTextEntries: entries };
     } catch (error) {
       console.warn('[pdf metadata] extract failed', error);
       return null;
     }
+  }
+
+  function matchesExtractedMeasurementQuery(row = {}, query = '') {
+    const normalizedQuery = normalizeTextLine(query).toLowerCase();
+    if (!normalizedQuery) return true;
+    const haystack = [
+      row?.label,
+      row?.value,
+      row?.page,
+      row?.sourceEntry?.text,
+      row?.sourceEntry?.sourceItems?.map((entry) => entry.text).join(' '),
+      row?.sourceEntry?.sourceText,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(normalizedQuery);
+  }
+
+  function getExtractedMeasurementHighlightTargets(meta, query = '') {
+    const rows = Array.isArray(meta?.extractedMeasurements) ? meta.extractedMeasurements : [];
+    const pdfEntries = Array.isArray(meta?.pdfTextEntries) ? meta.pdfTextEntries : [];
+    const normalizedQuery = normalizeTextLine(query).toLowerCase();
+    const targets = [];
+
+    if (!normalizedQuery) return targets;
+
+    rows.forEach((row) => {
+      const haystack = [
+        row?.label,
+        row?.value,
+        row?.page,
+        row?.sourceEntry?.text,
+        row?.sourceEntry?.sourceItems?.map((entry) => entry.text).join(' '),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (haystack.includes(normalizedQuery)) {
+        const sourceEntry = row?.sourceEntry || null;
+        if (sourceEntry) {
+          targets.push({ ...sourceEntry, row, kind: 'row' });
+        }
+      }
+    });
+
+    if (targets.length) return targets;
+
+    pdfEntries.forEach((entry) => {
+      const haystack = [
+        entry?.text,
+        entry?.sourceItems?.map((item) => item.text).join(' '),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (haystack.includes(normalizedQuery)) {
+        targets.push({ ...entry, kind: 'pdf' });
+      }
+    });
+
+    return targets;
+  }
+
+  function redrawExtractedMeasurementHighlights() {
+    return;
+  }
+
+  function renderExtractedMeasurementRows(container, rows, meta) {
+    const list = container.querySelector('[data-extracted-list]');
+    if (!list) return;
+
+    const hasQuery = !!_activeExtractedMeasurementQuery;
+    const visibleRows = rows.filter((row) => matchesExtractedMeasurementQuery(row, _activeExtractedMeasurementQuery));
+
+    list.innerHTML = `
+      <div class="space-y-2">
+        ${visibleRows.map((row, index) => `
+          <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2" data-extracted-row-index="${index}">
+            <div class="mt-1 space-y-1">
+              <label class="block text-[10px] uppercase tracking-wide text-gray-400">Description</label>
+              <input
+                type="text"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                data-extracted-field="label"
+                data-extracted-index="${index}"
+                value="${escapeHtml(row.label || '')}"
+              />
+              <label class="block text-[10px] uppercase tracking-wide text-gray-400">Measurement</label>
+              <input
+                type="text"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                data-extracted-field="value"
+                data-extracted-index="${index}"
+                value="${escapeHtml(row.value || '')}"
+              />
+            </div>
+            ${row.page ? `<div class="mt-1 text-[10px] text-gray-400">p${row.page}</div>` : ''}
+          </div>
+        `).join('')}
+        ${!visibleRows.length && hasQuery ? `<div class="rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500">No matches for “${escapeHtml(_activeExtractedMeasurementQuery)}”.</div>` : ''}
+      </div>
+    `;
+
+    list.querySelectorAll('input[data-extracted-field]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const index = Number(input.dataset.extractedIndex || 0);
+        const field = input.dataset.extractedField;
+        const row = rows[index];
+        if (!row) return;
+        row[field] = input.value;
+      });
+    });
   }
 
   function renderExtractedMeasurements(meta) {
@@ -772,22 +906,41 @@ async function initApp(){
     }
 
     container.style.display = 'block';
-    container.innerHTML = `
-      <div class="mb-2">
-        <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
-        <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
-      </div>
-      <div class="max-h-48 overflow-y-auto pr-1">
-        <div class="space-y-2">
-          ${meta.extractedMeasurements.map((row) => `
-            <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-              <div class="text-[11px] text-gray-500">${escapeHtml(compactMeasurementLabel(row.label) || row.label)}</div>
-              <div class="text-sm text-gray-800 font-semibold">${escapeHtml(row.value)}${row.page ? ` <span class="text-[10px] text-gray-400">p${row.page}</span>` : ''}</div>
-            </div>
-          `).join('')}
+    const rows = meta.extractedMeasurements;
+
+    if (!container.querySelector('[data-extracted-search-input]')) {
+      container.innerHTML = `
+        <div class="mb-2">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
+          <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
         </div>
-      </div>
-    `;
+        <div class="mb-2">
+          <input
+            type="search"
+            data-extracted-search-input
+            value="${escapeHtml(_activeExtractedMeasurementQuery)}"
+            placeholder="Search extracted measurements or PDF"
+            class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+          />
+        </div>
+        <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
+      `;
+    }
+
+    const searchInput = container.querySelector('[data-extracted-search-input]');
+    if (searchInput && !searchInput.dataset.bound) {
+      searchInput.dataset.bound = 'true';
+      searchInput.addEventListener('input', (event) => {
+        _activeExtractedMeasurementQuery = normalizeTextLine(event.target.value).trim();
+        renderExtractedMeasurementRows(container, rows, meta);
+      });
+    }
+
+    if (searchInput) {
+      searchInput.value = _activeExtractedMeasurementQuery;
+    }
+
+    renderExtractedMeasurementRows(container, rows, meta);
   }
 
   function getVectorPayloadLines(pageData = {}) {
@@ -876,6 +1029,27 @@ async function initApp(){
 
   function getDefaultSovManualOverrides() {
     return { rough: false, final: false, touchup: false, quote: false };
+  }
+
+  function getSovColumns() {
+    const breakdownPhases = Array.isArray(_loadedProjectData?.labor_breakdown?.phases)
+      ? _loadedProjectData.labor_breakdown.phases
+      : [];
+    const phaseNames = breakdownPhases.map((phase) => String(phase?.name || '').toLowerCase());
+    const hasDefinedPhases = phaseNames.length > 0;
+
+    const includeRough = !_deletedPhaseIds.has('rough') && (!hasDefinedPhases || phaseNames.some((name) => name.includes('rough')));
+    const includeFinal = !_deletedPhaseIds.has('final') && (!hasDefinedPhases || phaseNames.some((name) => name.includes('final')));
+    const includeTouchup = !_deletedPhaseIds.has('touchup') && (!hasDefinedPhases || phaseNames.some((name) => name.includes('touch')));
+
+    return [
+      { key: 'page', label: 'Page' },
+      { key: 'description', label: 'Description' },
+      ...(includeRough ? [{ key: 'rough', label: 'Rough' }] : []),
+      ...(includeFinal ? [{ key: 'final', label: 'Final' }] : []),
+      ...(includeTouchup ? [{ key: 'touchup', label: 'Touch up' }] : []),
+      { key: 'quote', label: 'Quote' },
+    ];
   }
 
   function isZeroSovAmount(value) {
@@ -1060,9 +1234,10 @@ async function initApp(){
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
     headRow.style.cssText = 'background:#f9fafb;';
-    ['Page', 'Description', 'Rough', 'Final', 'Touch up', 'Quote'].forEach((label) => {
+    const columns = getSovColumns();
+    columns.forEach((column) => {
       const th = document.createElement('th');
-      th.textContent = label;
+      th.textContent = column.label;
       th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;white-space:nowrap;';
       headRow.appendChild(th);
     });
@@ -1072,29 +1247,31 @@ async function initApp(){
     const tbody = document.createElement('tbody');
     visibleRows.forEach((row) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <button type="button" class="mini-btn" data-delete-sov-row="${row.page}" style="padding:2px 6px;min-width:auto;font-size:11px;line-height:1;">×</button>
-            <span>${escapeHtml(row.page)}</span>
-          </div>
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <input type="text" value="${escapeHtml(formatSovCurrency(row.rough))}" data-sov-amount="${row.page}" data-sov-key="rough" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <input type="text" value="${escapeHtml(formatSovCurrency(row.final))}" data-sov-amount="${row.page}" data-sov-key="final" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <input type="text" value="${escapeHtml(formatSovCurrency(row.touchup))}" data-sov-amount="${row.page}" data-sov-key="touchup" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
-        </td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-          <input type="text" value="${escapeHtml(formatSovCurrency(row.quote))}" data-sov-amount="${row.page}" data-sov-key="quote" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
-        </td>
-      `;
+      tr.innerHTML = columns.map((column) => {
+        switch (column.key) {
+          case 'page':
+            return `
+              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <button type="button" class="mini-btn" data-delete-sov-row="${row.page}" style="padding:2px 6px;min-width:auto;font-size:11px;line-height:1;">×</button>
+                  <span>${escapeHtml(row.page)}</span>
+                </div>
+              </td>
+            `;
+          case 'description':
+            return `
+              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+                <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              </td>
+            `;
+          default:
+            return `
+              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+                <input type="text" value="${escapeHtml(formatSovCurrency(row[column.key]))}" data-sov-amount="${row.page}" data-sov-key="${column.key}" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              </td>
+            `;
+        }
+      }).join('');
 
       const deleteBtn = tr.querySelector('[data-delete-sov-row]');
       if (deleteBtn) {
@@ -1499,6 +1676,15 @@ async function initApp(){
       const boldFont = await outPdfDoc.embedFont(StandardFonts.HelveticaBold);
       const marginX = 48;
       const startY = lastCanvas.height - 60;
+      const columns = getSovColumns();
+      const columnXPositions = {
+        page: marginX,
+        description: marginX + 72,
+        rough: marginX + 220,
+        final: marginX + 300,
+        touchup: marginX + 380,
+        quote: marginX + 460,
+      };
 
       sovPage.drawText('Schedule of Values', {
         x: marginX,
@@ -1508,92 +1694,33 @@ async function initApp(){
         color: rgb(0, 0, 0)
       });
 
-      sovPage.drawText('Page', {
-        x: marginX,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-      sovPage.drawText('Description', {
-        x: marginX + 72,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-      sovPage.drawText('Rough', {
-        x: marginX + 220,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-      sovPage.drawText('Final', {
-        x: marginX + 300,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-      sovPage.drawText('Touch up', {
-        x: marginX + 380,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
-      });
-      sovPage.drawText('Quote', {
-        x: marginX + 460,
-        y: startY - 32,
-        size: 12,
-        font: boldFont,
-        color: rgb(0, 0, 0)
+      columns.forEach((column) => {
+        const x = columnXPositions[column.key] ?? (marginX + 220 + 80 * (columns.indexOf(column) - 2));
+        sovPage.drawText(column.label, {
+          x,
+          y: startY - 32,
+          size: 12,
+          font: boldFont,
+          color: rgb(0, 0, 0)
+        });
       });
 
       let currentY = startY - 56;
       rows.forEach((row) => {
-        sovPage.drawText(String(row.page), {
-          x: marginX,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
-        });
-        sovPage.drawText(String(row.description), {
-          x: marginX + 72,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
-        });
-        sovPage.drawText(String(formatSovCurrency(row.rough)), {
-          x: marginX + 220,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
-        });
-        sovPage.drawText(String(formatSovCurrency(row.final)), {
-          x: marginX + 300,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
-        });
-        sovPage.drawText(String(formatSovCurrency(row.touchup)), {
-          x: marginX + 380,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
-        });
-        sovPage.drawText(String(formatSovCurrency(row.quote)), {
-          x: marginX + 460,
-          y: currentY,
-          size: 11,
-          font: regularFont,
-          color: rgb(0, 0, 0)
+        columns.forEach((column) => {
+          const x = columnXPositions[column.key] ?? (marginX + 220 + 80 * (columns.indexOf(column) - 2));
+          const textValue = column.key === 'page'
+            ? String(row.page)
+            : column.key === 'description'
+              ? String(row.description)
+              : String(formatSovCurrency(row[column.key]));
+          sovPage.drawText(textValue, {
+            x,
+            y: currentY,
+            size: 11,
+            font: regularFont,
+            color: rgb(0, 0, 0)
+          });
         });
         currentY -= 18;
       });
@@ -1654,29 +1781,39 @@ async function initApp(){
       const sovPageWidth = lastPageWidth || 612;
       const sovPageHeight = lastPageHeight || 792;
       const sovRows = getSovPageRows();
+      const sovColumns = getSovColumns();
+      const columnXPositions = {
+        page: 40,
+        description: 100,
+        rough: 220,
+        final: 300,
+        touchup: 380,
+        quote: 460,
+      };
       doc.addPage([sovPageWidth, sovPageHeight]);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(18);
       doc.text('Schedule of Values', 40, 48);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(11);
-      doc.text('Page', 40, 78);
-      doc.text('Description', 100, 78);
-      doc.text('Rough', 220, 78);
-      doc.text('Final', 300, 78);
-      doc.text('Touch up', 380, 78);
-      doc.text('Quote', 460, 78);
+      sovColumns.forEach((column) => {
+        const x = columnXPositions[column.key] ?? (220 + 80 * (sovColumns.indexOf(column) - 2));
+        doc.text(column.label, x, 78);
+      });
       doc.setLineWidth(0.5);
       doc.line(40, 84, sovPageWidth - 40, 84);
 
       let nextY = 104;
       sovRows.forEach((row) => {
-        doc.text(String(row.page), 40, nextY);
-        doc.text(String(row.description), 100, nextY);
-        doc.text(String(formatSovCurrency(row.rough)), 220, nextY);
-        doc.text(String(formatSovCurrency(row.final)), 300, nextY);
-        doc.text(String(formatSovCurrency(row.touchup)), 380, nextY);
-        doc.text(String(formatSovCurrency(row.quote)), 460, nextY);
+        sovColumns.forEach((column) => {
+          const x = columnXPositions[column.key] ?? (220 + 80 * (sovColumns.indexOf(column) - 2));
+          const textValue = column.key === 'page'
+            ? String(row.page)
+            : column.key === 'description'
+              ? String(row.description)
+              : String(formatSovCurrency(row[column.key]));
+          doc.text(textValue, x, nextY);
+        });
         nextY += 16;
       });
 
@@ -1925,6 +2062,7 @@ async function initApp(){
     overlay.buildBarriersFromCanvas();
 
     overlay.redraw();
+    redrawExtractedMeasurementHighlights();
 
     syncOverlayTransform();
 
@@ -2567,7 +2705,12 @@ async function initApp(){
         const restoreBtn = document.createElement('button');
         restoreBtn.type = 'button'; restoreBtn.textContent = 'Restore';
         restoreBtn.style.cssText = 'padding:3px 10px;border:1px solid #6ee7b7;border-radius:4px;background:white;color:#059669;font-size:11px;cursor:pointer;';
-        restoreBtn.onclick = () => { _deletedPhaseIds.delete(pid); _renderPhaseTable(); _updateCrewCalcs(); };
+        restoreBtn.onclick = () => {
+          _deletedPhaseIds.delete(pid);
+          _renderPhaseTable();
+          _updateCrewCalcs();
+          renderSovCard();
+        };
         collapsedHeader.appendChild(collapsedName); collapsedHeader.appendChild(restoreBtn);
         collapsed.appendChild(collapsedHeader);
         container.appendChild(collapsed);
@@ -2603,7 +2746,12 @@ async function initApp(){
       const delPhaseBtn = document.createElement('button');
       delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
       delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
-      delPhaseBtn.onclick = () => { _deletedPhaseIds.add(pid); _renderPhaseTable(); _updateCrewCalcs(); };
+      delPhaseBtn.onclick = () => {
+        _deletedPhaseIds.add(pid);
+        _renderPhaseTable();
+        _updateCrewCalcs();
+        renderSovCard();
+      };
 
       const leftGroup = document.createElement('div');
       leftGroup.style.cssText = 'display:flex;align-items:center;';
