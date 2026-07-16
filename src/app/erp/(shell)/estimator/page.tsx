@@ -641,14 +641,32 @@ export default function EstimatorPage() {
                 <label className="block text-xs text-gray-500 mb-1">
                   Total Area (SF)
                 </label>
-                <input
-                  type="number"
-                  id="analysisTotalAreaInput"
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                  className="w-48 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    id="analysisTotalAreaInput"
+                    placeholder="0"
+                    min="0"
+                    step="1"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                  <button
+                    type="button"
+                    id="totalAreaModifyBtn"
+                    style={{ display: "none" }}
+                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                  >
+                    Modify
+                  </button>
+                  <button
+                    type="button"
+                    id="totalAreaResetBtn"
+                    style={{ display: "none" }}
+                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                  >
+                    Reset to auto
+                  </button>
+                </div>
               </div>
               {/* Start Address */}
               <div className="mb-4">
@@ -732,6 +750,16 @@ export default function EstimatorPage() {
               <input type="hidden" id="foremanRateInput" defaultValue="220" />
 
               {/* Phase table — rendered by JS */}
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phases</span>
+                <button
+                  type="button"
+                  id="regenPhasesBtn"
+                  className="px-3 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  ↺ Regenerate from Area
+                </button>
+              </div>
               <div
                 id="phaseTableContainer"
                 className="mb-4 overflow-x-auto"
