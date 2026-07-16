@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
 import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
@@ -12,6 +12,8 @@ export type CommissionDealRow = {
   jobTitle: string;
   segment: string;
   ownerName: string | null;
+  buildingId: string | null;
+  buildingName: string | null;
   contractValueCents: number;
   marginCents: number | null;
   commissionCents: number;
@@ -117,6 +119,47 @@ function combinedSortValue(row: CombinedRow, key: SortKey): number {
   if (key === "date") return new Date(combinedDateIso(row)).getTime();
   if (key === "margin") return row.kind === "deal" ? (row.deal.marginCents ?? -Infinity) : -Infinity;
   return row.kind === "deal" ? row.deal.commissionCents : row.recurring.commissionCents;
+}
+
+function combinedRowKey(row: CombinedRow): string {
+  return row.kind === "deal" ? row.deal.projectId : row.recurring.periodId;
+}
+
+// Janitorial turnovers are one project per unit, so a single building can
+// have a dozen+ rows in a given month. Same treatment as the Project Billing
+// page's janitorial table: fold same-building rows together and only print
+// the building name on the first one — no separate header row or collapse.
+function janitorialBuildingKey(row: CombinedRow): string | null {
+  return row.kind === "deal" && projectTypeGroup(row.deal.segment) === "JANITORIAL_TURNOVER_REQUESTS" && row.deal.buildingId
+    ? row.deal.buildingId
+    : null;
+}
+
+type DisplayRow =
+  | { kind: "single"; row: CombinedRow }
+  | { kind: "group"; buildingId: string; buildingName: string; rows: CombinedRow[] };
+
+function groupJanitorialByBuilding(rows: CombinedRow[]): DisplayRow[] {
+  const consumed = new Set<string>();
+  const out: DisplayRow[] = [];
+  for (const row of rows) {
+    const key = combinedRowKey(row);
+    if (consumed.has(key)) continue;
+    const buildingId = janitorialBuildingKey(row);
+    if (!buildingId) {
+      out.push({ kind: "single", row });
+      continue;
+    }
+    const members = rows.filter((r) => janitorialBuildingKey(r) === buildingId && !consumed.has(combinedRowKey(r)));
+    members.forEach((m) => consumed.add(combinedRowKey(m)));
+    if (members.length === 1) {
+      out.push({ kind: "single", row: members[0] });
+      continue;
+    }
+    const buildingName = (members[0].kind === "deal" && members[0].deal.buildingName) || "Unknown building";
+    out.push({ kind: "group", buildingId, buildingName, rows: members });
+  }
+  return out;
 }
 
 const SORT_OPTIONS: { value: SortState; label: string }[] = [
@@ -312,6 +355,93 @@ function RevenueLine({ revenueCents }: { revenueCents: number }) {
   );
 }
 
+function CombinedRowTr({
+  row,
+  buildingCell,
+  onTogglePaid,
+  savingId,
+  onToggleRecurringPaid,
+  savingRecurringId,
+}: {
+  row: CombinedRow;
+  buildingCell: ReactNode;
+  onTogglePaid: (row: CommissionDealRow) => void;
+  savingId: string | null;
+  onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
+  savingRecurringId: string | null;
+}) {
+  if (row.kind === "deal") {
+    const d = row.deal;
+    const marginPct = marginPercentOf(d);
+    const tier = marginPct == null ? null : marginTierFor(marginPct);
+    return (
+      <tr key={d.projectId} className="border-t border-gray-100 hover:bg-gray-50">
+        <td className="px-3 py-2">{buildingCell}</td>
+        <td className="max-w-xs truncate px-3 py-2">
+          <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
+            {d.jobTitle}
+          </Link>
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
+        <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
+          {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+          {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
+        <td className="px-3 py-2">
+          <button
+            type="button"
+            onClick={() => onTogglePaid(d)}
+            disabled={savingId === d.projectId}
+            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
+              d.paidAt
+                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                : "border-gray-300 bg-gray-100 text-gray-600"
+            }`}
+          >
+            {d.paidAt ? "Paid" : "Not paid"}
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  const r = row.recurring;
+  return (
+    <tr key={r.periodId} className="border-t border-gray-100 bg-violet-50/50 hover:bg-violet-100/60">
+      <td className="px-3 py-2">{buildingCell}</td>
+      <td className="max-w-xs truncate px-3 py-2">
+        <Link href={`/erp/buildings/${r.buildingId}`} className="text-pink-600 hover:underline">
+          {r.buildingName}
+        </Link>
+        <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Recurring</span>
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatMonth(r.periodStart)}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(r.monthlyRateCents)}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-400">—</td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
+      <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
+      <td className="px-3 py-2">
+        <button
+          type="button"
+          onClick={() => onToggleRecurringPaid(r)}
+          disabled={savingRecurringId === r.periodId}
+          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
+            r.paidAt
+              ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+              : "border-gray-300 bg-gray-100 text-gray-600"
+          }`}
+        >
+          {r.paidAt ? "Paid" : "Not paid"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 function RepPanel({
   yearRevenueCents,
   deals,
@@ -359,6 +489,8 @@ function RepPanel({
         : combinedSortValue(a, sort.key) - combinedSortValue(b, sort.key)
     );
 
+  const displayRows = groupJanitorialByBuilding(visibleRows);
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
@@ -396,9 +528,10 @@ function RepPanel({
             <p className="p-4 text-center text-sm text-gray-400">No deals match the current filters.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead>
-                  <tr className="text-xs font-medium text-gray-500">
+              <table className="min-w-full text-sm">
+                <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Building</th>
                     <th className="px-3 py-2 text-left">Project</th>
                     <th className="px-3 py-2 text-right">Date</th>
                     <th className="px-3 py-2 text-right">Contract</th>
@@ -408,75 +541,46 @@ function RepPanel({
                     <th className="px-3 py-2 text-left">Paid</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {visibleRows.map((row) => {
-                    if (row.kind === "deal") {
-                      const d = row.deal;
-                      const marginPct = marginPercentOf(d);
-                      const tier = marginPct == null ? null : marginTierFor(marginPct);
+                <tbody>
+                  {displayRows.map((entry) => {
+                    if (entry.kind === "single") {
+                      const buildingCell =
+                        entry.row.kind === "deal" && janitorialBuildingKey(entry.row)
+                          ? <span className="font-medium text-gray-900">{entry.row.deal.buildingName}</span>
+                          : <span className="text-gray-300 select-none">—</span>;
                       return (
-                        <tr key={d.projectId} className="hover:bg-gray-50">
-                          <td className="max-w-xs truncate px-3 py-2">
-                            <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
-                              {d.jobTitle}
-                            </Link>
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
-                          <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
-                            {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-gray-500">
-                            {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
-                          <td className="px-3 py-2">
-                            <button
-                              type="button"
-                              onClick={() => onTogglePaid(d)}
-                              disabled={savingId === d.projectId}
-                              className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-                                d.paidAt
-                                  ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                                  : "border-gray-300 bg-gray-100 text-gray-600"
-                              }`}
-                            >
-                              {d.paidAt ? "Paid" : "Not paid"}
-                            </button>
-                          </td>
-                        </tr>
+                        <CombinedRowTr
+                          key={combinedRowKey(entry.row)}
+                          row={entry.row}
+                          buildingCell={buildingCell}
+                          onTogglePaid={onTogglePaid}
+                          savingId={savingId}
+                          onToggleRecurringPaid={onToggleRecurringPaid}
+                          savingRecurringId={savingRecurringId}
+                        />
                       );
                     }
 
-                    const r = row.recurring;
                     return (
-                      <tr key={r.periodId} className="bg-violet-50/50 hover:bg-violet-100/60">
-                        <td className="max-w-xs truncate px-3 py-2">
-                          <Link href={`/erp/buildings/${r.buildingId}`} className="text-pink-600 hover:underline">
-                            {r.buildingName}
-                          </Link>
-                          <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Recurring</span>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatMonth(r.periodStart)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(r.monthlyRateCents)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-400">—</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
-                        <td className="px-3 py-2">
-                          <button
-                            type="button"
-                            onClick={() => onToggleRecurringPaid(r)}
-                            disabled={savingRecurringId === r.periodId}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-                              r.paidAt
-                                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                                : "border-gray-300 bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {r.paidAt ? "Paid" : "Not paid"}
-                          </button>
-                        </td>
-                      </tr>
+                      <Fragment key={entry.buildingId}>
+                        {entry.rows.map((row, idx) => (
+                          <CombinedRowTr
+                            key={combinedRowKey(row)}
+                            row={row}
+                            buildingCell={
+                              idx === 0 ? (
+                                <span className="font-medium text-gray-900">{entry.buildingName}</span>
+                              ) : (
+                                <span className="text-gray-300 select-none">↳</span>
+                              )
+                            }
+                            onTogglePaid={onTogglePaid}
+                            savingId={savingId}
+                            onToggleRecurringPaid={onToggleRecurringPaid}
+                            savingRecurringId={savingRecurringId}
+                          />
+                        ))}
+                      </Fragment>
                     );
                   })}
                 </tbody>

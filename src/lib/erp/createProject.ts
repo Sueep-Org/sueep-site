@@ -31,7 +31,11 @@ function maxDateValue(values: (Date | null | undefined)[]) {
   return sorted[sorted.length - 1] ?? null;
 }
 
-export async function createProjectFromPayload(body: Record<string, unknown>) {
+export async function createProjectFromPayload(
+  body: Record<string, unknown>,
+  options?: { createdByEmployeeId?: string | null }
+) {
+  const createdByEmployeeId = options?.createdByEmployeeId ?? null;
   const segment = normalizeProjectSegment(String(body.segment || "COMMERCIAL_CLEANING"));
 
   if (segment === "JANITORIAL_TURNOVER_REQUESTS") {
@@ -77,6 +81,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
             percentInvoiced: 0,
             contractValueCents: request.priceCents ?? undefined,
             hubspotPipelineId,
+            createdByEmployeeId,
           },
         });
       })
@@ -112,6 +117,7 @@ export async function createProjectFromPayload(body: Record<string, unknown>) {
       estHours: body.estHours != null && body.estHours !== "" ? Number(body.estHours) : undefined,
       actualHours: body.actualHours != null && body.actualHours !== "" ? Number(body.actualHours) : undefined,
       hubspotPipelineId: body.hubspotPipelineId != null ? String(body.hubspotPipelineId).trim() || null : null,
+      createdByEmployeeId,
     },
   });
 

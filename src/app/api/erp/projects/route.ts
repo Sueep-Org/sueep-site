@@ -4,6 +4,7 @@ import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegm
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
 import { notifyJanitorialTurnoverCreated } from "@/lib/erp/notifyJanitorialTurnover";
+import { getErpAuth } from "@/lib/erpAuth";
 
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
@@ -56,8 +57,13 @@ export async function POST(req: Request) {
 
   const notifyEmployeeIds = Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [];
 
+  const auth = await getErpAuth();
+  const creator = auth?.email
+    ? await prisma.employee.findFirst({ where: { email: { equals: auth.email, mode: "insensitive" } }, select: { id: true } })
+    : null;
+
   try {
-    const result = await createProjectFromPayload(body);
+    const result = await createProjectFromPayload(body, { createdByEmployeeId: creator?.id ?? null });
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }

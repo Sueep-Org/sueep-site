@@ -176,7 +176,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4">
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h3 className="text-sm font-semibold text-gray-700">Required Documents</h3>
         <p className="text-xs text-gray-500">
           Define which document types this employee must have on file. Compliance is met when all are present.
@@ -280,9 +280,9 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
 
         {reqError ? <p className="text-xs text-red-500">{reqError}</p> : null}
         {reqOk ? <p className="text-xs text-emerald-600">Saved.</p> : null}
-      </div>
+      </section>
 
-      <div className="space-y-4">
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h3 className="text-sm font-semibold text-gray-700">Documents on File</h3>
         <p className="text-xs text-gray-500">Upload and manage this employee&apos;s documents.</p>
 
@@ -404,7 +404,7 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

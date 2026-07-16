@@ -113,10 +113,18 @@ model Project {
   /// commissionEmployeeId lets that be overridden per project.
   commissionPaidAt    DateTime?
   commissionEmployeeId String?
-  commissionEmployee   Employee? @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+  commissionEmployee   Employee? @relation("ProjectCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+
+  /// ERP user who manually created this project (e.g. via the New Project
+  /// form) — used as the commission-owner fallback when there's no HubSpot
+  /// deal owner to match against. Left null for projects synced in from
+  /// HubSpot or created by an unauthenticated public form.
+  createdByEmployeeId String?
+  createdByEmployee   Employee? @relation("ProjectCreatedBy", fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
 
   @@index([segment])
   @@index([commissionEmployeeId])
+  @@index([createdByEmployeeId])
   @@index([status])
   @@index([projectDate])
   @@index([recurringContractPeriodId])
@@ -889,7 +897,8 @@ model Employee {
   contracts EmployeeContract[]
   safetyCheckWorkers SafetyCheckWorker[]
   safetyIncidents SafetyIncident[]
-  commissionProjects Project[]
+  commissionProjects Project[] @relation("ProjectCommissionOwner")
+  createdProjects    Project[] @relation("ProjectCreatedBy")
   reimbursements Reimbursement[]
   recurringContractCommissions RecurringContract[]
   offshorePayrollPayments OffshorePayrollPayment[]

@@ -7,18 +7,30 @@ import { Prisma } from "@prisma/client";
  * Get all labor entries with optional filtering
  * Query params:
  *   - projectId: Filter by project
- *   - workDate: Filter by work date
+ *   - employeeId: Filter by employee
+ *   - workDate: Filter by a single work date
+ *   - startDate / endDate: Filter by a work date range (inclusive)
  *   - workerName: Filter by worker name
+ *   - skip / take: Pagination — when `take` is omitted, all matching rows are returned
+ *     (existing behavior); when provided, one extra row is fetched to compute `hasMore`.
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const projectId = searchParams.get("projectId");
+    const employeeId = searchParams.get("employeeId");
     const workDate = searchParams.get("workDate");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
     const workerName = searchParams.get("workerName");
+    const skip = Number(searchParams.get("skip") ?? "0") || 0;
+    const takeParam = searchParams.get("take");
+    const take = takeParam ? Math.min(200, Math.max(1, Number(takeParam) || 0)) : null;
 
     const where: Prisma.LaborEntryWhereInput = {};
     if (projectId) where.projectId = projectId;
+    if (employeeId) where.employeeId = employeeId;
+    if (workerName) where.workerName = { contains: workerName, mode: "insensitive" };
     if (workDate) {
       const date = new Date(workDate);
       const nextDay = new Date(date);
@@ -27,8 +39,12 @@ export async function GET(request: NextRequest) {
         gte: date,
         lt: nextDay,
       };
+    } else if (startDate || endDate) {
+      where.workDate = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lt: new Date(new Date(endDate).getTime() + 24 * 60 * 60 * 1000) } : {}),
+      };
     }
-    if (workerName) where.workerName = { contains: workerName, mode: "insensitive" };
 
     const entries = await prisma.laborEntry.findMany({
       where,
@@ -54,11 +70,17 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      skip: skip || undefined,
+      take: take ? take + 1 : undefined,
     });
+
+    const hasMore = take != null && entries.length > take;
+    const pageEntries = take != null ? entries.slice(0, take) : entries;
 
     return NextResponse.json({
       success: true,
-      data: entries.map((e) => ({
+      hasMore,
+      data: pageEntries.map((e) => ({
         id: e.id,
         projectId: e.projectId,
         employeeId: e.employeeId,

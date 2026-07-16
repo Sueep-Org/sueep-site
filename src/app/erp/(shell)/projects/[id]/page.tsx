@@ -163,7 +163,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   // What the editor's "Auto" option resolves to absent an explicit override
   // — same resolver the Employee "Commission" tab uses, so the two always agree.
   const autoMatchedEmployeeId = resolveCommissionEmployeeId(
-    { commissionEmployeeId: null, hubspotOwnerEmail: project.hubspotOwnerEmail, hubspotOwnerName: project.hubspotOwnerName },
+    {
+      commissionEmployeeId: null,
+      hubspotOwnerEmail: project.hubspotOwnerEmail,
+      hubspotOwnerName: project.hubspotOwnerName,
+      createdByEmployeeId: project.createdByEmployeeId,
+    },
     commissionEligibleEmployees
   );
   const autoMatchedCommissionEmployee =

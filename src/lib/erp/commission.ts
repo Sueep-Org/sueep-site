@@ -112,14 +112,12 @@ export function computeRecurringCommissionCents(monthlyRateCents: number, monthI
   return Math.round(monthlyRateCents * recurringCommissionRateForMonth(monthIndex));
 }
 
-/** Deals with no resolvable HubSpot owner default here rather than going uncredited. */
-export const DEFAULT_COMMISSION_OWNER_EMAIL = "nick@sueep.com";
-
 type CommissionEligibleEmployee = { id: string; email: string | null; firstName: string; lastName: string };
 type CommissionProject = {
   commissionEmployeeId: string | null;
   hubspotOwnerEmail: string | null;
   hubspotOwnerName: string | null;
+  createdByEmployeeId: string | null;
 };
 
 /**
@@ -127,8 +125,9 @@ type CommissionProject = {
  * used by both the project page (to show/edit the assignment) and the
  * employee page (to decide which projects show up on someone's tab).
  * Priority: explicit override > HubSpot owner email match > HubSpot owner
- * name match > the default owner (only employees with an ERP login are
- * eligible at any step).
+ * name match > whoever manually created the project (set at creation time
+ * for projects made directly in the ERP, rather than synced from HubSpot) >
+ * blank (only employees with an ERP login are eligible at any step).
  */
 export function resolveCommissionEmployeeId(
   project: CommissionProject,
@@ -148,6 +147,9 @@ export function resolveCommissionEmployeeId(
     );
   if (byName) return byName.id;
 
-  const defaultOwner = eligibleEmployees.find((e) => e.email?.toLowerCase() === DEFAULT_COMMISSION_OWNER_EMAIL);
-  return defaultOwner?.id ?? null;
+  const creator =
+    project.createdByEmployeeId && eligibleEmployees.find((e) => e.id === project.createdByEmployeeId);
+  if (creator) return creator.id;
+
+  return null;
 }

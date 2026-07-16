@@ -8,6 +8,8 @@ import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
+import { EmployeeLaborSection } from "./EmployeeLaborSection";
+import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { getErpAuth, canEditEmployeePayInfo, canViewEmployeeSsn } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,43 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
 
   const requiredDocuments = parseRequiredDocuments(employee.requiredDocuments);
   const compliance = evaluateEmployeeCompliance(employee.status, requiredDocuments, employee.documents);
+
+  const [initialLaborEntries, laborProjectGroups] = await Promise.all([
+    prisma.laborEntry.findMany({
+      where: { employeeId: employee.id },
+      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+      take: LABOR_PAGE_SIZE + 1,
+      select: {
+        id: true,
+        projectId: true,
+        workDate: true,
+        role: true,
+        hours: true,
+        hourlyRateCents: true,
+        taskDescription: true,
+        project: { select: { jobTitle: true } },
+      },
+    }),
+    prisma.laborEntry.groupBy({ by: ["projectId"], where: { employeeId: employee.id } }),
+  ]);
+  const laborProjects = laborProjectGroups.length
+    ? await prisma.project.findMany({
+        where: { id: { in: laborProjectGroups.map((g) => g.projectId) } },
+        select: { id: true, jobTitle: true },
+        orderBy: { jobTitle: "asc" },
+      })
+    : [];
+  const initialLaborHasMore = initialLaborEntries.length > LABOR_PAGE_SIZE;
+  const laborEntryRows = initialLaborEntries.slice(0, LABOR_PAGE_SIZE).map((e) => ({
+    id: e.id,
+    projectId: e.projectId,
+    projectTitle: e.project.jobTitle,
+    workDate: e.workDate.toISOString(),
+    role: e.role,
+    hours: e.hours,
+    hourlyRateCents: e.hourlyRateCents,
+    taskDescription: e.taskDescription,
+  }));
 
   return (
     <div className="space-y-4">
@@ -79,39 +118,47 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
             />
           ),
         },
-        ...(canSeePay ? [{
-          label: "Bank Account",
-          content: (
-            <EmployeeBankAccountSection
-              employeeId={employee.id}
-              initial={{
-                bankAccountType: employee.bankAccountType,
-                bankAccountNumber: employee.bankAccountNumber,
-                bankRoutingNumber: employee.bankRoutingNumber,
-              }}
-            />
-          ),
-        }] : []),
-        ...(canSeeSsn ? [{
-          label: "SSN",
-          content: <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />,
-        }] : []),
         {
-          label: "Documents",
+          label: "Personal & Documents",
           content: (
-            <EmployeeDocumentsSection
+            <div className="space-y-4">
+              {canSeeSsn && <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />}
+              {canSeePay && (
+                <EmployeeBankAccountSection
+                  employeeId={employee.id}
+                  initial={{
+                    bankAccountType: employee.bankAccountType,
+                    bankAccountNumber: employee.bankAccountNumber,
+                    bankRoutingNumber: employee.bankRoutingNumber,
+                  }}
+                />
+              )}
+              <EmployeeDocumentsSection
+                employeeId={employee.id}
+                initialRequiredDocuments={requiredDocuments}
+                initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+                initialDocuments={employee.documents.map((d) => ({
+                  id: d.id,
+                  documentType: d.documentType,
+                  title: d.title,
+                  issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
+                  expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
+                  fileUrl: d.fileUrl,
+                  notes: d.notes,
+                }))}
+              />
+            </div>
+          ),
+        },
+        {
+          label: "Labor",
+          content: (
+            <EmployeeLaborSection
               employeeId={employee.id}
-              initialRequiredDocuments={requiredDocuments}
-              initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
-              initialDocuments={employee.documents.map((d) => ({
-                id: d.id,
-                documentType: d.documentType,
-                title: d.title,
-                issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
-                expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
-                fileUrl: d.fileUrl,
-                notes: d.notes,
-              }))}
+              canSeePay={canSeePay}
+              initialEntries={laborEntryRows}
+              initialHasMore={initialLaborHasMore}
+              projectOptions={laborProjects}
             />
           ),
         },
