@@ -521,7 +521,7 @@ async function initApp(){
   }
 
   function isFloorLikeLine(line) {
-    return /\b(?:floor|level|suite)\b/i.test(line) || /^\d+(?:st|nd|rd|th)?\s+(?:floor|level)/i.test(line);
+    return /\b(?:floor|level)\b/i.test(line) || /\bsuite\s+level\b/i.test(line) || /^\d+(?:st|nd|rd|th)?\s+(?:floor|level)/i.test(line);
   }
 
   function groupPdfTextLines(items = [], pageNum = 1, viewport = null) {
@@ -2569,6 +2569,33 @@ async function initApp(){
   let _phaseCrews = { rough: [], final: [], touchup: [] };
   let _deletedPhaseIds = new Set();
   let _expectedDaysManual = false;
+  let _phasesLocked = true;
+
+  function _autoGeneratePhases(totalArea) {
+    const area = parseFloat(totalArea) || 0;
+    if (area <= 0) return;
+    const uid = () => Math.random().toString(36).slice(2);
+    const roughDays = Math.ceil(area / 9000);
+    const finalDays = Math.ceil(area / 7500);
+    const touchupDays = Math.ceil(area / 6000);
+    _phaseCrews.rough = [
+      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
+      { role: 'foreman', rate: 220, days: roughDays, _uid: uid() },
+    ];
+    _phaseCrews.final = [
+      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
+      { role: 'foreman', rate: 220, days: finalDays, _uid: uid() },
+    ];
+    _phaseCrews.touchup = [
+      { role: 'cleaner', rate: 22, days: touchupDays, _uid: uid() },
+      { role: 'foreman', rate: 220, days: touchupDays, _uid: uid() },
+    ];
+    _deletedPhaseIds = new Set();
+  }
 
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
@@ -2690,7 +2717,59 @@ async function initApp(){
     if (!container) return;
     container.innerHTML = '';
 
+    if (_phasesLocked) {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button'; editBtn.textContent = 'Edit Phases';
+      editBtn.style.cssText = 'padding:4px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;color:#374151;font-size:12px;cursor:pointer;';
+      editBtn.onclick = () => { _phasesLocked = false; _renderPhaseTable(); };
+      bar.appendChild(editBtn);
+      container.appendChild(bar);
+
+      const rates = _getRates();
+      PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid, i) => {
+        const actualIdx = PHASE_IDS.indexOf(pid);
+        const crew = _phaseCrews[pid] || [];
+        const c = _calcPhase({ crew }, rates);
+        const days = crew.length > 0 ? Math.max(...crew.map(m => m.days || 0)) : 0;
+        const cleaners = crew.filter(m => m.role === 'cleaner').length;
+        const foremen = crew.filter(m => m.role === 'foreman').length;
+        const pms = crew.filter(m => m.role === 'project_manager').length;
+
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;';
+        const nameEl = document.createElement('span');
+        nameEl.textContent = PHASES[actualIdx];
+        nameEl.style.cssText = 'font-weight:600;font-size:13px;color:#374151;';
+        const summary = document.createElement('span');
+        const parts = [];
+        if (cleaners) parts.push(`${cleaners} Cleaner${cleaners > 1 ? 's' : ''}`);
+        if (foremen) parts.push(`${foremen} Foreman`);
+        if (pms) parts.push(`${pms} PM`);
+        summary.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
+        summary.style.cssText = 'font-size:12px;color:#6b7280;';
+        header.appendChild(nameEl); header.appendChild(summary);
+        section.appendChild(header);
+        container.appendChild(section);
+      });
+      _updateCrewCalcs();
+      return;
+    }
+
     const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
+
+    // Lock button at top when in edit mode
+    const lockBar = document.createElement('div');
+    lockBar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
+    const lockBtn = document.createElement('button');
+    lockBtn.type = 'button'; lockBtn.textContent = 'Done Editing';
+    lockBtn.style.cssText = 'padding:4px 12px;border:1px solid #86efac;border-radius:6px;background:white;color:#16a34a;font-size:12px;cursor:pointer;';
+    lockBtn.onclick = () => { _phasesLocked = true; _renderPhaseTable(); };
+    lockBar.appendChild(lockBtn);
+    container.appendChild(lockBar);
 
     PHASE_IDS.forEach((pid, i) => {
       if (_deletedPhaseIds.has(pid)) {
@@ -3006,12 +3085,28 @@ async function initApp(){
         if (!savedPids.has(pid)) _deletedPhaseIds.add(pid);
       }
     } else {
-      ['rough', 'final', 'touchup'].forEach(pid => {
-        _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 220, days: 2, _uid: Math.random().toString(36).slice(2) }];
-      });
+      const totalArea = _pdfMetadataSummary?.totalArea ?? _loadedProjectData.total_area;
+      if (totalArea) {
+        _autoGeneratePhases(totalArea);
+      } else {
+        ['rough', 'final', 'touchup'].forEach(pid => {
+          _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 220, days: 2, _uid: Math.random().toString(36).slice(2) }];
+        });
+      }
     }
+    _phasesLocked = true;
 
     _renderPhaseTable();
+
+    const regenPhasesBtn = document.getElementById('regenPhasesBtn');
+    if (regenPhasesBtn) regenPhasesBtn.onclick = () => {
+      const area = parseFloat(document.getElementById('analysisTotalAreaInput')?.value) || 0;
+      if (!area) { alert('Please set Total Area first.'); return; }
+      _autoGeneratePhases(area);
+      _phasesLocked = true;
+      _renderPhaseTable();
+      _updateCrewCalcs();
+    };
 
     // Reset expected days manual override state
     _expectedDaysManual = !!_loadedProjectData.expected_days;
@@ -3041,7 +3136,34 @@ async function initApp(){
       _updateCrewCalcs();
     };
 
-    setVal('analysisTotalAreaInput', _pdfMetadataSummary?.totalArea ?? _loadedProjectData.total_area);
+    const autoTotalArea = _pdfMetadataSummary?.totalArea ?? null;
+    const totalAreaInput = document.getElementById('analysisTotalAreaInput');
+    const totalAreaModifyBtn = document.getElementById('totalAreaModifyBtn');
+    const totalAreaResetBtn = document.getElementById('totalAreaResetBtn');
+    setVal('analysisTotalAreaInput', autoTotalArea ?? _loadedProjectData.total_area);
+    if (totalAreaInput) {
+      totalAreaInput.readOnly = true;
+      totalAreaInput.className = 'w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
+    }
+    if (totalAreaModifyBtn) totalAreaModifyBtn.style.display = '';
+    if (totalAreaResetBtn) totalAreaResetBtn.style.display = 'none';
+    const _regenPhasesFromAreaInput = () => {
+      const area = parseFloat(totalAreaInput?.value) || 0;
+      if (area > 0) { _autoGeneratePhases(area); _phasesLocked = true; _renderPhaseTable(); _updateCrewCalcs(); }
+    };
+    if (totalAreaInput) totalAreaInput.addEventListener('change', _regenPhasesFromAreaInput);
+    if (totalAreaModifyBtn) totalAreaModifyBtn.onclick = () => {
+      if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; totalAreaInput.focus(); }
+      totalAreaModifyBtn.style.display = 'none';
+      if (totalAreaResetBtn) totalAreaResetBtn.style.display = autoTotalArea != null ? '' : 'none';
+    };
+    if (totalAreaResetBtn) totalAreaResetBtn.onclick = () => {
+      if (totalAreaInput) { totalAreaInput.readOnly = true; totalAreaInput.className = 'w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none'; }
+      setVal('analysisTotalAreaInput', autoTotalArea ?? _loadedProjectData.total_area);
+      totalAreaResetBtn.style.display = 'none';
+      if (totalAreaModifyBtn) totalAreaModifyBtn.style.display = '';
+      _regenPhasesFromAreaInput();
+    };
     setVal('analysisAddressInput', _pdfMetadataSummary?.address || _loadedProjectData.address);
     setVal('gasolineInput', _loadedProjectData.gasoline);
     setVal('tollCostInput', _loadedProjectData.toll_cost);
