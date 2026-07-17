@@ -31,7 +31,11 @@ export default function EstimatorPage() {
       const href = anchor.getAttribute("href");
       if (!href || href.includes("/estimator")) return;
       if (w.__estimatorProjectLoaded) {
-        if (!window.confirm("Are you sure you want to leave? Any unsaved changes will be lost.")) {
+        if (
+          !window.confirm(
+            "Are you sure you want to leave? Any unsaved changes will be lost.",
+          )
+        ) {
           e.preventDefault();
           e.stopPropagation();
         }
@@ -234,6 +238,14 @@ export default function EstimatorPage() {
                 </button>
                 <button id="drawIrregBtn" className="mini-btn">
                   Draw Irreg
+                </button>
+                <button
+                  id="undoShapeBtn"
+                  className="mini-btn"
+                  type="button"
+                  disabled
+                >
+                  Undo
                 </button>
 
                 <button id="doubleSideToggle" className="mini-btn">
@@ -705,12 +717,26 @@ export default function EstimatorPage() {
               {/* Drive info (read-only, below address) */}
               <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Distance</label>
-                  <div id="editDriveDistance" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Drive Distance
+                  </label>
+                  <div
+                    id="editDriveDistance"
+                    className="text-sm text-gray-600 font-medium mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Time</label>
-                  <div id="editDriveTime" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Drive Time
+                  </label>
+                  <div
+                    id="editDriveTime"
+                    className="text-sm text-gray-600 font-medium mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
               </div>
               {/* Expected Days to Complete */}
@@ -751,7 +777,9 @@ export default function EstimatorPage() {
 
               {/* Phase table — rendered by JS */}
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phases</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Phases
+                </span>
                 <button
                   type="button"
                   id="regenPhasesBtn"
@@ -826,7 +854,9 @@ export default function EstimatorPage() {
 
               {/* Margin — single row */}
               <div className="mb-3 pt-4 border-t border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Margin ($)
+                </label>
                 <input
                   type="number"
                   id="marginInput"
@@ -839,7 +869,9 @@ export default function EstimatorPage() {
               {/* Gasoline + Toll Cost + Drive info (read-only) */}
               <div className="flex flex-wrap gap-4 mb-4">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Gasoline ($)
+                  </label>
                   <input
                     type="number"
                     id="gasolineInput"
@@ -850,7 +882,9 @@ export default function EstimatorPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Toll Cost ($)</label>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Toll Cost ($)
+                  </label>
                   <input
                     type="number"
                     id="tollCostInput"

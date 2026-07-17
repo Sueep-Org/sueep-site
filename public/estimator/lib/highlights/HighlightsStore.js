@@ -36,6 +36,17 @@ export class HighlightsStore {
     return entry;
   }
 
+  removePolygon(page, idOrPolygon) {
+    this._ensure(page);
+    const arr = this._pageToStrokes.get(page);
+    const idx = typeof idOrPolygon === 'string' || typeof idOrPolygon === 'number'
+      ? arr.findIndex((poly) => poly.id === idOrPolygon || poly.measurementId === idOrPolygon)
+      : arr.indexOf(idOrPolygon);
+    if (idx < 0) return false;
+    arr.splice(idx, 1);
+    return true;
+  }
+
   undo(page) {
     this._ensure(page);
     const arr = this._pageToStrokes.get(page);

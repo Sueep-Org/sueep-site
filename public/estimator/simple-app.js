@@ -248,6 +248,7 @@ async function initApp(){
   const detectWallsBtn = $('detectWallsBtn');
   const drawRectBtn = $('drawRectBtn');
   const drawIrregBtn = $('drawIrregBtn');
+  const undoShapeBtn = $('undoShapeBtn');
 
   const zoomInBtn = $('zoomInBtn');
 
@@ -355,6 +356,19 @@ async function initApp(){
   overlay.setActive(false);
 
   overlay.setTool('area');
+
+  if (undoShapeBtn) {
+    undoShapeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (overlay?.undoLastShapeAction?.()) {
+        toast('Shape action undone', 'info');
+      } else {
+        toast('Nothing to undo', 'info');
+      }
+    };
+    overlay._syncShapeUndoButton?.();
+  }
 
   // Per-project annotation persistence via API (with localStorage fallback)
   window.__saveAnnotations = async function() {
