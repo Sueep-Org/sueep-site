@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { computeProjectMargins } from "@/lib/erp/projectMargin";
 import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveCommissionEmployeeId } from "@/lib/erp/commission";
+import { bidBonusCentsForCount, mondayOf, type BidBonusRow } from "@/lib/erp/bidBonus";
 import { CommissionByRep, type CommissionChangeOrderRow, type CommissionDealRow, type RecurringCommissionRow, type RepGroup } from "../commission/CommissionByRep";
+import { BidsView, type BidRow } from "../commission/BidsView";
+import { BidCommissionView } from "../commission/BidCommissionView";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
 import { OffshorePayrollView } from "./OffshorePayrollView";
@@ -17,7 +20,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [projects, employees, erpUsers, reimbursements, recurringPeriods, completedPaidChangeOrders] = await Promise.all([
+  const [projects, employees, erpUsers, reimbursements, recurringPeriods, completedPaidChangeOrders, bidBonusEntries, salesBidEntries] = await Promise.all([
     prisma.project.findMany({
       // Only deals that are actually PAID count toward commission — being
       // fully billed/invoiced (percentInvoiced=100) isn't enough on its own,
@@ -103,6 +106,14 @@ export default async function PayrollPage({ searchParams }: PageProps) {
           },
         },
       },
+    }),
+    prisma.bidBonusEntry.findMany({
+      orderBy: { weekStart: "desc" },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
+    }),
+    prisma.salesBidEntry.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     }),
   ]);
 
@@ -259,6 +270,56 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     }
   );
 
+  // The manual bid-pipeline log — a separate comp track from deal/CO/recurring
+  // commission, shown as its own flat page ("Bids") rather than nested
+  // per-rep, and not scoped to the Commission tab's selected year.
+  const bidRows: BidRow[] = salesBidEntries.map((entry) => ({
+    id: entry.id,
+    employeeId: entry.employeeId,
+    employeeName: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+    date: entry.date ? entry.date.toISOString() : null,
+    projectStartDate: entry.projectStartDate ? entry.projectStartDate.toISOString() : null,
+    company: entry.company,
+    deal: entry.deal,
+    description: entry.description,
+    drawings: entry.drawings as "YES" | "NO" | "ASKED" | null,
+    payoutCents: entry.payoutCents,
+    sent: entry.sent,
+  }));
+
+  // Weekly verified-bid bonus ("Bid Commission") is derived from the Bids
+  // log, not manually entered: count each employee's sent bids per week
+  // (bucketed by the bid's own date, not the week it was later marked sent)
+  // and look up the tier. Bids with no date can't be bucketed into a week,
+  // so they don't count. Paid status is the only thing actually stored
+  // (BidBonusEntry), keyed by (employeeId, weekStart) — union in any paid
+  // weeks that currently have zero sent bids so a paid record never
+  // silently disappears if its bids are later unmarked or deleted.
+  const sentBidCountByKey = new Map<string, number>();
+  const employeeNameById = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`.trim()]));
+  for (const entry of salesBidEntries) {
+    if (!entry.sent || !entry.date) continue;
+    const key = `${entry.employeeId}::${mondayOf(entry.date)}`;
+    sentBidCountByKey.set(key, (sentBidCountByKey.get(key) ?? 0) + 1);
+  }
+  const paidAtByKey = new Map(
+    bidBonusEntries.map((e) => [`${e.employeeId}::${mondayOf(e.weekStart)}`, e.paidAt])
+  );
+  const bidBonusRowKeys = new Set([...sentBidCountByKey.keys(), ...paidAtByKey.keys()]);
+  const bidBonusRows: BidBonusRow[] = [...bidBonusRowKeys].map((key) => {
+    const [employeeId, weekStartDate] = key.split("::");
+    const verifiedBids = sentBidCountByKey.get(key) ?? 0;
+    const paidAt = paidAtByKey.get(key) ?? null;
+    return {
+      employeeId,
+      employeeName: employeeNameById.get(employeeId) ?? "Unknown",
+      weekStart: new Date(`${weekStartDate}T00:00:00Z`).toISOString(),
+      verifiedBids,
+      bonusCents: bidBonusCentsForCount(verifiedBids),
+      paidAt: paidAt ? paidAt.toISOString() : null,
+    };
+  });
+
   const availableYears = [
     ...new Set([...allRows.map((r) => r.year), ...recurringRowsAll.map((r) => r.year), ...allCoRows.map((r) => r.year)]),
   ].sort((a, b) => b - a);
@@ -358,12 +419,34 @@ export default async function PayrollPage({ searchParams }: PageProps) {
           { label: "Offshore Payroll", content: <OffshorePayrollView /> },
           {
             label: "Commission",
-            // key={selectedYear} forces a full remount on year-tab switches —
-            // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner/
-            // coByOwner) is only initialized once from the `reps` prop, so
-            // without a fresh mount it kept showing the first-loaded year's
-            // rows even after navigating to a different year.
-            content: <CommissionByRep key={selectedYear} years={availableYears} selectedYear={selectedYear} reps={repGroups} />,
+            children: [
+              {
+                label: "Sales",
+                // key={selectedYear} forces a full remount on year-tab switches —
+                // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner/
+                // coByOwner) is only initialized once from the `reps` prop, so
+                // without a fresh mount it kept showing the first-loaded year's
+                // rows even after navigating to a different year.
+                content: (
+                  <CommissionByRep key={selectedYear} years={availableYears} selectedYear={selectedYear} reps={repGroups} />
+                ),
+              },
+              {
+                label: "Bids",
+                content: (
+                  <div className="space-y-6">
+                    <section className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Bid Commission</h2>
+                      <BidCommissionView rows={bidBonusRows} />
+                    </section>
+                    <section className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Bids</h2>
+                      <BidsView employees={activeEmployeeOptions} rows={bidRows} />
+                    </section>
+                  </div>
+                ),
+              },
+            ],
           },
           {
             label: "Reimbursements",

@@ -917,6 +917,8 @@ model Employee {
   reimbursements Reimbursement[]
   recurringContractCommissions RecurringContract[]
   offshorePayrollPayments OffshorePayrollPayment[]
+  bidBonusEntries BidBonusEntry[]
+  salesBidEntries SalesBidEntry[]
 
   @@index([status])
   @@index([defaultProject])
@@ -940,6 +942,56 @@ model OffshorePayrollPayment {
   paidAt      DateTime?
 
   @@unique([employeeId, periodStart])
+}
+
+/// Paid-status record for a BD Caller's weekly bid bonus. The verified-bid
+/// count itself is NOT stored here — it's derived live by counting
+/// SalesBidEntry rows with sent=true for that employee/week (see
+/// countSentBidsByWeek in payroll/page.tsx), same reasoning as
+/// OffshorePayrollPayment not snapshotting its rate. A row only exists once
+/// someone has toggled paid status for that employee/week.
+model BidBonusEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// Monday of the reported week
+  weekStart DateTime
+
+  /// Set once the bonus has been paid out
+  paidAt DateTime?
+
+  @@unique([employeeId, weekStart])
+  @@index([employeeId])
+}
+
+/// Manual bid-pipeline log for BD Callers — mirrors the "Sales" tracking
+/// sheet columns 1:1 (Date, Project Start Date, Company, Deal, Description,
+/// Drawings Y/N, Payout), plus `sent` to mark whether the bid was actually
+/// submitted. Bids with sent=true are what feed the weekly bonus count in
+/// BidBonusEntry's derived verifiedBids.
+model SalesBidEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date             DateTime?
+  projectStartDate DateTime?
+  company          String
+  deal             String?
+  description      String?
+  /// YES | NO | ASKED
+  drawings         String?
+  payoutCents      Int?
+  sent             Boolean @default(false)
+
+  @@index([employeeId])
 }
 
 model EmployeeDocument {
