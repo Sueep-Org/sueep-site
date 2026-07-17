@@ -225,7 +225,7 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
               <input id="sb-payout" type="text" placeholder="$0.00" value={formPayout} onChange={(e) => setFormPayout(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <p className="text-xs text-gray-500">New bids start as &quot;Not sent&quot; — mark sent from the table once submitted, and it'll count toward that week's bid bonus.</p>
+          <p className="text-xs text-gray-500">New bids start as &quot;Not sent&quot; — mark sent from the table once submitted, and it&apos;ll count toward that week&apos;s bid bonus.</p>
           {formError && <p className="text-xs text-red-500">{formError}</p>}
           <button
             type="submit"
