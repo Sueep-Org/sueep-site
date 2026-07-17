@@ -123,6 +123,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       data.estimatedDays = Math.round(n);
     }
   }
+  if (body.commissionPaid !== undefined) {
+    data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+  }
 
   const laborersRaw = Array.isArray(body.laborers)
     ? (body.laborers as unknown[]).flatMap((l) => {

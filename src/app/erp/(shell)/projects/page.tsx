@@ -174,9 +174,12 @@ export default async function ErpProjectsPage() {
     const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
 
-    // Roll up qualifying change orders (exclude VOID and REJECTED)
+    // Roll up qualifying change orders (exclude VOID and REJECTED).
+    // contractValueCents is only set once a CO's final value is confirmed;
+    // until then, fall back to its estimatedCostCents so a CO with just an
+    // estimate still counts instead of silently showing as $0.
     const qualifyingCOs = p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
-    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? 0), 0);
+    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0), 0);
     const coEstMaterialCents = qualifyingCOs.reduce((s, co) => s + (co.estMaterialCents ?? 0), 0);
     const coActualMaterialCents = qualifyingCOs.reduce((s, co) => {
       const mat = co.materialEntries.reduce((ms, e) => ms + e.costCents, 0);

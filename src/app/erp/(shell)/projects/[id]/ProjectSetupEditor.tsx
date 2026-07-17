@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -27,8 +26,6 @@ type Props = {
   erpSupervisors: ErpSupervisor[];
   projectDateIso: string | null;
   projectEndDateIso: string | null;
-  description: string | null;
-  showServiceType: boolean;
 };
 
 function toInputDate(iso: string | null): string {
@@ -52,8 +49,6 @@ export function ProjectSetupEditor({
   erpSupervisors,
   projectDateIso,
   projectEndDateIso,
-  description,
-  showServiceType,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -76,13 +71,6 @@ export function ProjectSetupEditor({
 
   // ERP supervisor link
   const [selectedSupervisorUserId, setSelectedSupervisorUserId] = useState(supervisorUserId ?? "");
-
-  // Service type
-  const isKnownServiceType = description ? (SERVICE_TYPE_OPTIONS as readonly string[]).includes(description) : false;
-  const [serviceTypeSelected, setServiceTypeSelected] = useState(
-    description && isKnownServiceType ? description : description ? "__other__" : "",
-  );
-  const [serviceTypeCustom, setServiceTypeCustom] = useState(description && !isKnownServiceType ? description : "");
 
 
   function handleLifecycleChange(next: ProjectLifecycle) {
@@ -131,10 +119,6 @@ export function ProjectSetupEditor({
       else if (current.getTime() > today.getTime()) nextProjectDate = toIsoDate(today);
     }
 
-    const serviceTypeValue = showServiceType
-      ? (serviceTypeSelected === "__other__" ? serviceTypeCustom.trim() : serviceTypeSelected) || null
-      : undefined;
-
     const payload: Record<string, unknown> = {
       status: nextStatus,
       segment: nextSegment,
@@ -144,7 +128,6 @@ export function ProjectSetupEditor({
       supervisorUserId: selectedSupervisorUserId || null,
     };
     if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
-    if (serviceTypeValue !== undefined) payload.description = serviceTypeValue;
 
     setLoading(true);
     try {
@@ -292,37 +275,6 @@ export function ProjectSetupEditor({
           </div>
         </div>
       </div>
-
-      {showServiceType && (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Work Type</h3>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={label} htmlFor="ps-st">Type</label>
-              <select id="ps-st" className={input} value={serviceTypeSelected} onChange={(e) => setServiceTypeSelected(e.target.value)}>
-                <option value="">— None —</option>
-                {SERVICE_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-                <option value="__other__">Other…</option>
-              </select>
-            </div>
-            {serviceTypeSelected === "__other__" && (
-              <div>
-                <label className={label} htmlFor="ps-st-custom">Custom</label>
-                <input
-                  id="ps-st-custom"
-                  type="text"
-                  className={input}
-                  value={serviceTypeCustom}
-                  onChange={(e) => setServiceTypeCustom(e.target.value)}
-                  placeholder="Describe the work"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
 

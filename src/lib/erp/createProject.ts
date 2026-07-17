@@ -97,6 +97,7 @@ export async function createProjectFromPayload(
 
   const projectDate = parseProjectDate(body.projectDate);
   const projectEndDate = parseProjectDate(body.projectEndDate);
+  const percentInvoiced = percentValue(body.percentInvoiced) ?? 0;
 
   const project = await prisma.project.create({
     data: {
@@ -107,7 +108,7 @@ export async function createProjectFromPayload(
       projectDate,
       projectEndDate,
       percentDone: percentValue(body.percentDone) ?? 0,
-      percentInvoiced: percentValue(body.percentInvoiced) ?? 0,
+      percentInvoiced,
       contractValueCents: inputToCents(body.contractValue) ?? undefined,
       estMaterialCents: inputToCents(body.estMaterial) ?? undefined,
       estTravelCents: inputToCents(body.estTravel) ?? undefined,

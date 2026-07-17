@@ -555,7 +555,11 @@ export function ProjectsExpandableTable({
             <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
             <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>
             <th className="px-3 py-2 font-semibold">Segment</th>
-            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Contract</th>}
+            {canSeeFinancials && (
+              <th className="px-3 py-2 font-semibold" title="Base contract value plus non-void/rejected change orders">
+                Contract
+              </th>
+            )}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Material</th>}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Material</th>}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Labor</th>}

@@ -35,6 +35,14 @@ model Project {
   percentDone     Float @default(0)
   percentInvoiced Float @default(0)
 
+  /// Stamped the first time billingStatus becomes INVOICE_PAID (never
+  /// cleared or re-stamped after that) — used both to gate a deal into
+  /// commission (billed isn't enough; it must be paid) and to bucket it
+  /// into the year it was actually paid in, since projectDate/projectEndDate
+  /// are scheduling dates (can be set long before billing wraps up) rather
+  /// than a payment-completion signal.
+  billingCompletedAt DateTime?
+
   /// BILLING | INACTIVE | INVOICE_PAID — manually set per project
   billingStatus String?
 
@@ -552,6 +560,13 @@ model ProjectChangeOrder {
   actualHours         Float?
   estLaborers         Int?
   estSupervisors      Int?
+
+  /// Sales commission on this CO is marked paid here — separate from the
+  /// parent project's own commissionPaidAt, since a CO only becomes
+  /// commissionable once it's COMPLETED and its billingStatus is paid
+  /// (see resolveCommissionEmployeeId / payroll page), independent of when
+  /// the base project's own commission was paid out.
+  commissionPaidAt DateTime?
 
   laborers        ProjectChangeOrderLaborer[]
   contracts       ChangeOrderContract[]

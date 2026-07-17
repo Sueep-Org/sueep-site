@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import {
   classifyHubSpotDealStage,
   erpStatusFromPhase,
+  parseHubSpotPipelineStageMap,
   shouldSyncDealToErp,
   type DealLifecyclePhase,
 } from "@/lib/hubspot/pipelineStages";
@@ -18,6 +19,36 @@ function parseHubSpotDate(value: string | null): Date | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+async function allSovItemsPaid(projectId: string): Promise<boolean> {
+  const sov = await prisma.projectSOV.findUnique({
+    where: { projectId },
+    select: { items: { select: { billingStatus: true } } },
+  });
+  return !!sov && sov.items.length > 0 && sov.items.every((i) => i.billingStatus === "PAID");
+}
+
+/**
+ * A deal leaving the Billing stage for Work Completed means the invoice is
+ * paid — but only trust that signal outright for post-construction deals
+ * (the only pipeline with a Billing stage today). For anything else, only
+ * mark paid once the project's own SOV confirms every line item is paid,
+ * rather than assuming from the HubSpot stage alone.
+ */
+async function resolveCompletionBillingStatus(
+  phase: DealLifecyclePhase,
+  previousBillingStatus: string | null,
+  pipelineId: string | null,
+  projectId: string
+): Promise<string | null> {
+  if (phase !== "COMPLETED" || previousBillingStatus !== "BILLING") return null;
+  const cfg = parseHubSpotPipelineStageMap();
+  const isPostConstruction = !!cfg && pipelineId === cfg.postConstruction.pipelineId;
+  if (isPostConstruction || (await allSovItemsPaid(projectId))) {
+    return "INVOICE_PAID";
+  }
+  return null;
 }
 
 export type SyncDealResult = {
@@ -117,6 +148,12 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       const projectDate = parseHubSpotDate(startRaw ?? closeRaw);
       const projectEndDate = parseHubSpotDate(endRaw ?? closeRaw);
       if (existing) {
+        const completionBillingStatus = await resolveCompletionBillingStatus(
+          phase,
+          existing.billingStatus,
+          pipelineId,
+          existing.id
+        );
         await prisma.project.update({
           where: { id: existing.id },
           data: {
@@ -130,7 +167,11 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             ...(hubspotOwnerId !== undefined ? { hubspotOwnerId } : {}),
             ...(hubspotOwnerName !== undefined ? { hubspotOwnerName } : {}),
             ...(hubspotOwnerEmail !== undefined ? { hubspotOwnerEmail } : {}),
-            ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
+            ...(completionBillingStatus
+              ? { billingStatus: completionBillingStatus }
+              : phase === "BILLING"
+                ? { billingStatus: "BILLING" }
+                : {}),
           },
         });
         syncedProjectId = existing.id;

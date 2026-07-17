@@ -312,6 +312,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     };
   });
 
+  // Same "counts unless it's dead" rule as the Projects table rollup —
+  // display-only total, never written back to project.contractValueCents.
+  // contractValueCents is only set once a CO's final value is confirmed;
+  // until then, fall back to its estimatedCostCents so a CO with just an
+  // estimate still counts instead of silently showing as $0.
+  const qualifyingChangeOrders = changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
+  const qualifyingCoContractValueCents = qualifyingChangeOrders.reduce(
+    (s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0),
+    0
+  );
+
   const changeOrderRows = changeOrders.map((co) => ({
     id: co.id,
     createdAt: co.createdAt.toISOString(),
@@ -385,8 +396,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             erpSupervisors={erpSupervisors}
             projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
             projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
-            description={project.description}
-            showServiceType={project.segment !== "JANITORIAL_TURNOVER_REQUESTS" && project.segment !== "REAL_ESTATE"}
           />
           <hr className="my-6 border-gray-200" />
           <ProjectWorkOrderNotifier
@@ -491,6 +500,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             hoursFromLogs={hoursFromLogs}
             estimatedDays={project.estimatedDays}
             daysFromLogs={daysFromLogs}
+            qualifyingCoContractValueCents={qualifyingCoContractValueCents}
+            qualifyingCoCount={qualifyingChangeOrders.length}
           />
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>

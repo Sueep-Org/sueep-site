@@ -28,6 +28,7 @@ export async function GET(req: Request) {
 
   const cfg = parseHubSpotPipelineStageMap();
   const janitorialPipelineId = cfg?.janitorial.pipelineId ?? null;
+  const postConstructionPipelineId = cfg?.postConstruction.pipelineId ?? null;
 
   const janitorialFilter = [
     ...(janitorialPipelineId ? [{ hubspotPipelineId: janitorialPipelineId }] : []),
@@ -39,6 +40,11 @@ export async function GET(req: Request) {
       status: "COMPLETE",
       AND: [
         { OR: janitorialFilter },
+        // COMMERCIAL_CLEANING is shared between the janitorial pipeline and
+        // post-construction cleaning jobs — segment alone can't tell them
+        // apart, so explicitly exclude anything actually synced from the
+        // post-construction pipeline even if its segment matches.
+        ...(postConstructionPipelineId ? [{ NOT: { hubspotPipelineId: postConstructionPipelineId } }] : []),
         {
           OR: [
             { projectEndDate: { gte: start, lte: end } },

@@ -37,8 +37,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   const updated = await prisma.projectSOVItem.update({ where: { id: itemId }, data: data as object });
+  // Always resync both — editing scheduledValueCents changes the SOV total
+  // (and therefore the correct percentInvoiced) even when billingStatus
+  // itself isn't part of this request.
   await syncSovPercentDone(id);
-  if (data.billingStatus) await syncProjectBillingFromSOV(id);
+  await syncProjectBillingFromSOV(id);
   return NextResponse.json(updated);
 }
 
@@ -51,6 +54,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.projectSOVItem.delete({ where: { id: itemId } });
+  // Deleting an item changes the SOV total the same way adding one does.
   await syncSovPercentDone(id);
+  await syncProjectBillingFromSOV(id);
   return NextResponse.json({ ok: true });
 }

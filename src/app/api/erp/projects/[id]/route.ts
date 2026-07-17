@@ -122,6 +122,34 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;
   }
 
+  // Fully invoiced isn't the same as paid — a project can sit at 100%
+  // invoiced while still awaiting payment, so percentInvoiced reaching 100
+  // must NOT auto-mark it paid. billingStatus has to be set explicitly.
+  //
+  // The inverse does hold, though: billingStatus values that unambiguously
+  // mean "fully invoiced" (PAID/BILLED/INVOICE_PAID) should default
+  // percentInvoiced to 100 when this request doesn't already specify it —
+  // this is what keeps the Janitorial/Recurring billing tabs' direct-PATCH
+  // fallback (no turnoverRequestId to sync through) from leaving
+  // percentInvoiced stale at 0 once something is marked paid.
+  if (
+    body.percentInvoiced === undefined &&
+    typeof data.billingStatus === "string" &&
+    ["PAID", "BILLED", "INVOICE_PAID"].includes(data.billingStatus)
+  ) {
+    data.percentInvoiced = 100;
+  }
+
+  // Stamp billingCompletedAt the first time billingStatus becomes paid via a
+  // manual edit — same rule the SOV/turnover-request sync paths follow, so
+  // commission gating/year-bucketing has a signal regardless of which path
+  // marked it paid. Fully billed isn't enough. Accepts "PAID" alongside the
+  // canonical "INVOICE_PAID" — see BILLING_STATUSES above.
+  const nextBillingStatus = data.billingStatus !== undefined ? (data.billingStatus as string | null) : existing.billingStatus;
+  if ((nextBillingStatus === "INVOICE_PAID" || nextBillingStatus === "PAID") && !existing.billingCompletedAt) {
+    data.billingCompletedAt = new Date();
+  }
+
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });
     return NextResponse.json(project);

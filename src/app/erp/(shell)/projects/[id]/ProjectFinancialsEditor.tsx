@@ -35,7 +35,14 @@ type Props = {
   hoursFromLogs: number;
   estimatedDays: number | null;
   daysFromLogs: number;
+  /** Sum of contractValueCents across non-void/rejected change orders — display only, never written back to contractValueCents. */
+  qualifyingCoContractValueCents: number;
+  qualifyingCoCount: number;
 };
+
+function formatCurrency(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
 
 function centsToInput(cents: number | null): string {
   if (cents == null) return "";
@@ -61,6 +68,8 @@ export function ProjectFinancialsEditor({
   hoursFromLogs,
   estimatedDays,
   daysFromLogs,
+  qualifyingCoContractValueCents,
+  qualifyingCoCount,
 }: Props) {
   const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
@@ -334,6 +343,15 @@ export function ProjectFinancialsEditor({
             <div>
               <label className={labelCls} htmlFor="fin-contract">Contract value ($)</label>
               <input id="fin-contract" type="number" min={0} step={0.01} className={inputCls} value={contractValue} onChange={(e) => setContractValue(e.target.value)} placeholder="0.00" />
+              {qualifyingCoCount > 0 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  + {formatCurrency(qualifyingCoContractValueCents)} across {qualifyingCoCount} change order{qualifyingCoCount === 1 ? "" : "s"}
+                  {" → "}
+                  <span className="font-medium text-gray-600">
+                    {formatCurrency((Number(contractValue || 0) * 100) + qualifyingCoContractValueCents)} total
+                  </span>
+                </p>
+              )}
             </div>
             <div>
               <label className={labelCls} htmlFor="fin-pct-done">% Done</label>

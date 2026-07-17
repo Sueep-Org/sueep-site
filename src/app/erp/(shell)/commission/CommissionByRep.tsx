@@ -21,6 +21,23 @@ export type CommissionDealRow = {
   completedAt: string;
 };
 
+// A completed + paid change order on a project — commissioned like a
+// one-time deal (own margin tier, own paid toggle) but always tied back to
+// its parent project rather than standing on its own.
+export type CommissionChangeOrderRow = {
+  changeOrderId: string;
+  projectId: string;
+  projectJobTitle: string;
+  title: string;
+  segment: string;
+  ownerName: string | null;
+  contractValueCents: number;
+  marginCents: number | null;
+  commissionCents: number;
+  paidAt: string | null;
+  completedAt: string;
+};
+
 // Same calendar-style grouping the Schedule page uses — painting/cleaning
 // folded into one "Post-construction" bucket rather than shown separately.
 type ProjectTypeGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
@@ -68,13 +85,14 @@ export type RepGroup = {
   paidCommissionCents: number;
   deals: CommissionDealRow[];
   recurringRows: RecurringCommissionRow[];
+  changeOrders: CommissionChangeOrderRow[];
 };
 
 type PaidFilter = "all" | "paid" | "unpaid";
 type SortKey = "date" | "margin" | "commission";
 type SortState = { key: SortKey; dir: "asc" | "desc" };
 
-function marginPercentOf(row: CommissionDealRow): number | null {
+function marginPercentOf(row: { marginCents: number | null; contractValueCents: number }): number | null {
   if (row.marginCents == null || row.contractValueCents === 0) return null;
   return (row.marginCents / row.contractValueCents) * 100;
 }
@@ -101,28 +119,45 @@ function sortValue(row: CommissionDealRow, key: SortKey): number {
 
 type CombinedRow =
   | { kind: "deal"; deal: CommissionDealRow }
-  | { kind: "recurring"; recurring: RecurringCommissionRow };
+  | { kind: "recurring"; recurring: RecurringCommissionRow }
+  | { kind: "co"; co: CommissionChangeOrderRow };
 
 function combinedDateIso(row: CombinedRow): string {
-  return row.kind === "deal" ? row.deal.completedAt : row.recurring.periodStart;
+  if (row.kind === "deal") return row.deal.completedAt;
+  if (row.kind === "co") return row.co.completedAt;
+  return row.recurring.periodStart;
 }
 function combinedPaidAt(row: CombinedRow): string | null {
-  return row.kind === "deal" ? row.deal.paidAt : row.recurring.paidAt;
+  if (row.kind === "deal") return row.deal.paidAt;
+  if (row.kind === "co") return row.co.paidAt;
+  return row.recurring.paidAt;
 }
 function combinedTypeGroup(row: CombinedRow): ProjectTypeGroup {
-  return row.kind === "deal" ? projectTypeGroup(row.deal.segment) : "JANITORIAL_TURNOVER_REQUESTS";
+  if (row.kind === "deal") return projectTypeGroup(row.deal.segment);
+  if (row.kind === "co") return projectTypeGroup(row.co.segment);
+  return "JANITORIAL_TURNOVER_REQUESTS";
 }
 function combinedSearchText(row: CombinedRow): string {
-  return row.kind === "deal" ? row.deal.jobTitle : row.recurring.buildingName;
+  if (row.kind === "deal") return row.deal.jobTitle;
+  if (row.kind === "co") return `${row.co.projectJobTitle} ${row.co.title}`;
+  return row.recurring.buildingName;
 }
 function combinedSortValue(row: CombinedRow, key: SortKey): number {
   if (key === "date") return new Date(combinedDateIso(row)).getTime();
-  if (key === "margin") return row.kind === "deal" ? (row.deal.marginCents ?? -Infinity) : -Infinity;
-  return row.kind === "deal" ? row.deal.commissionCents : row.recurring.commissionCents;
+  if (key === "margin") {
+    if (row.kind === "deal") return row.deal.marginCents ?? -Infinity;
+    if (row.kind === "co") return row.co.marginCents ?? -Infinity;
+    return -Infinity;
+  }
+  if (row.kind === "deal") return row.deal.commissionCents;
+  if (row.kind === "co") return row.co.commissionCents;
+  return row.recurring.commissionCents;
 }
 
 function combinedRowKey(row: CombinedRow): string {
-  return row.kind === "deal" ? row.deal.projectId : row.recurring.periodId;
+  if (row.kind === "deal") return row.deal.projectId;
+  if (row.kind === "co") return row.co.changeOrderId;
+  return row.recurring.periodId;
 }
 
 // Janitorial turnovers are one project per unit, so a single building can
@@ -362,6 +397,8 @@ function CombinedRowTr({
   savingId,
   onToggleRecurringPaid,
   savingRecurringId,
+  onToggleCoPaid,
+  savingCoId,
 }: {
   row: CombinedRow;
   buildingCell: ReactNode;
@@ -369,7 +406,51 @@ function CombinedRowTr({
   savingId: string | null;
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
   savingRecurringId: string | null;
+  onToggleCoPaid: (row: CommissionChangeOrderRow) => void;
+  savingCoId: string | null;
 }) {
+  if (row.kind === "co") {
+    const co = row.co;
+    const marginPct = marginPercentOf(co);
+    const tier = marginPct == null ? null : marginTierFor(marginPct);
+    return (
+      <tr key={co.changeOrderId} className="border-t border-gray-100 bg-blue-50/30 hover:bg-blue-100/60">
+        <td className="px-3 py-2">{buildingCell}</td>
+        <td className="max-w-xs px-3 py-2">
+          <span className="flex items-center gap-1.5">
+            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-600">CO</span>
+            <Link href={`/erp/projects/${co.projectId}`} className="min-w-0 truncate text-pink-600 hover:underline">
+              {co.projectJobTitle} — {co.title}
+            </Link>
+          </span>
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(co.completedAt)}</td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(co.contractValueCents)}</td>
+        <td className={`px-3 py-2 text-right tabular-nums ${co.marginCents != null && co.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
+          {co.marginCents == null ? "—" : centsToDollars(co.marginCents)}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+          {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(co.commissionCents)}</td>
+        <td className="px-3 py-2">
+          <button
+            type="button"
+            onClick={() => onToggleCoPaid(co)}
+            disabled={savingCoId === co.changeOrderId}
+            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
+              co.paidAt
+                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+                : "border-gray-300 bg-gray-100 text-gray-600"
+            }`}
+          >
+            {co.paidAt ? "Paid" : "Not paid"}
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
   if (row.kind === "deal") {
     const d = row.deal;
     const marginPct = marginPercentOf(d);
@@ -450,6 +531,9 @@ function RepPanel({
   recurringRows,
   onToggleRecurringPaid,
   savingRecurringId,
+  changeOrders,
+  onToggleCoPaid,
+  savingCoId,
 }: {
   yearRevenueCents: number;
   deals: CommissionDealRow[];
@@ -458,6 +542,9 @@ function RepPanel({
   recurringRows: RecurringCommissionRow[];
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
   savingRecurringId: string | null;
+  changeOrders: CommissionChangeOrderRow[];
+  onToggleCoPaid: (row: CommissionChangeOrderRow) => void;
+  savingCoId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
@@ -476,6 +563,7 @@ function RepPanel({
   const combined: CombinedRow[] = [
     ...deals.map((d) => ({ kind: "deal" as const, deal: d })),
     ...recurringRows.map((r) => ({ kind: "recurring" as const, recurring: r })),
+    ...changeOrders.map((co) => ({ kind: "co" as const, co })),
   ];
 
   const query = search.trim().toLowerCase();
@@ -557,6 +645,8 @@ function RepPanel({
                           savingId={savingId}
                           onToggleRecurringPaid={onToggleRecurringPaid}
                           savingRecurringId={savingRecurringId}
+                          onToggleCoPaid={onToggleCoPaid}
+                          savingCoId={savingCoId}
                         />
                       );
                     }
@@ -578,6 +668,8 @@ function RepPanel({
                             savingId={savingId}
                             onToggleRecurringPaid={onToggleRecurringPaid}
                             savingRecurringId={savingRecurringId}
+                            onToggleCoPaid={onToggleCoPaid}
+                            savingCoId={savingCoId}
                           />
                         ))}
                       </Fragment>
@@ -611,6 +703,11 @@ export function CommissionByRep({
     Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.recurringRows]))
   );
   const [savingRecurringId, setSavingRecurringId] = useState<string | null>(null);
+
+  const [coByOwner, setCoByOwner] = useState<Record<string, CommissionChangeOrderRow[]>>(() =>
+    Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.changeOrders]))
+  );
+  const [savingCoId, setSavingCoId] = useState<string | null>(null);
 
   async function setPaid(row: CommissionDealRow, ownerKey: string, paid: boolean) {
     setSavingId(row.projectId);
@@ -662,6 +759,31 @@ export function CommissionByRep({
     }
   }
 
+  async function setCoPaid(row: CommissionChangeOrderRow, ownerKey: string, paid: boolean) {
+    setSavingCoId(row.changeOrderId);
+    setCoByOwner((prev) => ({
+      ...prev,
+      [ownerKey]: prev[ownerKey].map((co) =>
+        co.changeOrderId === row.changeOrderId ? { ...co, paidAt: paid ? new Date().toISOString() : null } : co
+      ),
+    }));
+    try {
+      const res = await fetch(`/api/erp/projects/${row.projectId}/change-orders/${row.changeOrderId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commissionPaid: paid }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+    } catch {
+      setCoByOwner((prev) => ({
+        ...prev,
+        [ownerKey]: prev[ownerKey].map((co) => (co.changeOrderId === row.changeOrderId ? { ...co, paidAt: row.paidAt } : co)),
+      }));
+    } finally {
+      setSavingCoId(null);
+    }
+  }
+
   const totalCommission = reps.reduce((s, r) => s + r.totalCommissionCents, 0);
   const totalPaid = reps.reduce((s, r) => s + r.paidCommissionCents, 0);
 
@@ -694,6 +816,9 @@ export function CommissionByRep({
                   recurringRows={recurringByOwner[key] ?? []}
                   savingRecurringId={savingRecurringId}
                   onToggleRecurringPaid={(row) => setRecurringPaid(row, key, !row.paidAt)}
+                  changeOrders={coByOwner[key] ?? []}
+                  savingCoId={savingCoId}
+                  onToggleCoPaid={(row) => setCoPaid(row, key, !row.paidAt)}
                 />
               ),
             };

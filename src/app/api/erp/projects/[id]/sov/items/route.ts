@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSovPercentDone } from "@/lib/sovSync";
+import { syncSovPercentDone, syncProjectBillingFromSOV } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -45,6 +45,9 @@ export async function POST(req: Request, ctx: Ctx) {
     },
   });
 
+  // A new item changes the SOV's total value — percentInvoiced/billingStatus
+  // must be recomputed against the new total, not just percentDone.
   await syncSovPercentDone(id);
+  await syncProjectBillingFromSOV(id);
   return NextResponse.json(item, { status: 201 });
 }

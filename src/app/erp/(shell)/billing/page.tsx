@@ -6,7 +6,7 @@ import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
-type Tab = "post-construction" | "janitorial";
+type Tab = "post-construction" | "janitorial" | "recurring";
 
 const BILLING_OPTIONS = [
   { value: "NOT_BILLED", label: "Not Billed" },
@@ -501,6 +501,194 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
   );
 }
 
+// ── Recurring ─────────────────────────────────────────────────────────────────
+
+type RecurringPeriodRow = {
+  periodId: string;
+  projectId: string;
+  periodStart: string;
+  monthlyRateCents: number;
+  billingStatus: string;
+};
+
+type RecurringBuildingRow = {
+  buildingId: string;
+  buildingName: string;
+  periods: RecurringPeriodRow[];
+};
+
+type RecurringResponse = {
+  start: string;
+  end: string;
+  rows: RecurringBuildingRow[];
+};
+
+function buildRecurringCsv(rows: RecurringBuildingRow[], start: string, end: string): string {
+  const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const headers = ["Building", "Month", "Monthly Amount", "Billing Status"].map(escape).join(",");
+  const dataRows: string[] = [];
+  for (const building of rows) {
+    for (const period of building.periods) {
+      dataRows.push([
+        escape(building.buildingName),
+        escape(period.periodStart.slice(0, 7)),
+        escape((period.monthlyRateCents / 100).toFixed(2)),
+        escape(BILLING_OPTIONS.find((o) => o.value === period.billingStatus)?.label ?? period.billingStatus),
+      ].join(","));
+    }
+  }
+  const total = rows.flatMap((r) => r.periods).reduce((s, p) => s + p.monthlyRateCents, 0);
+  dataRows.push([escape("TOTAL"), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
+  void end;
+  return [headers, ...dataRows].join("\r\n");
+}
+
+function RecurringTab({ start, end }: { start: string; end: string }) {
+  const [data, setData] = useState<RecurringResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!start || !end) return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    fetch(`/api/erp/billing/recurring?start=${start}&end=${end}`)
+      .then((r) => r.json())
+      .then((d: RecurringResponse) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setError("Could not load billing data."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [start, end]);
+
+  const allPeriods = data?.rows.flatMap((r) => r.periods) ?? [];
+  const totalCents = allPeriods.reduce((s, p) => s + p.monthlyRateCents, 0);
+
+  async function updateBillingStatus(period: RecurringPeriodRow, billingStatus: string) {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) => ({
+          ...row,
+          periods: row.periods.map((p) => p.periodId === period.periodId ? { ...p, billingStatus } : p),
+        })),
+      };
+    });
+    try {
+      await fetch(`/api/erp/projects/${period.projectId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ billingStatus }),
+      });
+    } catch {
+      fetch(`/api/erp/billing/recurring?start=${start}&end=${end}`)
+        .then((r) => r.json()).then((d: RecurringResponse) => setData(d)).catch(() => {});
+    }
+  }
+
+  function downloadCsv() {
+    if (!data) return;
+    const csv = buildRecurringCsv(data.rows, data.start, data.end);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `billing-recurring-${start}-to-${end}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={downloadCsv}
+          disabled={!data || data.rows.length === 0}
+          className="flex items-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-40"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+            <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+          </svg>
+          Download CSV
+        </button>
+      </div>
+
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
+              <tr>
+                <th className="px-4 py-3">Building</th>
+                <th className="px-4 py-3">Month</th>
+                <th className="px-4 py-3 text-right">Monthly Amount</th>
+                <th className="px-4 py-3">Billing Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+              ) : error ? (
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+              ) : !data || data.rows.length === 0 ? (
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No recurring contract periods in this date range.</td></tr>
+              ) : (
+                data.rows.map((building) =>
+                  building.periods.map((period, idx) => (
+                    <tr key={period.periodId} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {idx === 0 ? (
+                          <Link href={`/erp/buildings/${building.buildingId}`} className="hover:text-pink-600 hover:underline">
+                            {building.buildingName}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-300 select-none">↳</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        <Link href={`/erp/projects/${period.projectId}`} className="hover:text-pink-600 hover:underline">
+                          {new Date(period.periodStart).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                        {fmt(period.monthlyRateCents)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={period.billingStatus}
+                          onChange={(e) => updateBillingStatus(period, e.target.value)}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(period.billingStatus)}`}
+                        >
+                          {BILLING_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
+            </tbody>
+            {data && data.rows.length > 0 && (
+              <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
+                <tr>
+                  <td className="px-4 py-3" colSpan={2}>
+                    Total — {allPeriods.length} month{allPeriods.length !== 1 ? "s" : ""} across {data.rows.length} building{data.rows.length !== 1 ? "s" : ""}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
+                  <td className="px-4 py-3" />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
@@ -510,7 +698,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
-    if (t === "post-construction" || t === "janitorial") setTab(t);
+    if (t === "post-construction" || t === "janitorial" || t === "recurring") setTab(t);
   }, []);
 
   function updateTab(t: Tab) {
@@ -523,6 +711,7 @@ export default function BillingPage() {
   const TABS: { id: Tab; label: string }[] = [
     { id: "post-construction", label: "Post-Construction" },
     { id: "janitorial", label: "Janitorial" },
+    { id: "recurring", label: "Recurring" },
   ];
 
   return (
@@ -577,6 +766,7 @@ export default function BillingPage() {
       {/* Tab content */}
       {tab === "post-construction" && <PostConstructionTab start={start} end={end} />}
       {tab === "janitorial" && <JanitorialTab start={start} end={end} />}
+      {tab === "recurring" && <RecurringTab start={start} end={end} />}
     </div>
   );
 }
