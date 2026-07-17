@@ -157,7 +157,7 @@ export function computePaintingQuote(input: PaintingQuoteInput): PaintingQuoteRe
   const mid = (lowCents + highCents) / 2;
   /** 50% of midpoint of the planning range — secures scheduling and paint / material ordering; balance per contract. */
   const depositRaw = Math.round(mid * 0.5);
-  const depositCents = Math.max(50, roundToNearest50Dollars(depositRaw));
+  const depositCents = Math.max(50_00, roundToNearest50Dollars(depositRaw));
 
   breakdown.push(
     `Deposit (${formatUsd(depositCents)}): 50% of the midpoint of your planning range — reserves your schedule and allows us to order paint and materials. Remaining balance per your written agreement with Sueep.`

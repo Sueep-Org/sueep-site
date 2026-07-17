@@ -167,7 +167,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     return {
       id: p.id,
       contractValueCents: p.contractValueCents!,
-      marginPercent: (marginCents / p.contractValueCents!) * 100,
+      marginPercent: p.contractValueCents === 0 ? 0 : (marginCents / p.contractValueCents!) * 100,
       ownerId: ownerIdByProject.get(p.id) ?? null,
       // Must match the `completedAt` precedence below — otherwise a deal can be
       // bucketed into one year while displaying a date from a different year,
@@ -188,7 +188,10 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // without colliding with project ids.
   const coDealsForCalc = completedPaidChangeOrders.map((co) => {
     const value = coValueCents(co);
-    const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0) + (co.actualTravelCents ?? 0);
+    // Labor + material only, no travel — matches computeProjectMargins (base
+    // deals) and the Projects table's CO cost rollup, so margin-based
+    // commission tiers agree with what the Projects page displays.
+    const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0);
     const marginCents = value - costCents;
     return {
       id: `co:${co.id}`,
@@ -234,7 +237,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const allCoRows: (CommissionChangeOrderRow & { ownerId: string | null; year: number })[] = completedPaidChangeOrders.map(
     (co) => {
       const value = coValueCents(co);
-      const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0) + (co.actualTravelCents ?? 0);
+      const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0);
       const ownerId = ownerIdByChangeOrder.get(co.id) ?? null;
       const owner = ownerId ? employeeById.get(ownerId) : null;
       const calcId = `co:${co.id}`;

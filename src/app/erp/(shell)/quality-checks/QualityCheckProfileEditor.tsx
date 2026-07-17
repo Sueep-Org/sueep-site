@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
+import { TurnoverRequestSelect } from "./TurnoverRequestSelect";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 import { SignaturePadInput } from "./SignaturePadInput";
 
