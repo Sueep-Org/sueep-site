@@ -41,6 +41,7 @@ export class CanvasOverlay {
     this._copiedMeasurement = null;
     this._lastPointerPosition = null;
     this._dragState = null;
+    this._shapeUndoStack = [];
     this._suppressNextClick = false;
     this._lastClickedCopyTarget = null;
   }
@@ -120,6 +121,91 @@ export class CanvasOverlay {
     this._selectedPolygonId = null;
     this._selectedLineIds.clear();
     this.redraw();
+  }
+
+  _syncShapeUndoButton() {
+    const btn = document.getElementById('undoShapeBtn');
+    if (btn) {
+      btn.disabled = !this._shapeUndoStack.length;
+    }
+  }
+
+  _pushShapeUndo(entry) {
+    if (!entry) return;
+    this._shapeUndoStack.push(entry);
+    this._syncShapeUndoButton();
+  }
+
+  undoLastShapeAction() {
+    const action = this._shapeUndoStack.pop();
+    if (!action) {
+      this._syncShapeUndoButton();
+      return false;
+    }
+
+    const page = action.page ?? this.currentPage;
+
+    if (action.type === 'add') {
+      if (action.measurementId) {
+        this.store.removeMeasurement(page, action.measurementId);
+      }
+      if (action.polygonId) {
+        this.store.removePolygon(page, action.polygonId);
+      }
+    } else if (action.type === 'move') {
+      const applyPoints = (points, snapshotPoints) => {
+        if (!Array.isArray(snapshotPoints)) return;
+        if (!points) return;
+        const clone = snapshotPoints.map((point) => ({ ...point }));
+        if (Array.isArray(points)) {
+          points.splice(0, points.length, ...clone);
+        }
+      };
+
+      const restoreMeasurement = (measurement, snapshot) => {
+        if (!measurement) return;
+        if (Array.isArray(snapshot.pts)) {
+          measurement.pts = snapshot.pts.map((seg) => ({ ...seg }));
+        }
+        if (Array.isArray(snapshot.shapePoints)) {
+          measurement.shapePoints = snapshot.shapePoints.map((point) => ({ ...point }));
+        }
+        if (Array.isArray(snapshot.polygonPoints)) {
+          measurement.polygonPoints = snapshot.polygonPoints.map((point) => ({ ...point }));
+        }
+      };
+
+      const restorePolygon = (polygon, snapshot) => {
+        if (!polygon) return;
+        const points = Array.isArray(snapshot.points)
+          ? snapshot.points
+          : (Array.isArray(snapshot.shapePoints) ? snapshot.shapePoints : (Array.isArray(snapshot.polygonPoints) ? snapshot.polygonPoints : []));
+        applyPoints(polygon.points, points);
+      };
+
+      if (action.targetType === 'line' && action.itemRef) {
+        const snapshot = action.beforeSnapshot || {};
+        action.itemRef.x1 = snapshot.x1 ?? action.itemRef.x1 ?? action.itemRef.x ?? 0;
+        action.itemRef.y1 = snapshot.y1 ?? action.itemRef.y1 ?? action.itemRef.y ?? 0;
+        action.itemRef.x2 = snapshot.x2 ?? action.itemRef.x2 ?? action.itemRef.x1 ?? action.itemRef.x ?? 0;
+        action.itemRef.y2 = snapshot.y2 ?? action.itemRef.y2 ?? action.itemRef.y1 ?? action.itemRef.y ?? 0;
+      } else if (action.targetType === 'polygon' && action.itemRef) {
+        restorePolygon(action.itemRef, action.beforeSnapshot || {});
+        const measurement = (this.store.listMeasurements(page) || []).find((entry) => entry.id === action.itemRef.measurementId || entry.id === action.itemRef.id || entry.polygonId === action.itemRef.id);
+        restoreMeasurement(measurement, action.beforeSnapshot || {});
+      } else if (action.targetType === 'measurement' && action.itemRef) {
+        const measurement = action.itemRef;
+        restoreMeasurement(measurement, action.beforeSnapshot || {});
+        const polygons = this.store.getPage(page) || [];
+        const polygon = polygons.find((entry) => entry.measurementId === measurement.id || entry.id === measurement.id || entry.id === (measurement.polygonId || measurement.id));
+        restorePolygon(polygon, action.beforeSnapshot || {});
+      }
+    }
+
+    this._syncShapeUndoButton();
+    this.onMeasurementsChanged?.();
+    this.redraw();
+    return true;
   }
 
   renderToContext(ctx, { width = this.overlay?.width || this.canvasEl?.width || 0, height = this.overlay?.height || this.canvasEl?.height || 0 } = {}) {
@@ -709,8 +795,11 @@ export class CanvasOverlay {
     }
 
     if (type === 'polygon') {
+      const points = Array.isArray(item.points) ? item.points.map((point) => ({ ...point })) : [];
       return {
-        points: Array.isArray(item.points) ? item.points.map((point) => ({ ...point })) : []
+        points,
+        shapePoints: points.map((point) => ({ ...point })),
+        polygonPoints: points.map((point) => ({ ...point }))
       };
     }
 
@@ -946,6 +1035,20 @@ export class CanvasOverlay {
   _onPointerUp = (e) => {
     // Always handle drag end regardless of drawing mode
     if (this._dragState) {
+      const dragState = this._dragState;
+      const moved = Boolean(dragState.lastPoint && dragState.startPoint) && (
+        Math.abs((dragState.lastPoint.x || 0) - (dragState.startPoint.x || 0)) > 0.5 ||
+        Math.abs((dragState.lastPoint.y || 0) - (dragState.startPoint.y || 0)) > 0.5
+      );
+      if (moved && (dragState.type === 'line' || dragState.type === 'polygon' || dragState.type === 'measurement')) {
+        this._pushShapeUndo({
+          type: 'move',
+          page: this.currentPage,
+          targetType: dragState.type,
+          itemRef: dragState.item,
+          beforeSnapshot: dragState.initialSnapshot
+        });
+      }
       this._dragState = null;
       try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
       this.onMeasurementsChanged?.();
@@ -1000,8 +1103,9 @@ export class CanvasOverlay {
 
       // store measurement record (normalized coordinates)
       const label = formatInches(realInchesForLine);
+      const measurementId = `drag-${Date.now()}`;
       this.store.addMeasurement(this.currentPage, {
-        id: `drag-${Date.now()}`,
+        id: measurementId,
         inches: realInchesForLine,
         label,
         at: Date.now(),
@@ -1009,6 +1113,12 @@ export class CanvasOverlay {
         pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
       });
 
+      this._pushShapeUndo({
+        type: 'add',
+        page: this.currentPage,
+        measurementId,
+        polygonId: null
+      });
       this.onMeasurementsChanged?.();
       toast(`Measured: ${label}`, 'success');
 
@@ -1057,6 +1167,12 @@ export class CanvasOverlay {
         pts: [{ x1: left / this.overlay.width, y1: top / this.overlay.height, x2: right / this.overlay.width, y2: bottom / this.overlay.height }]
       });
 
+      this._pushShapeUndo({
+        type: 'add',
+        page: this.currentPage,
+        measurementId,
+        polygonId: measurementId
+      });
       this.onMeasurementsChanged?.();
       toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
 
@@ -1293,6 +1409,12 @@ export class CanvasOverlay {
       pts: pathPoints.map((point, index) => ({ x1: point.x / this.overlay.width, y1: point.y / this.overlay.height, x2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).x / this.overlay.width, y2: (index < pathPoints.length - 1 ? pathPoints[index + 1] : pathPoints[0]).y / this.overlay.height }))
     });
 
+    this._pushShapeUndo({
+      type: 'add',
+      page: this.currentPage,
+      measurementId,
+      polygonId: measurementId
+    });
     this.onMeasurementsChanged?.();
     toast(`Area: ${areaScaled.toFixed(2)} sq`, 'success');
 
