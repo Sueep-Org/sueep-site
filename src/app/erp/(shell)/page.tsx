@@ -38,6 +38,16 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Monday-anchored week bucket, matching the OT week convention in calcOtSplits.ts.
+function mondayOf(d: Date): string {
+  const date = new Date(d);
+  const day = date.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setUTCDate(date.getUTCDate() + diff);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString().slice(0, 10);
+}
+
 const SEGMENT_DOT: Record<string, string> = {
   JANITORIAL_TURNOVER_REQUESTS: "bg-teal-400",
   COMMERCIAL_CLEANING: "bg-teal-400",
@@ -427,7 +437,10 @@ export default async function ErpDashboardPage() {
     const adminTodayStart = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 0, 0, 0, 0));
     const adminTodayEnd = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 23, 59, 59, 999));
 
-    const [allProjects, employees, candidates, contractors, recentProjects, recentLabor, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
+    const flagWindowStart = new Date(adminTodayStart);
+    flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
+
+    const [allProjects, employees, candidates, contractors, recentProjects, recentLabor, laborForFlags, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
       prisma.project.findMany({
         select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true },
         orderBy: { updatedAt: "desc" },
@@ -456,6 +469,13 @@ export default async function ErpDashboardPage() {
         select: {
           id: true, workDate: true, workerName: true, hours: true,
           project: { select: { id: true, jobTitle: true, status: true, supervisor: true, segment: true } },
+        },
+      }),
+      prisma.laborEntry.findMany({
+        where: { employeeId: { not: null }, workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
+        select: {
+          employeeId: true, workerName: true, workDate: true, hours: true,
+          project: { select: { id: true, jobTitle: true } },
         },
       }),
       prisma.dailySafetyCheck.findMany({
@@ -505,6 +525,50 @@ export default async function ErpDashboardPage() {
       if (whereWeAre.length >= 10) break;
     }
 
+    // Labor red flags: hours concentrated on a single project, either in one
+    // day or over a week, within the last 14 days (roughly a pay period).
+    // Two independent signals merged into one list: a single long shift can
+    // be a data-entry error or a burnout risk even if the week overall looks
+    // normal; a high weekly total on one project can hide a bad entry spread
+    // across several days. Distinct from the payroll OT split in
+    // calcOtSplits.ts, which sums a worker's hours across ALL projects for
+    // pay — this is specifically about concentration on ONE project.
+    const DAY_HOURS_FLAG_THRESHOLD = 12;
+    const WEEK_HOURS_FLAG_THRESHOLD = 40;
+    type LaborFlag = { kind: "day" | "week"; workerName: string; projectId: string; jobTitle: string; hours: number; label: string };
+
+    const dayFlags: LaborFlag[] = laborForFlags
+      .filter((e) => e.hours >= DAY_HOURS_FLAG_THRESHOLD)
+      .map((e) => ({
+        kind: "day" as const,
+        workerName: e.workerName,
+        projectId: e.project.id,
+        jobTitle: e.project.jobTitle,
+        hours: e.hours,
+        label: `${new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · single day`,
+      }));
+
+    const weekBuckets = new Map<string, { workerName: string; projectId: string; jobTitle: string; hours: number; weekStart: string }>();
+    for (const e of laborForFlags) {
+      const weekStart = mondayOf(e.workDate);
+      const key = `${e.employeeId}::${e.project.id}::${weekStart}`;
+      const bucket = weekBuckets.get(key) ?? { workerName: e.workerName, projectId: e.project.id, jobTitle: e.project.jobTitle, hours: 0, weekStart };
+      bucket.hours += e.hours;
+      weekBuckets.set(key, bucket);
+    }
+    const weekFlags: LaborFlag[] = [...weekBuckets.values()]
+      .filter((w) => w.hours >= WEEK_HOURS_FLAG_THRESHOLD)
+      .map((w) => ({
+        kind: "week" as const,
+        workerName: w.workerName,
+        projectId: w.projectId,
+        jobTitle: w.jobTitle,
+        hours: w.hours,
+        label: `week of ${new Date(`${w.weekStart}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+      }));
+
+    const laborFlags = [...dayFlags, ...weekFlags].sort((a, b) => b.hours - a.hours).slice(0, 8);
+
     // Safety KPIs
     const safetyWorkers = todaySafetyChecks.flatMap((c) => c.workers);
     const safetyTotal = safetyWorkers.length;
@@ -553,6 +617,39 @@ export default async function ErpDashboardPage() {
                       <p className="text-[11px] text-gray-400">
                         {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Labor red flags */}
+        <div className={`rounded-lg border bg-white ${laborFlags.length > 0 ? "border-red-200" : "border-gray-200"}`}>
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Labor red flags</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project</p>
+            </div>
+            {laborFlags.length > 0 && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
+            )}
+          </div>
+          {laborFlags.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 sm:grid sm:grid-cols-2 sm:divide-y-0">
+              {laborFlags.map((f, i) => (
+                <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`} className="sm:border-b sm:border-gray-100">
+                  <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
+                      <p className="truncate text-xs text-gray-400">{f.jobTitle}</p>
+                    </div>
+                    <div className="ml-2 shrink-0 text-right">
+                      <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
+                      <p className="text-[11px] text-gray-400">{f.label}</p>
                     </div>
                   </Link>
                 </li>
