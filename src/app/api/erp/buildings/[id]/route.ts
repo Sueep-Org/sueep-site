@@ -63,6 +63,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);
   }
+  if (body.commissionEmployeeId !== undefined) {
+    if (!canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+      return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit the commission owner" }, { status: 403 });
+    }
+    data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId) : null;
+  }
 
   try {
     const building = await prisma.building.update({ where: { id }, data: data as object });

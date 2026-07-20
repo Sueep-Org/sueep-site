@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { centsToDollars } from "@/lib/erp/money";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
 
 export type BidRow = {
@@ -249,7 +248,6 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
                 <th className="px-4 py-3">Deal</th>
                 <th className="px-4 py-3">Description</th>
                 <th className="px-4 py-3">Drawings</th>
-                <th className="px-4 py-3 text-right">Payout</th>
                 <th className="px-4 py-3">Sent</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -257,7 +255,7 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
             <tbody>
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">No bids logged yet.</td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">No bids logged yet.</td>
                 </tr>
               ) : (
                 visibleRows.map((row, i) => (
@@ -269,7 +267,6 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
                     <td className="px-4 py-3 text-gray-700">{row.deal ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-700">{row.description ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-700">{row.drawings ? DRAWINGS_LABEL[row.drawings] : "—"}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-900">{row.payoutCents == null ? "—" : centsToDollars(row.payoutCents)}</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"

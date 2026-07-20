@@ -20,14 +20,21 @@ type Props = {
   isSupervisor?: boolean;
   canEditPricing?: boolean;
   employees: { id: string; name: string }[];
+  commissionEmployeeId?: string | null;
 };
 
-export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor, canEditPricing = false, employees }: Props) {
+export function BuildingTabs({ buildingId, buildingName, initial, initialPackage, isSupervisor, canEditPricing = false, employees, commissionEmployeeId = null }: Props) {
   const allTabs = [
     {
       label: "Details",
       content: (
-        <BuildingProfileEditor buildingId={buildingId} initial={{ ...initial, address: initial.address ?? "" }} />
+        <BuildingProfileEditor
+          buildingId={buildingId}
+          initial={{ ...initial, address: initial.address ?? "" }}
+          commissionEmployeeId={commissionEmployeeId}
+          employees={employees}
+          canEditCommissionOwner={canEditPricing}
+        />
       ),
     },
     {

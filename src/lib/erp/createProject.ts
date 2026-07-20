@@ -82,6 +82,7 @@ export async function createProjectFromPayload(
             contractValueCents: request.priceCents ?? undefined,
             hubspotPipelineId,
             createdByEmployeeId,
+            commissionEmployeeId: result.building.commissionEmployeeId,
           },
         });
       })

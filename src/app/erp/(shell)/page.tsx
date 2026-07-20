@@ -452,10 +452,10 @@ export default async function ErpDashboardPage() {
       }),
       prisma.laborEntry.findMany({
         orderBy: { workDate: "desc" },
-        take: 8,
+        take: 150,
         select: {
           id: true, workDate: true, workerName: true, hours: true,
-          project: { select: { id: true, jobTitle: true } },
+          project: { select: { id: true, jobTitle: true, status: true, supervisor: true, segment: true } },
         },
       }),
       prisma.dailySafetyCheck.findMany({
@@ -485,6 +485,26 @@ export default async function ErpDashboardPage() {
     const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
 
+    // "Where we are": the most recent labor entry per project — one row per
+    // project, not one row per log — so it reads as a live snapshot of where
+    // people are working rather than a raw activity feed. recentLabor is
+    // already ordered by workDate desc, so the first entry seen per project
+    // is that project's latest. ARCHIVED is excluded everywhere (dead work),
+    // but COMPLETE only excludes non-turnover projects — turnover units are
+    // typically one-day jobs that get marked COMPLETE right after the labor
+    // that finished them is logged, so excluding COMPLETE there would hide
+    // almost all turnover activity, not just stale projects.
+    const whereWeAre: typeof recentLabor = [];
+    const seenProjectIds = new Set<string>();
+    for (const entry of recentLabor) {
+      if (entry.project.status === "ARCHIVED") continue;
+      if (entry.project.status === "COMPLETE" && entry.project.segment !== "JANITORIAL_TURNOVER_REQUESTS") continue;
+      if (seenProjectIds.has(entry.project.id)) continue;
+      seenProjectIds.add(entry.project.id);
+      whereWeAre.push(entry);
+      if (whereWeAre.length >= 10) break;
+    }
+
     // Safety KPIs
     const safetyWorkers = todaySafetyChecks.flatMap((c) => c.workers);
     const safetyTotal = safetyWorkers.length;
@@ -507,6 +527,38 @@ export default async function ErpDashboardPage() {
               Schedule
             </Link>
           </div>
+        </div>
+
+        {/* Where we are */}
+        <div className="rounded-lg border border-gray-200 bg-white">
+          <div className="border-b border-gray-100 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Where we are</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Active projects · most recent labor log each</p>
+          </div>
+          {whereWeAre.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 sm:grid sm:grid-cols-2 sm:divide-y-0">
+              {whereWeAre.map((e) => (
+                <li key={e.project.id} className="sm:border-b sm:border-gray-100">
+                  <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-900">{e.project.jobTitle}</p>
+                      <p className="truncate text-xs text-gray-400">
+                        {e.workerName}{e.project.supervisor ? ` · ${e.project.supervisor}` : ""}
+                      </p>
+                    </div>
+                    <div className="ml-2 shrink-0 text-right">
+                      <p className="text-xs font-semibold text-gray-700">{e.hours.toFixed(2)}h</p>
+                      <p className="text-[11px] text-gray-400">
+                        {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* KPI strip — all white, only alert states get color */}
@@ -594,35 +646,6 @@ export default async function ErpDashboardPage() {
 
           {/* Right column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Recent labor */}
-            <div className="rounded-lg border border-gray-200 bg-white">
-              <div className="border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Recent labor logged</h2>
-              </div>
-              {recentLabor.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {recentLabor.map((e) => (
-                    <li key={e.id}>
-                      <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{e.workerName}</p>
-                          <p className="truncate text-xs text-gray-400">{e.project.jobTitle}</p>
-                        </div>
-                        <div className="ml-2 shrink-0 text-right">
-                          <p className="text-xs font-semibold text-gray-700">{e.hours}h</p>
-                          <p className="text-[11px] text-gray-400">
-                            {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
             {/* Compliance snapshot */}
             <div className="rounded-lg border border-gray-200 bg-white">
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">

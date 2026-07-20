@@ -101,6 +101,14 @@ export async function generatePeriodForContract(
           projectEndDate: periodEnd,
           percentDone: 0,
           percentInvoiced: 0,
+          // Not set on the billing project above — that revenue is already
+          // commissioned via RecurringContract.commissionEmployeeId on its
+          // own 5%/2% schedule (see computeRecurringCommissionCents); giving
+          // it an owner here too would double-commission it as a one-time
+          // deal. Unit projects normally carry no contractValueCents, but an
+          // "other work" charge can still land on one, so they still need an
+          // owner to get commissioned correctly when that happens.
+          commissionEmployeeId: building.commissionEmployeeId,
         },
       });
     })

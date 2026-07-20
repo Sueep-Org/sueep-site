@@ -151,12 +151,21 @@ model Building {
   pmPhone String?
   pricingPackage Json?
 
+  /// Salesperson who gets commission credit on turnover unit projects
+  /// created for this building — stamped onto each unit Project at creation
+  /// (see createProjectFromPayload/generatePeriodForContract) so every unit
+  /// resolves to the same owner without per-project assignment. Left
+  /// unset for buildings where turnover work isn't yet commission-assigned.
+  commissionEmployeeId String?
+  commissionEmployee   Employee? @relation("BuildingCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+
   turnoverRequests      TurnoverRequest[]
   contractorAssignments ContractorAssignment[]
   projects              Project[]
   recurringContract     RecurringContract?
 
   @@index([name])
+  @@index([commissionEmployeeId])
 }
 
 enum TurnoverRequestType {
@@ -916,6 +925,7 @@ model Employee {
   createdProjects    Project[] @relation("ProjectCreatedBy")
   reimbursements Reimbursement[]
   recurringContractCommissions RecurringContract[]
+  buildingCommissions Building[] @relation("BuildingCommissionOwner")
   offshorePayrollPayments OffshorePayrollPayment[]
   bidBonusEntries BidBonusEntry[]
   salesBidEntries SalesBidEntry[]

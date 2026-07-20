@@ -54,6 +54,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         }}
         initialPackage={building.pricingPackage}
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
+        commissionEmployeeId={building.commissionEmployeeId}
       />
     </div>
   );
