@@ -38,6 +38,39 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+type ActivityProject = {
+  status: string;
+  billingStatus: string | null;
+  percentDone: number;
+  percentInvoiced: number;
+  projectDate: Date | null;
+};
+
+/**
+ * There's no per-field change history on Project, so "recent activity" can't
+ * say what changed from what — only what's true about it right now. This
+ * picks the single most relevant current fact (in priority order) so the
+ * feed reads as "this project was touched because X" instead of a bare
+ * status label that doesn't explain anything.
+ */
+function describeProjectActivity(p: ActivityProject): { text: string; dot: string } {
+  const status = p.status.toUpperCase();
+  const billing = p.billingStatus?.toUpperCase() ?? null;
+  const isPaid = billing === "PAID" || billing === "INVOICE_PAID";
+
+  if (status === "ARCHIVED") return { text: "Archived", dot: "bg-gray-300" };
+  if (status === "ON_HOLD") return { text: "Put on hold", dot: "bg-amber-400" };
+  if (status === "COMPLETE") return { text: isPaid ? "Completed · invoice paid" : "Completed", dot: "bg-emerald-400" };
+  if (isPaid) return { text: "Invoice paid", dot: "bg-emerald-400" };
+  if (billing === "BILLING") return { text: "Sent to billing", dot: "bg-blue-400" };
+  if (p.percentInvoiced > 0) return { text: `${Math.round(p.percentInvoiced)}% invoiced`, dot: "bg-sky-400" };
+  if (p.percentDone > 0) return { text: `${Math.round(p.percentDone)}% done`, dot: "bg-violet-400" };
+  if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null) === "UPCOMING") {
+    return { text: "Scheduled to start", dot: "bg-violet-400" };
+  }
+  return { text: "In progress", dot: "bg-emerald-400" };
+}
+
 // Monday-anchored week bucket, matching the OT week convention in calcOtSplits.ts.
 function mondayOf(d: Date): string {
   const date = new Date(d);
@@ -103,37 +136,23 @@ export default async function ErpDashboardPage() {
             <p className="text-sm text-gray-400">{today}</p>
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Link href="/erp/billing" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Billing</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Project Billing</p>
-              <p className="mt-1 text-sm text-gray-500">View and manage billing status across projects.</p>
-            </Link>
-            <Link href="/erp/payroll" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Payroll</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Payroll Export</p>
-              <p className="mt-1 text-sm text-gray-500">Export labor hours and pay data for payroll processing.</p>
-            </Link>
-            <Link href="/erp/employees" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Employees</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Employee Records</p>
-              <p className="mt-1 text-sm text-gray-500">View employee info and pay rates.</p>
-            </Link>
-            <Link href="/erp/projects" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Projects</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">All Projects</p>
-              <p className="mt-1 text-sm text-gray-500">View project financials and contract values.</p>
-            </Link>
-            <Link href="/erp/candidates" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Hiring</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Candidates</p>
-              <p className="mt-1 text-sm text-gray-500">Manage applicants and onboarding.</p>
-            </Link>
-            <Link href="/erp/contractors" className="rounded-lg border border-gray-200 bg-white p-5 hover:shadow-md transition">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Hiring</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Contractor Verification</p>
-              <p className="mt-1 text-sm text-gray-500">Review and verify contractor paperwork.</p>
-            </Link>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              { href: "/erp/billing", label: "Billing", title: "Project Billing", dot: "bg-emerald-400" },
+              { href: "/erp/payroll", label: "Payroll", title: "Payroll Export", dot: "bg-violet-400" },
+              { href: "/erp/employees", label: "Employees", title: "Employee Records", dot: "bg-blue-400" },
+              { href: "/erp/projects", label: "Projects", title: "All Projects", dot: "bg-sky-400" },
+              { href: "/erp/candidates", label: "Hiring", title: "Candidates", dot: "bg-amber-400" },
+              { href: "/erp/contractors", label: "Hiring", title: "Contractor Verification", dot: "bg-teal-400" },
+            ].map((c) => (
+              <Link key={c.title} href={c.href} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${c.dot}`} />
+                  {c.label}
+                </p>
+                <p className="mt-0.5 text-base font-semibold text-gray-900">{c.title}</p>
+              </Link>
+            ))}
           </div>
         </div>
       );
@@ -168,15 +187,12 @@ export default async function ErpDashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {/* Projects needing estimates */}
-            <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Projects missing estimates</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Need est. labor or material</p>
-                </div>
-                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">{missingEstimates.length}</span>
+                <h2 className="text-sm font-semibold text-gray-900" title="Need est. labor or material">Projects missing estimates</h2>
+                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">{missingEstimates.length}</span>
               </div>
               {missingEstimates.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-gray-400">All projects have estimates.</p>
@@ -203,7 +219,7 @@ export default async function ErpDashboardPage() {
             </div>
 
             {/* Recent change orders */}
-            <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900">Recent change orders</h2>
               </div>
@@ -313,43 +329,27 @@ export default async function ErpDashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
 
-          {/* KPI strip */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* Stat strip */}
+          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:grid-cols-4 sm:divide-y-0">
             {[
-              {
-                label: "My Projects",
-                value: myProjects.length,
-                card: "border-blue-200 bg-blue-50", val: "text-blue-700",
-              },
-              {
-                label: "Checks Today",
-                value: `${projectsWithCheck}/${myProjects.length}`,
-                card: projectsMissingCheck > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
-                val: projectsMissingCheck > 0 ? "text-amber-700" : "text-emerald-700",
-              },
-              {
-                label: "Compliance Rate",
-                value: complianceRate !== null ? `${complianceRate}%` : "—",
-                card: complianceRate !== null && complianceRate < 100 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50",
-                val: complianceRate !== null && complianceRate < 100 ? "text-red-600" : "text-emerald-700",
-              },
-              {
-                label: "Open Incidents",
-                value: openIncidents.length,
-                card: openIncidents.length > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50",
-                val: openIncidents.length > 0 ? "text-red-600" : "text-gray-400",
-              },
+              { label: "My Projects", value: myProjects.length, dot: "bg-blue-400", val: "text-blue-700", alert: false },
+              { label: "Checks Today", value: `${projectsWithCheck}/${myProjects.length}`, dot: "bg-teal-400", val: "text-teal-700", alert: projectsMissingCheck > 0 },
+              { label: "Compliance", value: complianceRate !== null ? `${complianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: complianceRate !== null && complianceRate < 100 },
+              { label: "Open Incidents", value: openIncidents.length, dot: "bg-red-400", val: "text-gray-900", alert: openIncidents.length > 0 },
             ].map((k) => (
-              <div key={k.label} className={`rounded-lg border px-3 py-2.5 ${k.card}`}>
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
-                <p className={`mt-1 text-xl font-bold ${k.val}`}>{k.value}</p>
+              <div key={k.label} className="px-4 py-3">
+                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                  {k.label}
+                </p>
+                <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
               </div>
             ))}
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {/* My projects with today's safety status */}
-            <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900">My projects</h2>
                 {assignmentOr.length === 0 && (
@@ -397,10 +397,9 @@ export default async function ErpDashboardPage() {
             </div>
 
             {/* Open incidents */}
-            <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Open incidents</h2>
-                <p className="mt-0.5 text-xs text-gray-400">Workers marked non-compliant</p>
+                <h2 className="text-sm font-semibold text-gray-900" title="Workers marked non-compliant">Open incidents</h2>
               </div>
               {openIncidents.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-gray-400">No open incidents.</p>
@@ -458,7 +457,7 @@ export default async function ErpDashboardPage() {
         select: {
           id: true, jobTitle: true, status: true, segment: true,
           supervisor: true, updatedAt: true, projectDate: true, billingStatus: true,
-          contractValueCents: true,
+          contractValueCents: true, percentDone: true, percentInvoiced: true,
         },
         orderBy: { updatedAt: "desc" },
         take: 15,
@@ -593,12 +592,50 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
+        {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
+        <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="grid grid-cols-3 divide-x divide-y divide-gray-100 sm:grid-cols-6 sm:divide-y-0">
+            {[
+              { label: "WIP", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", dot: "bg-emerald-400", val: "text-emerald-700" },
+              { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", dot: "bg-violet-400", val: "text-violet-700" },
+              { label: "Employees", value: activeEmployees.length, sub: null, href: "/erp/employees", dot: "bg-blue-400", val: "text-blue-700" },
+              { label: "Contractors", value: contractors, sub: null, href: "/erp/contractors", dot: "bg-sky-400", val: "text-sky-700" },
+              { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
+              { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
+            ].map((k) => (
+              <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
+                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                  {k.label}
+                </p>
+                <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
+                {k.sub && <p className="text-[11px] text-gray-400">{k.sub}</p>}
+              </Link>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-4 sm:divide-y-0" title="Safety — today">
+            {[
+              { label: "Checks today", value: todaySafetyChecks.length, dot: "bg-teal-400", val: "text-teal-700", alert: false },
+              { label: "Compliance", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
+              { label: "Incidents", value: openIncidentCount, dot: "bg-amber-400", val: "text-gray-900", alert: openIncidentCount > 0 },
+              { label: "Escalated", value: escalatedIncidentCount, dot: "bg-red-400", val: "text-gray-900", alert: escalatedIncidentCount > 0 },
+            ].map((k) => (
+              <div key={k.label} className="px-4 py-3">
+                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                  {k.label}
+                </p>
+                <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Where we are / Labor red flags */}
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 bg-white">
-            <div className="border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Where we are</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Active projects · most recent labor log each</p>
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900" title="Active projects · most recent labor log each">Where we are</h2>
             </div>
             {whereWeAre.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
@@ -626,14 +663,11 @@ export default async function ErpDashboardPage() {
             )}
           </div>
 
-          <div className={`rounded-lg border bg-white ${laborFlags.length > 0 ? "border-red-200" : "border-gray-200"}`}>
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900">Labor red flags</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Last 14 days · 12+ hrs/day or 40+ hrs/wk on one project</p>
-              </div>
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">Labor red flags</h2>
               {laborFlags.length > 0 && (
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{laborFlags.length}</span>
               )}
             </div>
             {laborFlags.length === 0 ? (
@@ -659,122 +693,34 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
-        {/* Overview */}
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Overview</p>
-          <div className="grid grid-cols-3 gap-3 lg:grid-cols-6">
-            {[
-              { label: "WIP Projects", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects" },
-              { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects" },
-              { label: "Active Employees", value: activeEmployees.length, sub: null, href: "/erp/employees" },
-              { label: "Active Contractors", value: contractors, sub: null, href: "/erp/contractors" },
-              { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", alert: nonCompliant.length > 0 },
-              { label: "Pending Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", alert: pendingCandidates > 0 },
-            ].map((k) => (
-              <Link
-                key={k.label}
-                href={k.href}
-                className={`rounded-lg border px-3 py-2.5 transition hover:shadow-sm ${k.alert ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}
-              >
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
-                <p className={`mt-1 text-xl font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
-                {k.sub && <p className="mt-0.5 text-[11px] text-gray-400">{k.sub}</p>}
-              </Link>
-            ))}
+        {/* Activity feed */}
+        <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Recent project activity</h2>
+            <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
           </div>
-        </div>
-
-        {/* Safety */}
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Safety — Today</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: "Checks submitted", value: todaySafetyChecks.length, alert: false },
-              { label: "Compliance rate", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
-              { label: "Open incidents", value: openIncidentCount, alert: openIncidentCount > 0 },
-              { label: "Escalated", value: escalatedIncidentCount, alert: escalatedIncidentCount > 0 },
-            ].map((k) => (
-              <div key={k.label} className={`rounded-lg border px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
-                <p className={`mt-1 text-xl font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-5">
-          {/* Activity feed */}
-          <div className="lg:col-span-3 rounded-lg border border-gray-200 bg-white">
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900">Recent project activity</h2>
-                <p className="text-xs text-gray-400 mt-0.5">All types · sorted by last updated</p>
-              </div>
-              <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
-            </div>
-            <ul className="divide-y divide-gray-100">
-              {recentProjects.map((p) => {
-                const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null);
-                const dotColor = lc === "ACTIVE" ? "bg-emerald-400" : lc === "UPCOMING" ? "bg-gray-300" : "bg-gray-200";
-                const lcLabel = lc === "ACTIVE" ? "WIP" : lc === "UPCOMING" ? "Upcoming" : "Done";
-                return (
-                  <li key={p.id}>
-                    <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                      <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
-                        <p className="text-xs text-gray-400">
-                          {projectSegmentLabel(p.segment)}{p.supervisor ? ` · ${p.supervisor}` : ""}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-xs text-gray-500">{lcLabel}</p>
-                        <p className="text-[11px] text-gray-400">{timeAgo(p.updatedAt)}</p>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* Right column */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Compliance snapshot */}
-            <div className="rounded-lg border border-gray-200 bg-white">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Workforce</h2>
-                <Link href="/erp/employees" className="text-xs text-pink-600 hover:underline">View all</Link>
-              </div>
-              <div className="divide-y divide-gray-100">
-                <div className="flex items-center justify-between px-4 py-2.5">
-                  <p className="text-sm text-gray-600">Active employees</p>
-                  <span className="text-sm font-semibold text-gray-900">{activeEmployees.length}</span>
-                </div>
-                <div className="flex items-center justify-between px-4 py-2.5">
-                  <p className="text-sm text-gray-600">Non-compliant</p>
-                  <Link
-                    href="/erp/employees"
-                    className={`text-sm font-semibold ${nonCompliant.length > 0 ? "text-red-600 hover:underline" : "text-gray-400"}`}
-                  >
-                    {nonCompliant.length}
+          <ul className="divide-y divide-gray-100">
+            {recentProjects.map((p) => {
+              const activity = describeProjectActivity(p);
+              return (
+                <li key={p.id}>
+                  <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                    <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${activity.dot}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                      <p className="text-xs text-gray-400">
+                        {projectSegmentLabel(p.segment)}{p.supervisor ? ` · ${p.supervisor}` : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs text-gray-500">{activity.text}</p>
+                      <p className="text-[11px] text-gray-400">{timeAgo(p.updatedAt)}</p>
+                    </div>
                   </Link>
-                </div>
-                <div className="flex items-center justify-between px-4 py-2.5">
-                  <p className="text-sm text-gray-600">Active contractors</p>
-                  <span className="text-sm font-semibold text-gray-900">{contractors}</span>
-                </div>
-                {pendingCandidates > 0 && (
-                  <div className="flex items-center justify-between px-4 py-2.5">
-                    <p className="text-sm text-gray-600">Pending candidates</p>
-                    <Link href="/erp/candidates" className="text-sm font-semibold text-pink-600 hover:underline">
-                      {pendingCandidates}
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </div>
     );
