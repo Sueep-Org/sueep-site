@@ -121,12 +121,31 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const eligibleEmployees = employees.filter((e) => e.email && erpUserEmails.has(e.email.toLowerCase()));
   const employeeById = new Map(eligibleEmployees.map((e) => [e.id, e]));
 
-  const margins = await computeProjectMargins(projects);
-  const ownerIdByProject = new Map(projects.map((p) => [p.id, resolveCommissionEmployeeId(p, eligibleEmployees)]));
+  // Commission is scoped to 2026 onward — 2024/2025 deals, COs, and recurring
+  // periods are excluded entirely rather than just hidden behind the year
+  // selector, since the accelerator threshold resets independently per
+  // (owner, calendar year) anyway, so dropping older years can't change what
+  // 2026+ commission looks like.
+  const COMMISSION_MIN_YEAR = 2026;
+  // Mirrors the `dealDate` precedence below — projectDate/projectEndDate are
+  // scheduling dates, so billingCompletedAt (when it's set) is the real
+  // signal for which year a deal actually counts toward.
+  const commissionProjects = projects.filter(
+    (p) => (p.billingCompletedAt ?? p.projectEndDate ?? p.projectDate ?? p.createdAt).getUTCFullYear() >= COMMISSION_MIN_YEAR
+  );
+  const commissionChangeOrders = completedPaidChangeOrders.filter(
+    (co) => (co.completedAt ?? co.updatedAt).getUTCFullYear() >= COMMISSION_MIN_YEAR
+  );
+  const commissionRecurringPeriods = recurringPeriods.filter(
+    (period) => period.periodStart.getUTCFullYear() >= COMMISSION_MIN_YEAR
+  );
+
+  const margins = await computeProjectMargins(commissionProjects);
+  const ownerIdByProject = new Map(commissionProjects.map((p) => [p.id, resolveCommissionEmployeeId(p, eligibleEmployees)]));
   // A CO has no owner of its own — it inherits commission credit from the
   // project it belongs to, same resolver as the base deal.
   const ownerIdByChangeOrder = new Map(
-    completedPaidChangeOrders.map((co) => [co.id, resolveCommissionEmployeeId(co.project, eligibleEmployees)])
+    commissionChangeOrders.map((co) => [co.id, resolveCommissionEmployeeId(co.project, eligibleEmployees)])
   );
 
   // Recurring janitorial contract commission: 5% of ACV months 1-12, 2%
@@ -138,7 +157,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // Only counts once that month's invoice is actually paid — mirrors the
   // one-time-deal and change-order gates below, and matches the Billing
   // page's Recurring tab, which is what marks a period's billing project paid.
-  const recurringRowsAll: (RecurringCommissionRow & { ownerId: string | null; year: number })[] = recurringPeriods
+  const recurringRowsAll: (RecurringCommissionRow & { ownerId: string | null; year: number })[] = commissionRecurringPeriods
     .map((period) => {
       const billingProject = period.projects.find((p) => p.id === period.billingProjectId);
       if (!billingProject?.contractValueCents) return null;
@@ -173,7 +192,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // Commission rate depends on margin % and is applied to contract value
   // (not margin dollars), plus an accelerator once a rep's cumulative
   // revenue for the calendar year passes $1.5M — see computeCommissionCentsByDeal.
-  const dealsForCalc = projects.map((p) => {
+  const dealsForCalc = commissionProjects.map((p) => {
     const marginCents = margins.get(p.id)?.marginCents ?? 0;
     return {
       id: p.id,
@@ -197,7 +216,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // counts toward the same per-owner annual accelerator threshold. Tagged
   // with a "co:" id prefix so they get their own entry in the commission map
   // without colliding with project ids.
-  const coDealsForCalc = completedPaidChangeOrders.map((co) => {
+  const coDealsForCalc = commissionChangeOrders.map((co) => {
     const value = coValueCents(co);
     // Labor + material only, no travel — matches computeProjectMargins (base
     // deals) and the Projects table's CO cost rollup, so margin-based
@@ -224,7 +243,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const yearByDeal = new Map(dealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
   const yearByCo = new Map(coDealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
 
-  const allRows: (CommissionDealRow & { ownerId: string | null; year: number })[] = projects.map((p) => {
+  const allRows: (CommissionDealRow & { ownerId: string | null; year: number })[] = commissionProjects.map((p) => {
     const margin = margins.get(p.id);
     const ownerId = ownerIdByProject.get(p.id) ?? null;
     const owner = ownerId ? employeeById.get(ownerId) : null;
@@ -245,7 +264,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     };
   });
 
-  const allCoRows: (CommissionChangeOrderRow & { ownerId: string | null; year: number })[] = completedPaidChangeOrders.map(
+  const allCoRows: (CommissionChangeOrderRow & { ownerId: string | null; year: number })[] = commissionChangeOrders.map(
     (co) => {
       const value = coValueCents(co);
       const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0);
