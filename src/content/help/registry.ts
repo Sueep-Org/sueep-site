@@ -13,6 +13,7 @@ import { MaterialsLog } from "./projects/material-logs";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
+import { CompensationOverview } from "./compensation/compensation-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -141,5 +142,14 @@ export const registry: ArticleEntry[] = [
     description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",
     order: 1,
     component: ScheduleCalendarOverview,
+  },
+  {
+    slug: "compensation/compensation-overview",
+    title: "Compensation Overview",
+    category: "Compensation",
+    description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",
+    order: 1,
+    component: CompensationOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
   },
 ];
