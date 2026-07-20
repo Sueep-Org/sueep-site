@@ -1,8 +1,14 @@
 /** Pure date helpers for ERP schedule / Gantt (no external deps). */
 
+// UTC, not local — date-only fields (projectDate, requestedDate, workDate,
+// etc.) are stored as literal UTC midnight with no real timezone attached
+// (see dates.ts). Zeroing via local setHours() depended on the server
+// process's ambient timezone and rolled UTC-midnight dates back a day
+// whenever that happened to be behind UTC (e.g. Eastern), which is how a CO
+// requested for the 20th ended up rendering on the 19th.
 export function startOfDay(d: Date): Date {
   const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
+  x.setUTCHours(0, 0, 0, 0);
   return x;
 }
 
@@ -63,8 +69,8 @@ export type ScheduleProject = {
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
- * its parent project — driven by its estimated start date plus any days its
- * own laborers have logged work. */
+ * its parent project — driven by its requested date, its estimated start
+ * date, and any days its own laborers have logged work. */
 export type ScheduleChangeOrder = {
   id: string;
   projectId: string;

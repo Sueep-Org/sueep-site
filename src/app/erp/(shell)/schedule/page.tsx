@@ -47,7 +47,7 @@ export default async function SchedulePage() {
     prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
-      select: { id: true, projectId: true, title: true, status: true, startDate: true },
+      select: { id: true, projectId: true, title: true, status: true, startDate: true, requestedDate: true },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
     prisma.projectDayAssignment.findMany({
@@ -140,6 +140,7 @@ export default async function SchedulePage() {
     .map((co) => {
       const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
       if (co.startDate) days.add(dayKey(co.startDate));
+      if (co.requestedDate) days.add(dayKey(co.requestedDate));
       const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
       for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
         laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };

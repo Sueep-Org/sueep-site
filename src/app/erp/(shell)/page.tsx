@@ -593,115 +593,112 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
-        {/* Where we are */}
-        <div className="rounded-lg border border-gray-200 bg-white">
-          <div className="border-b border-gray-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">Where we are</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Active projects · most recent labor log each</p>
-          </div>
-          {whereWeAre.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 sm:grid sm:grid-cols-2 sm:divide-y-0">
-              {whereWeAre.map((e) => (
-                <li key={e.project.id} className="sm:border-b sm:border-gray-100">
-                  <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-900">{e.project.jobTitle}</p>
-                      <p className="truncate text-xs text-gray-400">
-                        {e.workerName}{e.project.supervisor ? ` · ${e.project.supervisor}` : ""}
-                      </p>
-                    </div>
-                    <div className="ml-2 shrink-0 text-right">
-                      <p className="text-xs font-semibold text-gray-700">{e.hours.toFixed(2)}h</p>
-                      <p className="text-[11px] text-gray-400">
-                        {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Labor red flags */}
-        <div className={`rounded-lg border bg-white ${laborFlags.length > 0 ? "border-red-200" : "border-gray-200"}`}>
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Labor red flags</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project</p>
+        {/* Where we are / Labor red flags */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="border-b border-gray-100 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Where we are</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Active projects · most recent labor log each</p>
             </div>
-            {laborFlags.length > 0 && (
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
+            {whereWeAre.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {whereWeAre.map((e) => (
+                  <li key={e.project.id}>
+                    <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">{e.project.jobTitle}</p>
+                        <p className="truncate text-xs text-gray-400">
+                          {e.workerName}{e.project.supervisor ? ` · ${e.project.supervisor}` : ""}
+                        </p>
+                      </div>
+                      <div className="ml-2 shrink-0 text-right">
+                        <p className="text-xs font-semibold text-gray-700">{e.hours.toFixed(2)}h</p>
+                        <p className="text-[11px] text-gray-400">
+                          {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-          {laborFlags.length === 0 ? (
-            <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 sm:grid sm:grid-cols-2 sm:divide-y-0">
-              {laborFlags.map((f, i) => (
-                <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`} className="sm:border-b sm:border-gray-100">
-                  <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
-                      <p className="truncate text-xs text-gray-400">{f.jobTitle}</p>
-                    </div>
-                    <div className="ml-2 shrink-0 text-right">
-                      <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
-                      <p className="text-[11px] text-gray-400">{f.label}</p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+
+          <div className={`rounded-lg border bg-white ${laborFlags.length > 0 ? "border-red-200" : "border-gray-200"}`}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Labor red flags</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Last 14 days · 12+ hrs/day or 40+ hrs/wk on one project</p>
+              </div>
+              {laborFlags.length > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
+              )}
+            </div>
+            {laborFlags.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {laborFlags.map((f, i) => (
+                  <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`}>
+                    <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
+                        <p className="truncate text-xs text-gray-400">{f.jobTitle}</p>
+                      </div>
+                      <div className="ml-2 shrink-0 text-right">
+                        <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
+                        <p className="text-[11px] text-gray-400">{f.label}</p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
-        {/* KPI strip — all white, only alert states get color */}
-        <div className="grid grid-cols-3 gap-3 lg:grid-cols-6">
-          {[
-            { label: "WIP Projects", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", card: "border-emerald-200 bg-emerald-50", val: "text-emerald-700" },
-            { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", card: "border-purple-200 bg-purple-50", val: "text-purple-700" },
-            { label: "Active Employees", value: activeEmployees.length, sub: null, href: "/erp/employees", card: "border-blue-200 bg-blue-50", val: "text-blue-700" },
-            { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", card: nonCompliant.length > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50", val: nonCompliant.length > 0 ? "text-red-600" : "text-gray-700" },
-            { label: "Pending Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", card: pendingCandidates > 0 ? "border-orange-200 bg-orange-50" : "border-gray-200 bg-gray-50", val: pendingCandidates > 0 ? "text-orange-600" : "text-gray-700" },
-            { label: "Active Contractors", value: contractors, sub: null, href: "/erp/contractors", card: "border-gray-200 bg-gray-50", val: "text-gray-700" },
-          ].map((k) => (
-            <Link
-              key={k.label}
-              href={k.href}
-              className={`rounded-lg border px-3 py-2.5 transition hover:shadow-sm ${k.card}`}
-            >
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
-              <p className={`mt-1 text-xl font-bold ${k.val}`}>{k.value}</p>
-              {k.sub && <p className={`mt-0.5 text-[11px] ${k.val} opacity-80`}>{k.sub}</p>}
-            </Link>
-          ))}
+        {/* Overview */}
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Overview</p>
+          <div className="grid grid-cols-3 gap-3 lg:grid-cols-6">
+            {[
+              { label: "WIP Projects", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects" },
+              { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects" },
+              { label: "Active Employees", value: activeEmployees.length, sub: null, href: "/erp/employees" },
+              { label: "Active Contractors", value: contractors, sub: null, href: "/erp/contractors" },
+              { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", alert: nonCompliant.length > 0 },
+              { label: "Pending Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", alert: pendingCandidates > 0 },
+            ].map((k) => (
+              <Link
+                key={k.label}
+                href={k.href}
+                className={`rounded-lg border px-3 py-2.5 transition hover:shadow-sm ${k.alert ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}
+              >
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
+                <p className={`mt-1 text-xl font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
+                {k.sub && <p className="mt-0.5 text-[11px] text-gray-400">{k.sub}</p>}
+              </Link>
+            ))}
+          </div>
         </div>
 
-        {/* Safety KPIs */}
+        {/* Safety */}
         <div>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Safety — Today</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className={`rounded-lg border px-3 py-2.5 ${todaySafetyChecks.length === 0 ? "border-gray-200 bg-gray-50" : "border-emerald-200 bg-emerald-50"}`}>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Checks submitted</p>
-              <p className={`mt-1 text-xl font-bold ${todaySafetyChecks.length === 0 ? "text-gray-400" : "text-emerald-700"}`}>{todaySafetyChecks.length}</p>
-            </div>
-            <div className={`rounded-lg border px-3 py-2.5 ${safetyComplianceRate === null ? "border-gray-200 bg-gray-50" : safetyComplianceRate < 100 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Compliance rate</p>
-              <p className={`mt-1 text-xl font-bold ${safetyComplianceRate === null ? "text-gray-400" : safetyComplianceRate < 100 ? "text-red-600" : "text-emerald-700"}`}>
-                {safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—"}
-              </p>
-            </div>
-            <div className={`rounded-lg border px-3 py-2.5 ${openIncidentCount > 0 ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Open incidents</p>
-              <p className={`mt-1 text-xl font-bold ${openIncidentCount > 0 ? "text-amber-700" : "text-gray-400"}`}>{openIncidentCount}</p>
-            </div>
-            <div className={`rounded-lg border px-3 py-2.5 ${escalatedIncidentCount > 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Escalated</p>
-              <p className={`mt-1 text-xl font-bold ${escalatedIncidentCount > 0 ? "text-red-600" : "text-gray-400"}`}>{escalatedIncidentCount}</p>
-            </div>
+            {[
+              { label: "Checks submitted", value: todaySafetyChecks.length, alert: false },
+              { label: "Compliance rate", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
+              { label: "Open incidents", value: openIncidentCount, alert: openIncidentCount > 0 },
+              { label: "Escalated", value: escalatedIncidentCount, alert: escalatedIncidentCount > 0 },
+            ].map((k) => (
+              <div key={k.label} className={`rounded-lg border px-3 py-2.5 ${k.alert ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k.label}</p>
+                <p className={`mt-1 text-xl font-bold ${k.alert ? "text-red-600" : "text-gray-900"}`}>{k.value}</p>
+              </div>
+            ))}
           </div>
         </div>
 
