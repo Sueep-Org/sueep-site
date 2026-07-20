@@ -16,7 +16,7 @@ export function CompensationOverview() {
       <H2>Steps</H2>
       <Steps>
         <Step n={1} title="Payroll tab">
-          Shows every hourly and salaried employee's pay for a two-week (biweekly) pay period,
+          Shows every hourly and salaried employee&apos;s pay for a two-week (biweekly) pay period,
           computed automatically from logged labor. Nothing here is entered manually.
           <Img src="/help/compensation/compensation_2.png" alt="Payroll tab" />
           <UL>
