@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { utcDateKey } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
@@ -312,6 +313,109 @@ export default async function ErpDashboardPage() {
         }),
       ]);
 
+      // Today's crew: who's actually working (logged hours) or planned
+      // (ProjectWorkerDayAssignment, not yet logged) on each of my projects
+      // today — scoped to the same myProjects set as everything else on this
+      // dashboard, which already includes projects I'm assigned to (project-
+      // level or a specific day) OR have personally logged labor on, same
+      // rule the schedule calendar uses for what a supervisor can see.
+      const myProjectIds = myProjects.map((p) => p.id);
+      const [todayWorkerAssignments, todayLaborEntries] = myProjectIds.length > 0
+        ? await Promise.all([
+            prisma.projectWorkerDayAssignment.findMany({
+              where: { projectId: { in: myProjectIds }, date: { gte: todayStart, lte: todayEnd } },
+              select: { projectId: true, employee: { select: { firstName: true, lastName: true } } },
+            }),
+            prisma.laborEntry.findMany({
+              where: { projectId: { in: myProjectIds }, workDate: { gte: todayStart, lte: todayEnd } },
+              select: { projectId: true, workerName: true, hours: true },
+            }),
+          ])
+        : [[], []];
+
+      type CrewMember = { name: string; hours: number | null };
+      const crewByProject = new Map<string, CrewMember[]>();
+      const loggedNamesByProject = new Map<string, Set<string>>();
+      for (const entry of todayLaborEntries) {
+        const list = crewByProject.get(entry.projectId) ?? [];
+        const existing = list.find((c) => c.name === entry.workerName);
+        if (existing) existing.hours = (existing.hours ?? 0) + entry.hours;
+        else list.push({ name: entry.workerName, hours: entry.hours });
+        crewByProject.set(entry.projectId, list);
+        const names = loggedNamesByProject.get(entry.projectId) ?? new Set<string>();
+        names.add(entry.workerName);
+        loggedNamesByProject.set(entry.projectId, names);
+      }
+      for (const a of todayWorkerAssignments) {
+        const name = `${a.employee.firstName} ${a.employee.lastName}`.trim();
+        if (loggedNamesByProject.get(a.projectId)?.has(name)) continue; // already counted as logged
+        const list = crewByProject.get(a.projectId) ?? [];
+        if (!list.some((c) => c.name === name)) list.push({ name, hours: null });
+        crewByProject.set(a.projectId, list);
+      }
+      const projectsWithCrew = myProjects.filter((p) => (crewByProject.get(p.id)?.length ?? 0) > 0);
+
+      // "My projects" as a list version of the schedule calendar: same three
+      // states as the calendar's chips — solid (logged), dashed/gray
+      // (planned for today-or-later, not yet logged), dashed/red (planned
+      // day already passed with nothing ever logged, i.e. missed) — instead
+      // of one flat row per project with no day-level detail. Window is
+      // yesterday through 5 days out, matching the calendar's rolling
+      // "recent + upcoming" feel without pulling in a whole month.
+      const feedWindowStart = new Date(todayStart);
+      feedWindowStart.setUTCDate(feedWindowStart.getUTCDate() - 1);
+      const feedWindowEnd = new Date(todayEnd);
+      feedWindowEnd.setUTCDate(feedWindowEnd.getUTCDate() + 5);
+
+      const [feedDayAssignments, feedWorkerAssignments, feedLaborEntries] = myProjectIds.length > 0
+        ? await Promise.all([
+            prisma.projectDayAssignment.findMany({
+              where: { projectId: { in: myProjectIds }, date: { gte: feedWindowStart, lte: feedWindowEnd } },
+              select: { projectId: true, date: true },
+            }),
+            prisma.projectWorkerDayAssignment.findMany({
+              where: { projectId: { in: myProjectIds }, date: { gte: feedWindowStart, lte: feedWindowEnd } },
+              select: { projectId: true, date: true },
+            }),
+            prisma.laborEntry.findMany({
+              where: { projectId: { in: myProjectIds }, workDate: { gte: feedWindowStart, lte: feedWindowEnd } },
+              select: { projectId: true, workDate: true, hours: true, workerName: true },
+            }),
+          ])
+        : [[], [], []];
+
+      type DayEntry = { projectId: string; jobTitle: string; dayKey: string; kind: "logged" | "planned" | "missed"; hours?: number; workers?: string[] };
+      const jobTitleByProjectId = new Map(myProjects.map((p) => [p.id, p.jobTitle]));
+
+      const loggedByKey = new Map<string, { hours: number; workers: Set<string> }>();
+      for (const e of feedLaborEntries) {
+        const key = `${e.projectId}::${utcDateKey(e.workDate)}`;
+        const cur = loggedByKey.get(key) ?? { hours: 0, workers: new Set<string>() };
+        cur.hours += e.hours;
+        cur.workers.add(e.workerName);
+        loggedByKey.set(key, cur);
+      }
+      const plannedKeys = new Set<string>();
+      for (const a of feedDayAssignments) plannedKeys.add(`${a.projectId}::${utcDateKey(a.date)}`);
+      for (const a of feedWorkerAssignments) plannedKeys.add(`${a.projectId}::${utcDateKey(a.date)}`);
+
+      const todayKeyStr = utcDateKey(todayStart);
+      const dayEntries: DayEntry[] = [];
+      for (const [key, logged] of loggedByKey) {
+        const [projectId, dayKey] = key.split("::");
+        dayEntries.push({ projectId, jobTitle: jobTitleByProjectId.get(projectId) ?? "", dayKey, kind: "logged", hours: logged.hours, workers: [...logged.workers] });
+      }
+      for (const key of plannedKeys) {
+        if (loggedByKey.has(key)) continue; // already showing as logged for that day
+        const [projectId, dayKey] = key.split("::");
+        dayEntries.push({ projectId, jobTitle: jobTitleByProjectId.get(projectId) ?? "", dayKey, kind: dayKey < todayKeyStr ? "missed" : "planned" });
+      }
+      dayEntries.sort((a, b) => {
+        if ((a.kind === "missed") !== (b.kind === "missed")) return a.kind === "missed" ? -1 : 1;
+        return a.dayKey.localeCompare(b.dayKey);
+      });
+      const visibleDayEntries = dayEntries.slice(0, 20);
+
       // KPIs across all my projects today
       const allWorkers = myProjects.flatMap((p) => p.dailySafetyChecks.flatMap((c) => c.workers));
       const totalWorkers = allWorkers.length;
@@ -347,46 +451,72 @@ export default async function ErpDashboardPage() {
             ))}
           </div>
 
+          {/* Today's crew */}
+          <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900" title="Logged hours today, plus anyone planned but not yet logged">Today&apos;s crew</h2>
+            </div>
+            {projectsWithCrew.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No one logged or scheduled today yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {projectsWithCrew.map((p) => {
+                  const crew = crewByProject.get(p.id) ?? [];
+                  return (
+                    <li key={p.id}>
+                      <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                        <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                        <p className="shrink-0 text-right text-xs text-gray-500">
+                          {crew.map((c) => (c.hours != null ? `${c.name} (${c.hours.toFixed(1)}h)` : `${c.name} (planned)`)).join(", ")}
+                        </p>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* My projects with today's safety status */}
+            {/* My projects — a list version of the schedule calendar: solid
+                (logged), dashed/gray (planned, not yet logged), dashed/red
+                (planned day already passed and never logged) */}
             <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">My projects</h2>
+                <h2 className="text-sm font-semibold text-gray-900" title="Yesterday through 5 days out">My projects</h2>
                 {assignmentOr.length === 0 && (
                   <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
                 )}
               </div>
-              {myProjects.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">No projects assigned yet.</p>
+              {visibleDayEntries.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-gray-400">Nothing logged or planned in this window.</p>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {myProjects.map((p) => {
-                    const check = p.dailySafetyChecks[0] ?? null;
-                    const workers = check?.workers ?? [];
-                    const passed = workers.filter((w) => w.passed).length;
-                    const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null);
+                  {visibleDayEntries.map((e) => {
+                    const dateLabel = new Date(`${e.dayKey}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
                     return (
-                      <li key={p.id}>
-                        <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <li key={`${e.projectId}-${e.dayKey}-${e.kind}`}>
+                        <Link href={`/erp/projects/${e.projectId}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                          <span
+                            className={`h-2 w-2 shrink-0 rounded-full ${
+                              e.kind === "logged"
+                                ? "bg-emerald-400"
+                                : e.kind === "missed"
+                                ? "border border-dashed border-red-400"
+                                : "border border-dashed border-gray-400"
+                            }`}
+                          />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {lc === "ACTIVE" ? "WIP" : "Upcoming"}
-                              {p.projectDate ? ` · ${new Date(p.projectDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                            <p className="truncate text-sm font-medium text-gray-900">{e.jobTitle}</p>
+                            <p className="truncate text-xs text-gray-400 mt-0.5">
+                              {e.kind === "logged" ? (e.workers ?? []).join(", ") : e.kind === "missed" ? "Planned, never logged" : "Planned"}
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
-                            {check ? (
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${passed === workers.length && workers.length > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                {passed}/{workers.length} passed
-                              </span>
-                            ) : p.segment === "POST_CONSTRUCTION" ? (
-                              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                                No check
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-gray-300">—</span>
-                            )}
+                            <p className={`text-xs font-semibold ${e.kind === "missed" ? "text-red-600" : "text-gray-700"}`}>
+                              {e.kind === "logged" ? `${(e.hours ?? 0).toFixed(1)}h` : e.kind === "missed" ? "Missed" : "Planned"}
+                            </p>
+                            <p className="text-[11px] text-gray-400">{dateLabel}</p>
                           </div>
                         </Link>
                       </li>
@@ -407,7 +537,7 @@ export default async function ErpDashboardPage() {
                 <ul className="divide-y divide-gray-100">
                   {openIncidents.map((inc) => (
                     <li key={inc.id}>
-                      <Link href={`/erp/projects/${inc.project.id}?tab=Safety`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <Link href={`/erp/projects/${inc.project.id}?tab=${encodeURIComponent("Safety Checklist")}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gray-900">{inc.workerName}</p>
                           <p className="truncate text-xs text-gray-400">{inc.project.jobTitle}</p>
