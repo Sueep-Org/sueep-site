@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
-import { utcDateKey } from "@/lib/erp/dates";
+import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
@@ -281,9 +281,9 @@ export default async function ErpDashboardPage() {
         assignmentOr.push({ laborEntries: { some: { workerName: { equals: supervisorFullName, mode: "insensitive" } } } });
       }
 
-      const _now = new Date();
-      const todayStart = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate(), 0, 0, 0, 0));
-      const todayEnd = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate(), 23, 59, 59, 999));
+      const todayStart = todayEasternAsUtcMidnight();
+      const todayEnd = new Date(todayStart);
+      todayEnd.setUTCHours(23, 59, 59, 999);
 
       const [myProjects, openIncidents] = await Promise.all([
         prisma.project.findMany({
@@ -562,14 +562,18 @@ export default async function ErpDashboardPage() {
     }
 
     // ── Admin / Project Manager ────────────────────────────────────────────
-    const _adminNow = new Date();
-    const adminTodayStart = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 0, 0, 0, 0));
-    const adminTodayEnd = new Date(Date.UTC(_adminNow.getUTCFullYear(), _adminNow.getUTCMonth(), _adminNow.getUTCDate(), 23, 59, 59, 999));
+    // Eastern-anchored, not naive UTC — "today" has to mean the Eastern
+    // business day (same reasoning as the schedule calendar fix), not
+    // whatever day UTC happens to be on, which runs ~4-5 hours ahead of
+    // Eastern every evening.
+    const adminTodayStart = todayEasternAsUtcMidnight();
+    const adminTodayEnd = new Date(adminTodayStart);
+    adminTodayEnd.setUTCHours(23, 59, 59, 999);
 
     const flagWindowStart = new Date(adminTodayStart);
     flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
 
-    const [allProjects, employees, candidates, contractors, recentProjects, recentLabor, laborForFlags, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
+    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
       prisma.project.findMany({
         select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true },
         orderBy: { updatedAt: "desc" },
@@ -593,19 +597,19 @@ export default async function ErpDashboardPage() {
         take: 15,
       }),
       prisma.laborEntry.findMany({
-        orderBy: { workDate: "desc" },
-        take: 150,
-        select: {
-          id: true, workDate: true, workerName: true, hours: true,
-          project: { select: { id: true, jobTitle: true, status: true, supervisor: true, segment: true } },
-        },
-      }),
-      prisma.laborEntry.findMany({
         where: { employeeId: { not: null }, workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
         select: {
           employeeId: true, workerName: true, workDate: true, hours: true,
           project: { select: { id: true, jobTitle: true } },
         },
+      }),
+      prisma.projectDayAssignment.findMany({
+        where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
+        select: { projectId: true, project: { select: { jobTitle: true } } },
+      }),
+      prisma.projectWorkerDayAssignment.findMany({
+        where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
+        select: { projectId: true, project: { select: { jobTitle: true } }, employee: { select: { firstName: true, lastName: true } } },
       }),
       prisma.dailySafetyCheck.findMany({
         where: { checkDate: { gte: adminTodayStart, lte: adminTodayEnd } },
@@ -634,25 +638,34 @@ export default async function ErpDashboardPage() {
     const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
 
-    // "Where we are": the most recent labor entry per project — one row per
-    // project, not one row per log — so it reads as a live snapshot of where
-    // people are working rather than a raw activity feed. recentLabor is
-    // already ordered by workDate desc, so the first entry seen per project
-    // is that project's latest. ARCHIVED is excluded everywhere (dead work),
-    // but COMPLETE only excludes non-turnover projects — turnover units are
-    // typically one-day jobs that get marked COMPLETE right after the labor
-    // that finished them is logged, so excluding COMPLETE there would hide
-    // almost all turnover activity, not just stale projects.
-    const whereWeAre: typeof recentLabor = [];
-    const seenProjectIds = new Set<string>();
-    for (const entry of recentLabor) {
-      if (entry.project.status === "ARCHIVED") continue;
-      if (entry.project.status === "COMPLETE" && entry.project.segment !== "JANITORIAL_TURNOVER_REQUESTS") continue;
-      if (seenProjectIds.has(entry.project.id)) continue;
-      seenProjectIds.add(entry.project.id);
-      whereWeAre.push(entry);
-      if (whereWeAre.length >= 10) break;
+    // "Where we are": which projects are actually scheduled today, company-
+    // wide — a supervisor day-assignment, a planned worker day-assignment, or
+    // actual labor already logged today (pulled out of laborForFlags, which
+    // already spans a window including today). Not "recently touched" —
+    // genuinely today, so an empty result is a real, meaningful signal
+    // ("nothing's on the calendar for today") rather than just quiet data.
+    type ScheduledToday = { projectId: string; jobTitle: string; loggedWorkers: Set<string>; plannedWorkers: Set<string> };
+    const scheduledTodayMap = new Map<string, ScheduledToday>();
+    function getOrInitScheduled(projectId: string, jobTitle: string): ScheduledToday {
+      const existing = scheduledTodayMap.get(projectId);
+      if (existing) return existing;
+      const created: ScheduledToday = { projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set() };
+      scheduledTodayMap.set(projectId, created);
+      return created;
     }
+    for (const a of todayDayAssignments) {
+      getOrInitScheduled(a.projectId, a.project.jobTitle);
+    }
+    for (const a of todayWorkerAssignments) {
+      const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
+      entry.plannedWorkers.add(`${a.employee.firstName} ${a.employee.lastName}`.trim());
+    }
+    for (const e of laborForFlags) {
+      if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;
+      const entry = getOrInitScheduled(e.project.id, e.project.jobTitle);
+      entry.loggedWorkers.add(e.workerName);
+    }
+    const scheduledToday = [...scheduledTodayMap.values()].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
 
     // Labor red flags: hours concentrated on a single project, either in one
     // day or over a week, within the last 14 days (roughly a pay period).
@@ -765,30 +778,33 @@ export default async function ErpDashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Active projects · most recent labor log each">Where we are</h2>
+              <h2 className="text-sm font-semibold text-gray-900" title="Projects with a supervisor or crew scheduled, or labor already logged, today">Where we are</h2>
             </div>
-            {whereWeAre.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">No labor entries yet.</p>
+            {scheduledToday.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">
+                No projects scheduled.{" "}
+                <Link href="/erp/schedule" className="text-pink-600 hover:underline">Schedule projects on the calendar</Link>
+              </p>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {whereWeAre.map((e) => (
-                  <li key={e.project.id}>
-                    <Link href={`/erp/projects/${e.project.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-gray-900">{e.project.jobTitle}</p>
-                        <p className="truncate text-xs text-gray-400">
-                          {e.workerName}{e.project.supervisor ? ` · ${e.project.supervisor}` : ""}
-                        </p>
-                      </div>
-                      <div className="ml-2 shrink-0 text-right">
-                        <p className="text-xs font-semibold text-gray-700">{e.hours.toFixed(2)}h</p>
-                        <p className="text-[11px] text-gray-400">
-                          {new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
+                {scheduledToday.map((p) => {
+                  const workers = [...p.loggedWorkers, ...[...p.plannedWorkers].filter((w) => !p.loggedWorkers.has(w))];
+                  return (
+                    <li key={p.projectId}>
+                      <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                          <p className="truncate text-xs text-gray-400">
+                            {workers.length > 0 ? workers.join(", ") : "No crew assigned yet"}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.loggedWorkers.size > 0 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                          {p.loggedWorkers.size > 0 ? "Logged" : "Planned"}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
