@@ -245,7 +245,6 @@ async function initApp(){
   // ======================================================
 
   const measureToggle = $('measureToggle');
-  const detectWallsBtn = $('detectWallsBtn');
   const drawRectBtn = $('drawRectBtn');
   const drawIrregBtn = $('drawIrregBtn');
   const undoShapeBtn = $('undoShapeBtn');
@@ -482,6 +481,119 @@ async function initApp(){
 
   function normalizeTextLine(value) {
     return String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeScaleExpressionCandidate(expression, fallbackText = '') {
+    const rawText = normalizeTextLine(expression ?? fallbackText ?? '');
+    if (!rawText) return null;
+
+    const compacted = rawText.replace(/\s+/g, ' ').trim();
+    if (!compacted) return null;
+
+    if (/(?:=|:|to)/.test(compacted) || /(?:in|inch|inches|ft|feet|foot|['"])/.test(compacted)) {
+      return compacted;
+    }
+
+    const numericMatch = compacted.match(/^([0-9]+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|ft|feet|foot|['"]|')|)?$/i);
+    if (!numericMatch?.[1]) return compacted;
+
+    const value = numericMatch[1];
+    if (value.includes('/')) {
+      return `${value} in = 1 ft`;
+    }
+
+    const parsedNumber = Number(value);
+    if (Number.isFinite(parsedNumber) && parsedNumber > 1 && Number.isInteger(parsedNumber)) {
+      return `1/${parsedNumber} in = 1 ft`;
+    }
+
+    return `${value} in = 1 ft`;
+  }
+
+  function extractScaleExpressionFromText(text = '') {
+    const normalized = normalizeTextLine(text)
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!normalized) return null;
+
+    const compacted = normalized.replace(/\s+/g, ' ').trim();
+    const scaleHint = /\b(scale|scaled|scales?|measure|measurement|dimension|dimensions)\b/i.test(compacted);
+    const hasRelationship = /(?:=|:|to)/.test(compacted);
+    if (!scaleHint && !hasRelationship) return null;
+
+    const directMatch = compacted.match(/((?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?\s*(?:=|:|to)\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?)/i);
+    if (directMatch?.[1]) {
+      return normalizeScaleExpressionCandidate(directMatch[1], compacted) || directMatch[1].replace(/\s+/g, ' ').trim();
+    }
+
+    const withLabelMatch = compacted.match(/\b(scale|scaled|scales?|measure|measurement|dimension|dimensions)\b[^0-9]{0,20}((?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?(?:\s*(?:=|:|to)\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?)?)/i);
+    if (withLabelMatch?.[2]) {
+      return normalizeScaleExpressionCandidate(withLabelMatch[2], compacted) || withLabelMatch[2].replace(/\s+/g, ' ').trim();
+    }
+
+    const ratioMatch = compacted.match(/((?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?\s*(?:=|:|to)\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?)/i);
+    if (ratioMatch?.[1]) {
+      return normalizeScaleExpressionCandidate(ratioMatch[1], compacted) || ratioMatch[1].replace(/\s+/g, ' ').trim();
+    }
+
+    const fallbackMeasurementMatch = compacted.match(/((?:\d+(?:\/\d+)?(?:\.\d+)?)(?:\s*(?:in|inch|inches|"|')|)?(?:\s*(?:ft|feet|foot|"|')|)?)/i);
+    if (fallbackMeasurementMatch?.[1] && scaleHint) {
+      return normalizeScaleExpressionCandidate(fallbackMeasurementMatch[1], compacted) || fallbackMeasurementMatch[1].replace(/\s+/g, ' ').trim();
+    }
+
+    return null;
+  }
+
+  function inferScaleInfoFromEntries(entries = []) {
+    const seen = new Set();
+    const normalizedEntries = (Array.isArray(entries) ? entries : []).map((entry) => normalizeTextLine(entry?.text ?? entry)).filter(Boolean);
+
+    for (let i = 0; i < normalizedEntries.length; i += 1) {
+      const currentLine = normalizedEntries[i];
+      if (!currentLine) continue;
+
+      const previousLine = normalizedEntries[i - 1] || '';
+      const nextLine = normalizedEntries[i + 1] || '';
+      const candidateTexts = [
+        currentLine,
+        [previousLine, currentLine].filter(Boolean).join(' '),
+        [currentLine, nextLine].filter(Boolean).join(' '),
+        [previousLine, currentLine, nextLine].filter(Boolean).join(' '),
+      ];
+
+      for (const candidateText of candidateTexts) {
+        if (!candidateText) continue;
+        const expression = extractScaleExpressionFromText(candidateText);
+        if (!expression) continue;
+
+        const dedupeKey = expression.toLowerCase();
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+
+        const factor = computeScaleFactorFromExpression(expression, 0, 1);
+        if (Number.isFinite(factor) && factor > 0) {
+          return { expression, factor };
+        }
+
+        if (/(?:=|:|to)/.test(candidateText) || /\b(?:scale|scaled|scales?|measure|measurement|dimension|dimensions)\b/i.test(candidateText)) {
+          return { expression, factor: null };
+        }
+      }
+    }
+
+    const joinedEntries = normalizedEntries.join(' | ');
+    const fullTextExpression = extractScaleExpressionFromText(joinedEntries);
+    if (fullTextExpression && !seen.has(fullTextExpression.toLowerCase())) {
+      const factor = computeScaleFactorFromExpression(fullTextExpression, 0, 1);
+      return {
+        expression: fullTextExpression,
+        factor: Number.isFinite(factor) && factor > 0 ? factor : null
+      };
+    }
+
+    return null;
   }
 
   function compactMeasurementLabel(label = '') {
@@ -797,8 +909,9 @@ async function initApp(){
       const address = inferAddressFromLines(entries);
       const totalArea = inferTotalAreaFromLines(entries);
       const extractedMeasurements = inferExtractedMeasurements(entries);
+      const detectedScale = inferScaleInfoFromEntries(entries);
 
-      return { projectName, address, totalArea, extractedMeasurements, pdfTextEntries: entries };
+      return { projectName, address, totalArea, extractedMeasurements, pdfTextEntries: entries, detectedScale };
     } catch (error) {
       console.warn('[pdf metadata] extract failed', error);
       return null;
@@ -1869,14 +1982,35 @@ async function initApp(){
     };
   }
 
+  function getVisibleScaleInfo(pageNum) {
+    const storedScale = highlightsStore.getScale(pageNum);
+    if (storedScale?.expression || storedScale?.display || storedScale?.label || storedScale?.factor) {
+      return storedScale;
+    }
+
+    if (_pdfMetadataSummary?.detectedScale?.expression) {
+      return {
+        factor: _pdfMetadataSummary.detectedScale.factor || null,
+        unit: 'in',
+        expression: _pdfMetadataSummary.detectedScale.expression,
+        display: _pdfMetadataSummary.detectedScale.expression
+      };
+    }
+
+    return null;
+  }
+
   function updateMeasurementList(){
     // Get measurements for the viewed page (not current PDF page)
     const measurements = highlightsStore.listMeasurements(measurementViewPage) || [];
-    const scale = highlightsStore.getScale(measurementViewPage);
+    const scale = getVisibleScaleInfo(measurementViewPage);
     
     // Update scale info based on viewed page
     if (measurementScaleInfo) {
-      if (scale && scale.factor) {
+      const scaleLabel = scale?.expression || scale?.display || scale?.label;
+      if (scaleLabel) {
+        measurementScaleInfo.textContent = `Scale: ${scaleLabel}`;
+      } else if (scale && scale.factor) {
         const pointsPerInch = 1 / scale.factor;
         measurementScaleInfo.textContent = `Scale set: 1 in = ${pointsPerInch.toFixed(1)} pt`;
       } else {
@@ -2142,6 +2276,12 @@ async function initApp(){
       const num = parseFloat(value);
       return Number.isFinite(num) ? num : null;
     };
+    const quotedUnitMatch = str.match(/^([0-9]+(?:\.[0-9]+)?|[0-9]+\/[0-9]+)\s*(["'])$/i);
+    if (quotedUnitMatch) {
+      const numericValue = parseNumericValue(quotedUnitMatch[1]);
+      if (numericValue == null) return null;
+      return quotedUnitMatch[2] === "'" ? numericValue * 12 : numericValue;
+    }
     const feetAndInchesMatch = str.match(/^([0-9]+(?:\.[0-9]+)?|[0-9]+\/[0-9]+)\s*(ft|feet|foot|')\s*([0-9]+(?:\.[0-9]+)?|[0-9]+\/[0-9]+)?\s*(in|inch|inches|")?$/i);
     if (feetAndInchesMatch) {
       const feet = parseNumericValue(feetAndInchesMatch[1]);
@@ -2235,6 +2375,22 @@ async function initApp(){
       }
       if (savePdfBtn) {
         savePdfBtn.disabled = false;
+      }
+
+      if (_pdfMetadataSummary?.detectedScale) {
+        const detectedScale = _pdfMetadataSummary.detectedScale;
+        const nextScale = {
+          factor: detectedScale.factor || null,
+          unit: 'in',
+          expression: detectedScale.expression || null,
+          display: detectedScale.expression || null
+        };
+        if (nextScale.factor || nextScale.expression) {
+          highlightsStore.setScale(currentPage, nextScale);
+          highlightsStore.setScale(measurementViewPage, nextScale);
+          updateMeasurementList();
+          overlay.redraw();
+        }
       }
 
       if (mainContent){
@@ -3827,47 +3983,6 @@ async function initApp(){
         toggleSidebarBtn.classList.toggle('active', isHidden);
       };
     }
-
-  if (detectWallsBtn) {
-    detectWallsBtn.onclick = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (!pdfDoc) {
-        toast('Upload a PDF before detecting walls.', 'info');
-        return;
-      }
-
-      const lines = await overlay.detectWallsOnCurrentPage();
-      const hasLines = Array.isArray(lines) && lines.length > 0;
-
-      if (!hasLines) {
-        toast('No wall lines were detected in the uploaded PDF yet.', 'info');
-        return;
-      }
-
-      currentPage = overlay.currentPage;
-      measurementViewPage = overlay.currentPage;
-      if (measurementPageInput) measurementPageInput.value = measurementViewPage;
-      if (measureToggle) measureToggle.classList.toggle('active', true);
-      if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
-      if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
-
-      await renderPage();
-      overlay.setActive(true);
-      overlay.setTool('measure');
-      overlay.redraw();
-      updateVectorLineInfo();
-      updateMeasurementList();
-
-      const scale = highlightsStore.getScale(currentPage);
-      if (scale && scale.factor) {
-        toast('Detected wall lines and prepared them for measurement.', 'success');
-      } else {
-        toast('Detected wall lines; set the page scale to extract measurements.', 'info');
-      }
-    };
-  }
 
   if (changeScaleBtn) {
     changeScaleBtn.onclick = (e) => {
