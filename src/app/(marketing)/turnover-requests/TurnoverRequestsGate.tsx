@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RealEstateForm } from "./RealEstateForm";
 import { PropertyManagerForm, type BuildingOption } from "./PropertyManagerForm";
 import { ProjectManagerForm } from "./ProjectManagerForm";
 
 type Role = "property-manager" | "real-estate-agent" | "project-manager" | null;
+
+const ROLE_VALUES: NonNullable<Role>[] = ["property-manager", "real-estate-agent", "project-manager"];
+
+function parseRole(value: string | null): Role {
+  return ROLE_VALUES.includes(value as NonNullable<Role>) ? (value as NonNullable<Role>) : null;
+}
 
 interface Props {
   buildings: BuildingOption[];
@@ -15,13 +22,15 @@ function RoleCard({
   onClick,
   icon,
   title,
+  requestType,
   description,
   badge,
 }: {
   onClick: () => void;
   icon: React.ReactNode;
   title: string;
-  description: string;
+  requestType: string;
+  description: React.ReactNode;
   badge?: string;
 }) {
   return (
@@ -42,7 +51,10 @@ function RoleCard({
       </div>
       <div>
         <p className="text-base font-semibold text-gray-900">{title}</p>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
+        <span className="mt-1.5 inline-block rounded-full bg-[#E73C6E]/10 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-[#E73C6E]">
+          Submits a {requestType}
+        </span>
+        <p className="mt-2 text-sm text-gray-500">{description}</p>
       </div>
       <div className="mt-auto flex items-center gap-1 text-sm font-medium text-[#E73C6E]">
         {badge ? "Learn more" : "Get started"}
@@ -83,19 +95,27 @@ function WipScreen({ onBack, title, description }: { onBack: () => void; title: 
   );
 }
 
-export function TurnoverRequestsGate({ buildings }: Props) {
-  const [role, setRole] = useState<Role>(null);
+function TurnoverRequestsGateInner({ buildings }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [role, setRole] = useState<Role>(() => parseRole(searchParams.get("role")));
+
+  function selectRole(next: Role) {
+    setRole(next);
+    router.replace(next ? `${pathname}?role=${next}` : pathname, { scroll: false });
+  }
 
   if (role === "real-estate-agent") {
-    return <RealEstateForm onBack={() => setRole(null)} />;
+    return <RealEstateForm onBack={() => selectRole(null)} />;
   }
 
   if (role === "property-manager") {
-    return <PropertyManagerForm onBack={() => setRole(null)} buildings={buildings} />;
+    return <PropertyManagerForm onBack={() => selectRole(null)} buildings={buildings} />;
   }
 
   if (role === "project-manager") {
-    return <ProjectManagerForm onBack={() => setRole(null)} />;
+    return <ProjectManagerForm onBack={() => selectRole(null)} />;
   }
 
   return (
@@ -107,9 +127,15 @@ export function TurnoverRequestsGate({ buildings }: Props) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <RoleCard
-          onClick={() => setRole("property-manager")}
+          onClick={() => selectRole("property-manager")}
           title="Property Manager"
-          description="I manage residential or commercial properties and need to schedule unit turnovers."
+          requestType="Turnover Request"
+          description={
+            <>
+              <strong className="font-semibold text-gray-700">Manage a building or portfolio?</strong>{" "}
+              Schedule a unit turnover or cleaning for a property you manage.
+            </>
+          }
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
@@ -117,9 +143,15 @@ export function TurnoverRequestsGate({ buildings }: Props) {
           }
         />
         <RoleCard
-          onClick={() => setRole("real-estate-agent")}
+          onClick={() => selectRole("real-estate-agent")}
           title="Real Estate Agent"
-          description="I'm an agent representing a property sale or listing and need turnover services."
+          requestType="Turnover Request"
+          description={
+            <>
+              <strong className="font-semibold text-gray-700">Listing or selling a property?</strong>{" "}
+              Request turnover or cleaning services to get it show-ready.
+            </>
+          }
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
@@ -127,9 +159,15 @@ export function TurnoverRequestsGate({ buildings }: Props) {
           }
         />
         <RoleCard
-          onClick={() => setRole("project-manager")}
+          onClick={() => selectRole("project-manager")}
           title="Project Manager"
-          description="I oversee active Sueep projects and need to request change orders or scope adjustments."
+          requestType="Change Order"
+          description={
+            <>
+              <strong className="font-semibold text-gray-700">Already working with Sueep on a project?</strong>{" "}
+              Submit a change order or scope adjustment for that active project.
+            </>
+          }
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
@@ -138,5 +176,13 @@ export function TurnoverRequestsGate({ buildings }: Props) {
         />
       </div>
     </div>
+  );
+}
+
+export function TurnoverRequestsGate(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <TurnoverRequestsGateInner {...props} />
+    </Suspense>
   );
 }
