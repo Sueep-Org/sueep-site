@@ -34,8 +34,14 @@ export async function POST(req: Request) {
   if (type === "change-order" && !body.coTitle?.trim()) {
     return NextResponse.json({ error: "coTitle is required for change order requests" }, { status: 400 });
   }
+  if (type === "change-order" && !body.coEstimatedStartDate) {
+    return NextResponse.json({ error: "coEstimatedStartDate is required for change order requests" }, { status: 400 });
+  }
   if (type === "sov-schedule" && !body.sovItemId) {
     return NextResponse.json({ error: "sovItemId is required for SOV scheduling" }, { status: 400 });
+  }
+  if (type === "sov-schedule" && !body.desiredDate) {
+    return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
   }
 
   const project = await prisma.project.findUnique({
@@ -70,7 +76,8 @@ export async function POST(req: Request) {
     changeOrderId = co.id;
   }
 
-  // Resolve SOV item description if needed
+  // Resolve SOV item description and persist a schedule request so it can
+  // show up on the ERP calendar (kept out of ProjectChangeOrder — see model comment)
   let sovDescription: string | undefined;
   if (type === "sov-schedule" && body.sovItemId) {
     const sovItem = await prisma.projectSOVItem.findFirst({
@@ -79,6 +86,17 @@ export async function POST(req: Request) {
     });
     if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
     sovDescription = sovItem.description;
+
+    await prisma.projectSovScheduleRequest.create({
+      data: {
+        projectId,
+        sovItemId: body.sovItemId,
+        requestedBy: requesterName.trim(),
+        requestedEmail: requesterEmail.trim(),
+        requestedDate: new Date(`${body.desiredDate}T00:00:00Z`),
+        comments: body.comments?.trim() || null,
+      },
+    });
   }
 
   // Build notification recipients

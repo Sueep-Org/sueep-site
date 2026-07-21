@@ -5,6 +5,7 @@ import {
   type ScheduleChangeOrder,
   type ScheduleDayAssignment,
   type ScheduleProject,
+  type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
@@ -24,7 +25,7 @@ export default async function SchedulePage() {
   const auth = await getErpAuth();
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
 
-  const [projectRows, supervisorUsers, laborEntryRows, changeOrderRows, coLaborerRows, dayAssignmentRows, workerAssignmentRows, employeeRows] = await Promise.all([
+  const [projectRows, supervisorUsers, laborEntryRows, changeOrderRows, coLaborerRows, sovRequestRows, dayAssignmentRows, workerAssignmentRows, employeeRows] = await Promise.all([
     prisma.project.findMany({
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
       select: {
@@ -50,6 +51,9 @@ export default async function SchedulePage() {
       select: { id: true, projectId: true, title: true, status: true, startDate: true, requestedDate: true },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
+    prisma.projectSovScheduleRequest.findMany({
+      select: { id: true, projectId: true, requestedBy: true, requestedDate: true, sovItem: { select: { description: true } } },
+    }),
     prisma.projectDayAssignment.findMany({
       select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true },
     }),
@@ -139,8 +143,10 @@ export default async function SchedulePage() {
   const changeOrders: ScheduleChangeOrder[] = changeOrderRows
     .map((co) => {
       const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
-      if (co.startDate) days.add(dayKey(co.startDate));
-      if (co.requestedDate) days.add(dayKey(co.requestedDate));
+      // startDate is the real scheduled date once set; requestedDate is only
+      // a placeholder fallback for COs from before startDate was required.
+      const scheduledDate = co.startDate ?? co.requestedDate;
+      if (scheduledDate) days.add(dayKey(scheduledDate));
       const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
       for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
         laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
@@ -155,6 +161,14 @@ export default async function SchedulePage() {
       };
     })
     .filter((co) => co.workDayKeys.length > 0);
+
+  const sovRequests: ScheduleSovRequest[] = sovRequestRows.map((r) => ({
+    id: r.id,
+    projectId: r.projectId,
+    title: r.sovItem.description,
+    requestedBy: r.requestedBy,
+    workDayKeys: [dayKey(r.requestedDate)],
+  }));
 
   // Resolve display names for ERP supervisors from employee records, same as
   // the per-project setup editor does.
@@ -202,6 +216,7 @@ export default async function SchedulePage() {
   // admin, etc.) sees the full calendar.
   let visibleProjects = projects;
   let visibleChangeOrders = changeOrders;
+  let visibleSovRequests = sovRequests;
   let visibleDayAssignments = dayAssignments;
   let visibleWorkerAssignments = workerAssignments;
   if (auth?.role === "SUPERVISOR") {
@@ -236,6 +251,7 @@ export default async function SchedulePage() {
 
     visibleProjects = projects.filter((p) => allowedProjectIds.has(p.id));
     visibleChangeOrders = changeOrders.filter((co) => allowedProjectIds.has(co.projectId));
+    visibleSovRequests = sovRequests.filter((r) => allowedProjectIds.has(r.projectId));
     visibleDayAssignments = dayAssignments.filter((a) => allowedProjectIds.has(a.projectId));
     visibleWorkerAssignments = workerAssignments.filter((a) => allowedProjectIds.has(a.projectId));
   }
@@ -253,6 +269,7 @@ export default async function SchedulePage() {
         projects={visibleProjects}
         supervisors={supervisors}
         changeOrders={visibleChangeOrders}
+        sovRequests={visibleSovRequests}
         initialDayAssignments={visibleDayAssignments}
         canFilterBySupervisor={canFilterBySupervisor}
         employees={employees}

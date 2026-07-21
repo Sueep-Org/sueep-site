@@ -171,6 +171,9 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
       if (!form.address.trim()) return "Property address is required.";
       if (!form.propertyType) return "Please select a property type.";
     }
+    if (s === 3) {
+      if (!form.cleanDate) return "Target clean date is required.";
+    }
     return "";
   }
 
@@ -552,8 +555,8 @@ export function RealEstateForm({ onBack, hidePricing = false, skipDeposit = fals
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={label} htmlFor="re-clean-date">Target clean date</label>
-                    <input id="re-clean-date" type="date" className={input} value={form.cleanDate} onChange={(e) => patch({ cleanDate: e.target.value })} />
+                    <label className={label} htmlFor="re-clean-date">Target clean date *</label>
+                    <input id="re-clean-date" type="date" required className={input} value={form.cleanDate} onChange={(e) => patch({ cleanDate: e.target.value })} />
                   </div>
                   <div>
                     <label className={label} htmlFor="re-movein-date">Move-in / listing date</label>

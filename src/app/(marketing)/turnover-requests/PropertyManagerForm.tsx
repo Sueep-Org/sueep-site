@@ -178,9 +178,12 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
 
   function validateStep(s: number): string {
     if (s === 1 && !form.buildingId) return "Please select a building.";
-    if (s === 2 && form.otherWork) {
-      if (!form.otherDescription.trim()) return "Please describe the other work needed.";
-      if (!form.otherPrice.trim() || Number(form.otherPrice) <= 0) return "Please enter a price for the other work.";
+    if (s === 2) {
+      if (!form.startDate) return "Target start date is required.";
+      if (form.otherWork) {
+        if (!form.otherDescription.trim()) return "Please describe the other work needed.";
+        if (!form.otherPrice.trim() || Number(form.otherPrice) <= 0) return "Please enter a price for the other work.";
+      }
     }
     if (s === 3) {
       if (!form.pmName.trim()) return "Your name is required.";
@@ -473,11 +476,12 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="pm-start">
-                  Target start date
+                  Target start date *
                 </label>
                 <input
                   id="pm-start"
                   type="date"
+                  required
                   className={input}
                   value={form.startDate}
                   onChange={(e) => patch({ startDate: e.target.value })}

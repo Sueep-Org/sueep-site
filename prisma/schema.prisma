@@ -84,6 +84,7 @@ model Project {
   workOrderAttachments ProjectWorkOrderAttachment[]
   images ProjectImage[]
   changeOrders ProjectChangeOrder[]
+  sovScheduleRequests ProjectSovScheduleRequest[]
   contacts ProjectContact[]
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
@@ -1370,8 +1371,34 @@ model ProjectSOVItem {
   updatedAt           DateTime   @updatedAt
 
   laborEntries LaborEntry[]
+  scheduleRequests ProjectSovScheduleRequest[]
 
   @@index([sovId])
+}
+
+/// A "Schedule SOV Work" request submitted via the public turnover-requests
+/// form (Project Manager role). Kept separate from ProjectChangeOrder so it
+/// never leaks into change-order pricing/approval/billing workflows — this
+/// is scheduling for already-contracted scope, not extra scope.
+model ProjectSovScheduleRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sovItemId String
+  sovItem   ProjectSOVItem @relation(fields: [sovItemId], references: [id], onDelete: Cascade)
+
+  requestedBy    String
+  requestedEmail String
+  requestedDate  DateTime
+  comments       String?
+  /// SUBMITTED | ACKNOWLEDGED
+  status         String @default("SUBMITTED")
+
+  @@index([projectId])
+  @@index([sovItemId])
 }
 
 model ChangeOrderMaterialEntry {

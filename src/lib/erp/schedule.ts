@@ -74,8 +74,10 @@ export type ScheduleProject = {
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
- * its parent project — driven by its requested date, its estimated start
- * date, and any days its own laborers have logged work. */
+ * its parent project — driven by its estimated start date (falling back to
+ * its requested date only when startDate isn't set, for COs predating
+ * startDate being required), plus any days its own laborers have logged
+ * work. */
 export type ScheduleChangeOrder = {
   id: string;
   projectId: string;
@@ -84,6 +86,20 @@ export type ScheduleChangeOrder = {
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, from ProjectChangeOrderLaborer — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
+};
+
+/** A "Schedule SOV Work" request (ProjectSovScheduleRequest) submitted via
+ * the public turnover-requests form — shown on the month calendar on its
+ * requested date, separately from ProjectChangeOrder (CO) since it isn't
+ * extra scope needing pricing/approval, just a scheduling ask against
+ * already-contracted SOV work. */
+export type ScheduleSovRequest = {
+  id: string;
+  projectId: string;
+  /** SOV line-item description, used as the chip title. */
+  title: string;
+  requestedBy: string;
+  workDayKeys: string[];
 };
 
 /** A planned supervisor coverage of a project on a future day (before any

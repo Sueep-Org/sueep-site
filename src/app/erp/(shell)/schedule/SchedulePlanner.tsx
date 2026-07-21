@@ -14,6 +14,7 @@ import {
   type ScheduleChangeOrder,
   type ScheduleDayAssignment,
   type ScheduleProject,
+  type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
@@ -56,6 +57,10 @@ const CALENDAR_GROUP_LABEL: Record<CalendarSegmentGroup, string> = {
 const CHANGE_ORDER_CHIP_CLASS = "bg-blue-100 text-blue-800 hover:bg-blue-200";
 const CHANGE_ORDER_SWATCH_CLASS = "bg-blue-100";
 const CHANGE_ORDER_LABEL = "Change order (CO)";
+
+const SOV_REQUEST_CHIP_CLASS = "bg-teal-100 text-teal-800 hover:bg-teal-200";
+const SOV_REQUEST_SWATCH_CLASS = "bg-teal-100";
+const SOV_REQUEST_LABEL = "SOV schedule request";
 
 // Dashed border marks a chip as "planned" (a supervisor was assigned ahead
 // of time via ProjectDayAssignment) as opposed to "confirmed" (an actual
@@ -107,13 +112,15 @@ function formatHours(hours: number): string {
   return `${n} hr${hours === 1 ? "" : "s"}`;
 }
 
-// "CO" (ProjectChangeOrder, blue) isn't a project segment — it's layered on
-// top as its own filterable type alongside the segment-based groups.
-type ProjectTypeFilter = CalendarSegmentGroup | "CO";
+// "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, teal)
+// aren't project segments — they're layered on top as their own filterable
+// types alongside the segment-based groups.
+type ProjectTypeFilter = CalendarSegmentGroup | "CO" | "SOV";
 
 const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; swatch: string }[] = [
   { value: "POST_CONSTRUCTION", label: CALENDAR_GROUP_LABEL.POST_CONSTRUCTION, swatch: CALENDAR_GROUP_SWATCH_CLASS.POST_CONSTRUCTION },
   { value: "CO", label: CHANGE_ORDER_LABEL, swatch: CHANGE_ORDER_SWATCH_CLASS },
+  { value: "SOV", label: SOV_REQUEST_LABEL, swatch: SOV_REQUEST_SWATCH_CLASS },
   { value: "JANITORIAL_TURNOVER_REQUESTS", label: CALENDAR_GROUP_LABEL.JANITORIAL_TURNOVER_REQUESTS, swatch: CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS },
   { value: "REAL_ESTATE", label: CALENDAR_GROUP_LABEL.REAL_ESTATE, swatch: CALENDAR_GROUP_SWATCH_CLASS.REAL_ESTATE },
   { value: "OTHER", label: CALENDAR_GROUP_LABEL.OTHER, swatch: CALENDAR_GROUP_SWATCH_CLASS.OTHER },
@@ -132,6 +139,7 @@ export function SchedulePlanner({
   projects,
   supervisors,
   changeOrders,
+  sovRequests,
   initialDayAssignments,
   canFilterBySupervisor,
   employees,
@@ -140,6 +148,7 @@ export function SchedulePlanner({
   projects: ScheduleProject[];
   supervisors: Supervisor[];
   changeOrders: ScheduleChangeOrder[];
+  sovRequests: ScheduleSovRequest[];
   initialDayAssignments: ScheduleDayAssignment[];
   canFilterBySupervisor: boolean;
   employees: Employee[];
@@ -346,6 +355,18 @@ export function SchedulePlanner({
     }
     return map;
   }, [changeOrders]);
+
+  const sovRequestsByDay = useMemo(() => {
+    const map = new Map<string, ScheduleSovRequest[]>();
+    for (const r of sovRequests) {
+      for (const k of r.workDayKeys) {
+        const list = map.get(k) ?? [];
+        list.push(r);
+        map.set(k, list);
+      }
+    }
+    return map;
+  }, [sovRequests]);
 
   // Projects starting today or later that have never had a supervisor
   // assigned and have no logged work yet — otherwise these are invisible on
@@ -587,6 +608,7 @@ export function SchedulePlanner({
                 let dayProjects = projectsByDay.get(k) ?? [];
                 let dayPlannedRaw = plannedByDay.get(k) ?? [];
                 let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
+                let daySovRequests = sovRequestsByDay.get(k) ?? [];
                 // Unassigned by definition, so a supervisor filter can never
                 // match one — hide rather than show under the wrong supervisor.
                 let dayNeedsSupervisor = selectedSupervisorId ? [] : needsSupervisorByDay.get(k) ?? [];
@@ -599,10 +621,14 @@ export function SchedulePlanner({
                   dayChangeOrders = dayChangeOrders.filter(
                     (co) => projectSupervisorOnDay(co.projectId, k) === selectedSupervisorId,
                   );
+                  daySovRequests = daySovRequests.filter(
+                    (r) => projectSupervisorOnDay(r.projectId, k) === selectedSupervisorId,
+                  );
                 }
 
                 dayProjects = dayProjects.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
                 dayChangeOrders = selectedTypes.has("CO") ? dayChangeOrders : [];
+                daySovRequests = selectedTypes.has("SOV") ? daySovRequests : [];
                 dayPlannedRaw = dayPlannedRaw.filter((a) => {
                   const project = projectById.get(a.projectId);
                   return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
@@ -618,14 +644,16 @@ export function SchedulePlanner({
                   .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
                   .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
 
-                const totalCount = dayProjects.length + dayPlanned.length + dayChangeOrders.length;
+                const totalCount = dayProjects.length + dayPlanned.length + dayChangeOrders.length + daySovRequests.length;
                 const visibleProjects = dayProjects.slice(0, 4);
                 const remainingAfterProjects = Math.max(0, 4 - visibleProjects.length);
                 const visiblePlanned = dayPlanned.slice(0, remainingAfterProjects);
                 const remainingAfterPlanned = Math.max(0, remainingAfterProjects - visiblePlanned.length);
                 const visibleChangeOrders = dayChangeOrders.slice(0, remainingAfterPlanned);
+                const remainingAfterChangeOrders = Math.max(0, remainingAfterPlanned - visibleChangeOrders.length);
+                const visibleSovRequests = daySovRequests.slice(0, remainingAfterChangeOrders);
                 const overflow =
-                  totalCount - visibleProjects.length - visiblePlanned.length - visibleChangeOrders.length;
+                  totalCount - visibleProjects.length - visiblePlanned.length - visibleChangeOrders.length - visibleSovRequests.length;
 
                 return (
                   <div
@@ -783,6 +811,27 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
+                      {visibleSovRequests.map((r) => {
+                        const parentProject = projectById.get(r.projectId);
+                        return (
+                          <li key={`sov-${r.id}`} className={inMonth ? "group relative" : "relative"}>
+                            <Link
+                              href={`/erp/projects/${r.projectId}`}
+                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${SOV_REQUEST_CHIP_CLASS}`}
+                            >
+                              <span className="truncate">{r.title}</span>
+                            </Link>
+                            {inMonth ? (
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                <div className="font-semibold">{r.title}</div>
+                                <div className="text-gray-300">{SOV_REQUEST_LABEL}</div>
+                                {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
+                                <div className="text-gray-300">Requested by: {r.requestedBy}</div>
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                       {overflow > 0 ? (
                         <li className="relative">
                           <button
@@ -844,6 +893,18 @@ export function SchedulePlanner({
                                     </Link>
                                   </li>
                                 ))}
+                                {daySovRequests.map((r) => (
+                                  <li key={`ov-sov-${r.id}`} className="flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
+                                    <Link
+                                      href={`/erp/projects/${r.projectId}`}
+                                      onClick={() => setExpandedDayKey(null)}
+                                      className="truncate hover:underline"
+                                    >
+                                      {r.title}
+                                    </Link>
+                                  </li>
+                                ))}
                               </ul>
                             </div>
                           ) : null}
@@ -856,7 +917,7 @@ export function SchedulePlanner({
             </div>
           </div>
         </div>
-        {presentGroups.length > 0 || changeOrders.length > 0 ? (
+        {presentGroups.length > 0 || changeOrders.length > 0 || sovRequests.length > 0 ? (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3">
             {presentGroups.map((group) => (
               <div key={group} className="flex items-center gap-1.5 text-[11px] text-gray-600">
@@ -868,6 +929,12 @@ export function SchedulePlanner({
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
                 {CHANGE_ORDER_LABEL}
+              </div>
+            ) : null}
+            {sovRequests.length > 0 ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
+                {SOV_REQUEST_LABEL}
               </div>
             ) : null}
             {dayAssignments.length > 0 ? (

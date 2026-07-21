@@ -14,11 +14,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const unitScopes = Array.isArray(body.unitScopes) ? (body.unitScopes as Record<string, unknown>[]) : [];
+  if (unitScopes.some((u) => !u.startDate)) {
+    return NextResponse.json({ error: "startDate is required for every unit" }, { status: 400 });
+  }
+
   const cfg = parseHubSpotPipelineStageMap();
   const notifyEmployeeIds = Array.isArray(body.notifyEmployeeIds) ? (body.notifyEmployeeIds as string[]) : [];
   const docusealSubmissionId = typeof body.docusealSubmissionId === "number" ? body.docusealSubmissionId : null;
   const pmEmail = typeof body.pmEmail === "string" ? body.pmEmail.trim() : null;
-  
+
   const payload = {
     ...body,
     segment: "JANITORIAL_TURNOVER_REQUESTS",

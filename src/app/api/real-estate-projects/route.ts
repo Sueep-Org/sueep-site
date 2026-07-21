@@ -13,6 +13,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  if (typeof body.projectDate !== "string" || !body.projectDate) {
+    return NextResponse.json({ error: "projectDate is required" }, { status: 400 });
+  }
+
   const payload = {
     ...body,
     segment: "REAL_ESTATE",

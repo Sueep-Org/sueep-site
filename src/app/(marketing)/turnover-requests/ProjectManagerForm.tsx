@@ -140,8 +140,16 @@ export function ProjectManagerForm({ onBack }: Props) {
       setError("Title is required.");
       return;
     }
+    if (requestType === "change-order" && !coEstimatedStartDate) {
+      setError("Estimated start date is required.");
+      return;
+    }
     if (requestType === "sov-schedule" && !selectedSovId) {
       setError("Please select an SOV item.");
+      return;
+    }
+    if (requestType === "sov-schedule" && !desiredDate) {
+      setError("Desired date is required.");
       return;
     }
     setLoading(true);
@@ -342,10 +350,11 @@ export function ProjectManagerForm({ onBack }: Props) {
               />
             </div>
             <div>
-              <label className={label} htmlFor="co-start-date">Estimated start date</label>
+              <label className={label} htmlFor="co-start-date">Estimated start date *</label>
               <input
                 id="co-start-date"
                 type="date"
+                required
                 className={input}
                 value={coEstimatedStartDate}
                 onChange={(e) => setCoEstimatedStartDate(e.target.value)}
@@ -409,10 +418,11 @@ export function ProjectManagerForm({ onBack }: Props) {
             )}
 
             <div>
-              <label className={label} htmlFor="sov-date">Desired date</label>
+              <label className={label} htmlFor="sov-date">Desired date *</label>
               <input
                 id="sov-date"
                 type="date"
+                required
                 className={input}
                 value={desiredDate}
                 onChange={(e) => setDesiredDate(e.target.value)}
