@@ -100,13 +100,33 @@ export function matchSovItem<T extends { description: string }>(
   return { kind: "match", candidate: top.candidate, score: top.score };
 }
 
-/** Literal whole-word match against a known list of unit numbers — not a
- * generic digit regex, since that risks false hits like "6th floor" against
- * a building that happens to have a real unit "6". Both the haystack and the
- * known unit numbers are normalized the same way before comparing. */
+/** Does `needleWords` appear as a contiguous, in-order run inside
+ * `haystackWords`? Needed because unit numbers are often multi-word ("Unit
+ * 1", not just "1") — a plain single-token set lookup (checking whether the
+ * whole multi-word string is a member of a set of individual words) can
+ * never match those, which was a real bug: "Unit 1" never matched a "Clean /
+ * Unit 1" line item because "unit 1" (one two-word string) was never equal
+ * to any single word in the haystack's token set. */
+function containsWordSequence(haystackWords: string[], needleWords: string[]): boolean {
+  if (needleWords.length === 0 || needleWords.length > haystackWords.length) return false;
+  for (let i = 0; i <= haystackWords.length - needleWords.length; i++) {
+    if (needleWords.every((word, j) => haystackWords[i + j] === word)) return true;
+  }
+  return false;
+}
+
+/** Literal whole-word (sequence) match against a known list of unit numbers
+ * — not a generic digit regex, since that risks false hits like "6th floor"
+ * against a building that happens to have a real unit "6". Both the
+ * haystack and the known unit numbers are normalized the same way before
+ * comparing, and unit numbers may be single-word ("9111") or multi-word
+ * ("Unit 1") — either way the match requires the exact word sequence. */
 export function matchUnitNumber(haystackNormalized: string, knownUnitNumbers: string[]): MatchResult<string> {
-  const haystackTokens = new Set(haystackNormalized.split(/\s+/).filter(Boolean));
-  const found = knownUnitNumbers.filter((unit) => haystackTokens.has(normalizeText(unit)));
+  const haystackWords = haystackNormalized.split(/\s+/).filter(Boolean);
+  const found = knownUnitNumbers.filter((unit) => {
+    const unitWords = normalizeText(unit).split(/\s+/).filter(Boolean);
+    return containsWordSequence(haystackWords, unitWords);
+  });
 
   if (found.length === 0) return { kind: "none" };
   if (found.length > 1) {

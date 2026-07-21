@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
-import { parseBuildingNameFromDealName } from "@/lib/hubspot/dealNaming";
+import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -655,6 +655,8 @@ export function NewProjectForm({
 
   function selectJanitorialDeal(deal: { id: string; name: string }) {
     setBuildingName(parseBuildingNameFromDealName(deal.name));
+    const address = parseAddressFromDealName(deal.name);
+    if (address) setBuildingAddress(address);
     setSelectedDealId(deal.id);
   }
 
