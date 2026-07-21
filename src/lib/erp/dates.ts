@@ -30,3 +30,17 @@ export function todayEasternKey(now: Date = new Date()): string {
 export function utcDateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * "Today," as a UTC-midnight Date carrying Eastern's current calendar day —
+ * the anchor to build a calendar view from. Runs client-side too (Intl, no
+ * server dependency), so the Schedule calendar shows the same "today" and
+ * the same month grid to every viewer regardless of their own device
+ * timezone, instead of each viewer's browser-local calendar day (which is
+ * what `new Date()` + local Date methods would give — wrong per the "always
+ * Eastern" requirement, and the direct cause of a supervisor 6 hours ahead
+ * of Eastern seeing the calendar's "today" land on tomorrow).
+ */
+export function todayEasternAsUtcMidnight(now: Date = new Date()): Date {
+  return new Date(`${todayEasternKey(now)}T00:00:00.000Z`);
+}

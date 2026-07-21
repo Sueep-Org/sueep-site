@@ -12,30 +12,35 @@ export function startOfDay(d: Date): Date {
   return x;
 }
 
+// UTC throughout, same reasoning as startOfDay above — this is calendar-day
+// arithmetic on values that are (or are anchored to) UTC-midnight day
+// labels, so it must never touch local Date methods, which would make the
+// result depend on the viewer's own browser timezone instead of being the
+// same for everyone.
 export function addDays(d: Date, n: number): Date {
   const x = new Date(d);
-  x.setDate(x.getDate() + n);
+  x.setUTCDate(x.getUTCDate() + n);
   return x;
 }
 
 export function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
 export function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 23, 59, 59, 999));
 }
 
 export function monthMatrix(anchor: Date): Date[][] {
   const first = startOfMonth(anchor);
-  const startWeekday = first.getDay();
-  const dim = endOfMonth(anchor).getDate();
+  const startWeekday = first.getUTCDay();
+  const dim = endOfMonth(anchor).getUTCDate();
   const cells: Date[] = [];
   for (let i = 0; i < startWeekday; i++) {
     cells.push(addDays(first, i - startWeekday));
   }
   for (let day = 1; day <= dim; day++) {
-    cells.push(new Date(anchor.getFullYear(), anchor.getMonth(), day));
+    cells.push(new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), day)));
   }
   while (cells.length % 7 !== 0) {
     const last = cells[cells.length - 1]!;

@@ -16,6 +16,7 @@ import {
   type ScheduleProject,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
+import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
 
 const PX_PER_DAY = 10;
@@ -121,7 +122,7 @@ const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; sw
 const ALL_PROJECT_TYPE_FILTERS = PROJECT_TYPE_FILTER_OPTIONS.map((o) => o.value);
 
 function monthLabel(d: Date): string {
-  return d.toLocaleString("en-US", { month: "long", year: "numeric" });
+  return d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 type Supervisor = { id: string; displayName: string };
@@ -144,7 +145,12 @@ export function SchedulePlanner({
   employees: Employee[];
   initialWorkerAssignments: ScheduleWorkerAssignment[];
 }) {
-  const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
+  // Anchors the whole calendar (which month/day is "today") to Eastern time,
+  // not the viewer's own device timezone — otherwise a viewer far enough
+  // ahead of Eastern sees the month grid's "today" land on the wrong cell
+  // (confirmed: someone 6 hours ahead saw Tuesday highlighted as Wednesday).
+  const todayDate = todayEasternAsUtcMidnight();
+  const [cursor, setCursor] = useState(() => startOfMonth(todayDate));
   const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<Set<ProjectTypeFilter>>(() => new Set(ALL_PROJECT_TYPE_FILTERS));
   const [filterOpen, setFilterOpen] = useState(false);
@@ -264,8 +270,7 @@ export function SchedulePlanner({
 
   const ganttRange = useMemo(() => {
     if (windows.length === 0) {
-      const t = startOfDay(new Date());
-      return { start: addDays(t, -7), end: addDays(t, 60) };
+      return { start: addDays(todayDate, -7), end: addDays(todayDate, 60) };
     }
     let min = windows[0]!.start;
     let max = windows[0]!.end;
@@ -274,7 +279,7 @@ export function SchedulePlanner({
       if (w.end > max) max = w.end;
     }
     return { start: addDays(min, -7), end: addDays(max, 14) };
-  }, [windows]);
+  }, [windows, todayDate]);
 
   const totalDays = Math.max(
     1,
@@ -285,7 +290,7 @@ export function SchedulePlanner({
   const dayOffset = (d: Date) =>
     Math.floor((startOfDay(d).getTime() - ganttRange.start.getTime()) / 86400000);
 
-  const todayOffsetPx = dayOffset(startOfDay(new Date())) * PX_PER_DAY;
+  const todayOffsetPx = dayOffset(todayDate) * PX_PER_DAY;
 
   const ganttScrollRef = useRef<HTMLDivElement>(null);
 
@@ -349,7 +354,7 @@ export function SchedulePlanner({
   // assignment or labor log to place them by.
   const needsSupervisorByDay = useMemo(() => {
     const map = new Map<string, ScheduleProject[]>();
-    const todayK = dayKey(new Date());
+    const todayK = dayKey(todayDate);
     for (const p of projects) {
       // Reads through supervisorOverrides (not just p.supervisorUserId) so
       // the alert disappears the moment a supervisor is assigned, instead of
@@ -372,7 +377,7 @@ export function SchedulePlanner({
       map.set(k, list);
     }
     return map;
-  }, [projects, supervisorOverrides]);
+  }, [projects, supervisorOverrides, todayDate]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -395,14 +400,14 @@ export function SchedulePlanner({
   }
 
   function prevMonth() {
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
+    setCursor((c) => new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth() - 1, 1)));
   }
   function nextMonth() {
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
+    setCursor((c) => new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth() + 1, 1)));
   }
 
-  const sameMonth = (a: Date, b: Date) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
-  const todayKey = dayKey(new Date());
+  const sameMonth = (a: Date, b: Date) => a.getUTCMonth() === b.getUTCMonth() && a.getUTCFullYear() === b.getUTCFullYear();
+  const todayKey = dayKey(todayDate);
 
   const calendarNav = (
     <div className="flex flex-wrap items-center gap-3">
@@ -633,7 +638,7 @@ export function SchedulePlanner({
                           isToday ? "bg-pink-600 text-white" : "text-gray-500"
                         }`}
                       >
-                        {cell.getDate()}
+                        {cell.getUTCDate()}
                       </div>
                       {isFutureOrToday ? (
                         <button
@@ -793,7 +798,7 @@ export function SchedulePlanner({
                               className={`absolute z-40 w-56 rounded-md bg-gray-900 px-2.5 py-2 text-[10px] leading-snug text-white shadow-lg ${tooltipPositionClass}`}
                             >
                               <div className="mb-1.5 font-semibold text-gray-300">
-                                {cell.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                                {cell.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })}
                               </div>
                               <ul className="max-h-48 space-y-1 overflow-y-auto">
                                 {dayProjects.map((p) => (
@@ -947,16 +952,16 @@ export function SchedulePlanner({
                       const d = addDays(ganttRange.start, i);
                       const isTodayCol = i * PX_PER_DAY === todayOffsetPx;
                       const show =
-                        isTodayCol || d.getDate() === 1 || i === 0 || d.getDay() === 0
+                        isTodayCol || d.getUTCDate() === 1 || i === 0 || d.getUTCDay() === 0
                           ? isTodayCol
                             ? "Today"
-                            : d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
                           : "";
                       return (
                         <div
                           key={i}
                           style={{ width: PX_PER_DAY, minWidth: PX_PER_DAY }}
-                          className={`shrink-0 border-l border-gray-100 ${d.getDay() === 0 ? "bg-gray-50" : ""}`}
+                          className={`shrink-0 border-l border-gray-100 ${d.getUTCDay() === 0 ? "bg-gray-50" : ""}`}
                         >
                           {show ? (
                             <span className={`pl-0.5 ${isTodayCol ? "font-semibold text-pink-600" : ""}`}>{show}</span>
