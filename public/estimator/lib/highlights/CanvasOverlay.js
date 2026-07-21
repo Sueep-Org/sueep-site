@@ -24,7 +24,6 @@ export class CanvasOverlay {
 
     this._edgeWorker = null;
     this._fillWorker = null;
-    this._wallWorker = null;
     this._barrierState = null;
 
     this.tool = 'area';
@@ -427,66 +426,6 @@ export class CanvasOverlay {
       imageData: img,
       width: this.canvasEl.width,
       height: this.canvasEl.height
-    });
-  }
-
-  detectWallsOnCurrentPage() {
-    if (!this.canvasEl) return Promise.resolve([]);
-
-    const width = this.canvasEl.width;
-    const height = this.canvasEl.height;
-    if (!width || !height) return Promise.resolve([]);
-
-    if (!this._wallWorker) {
-      this._wallWorker = new Worker(
-        new URL('../walls/wallWorker.js', import.meta.url),
-        { type: 'module' }
-      );
-    }
-
-    const ctx = this.canvasEl.getContext('2d');
-    const img = ctx.getImageData(0, 0, width, height);
-
-    return new Promise((resolve) => {
-      const handleMessage = (e) => {
-        const payload = e.data || {};
-        if (payload.type !== 'walls') return;
-
-        this._wallWorker.removeEventListener('message', handleMessage);
-
-        const segments = Array.isArray(payload.segments) ? payload.segments : [];
-        const lines = [];
-        for (const segment of segments) {
-          const points = Array.isArray(segment.points) ? segment.points : [];
-          if (points.length < 2) continue;
-          const start = points[0];
-          const end = points[points.length - 1];
-          lines.push({
-            id: segment.id || `${start.x}-${start.y}-${end.x}-${end.y}`,
-            x1: Number(start.x || 0) / Math.max(1, width),
-            y1: Number(start.y || 0) / Math.max(1, height),
-            x2: Number(end.x || 0) / Math.max(1, width),
-            y2: Number(end.y || 0) / Math.max(1, height)
-          });
-        }
-
-        this.store.setLines(this.currentPage, lines);
-        this.redraw();
-        this.onMeasurementsChanged?.();
-        resolve(lines);
-      };
-
-      this._wallWorker.addEventListener('message', handleMessage);
-      this._wallWorker.postMessage(
-        {
-          type: 'build',
-          width,
-          height,
-          data: img.data.buffer,
-          maxDim: 1400
-        },
-        [img.data.buffer]
-      );
     });
   }
 

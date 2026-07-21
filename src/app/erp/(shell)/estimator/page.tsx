@@ -230,9 +230,6 @@ export default function EstimatorPage() {
                 <button id="measureToggle" className="mini-btn">
                   Measure
                 </button>
-                <button id="detectWallsBtn" className="mini-btn">
-                  Detect Walls
-                </button>
                 <button id="drawRectBtn" className="mini-btn">
                   Draw Rect
                 </button>
