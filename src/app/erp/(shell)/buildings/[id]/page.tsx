@@ -51,6 +51,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           pmName: building.pmName,
           pmEmail: building.pmEmail,
           pmPhone: building.pmPhone,
+          hubspotDealId: building.hubspotDealId,
         }}
         initialPackage={building.pricingPackage}
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}

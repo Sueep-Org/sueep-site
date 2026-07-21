@@ -24,8 +24,21 @@ export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "
 export type HubSpotPipelineStageMap = {
   /** Post-construction pipeline object id (string from HubSpot) */
   postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
-  /** Janitorial pipeline */
-  janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
+  /** Janitorial pipeline. quoteApproved/workInProgress map to this
+   * pipeline's actual "Awarded"/"Signed" stages; walkthrough/proposal/
+   * activeTurnovers are additional stages surfaced only when searching for
+   * a deal to name/link a new Building from (see searchJanitorialDealsForBuildingCreation) — not used for Project sync. */
+  janitorial: {
+    pipelineId: string;
+    stages: {
+      quoteApproved: string;
+      workInProgress: string;
+      workCompleted: string;
+      walkthrough?: string;
+      proposal?: string;
+      activeTurnovers?: string;
+    };
+  };
   /** Real estate pipeline (formerly residential) — syncs as REAL_ESTATE segment */
   realEstate?: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
 };

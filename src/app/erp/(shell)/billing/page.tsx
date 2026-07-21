@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
+import { SearchableSelect } from "../../components/SearchableSelect";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
-type Tab = "post-construction" | "janitorial" | "recurring";
+type Tab = "post-construction" | "janitorial" | "recurring" | "needs-review";
 
 const BILLING_OPTIONS = [
   { value: "NOT_BILLED", label: "Not Billed" },
@@ -689,6 +690,156 @@ function RecurringTab({ start, end }: { start: string; end: string }) {
   );
 }
 
+// ── Needs Review ──────────────────────────────────────────────────────────────
+
+type ReviewCandidateSovItem = { id: string; description: string; scheduledValueCents: number; billingStatus: string };
+type ReviewCandidateUnit = { id: string; unitNumber: string | null; priceCents: number | null; approvedPriceCents: number | null };
+
+type ReviewRow = {
+  id: string;
+  hubspotInvoiceId: string;
+  lineItemText: string;
+  amountCents: number;
+  matchMethod: string | null;
+  matchScore: number | null;
+  project: { id: string; jobTitle: string } | null;
+  building: { id: string; name: string } | null;
+  candidateSovItems: ReviewCandidateSovItem[];
+  candidateUnits: ReviewCandidateUnit[];
+};
+
+type ReviewResponse = { rows: ReviewRow[] };
+
+function ReviewRowCard({ row, onResolved }: { row: ReviewRow; onResolved: (id: string) => void }) {
+  const [selected, setSelected] = useState("");
+  const [createAlias, setCreateAlias] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const isSov = row.project != null;
+
+  const options = isSov
+    ? row.candidateSovItems.map((i) => ({ value: i.id, label: `${i.description} — ${fmt(i.scheduledValueCents)}` }))
+    : row.candidateUnits.map((u) => ({
+        value: u.id,
+        label: `Unit ${formatUnitDisplay(u.unitNumber) ?? u.unitNumber ?? u.id} — ${fmt(u.approvedPriceCents ?? u.priceCents ?? 0)}`,
+      }));
+
+  async function submit(action: "resolve" | "ignore") {
+    setSubmitting(true);
+    setError("");
+    try {
+      const body: Record<string, unknown> = { action };
+      if (action === "resolve") {
+        if (!selected) { setError("Pick a match first."); setSubmitting(false); return; }
+        if (isSov) body.sovItemId = selected; else body.turnoverRequestId = selected;
+        body.createAlias = createAlias;
+      }
+      const res = await fetch(`/api/erp/billing/review/${row.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error || "Could not resolve this item.");
+        setSubmitting(false);
+        return;
+      }
+      onResolved(row.id);
+    } catch {
+      setError("Network error. Please try again.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{row.lineItemText}</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {isSov ? row.project!.jobTitle : row.building!.name} · Invoice {row.hubspotInvoiceId} · {fmt(row.amountCents)}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">Needs review</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SearchableSelect
+          value={selected}
+          onChange={setSelected}
+          options={options}
+          placeholder={isSov ? "Search SOV items…" : "Search units…"}
+          allLabel="Not sure — leave unresolved"
+          className="w-72"
+        />
+        <label className="flex items-center gap-1.5 text-xs text-gray-600">
+          <input type="checkbox" checked={createAlias} onChange={(e) => setCreateAlias(e.target.checked)} className="h-3.5 w-3.5 accent-pink-600" />
+          Remember this for future invoices
+        </label>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit("resolve")}
+          className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-40"
+        >
+          {submitting ? "Saving…" : "Confirm match"}
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit("ignore")}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        >
+          Not applicable
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NeedsReviewTab() {
+  const [rows, setRows] = useState<ReviewRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  function load() {
+    setLoading(true);
+    setError("");
+    fetch("/api/erp/billing/review")
+      .then((r) => r.json())
+      .then((d: ReviewResponse) => setRows(d.rows))
+      .catch(() => setError("Could not load items needing review."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function handleResolved(id: string) {
+    setRows((prev) => (prev ? prev.filter((r) => r.id !== id) : prev));
+  }
+
+  return (
+    <div className="space-y-3">
+      {loading ? (
+        <p className="py-8 text-center text-sm text-gray-400">Loading…</p>
+      ) : error ? (
+        <p className="py-8 text-center text-sm text-red-500">{error}</p>
+      ) : !rows || rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500">Nothing needs review right now — every matched HubSpot invoice line item was confidently applied.</p>
+      ) : (
+        rows.map((row) => <ReviewRowCard key={row.id} row={row} onResolved={handleResolved} />)
+      )}
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
@@ -698,7 +849,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
-    if (t === "post-construction" || t === "janitorial" || t === "recurring") setTab(t);
+    if (t === "post-construction" || t === "janitorial" || t === "recurring" || t === "needs-review") setTab(t);
   }, []);
 
   function updateTab(t: Tab) {
@@ -712,6 +863,7 @@ export default function BillingPage() {
     { id: "post-construction", label: "Post-Construction" },
     { id: "janitorial", label: "Janitorial" },
     { id: "recurring", label: "Recurring" },
+    { id: "needs-review", label: "Needs Review" },
   ];
 
   return (
@@ -767,6 +919,7 @@ export default function BillingPage() {
       {tab === "post-construction" && <PostConstructionTab start={start} end={end} />}
       {tab === "janitorial" && <JanitorialTab start={start} end={end} />}
       {tab === "recurring" && <RecurringTab start={start} end={end} />}
+      {tab === "needs-review" && <NeedsReviewTab />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
@@ -56,6 +57,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const trimmed = String(body.pmPhone || "").trim();
     data.pmPhone = trimmed || null;
   }
+  if (body.hubspotDealId !== undefined) {
+    const trimmed = String(body.hubspotDealId || "").trim();
+    data.hubspotDealId = trimmed || null;
+  }
   if (body.pricingPackage !== undefined) {
     if (!canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
       return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
@@ -74,6 +79,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const building = await prisma.building.update({ where: { id }, data: data as object });
     return NextResponse.json(building);
   } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json({ error: "That HubSpot deal ID is already linked to a different building" }, { status: 409 });
+    }
     console.error("PATCH /api/erp/buildings/[id]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }

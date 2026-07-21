@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { parseBuildingNameFromDealName } from "@/lib/hubspot/dealNaming";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -626,6 +627,44 @@ export function NewProjectForm({
   const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
   const [buildingAddress, setBuildingAddress] = useState("");
+  const [dealQuery, setDealQuery] = useState("");
+  const [dealCandidates, setDealCandidates] = useState<{ id: string; name: string }[]>([]);
+  const [dealSearchLoading, setDealSearchLoading] = useState(false);
+  const [dealSearchError, setDealSearchError] = useState("");
+  const [hasSearchedDeal, setHasSearchedDeal] = useState(false);
+  const [selectedDealId, setSelectedDealId] = useState("");
+
+  async function searchJanitorialDeal(query: string) {
+    setDealSearchLoading(true);
+    setDealSearchError("");
+    try {
+      const res = await fetch(`/api/erp/hubspot/janitorial-deal-search?q=${encodeURIComponent(query)}`);
+      const data = (await res.json()) as { results?: { id: string; name: string }[]; error?: string };
+      if (!res.ok) {
+        setDealSearchError(data.error || "Could not search HubSpot.");
+        return;
+      }
+      setDealCandidates(data.results ?? []);
+    } catch {
+      setDealSearchError("Network error searching HubSpot.");
+    } finally {
+      setDealSearchLoading(false);
+      setHasSearchedDeal(true);
+    }
+  }
+
+  function selectJanitorialDeal(deal: { id: string; name: string }) {
+    setBuildingName(parseBuildingNameFromDealName(deal.name));
+    setSelectedDealId(deal.id);
+  }
+
+  function resetDealSearchState() {
+    setDealQuery("");
+    setDealCandidates([]);
+    setDealSearchError("");
+    setHasSearchedDeal(false);
+    setSelectedDealId("");
+  }
   const [supervisorName, setSupervisorName] = useState(() => {
     const david = employees.find(
       (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
@@ -826,6 +865,7 @@ export function NewProjectForm({
       setPmName("");
       setPmEmail("");
       setPmPhone("");
+      resetDealSearchState();
       return;
     }
 
@@ -838,6 +878,7 @@ export function NewProjectForm({
     setPmName(building?.pmName ?? "");
     setPmEmail(building?.pmEmail ?? "");
     setPmPhone(building?.pmPhone ?? "");
+    resetDealSearchState();
   }
 
   function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
@@ -850,6 +891,7 @@ export function NewProjectForm({
       setPmName("");
       setPmEmail("");
       setPmPhone("");
+      resetDealSearchState();
       return;
     }
 
@@ -866,6 +908,7 @@ export function NewProjectForm({
     setPmName("");
     setPmEmail(matchedBuilding?.pmEmail || "");
     setPmPhone(matchedBuilding?.pmPhone || "");
+    resetDealSearchState();
   }
 
   function validateStep(step: number): string {
@@ -875,6 +918,9 @@ export function NewProjectForm({
       if (!pmName.trim()) return "PM name is required.";
       if (!pmEmail.trim()) return "PM email is required.";
       if (!pmPhone.trim()) return "PM phone is required.";
+    }
+    if (step === 2) {
+      if (unitScopes.some((unit) => !unit.startDate)) return "Start date is required for every unit.";
     }
     if (step === 3) {
       if (!sueepPmName.trim()) return "SUEEP PM name is required.";
@@ -1073,6 +1119,7 @@ export function NewProjectForm({
       buildingProjectId: isAddingBuilding ? undefined : buildingProjectId || undefined,
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
+      buildingHubspotDealId: isAddingBuilding ? selectedDealId || undefined : undefined,
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
@@ -1268,12 +1315,13 @@ export function NewProjectForm({
           <>
             <div className="min-w-0">
               <label className={label} htmlFor="projectDate">
-                Start date
+                Start date *
               </label>
               <input
                 id="projectDate"
                 name="projectDate"
                 type="date"
+                required
                 className={input}
               />
             </div>
@@ -1340,19 +1388,73 @@ export function NewProjectForm({
                   {!disableNewBuilding && <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>}
                 </select>
                 {isAddingBuilding ? (
-                  <div className="mt-2">
-                    <label className={label} htmlFor="newBuildingName">
-                      New building name
-                    </label>
-                    <input
-                      id="newBuildingName"
-                      name="newBuildingName"
-                      required
-                      className={input}
-                      value={buildingName}
-                      onChange={(e) => setBuildingName(e.target.value)}
-                      placeholder="Type the building name"
-                    />
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label className={label}>Find building from a HubSpot deal</label>
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          value={dealQuery}
+                          onChange={(e) => setDealQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void searchJanitorialDeal(dealQuery);
+                            }
+                          }}
+                          placeholder="Search deals by name…"
+                          className={input}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => searchJanitorialDeal(dealQuery)}
+                          disabled={dealSearchLoading || !dealQuery.trim()}
+                          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {dealSearchLoading ? "Searching…" : "Search"}
+                        </button>
+                      </div>
+
+                      {dealSearchError && <p className="mt-1 text-xs text-red-600">{dealSearchError}</p>}
+
+                      {hasSearchedDeal && !dealSearchLoading && dealCandidates.length === 0 && !dealSearchError && (
+                        <p className="mt-1 text-xs text-gray-400">No matching deals found — enter the building name manually below.</p>
+                      )}
+
+                      {dealCandidates.length > 0 && (
+                        <div className="mt-1.5 space-y-1 rounded-md border border-gray-200 p-1.5">
+                          {dealCandidates.map((deal) => (
+                            <button
+                              key={deal.id}
+                              type="button"
+                              onClick={() => selectJanitorialDeal(deal)}
+                              className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs ${
+                                selectedDealId === deal.id ? "bg-pink-50 font-medium text-pink-700" : "text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <span className="truncate">{deal.name}</span>
+                              {selectedDealId === deal.id && <span className="shrink-0 text-pink-600">✓ Selected</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="newBuildingName">
+                        New building name
+                      </label>
+                      <input
+                        id="newBuildingName"
+                        name="newBuildingName"
+                        required
+                        className={input}
+                        value={buildingName}
+                        onChange={(e) => {
+                          setBuildingName(e.target.value);
+                          setSelectedDealId("");
+                        }}
+                        placeholder="Or type the building name manually"
+                      />
+                    </div>
                   </div>
                 ) : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
@@ -1482,11 +1584,12 @@ export function NewProjectForm({
                     </div>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`start-date-${unit.id}`}>
-                        Start date
+                        Start date *
                       </label>
                       <input
                         id={`start-date-${unit.id}`}
                         type="date"
+                        required
                         className={input}
                         value={unit.startDate}
                         onChange={(e) => updateUnitScope(unit.id, { startDate: e.target.value })}

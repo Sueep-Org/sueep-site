@@ -32,6 +32,12 @@ const DEAL_EVENT_TYPES = new Set([
   "deal.associationChange",
 ]);
 
+// Paid-invoice billing sync (processPaidInvoices, in syncInvoicePayments.ts)
+// is NOT triggered from here — HubSpot's private-app webhook subscriptions
+// don't currently support the Invoice object, so there's no invoice event
+// this handler could ever receive. It's driven by a scheduled poll instead,
+// see src/app/api/cron/hubspot-invoice-sync/route.ts.
+
 /**
  * Triggered after each verified webhook POST. Runs a full deal→project sync
  * whenever any deal event is present in the batch.
@@ -50,14 +56,13 @@ export async function handleHubSpotWebhookEvents(events: HubSpotCrmWebhookEvent[
     count: events.length,
     types: [...new Set(events.map((e) => e.subscriptionType))],
   });
-
   try {
     const result = await syncHubSpotDealsToProjects();
-    console.info("[hubspot webhook] sync complete", {
+    console.info("[hubspot webhook] deal sync complete", {
       synced: result.synced.length,
       errors: result.errors,
     });
   } catch (e) {
-    console.error("[hubspot webhook] sync failed", e);
+    console.error("[hubspot webhook] deal sync failed", e);
   }
 }

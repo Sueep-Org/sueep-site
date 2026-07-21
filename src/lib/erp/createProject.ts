@@ -96,6 +96,10 @@ export async function createProjectFromPayload(
     return { error: "jobTitle is required", status: 400 } as const;
   }
 
+  if (!stringValue(body.projectDate)) {
+    return { error: "projectDate (start date) is required", status: 400 } as const;
+  }
+
   const projectDate = parseProjectDate(body.projectDate);
   const projectEndDate = parseProjectDate(body.projectEndDate);
   const percentInvoiced = percentValue(body.percentInvoiced) ?? 0;

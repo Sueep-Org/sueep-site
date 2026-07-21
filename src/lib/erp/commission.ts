@@ -121,6 +121,29 @@ type CommissionProject = {
 };
 
 /**
+ * Matches a HubSpot deal owner (by email, then by display name) to an ERP
+ * employee — the core lookup shared by resolveCommissionEmployeeId (projects)
+ * and the building-level "suggest commission owner from HubSpot deal owner"
+ * feature. Email takes priority since names can collide or be formatted
+ * differently; falls back to name match when email isn't available/found.
+ */
+export function matchEmployeeByHubspotOwner(
+  ownerEmail: string | null | undefined,
+  ownerName: string | null | undefined,
+  eligibleEmployees: CommissionEligibleEmployee[]
+): CommissionEligibleEmployee | null {
+  const byEmail = ownerEmail && eligibleEmployees.find((e) => e.email?.toLowerCase() === ownerEmail.toLowerCase());
+  if (byEmail) return byEmail;
+
+  const byName =
+    ownerName &&
+    eligibleEmployees.find((e) => `${e.firstName} ${e.lastName}`.trim().toLowerCase() === ownerName.toLowerCase());
+  if (byName) return byName;
+
+  return null;
+}
+
+/**
  * Single source of truth for "who gets commission credit on this project" —
  * used by both the project page (to show/edit the assignment) and the
  * employee page (to decide which projects show up on someone's tab).
@@ -135,17 +158,8 @@ export function resolveCommissionEmployeeId(
 ): string | null {
   if (project.commissionEmployeeId) return project.commissionEmployeeId;
 
-  const byEmail =
-    project.hubspotOwnerEmail &&
-    eligibleEmployees.find((e) => e.email?.toLowerCase() === project.hubspotOwnerEmail!.toLowerCase());
-  if (byEmail) return byEmail.id;
-
-  const byName =
-    project.hubspotOwnerName &&
-    eligibleEmployees.find(
-      (e) => `${e.firstName} ${e.lastName}`.trim().toLowerCase() === project.hubspotOwnerName!.toLowerCase()
-    );
-  if (byName) return byName.id;
+  const byOwner = matchEmployeeByHubspotOwner(project.hubspotOwnerEmail, project.hubspotOwnerName, eligibleEmployees);
+  if (byOwner) return byOwner.id;
 
   const creator =
     project.createdByEmployeeId && eligibleEmployees.find((e) => e.id === project.createdByEmployeeId);

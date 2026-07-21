@@ -85,6 +85,8 @@ model Project {
   images ProjectImage[]
   changeOrders ProjectChangeOrder[]
   sovScheduleRequests ProjectSovScheduleRequest[]
+  hubspotSovAliases HubSpotSovAlias[]
+  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
   contacts ProjectContact[]
   contractorAssignments ContractorAssignment[]
   laborAssignments ProjectLaborAssignment[]
@@ -160,10 +162,17 @@ model Building {
   commissionEmployeeId String?
   commissionEmployee   Employee? @relation("BuildingCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
 
+  /// HubSpot Deal covering ALL turnover invoicing for this building (one
+  /// deal per building, not per unit) — used to route a paid invoice's line
+  /// items back to the right building's units for billing-status automation.
+  hubspotDealId String? @unique
+
   turnoverRequests      TurnoverRequest[]
   contractorAssignments ContractorAssignment[]
   projects              Project[]
   recurringContract     RecurringContract?
+  hubspotUnitAliases    HubSpotUnitAlias[]
+  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
 
   @@index([name])
   @@index([commissionEmployeeId])
@@ -226,10 +235,12 @@ model TurnoverRequest {
   laborAssignments       LaborAssignment[]
   qualityChecks          QualityCheck[]
   projects               Project[]
+  hubspotInvoiceMatches  HubSpotInvoiceLineItemMatch[]
 
   @@index([buildingId])
   @@index([status])
   @@index([requestType])
+  @@index([buildingId, unitNumber, billingStatus])
 }
 
 /// A flat monthly (subscription-style) janitorial contract for a Building,
@@ -792,6 +803,9 @@ model ErpUser {
   supervisorProjects Project[]
   dayAssignments     ProjectDayAssignment[]
   projectNotes       ProjectNote[]
+  hubspotSovAliasesCreated  HubSpotSovAlias[]
+  hubspotUnitAliasesCreated HubSpotUnitAlias[]
+  hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
 
   @@index([firebaseUid])
 }
@@ -1372,6 +1386,8 @@ model ProjectSOVItem {
 
   laborEntries LaborEntry[]
   scheduleRequests ProjectSovScheduleRequest[]
+  hubspotAliases HubSpotSovAlias[]
+  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
 
   @@index([sovId])
 }
@@ -1399,6 +1415,130 @@ model ProjectSovScheduleRequest {
 
   @@index([projectId])
   @@index([sovItemId])
+}
+
+/// A human-confirmed mapping from a HubSpot invoice line item's normalized
+/// text to a specific SOV line item on a project — learned the first time a
+/// PENDING_REVIEW HubSpotInvoiceLineItemMatch is resolved, so the same
+/// recurring line-item phrasing auto-matches on future invoices without
+/// repeat manual work. Scoped per-project since the same wording can mean
+/// different things on different jobs.
+model HubSpotSovAlias {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sovItemId String
+  sovItem   ProjectSOVItem @relation(fields: [sovItemId], references: [id], onDelete: Cascade)
+
+  /// Normalized (lowercased, punctuation/ordinal-suffix-stripped) combined
+  /// line item name+description text this alias was confirmed for.
+  hubspotText String
+  /// Soft-disable — keeps an audit trail instead of silently deleting a
+  /// mistaken alias.
+  active Boolean @default(true)
+
+  createdByUserId String?
+  createdByUser   ErpUser? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// Snapshot of who confirmed this, so it stays readable if their ERP account is later removed.
+  createdByName String
+
+  @@unique([projectId, hubspotText])
+  @@index([sovItemId])
+}
+
+/// A human-confirmed mapping from a HubSpot invoice line item's normalized
+/// text to a unit NUMBER (not a specific TurnoverRequest row, since
+/// recurring-contract units get a new TurnoverRequest every billing period —
+/// the alias means "this text always refers to unit X in this building",
+/// which outlives any single period's row).
+model HubSpotUnitAlias {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  unitNumber  String
+  hubspotText String
+  active      Boolean @default(true)
+
+  createdByUserId String?
+  createdByUser   ErpUser? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByName   String
+
+  @@unique([buildingId, hubspotText])
+  @@index([buildingId, unitNumber])
+}
+
+enum HubSpotLineItemMatchStatus {
+  /// Scored above the confidence threshold, applied automatically.
+  AUTO_APPLIED
+  /// Matched via a learned alias and passed the amount-reconciliation check, applied.
+  ALIAS_APPLIED
+  /// Below threshold, amount mismatch, or ambiguous candidates — needs a human.
+  PENDING_REVIEW
+  /// A human resolved it from the review queue; resolution applied.
+  RESOLVED
+  /// A human marked this line item as not-applicable — permanent no-op.
+  IGNORED
+  /// Target billing record was already PAID when this line item was processed — no-op re-confirmation.
+  ALREADY_PAID_SKIPPED
+}
+
+/// One row per HubSpot invoice line item, written every time it's processed
+/// — this is simultaneously the idempotency ledger (upsert by
+/// hubspotLineItemId, since the same paid invoice gets reprocessed on every
+/// webhook firing), the manual-review queue (filter status = PENDING_REVIEW),
+/// and the audit trail for "why is this marked paid."
+model HubSpotInvoiceLineItemMatch {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  hubspotInvoiceId  String
+  hubspotLineItemId String @unique
+  hubspotDealId     String?
+  /// Normalized combined name+description text this line item was matched against.
+  lineItemText String
+  amountCents  Int
+
+  /// Exactly one of projectId (post-construction/SOV) or buildingId
+  /// (janitorial) is set, depending on which billing shape this invoice's
+  /// deal resolved to.
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  buildingId String?
+  building   Building? @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  matchedSovItemId         String?
+  matchedSovItem           ProjectSOVItem?  @relation(fields: [matchedSovItemId], references: [id], onDelete: SetNull)
+  /// Set for janitorial matches — the unit number this line item was grouped under.
+  matchedUnitNumber        String?
+  matchedTurnoverRequestId String?
+  matchedTurnoverRequest   TurnoverRequest? @relation(fields: [matchedTurnoverRequestId], references: [id], onDelete: SetNull)
+
+  /// ALIAS | SCORE | HUMAN
+  matchMethod String?
+  matchScore  Float?
+  /// Top-N {id, label, score} candidates considered — audit/debug, and prefills the review UI.
+  candidatesJson Json?
+
+  status HubSpotLineItemMatchStatus @default(PENDING_REVIEW)
+
+  resolvedByUserId String?
+  resolvedByUser   ErpUser? @relation(fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  resolvedByName   String?
+  /// false = a one-off resolution the human didn't want remembered as a reusable alias.
+  createAlias Boolean @default(true)
+
+  @@index([hubspotInvoiceId])
+  @@index([status])
+  @@index([projectId])
+  @@index([buildingId])
 }
 
 model ChangeOrderMaterialEntry {

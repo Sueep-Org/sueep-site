@@ -15,6 +15,7 @@ type Props = {
     pmName: string | null;
     pmEmail: string | null;
     pmPhone: string | null;
+    hubspotDealId: string | null;
   };
   initialPackage: unknown;
   isSupervisor?: boolean;

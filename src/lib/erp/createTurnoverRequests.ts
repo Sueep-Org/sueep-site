@@ -126,6 +126,7 @@ async function resolveBuilding(body: Record<string, unknown>) {
       pmName: stringValue(body.pmName) || null,
       pmEmail: stringValue(body.pmEmail) || null,
       pmPhone: stringValue(body.pmPhone) || null,
+      hubspotDealId: stringValue(body.buildingHubspotDealId) || null,
       pricingPackage: pricingPackageFromPayload(body, null),
     },
   });
@@ -144,8 +145,12 @@ function unitDateRange(unit: UnitScopePayload) {
 }
 
 export async function createTurnoverRequestsFromPayload(body: Record<string, unknown>) {
-  const building = await resolveBuilding(body);
   const units = parseUnitScopes(body.unitScopes);
+  if (units.some((unit) => !unitDateRange(unit).startDate)) {
+    throw new Error("Start date is required for every unit");
+  }
+
+  const building = await resolveBuilding(body);
   const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage);
 
   const recurringContract = units.some((u) => Boolean(u.recurringContractUnit))
