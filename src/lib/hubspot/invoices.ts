@@ -26,26 +26,37 @@ export type HubSpotLineItemRecord = {
   };
 };
 
-/** All invoices HubSpot currently considers paid. */
-export async function searchPaidInvoices(limit = 100): Promise<HubSpotInvoiceRecord[]> {
-  const res = await hubspotFetch("/crm/v3/objects/invoices/search", {
-    method: "POST",
-    body: JSON.stringify({
-      filterGroups: [
-        {
-          filters: [{ propertyName: "hs_invoice_status", operator: "EQ", value: "paid" }],
-        },
-      ],
-      properties: ["hs_invoice_status", "hs_number", "hs_createdate"],
-      limit,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HubSpot invoice search failed: ${res.status} ${text}`);
-  }
-  const data = (await res.json()) as { results?: HubSpotInvoiceRecord[] };
-  return data.results ?? [];
+/** All invoices HubSpot currently considers paid — paginated, since accounts
+ * can easily have 100+ paid invoices and a single unpaginated page would
+ * silently miss newer ones depending on HubSpot's default sort order (this
+ * was a real bug: a brand-new paid test invoice didn't show up in the first
+ * 100 results and was never processed). */
+export async function searchPaidInvoices(pageSize = 100): Promise<HubSpotInvoiceRecord[]> {
+  const results: HubSpotInvoiceRecord[] = [];
+  let after: string | undefined;
+
+  do {
+    const res = await hubspotFetch("/crm/v3/objects/invoices/search", {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [
+          { filters: [{ propertyName: "hs_invoice_status", operator: "EQ", value: "paid" }] },
+        ],
+        properties: ["hs_invoice_status", "hs_number", "hs_createdate"],
+        limit: pageSize,
+        ...(after ? { after } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HubSpot invoice search failed: ${res.status} ${text}`);
+    }
+    const data = (await res.json()) as { results?: HubSpotInvoiceRecord[]; paging?: { next?: { after?: string } } };
+    results.push(...(data.results ?? []));
+    after = data.paging?.next?.after;
+  } while (after);
+
+  return results;
 }
 
 type HubSpotAssociationPage = {
