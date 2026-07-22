@@ -2,7 +2,7 @@
 
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
@@ -60,7 +60,7 @@ function janitorialRowDescription(_row: ProjectTableRow) {
 // David works units in: finish what's in progress, then what's coming up,
 // with wrapped-up units sorted to the bottom out of the way.
 function lifecycleRank(row: ProjectTableRow): number {
-  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate);
+  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders));
   if (lifecycle === "ACTIVE") return 0;
   if (lifecycle === "UPCOMING") return 1;
   return 2;

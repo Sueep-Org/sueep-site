@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canSeeFinancials as checkFinancials } from "@/lib/erpAuth";
 import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
 import { ProjectsTabs } from "./ProjectsTabs";
@@ -148,7 +148,7 @@ export default async function ErpProjectsPage() {
   ]);
 
   const lifecycleRank = (p: (typeof projects)[number]) => {
-    const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null);
+    const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null, hasActiveChangeOrder(p.changeOrders));
     if (lifecycle === "ACTIVE") return 0;
     if (lifecycle === "UPCOMING") return 1;
     return 2;

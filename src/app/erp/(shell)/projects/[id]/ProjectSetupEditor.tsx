@@ -26,6 +26,7 @@ type Props = {
   erpSupervisors: ErpSupervisor[];
   projectDateIso: string | null;
   projectEndDateIso: string | null;
+  hasActiveChangeOrder?: boolean;
 };
 
 function toInputDate(iso: string | null): string {
@@ -49,12 +50,16 @@ export function ProjectSetupEditor({
   erpSupervisors,
   projectDateIso,
   projectEndDateIso,
+  hasActiveChangeOrder = false,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const currentLifecycle = useMemo(() => deriveProjectLifecycle(status, projectDateIso), [status, projectDateIso]);
+  const currentLifecycle = useMemo(
+    () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder),
+    [status, projectDateIso, hasActiveChangeOrder]
+  );
   const [lifecycle, setLifecycle] = useState<ProjectLifecycle>(currentLifecycle);
   const [startDate, setStartDate] = useState(toInputDate(projectDateIso));
   const [endDate, setEndDate] = useState(toInputDate(projectEndDateIso));

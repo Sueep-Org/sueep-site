@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
@@ -45,6 +45,7 @@ type ActivityProject = {
   percentDone: number;
   percentInvoiced: number;
   projectDate: Date | null;
+  changeOrders: { status: string }[];
 };
 
 /**
@@ -66,7 +67,7 @@ function describeProjectActivity(p: ActivityProject): { text: string; dot: strin
   if (billing === "BILLING") return { text: "Sent to billing", dot: "bg-blue-400" };
   if (p.percentInvoiced > 0) return { text: `${Math.round(p.percentInvoiced)}% invoiced`, dot: "bg-sky-400" };
   if (p.percentDone > 0) return { text: `${Math.round(p.percentDone)}% done`, dot: "bg-violet-400" };
-  if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null) === "UPCOMING") {
+  if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "UPCOMING") {
     return { text: "Scheduled to start", dot: "bg-violet-400" };
   }
   return { text: "In progress", dot: "bg-emerald-400" };
@@ -575,7 +576,7 @@ export default async function ErpDashboardPage() {
 
     const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
       prisma.project.findMany({
-        select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true },
+        select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true, changeOrders: { select: { status: true } } },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
@@ -592,6 +593,7 @@ export default async function ErpDashboardPage() {
           id: true, jobTitle: true, status: true, segment: true,
           supervisor: true, updatedAt: true, projectDate: true, billingStatus: true,
           contractValueCents: true, percentDone: true, percentInvoiced: true,
+          changeOrders: { select: { status: true } },
         },
         orderBy: { updatedAt: "desc" },
         take: 15,
@@ -623,7 +625,7 @@ export default async function ErpDashboardPage() {
     let wipCount = 0, upcomingCount = 0;
     let wipValue = 0;
     for (const p of allProjects) {
-      const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null);
+      const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders));
       if (lc === "ACTIVE") { wipCount++; wipValue += p.contractValueCents ?? 0; }
       else if (lc === "UPCOMING") upcomingCount++;
     }

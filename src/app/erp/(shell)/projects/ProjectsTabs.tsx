@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
@@ -87,7 +87,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
   }
 
   function getLifecycle(row: ProjectTableRow): Lifecycle {
-    return deriveProjectLifecycle(row.status, row.projectDate) as Lifecycle;
+    return deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders)) as Lifecycle;
   }
 
   function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {

@@ -2113,6 +2113,12 @@ export function NewProjectForm({
                 <input id="contractValue" name="contractValue" className={input} placeholder="0.00" />
               </div>
               <div>
+                <label className={label} htmlFor="estLabor">
+                  Est. labor
+                </label>
+                <input id="estLabor" name="estLabor" className={input} />
+              </div>
+              <div>
                 <label className={label} htmlFor="estMaterial">
                   Est. material
                 </label>
@@ -2123,12 +2129,6 @@ export function NewProjectForm({
                   Est. travel
                 </label>
                 <input id="estTravel" name="estTravel" className={input} />
-              </div>
-              <div>
-                <label className={label} htmlFor="estLabor">
-                  Est. labor
-                </label>
-                <input id="estLabor" name="estLabor" className={input} />
               </div>
               <div>
                 <label className={label} htmlFor="actualLabor">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canEditPricing, canEditEmployeePayInfo } from "@/lib/erpAuth";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
@@ -396,6 +397,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             erpSupervisors={erpSupervisors}
             projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
             projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
+            hasActiveChangeOrder={hasActiveChangeOrder(changeOrders)}
           />
           <hr className="my-6 border-gray-200" />
           <ProjectWorkOrderNotifier
