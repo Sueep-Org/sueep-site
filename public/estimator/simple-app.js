@@ -3032,9 +3032,93 @@ async function initApp(){
       const daysEl = document.getElementById('expectedDaysInput');
       if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
     }
+
+    _updateChangeOrder();
   }
 
   const _updateCalcCells = _updateCrewCalcs;
+
+  function _updateChangeOrder() {
+    if (document.getElementById('analysisEditForm')?.style.display === 'none') return;
+    const card = document.getElementById('changeOrderCard');
+    if (!card) return;
+
+    const n = id => parseFloat(document.getElementById(id)?.value) || 0;
+    const cleanerBilling = n('coBillingCleanerInput');
+    const supervisorBilling = n('coBillingSupervisorInput');
+    const pmBilling = n('coBillingPmInput');
+    const hoursPerDay = n('coHoursPerDayInput') || 8;
+    const materials = n('coMaterialsInput');
+    const materialsGC = n('coMaterialsGCInput');
+
+    const rates = _getRates();
+    let laborChangeOrder = 0, laborCosts = 0;
+
+    PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach(pid => {
+      const crew = _phaseCrews[pid] || [];
+      const c = _calcPhase({ crew }, rates);
+      laborCosts += c.laborCost;
+      for (const m of crew) {
+        const days = m.days || 0;
+        if (m.role === 'cleaner') laborChangeOrder += cleanerBilling * hoursPerDay * days;
+        else if (m.role === 'foreman') laborChangeOrder += supervisorBilling * hoursPerDay * days;
+        else if (m.role === 'project_manager') laborChangeOrder += pmBilling * hoursPerDay * days;
+      }
+    });
+
+    const profit = laborChangeOrder - laborCosts - materials + materialsGC;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('coLaborChangeOrderDisplay', fmt$(laborChangeOrder));
+    setText('coLaborCostsDisplay', fmt$(laborCosts));
+    setText('coMaterialsDisplay', fmt$(materials));
+    setText('coMaterialsGCDisplay', fmt$(materialsGC));
+    setText('coProfitDisplay', fmt$(profit));
+    card.style.display = '';
+  }
+
+  function showChangeOrderCard(projData) {
+    const card = document.getElementById('changeOrderCard');
+    if (!card) return;
+
+    const bd = projData?.labor_breakdown;
+    const co = bd?.change_order || {};
+    const cleanerBilling = co.cleaner_billing_rate ?? 42;
+    const supervisorBilling = co.supervisor_billing_rate ?? 47;
+    const pmBilling = co.pm_billing_rate ?? 0;
+    const hoursPerDay = co.hours_per_day ?? 8;
+    const materials = co.materials ?? 0;
+    const materialsGC = co.materials_gc ?? 0;
+
+    const rates = {
+      cleanerRate: bd?.cleaner_rate || 0,
+      foremanRate: bd?.foreman_rate || 0,
+      overhead: (bd?.overhead_pct || 0) / 100,
+      profit: (bd?.profit_pct || 0) / 100,
+      tax: (bd?.tax_pct || 0) / 100,
+      commission: (bd?.commission_pct || 0) / 100,
+    };
+
+    let laborChangeOrder = 0, laborCosts = 0;
+    for (const p of (bd?.phases || [])) {
+      const c = _calcPhase(p, rates);
+      laborCosts += c.laborCost;
+      for (const m of (p.crew || [])) {
+        const days = m.days || 0;
+        if (m.role === 'cleaner') laborChangeOrder += cleanerBilling * hoursPerDay * days;
+        else if (m.role === 'foreman') laborChangeOrder += supervisorBilling * hoursPerDay * days;
+        else if (m.role === 'project_manager') laborChangeOrder += pmBilling * hoursPerDay * days;
+      }
+    }
+
+    const profit = laborChangeOrder - laborCosts - materials + materialsGC;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('coLaborChangeOrderDisplay', fmt$(laborChangeOrder));
+    setText('coLaborCostsDisplay', fmt$(laborCosts));
+    setText('coMaterialsDisplay', fmt$(materials));
+    setText('coMaterialsGCDisplay', fmt$(materialsGC));
+    setText('coProfitDisplay', fmt$(profit));
+    card.style.display = '';
+  }
 
   function _renderPhaseTable() {
     const container = document.getElementById('phaseTableContainer');
@@ -3366,6 +3450,7 @@ async function initApp(){
     document.getElementById('analysisEditForm').style.display = 'none';
     document.getElementById('editAnalysisBtn').style.display = '';
     card.style.display = 'block';
+    showChangeOrderCard(projData);
     renderSovCard();
   }
 
@@ -3494,6 +3579,18 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
 
+    // Change Order billing rates
+    const co = bd?.change_order || {};
+    setVal('coBillingCleanerInput', co.cleaner_billing_rate ?? 42);
+    setVal('coBillingSupervisorInput', co.supervisor_billing_rate ?? 47);
+    setVal('coBillingPmInput', co.pm_billing_rate ?? 0);
+    setVal('coHoursPerDayInput', co.hours_per_day ?? 8);
+    setVal('coMaterialsInput', co.materials !== undefined ? co.materials : '');
+    setVal('coMaterialsGCInput', co.materials_gc !== undefined ? co.materials_gc : '');
+    ['coBillingCleanerInput', 'coBillingSupervisorInput', 'coBillingPmInput', 'coHoursPerDayInput', 'coMaterialsInput', 'coMaterialsGCInput']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', _updateChangeOrder); });
+    _updateChangeOrder();
+
     // ZIP manual lookup button
     const taxZipLookupBtn = document.getElementById('taxZipLookupBtn');
     if (taxZipLookupBtn) taxZipLookupBtn.onclick = async () => {
@@ -3597,6 +3694,7 @@ async function initApp(){
       const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
       const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
+      const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
         foreman_rate: rates.foremanRate,
@@ -3605,6 +3703,14 @@ async function initApp(){
         tax_pct: taxPct,
         commission_pct: commPct,
         phases,
+        change_order: {
+          cleaner_billing_rate: pf('coBillingCleanerInput') || 42,
+          supervisor_billing_rate: pf('coBillingSupervisorInput') || 47,
+          pm_billing_rate: pf('coBillingPmInput'),
+          hours_per_day: pf('coHoursPerDayInput') || 8,
+          materials: pf('coMaterialsInput'),
+          materials_gc: pf('coMaterialsGCInput'),
+        },
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
