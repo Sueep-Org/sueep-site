@@ -1,3 +1,5 @@
+import { turnoverHoursBudget } from "@/lib/erp/turnoverHoursBudget";
+
 type Props = {
   unitNumber: string | null;
   bedrooms: number | null;
@@ -10,6 +12,7 @@ type Props = {
   ceilingPaint: boolean;
   otherWork: boolean;
   otherDescription: string | null;
+  contractValueCents: number | null;
 };
 
 function Check() {
@@ -33,6 +36,7 @@ export function UnitScopeCard({
   ceilingPaint,
   otherWork,
   otherDescription,
+  contractValueCents,
 }: Props) {
   const workItems = [
     fullClean ? "Full Clean" : null,
@@ -86,6 +90,24 @@ export function UnitScopeCard({
         </div>
       ) : (
         <div className="px-4 py-3 text-sm text-gray-400">No work items selected.</div>
+      )}
+
+      {contractValueCents != null && contractValueCents > 0 && (
+        <div className="px-4 py-3 border-t border-gray-100">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-2">
+            Crew hours budget (target: 50% margin)
+          </p>
+          <div className="flex gap-4">
+            {[1, 2, 3].map((crewSize) => (
+              <div key={crewSize} className="text-sm">
+                <span className="text-gray-500">{crewSize} worker{crewSize > 1 ? "s" : ""}:</span>{" "}
+                <span className="font-semibold text-gray-800">
+                  {turnoverHoursBudget(contractValueCents, crewSize).toFixed(1)} hrs
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import {
+  turnoverTotalHoursBudget,
+  turnoverImpliedMarginPct,
+  turnoverMarginSeverity,
+  type TurnoverMarginSeverity,
+} from "@/lib/erp/turnoverHoursBudget";
 
 export type LaborRow = {
   id: string;
@@ -262,6 +268,7 @@ export function ProjectLaborSection({
   safetyPassedKeys = [],
   hasApprovedCheckToday,
   requiresSafetyCheck = true,
+  contractValueCents = null,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -273,12 +280,22 @@ export function ProjectLaborSection({
   safetyPassedKeys?: string[];
   hasApprovedCheckToday?: boolean;
   requiresSafetyCheck?: boolean;
+  /** Turnovers only, powers the hours-budget callout below. */
+  contractValueCents?: number | null;
 }) {
   const router = useRouter();
   const passedKeySet = new Set(safetyPassedKeys);
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [pendingOverBudget, setPendingOverBudget] = useState<{
+    form: HTMLFormElement;
+    hours: number;
+    projectedHours: number;
+    projectedMarginPct: number;
+    severity: TurnoverMarginSeverity;
+  } | null>(null);
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
   const [roleStr, setRoleStr] = useState("");
@@ -424,6 +441,19 @@ export function ProjectLaborSection({
       setError("Clock-out must be after clock-in.");
       return;
     }
+    if (hoursBudget != null && contractValueCents) {
+      const projectedHours = totalHoursLogged + hours;
+      const projectedMarginPct = turnoverImpliedMarginPct(contractValueCents, projectedHours);
+      const severity = turnoverMarginSeverity(projectedMarginPct);
+      if (severity !== "on-track") {
+        setPendingOverBudget({ form, hours, projectedHours, projectedMarginPct, severity });
+        return;
+      }
+    }
+    await submitLaborEntry(form, hours);
+  }
+
+  async function submitLaborEntry(form: HTMLFormElement, hours: number) {
     setLoading(true);
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
@@ -534,6 +564,11 @@ export function ProjectLaborSection({
 
   const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.regHours, e.otHours, e.hourlyRateCents), 0);
 
+  const totalHoursLogged = entries.reduce((s, e) => s + (e.regHours + e.otHours), 0);
+  const hoursBudget = isJanitorialUnit && contractValueCents ? turnoverTotalHoursBudget(contractValueCents) : null;
+  const impliedMarginPct = hoursBudget != null ? turnoverImpliedMarginPct(contractValueCents!, totalHoursLogged) : null;
+  const marginSeverity = impliedMarginPct != null ? turnoverMarginSeverity(impliedMarginPct) : null;
+
   const visibleEntries = entries.filter((r) => {
     if (filterDate) {
       const rowDate = new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
@@ -553,6 +588,49 @@ export function ProjectLaborSection({
   return (
     <>
     <div className="space-y-6">
+      {hoursBudget != null && impliedMarginPct != null && (
+        <div
+          className={
+            marginSeverity === "bad"
+              ? "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+              : marginSeverity === "watch"
+                ? "flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                : "flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+          }
+        >
+          {marginSeverity !== "on-track" && (
+            <span
+              className={
+                marginSeverity === "bad"
+                  ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white"
+                  : "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
+              }
+            >
+              !
+            </span>
+          )}
+          <div>
+            <p
+              className={
+                marginSeverity === "bad"
+                  ? "text-sm font-medium text-red-800"
+                  : marginSeverity === "watch"
+                    ? "text-sm font-medium text-amber-800"
+                    : "text-sm text-gray-600"
+              }
+            >
+              {marginSeverity === "bad"
+                ? `Well over the hours budget. This job is on track to lose money on labor (~${impliedMarginPct.toFixed(0)}% margin).`
+                : marginSeverity === "watch"
+                  ? `Over the recommended hours budget. Margin is trending below the 50% target (~${impliedMarginPct.toFixed(0)}%).`
+                  : "On track for the 50% margin target."}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {totalHoursLogged.toFixed(1)} hrs logged of a {hoursBudget.toFixed(1)} hr budget
+            </p>
+          </div>
+        </div>
+      )}
       {requiresSafetyCheck && hasApprovedCheckToday === false && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
@@ -561,8 +639,17 @@ export function ProjectLaborSection({
           </p>
         </div>
       )}
-      {canEdit && <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+      {canEdit && showAddForm && <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(false)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Close
+          </button>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
           &quot;Other&quot; only when the worker is not in the list.
@@ -701,20 +788,33 @@ export function ProjectLaborSection({
       </form>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          {showFinancials && (
-            <p className="text-sm text-gray-700">
-              {filterDate || filterLaborer ? (
-                <>
-                  Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
-                  <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalLaborCents)})</span>
-                </>
-              ) : (
-                <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span></>
-              )}
-            </p>
-          )}
+          <div className="flex items-center gap-3">
+            {showFinancials && (
+              <p className="text-sm text-gray-700">
+                {filterDate || filterLaborer ? (
+                  <>
+                    Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                    <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalLaborCents)})</span>
+                  </>
+                ) : (
+                  <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span></>
+                )}
+              </p>
+            )}
+            {canEdit && !showAddForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                aria-label="Add labor entry"
+                title="Add labor entry"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-lg font-semibold leading-none text-white shadow hover:bg-pink-500"
+              >
+                +
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-3">
@@ -965,6 +1065,66 @@ export function ProjectLaborSection({
         </div>
       </div>
     </div>
+
+    {pendingOverBudget ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setPendingOverBudget(null)}
+      >
+        <div
+          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
+                pendingOverBudget.severity === "bad" ? "bg-red-500" : "bg-amber-400"
+              }`}
+            >
+              !
+            </span>
+            <h3 className="text-sm font-semibold text-gray-800">
+              {pendingOverBudget.severity === "bad" ? "This puts the job in the red" : "This goes over budget"}
+            </h3>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums text-gray-900">
+              {pendingOverBudget.projectedHours.toFixed(1)}
+            </span>
+            <span className="text-sm text-gray-500">of {hoursBudget?.toFixed(1)} hr budget</span>
+          </div>
+          <p
+            className={`mt-1 text-sm font-medium ${
+              pendingOverBudget.severity === "bad" ? "text-red-600" : "text-amber-600"
+            }`}
+          >
+            ~{pendingOverBudget.projectedMarginPct.toFixed(0)}% margin (target: 50%)
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingOverBudget(null)}
+              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const p = pendingOverBudget;
+                setPendingOverBudget(null);
+                submitLaborEntry(p.form, p.hours);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
+                pendingOverBudget.severity === "bad" ? "bg-red-600 hover:bg-red-700" : "bg-amber-500 hover:bg-amber-600"
+              }`}
+            >
+              Add anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
 
     {qualityPopup ? (
       <div

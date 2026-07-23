@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
+import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -49,6 +50,8 @@ export async function POST(req: Request) {
       select: {
         id: true,
         jobTitle: true,
+        turnoverRequestId: true,
+        contractValueCents: true,
         building: { select: { address: true } },
         workOrderRecord: { select: { siteAddress: true } },
       },
@@ -61,6 +64,18 @@ export async function POST(req: Request) {
   // Building.address has far broader coverage than the work-order siteAddress
   // (most projects are linked to a Building), so prefer it and fall back.
   const location = project.building?.address || project.workOrderRecord?.siteAddress || undefined;
+
+  // Turnovers only, for now. The crew-hours budget assumes the turnover
+  // pricing model (contractValueCents ~= 2x target labor cost). Non-turnover
+  // projects (recurring contracts, PDF-estimator commercial jobs) don't have
+  // that relationship and would need their own derivation.
+  let hoursBudgetText: string | null = null;
+  if (project.turnoverRequestId && project.contractValueCents) {
+    const scheduledCrewSize = await prisma.projectWorkerDayAssignment.count({
+      where: { projectId, date },
+    });
+    hoursBudgetText = formatTurnoverHoursBudgetText(project.contractValueCents, scheduledCrewSize);
+  }
 
   // Assigning a supervisor here also makes them the project's supervisor on
   // the project details page (Project.supervisorUserId) — same field the
@@ -81,23 +96,31 @@ export async function POST(req: Request) {
   // a duplicate. Email delivery failures shouldn't block the assignment.
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+    const descriptionLines = [
+      `Project: ${project.jobTitle}`,
+      ...(hoursBudgetText ? ["", hoursBudgetText] : []),
+      ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
+    ];
     const ics = buildDayAssignmentInvite({
       uid: `day-assignment-${assignment.id}@sueep.com`,
       dateKey: dayKey(assignment.date),
       startTime: assignment.startTime,
       endTime: assignment.endTime,
       summary: `Supervising: ${project.jobTitle}`,
-      description: appUrl ? `Project: ${project.jobTitle}\n${appUrl}/erp/projects/${projectId}` : `Project: ${project.jobTitle}`,
+      description: descriptionLines.join("\n"),
       location,
       url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
       organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
       organizerName: "Sueep Schedule",
       attendeeEmail: supervisor.email,
     });
+    const budgetHtml = hoursBudgetText
+      ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>`
+      : "";
     await sendEmail({
       to: supervisor.email,
       subject: `You're assigned: ${project.jobTitle} on ${dayKey(assignment.date)}`,
-      html: `<p>You've been assigned to <strong>${project.jobTitle}</strong> on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>`,
+      html: `<p>You've been assigned to <strong>${project.jobTitle}</strong> on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
     });
   } catch (e) {

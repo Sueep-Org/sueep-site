@@ -410,7 +410,6 @@ export function ProjectFinancialsEditor({
                       <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
                         {(laborCentsFromLogs / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
                       </div>
-                      <p className="mt-0.5 text-xs text-emerald-600">Calculated from work logs (Rate/hr × hours)</p>
                     </>
                   ) : (
                     <>
@@ -452,7 +451,6 @@ export function ProjectFinancialsEditor({
                       <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
                         {hoursFromLogs.toFixed(2)}
                       </div>
-                      <p className="mt-0.5 text-xs text-emerald-600">Calculated from work logs</p>
                     </>
                   ) : (
                     <>

@@ -380,6 +380,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 ceilingPaint={project.turnoverRequest.ceilingPaint}
                 otherWork={project.turnoverRequest.otherWork}
                 otherDescription={project.turnoverRequest.otherDescription}
+                contractValueCents={project.contractValueCents}
               />
             </div>
           )}
@@ -517,7 +518,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} contractValueCents={project.contractValueCents} />,
     },
     {
       label: "Contractors",
