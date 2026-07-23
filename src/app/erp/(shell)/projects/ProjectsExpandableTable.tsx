@@ -175,6 +175,22 @@ function sumProjects(rows: ProjectTableRow[], selector: (row: ProjectTableRow) =
   return rows.reduce((sum, row) => sum + (selector(row) ?? 0), 0);
 }
 
+/** Job/building titles and PM names are often "Name - extra detail - company"
+ * (e.g. "The Gio Apartments - 2630 W Girard Ave... - Cushman & Wakefield") —
+ * in these narrow columns, cut at the first " - " separator rather than
+ * letting CSS ellipsis chop it mid-word wherever it happens to overflow.
+ * Requires spaces around the hyphen so it doesn't false-match a hyphen
+ * that's actually part of the name itself, like a street range ("20-30 W
+ * Allens Ln") or a unit range ("2000-2039"). Only shortens text that
+ * actually has a " - " to cut at; anything else is left for the `truncate`
+ * class to ellipsis normally. */
+function truncateAtHyphen(text: string): string {
+  const idx = text.indexOf(" - ");
+  if (idx === -1) return text;
+  const before = text.slice(0, idx).trim();
+  return before || text;
+}
+
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
   return (
@@ -283,7 +299,7 @@ function SubRowTitleCell({
   title: string;
 }) {
   return (
-    <td className="w-[340px] min-w-[340px] bg-gray-50 px-3 py-1.5">
+    <td className="w-[280px] min-w-[280px] bg-gray-50 px-3 py-1.5">
       <div className="flex items-center gap-2 pl-4">
         <span className="shrink-0 text-gray-300">&gt;</span>
         {badge ? (
@@ -298,8 +314,9 @@ function SubRowTitleCell({
           href={href}
           onClick={(e) => e.stopPropagation()}
           className="truncate text-sm font-medium text-gray-700 hover:underline"
+          title={title}
         >
-          {title}
+          {truncateAtHyphen(title)}
         </Link>
       </div>
     </td>
@@ -571,8 +588,8 @@ export function ProjectsExpandableTable({
       <table className={`w-full text-left text-sm ${canSeeFinancials ? "min-w-[1600px]" : "min-w-[820px]"}`}>
         <thead className="sticky top-0 z-10 border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
-            <th className="w-[340px] min-w-[340px] px-3 py-2 font-semibold">Job</th>
-            <th className="w-[160px] min-w-[160px] px-3 py-2 font-semibold">PM</th>
+            <th className="w-[280px] min-w-[280px] px-3 py-2 font-semibold">Job</th>
+            <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">PM</th>
             {canSeeFinancials && (
               <th className="px-3 py-2 font-semibold" title="Base contract value plus non-void/rejected change orders">
                 Contract
@@ -634,26 +651,27 @@ export function ProjectsExpandableTable({
                     }}
                     aria-expanded={collapsibleGroups ? groupIsOpen : undefined}
                   >
-                    <td className="w-[340px] min-w-[340px] px-3 py-2">
+                    <td className="w-[280px] min-w-[280px] px-3 py-2">
                       {groupActualCost !== 0 && groupMargin != null && groupMargin < 0 ? <MarginWarningIcon /> : null}
                       {groupHref ? (
                         <Link
                           href={groupHref}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-medium text-emerald-600 hover:underline"
+                          className="block truncate font-medium text-emerald-600 hover:underline"
+                          title={groupTitle}
                         >
-                          {groupTitle}
+                          {truncateAtHyphen(groupTitle)}
                         </Link>
                       ) : (
-                        <span className="font-medium text-emerald-600">
-                          {groupTitle}
+                        <span className="block truncate font-medium text-emerald-600" title={groupTitle}>
+                          {truncateAtHyphen(groupTitle)}
                         </span>
                       )}
                       <p className="mt-0.5 text-xs text-gray-500">
                         {groupCount} unit{groupCount !== 1 ? "s" : ""}
                       </p>
                     </td>
-                    <td className="w-[160px] min-w-[160px] px-3 py-2 text-gray-400">
+                    <td className="w-[130px] min-w-[130px] px-3 py-2 text-gray-400">
                       -
                     </td>
                     {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
@@ -700,7 +718,7 @@ export function ProjectsExpandableTable({
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse" : "Expand"}
                 >
-                  <td className="w-[340px] min-w-[340px] px-3 py-2">
+                  <td className="w-[280px] min-w-[280px] px-3 py-2">
                     <div className={`flex items-center gap-1.5 ${currentGroupTitle ? "pl-4" : ""}`}>
                       {currentGroupTitle && (
                         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-gray-400">
@@ -713,23 +731,28 @@ export function ProjectsExpandableTable({
                         <Link
                           href={`/erp/projects/${p.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className={`font-medium ${styles.titleLink}`}
+                          className={`block truncate font-medium ${styles.titleLink}`}
+                          title={rowTitle}
                         >
-                          {rowTitle}
+                          {truncateAtHyphen(rowTitle)}
                         </Link>
                         {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
                       </div>
                     </div>
                   </td>
-                  <td className="w-[160px] min-w-[160px] px-3 py-2 text-gray-900">
+                  <td className="w-[130px] min-w-[130px] px-3 py-2 text-gray-900">
                     {(() => {
                       const isTurnover = p.segment === "JANITORIAL_TURNOVER_REQUESTS";
                       const sueepPm = isTurnover ? (p.supervisor || getDescriptionLine(p.description, "SUEEP PM")) : p.supervisor;
                       const pm = isTurnover ? getDescriptionLine(p.description, "Property Manager/Maintenance Manager") : null;
                       return (
                         <>
-                          {sueepPm ? <span>{sueepPm}</span> : <span className="text-gray-400">Unassigned</span>}
-                          {pm ? <p className="text-xs text-gray-500">{pm}</p> : null}
+                          {sueepPm ? (
+                            <span className="block truncate" title={sueepPm}>{truncateAtHyphen(sueepPm)}</span>
+                          ) : (
+                            <span className="text-gray-400">Unassigned</span>
+                          )}
+                          {pm ? <p className="truncate text-xs text-gray-500" title={pm}>{truncateAtHyphen(pm)}</p> : null}
                         </>
                       );
                     })()}
@@ -803,8 +826,8 @@ export function ProjectsExpandableTable({
                               title={co.title}
                             />
                             {/* PM */}
-                            <td className="w-[160px] min-w-[160px] px-3 py-1.5 text-sm text-gray-700">
-                              {co.supervisor || <span className="text-gray-400">-</span>}
+                            <td className="w-[130px] min-w-[130px] truncate px-3 py-1.5 text-sm text-gray-700" title={co.supervisor ?? undefined}>
+                              {co.supervisor ? truncateAtHyphen(co.supervisor) : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Contract -> contract value */}
                             {canSeeFinancials && (

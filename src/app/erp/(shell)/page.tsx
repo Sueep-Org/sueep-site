@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
+import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
@@ -21,6 +22,11 @@ function centsToDollarsShort(cents: number | null): string {
   if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
   if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(0)}k`;
   return `$${dollars.toFixed(0)}`;
+}
+
+/** Same as centsToDollarsShort but puts the minus sign before the $, not after it. */
+function signedDollarsShort(cents: number): string {
+  return cents < 0 ? `-${centsToDollarsShort(-cents)}` : centsToDollarsShort(cents);
 }
 
 function greeting() {
@@ -576,7 +582,21 @@ export default async function ErpDashboardPage() {
 
     const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
       prisma.project.findMany({
-        select: { id: true, status: true, projectDate: true, contractValueCents: true, segment: true, changeOrders: { select: { status: true } } },
+        select: {
+          id: true, jobTitle: true, status: true, projectDate: true, contractValueCents: true, segment: true,
+          actualLaborCents: true, actualMaterialCents: true,
+          laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+          materialEntries: { select: { costCents: true } },
+          contractorAssignments: { select: { costCents: true } },
+          changeOrders: {
+            select: {
+              status: true, contractValueCents: true, estimatedCostCents: true,
+              actualLaborCents: true, actualMaterialCents: true,
+              materialEntries: { select: { costCents: true } },
+              laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+            },
+          },
+        },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
@@ -629,6 +649,26 @@ export default async function ErpDashboardPage() {
       if (lc === "ACTIVE") { wipCount++; wipValue += p.contractValueCents ?? 0; }
       else if (lc === "UPCOMING") upcomingCount++;
     }
+
+    // Bad margins — ACTUAL cost vs. contract, computed the exact same way
+    // (OT-aware labor from logs + contractor cost + rolled-up change orders)
+    // as the Projects table itself, via the shared
+    // computeProjectActualsWithChangeOrders — so this and the table can
+    // never quietly disagree on a project's real margin again. Flags
+    // anything under a 10% margin, not just negative.
+    const BAD_MARGIN_THRESHOLD_PCT = 10;
+    const projectActuals = await computeProjectActualsWithChangeOrders(allProjects);
+    const badMarginProjects = allProjects
+      .map((p) => {
+        const actuals = projectActuals.get(p.id);
+        if (!actuals || actuals.contractValueCents == null || actuals.contractValueCents === 0 || actuals.marginCents == null) return null;
+        const marginPct = Math.round((actuals.marginCents / actuals.contractValueCents) * 100);
+        if (marginPct >= BAD_MARGIN_THRESHOLD_PCT) return null;
+        return { id: p.id, jobTitle: p.jobTitle, marginCents: actuals.marginCents, marginPct };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .sort((a, b) => a.marginCents - b.marginCents)
+      .slice(0, 8);
 
     // Employee compliance
     const activeEmployees = employees.filter((e) => e.status === "ACTIVE");
@@ -840,6 +880,35 @@ export default async function ErpDashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Bad margins — financial data, so only shown to roles that can see it */}
+        {showFinancials && (
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders) under 10%">Bad margins</h2>
+              {badMarginProjects.length > 0 && (
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{badMarginProjects.length}</span>
+              )}
+            </div>
+            {badMarginProjects.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No projects under a 10% margin.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {badMarginProjects.map((p) => (
+                  <li key={p.id}>
+                    <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <p className="min-w-0 truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs font-semibold text-red-600">{signedDollarsShort(p.marginCents)}</p>
+                        {p.marginPct != null && <p className="text-[11px] text-gray-400">{p.marginPct}%</p>}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Activity feed */}
         <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">

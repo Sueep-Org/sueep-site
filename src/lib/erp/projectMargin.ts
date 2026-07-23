@@ -44,3 +44,62 @@ export async function computeProjectMargins(projects: ProjectMarginInput[]): Pro
   }
   return result;
 }
+
+type ChangeOrderLine = {
+  status: string;
+  contractValueCents: number | null;
+  estimatedCostCents: number | null;
+  actualLaborCents: number | null;
+  actualMaterialCents: number | null;
+  materialEntries: { costCents: number }[];
+  laborers: LaborLine[];
+};
+
+export type ProjectActualsInput = ProjectMarginInput & { changeOrders: ChangeOrderLine[] };
+export type ProjectActuals = { contractValueCents: number | null; actualLaborCents: number; actualMaterialCents: number; marginCents: number | null };
+
+/**
+ * Same as computeProjectMargins, but also rolls up qualifying (non-void,
+ * non-rejected) change orders into both the contract value and actual cost
+ * — this is the exact methodology the Projects table itself uses (see
+ * `rows.map` in projects/page.tsx). Kept as one shared implementation so
+ * the table and anything else showing "margin" (the dashboard's Bad
+ * margins widget, in particular) can never quietly drift apart on what a
+ * project's real cost is, the way they did before this function existed.
+ */
+export async function computeProjectActualsWithChangeOrders(
+  projects: ProjectActualsInput[]
+): Promise<Map<string, ProjectActuals>> {
+  const otSplits = await calcOtSplits([
+    ...projects.flatMap((p) => p.laborEntries),
+    ...projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
+  ]);
+  const result = new Map<string, ProjectActuals>();
+  for (const p of projects) {
+    const laborCents = otAwareLaborCents(p.laborEntries, otSplits);
+    const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
+    const contractorCostCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+    const baseActualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
+    const baseActualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
+
+    const qualifyingCOs = p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
+    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0), 0);
+    const coActualMaterialCents = qualifyingCOs.reduce((s, co) => {
+      const mat = co.materialEntries.reduce((ms, e) => ms + e.costCents, 0);
+      return s + (mat > 0 ? mat : (co.actualMaterialCents ?? 0));
+    }, 0);
+    const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
+      const lab = otAwareLaborCents(co.laborers, otSplits);
+      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0));
+    }, 0);
+
+    const contractValueCents =
+      p.contractValueCents == null && coContractValueCents === 0 ? null : (p.contractValueCents ?? 0) + coContractValueCents;
+    const actualLaborCents = baseActualLaborCents + coActualLaborCents;
+    const actualMaterialCents = baseActualMaterialCents + coActualMaterialCents;
+    const marginCents = contractValueCents == null ? null : contractValueCents - (actualLaborCents + actualMaterialCents);
+
+    result.set(p.id, { contractValueCents, actualLaborCents, actualMaterialCents, marginCents });
+  }
+  return result;
+}
