@@ -483,12 +483,66 @@ async function initApp(){
     return String(value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  function formatStandardScaleDenominator(denominator) {
+    const numeric = Number(denominator);
+    if (!Number.isFinite(numeric) || numeric <= 0) return null;
+
+    if (numeric >= 1 && Number.isInteger(numeric)) {
+      return `1/${numeric}`;
+    }
+
+    const cleaned = Number(numeric.toFixed(4));
+    if (!Number.isFinite(cleaned) || cleaned <= 0) return null;
+
+    return `1/${cleaned}`;
+  }
+
+  function standardizeScaleExpression(expression = '') {
+    const normalized = normalizeTextLine(expression)
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!normalized) return null;
+
+    const ratioMatch = normalized.match(/^([^=]+?)\s*(?:=|:|to)\s*([^=]+)$/i);
+    if (!ratioMatch) return null;
+
+    const leftText = ratioMatch[1].trim();
+    const rightText = ratioMatch[2].trim();
+    const leftInches = parseMeasurementToInches(leftText);
+    const rightInches = parseMeasurementToInches(rightText);
+    if (!Number.isFinite(leftInches) || leftInches <= 0 || !Number.isFinite(rightInches) || rightInches <= 0) {
+      return null;
+    }
+
+    const leftIsFeet = /(?:ft|feet|foot|')/.test(leftText);
+    const rightIsFeet = /(?:ft|feet|foot|')/.test(rightText);
+
+    if (!leftIsFeet && !rightIsFeet) {
+      const feetPerDrawingInch = (rightInches / leftInches) / 12;
+      const denominator = formatStandardScaleDenominator(feetPerDrawingInch);
+      return denominator ? `${denominator} in = 1 ft` : null;
+    }
+
+    const drawingFeet = leftIsFeet ? leftInches / 12 : leftInches;
+    const realFeet = rightIsFeet ? rightInches / 12 : rightInches / 12;
+    const feetPerDrawingInch = realFeet / drawingFeet;
+    const denominator = formatStandardScaleDenominator(feetPerDrawingInch);
+    return denominator ? `${denominator} in = 1 ft` : null;
+  }
+
   function normalizeScaleExpressionCandidate(expression, fallbackText = '') {
     const rawText = normalizeTextLine(expression ?? fallbackText ?? '');
     if (!rawText) return null;
 
     const compacted = rawText.replace(/\s+/g, ' ').trim();
     if (!compacted) return null;
+
+    const standardized = standardizeScaleExpression(compacted);
+    if (standardized) {
+      return standardized;
+    }
 
     if (/(?:=|:|to)/.test(compacted) || /(?:in|inch|inches|ft|feet|foot|['"])/.test(compacted)) {
       return compacted;
@@ -605,16 +659,27 @@ async function initApp(){
 
     if (!normalized) return '';
 
+    const genericSummaryPatterns = [
+      /\bstatement\b.*\brenovation\b/i,
+      /\bthis\b.*\bincludes\b.*\brenovation\b/i,
+      /\brenovation\b/i
+    ];
+    if (genericSummaryPatterns.some((pattern) => pattern.test(normalized))) {
+      return 'Renovation';
+    }
+
     const stopWords = new Set([
       'the', 'and', 'of', 'for', 'with', 'to', 'in', 'on', 'from', 'a', 'an',
-      'project', 'code', 'summary', 'data', 'section', 'table', 'measurements', 'measurement'
+      'project', 'code', 'summary', 'data', 'section', 'table', 'measurements', 'measurement',
+      'statement', 'includes', 'description'
     ]);
     const descriptiveWhitelist = new Set([
       'suite', 'floor', 'ground', 'level', 'main', 'upper', 'lower', 'mezzanine', 'basement',
       'garage', 'deck', 'patio', 'porch', 'yard', 'room', 'hall', 'entry', 'office',
       'storage', 'bath', 'bathroom', 'kitchen', 'living', 'dining', 'bedroom', 'wall',
       'ceiling', 'window', 'door', 'exterior', 'interior', 'front', 'rear', 'side',
-      'north', 'south', 'east', 'west', 'total', 'area', 'gross', 'net'
+      'north', 'south', 'east', 'west', 'total', 'area', 'gross', 'net', 'access', 'restroom',
+      'family'
     ]);
 
     const words = normalized
@@ -701,9 +766,21 @@ async function initApp(){
   function looksLikeAddress(text) {
     const clean = normalizeTextLine(text);
     if (!clean) return false;
-    const hasNumber = /\d/.test(clean);
-    const hasStreetType = /\b(?:st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|way|ct|court|ter|terrace|pkwy|parkway|trl|trail|cir|circle|hwy|highway)\b/i.test(clean);
-    return hasNumber && hasStreetType;
+
+    const compact = clean
+      .replace(/[^\w\s#.,-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!compact) return false;
+    if (/\b(?:sf|sq\.?\s*ft|square feet|square footage|area|total|gross|building|project|code|summary|table|measurement|measurements)\b/i.test(compact)) return false;
+    if (/^\d+(?:st|nd|rd|th)?\s+(?:floor|level|suite|unit|apt|room|building|bldg)\b/i.test(compact)) return false;
+
+    const startsWithStreetNumber = /^#?\d{1,5}(?:\s*[/-]\s*\d{1,5})?(?:\s*[a-z])?/i.test(compact);
+    const hasStreetType = /\b(?:st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|ln|lane|way|ct|court|ter|terrace|pkwy|parkway|trl|trail|cir|circle|hwy|highway|pl|place|sq|square|loop|row|pike|rte|route|expy|expressway|byp|bypass)\b/i.test(compact);
+    const tokenCount = compact.split(/\s+/).filter(Boolean).length;
+
+    return startsWithStreetNumber && hasStreetType && tokenCount <= 12;
   }
 
   function inferProjectNameFromLines(entries = []) {
@@ -711,7 +788,40 @@ async function initApp(){
   }
 
   function inferAddressFromLines(entries = []) {
-    return null;
+    const candidates = [];
+    const seen = new Set();
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const line = normalizeTextLine(entry?.text ?? entry);
+      if (!line) continue;
+
+      const nextLine = normalizeTextLine(entries[i + 1]?.text ?? entries[i + 1]);
+      const nextNextLine = normalizeTextLine(entries[i + 2]?.text ?? entries[i + 2]);
+      const candidateTexts = [
+        line,
+        [line, nextLine].filter(Boolean).join(' '),
+        [line, nextLine, nextNextLine].filter(Boolean).join(' '),
+      ];
+
+      candidateTexts.forEach((candidateText) => {
+        const normalizedCandidate = normalizeTextLine(candidateText);
+        if (!normalizedCandidate) return;
+        if (seen.has(normalizedCandidate.toLowerCase())) return;
+        if (!looksLikeAddress(normalizedCandidate)) return;
+        seen.add(normalizedCandidate.toLowerCase());
+        candidates.push({ text: normalizedCandidate, page: entry?.page || 1 });
+      });
+    }
+
+    if (!candidates.length) return null;
+
+    candidates.sort((a, b) => {
+      if (a.text.length !== b.text.length) return a.text.length - b.text.length;
+      return a.page - b.page;
+    });
+
+    return candidates[0].text;
   }
 
   function inferTotalAreaFromLines(entries = []) {
@@ -834,14 +944,23 @@ async function initApp(){
       .replace(/[:\-–—]/g, ' ')
       .trim();
 
-    if (!labelText || /^(total|area|square feet|sq ft|sf|project data|code summary)$/i.test(labelText)) {
+    const compactLabel = compactMeasurementLabel(labelText);
+    const fallbackLabel = compactLabel || (labelText.split(/\s+/).filter(Boolean).length > 1 ? labelText : '');
+    const isGenericLabel = /^(total|area|square feet|sq ft|sf|project data|code summary)$/i.test(labelText);
+
+    if (!fallbackLabel && isGenericLabel) {
+      return {
+        label: 'Total Area',
+        value: `${numericMatch[1]} ${unitMatch[1].replace(/\s+/g, ' ').trim()}`
+      };
+    }
+
+    if (!fallbackLabel) {
       return null;
     }
 
-    const compactLabel = compactMeasurementLabel(labelText);
-
     return {
-      label: compactLabel || (labelText.split(/\s+/).filter(Boolean).length > 1 ? labelText : ''),
+      label: fallbackLabel,
       value: `${numericMatch[1]} ${unitMatch[1].replace(/\s+/g, ' ').trim()}`
     };
   }
@@ -860,9 +979,8 @@ async function initApp(){
       rows.push({ label: normalizedLabel, value: normalizedValue, page, sourceEntry });
     };
 
-    const relevantEntries = entries.filter((entry) => (entry?.page || 1) === 1);
-    const tableRanges = findMeasurementTableRanges(relevantEntries.length ? relevantEntries : entries);
-    if (!tableRanges.length) return rows;
+    const relevantEntries = Array.isArray(entries) ? entries : [];
+    const tableRanges = findMeasurementTableRanges(relevantEntries);
 
     tableRanges.forEach((range) => {
       for (let i = range.start; i < range.end; i += 1) {
@@ -878,11 +996,32 @@ async function initApp(){
       }
     });
 
+    if (!rows.length) {
+      for (let i = 0; i < relevantEntries.length; i += 1) {
+        const line = normalizeTextLine(relevantEntries[i]?.text ?? relevantEntries[i]);
+        if (!line) continue;
+
+        const nextLine = normalizeTextLine(relevantEntries[i + 1]?.text ?? relevantEntries[i + 1]);
+        const combined = [line, nextLine].filter(Boolean).join(' ');
+        const parsedRow = parseTableAreaRow(combined) || parseTableAreaRow(line);
+        if (!parsedRow) continue;
+
+        addRow(parsedRow.label, parsedRow.value, relevantEntries[i]?.page || 1, relevantEntries[i] || null);
+      }
+    }
+
     return rows;
   }
 
-  function inferExtractedMeasurements(entries = []) {
-    return inferSquareFootageRows(entries);
+  function inferExtractedMeasurements(entries = [], totalArea = null) {
+    const rows = inferSquareFootageRows(entries);
+    if (Number.isFinite(totalArea) && totalArea > 0) {
+      const hasTotalRow = rows.some((row) => /^(total area|total)$/i.test(row.label || ''));
+      if (!hasTotalRow) {
+        rows.unshift({ label: 'Total Area', value: `${totalArea} SF`, page: 1, sourceEntry: null });
+      }
+    }
+    return rows;
   }
 
   async function extractPdfMetadataFromFile(file) {
@@ -908,7 +1047,7 @@ async function initApp(){
       const projectName = inferProjectNameFromLines(entries);
       const address = inferAddressFromLines(entries);
       const totalArea = inferTotalAreaFromLines(entries);
-      const extractedMeasurements = inferExtractedMeasurements(entries);
+      const extractedMeasurements = inferExtractedMeasurements(entries, totalArea);
       const detectedScale = inferScaleInfoFromEntries(entries);
 
       return { projectName, address, totalArea, extractedMeasurements, pdfTextEntries: entries, detectedScale };
@@ -3115,7 +3254,7 @@ async function initApp(){
     if (!card) return;
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-    const resolvedAddress = _pdfMetadataSummary?.address || projData.address || '';
+    const resolvedAddress = [projData.address, _pdfMetadataSummary?.address].find((value) => normalizeTextLine(value)) || '';
     const resolvedArea = _pdfMetadataSummary?.totalArea ?? projData.total_area;
     const resolvedName = _pdfMetadataSummary?.projectName || projData.name || '';
 
@@ -3334,7 +3473,7 @@ async function initApp(){
       if (totalAreaModifyBtn) totalAreaModifyBtn.style.display = '';
       _regenPhasesFromAreaInput();
     };
-    setVal('analysisAddressInput', _pdfMetadataSummary?.address || _loadedProjectData.address);
+    setVal('analysisAddressInput', (_loadedProjectData.address || _pdfMetadataSummary?.address || '').toString());
     setVal('gasolineInput', _loadedProjectData.gasoline);
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
@@ -3770,7 +3909,7 @@ async function initApp(){
 
       const fallbackProjectName = file.name.replace(/\.pdf$/i, '').trim() || file.name;
       const extractedProjectName = fallbackProjectName;
-      const extractedAddress = '';
+      const extractedAddress = _pdfMetadataSummary?.address || '';
       const extractedArea = _pdfMetadataSummary?.totalArea ?? null;
 
       // 1. Create project using the uploaded filename as the initial project name
@@ -3799,6 +3938,10 @@ async function initApp(){
             await handleFile(new File([blob], blueprint.filename));
           }
         }
+        if (extractedAddress && !normalizeTextLine(freshData.address)) {
+          await patchProjectDetails(existing.id, { address: extractedAddress });
+          freshData.address = extractedAddress;
+        }
         activeProjectId = existing.id;
         showProjectLoadedCard(freshData, blueprint?.filename || projectName);
         return;
@@ -3813,8 +3956,15 @@ async function initApp(){
       updateProjectDetails(project);
       console.log('[upload] project created:', projectId);
 
+      const autoPatchPayload = {};
       if (extractedArea != null) {
-        await patchProjectDetails(projectId, { total_area: Number(extractedArea) });
+        autoPatchPayload.total_area = Number(extractedArea);
+      }
+      if (extractedAddress) {
+        autoPatchPayload.address = extractedAddress;
+      }
+      if (Object.keys(autoPatchPayload).length > 0) {
+        await patchProjectDetails(projectId, autoPatchPayload);
       }
 
       // 2. Upload blueprint
