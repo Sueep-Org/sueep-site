@@ -2732,6 +2732,21 @@ async function initApp(){
   const fmtSF = v => (v != null ? Number(v).toLocaleString() + ' SF' : '—');
 
   // ---- Estimate phases ----
+  // Combined sales tax rates (state + common local) by state abbreviation
+  const STATE_TAX_RATES = {
+    PA: 6, NJ: 6.625, DE: 0, MD: 6, VA: 5.3, DC: 6,
+    NY: 8, CT: 6.35, MA: 6.25, FL: 6, TX: 6.25, CA: 7.25,
+    GA: 4, NC: 4.75, SC: 6, OH: 5.75, IL: 6.25, CO: 2.9,
+    WA: 6.5, OR: 0, AZ: 5.6, NV: 6.85, MI: 6, MN: 6.875,
+  };
+
+  function _inferStateTaxRate(address = '') {
+    const stateMatch = address.match(/\b([A-Z]{2})\b(?:\s+\d{5})?$/);
+    if (!stateMatch) return null;
+    const state = stateMatch[1];
+    return STATE_TAX_RATES[state] ?? null;
+  }
+
   const PHASES = ['Rough Cleaning', 'Final Cleaning', 'Touch Up Cleaning'];
   const PHASE_IDS = ['rough', 'final', 'touchup'];
 
@@ -3230,7 +3245,7 @@ async function initApp(){
       setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
       setVal('foremanRateInput', bd.foreman_rate ?? 220);
       setVal('overheadInput', bd.overhead_pct ?? 10);
-      setVal('profitInput', bd.profit_pct ?? 25);
+      setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
       setVal('commissionInput', bd.commission_pct ?? 10);
 
@@ -3339,6 +3354,48 @@ async function initApp(){
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
+
+    // ZIP manual lookup button
+    const taxZipLookupBtn = document.getElementById('taxZipLookupBtn');
+    if (taxZipLookupBtn) taxZipLookupBtn.onclick = async () => {
+      const zip = document.getElementById('taxZipInput')?.value?.trim();
+      if (!zip || zip.length !== 5) { alert('Enter a valid 5-digit ZIP'); return; }
+      try {
+        const r = await fetch(`${API_BASE}/api/projects/tax-rate?zip=${zip}`);
+        const data = r.ok ? await r.json() : null;
+        if (data?.combined_rate != null) {
+          setVal('taxInput', parseFloat(data.combined_rate).toFixed(3));
+          _updateCrewCalcs();
+        } else {
+          alert('Could not find tax rate for this ZIP');
+        }
+      } catch { alert('Lookup failed'); }
+    };
+
+    // Auto-fill tax rate from ZIP (TaxJar) or fallback to state hardcode
+    if (!bd?.tax_pct) {
+      const addr = _pdfMetadataSummary?.address || _loadedProjectData.address || '';
+      const zipMatch = addr.match(/\b(\d{5})\b/);
+      if (zipMatch) {
+        fetch(`${API_BASE}/api/projects/tax-rate?zip=${zipMatch[1]}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.combined_rate != null) {
+              setVal('taxInput', parseFloat(data.combined_rate).toFixed(3));
+            } else {
+              const fallback = _inferStateTaxRate(addr);
+              if (fallback != null) setVal('taxInput', fallback);
+            }
+          })
+          .catch(() => {
+            const fallback = _inferStateTaxRate(addr);
+            if (fallback != null) setVal('taxInput', fallback);
+          });
+      } else {
+        const fallback = _inferStateTaxRate(addr);
+        if (fallback != null) setVal('taxInput', fallback);
+      }
+    }
 
     const di = _loadedProjectData.driving_info || {};
     const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
