@@ -636,6 +636,12 @@ export function ProjectsExpandableTable({
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
+            // Only the raw jobTitle fallback needs hyphen-truncation (it's the
+            // long "Name - detail - company" string). A custom rowTitleForRow
+            // (e.g. janitorial unit labels like "BLDG 1 - Unit 405") is already
+            // a short, deliberately-formatted label — truncating it at its own
+            // internal hyphen would wrongly cut off the unit number.
+            const displayRowTitle = rowTitleForRow ? rowTitle : truncateAtHyphen(rowTitle);
             const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
             const groupHref = groupTitle ? groupHrefForRow?.(p, i, rows) || null : null;
             const actualCost = projectActualCostCents(p);
@@ -734,7 +740,7 @@ export function ProjectsExpandableTable({
                           className={`block truncate font-medium ${styles.titleLink}`}
                           title={rowTitle}
                         >
-                          {truncateAtHyphen(rowTitle)}
+                          {displayRowTitle}
                         </Link>
                         {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
                       </div>
