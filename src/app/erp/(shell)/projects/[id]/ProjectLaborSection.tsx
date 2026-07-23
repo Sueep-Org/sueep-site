@@ -9,6 +9,7 @@ import {
   turnoverMarginSeverity,
   type TurnoverMarginSeverity,
 } from "@/lib/erp/turnoverHoursBudget";
+import { UnitScopeCard } from "./UnitScopeCard";
 
 export type LaborRow = {
   id: string;
@@ -269,6 +270,7 @@ export function ProjectLaborSection({
   hasApprovedCheckToday,
   requiresSafetyCheck = true,
   contractValueCents = null,
+  unitScope = null,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -282,6 +284,22 @@ export function ProjectLaborSection({
   requiresSafetyCheck?: boolean;
   /** Turnovers only, powers the hours-budget callout below. */
   contractValueCents?: number | null;
+  /** Read-only scope-of-work summary shown above the labor log, for roles
+   * (supervisors) that don't have access to the Overview tab where this
+   * normally lives. Null hides it entirely. */
+  unitScope?: {
+    unitNumber: string | null;
+    bedrooms: number | null;
+    bathrooms: number | null;
+    fullClean: boolean;
+    fullPaint: boolean;
+    touchUpPaint: number | null;
+    carpetCleaning: boolean;
+    materialsAdditional: boolean;
+    ceilingPaint: boolean;
+    otherWork: boolean;
+    otherDescription: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const passedKeySet = new Set(safetyPassedKeys);
@@ -588,6 +606,22 @@ export function ProjectLaborSection({
   return (
     <>
     <div className="space-y-6">
+      {unitScope && (
+        <UnitScopeCard
+          unitNumber={unitScope.unitNumber}
+          bedrooms={unitScope.bedrooms}
+          bathrooms={unitScope.bathrooms}
+          fullClean={unitScope.fullClean}
+          fullPaint={unitScope.fullPaint}
+          touchUpPaint={unitScope.touchUpPaint}
+          carpetCleaning={unitScope.carpetCleaning}
+          materialsAdditional={unitScope.materialsAdditional}
+          ceilingPaint={unitScope.ceilingPaint}
+          otherWork={unitScope.otherWork}
+          otherDescription={unitScope.otherDescription}
+          contractValueCents={contractValueCents}
+        />
+      )}
       {hoursBudget != null && impliedMarginPct != null && (
         <div
           className={

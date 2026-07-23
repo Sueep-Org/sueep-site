@@ -2,6 +2,90 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
 import { syncSovPercentDone } from "@/lib/sovSync";
+import { sendEmail, buildTurnoverMarginAlertEmail } from "@/lib/email";
+import {
+  turnoverTotalHoursBudget,
+  turnoverImpliedMarginPct,
+  turnoverMarginSeverity,
+  turnoverMarginWorsened,
+} from "@/lib/erp/turnoverHoursBudget";
+
+/** Same "Label: value" line format used to embed a Sueep PM name in the
+ * description for older projects that predate the dedicated supervisor
+ * field (duplicated from the same helper in pm-view/page.tsx, ProjectsExpandableTable.tsx,
+ * and projects/[id]/page.tsx). */
+function getDescLine(description: string | null, key: string): string {
+  if (!description) return "";
+  const prefix = `${key}:`;
+  return (
+    description
+      .split(/\r?\n/)
+      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
+      ?.replace(new RegExp(`^${key}:\\s*`, "i"), "")
+      .trim() ?? ""
+  );
+}
+
+async function findEmployeeEmailByName(fullName: string): Promise<string | null> {
+  const [firstName, ...rest] = fullName.trim().split(" ");
+  const lastName = rest.join(" ");
+  const emp = await prisma.employee.findFirst({
+    where: { firstName: { equals: firstName, mode: "insensitive" }, lastName: { equals: lastName, mode: "insensitive" }, email: { not: null } },
+    select: { email: true },
+  });
+  return emp?.email ?? null;
+}
+
+async function notifyPmIfMarginWorsened(projectId: string, priorHours: number, newHours: number) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      jobTitle: true,
+      turnoverRequestId: true,
+      contractValueCents: true,
+      supervisor: true,
+      description: true,
+      supervisorUser: { select: { email: true } },
+    },
+  });
+  if (!project || !project.turnoverRequestId || !project.contractValueCents) return;
+
+  const hoursBudget = turnoverTotalHoursBudget(project.contractValueCents);
+  const priorSeverity = turnoverMarginSeverity(turnoverImpliedMarginPct(project.contractValueCents, priorHours));
+  const newMarginPct = turnoverImpliedMarginPct(project.contractValueCents, newHours);
+  const newSeverity = turnoverMarginSeverity(newMarginPct);
+  if (!turnoverMarginWorsened(priorSeverity, newSeverity) || newSeverity === "on-track") return;
+
+  // The Sueep PM on a turnover, same person shown in the "PM" column on the
+  // projects table, is Project.supervisor (a name string) or, for older
+  // projects, a "SUEEP PM:" line in the description. That is a different
+  // person from supervisorUser (Project.supervisorUserId), the ERP login
+  // assigned via the schedule/calendar-invite flow for on-site coverage, so
+  // it's only used here as a last-resort fallback.
+  let recipient: string | null = null;
+  const pmName = project.supervisor?.trim() || getDescLine(project.description, "SUEEP PM");
+  if (pmName) recipient = await findEmployeeEmailByName(pmName);
+  if (!recipient) recipient = project.supervisorUser?.email ?? null;
+  if (!recipient) recipient = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+  try {
+    await sendEmail({
+      to: recipient,
+      subject: `Margin alert: ${project.jobTitle}`,
+      html: buildTurnoverMarginAlertEmail({
+        jobTitle: project.jobTitle,
+        severity: newSeverity,
+        hoursLogged: newHours,
+        hoursBudget,
+        marginPct: newMarginPct,
+        projectUrl: appUrl ? `${appUrl}/erp/projects/${projectId}` : null,
+      }),
+    });
+  } catch (e) {
+    console.error("Failed to send turnover margin alert email", e);
+  }
+}
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -80,6 +164,9 @@ export async function POST(req: Request, ctx: Ctx) {
     if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
   }
 
+  const priorHoursAgg = await prisma.laborEntry.aggregate({ where: { projectId: id }, _sum: { hours: true } });
+  const priorHours = priorHoursAgg._sum.hours ?? 0;
+
   try {
     const entry = await prisma.laborEntry.create({
       data: {
@@ -102,6 +189,11 @@ export async function POST(req: Request, ctx: Ctx) {
     if (sovItemId && body.sovCompleted !== undefined) {
       await prisma.projectSOVItem.update({ where: { id: sovItemId }, data: { completed: Boolean(body.sovCompleted) } });
       await syncSovPercentDone(id);
+    }
+    try {
+      await notifyPmIfMarginWorsened(id, priorHours, priorHours + hours);
+    } catch (e) {
+      console.error("Turnover margin PM alert failed", e);
     }
     return NextResponse.json(entry);
   } catch (e) {

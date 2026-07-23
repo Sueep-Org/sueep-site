@@ -518,7 +518,19 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} contractValueCents={project.contractValueCents} />,
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} contractValueCents={project.contractValueCents} unitScope={isSupervisor && project.turnoverRequest ? {
+        unitNumber: project.turnoverRequest.unitNumber,
+        bedrooms: project.turnoverRequest.bedrooms,
+        bathrooms: project.turnoverRequest.bathrooms,
+        fullClean: project.turnoverRequest.fullClean,
+        fullPaint: project.turnoverRequest.fullPaint,
+        touchUpPaint: project.turnoverRequest.touchUpPaint,
+        carpetCleaning: project.turnoverRequest.carpetCleaning,
+        materialsAdditional: project.turnoverRequest.materialsAdditional,
+        ceilingPaint: project.turnoverRequest.ceilingPaint,
+        otherWork: project.turnoverRequest.otherWork,
+        otherDescription: project.turnoverRequest.otherDescription,
+      } : null} />,
     },
     {
       label: "Contractors",

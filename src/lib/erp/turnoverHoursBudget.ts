@@ -40,6 +40,19 @@ export function turnoverMarginSeverity(marginPct: number): TurnoverMarginSeverit
   return "bad";
 }
 
+const SEVERITY_RANK: Record<TurnoverMarginSeverity, number> = { "on-track": 0, watch: 1, bad: 2 };
+
+/** True the first time a severity crosses into a worse tier (on-track to
+ * watch, watch to bad, or on-track straight to bad). False if it was already
+ * at that tier or worse, so a PM alert only fires on the entry that actually
+ * caused the crossing, not on every entry logged after that point. */
+export function turnoverMarginWorsened(
+  before: TurnoverMarginSeverity,
+  after: TurnoverMarginSeverity
+): boolean {
+  return SEVERITY_RANK[after] > SEVERITY_RANK[before];
+}
+
 /** Plain-text budget line(s) for the calendar invite email/description. Shows
  * a single number when the day's crew is already scheduled (ProjectWorkerDayAssignment),
  * otherwise a small table by crew size since headcount isn't locked in yet. */

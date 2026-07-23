@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
@@ -7,6 +6,8 @@ import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
+import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -259,34 +260,7 @@ export default async function ErpDashboardPage() {
 
     // ── Supervisor ─────────────────────────────────────────────────────────
     if (role === "SUPERVISOR") {
-      // auth.uid is the Firebase UID from the session token, not the
-      // ErpUser.id that Project.supervisorUserId actually references.
-      const supervisorUser = auth?.uid
-        ? await prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } })
-        : null;
-      const supervisorEmployee = auth?.email
-        ? await prisma.employee.findFirst({
-            where: { email: { equals: auth.email, mode: "insensitive" } },
-            select: { id: true, firstName: true, lastName: true },
-          })
-        : null;
-      const supervisorFullName = supervisorEmployee
-        ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim()
-        : null;
-
-      // "My projects" = assigned to (project-level or a specific scheduled
-      // day) or personally logged labor on — same rule as the schedule page.
-      const assignmentOr: Prisma.ProjectWhereInput[] = [];
-      if (supervisorUser) {
-        assignmentOr.push({ supervisorUserId: supervisorUser.id });
-        assignmentOr.push({ dayAssignments: { some: { supervisorUserId: supervisorUser.id } } });
-      }
-      if (supervisorEmployee) {
-        assignmentOr.push({ laborEntries: { some: { employeeId: supervisorEmployee.id } } });
-      }
-      if (supervisorFullName) {
-        assignmentOr.push({ laborEntries: { some: { workerName: { equals: supervisorFullName, mode: "insensitive" } } } });
-      }
+      const scope = await getSupervisorProjectScope(auth!.uid, auth!.email);
 
       const todayStart = todayEasternAsUtcMidnight();
       const todayEnd = new Date(todayStart);
@@ -294,11 +268,13 @@ export default async function ErpDashboardPage() {
 
       const [myProjects, openIncidents] = await Promise.all([
         prisma.project.findMany({
-          where: assignmentOr.length > 0
-            ? { OR: assignmentOr, NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } }
-            : { NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } } },
+          where: {
+            ...(scope.where ?? {}),
+            NOT: { status: { in: ["COMPLETED", "ARCHIVED"] } },
+          },
           select: {
             id: true, jobTitle: true, status: true, projectDate: true, segment: true,
+            turnoverRequestId: true, contractValueCents: true,
             dailySafetyChecks: {
               where: { checkDate: { gte: todayStart, lte: todayEnd } },
               include: { workers: { select: { passed: true } } },
@@ -308,9 +284,10 @@ export default async function ErpDashboardPage() {
           orderBy: [{ projectDate: "asc" }, { updatedAt: "desc" }],
         }),
         prisma.safetyIncident.findMany({
-          where: assignmentOr.length > 0
-            ? { status: { in: ["OPEN", "ESCALATED"] }, project: { OR: assignmentOr } }
-            : { status: { in: ["OPEN", "ESCALATED"] } },
+          where: {
+            status: { in: ["OPEN", "ESCALATED"] },
+            ...(scope.where ? { project: scope.where } : {}),
+          },
           orderBy: { createdAt: "desc" },
           take: 20,
           select: {
@@ -361,6 +338,27 @@ export default async function ErpDashboardPage() {
         crewByProject.set(a.projectId, list);
       }
       const projectsWithCrew = myProjects.filter((p) => (crewByProject.get(p.id)?.length ?? 0) > 0);
+
+      // Hours-budget status for turnovers, using the same blended-rate
+      // formula as the Labor tab callout, deliberately not real dollar
+      // figures, so this is safe to show to supervisors.
+      const turnoverProjectIds = myProjects
+        .filter((p) => p.turnoverRequestId && p.contractValueCents)
+        .map((p) => p.id);
+      const hoursByProjectId = turnoverProjectIds.length > 0
+        ? await prisma.laborEntry.groupBy({
+            by: ["projectId"],
+            where: { projectId: { in: turnoverProjectIds } },
+            _sum: { hours: true },
+          })
+        : [];
+      const totalHoursByProjectId = new Map(hoursByProjectId.map((h) => [h.projectId, h._sum.hours ?? 0]));
+      const budgetSeverityByProjectId = new Map<string, TurnoverMarginSeverity>();
+      for (const p of myProjects) {
+        if (!p.turnoverRequestId || !p.contractValueCents) continue;
+        const hours = totalHoursByProjectId.get(p.id) ?? 0;
+        budgetSeverityByProjectId.set(p.id, turnoverMarginSeverity(turnoverImpliedMarginPct(p.contractValueCents, hours)));
+      }
 
       // "My projects" as a list version of the schedule calendar: same three
       // states as the calendar's chips — solid (logged), dashed/gray
@@ -469,10 +467,26 @@ export default async function ErpDashboardPage() {
               <ul className="divide-y divide-gray-100">
                 {projectsWithCrew.map((p) => {
                   const crew = crewByProject.get(p.id) ?? [];
+                  const severity = budgetSeverityByProjectId.get(p.id);
+                  const budgetTitle = severity && severity !== "on-track" && p.contractValueCents
+                    ? `${(totalHoursByProjectId.get(p.id) ?? 0).toFixed(1)} of ${turnoverTotalHoursBudget(p.contractValueCents).toFixed(1)} hr budget`
+                    : undefined;
                   return (
                     <li key={p.id}>
                       <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                        <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                          {severity === "bad" && (
+                            <span title={budgetTitle} className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                              Over budget
+                            </span>
+                          )}
+                          {severity === "watch" && (
+                            <span title={budgetTitle} className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Watch hours
+                            </span>
+                          )}
+                        </span>
                         <p className="shrink-0 text-right text-xs text-gray-500">
                           {crew.map((c) => (c.hours != null ? `${c.name} (${c.hours.toFixed(1)}h)` : `${c.name} (planned)`)).join(", ")}
                         </p>
@@ -491,7 +505,7 @@ export default async function ErpDashboardPage() {
             <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900" title="Yesterday through 5 days out">My projects</h2>
-                {assignmentOr.length === 0 && (
+                {scope.unlinked && (
                   <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
                 )}
               </div>

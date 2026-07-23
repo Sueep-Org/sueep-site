@@ -399,6 +399,36 @@ export function buildProjectRequestConfirmationEmail(params: {
   `;
 }
 
+export function buildTurnoverMarginAlertEmail(params: {
+  jobTitle: string;
+  severity: "watch" | "bad";
+  hoursLogged: number;
+  hoursBudget: number;
+  marginPct: number;
+  projectUrl: string | null;
+}) {
+  const isBad = params.severity === "bad";
+  const color = isBad ? "#dc2626" : "#d97706";
+  const headline = isBad
+    ? "Turnover is now losing money on labor"
+    : "Turnover has gone over its hours budget";
+
+  const cta = params.projectUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View labor log</a></p>`
+    : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:${color}">${headline}</h2>
+      <p><strong>Project:</strong> ${escapeHtml(params.jobTitle)}</p>
+      <p><strong>Hours logged:</strong> ${params.hoursLogged.toFixed(1)} of a ${params.hoursBudget.toFixed(1)} hr budget</p>
+      <p><strong>Implied margin:</strong> ~${params.marginPct.toFixed(0)}% (target: 50%)</p>
+      ${cta}
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canSeeFinancials as checkFinancials } from "@/lib/erpAuth";
+import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
 import { ProjectsTabs } from "./ProjectsTabs";
 
@@ -46,12 +47,25 @@ function parseProjectUnitNumbers(description: string | null) {
     .filter(Boolean);
 }
 
-export default async function ErpProjectsPage() {
+type PageProps = { searchParams: Promise<{ scope?: string }> };
+
+export default async function ErpProjectsPage({ searchParams }: PageProps) {
+  const { scope: scopeParam } = await searchParams;
   const cfg = parseHubSpotPipelineStageMap();
   const auth = await getErpAuth();
   const financials = checkFinancials(auth?.role ?? "EMPLOYEE");
 
+  // Supervisors default to seeing just their own projects (same rule as
+  // their dashboard and the schedule calendar), but can switch to the full
+  // company list via the toggle below — this only restricts the default
+  // view, not their access. Every other role always sees everything.
+  const isSupervisor = auth?.role === "SUPERVISOR";
+  const supervisorScope = isSupervisor ? await getSupervisorProjectScope(auth!.uid, auth!.email) : null;
+  const scope = isSupervisor && scopeParam !== "all" ? "mine" : "all";
+  const projectWhere = scope === "mine" && supervisorScope?.where ? supervisorScope.where : undefined;
+
   const projects = await prisma.project.findMany({
+    where: projectWhere,
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
     take: 300,
     include: {
@@ -332,6 +346,22 @@ export default async function ErpProjectsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
         <div className="flex items-center gap-2">
+          {isSupervisor && (
+            <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 text-xs">
+              <Link
+                href="/erp/projects?scope=mine"
+                className={`rounded px-2.5 py-1 font-medium ${scope === "mine" ? "bg-pink-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                My Projects
+              </Link>
+              <Link
+                href="/erp/projects?scope=all"
+                className={`rounded px-2.5 py-1 font-medium ${scope === "all" ? "bg-pink-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                All Projects
+              </Link>
+            </div>
+          )}
           <Link
             href="/erp/projects/new"
             className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
@@ -340,8 +370,21 @@ export default async function ErpProjectsPage() {
           </Link>
         </div>
       </div>
+      {isSupervisor && scope === "mine" && supervisorScope?.unlinked && (
+        <p className="text-xs text-amber-600">
+          Not linked to an ERP supervisor account or employee record, showing all projects. Ask an admin to assign you in the project Setup tab.
+        </p>
+      )}
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && scope === "mine" && !supervisorScope?.unlinked ? (
+        <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
+          Nothing assigned to you yet.{" "}
+          <Link href="/erp/projects?scope=all" className="text-pink-600 hover:underline">
+            View all projects
+          </Link>
+          .
+        </div>
+      ) : rows.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
           No projects yet.{" "}
           <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
