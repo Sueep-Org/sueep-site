@@ -12,9 +12,9 @@ type LaborRowBase = {
   role: string | null;
   name: string;
   hours: number;
+  commuteHours?: number | null;
   hourlyRateCents: number;
   description: string | null;
-  qualityRating: string | null;
   qualityNotes: string | null;
 };
 
@@ -323,33 +323,8 @@ function SubRowTitleCell({
   );
 }
 
-const QUALITY_OPTIONS = [
-  { value: "", label: "—", score: null },
-  { value: "POOR", label: "Poor", score: 1 },
-  { value: "FAIR", label: "Fair", score: 2 },
-  { value: "GOOD", label: "Good", score: 3 },
-  { value: "EXCELLENT", label: "Excellent", score: 4 },
-];
-
-const QUALITY_SCORE: Record<string, number> = {
-  POOR: 1,
-  FAIR: 2,
-  GOOD: 3,
-  EXCELLENT: 4,
-};
-
-const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-emerald-600",
-  GOOD: "text-gray-800",
-  FAIR: "text-gray-500",
-  POOR: "text-red-400",
-};
-
 export function LaborTable({ entries, initialVisible = 5, showFinancials = true }: { entries: LaborRow[]; initialVisible?: number; showFinancials?: boolean }) {
   const [showAll, setShowAll] = useState(false);
-  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
-    Object.fromEntries(entries.map((e) => [e.id, e.qualityRating ?? ""]))
-  );
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(entries.map((e) => [e.id, e.qualityNotes ?? ""]))
   );
@@ -359,15 +334,6 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
 
   const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
   const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
-
-  function handleQualityChange(entry: LaborRow, value: string) {
-    setQualityMap((prev) => ({ ...prev, [entry.id]: value }));
-    fetch(entry.updatePath, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qualityRating: value || null }),
-    }).catch(() => {});
-  }
 
   function handleNotesSave() {
     if (!popup) return;
@@ -387,12 +353,12 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
         <table className="w-full table-fixed text-xs">
           <colgroup>
             <col className="w-[9%]" />
-            <col className="w-[20%]" />
-            <col className={showFinancials ? "w-[21%]" : "w-[31%]"} />
-            <col className="w-[8%]" />
+            <col className="w-[18%]" />
+            <col className={showFinancials ? "w-[19%]" : "w-[27%]"} />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
             {showFinancials && <col className="w-[10%]" />}
-            <col className="w-[10%]" />
-            <col className="w-[16%]" />
+            <col className={showFinancials ? "w-[24%]" : "w-[26%]"} />
             <col className="w-[6%]" />
           </colgroup>
           <thead>
@@ -401,15 +367,14 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
               <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
               <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
               <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
+              <th className="pb-1.5 pr-3 text-right font-semibold">Commute</th>
               {showFinancials && <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>}
               <th className="pb-1.5 pr-3 text-left font-semibold">Description</th>
-              <th className="pb-1.5 pr-3 text-left font-semibold">Quality</th>
               <th className="pb-1.5 text-left font-semibold">Notes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visibleEntries.map((e, i) => {
-              const quality = qualityMap[e.id] ?? "";
               const notes = notesMap[e.id] ?? "";
               return (
                 <tr key={`${e.date}-${e.name}-${i}`} className="text-slate-900">
@@ -417,34 +382,16 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
                   <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
+                  <td className="py-1 pr-3 text-right tabular-nums text-slate-500">
+                    {e.commuteHours != null ? e.commuteHours.toFixed(2) : <EmptyValue />}
+                  </td>
                   {showFinancials && <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>}
                   <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
-                  <td className="py-1 pr-3">
-                    <div className="flex items-center gap-1">
-                      {quality ? (
-                        <span className={`shrink-0 text-xs font-bold tabular-nums ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
-                          {QUALITY_SCORE[quality]}
-                        </span>
-                      ) : null}
-                      <select
-                        value={quality}
-                        onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
-                        onClick={(ev) => ev.stopPropagation()}
-                        className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-300 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                      >
-                        {QUALITY_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.score != null ? `${opt.score} – ${opt.label}` : opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </td>
                   <td className="py-1">
                     <button
                       type="button"
                       onClick={(ev) => { ev.stopPropagation(); setPopup({ id: e.id, updatePath: e.updatePath, draft: notes }); }}
-                      title={notes || "Add quality notes"}
+                      title={notes || "Add notes"}
                       className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
@@ -486,13 +433,13 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
             className="w-80 rounded-xl bg-white p-5 shadow-2xl"
             onClick={(ev) => ev.stopPropagation()}
           >
-            <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+            <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
             <textarea
               autoFocus
               rows={4}
               value={popup.draft}
               onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
-              placeholder="Add notes about work quality..."
+              placeholder="Add notes..."
               className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
             />
             <div className="mt-3 flex justify-end gap-2">

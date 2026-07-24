@@ -132,6 +132,14 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const clockIn = typeof body.clockIn === "string" && /^\d{2}:\d{2}$/.test(body.clockIn) ? body.clockIn : null;
 
+  let commuteHours: number | null = null;
+  if (body.commuteHours !== undefined && body.commuteHours !== null && body.commuteHours !== "") {
+    const c = Number(body.commuteHours);
+    if (!Number.isFinite(c) || c < 0) return NextResponse.json({ error: "Invalid commuteHours" }, { status: 400 });
+    if (c > hours) return NextResponse.json({ error: "commuteHours cannot exceed hours" }, { status: 400 });
+    commuteHours = c;
+  }
+
   let hourlyRateCents: number;
   if (typeof body.hourlyRateCents === "number" && Number.isFinite(body.hourlyRateCents)) {
     hourlyRateCents = Math.round(body.hourlyRateCents);
@@ -177,6 +185,7 @@ export async function POST(req: Request, ctx: Ctx) {
         role: body.role != null ? String(body.role).trim() || null : null,
         hours,
         clockIn,
+        commuteHours,
         hourlyRateCents,
         taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
         sovItemId: sovItemId || null,

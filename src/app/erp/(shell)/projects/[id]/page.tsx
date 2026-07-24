@@ -308,12 +308,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       role: e.role,
       hours: e.hours.toString(),
       clockIn: e.clockIn ?? null,
+      commuteHours: e.commuteHours ?? null,
       regHours: split.regHours,
       otHours: split.otHours,
       hourlyRateCents: e.hourlyRateCents,
       taskDescription: e.taskDescription,
       sovItemId: e.sovItemId ?? null,
-      qualityRating: e.qualityRating ?? null,
       qualityNotes: e.qualityNotes ?? null,
     };
   });

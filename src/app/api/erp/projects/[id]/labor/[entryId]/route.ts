@@ -36,6 +36,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.clockIn !== undefined) {
     data.clockIn = typeof body.clockIn === "string" && /^\d{2}:\d{2}$/.test(body.clockIn) ? body.clockIn : null;
   }
+  if (body.commuteHours !== undefined) {
+    if (body.commuteHours === null || body.commuteHours === "") {
+      data.commuteHours = null;
+    } else {
+      const c = Number(body.commuteHours);
+      const effectiveHours = body.hours !== undefined ? Number(body.hours) : existing.hours;
+      if (!Number.isFinite(c) || c < 0) return NextResponse.json({ error: "Invalid commuteHours" }, { status: 400 });
+      if (c > effectiveHours) return NextResponse.json({ error: "commuteHours cannot exceed hours" }, { status: 400 });
+      data.commuteHours = c;
+    }
+  }
   if (body.hourlyRate !== undefined) {
     const rate = typeof body.hourlyRate === "string"
       ? Number(String(body.hourlyRate).replace(/[$,]/g, ""))

@@ -732,6 +732,9 @@ model LaborEntry {
   /// Cents per hour (e.g. $28.84/hr → 2884)
   hourlyRateCents Int
 
+  /// Portion of `hours` spent commuting rather than on-site, e.g. 1 of a 9-hour shift.
+  commuteHours Float?
+
   taskDescription String?
 
   /// Optional link to a ProjectSOVItem (replaces taskDescription when set)

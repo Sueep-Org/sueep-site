@@ -20,12 +20,12 @@ export type LaborRow = {
   role: string | null;
   hours: string;
   clockIn: string | null;
+  commuteHours: number | null;
   regHours: number;
   otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
   sovItemId: string | null;
-  qualityRating: string | null;
   qualityNotes: string | null;
 };
 
@@ -36,21 +36,6 @@ export type SOVItemOption = {
 };
 
 const SOV_OTHER = "__sov_other__";
-
-const QUALITY_OPTIONS = [
-  { value: "", label: "—" },
-  { value: "EXCELLENT", label: "Excellent" },
-  { value: "GOOD", label: "Good" },
-  { value: "FAIR", label: "Fair" },
-  { value: "POOR", label: "Poor" },
-];
-
-const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-emerald-600",
-  GOOD: "text-blue-600",
-  FAIR: "text-amber-600",
-  POOR: "text-red-600",
-};
 
 export type LaborEmployeeOption = {
   id: string;
@@ -323,16 +308,14 @@ export function ProjectLaborSection({
   const [filterLaborer, setFilterLaborer] = useState("");
   const [clockInStr, setClockInStr] = useState("08:00");
   const [clockOutStr, setClockOutStr] = useState("");
+  const [commuteHoursStr, setCommuteHoursStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteHours: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteHours: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
   const [sovPick, setSovPick] = useState<string>("");
   const [sovMarkComplete, setSovMarkComplete] = useState(false);
   const [unitCompleted, setUnitCompleted] = useState(false);
   const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
-  );
-  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
-    Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""]))
   );
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""]))
@@ -341,7 +324,6 @@ export function ProjectLaborSection({
 
   useEffect(() => {
     setEntries(initialEntries);
-    setQualityMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""])));
     setNotesMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""])));
   }, [initialEntries]);
 
@@ -355,15 +337,6 @@ export function ProjectLaborSection({
     setHourlyRateStr(e?.hourlyPayCents != null ? (e.hourlyPayCents / 100).toFixed(2) : "");
     setRoleStr(e?.role ?? "");
   }, [employeePick, employees]);
-
-  function handleQualityChange(entryId: string, value: string) {
-    setQualityMap((prev) => ({ ...prev, [entryId]: value }));
-    fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ qualityRating: value || null }),
-    }).catch(() => {});
-  }
 
   function handleQualityNotesSave() {
     if (!qualityPopup) return;
@@ -409,6 +382,7 @@ export function ProjectLaborSection({
       role: r.role ?? "",
       clockIn: defaultIn,
       clockOut: hoursToClockOut(defaultIn, Number(r.hours)),
+      commuteHours: r.commuteHours != null ? String(r.commuteHours) : "",
       hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
       taskDescription: r.taskDescription ?? "",
       sovItemId: r.sovItemId ?? "",
@@ -429,22 +403,26 @@ export function ProjectLaborSection({
         role: editFields.role || null,
         hours: calcHours(editFields.clockIn, editFields.clockOut),
         clockIn: editFields.clockIn || null,
+        commuteHours: editFields.commuteHours === "" ? null : editFields.commuteHours,
         hourlyRate: editFields.hourlyRate,
         taskDescription: taskDesc,
         sovItemId: sovItemId,
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
             : e,
         ),
       );
       setEditingId(null);
       router.refresh();
+    } else {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error || "Failed to save entry");
     }
   }
 
@@ -459,6 +437,10 @@ export function ProjectLaborSection({
     const hours = calcHours(clockInStr, clockOutStr);
     if (hours <= 0) {
       setError("Clock-out must be after clock-in.");
+      return;
+    }
+    if (commuteHoursStr && Number(commuteHoursStr) > hours) {
+      setError("Commute hours can't exceed total hours.");
       return;
     }
     if (hoursBudget != null && contractValueCents) {
@@ -507,6 +489,7 @@ export function ProjectLaborSection({
           role: role || undefined,
           hours,
           clockIn: clockInStr || undefined,
+          commuteHours: commuteHoursStr !== "" ? Number(commuteHoursStr) : undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
           sovItemId: sovItemId || undefined,
@@ -522,6 +505,7 @@ export function ProjectLaborSection({
         role?: string | null;
         hours?: unknown;
         clockIn?: string | null;
+        commuteHours?: number | null;
         hourlyRateCents?: number;
         taskDescription?: string | null;
         sovItemId?: string | null;
@@ -544,12 +528,12 @@ export function ProjectLaborSection({
         role: data.role ?? null,
         hours: String(data.hours),
         clockIn: data.clockIn ?? clockInStr,
+        commuteHours: data.commuteHours ?? null,
         regHours: Number(data.hours),
         otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,
         taskDescription: data.taskDescription ?? null,
         sovItemId: data.sovItemId ?? null,
-        qualityRating: null,
         qualityNotes: null,
       };
       if (sovMarkComplete && sovItemId) {
@@ -571,6 +555,7 @@ export function ProjectLaborSection({
       setRoleStr("");
       setClockInStr("08:00");
       setClockOutStr("");
+      setCommuteHoursStr("");
       setSovPick("");
       setSovMarkComplete(false);
       setUnitCompleted(false);
@@ -746,6 +731,20 @@ export function ProjectLaborSection({
                 : <span className="text-gray-400">—</span>}
             </p>
           </div>
+          <div>
+            <label className={label} htmlFor="l-commute">Commute hours (optional)</label>
+            <input
+              id="l-commute"
+              type="number"
+              min={0}
+              step="0.25"
+              className={input}
+              placeholder="e.g. 1"
+              value={commuteHoursStr}
+              onChange={(e) => setCommuteHoursStr(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Included in the hours above, not added on top.</p>
+          </div>
           {showFinancials ? (
             <div>
               <label className={label} htmlFor="l-rate">
@@ -898,11 +897,11 @@ export function ProjectLaborSection({
                 <th className="py-2 pr-2 font-medium">Worker</th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
+                <th className="py-2 pr-2 font-medium">Commute</th>
                 <th className="py-2 pr-2 font-medium text-amber-600">OT Hrs</th>
                 {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
                 {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
-                <th className="py-2 pr-2 font-medium">Quality</th>
                 <th className="py-2 pr-2 font-medium">Notes</th>
                 {canEdit && <th className="py-2" />}
               </tr>
@@ -916,7 +915,6 @@ export function ProjectLaborSection({
                 </tr>
               ) : (
                 visibleEntries.map((r) => {
-                  const quality = qualityMap[r.id] ?? "";
                   const notes = notesMap[r.id] ?? "";
                   const dateStr = laborDateStr(r.workDate);
                   const needsSafetyCheck = requiresSafetyCheck && dateStr >= SAFETY_CUTOFF;
@@ -945,6 +943,17 @@ export function ProjectLaborSection({
                             {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
                           </span>
                         </div>
+                      </td>
+                      <td className="py-1 pr-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.25"
+                          className={editInput}
+                          placeholder="—"
+                          value={editFields.commuteHours}
+                          onChange={(e) => setEditFields((f) => ({ ...f, commuteHours: e.target.value }))}
+                        />
                       </td>
                       <td className="py-1 pr-2 text-xs text-gray-400">—</td>
                       {showFinancials && (
@@ -978,19 +987,10 @@ export function ProjectLaborSection({
                         )}
                       </td>
                       <td className="py-1 pr-2">
-                        <select
-                          value={quality}
-                          onChange={(e) => handleQualityChange(r.id, e.target.value)}
-                          className={`w-full rounded border border-gray-300 bg-white px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                        >
-                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                      </td>
-                      <td className="py-1 pr-2">
                         <button
                           type="button"
                           onClick={() => setQualityPopup({ id: r.id, draft: notes })}
-                          title={notes || "Add quality notes"}
+                          title={notes || "Add notes"}
                           className={`rounded p-1 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
@@ -1028,6 +1028,9 @@ export function ProjectLaborSection({
                       </td>
                       <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
+                      <td className="py-2 pr-2 text-gray-500">
+                        {r.commuteHours != null ? r.commuteHours.toFixed(2) : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="py-2 pr-2">
                         {r.otHours > 0
                           ? <span className="font-medium text-amber-600">{r.otHours.toFixed(2)}</span>
@@ -1060,26 +1063,11 @@ export function ProjectLaborSection({
                         )}
                       </td>
                       <td className="py-2 pr-2">
-                        {canEdit ? (
-                          <select
-                            value={quality}
-                            onChange={(e) => handleQualityChange(r.id, e.target.value)}
-                            className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                          >
-                            {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        ) : (
-                          <span className={`text-xs ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
-                            {QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? "—"}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-2">
                         {canEdit && (
                           <button
                             type="button"
                             onClick={() => setQualityPopup({ id: r.id, draft: notes })}
-                            title={notes || "Add quality notes"}
+                            title={notes || "Add notes"}
                             className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
@@ -1173,13 +1161,13 @@ export function ProjectLaborSection({
           className="w-80 rounded-xl bg-white p-5 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+          <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
           <textarea
             autoFocus
             rows={4}
             value={qualityPopup.draft}
             onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
-            placeholder="Add notes about work quality..."
+            placeholder="Add notes..."
             className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
           />
           <div className="mt-3 flex justify-end gap-2">
