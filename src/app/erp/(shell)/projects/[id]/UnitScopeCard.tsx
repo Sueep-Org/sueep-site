@@ -1,9 +1,13 @@
 import { turnoverHoursBudget } from "@/lib/erp/turnoverHoursBudget";
 
+const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
+
 type Props = {
   unitNumber: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  sqft: number | null;
+  unitQuality: string | null;
   fullClean: boolean;
   fullPaint: boolean;
   touchUpPaint: number | null;
@@ -28,6 +32,8 @@ export function UnitScopeCard({
   unitNumber,
   bedrooms,
   bathrooms,
+  sqft,
+  unitQuality,
   fullClean,
   fullPaint,
   touchUpPaint,
@@ -72,6 +78,18 @@ export function UnitScopeCard({
                 <span className="text-sm text-gray-600">{bathrooms} Bathroom{bathrooms !== 1 ? "s" : ""}</span>
               </>
             )}
+          </>
+        )}
+        {sqft != null && (
+          <>
+            <span className="text-xs text-gray-400">·</span>
+            <span className="text-sm text-gray-600">{sqft.toLocaleString()} sq ft</span>
+          </>
+        )}
+        {unitQuality && (
+          <>
+            <span className="text-xs text-gray-400">·</span>
+            <span className="text-sm text-gray-600">{UNIT_QUALITY_LABELS[unitQuality] ?? unitQuality} condition</span>
           </>
         )}
       </div>

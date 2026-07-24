@@ -3,14 +3,6 @@
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
-const UNIT_LAYOUTS = [
-  { label: "1/1", bedrooms: "1", bathrooms: "1" },
-  { label: "2/1", bedrooms: "2", bathrooms: "1" },
-  { label: "2/2", bedrooms: "2", bathrooms: "2" },
-  { label: "3/2", bedrooms: "3", bathrooms: "2" },
-  { label: "3/1", bedrooms: "3", bathrooms: "1" },
-] as const;
-
 type CommonAreaRates = {
   fullClean: string;
   fullPaint: string;
@@ -124,20 +116,12 @@ export function TurnoverPricingPackageQuestions({
   const pricing = { ...basePricing, priceCents: basePricing.priceCents + otherCents };
   const totalLabel = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(pricing.priceCents / 100);
 
-  const selectedLayout = isCommonArea
-    ? "Common Area"
-    : UNIT_LAYOUTS.find((layout) => layout.bedrooms === bedrooms && layout.bathrooms === bathrooms)?.label;
-
-  function selectLayout(layout: (typeof UNIT_LAYOUTS)[number]) {
-    setIsCommonArea(false);
-    setBedrooms(layout.bedrooms);
-    setBathrooms(layout.bathrooms);
-  }
-
-  function selectCommonArea() {
-    setIsCommonArea(true);
-    setBedrooms("");
-    setBathrooms("");
+  function toggleCommonArea(checked: boolean) {
+    setIsCommonArea(checked);
+    if (checked) {
+      setBedrooms("");
+      setBathrooms("");
+    }
   }
 
   return (
@@ -152,25 +136,14 @@ export function TurnoverPricingPackageQuestions({
         </span>
       </div>
 
-      <label className="mt-4 block text-xs font-medium text-gray-600">
-        Unit type
-        <select
-          value={selectedLayout ?? ""}
-          onChange={(event) => {
-            if (event.target.value === "Common Area") { selectCommonArea(); return; }
-            const layout = UNIT_LAYOUTS.find((option) => option.label === event.target.value);
-            if (layout) selectLayout(layout);
-          }}
-          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        >
-          <option value="">Select unit type...</option>
-          {UNIT_LAYOUTS.map((layout) => (
-            <option key={layout.label} value={layout.label}>
-              {layout.label}
-            </option>
-          ))}
-          <option value="Common Area">Common Area</option>
-        </select>
+      <label className="mt-4 flex items-center">
+        <input
+          type="checkbox"
+          checked={isCommonArea}
+          onChange={(event) => toggleCommonArea(event.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-pink-600"
+        />
+        <span className="ml-2 text-sm text-gray-700">Common area</span>
       </label>
 
       {!isCommonArea && (

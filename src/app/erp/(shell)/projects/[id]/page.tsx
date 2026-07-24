@@ -70,6 +70,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             unitNumber: true,
             bedrooms: true,
             bathrooms: true,
+            sqft: true,
+            unitQuality: true,
             fullClean: true,
             fullPaint: true,
             touchUpPaint: true,
@@ -241,19 +243,22 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     billingStatus: item.billingStatus,
   }));
 
-  function getDescLine(desc: string | null, label: string) {
-    const prefix = `${label}:`;
-    return (
-      (desc || "")
-        .split(/\r?\n/)
-        .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
-        ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
-        .trim() || null
-    );
+  function stripDescLines(desc: string | null, labels: string[]) {
+    if (!desc) return desc;
+    const prefixes = labels.map((label) => `${label.toLowerCase()}:`);
+    return desc
+      .split(/\r?\n/)
+      .filter((line) => !prefixes.some((prefix) => line.trim().toLowerCase().startsWith(prefix)))
+      .join("\n")
+      .trim() || null;
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
-  const propertyManager = isTurnover ? getDescLine(project.description, "Property Manager/Maintenance Manager") : null;
-  const sueepPm = isTurnover ? (project.supervisor || getDescLine(project.description, "SUEEP PM")) : null;
+  // "Property" duplicates the page title (building - unit) and "Units" duplicates the Unit
+  // Scope card shown above this block — both already shown elsewhere on Overview, so they're
+  // dropped from the raw "Submitted details" dump.
+  const displayDescription = isTurnover
+    ? stripDescLines(project.description, ["Property", "Units"])
+    : project.description;
 
   const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
   const laborOtSplits = await calcOtSplits(
@@ -372,6 +377,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 unitNumber={project.turnoverRequest.unitNumber}
                 bedrooms={project.turnoverRequest.bedrooms}
                 bathrooms={project.turnoverRequest.bathrooms}
+                sqft={project.turnoverRequest.sqft}
+                unitQuality={project.turnoverRequest.unitQuality}
                 fullClean={project.turnoverRequest.fullClean}
                 fullPaint={project.turnoverRequest.fullPaint}
                 touchUpPaint={project.turnoverRequest.touchUpPaint}
@@ -422,26 +429,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           />
           <WorkOrderAttachmentsSection projectId={project.id} />
           <div className="mt-4" />
-          {isTurnover && (propertyManager || sueepPm) && (
-            <div className="mb-4 flex gap-6 rounded-md border border-gray-200 bg-gray-50 p-3">
-              {propertyManager && (
-                <div>
-                  <p className="text-[10px] uppercase text-gray-500">Property Manager</p>
-                  <p className="mt-0.5 text-sm font-medium text-gray-800">{propertyManager}</p>
-                </div>
-              )}
-              {sueepPm && (
-                <div>
-                  <p className="text-[10px] uppercase text-gray-500">Sueep PM</p>
-                  <p className="mt-0.5 text-sm font-medium text-gray-800">{sueepPm}</p>
-                </div>
-              )}
-            </div>
-          )}
-          {project.description && project.segment !== "REAL_ESTATE" ? (
+          {displayDescription && project.segment !== "REAL_ESTATE" ? (
             <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3">
               <p className="text-[10px] uppercase text-gray-500">Submitted details</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{project.description}</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-gray-800">{displayDescription}</p>
             </div>
           ) : null}
           <ProjectNotesSection
@@ -466,6 +457,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 pricingPackage={project.building?.pricingPackage ?? null}
                 bedrooms={project.turnoverRequest?.bedrooms ?? null}
                 bathrooms={project.turnoverRequest?.bathrooms ?? null}
+                sqft={project.turnoverRequest?.sqft ?? null}
+                unitQuality={project.turnoverRequest?.unitQuality ?? null}
                 fullClean={project.turnoverRequest?.fullClean ?? false}
                 fullPaint={project.turnoverRequest?.fullPaint ?? false}
                 touchUpPaint={project.turnoverRequest?.touchUpPaint ?? null}
@@ -522,6 +515,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         unitNumber: project.turnoverRequest.unitNumber,
         bedrooms: project.turnoverRequest.bedrooms,
         bathrooms: project.turnoverRequest.bathrooms,
+        sqft: project.turnoverRequest.sqft,
+        unitQuality: project.turnoverRequest.unitQuality,
         fullClean: project.turnoverRequest.fullClean,
         fullPaint: project.turnoverRequest.fullPaint,
         touchUpPaint: project.turnoverRequest.touchUpPaint,

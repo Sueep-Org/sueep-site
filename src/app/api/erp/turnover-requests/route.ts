@@ -6,6 +6,12 @@ import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 type RequestBody = Record<string, unknown>;
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
+const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+
+function parseUnitQuality(value: unknown): string | null {
+  const quality = String(value ?? "").trim().toUpperCase();
+  return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
+}
 
 function parseDate(value: unknown): Date | null | undefined {
   if (value === undefined) return undefined;
@@ -60,6 +66,8 @@ export async function POST(req: Request) {
   const bedrooms = parseIntValue(body.bedrooms);
   const bathrooms = parseIntValue(body.bathrooms);
   const isCommonArea = Boolean(body.isCommonArea) || (bedrooms === null && bathrooms === null && body.isCommonArea !== false);
+  const sqft = parseIntValue(body.sqft);
+  const unitQuality = parseUnitQuality(body.unitQuality);
   const fullPaint = Boolean(body.fullPaint);
   const touchUpPaint = parseIntValue(body.touchUpPaint) ?? 0;
   const fullClean = Boolean(body.fullClean);
@@ -100,6 +108,8 @@ export async function POST(req: Request) {
         unitNumber: unitNumber || null,
         bedrooms: isCommonArea ? null : (bedrooms ?? null),
         bathrooms: isCommonArea ? null : (bathrooms ?? null),
+        sqft,
+        unitQuality,
         fullPaint,
         touchUpPaint,
         fullClean,

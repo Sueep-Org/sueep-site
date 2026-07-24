@@ -291,6 +291,8 @@ export function ProjectLaborSection({
     unitNumber: string | null;
     bedrooms: number | null;
     bathrooms: number | null;
+    sqft: number | null;
+    unitQuality: string | null;
     fullClean: boolean;
     fullPaint: boolean;
     touchUpPaint: number | null;
@@ -611,6 +613,8 @@ export function ProjectLaborSection({
           unitNumber={unitScope.unitNumber}
           bedrooms={unitScope.bedrooms}
           bathrooms={unitScope.bathrooms}
+          sqft={unitScope.sqft}
+          unitQuality={unitScope.unitQuality}
           fullClean={unitScope.fullClean}
           fullPaint={unitScope.fullPaint}
           touchUpPaint={unitScope.touchUpPaint}

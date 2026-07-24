@@ -15,6 +15,8 @@ type Props = {
   pricingPackage: unknown;
   bedrooms: number | null;
   bathrooms: number | null;
+  sqft: number | null;
+  unitQuality: string | null;
   fullClean: boolean;
   fullPaint: boolean;
   touchUpPaint: number | null;
@@ -35,6 +37,8 @@ export function UnitScopeEditor({
   pricingPackage,
   bedrooms,
   bathrooms,
+  sqft,
+  unitQuality,
   fullClean,
   fullPaint,
   touchUpPaint,
@@ -51,6 +55,8 @@ export function UnitScopeEditor({
   const [isCommonArea, setIsCommonArea] = useState(bedrooms === null && bathrooms === null);
   const [bedroomsStr, setBedroomsStr] = useState(bedrooms?.toString() ?? "");
   const [bathroomsStr, setBathroomsStr] = useState(bathrooms?.toString() ?? "");
+  const [sqftStr, setSqftStr] = useState(sqft?.toString() ?? "");
+  const [unitQualityVal, setUnitQuality] = useState(unitQuality ?? "");
   const [fullCleanVal, setFullClean] = useState(fullClean);
   const [fullPaintVal, setFullPaint] = useState(fullPaint);
   const [touchUpPaintStr, setTouchUpPaint] = useState(touchUpPaint?.toString() ?? "0");
@@ -114,6 +120,8 @@ export function UnitScopeEditor({
         unitNumber: newUnitNumber,
         bedrooms: isCommonArea ? null : (bedroomsStr !== "" ? Number(bedroomsStr) : null),
         bathrooms: isCommonArea ? null : (bathroomsStr !== "" ? Number(bathroomsStr) : null),
+        sqft: sqftStr !== "" ? Number(sqftStr) : null,
+        unitQuality: unitQualityVal || null,
         fullClean: fullCleanVal,
         fullPaint: fullPaintVal,
         touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
@@ -197,6 +205,40 @@ export function UnitScopeEditor({
           className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         />
         <p className="mt-1 text-[11px] text-gray-400">Purely numeric entries (e.g. &ldquo;1&rdquo;) will display as &ldquo;Unit 1&rdquo; automatically.</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-600" htmlFor="use-sqft">
+            Square footage
+          </label>
+          <input
+            id="use-sqft"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={sqftStr}
+            onChange={(e) => setSqftStr(e.target.value)}
+            placeholder="e.g. 850"
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600" htmlFor="use-quality">
+            Unit quality
+          </label>
+          <select
+            id="use-quality"
+            value={unitQualityVal}
+            onChange={(e) => setUnitQuality(e.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          >
+            <option value="">Select quality...</option>
+            <option value="GOOD">Good</option>
+            <option value="FAIR">Fair</option>
+            <option value="POOR">Poor</option>
+          </select>
+        </div>
       </div>
 
       <TurnoverPricingPackageQuestions

@@ -12,7 +12,11 @@ type UnitScopePayload = {
   paintDate?: unknown;
   cleanDate?: unknown;
   moveOutDate?: unknown;
-  features?: unknown;
+  bedrooms?: unknown;
+  bathrooms?: unknown;
+  isCommonArea?: unknown;
+  sqft?: unknown;
+  unitQuality?: unknown;
   fullPaint?: unknown;
   touchUpPaint?: unknown;
   materialsAdditional?: unknown;
@@ -41,16 +45,17 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function featureToBedsBaths(value: unknown) {
-  const feature = stringValue(value);
-  if (feature === "studio") return { bedrooms: 0, bathrooms: 1 };
-  if (feature === "common-area") return { bedrooms: null, bathrooms: null };
-  const match = feature.match(/^(\d+)\/(\d+)$/);
-  if (!match) return { bedrooms: 1, bathrooms: 1 };
-  return {
-    bedrooms: Number(match[1]),
-    bathrooms: Number(match[2]),
-  };
+const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+
+function parseIntValue(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function parseUnitQuality(value: unknown): string | null {
+  const quality = stringValue(value).toUpperCase();
+  return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
 }
 
 function parseUnitScopes(value: unknown): UnitScopePayload[] {
@@ -159,8 +164,11 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
 
   const requests = await Promise.all(
     units.map(async (unit, index) => {
-      const isCommonArea = stringValue(unit.features) === "common-area";
-      const { bedrooms, bathrooms } = featureToBedsBaths(unit.features);
+      const isCommonArea = Boolean(unit.isCommonArea);
+      const bedrooms = isCommonArea ? null : parseIntValue(unit.bedrooms) ?? 1;
+      const bathrooms = isCommonArea ? null : parseIntValue(unit.bathrooms) ?? 1;
+      const sqft = parseIntValue(unit.sqft);
+      const unitQuality = parseUnitQuality(unit.unitQuality);
       const { startDate, endDate } = unitDateRange(unit);
       const fullPaint = Boolean(unit.fullPaint);
       const touchUpPaint = Boolean(unit.touchUpPaint) && !fullPaint ? 1 : 0;
@@ -214,6 +222,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           unitNumber,
           bedrooms,
           bathrooms,
+          sqft,
+          unitQuality,
           fullPaint,
           touchUpPaint,
           fullClean,

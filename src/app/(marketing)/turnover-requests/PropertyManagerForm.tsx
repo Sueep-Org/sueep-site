@@ -9,18 +9,16 @@ const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
 const label = "block text-xs font-medium text-gray-600";
 
-const UNIT_FEATURE_OPTIONS = [
-  { value: "studio", label: "Studio" },
-  { value: "1/1", label: "1 bed / 1 bath" },
-  { value: "2/1", label: "2 bed / 1 bath" },
-  { value: "2/2", label: "2 bed / 2 bath" },
-  { value: "3/1", label: "3 bed / 1 bath" },
-  { value: "3/2", label: "3 bed / 2 bath" },
-  { value: "3/3", label: "3 bed / 3 bath" },
-  { value: "common-area", label: "Common Area" },
+const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
+const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
+const UNIT_QUALITY_OPTIONS = [
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
 ] as const;
 
-type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
+type BedroomValue = (typeof BEDROOM_OPTIONS)[number];
+type BathroomValue = (typeof BATHROOM_OPTIONS)[number];
 
 const TOTAL_STEPS = 4;
 const STEP_LABELS = ["Building", "Unit & Services", "Your Info", "Sign Contract"] as const;
@@ -38,7 +36,11 @@ export interface BuildingOption {
 interface FormState {
   buildingId: string;
   unitNumber: string;
-  features: UnitFeatureValue;
+  bedrooms: BedroomValue;
+  bathrooms: BathroomValue;
+  isCommonArea: boolean;
+  sqft: string;
+  unitQuality: string;
   fullClean: boolean;
   touchUpPaint: boolean;
   fullPaint: boolean;
@@ -56,7 +58,11 @@ interface FormState {
 const initial: FormState = {
   buildingId: "",
   unitNumber: "",
-  features: "1/1",
+  bedrooms: "1",
+  bathrooms: "1",
+  isCommonArea: false,
+  sqft: "",
+  unitQuality: "",
   fullClean: false,
   touchUpPaint: false,
   fullPaint: false,
@@ -138,11 +144,15 @@ function dollarsToCents(value: string): number {
   return Math.round(parsed * 100);
 }
 
-function parseFeaturesForPricing(features: UnitFeatureValue): { bedrooms?: number; bathrooms?: number } {
-  if (features === "studio") return { bedrooms: 0, bathrooms: 1 };
-  if (features === "common-area") return {};
-  const [beds, baths] = features.split("/").map(Number);
-  return { bedrooms: beds || undefined, bathrooms: baths || undefined };
+function bedroomsToNumber(value: BedroomValue): number {
+  if (value === "Studio") return 0;
+  if (value === "4+") return 4;
+  return Number(value) || 1;
+}
+
+function bathroomsToNumber(value: BathroomValue): number {
+  if (value === "3+") return 3;
+  return Number(value) || 1;
 }
 
 interface Props {
@@ -217,8 +227,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
     setSigningLoading(true);
 
     const pricingPackage = getTurnoverPricingPackage(selectedBuilding?.name ?? "");
-    const { bedrooms, bathrooms } = parseFeaturesForPricing(form.features);
-    const isCommonArea = form.features === "common-area";
+    const isCommonArea = form.isCommonArea;
+    const bedrooms = isCommonArea ? undefined : bedroomsToNumber(form.bedrooms);
+    const bathrooms = isCommonArea ? undefined : bathroomsToNumber(form.bathrooms);
     const pricing = computeTurnoverPricing({
       requestType: "TURNOVER",
       pricingPackage,
@@ -281,7 +292,11 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           unitScopes: [
             {
               unitNumber: form.unitNumber.trim() || "Unit TBD",
-              features: form.features,
+              bedrooms: form.isCommonArea ? undefined : bedroomsToNumber(form.bedrooms),
+              bathrooms: form.isCommonArea ? undefined : bathroomsToNumber(form.bathrooms),
+              isCommonArea: form.isCommonArea,
+              sqft: form.sqft || undefined,
+              unitQuality: form.unitQuality || undefined,
               fullClean: form.fullClean,
               touchUpPaint: form.touchUpPaint,
               fullPaint: form.fullPaint,
@@ -389,21 +404,84 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                 />
               </div>
               <div>
-                <label className={label} htmlFor="pm-features">
-                  Unit layout
+                <label className={label} htmlFor="pm-sqft">
+                  Square footage
+                </label>
+                <input
+                  id="pm-sqft"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  className={input}
+                  value={form.sqft}
+                  onChange={(e) => patch({ sqft: e.target.value })}
+                  placeholder="e.g. 850"
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="pm-bedrooms">
+                  Bedrooms
                 </label>
                 <select
-                  id="pm-features"
+                  id="pm-bedrooms"
                   className={input}
-                  value={form.features}
-                  onChange={(e) => patch({ features: e.target.value as UnitFeatureValue })}
+                  value={form.bedrooms}
+                  disabled={form.isCommonArea}
+                  onChange={(e) => patch({ bedrooms: e.target.value as BedroomValue })}
                 >
-                  {UNIT_FEATURE_OPTIONS.map((o) => (
+                  {BEDROOM_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={label} htmlFor="pm-bathrooms">
+                  Bathrooms
+                </label>
+                <select
+                  id="pm-bathrooms"
+                  className={input}
+                  value={form.bathrooms}
+                  disabled={form.isCommonArea}
+                  onChange={(e) => patch({ bathrooms: e.target.value as BathroomValue })}
+                >
+                  {BATHROOM_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={label} htmlFor="pm-quality">
+                  Unit quality
+                </label>
+                <select
+                  id="pm-quality"
+                  className={input}
+                  value={form.unitQuality}
+                  onChange={(e) => patch({ unitQuality: e.target.value })}
+                >
+                  <option value="">Select quality...</option>
+                  {UNIT_QUALITY_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={form.isCommonArea}
+                    onChange={(e) => patch({ isCommonArea: e.target.checked })}
+                    className="h-4 w-4 rounded accent-[#E73C6E]"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Common area</span>
+                </label>
               </div>
             </div>
 

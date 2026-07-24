@@ -21,6 +21,12 @@ function parseIntValue(value: unknown): number | null | undefined {
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "QUALITY_CHECK", "APPROVED"] as const;
+const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+
+function parseUnitQuality(value: unknown): string | null {
+  const quality = String(value ?? "").trim().toUpperCase();
+  return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
+}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -63,6 +69,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.unitNumber !== undefined) data.unitNumber = String(body.unitNumber || "").trim() || null;
   if (body.bedrooms !== undefined) data.bedrooms = parseIntValue(body.bedrooms) ?? null;
   if (body.bathrooms !== undefined) data.bathrooms = parseIntValue(body.bathrooms) ?? null;
+  if (body.sqft !== undefined) data.sqft = parseIntValue(body.sqft) ?? null;
+  if (body.unitQuality !== undefined) data.unitQuality = parseUnitQuality(body.unitQuality);
   if (body.fullPaint !== undefined) data.fullPaint = Boolean(body.fullPaint);
   if (body.touchUpPaint !== undefined) data.touchUpPaint = parseIntValue(body.touchUpPaint) ?? 0;
   if (body.fullClean !== undefined) data.fullClean = Boolean(body.fullClean);

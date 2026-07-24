@@ -31,25 +31,12 @@ const PRICING_FIELD_LABELS = {
   additionalMaterials: "Additional materials",
   carpetCleaning: "Carpet cleaning",
 } as const;
-const UNIT_FEATURE_OPTIONS = [
-  { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
-  { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
-  { value: "2/1", label: "2/1", bedrooms: 2, bathrooms: 1 },
-  { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
-  { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
-  { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
-  { value: "3/3", label: "3/3", bedrooms: 3, bathrooms: 3 },
-  { value: "common-area", label: "Common Area", bedrooms: 0, bathrooms: 0 },
-] as const;
+const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
+const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
 const UNIT_QUALITY_OPTIONS = [
-  "Vacant",
-  "Occupied",
-  "Light wear",
-  "Heavy dust",
-  "Needs trash-out",
-
-  
-  "Needs maintenance",
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
 ] as const;
 const BUILDING_ADDRESS_OPTIONS = [
   "751 Vandenburg Rd, King of Prussia, PA 19406 (Park Square)",
@@ -64,7 +51,8 @@ const BUILDING_ADDRESS_OPTIONS = [
 const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
 const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
 
-type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
+type BedroomValue = (typeof BEDROOM_OPTIONS)[number];
+type BathroomValue = (typeof BATHROOM_OPTIONS)[number];
 type PricingField = keyof typeof PRICING_FIELD_LABELS;
 type PricePackageValues = Record<PricingField, string>;
 type UnitScope = {
@@ -75,7 +63,10 @@ type UnitScope = {
   paintDate: string;
   cleanDate: string;
   moveOutDate: string;
-  features: UnitFeatureValue;
+  bedrooms: BedroomValue;
+  bathrooms: BathroomValue;
+  isCommonArea: boolean;
+  sqft: string;
   unitQuality: string;
   fullPaint: boolean;
   touchUpPaint: boolean;
@@ -99,7 +90,10 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     paintDate: "",
     cleanDate: "",
     moveOutDate: "",
-    features: "1/1",
+    bedrooms: "1",
+    bathrooms: "1",
+    isCommonArea: false,
+    sqft: "",
     unitQuality: "",
     fullPaint: false,
     touchUpPaint: false,
@@ -121,6 +115,26 @@ function normalizeBeds(value?: number | null): 1 | 2 | 3 {
   return beds === 2 ? 2 : 1;
 }
 
+function bedroomsToNumber(value: BedroomValue): number {
+  if (value === "Studio") return 0;
+  if (value === "4+") return 4;
+  return Number(value) || 1;
+}
+
+function bathroomsToNumber(value: BathroomValue): number {
+  if (value === "3+") return 3;
+  return Number(value) || 1;
+}
+
+function describeUnit(unit: Pick<UnitScope, "isCommonArea" | "bedrooms" | "bathrooms" | "sqft">): string {
+  const base = unit.isCommonArea
+    ? "Common Area"
+    : unit.bedrooms === "Studio"
+      ? "Studio"
+      : `${unit.bedrooms} bed / ${unit.bathrooms} bath`;
+  return unit.sqft.trim() ? `${base}, ${unit.sqft.trim()} sq ft` : base;
+}
+
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     cents / 100
@@ -138,12 +152,9 @@ function dollarsToCents(value: string) {
   return Math.round(parsed * 100);
 }
 
-function getUnitFeature(value: UnitFeatureValue) {
-  return UNIT_FEATURE_OPTIONS.find((option) => option.value === value) ?? UNIT_FEATURE_OPTIONS[0];
-}
+const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
 
 function unitScopeSummary(unit: UnitScope) {
-  const feature = getUnitFeature(unit.features);
   const dateRange =
     unit.startDate || unit.endDate
       ? `, dates: ${unit.startDate || "TBD"} to ${unit.endDate || "TBD"}`
@@ -163,10 +174,10 @@ function unitScopeSummary(unit: UnitScope) {
     unit.otherWork ? `other: ${unit.otherDescription.trim() || "unspecified"}` : null,
   ].filter(Boolean);
 
-  const unitLabel = unit.unitNumber || (unit.features === "common-area" ? "Common Area" : "Unit");
-  return `${unitLabel} (${feature.label}${dateRange}${
+  const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : "Unit");
+  return `${unitLabel} (${describeUnit(unit)}${dateRange}${
     scheduledDates.length ? `, ${scheduledDates.join(", ")}` : ""
-  })${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+  })${unit.unitQuality ? ` - ${UNIT_QUALITY_LABELS[unit.unitQuality] ?? unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
   }`;
 }
@@ -780,10 +791,9 @@ export function NewProjectForm({
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
 
   const unitCount = Math.max(1, unitScopes.length);
-  const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
-  const firstUnitIsCommonArea = unitScopes[0]?.features === "common-area";
-  const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
-  const normalizedBathrooms = firstUnitFeature.bathrooms;
+  const firstUnitIsCommonArea = unitScopes[0]?.isCommonArea ?? false;
+  const normalizedBeds = normalizeBeds(bedroomsToNumber(unitScopes[0]?.bedrooms ?? "1"));
+  const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
   const pricingPackage = useMemo(
     () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
@@ -943,7 +953,6 @@ export function NewProjectForm({
     };
 
     unitScopes.forEach((unit, index) => {
-      const feature = getUnitFeature(unit.features);
       const unitLines: string[] = [];
       let unitTotal = 0;
 
@@ -987,7 +996,7 @@ export function NewProjectForm({
       totalPrice += unitTotal;
       if (unitLines.length > 0) {
         breakdown.push(
-          `${unit.unitNumber || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`)} (${feature.label}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
+          `${unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`)} (${describeUnit(unit)}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
         );
       }
     });
@@ -1058,7 +1067,7 @@ export function NewProjectForm({
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
     const turnoverUnitLabel = unitScopes
-      .map((unit, index) => unit.unitNumber.trim() || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`))
+      .map((unit, index) => unit.unitNumber.trim() || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`))
       .join(", ");
     const generatedTurnoverTitle = `${buildingName.trim() || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
@@ -1127,8 +1136,8 @@ export function NewProjectForm({
       pmPhone: pmPhone.trim() || undefined,
       sueepPmName: sueepPmName.trim() || undefined,
       sueepPmEmail: sueepPmEmail.trim() || undefined,
-      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`)).join(", ") || undefined,
-      unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
+      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`)).join(", ") || undefined,
+      unitQuality: unitScopes.map((unit) => (unit.unitQuality ? UNIT_QUALITY_LABELS[unit.unitQuality] ?? unit.unitQuality : "")).filter(Boolean).join("; ") || undefined,
       moveOutDates: unitScopes.map((unit) => unit.moveOutDate).filter(Boolean).join(", ") || undefined,
       paintDates: unitScopes.map((unit) => unit.paintDate).filter(Boolean).join(", ") || undefined,
       cleanDates: unitScopes.map((unit) => unit.cleanDate).filter(Boolean).join(", ") || undefined,
@@ -1571,17 +1580,17 @@ export function NewProjectForm({
             <div className={isMultiStep ? "min-w-0 flex-1 space-y-3" : "space-y-3"}>
               {unitScopes.map((unit, index) => (
                 <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className={isMultiStep ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]"}>
+                  <div className={isMultiStep ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_1.5fr_auto]"}>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`unit-${unit.id}`}>
-                        {unit.features === "common-area" ? "Title" : "Unit number"}
+                        {unit.isCommonArea ? "Title" : "Unit number"}
                       </label>
                       <input
                         id={`unit-${unit.id}`}
                         className={input}
                         value={unit.unitNumber}
                         onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
-                        placeholder={unit.features === "common-area" ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
+                        placeholder={unit.isCommonArea ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
                       />
                     </div>
                     <div className="min-w-0">
@@ -1609,23 +1618,6 @@ export function NewProjectForm({
                         onChange={(e) => updateUnitScope(unit.id, { endDate: e.target.value })}
                       />
                     </div>
-                    <div className="min-w-0">
-                      <label className={label} htmlFor={`features-${unit.id}`}>
-                        Features
-                      </label>
-                      <select
-                        id={`features-${unit.id}`}
-                        className={input}
-                        value={unit.features}
-                        onChange={(e) => updateUnitScope(unit.id, { features: e.target.value as UnitFeatureValue })}
-                      >
-                        {UNIT_FEATURE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                     <div className={isMultiStep ? "min-w-0 sm:col-span-2 lg:col-span-1" : "min-w-0 md:col-span-2 xl:col-span-1"}>
                       <label className={label} htmlFor={`quality-${unit.id}`}>
                         Unit quality
@@ -1638,8 +1630,8 @@ export function NewProjectForm({
                       >
                         <option value="">Select quality...</option>
                         {UNIT_QUALITY_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
                       </select>
@@ -1653,6 +1645,70 @@ export function NewProjectForm({
                       >
                         Remove
                       </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`bedrooms-${unit.id}`}>
+                        Bedrooms
+                      </label>
+                      <select
+                        id={`bedrooms-${unit.id}`}
+                        className={input}
+                        value={unit.bedrooms}
+                        disabled={unit.isCommonArea}
+                        onChange={(e) => updateUnitScope(unit.id, { bedrooms: e.target.value as BedroomValue })}
+                      >
+                        {BEDROOM_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`bathrooms-${unit.id}`}>
+                        Bathrooms
+                      </label>
+                      <select
+                        id={`bathrooms-${unit.id}`}
+                        className={input}
+                        value={unit.bathrooms}
+                        disabled={unit.isCommonArea}
+                        onChange={(e) => updateUnitScope(unit.id, { bathrooms: e.target.value as BathroomValue })}
+                      >
+                        {BATHROOM_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`sqft-${unit.id}`}>
+                        Square footage
+                      </label>
+                      <input
+                        id={`sqft-${unit.id}`}
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        className={input}
+                        value={unit.sqft}
+                        onChange={(e) => updateUnitScope(unit.id, { sqft: e.target.value })}
+                        placeholder="e.g. 850"
+                      />
+                    </div>
+                    <div className="flex items-end pb-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={unit.isCommonArea}
+                          onChange={(e) => updateUnitScope(unit.id, { isCommonArea: e.target.checked })}
+                          className="h-4 w-4 text-pink-600"
+                        />
+                        <span className={checkboxLabel}>Common area</span>
+                      </label>
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1814,8 +1870,7 @@ export function NewProjectForm({
                       <p className="py-4 text-xs italic text-gray-400">Select services to see {lockedSueepPm ? "a summary" : "pricing"}.</p>
                     ) : (
                       unitScopes.map((unit, index) => {
-                        const feature = getUnitFeature(unit.features);
-                        const unitLabel = unit.unitNumber || (unit.features === "common-area" ? "Common Area" : `Unit ${index + 1}`);
+                        const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`);
                         const pc = packagePricing.pricePackageCents;
                         const items: { label: string; cents: number }[] = [];
                         if (unit.fullClean) items.push({ label: "Full clean", cents: pc.fullClean });
@@ -1831,7 +1886,7 @@ export function NewProjectForm({
                           <div key={unit.id} className="py-3">
                             <p className="mb-2 text-xs font-semibold text-gray-700">
                               {unitLabel}{" "}
-                              <span className="font-normal text-gray-400">({feature.label})</span>
+                              <span className="font-normal text-gray-400">({describeUnit(unit)})</span>
                             </p>
                             <div className="space-y-1.5">
                               {items.map((item) => (

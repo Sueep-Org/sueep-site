@@ -204,6 +204,9 @@ model TurnoverRequest {
   unitNumber  String?
   bedrooms    Int?
   bathrooms   Int?
+  sqft        Int?
+  /// GOOD | FAIR | POOR
+  unitQuality String?
 
   fullPaint           Boolean @default(false)
   touchUpPaint        Int?     @default(0)
