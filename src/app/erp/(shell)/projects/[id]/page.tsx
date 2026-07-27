@@ -655,8 +655,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             label: "Signing",
             content: (
               <ProjectSigningSection
+                projectId={project.id}
                 contracts={(project.contracts ?? []).map((c): ProjectContractItem => ({
                   id: c.id,
+                  contractPdfFilename: c.contractPdfFilename,
+                  docusealTemplateId: c.docusealTemplateId,
                   signingStatus: c.signingStatus,
                   customerEmail: c.customerEmail,
                   docusealSubmissionId: c.docusealSubmissionId,
