@@ -104,7 +104,7 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const project = await prisma.project.findUnique({ where: { id }, select: { id: true } });
+  const project = await prisma.project.findUnique({ where: { id }, select: { id: true, supervisor: true } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: Record<string, unknown>;
@@ -163,9 +163,42 @@ export async function POST(req: Request, ctx: Ctx) {
   if (hourlyRateCents < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
 
   const employeeId = body.employeeId != null ? String(body.employeeId).trim() : "";
+  let employee: { id: string; firstName: string; lastName: string; email: string | null } | null = null;
   if (employeeId) {
-    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    employee = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
+
+  // No labor can be logged on a project with no PM assigned, except by a
+  // SUPERVISOR-role ERP user logging their own hours, which auto-assigns them
+  // as the PM instead of blocking them, so the very first entry on a new
+  // project doesn't get stuck needing a PM that only labor logging can set.
+  if (!project.supervisor || !project.supervisor.trim()) {
+    // Covers both an employee picked from the roster (employeeId set) and a
+    // free-typed "Other" worker name that happens to match a real employee
+    // (findEmployeeEmailByName, same lookup used for PM-alert recipients).
+    const candidateEmail = employee?.email ?? (await findEmployeeEmailByName(workerName));
+    const candidateName = employee ? `${employee.firstName} ${employee.lastName}`.trim() : workerName;
+    let autoAssignName: string | null = null;
+    if (candidateEmail) {
+      const erpUser = await prisma.erpUser.findFirst({
+        where: { email: { equals: candidateEmail, mode: "insensitive" } },
+        select: { role: true },
+      });
+      if (erpUser?.role === "SUPERVISOR") {
+        autoAssignName = candidateName;
+      }
+    }
+    if (!autoAssignName) {
+      return NextResponse.json(
+        { error: "This project needs a supervisor (PM) assigned before labor can be logged." },
+        { status: 400 },
+      );
+    }
+    await prisma.project.update({ where: { id }, data: { supervisor: autoAssignName } });
   }
 
   // Location support
