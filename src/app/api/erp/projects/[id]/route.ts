@@ -96,7 +96,31 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
   if (body.pricingPackage !== undefined) data.pricingPackage = body.pricingPackage ?? null;
-  if (body.contractValue !== undefined) data.contractValueCents = cents(body.contractValue);
+  if (body.contractValue !== undefined) {
+    data.contractValueCents = cents(body.contractValue);
+
+    // For a turnover unit, billing prefers TurnoverRequest.approvedPriceCents over
+    // Project.contractValueCents (see billing/janitorial/route.ts), so a manual edit
+    // here has to flow into that override to actually change what gets billed,
+    // otherwise it only ever changes what shows on dashboards/reports.
+    if (existing.turnoverRequestId) {
+      if (data.contractValueCents === null) {
+        // Clearing the override reverts billing to the pricing-package's computed
+        // price, so mirror that same value back here instead of leaving this blank.
+        const tr = await prisma.turnoverRequest.update({
+          where: { id: existing.turnoverRequestId },
+          data: { approvedPriceCents: null },
+          select: { priceCents: true },
+        });
+        data.contractValueCents = tr.priceCents ?? null;
+      } else {
+        await prisma.turnoverRequest.update({
+          where: { id: existing.turnoverRequestId },
+          data: { approvedPriceCents: data.contractValueCents as number },
+        });
+      }
+    }
+  }
   if (body.estMaterial !== undefined) data.estMaterialCents = cents(body.estMaterial);
   if (body.estTravel !== undefined) data.estTravelCents = cents(body.estTravel);
   if (body.estLabor !== undefined) data.estLaborCents = cents(body.estLabor);

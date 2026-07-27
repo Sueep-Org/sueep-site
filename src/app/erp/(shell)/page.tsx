@@ -481,6 +481,11 @@ export default async function ErpDashboardPage() {
                               Over budget
                             </span>
                           )}
+                          {severity === "critical" && (
+                            <span title={budgetTitle} className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                              Margin &lt;30%
+                            </span>
+                          )}
                           {severity === "watch" && (
                             <span title={budgetTitle} className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
                               Watch hours

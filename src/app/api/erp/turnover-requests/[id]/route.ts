@@ -150,6 +150,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
   try {
     const request = await prisma.turnoverRequest.update({ where: { id }, data: data as object });
 
+    // Keep the linked project's contractValueCents mirroring whatever billing
+    // actually uses (approvedPriceCents override if one is set, else the
+    // freshly computed priceCents), so Financials/dashboards never silently
+    // disagree with the real billed price. A manual override left in
+    // approvedPriceCents survives this untouched, since it only changes here
+    // when this same PATCH just set it (pmSignatureUrl branch above).
+    const effectiveApprovedPriceCents =
+      data.approvedPriceCents !== undefined ? (data.approvedPriceCents as number | null) : existing.approvedPriceCents;
+    await prisma.project.updateMany({
+      where: { turnoverRequestId: id },
+      data: { contractValueCents: effectiveApprovedPriceCents ?? request.priceCents },
+    });
+
     if (data.billingStatus) {
       await syncProjectBillingFromRequest(id, String(data.billingStatus));
     }

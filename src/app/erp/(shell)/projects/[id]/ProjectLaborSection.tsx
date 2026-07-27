@@ -9,6 +9,7 @@ import {
   turnoverMarginSeverity,
   type TurnoverMarginSeverity,
 } from "@/lib/erp/turnoverHoursBudget";
+import { TRANSPORTATION_METHOD_OPTIONS, transportationMethodShortLabel } from "@/lib/erp/transportationMethods";
 import { UnitScopeCard } from "./UnitScopeCard";
 
 export type LaborRow = {
@@ -21,6 +22,7 @@ export type LaborRow = {
   hours: string;
   clockIn: string | null;
   commuteHours: number | null;
+  transportationMethod: string | null;
   regHours: number;
   otHours: number;
   hourlyRateCents: number;
@@ -308,9 +310,10 @@ export function ProjectLaborSection({
   const [filterLaborer, setFilterLaborer] = useState("");
   const [clockInStr, setClockInStr] = useState("08:00");
   const [clockOutStr, setClockOutStr] = useState("");
-  const [commuteHoursStr, setCommuteHoursStr] = useState("");
+  const [commuteMinutesStr, setCommuteMinutesStr] = useState("");
+  const [transportationMethodStr, setTransportationMethodStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteHours: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteHours: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
   const [sovPick, setSovPick] = useState<string>("");
   const [sovMarkComplete, setSovMarkComplete] = useState(false);
   const [unitCompleted, setUnitCompleted] = useState(false);
@@ -382,7 +385,8 @@ export function ProjectLaborSection({
       role: r.role ?? "",
       clockIn: defaultIn,
       clockOut: hoursToClockOut(defaultIn, Number(r.hours)),
-      commuteHours: r.commuteHours != null ? String(r.commuteHours) : "",
+      commuteMinutes: r.commuteHours != null ? String(Math.round(r.commuteHours * 60)) : "",
+      transportationMethod: r.transportationMethod ?? "",
       hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
       taskDescription: r.taskDescription ?? "",
       sovItemId: r.sovItemId ?? "",
@@ -403,18 +407,19 @@ export function ProjectLaborSection({
         role: editFields.role || null,
         hours: calcHours(editFields.clockIn, editFields.clockOut),
         clockIn: editFields.clockIn || null,
-        commuteHours: editFields.commuteHours === "" ? null : editFields.commuteHours,
+        commuteHours: editFields.commuteMinutes === "" ? null : String(Number(editFields.commuteMinutes) / 60),
+        transportationMethod: editFields.transportationMethod || null,
         hourlyRate: editFields.hourlyRate,
         taskDescription: taskDesc,
         sovItemId: sovItemId,
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; transportationMethod: string | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, transportationMethod: updated.transportationMethod ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
             : e,
         ),
       );
@@ -439,8 +444,8 @@ export function ProjectLaborSection({
       setError("Clock-out must be after clock-in.");
       return;
     }
-    if (commuteHoursStr && Number(commuteHoursStr) > hours) {
-      setError("Commute hours can't exceed total hours.");
+    if (commuteMinutesStr && Number(commuteMinutesStr) / 60 > hours) {
+      setError("Commute time can't exceed total hours.");
       return;
     }
     if (hoursBudget != null && contractValueCents) {
@@ -489,7 +494,8 @@ export function ProjectLaborSection({
           role: role || undefined,
           hours,
           clockIn: clockInStr || undefined,
-          commuteHours: commuteHoursStr !== "" ? Number(commuteHoursStr) : undefined,
+          commuteHours: commuteMinutesStr !== "" ? Number(commuteMinutesStr) / 60 : undefined,
+          transportationMethod: transportationMethodStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
           sovItemId: sovItemId || undefined,
@@ -506,6 +512,7 @@ export function ProjectLaborSection({
         hours?: unknown;
         clockIn?: string | null;
         commuteHours?: number | null;
+        transportationMethod?: string | null;
         hourlyRateCents?: number;
         taskDescription?: string | null;
         sovItemId?: string | null;
@@ -529,6 +536,7 @@ export function ProjectLaborSection({
         hours: String(data.hours),
         clockIn: data.clockIn ?? clockInStr,
         commuteHours: data.commuteHours ?? null,
+        transportationMethod: data.transportationMethod ?? null,
         regHours: Number(data.hours),
         otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,
@@ -555,7 +563,8 @@ export function ProjectLaborSection({
       setRoleStr("");
       setClockInStr("08:00");
       setClockOutStr("");
-      setCommuteHoursStr("");
+      setCommuteMinutesStr("");
+      setTransportationMethodStr("");
       setSovPick("");
       setSovMarkComplete(false);
       setUnitCompleted(false);
@@ -616,9 +625,11 @@ export function ProjectLaborSection({
           className={
             marginSeverity === "bad"
               ? "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
-              : marginSeverity === "watch"
-                ? "flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
-                : "flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+              : marginSeverity === "critical"
+                ? "flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3"
+                : marginSeverity === "watch"
+                  ? "flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  : "flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
           }
         >
           {marginSeverity !== "on-track" && (
@@ -626,7 +637,9 @@ export function ProjectLaborSection({
               className={
                 marginSeverity === "bad"
                   ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white"
-                  : "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
+                  : marginSeverity === "critical"
+                    ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white"
+                    : "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
               }
             >
               !
@@ -637,16 +650,20 @@ export function ProjectLaborSection({
               className={
                 marginSeverity === "bad"
                   ? "text-sm font-medium text-red-800"
-                  : marginSeverity === "watch"
-                    ? "text-sm font-medium text-amber-800"
-                    : "text-sm text-gray-600"
+                  : marginSeverity === "critical"
+                    ? "text-sm font-medium text-orange-800"
+                    : marginSeverity === "watch"
+                      ? "text-sm font-medium text-amber-800"
+                      : "text-sm text-gray-600"
               }
             >
               {marginSeverity === "bad"
                 ? `Well over the hours budget. This job is on track to lose money on labor (~${impliedMarginPct.toFixed(0)}% margin).`
-                : marginSeverity === "watch"
-                  ? `Over the recommended hours budget. Margin is trending below the 50% target (~${impliedMarginPct.toFixed(0)}%).`
-                  : "On track for the 50% margin target."}
+                : marginSeverity === "critical"
+                  ? `Margin has dropped below 30% (~${impliedMarginPct.toFixed(0)}%). Getting close to break-even.`
+                  : marginSeverity === "watch"
+                    ? `Over the recommended hours budget. Margin is trending below the 50% target (~${impliedMarginPct.toFixed(0)}%).`
+                    : "On track for the 50% margin target."}
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
               {totalHoursLogged.toFixed(1)} hrs logged of a {hoursBudget.toFixed(1)} hr budget
@@ -732,18 +749,32 @@ export function ProjectLaborSection({
             </p>
           </div>
           <div>
-            <label className={label} htmlFor="l-commute">Commute hours (optional)</label>
+            <label className={label} htmlFor="l-commute">Commute minutes (optional)</label>
             <input
               id="l-commute"
               type="number"
               min={0}
-              step="0.25"
+              step="5"
               className={input}
-              placeholder="e.g. 1"
-              value={commuteHoursStr}
-              onChange={(e) => setCommuteHoursStr(e.target.value)}
+              placeholder="e.g. 15"
+              value={commuteMinutesStr}
+              onChange={(e) => setCommuteMinutesStr(e.target.value)}
             />
             <p className="mt-1 text-[11px] text-gray-400">Included in the hours above, not added on top.</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="l-transportation">Transportation</label>
+            <select
+              id="l-transportation"
+              className={input}
+              value={transportationMethodStr}
+              onChange={(e) => setTransportationMethodStr(e.target.value)}
+            >
+              <option value="">— Not set —</option>
+              {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           {showFinancials ? (
             <div>
@@ -948,12 +979,22 @@ export function ProjectLaborSection({
                         <input
                           type="number"
                           min={0}
-                          step="0.25"
+                          step="5"
                           className={editInput}
-                          placeholder="—"
-                          value={editFields.commuteHours}
-                          onChange={(e) => setEditFields((f) => ({ ...f, commuteHours: e.target.value }))}
+                          placeholder="min"
+                          value={editFields.commuteMinutes}
+                          onChange={(e) => setEditFields((f) => ({ ...f, commuteMinutes: e.target.value }))}
                         />
+                        <select
+                          className={`${editInput} mt-1`}
+                          value={editFields.transportationMethod}
+                          onChange={(e) => setEditFields((f) => ({ ...f, transportationMethod: e.target.value }))}
+                        >
+                          <option value="">— Transport —</option>
+                          {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-1 pr-2 text-xs text-gray-400">—</td>
                       {showFinancials && (
@@ -1029,7 +1070,10 @@ export function ProjectLaborSection({
                       <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
                       <td className="py-2 pr-2 text-gray-500">
-                        {r.commuteHours != null ? r.commuteHours.toFixed(2) : <span className="text-gray-300">—</span>}
+                        {r.commuteHours != null ? `${Math.round(r.commuteHours * 60)} min` : <span className="text-gray-300">—</span>}
+                        {transportationMethodShortLabel(r.transportationMethod) && (
+                          <span className="block text-[11px] text-gray-400">{transportationMethodShortLabel(r.transportationMethod)}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
                         {r.otHours > 0
@@ -1104,13 +1148,21 @@ export function ProjectLaborSection({
           <div className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-                pendingOverBudget.severity === "bad" ? "bg-red-500" : "bg-amber-400"
+                pendingOverBudget.severity === "bad"
+                  ? "bg-red-500"
+                  : pendingOverBudget.severity === "critical"
+                    ? "bg-orange-500"
+                    : "bg-amber-400"
               }`}
             >
               !
             </span>
             <h3 className="text-sm font-semibold text-gray-800">
-              {pendingOverBudget.severity === "bad" ? "This puts the job in the red" : "This goes over budget"}
+              {pendingOverBudget.severity === "bad"
+                ? "This puts the job in the red"
+                : pendingOverBudget.severity === "critical"
+                  ? "This drops margin below 30%"
+                  : "This goes over budget"}
             </h3>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
@@ -1121,7 +1173,11 @@ export function ProjectLaborSection({
           </div>
           <p
             className={`mt-1 text-sm font-medium ${
-              pendingOverBudget.severity === "bad" ? "text-red-600" : "text-amber-600"
+              pendingOverBudget.severity === "bad"
+                ? "text-red-600"
+                : pendingOverBudget.severity === "critical"
+                  ? "text-orange-600"
+                  : "text-amber-600"
             }`}
           >
             ~{pendingOverBudget.projectedMarginPct.toFixed(0)}% margin (target: 50%)
@@ -1142,7 +1198,11 @@ export function ProjectLaborSection({
                 submitLaborEntry(p.form, p.hours);
               }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
-                pendingOverBudget.severity === "bad" ? "bg-red-600 hover:bg-red-700" : "bg-amber-500 hover:bg-amber-600"
+                pendingOverBudget.severity === "bad"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : pendingOverBudget.severity === "critical"
+                    ? "bg-orange-600 hover:bg-orange-700"
+                    : "bg-amber-500 hover:bg-amber-600"
               }`}
             >
               Add anyway

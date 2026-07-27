@@ -309,6 +309,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       hours: e.hours.toString(),
       clockIn: e.clockIn ?? null,
       commuteHours: e.commuteHours ?? null,
+      transportationMethod: e.transportationMethod ?? null,
       regHours: split.regHours,
       otHours: split.otHours,
       hourlyRateCents: e.hourlyRateCents,
@@ -498,6 +499,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             daysFromLogs={daysFromLogs}
             qualifyingCoContractValueCents={qualifyingCoContractValueCents}
             qualifyingCoCount={qualifyingChangeOrders.length}
+            isTurnoverUnit={!!project.turnoverRequestId}
           />
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>

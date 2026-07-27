@@ -401,17 +401,20 @@ export function buildProjectRequestConfirmationEmail(params: {
 
 export function buildTurnoverMarginAlertEmail(params: {
   jobTitle: string;
-  severity: "watch" | "bad";
+  severity: "watch" | "critical" | "bad";
   hoursLogged: number;
   hoursBudget: number;
   marginPct: number;
   projectUrl: string | null;
 }) {
-  const isBad = params.severity === "bad";
-  const color = isBad ? "#dc2626" : "#d97706";
-  const headline = isBad
-    ? "Turnover is now losing money on labor"
-    : "Turnover has gone over its hours budget";
+  const color =
+    params.severity === "bad" ? "#dc2626" : params.severity === "critical" ? "#ea580c" : "#d97706";
+  const headline =
+    params.severity === "bad"
+      ? "Turnover is now losing money on labor"
+      : params.severity === "critical"
+        ? "Turnover margin has dropped below 30%"
+        : "Turnover has gone over its hours budget";
 
   const cta = params.projectUrl
     ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View labor log</a></p>`

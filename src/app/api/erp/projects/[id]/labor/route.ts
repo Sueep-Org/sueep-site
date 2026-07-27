@@ -9,6 +9,7 @@ import {
   turnoverMarginSeverity,
   turnoverMarginWorsened,
 } from "@/lib/erp/turnoverHoursBudget";
+import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
 
 /** Same "Label: value" line format used to embed a Sueep PM name in the
  * description for older projects that predate the dedicated supervisor
@@ -140,6 +141,12 @@ export async function POST(req: Request, ctx: Ctx) {
     commuteHours = c;
   }
 
+  const transportationMethodRaw = body.transportationMethod ? String(body.transportationMethod).toUpperCase() : null;
+  if (transportationMethodRaw && !TRANSPORTATION_METHODS.includes(transportationMethodRaw as (typeof TRANSPORTATION_METHODS)[number])) {
+    return NextResponse.json({ error: "Invalid transportationMethod" }, { status: 400 });
+  }
+  const transportationMethod = transportationMethodRaw;
+
   let hourlyRateCents: number;
   if (typeof body.hourlyRateCents === "number" && Number.isFinite(body.hourlyRateCents)) {
     hourlyRateCents = Math.round(body.hourlyRateCents);
@@ -186,6 +193,7 @@ export async function POST(req: Request, ctx: Ctx) {
         hours,
         clockIn,
         commuteHours,
+        transportationMethod,
         hourlyRateCents,
         taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
         sovItemId: sovItemId || null,

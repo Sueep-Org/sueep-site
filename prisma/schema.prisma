@@ -735,6 +735,9 @@ model LaborEntry {
   /// Portion of `hours` spent commuting rather than on-site, e.g. 1 of a 9-hour shift.
   commuteHours Float?
 
+  /// COMPANY_VAN | EMPLOYEE_VEHICLE | PICKUP | MEETUP_SPOT — how this worker got to the job that day
+  transportationMethod String?
+
   taskDescription String?
 
   /// Optional link to a ProjectSOVItem (replaces taskDescription when set)

@@ -21,7 +21,11 @@ export function turnoverTotalHoursBudget(contractValueCents: number): number {
   return turnoverHoursBudget(contractValueCents, 1);
 }
 
-export type TurnoverMarginSeverity = "on-track" | "watch" | "bad";
+/** Second PM-alert threshold, between the 50% target and break-even; see
+ *  turnoverMarginSeverity. */
+const CRITICAL_MARGIN_THRESHOLD_PCT = 30;
+
+export type TurnoverMarginSeverity = "on-track" | "watch" | "critical" | "bad";
 
 /** Margin implied by hours logged so far, using the blended rate rather than
  * each worker's real hourlyRateCents, deliberately, so this can be shown to
@@ -36,16 +40,18 @@ export function turnoverImpliedMarginPct(contractValueCents: number, actualHours
 
 export function turnoverMarginSeverity(marginPct: number): TurnoverMarginSeverity {
   if (marginPct >= TARGET_LABOR_SHARE_OF_PRICE * 100) return "on-track";
-  if (marginPct >= 0) return "watch";
+  if (marginPct >= CRITICAL_MARGIN_THRESHOLD_PCT) return "watch";
+  if (marginPct >= 0) return "critical";
   return "bad";
 }
 
-const SEVERITY_RANK: Record<TurnoverMarginSeverity, number> = { "on-track": 0, watch: 1, bad: 2 };
+const SEVERITY_RANK: Record<TurnoverMarginSeverity, number> = { "on-track": 0, watch: 1, critical: 2, bad: 3 };
 
-/** True the first time a severity crosses into a worse tier (on-track to
- * watch, watch to bad, or on-track straight to bad). False if it was already
- * at that tier or worse, so a PM alert only fires on the entry that actually
- * caused the crossing, not on every entry logged after that point. */
+/** True the first time a severity crosses into a worse tier (e.g. on-track to
+ * watch, watch to critical, critical to bad, or a jump straight past a tier).
+ * False if it was already at that tier or worse, so a PM alert only fires on
+ * the entry that actually caused the crossing, not on every entry logged
+ * after that point. */
 export function turnoverMarginWorsened(
   before: TurnoverMarginSeverity,
   after: TurnoverMarginSeverity

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
 import { syncSovPercentDone } from "@/lib/sovSync";
+import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
 
 type Ctx = { params: Promise<{ id: string; entryId: string }> };
 
@@ -46,6 +47,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
       if (c > effectiveHours) return NextResponse.json({ error: "commuteHours cannot exceed hours" }, { status: 400 });
       data.commuteHours = c;
     }
+  }
+  if (body.transportationMethod !== undefined) {
+    const tm = body.transportationMethod ? String(body.transportationMethod).toUpperCase() : null;
+    if (tm && !TRANSPORTATION_METHODS.includes(tm as (typeof TRANSPORTATION_METHODS)[number])) {
+      return NextResponse.json({ error: "Invalid transportationMethod" }, { status: 400 });
+    }
+    data.transportationMethod = tm;
   }
   if (body.hourlyRate !== undefined) {
     const rate = typeof body.hourlyRate === "string"

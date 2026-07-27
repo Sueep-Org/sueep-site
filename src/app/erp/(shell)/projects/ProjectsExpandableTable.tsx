@@ -383,7 +383,7 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
                   <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
                   <td className="py-1 pr-3 text-right tabular-nums text-slate-500">
-                    {e.commuteHours != null ? e.commuteHours.toFixed(2) : <EmptyValue />}
+                    {e.commuteHours != null ? `${Math.round(e.commuteHours * 60)} min` : <EmptyValue />}
                   </td>
                   {showFinancials && <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>}
                   <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>

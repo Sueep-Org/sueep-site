@@ -38,6 +38,9 @@ type Props = {
   /** Sum of contractValueCents across non-void/rejected change orders — display only, never written back to contractValueCents. */
   qualifyingCoContractValueCents: number;
   qualifyingCoCount: number;
+  /** True for a janitorial turnover unit. Editing contract value here also sets the
+   * TurnoverRequest's approved-price override, so it's what actually gets billed. */
+  isTurnoverUnit?: boolean;
 };
 
 function formatCurrency(cents: number): string {
@@ -70,6 +73,7 @@ export function ProjectFinancialsEditor({
   daysFromLogs,
   qualifyingCoContractValueCents,
   qualifyingCoCount,
+  isTurnoverUnit = false,
 }: Props) {
   const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
@@ -343,6 +347,9 @@ export function ProjectFinancialsEditor({
             <div>
               <label className={labelCls} htmlFor="fin-contract">Contract value ($)</label>
               <input id="fin-contract" type="number" min={0} step={0.01} className={inputCls} value={contractValue} onChange={(e) => setContractValue(e.target.value)} placeholder="0.00" />
+              {isTurnoverUnit && (
+                <p className="mt-1 text-[11px] text-gray-400">Sets this unit&apos;s approved price, the amount that actually gets billed, not just a label. Clear it to go back to the pricing package&apos;s computed price.</p>
+              )}
               {qualifyingCoCount > 0 && (
                 <p className="mt-1 text-xs text-gray-400">
                   + {formatCurrency(qualifyingCoContractValueCents)} across {qualifyingCoCount} change order{qualifyingCoCount === 1 ? "" : "s"}
