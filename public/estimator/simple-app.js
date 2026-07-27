@@ -2903,19 +2903,19 @@ async function initApp(){
     const finalDays = Math.ceil(area / 7500);
     const touchupDays = Math.ceil(area / 6000);
     _phaseCrews.rough = [
-      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, days: roughDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
       { role: 'foreman', rate: 220, days: roughDays, _uid: uid() },
     ];
     _phaseCrews.final = [
-      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, days: finalDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
       { role: 'foreman', rate: 220, days: finalDays, _uid: uid() },
     ];
     _phaseCrews.touchup = [
-      { role: 'cleaner', rate: 22, days: touchupDays, _uid: uid() },
+      { role: 'cleaner', rate: 22, hours: 8, days: touchupDays, _uid: uid() },
       { role: 'foreman', rate: 220, days: touchupDays, _uid: uid() },
     ];
     _deletedPhaseIds = new Set();
@@ -2926,7 +2926,7 @@ async function initApp(){
     let cleanersPay = 0, foremanPay = 0, pmPay = 0;
     if (crew.length > 0) {
       for (const m of crew) {
-        if (m.role === 'cleaner') cleanersPay += (m.rate || 0) * (m.days || 0);
+        if (m.role === 'cleaner') cleanersPay += (m.rate || 0) * (m.hours ?? 8) * (m.days || 0);
         else if (m.role === 'project_manager') pmPay += (m.rate || 0) * (m.days || 0);
         else foremanPay += (m.rate || 0) * (m.days || 0);
       }
@@ -2989,7 +2989,7 @@ async function initApp(){
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
       crew.forEach((m) => {
-        const pay = m.role === 'cleaner' ? (m.rate||0)*(m.days||0)*8 : (m.rate||0)*(m.days||0);
+        const pay = m.role === 'cleaner' ? (m.rate||0)*(m.hours??8)*(m.days||0) : (m.rate||0)*(m.days||0);
         const el = document.getElementById(`crew_pay_${m._uid}`);
         if (el) el.textContent = fmt$(pay);
       });
@@ -3221,7 +3221,9 @@ async function initApp(){
         btn.type = 'button'; btn.textContent = label;
         btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
         btn.onclick = () => {
-          _phaseCrews[pid].push({ role, rate: defaultRate, days: 1, _uid: Math.random().toString(36).slice(2) });
+          const newMember = { role, rate: defaultRate, days: 1, _uid: Math.random().toString(36).slice(2) };
+          if (role === 'cleaner') newMember.hours = 8;
+          _phaseCrews[pid].push(newMember);
           _renderPhaseTable();
         };
         return btn;
@@ -3257,10 +3259,10 @@ async function initApp(){
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Role', 'Name', 'Rate', 'Days', 'Pay', ''].forEach((h, hi) => {
+        ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
           const th = document.createElement('th');
           th.textContent = h;
-          th.style.cssText = `text-align:${hi >= 3 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+          th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
           hrow.appendChild(th);
         });
         const roleOrder = { cleaner: 0, foreman: 1, project_manager: 2 };
@@ -3294,10 +3296,28 @@ async function initApp(){
           rateInput.style.cssText = iStyle + 'width:64px;';
           rateInput.addEventListener('input', () => { member.rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
           const rateLabel = document.createElement('span');
-          rateLabel.textContent = '$/day';
+          rateLabel.textContent = member.role === 'cleaner' ? '$/hr' : '$/day';
           rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
           rateWrap.appendChild(rateInput); rateWrap.appendChild(rateLabel);
           rateTd.appendChild(rateWrap);
+
+          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+          if (member.role === 'cleaner') {
+            const hoursWrap = document.createElement('div'); hoursWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const hoursInput = document.createElement('input');
+            hoursInput.type = 'number'; hoursInput.min = '0'; hoursInput.max = '24'; hoursInput.step = '0.5';
+            hoursInput.value = member.hours ?? 8;
+            hoursInput.style.cssText = iStyle + 'width:44px;';
+            hoursInput.addEventListener('input', () => { member.hours = parseFloat(hoursInput.value) || 0; _updateCrewCalcs(); });
+            const hoursLabel = document.createElement('span');
+            hoursLabel.textContent = 'hrs';
+            hoursLabel.style.cssText = 'font-size:11px;color:#6b7280;';
+            hoursWrap.appendChild(hoursInput); hoursWrap.appendChild(hoursLabel);
+            hoursTd.appendChild(hoursWrap);
+          } else {
+            hoursTd.textContent = '—';
+            hoursTd.style.cssText += 'text-align:center;color:#d1d5db;font-size:12px;';
+          }
 
           const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
           const daysInput = document.createElement('input');
@@ -3309,7 +3329,7 @@ async function initApp(){
           const payTd = tr.insertCell();
           payTd.id = `crew_pay_${member._uid || idx}`;
           payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
-          const pay = member.role === 'cleaner' ? (member.rate||0)*(member.days||0)*8 : (member.rate||0)*(member.days||0);
+          const pay = member.role === 'cleaner' ? (member.rate||0)*(member.hours??8)*(member.days||0) : (member.rate||0)*(member.days||0);
           payTd.textContent = fmt$(pay);
 
           const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
