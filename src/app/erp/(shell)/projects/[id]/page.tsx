@@ -628,6 +628,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               />
             ),
           },
+        ]
+      : []),
+    ...(isPostConstruction || isTurnover
+      ? [
           {
             label: "Change Orders",
             content: (
