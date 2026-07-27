@@ -282,12 +282,16 @@ export function ProjectChangeOrdersSection({
 
       const proj = (await projRes.json()) as { labor_breakdown?: EstimatorLaborBreakdown };
       const lb = proj.labor_breakdown;
-      const co = lb?.change_order;
-      if (!lb || !co) {
-        setEstModalError("That estimator project has no change order set up yet.");
+      if (!lb || !(lb.phases?.length)) {
+        setEstModalError("That estimator project has no labor breakdown set up yet.");
         setEstModalLoading(false);
         return;
       }
+      // change_order is only present once someone has actually opened and saved the
+      // Change Order card in the estimator, same as the estimator's own UI (showChangeOrderCard
+      // in simple-app.js), it just falls back to default billing rates rather than erroring.
+      const co = lb.change_order ?? {};
+      const usedDefaultRates = !lb.change_order;
 
       const cleanerRate = lb.cleaner_rate ?? 0;
       const foremanRate = lb.foreman_rate ?? 0;
@@ -318,6 +322,9 @@ export function ProjectChangeOrdersSection({
       }
       setEntries((prev) => [data, ...prev]);
       setEstModalOpen(false);
+      if (usedDefaultRates) {
+        setError("Imported, but no saved change-order billing rates were found for that estimator project, so default rates ($42/hr cleaner, $47/hr supervisor, $0 materials) were used. Edit the change order below if those aren't right.");
+      }
       router.refresh();
     } catch {
       setEstModalError("Could not load that project. Try again.");
