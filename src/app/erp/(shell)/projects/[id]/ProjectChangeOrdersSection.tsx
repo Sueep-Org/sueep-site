@@ -270,7 +270,7 @@ export function ProjectChangeOrdersSection({
     }
   }
 
-  async function importEstimatorChangeOrder(estId: string, estName: string) {
+  async function importEstimatorChangeOrder(estId: string) {
     const anonId = localStorage.getItem("ai_estimator_anon_id")!;
     setEstModalLoading(true);
     setEstModalError("");
@@ -307,7 +307,7 @@ export function ProjectChangeOrdersSection({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          title: estName,
+          title: "Change Order",
           status: "DRAFT",
           contractValue: laborChangeOrder,
           estLabor: laborCosts,
@@ -454,7 +454,7 @@ export function ProjectChangeOrdersSection({
                   <li key={p.id}>
                     <button
                       type="button"
-                      onClick={() => importEstimatorChangeOrder(p.id, p.name)}
+                      onClick={() => importEstimatorChangeOrder(p.id)}
                       className="w-full px-3 py-2.5 text-left text-sm text-gray-800 hover:bg-yellow-50 hover:text-yellow-900"
                     >
                       {p.name}
