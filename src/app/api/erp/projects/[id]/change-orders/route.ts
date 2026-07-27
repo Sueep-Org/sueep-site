@@ -56,6 +56,9 @@ export async function POST(req: Request, ctx: Ctx) {
     : [];
 
   const estimatedCostCents = inputToCents(body.estimatedCost) ?? null;
+  const contractValueCents = inputToCents(body.contractValue) ?? null;
+  const estLaborCents = inputToCents(body.estLabor) ?? null;
+  const estMaterialCents = inputToCents(body.estMaterial) ?? null;
 
   // A project's own contractValueCents is the base deal's value only — it's
   // what margin and the base commission line read from, so it must never be
@@ -72,6 +75,9 @@ export async function POST(req: Request, ctx: Ctx) {
         requestedBy: body.requestedBy != null ? String(body.requestedBy).trim() || null : null,
         supervisor: body.supervisor != null ? String(body.supervisor).trim() || null : null,
         estimatedCostCents: estimatedCostCents ?? undefined,
+        contractValueCents: contractValueCents ?? undefined,
+        estLaborCents: estLaborCents ?? undefined,
+        estMaterialCents: estMaterialCents ?? undefined,
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,

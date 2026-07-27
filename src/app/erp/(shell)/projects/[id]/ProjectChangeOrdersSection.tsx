@@ -5,6 +5,59 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 
+const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
+
+type EstimatorCrewMember = { role?: string; rate?: number; hours?: number; days?: number };
+type EstimatorPhase = { persons?: number; days?: number; crew?: EstimatorCrewMember[] };
+type EstimatorChangeOrder = {
+  cleaner_billing_rate?: number;
+  supervisor_billing_rate?: number;
+  pm_billing_rate?: number;
+  hours_per_day?: number;
+  materials?: number;
+};
+type EstimatorLaborBreakdown = {
+  cleaner_rate?: number;
+  foreman_rate?: number;
+  phases?: EstimatorPhase[];
+  change_order?: EstimatorChangeOrder;
+};
+
+/** Mirrors the estimator's own per-phase labor cost math (public/estimator/simple-app.js,
+ * _calcPhase) so a change order's cost lines match what the estimator would show, without
+ * touching estimator code, this just reads its already-public output shape. */
+function estimatorPhaseLaborCost(phase: EstimatorPhase, cleanerRate: number, foremanRate: number): number {
+  const crew = phase.crew ?? [];
+  if (crew.length > 0) {
+    let cleanersPay = 0, foremanPay = 0, pmPay = 0;
+    for (const m of crew) {
+      if (m.role === "cleaner") cleanersPay += (m.rate ?? 0) * (m.hours ?? 8) * (m.days ?? 0);
+      else if (m.role === "project_manager") pmPay += (m.rate ?? 0) * (m.days ?? 0);
+      else foremanPay += (m.rate ?? 0) * (m.days ?? 0);
+    }
+    return cleanersPay + foremanPay + pmPay;
+  }
+  // Backward compat: old format with persons/days + global rates, same fallback as the estimator.
+  return (phase.persons ?? 0) * (phase.days ?? 0) * cleanerRate * 8 + (phase.days ?? 0) * foremanRate;
+}
+
+/** The change order's billed labor for one phase, what's charged to the client at the
+ * change-order billing rates, as opposed to estimatorPhaseLaborCost's internal cost. */
+function estimatorPhaseChangeOrderBilled(phase: EstimatorPhase, co: EstimatorChangeOrder): number {
+  const cleanerBilling = co.cleaner_billing_rate ?? 42;
+  const supervisorBilling = co.supervisor_billing_rate ?? 47;
+  const pmBilling = co.pm_billing_rate ?? 0;
+  const hoursPerDay = co.hours_per_day ?? 8;
+  let billed = 0;
+  for (const m of phase.crew ?? []) {
+    const days = m.days ?? 0;
+    if (m.role === "cleaner") billed += cleanerBilling * hoursPerDay * days;
+    else if (m.role === "project_manager") billed += pmBilling * hoursPerDay * days;
+    else billed += supervisorBilling * hoursPerDay * days;
+  }
+  return billed;
+}
+
 type EmployeeNotifyOption = {
   id: string;
   firstName: string;
@@ -181,9 +234,97 @@ export function ProjectChangeOrdersSection({
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(defaultNotifyIds);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Estimator import modal
+  const [estModalOpen, setEstModalOpen] = useState(false);
+  const [estProjects, setEstProjects] = useState<{ id: string; name: string }[]>([]);
+  const [estModalLoading, setEstModalLoading] = useState(false);
+  const [estModalError, setEstModalError] = useState("");
+
   useEffect(() => {
     setEntries(initialEntries);
   }, [initialEntries]);
+
+  async function openEstimatorImport() {
+    const anonId = localStorage.getItem("ai_estimator_anon_id");
+    if (!anonId) {
+      setEstModalError("Open the AI Estimator page at least once to link your account.");
+      setEstModalOpen(true);
+      return;
+    }
+    setEstModalOpen(true);
+    setEstModalLoading(true);
+    setEstModalError("");
+    try {
+      const res = await fetch(`${ESTIMATOR_API}/api/projects`, {
+        headers: { "x-anon-id": anonId },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load projects");
+      const data = (await res.json()) as { projects?: { id: string; name: string }[] };
+      setEstProjects(data.projects ?? []);
+      if ((data.projects ?? []).length === 0) setEstModalError("No estimator projects found.");
+    } catch {
+      setEstModalError("Could not connect to the estimator. Try again.");
+    } finally {
+      setEstModalLoading(false);
+    }
+  }
+
+  async function importEstimatorChangeOrder(estId: string, estName: string) {
+    const anonId = localStorage.getItem("ai_estimator_anon_id")!;
+    setEstModalLoading(true);
+    setEstModalError("");
+    try {
+      const projRes = await fetch(`${ESTIMATOR_API}/api/projects/${estId}`, {
+        headers: { "x-anon-id": anonId }, cache: "no-store",
+      });
+      if (!projRes.ok) throw new Error("Failed to load project");
+
+      const proj = (await projRes.json()) as { labor_breakdown?: EstimatorLaborBreakdown };
+      const lb = proj.labor_breakdown;
+      const co = lb?.change_order;
+      if (!lb || !co) {
+        setEstModalError("That estimator project has no change order set up yet.");
+        setEstModalLoading(false);
+        return;
+      }
+
+      const cleanerRate = lb.cleaner_rate ?? 0;
+      const foremanRate = lb.foreman_rate ?? 0;
+      let laborCosts = 0;
+      let laborChangeOrder = 0;
+      for (const phase of lb.phases ?? []) {
+        laborCosts += estimatorPhaseLaborCost(phase, cleanerRate, foremanRate);
+        laborChangeOrder += estimatorPhaseChangeOrderBilled(phase, co);
+      }
+      const materials = co.materials ?? 0;
+
+      const res = await fetch(`/api/erp/projects/${projectId}/change-orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: estName,
+          status: "DRAFT",
+          contractValue: laborChangeOrder,
+          estLabor: laborCosts,
+          estMaterial: materials,
+        }),
+      });
+      const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
+      if (!res.ok) {
+        setEstModalError(data.error || "Failed to create change order");
+        setEstModalLoading(false);
+        return;
+      }
+      setEntries((prev) => [data, ...prev]);
+      setEstModalOpen(false);
+      router.refresh();
+    } catch {
+      setEstModalError("Could not load that project. Try again.");
+    } finally {
+      setEstModalLoading(false);
+    }
+  }
 
   async function onAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -280,6 +421,45 @@ export function ProjectChangeOrdersSection({
 
   return (
     <div className="space-y-6">
+      {estModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">Import change order from AI Estimator</h3>
+              <button
+                type="button"
+                onClick={() => setEstModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-gray-500">
+              Select a project. Pulls the change order&apos;s billed labor as the contract value, its internal labor cost, and its materials cost.
+            </p>
+            {estModalLoading ? (
+              <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
+            ) : estModalError ? (
+              <p className="text-xs text-red-500">{estModalError}</p>
+            ) : (
+              <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
+                {estProjects.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => importEstimatorChangeOrder(p.id, p.name)}
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-800 hover:bg-yellow-50 hover:text-yellow-900"
+                    >
+                      {p.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Change orders</h2>
         <div className="mt-4 space-y-3">
@@ -302,7 +482,16 @@ export function ProjectChangeOrdersSection({
       </div>
 
       <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start change order</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Start change order</h2>
+          <button
+            type="button"
+            onClick={openEstimatorImport}
+            className="rounded-md bg-yellow-400 px-3 py-1 text-xs font-semibold text-yellow-900 hover:bg-yellow-300 active:bg-yellow-500"
+          >
+            Import from Estimator
+          </button>
+        </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="sm:col-span-2">
             <label className={label} htmlFor="co-title">
