@@ -8,11 +8,11 @@ import { ErpLogoutButton } from "./ErpLogoutButton";
 import type { ErpRole } from "@/lib/erpSession";
 
 type AllRoles = ErpRole[];
-const ALL: AllRoles = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
-const PM_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER"];
-const FIELD: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
-const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
-const FINANCE_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "FINANCE"];
+const ALL: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const PM_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES"];
+const FIELD: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"];
+const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
+const FINANCE_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
 
 interface NavItem {
   href: string;

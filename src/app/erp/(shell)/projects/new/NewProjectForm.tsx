@@ -1442,7 +1442,7 @@ export function NewProjectForm({
                                 selectedDealId === deal.id ? "bg-pink-50 font-medium text-pink-700" : "text-gray-700 hover:bg-gray-50"
                               }`}
                             >
-                              <span className="truncate">{deal.name}</span>
+                              <span className="truncate" title={deal.name}>{deal.name}</span>
                               {selectedDealId === deal.id && <span className="shrink-0 text-pink-600">✓ Selected</span>}
                             </button>
                           ))}

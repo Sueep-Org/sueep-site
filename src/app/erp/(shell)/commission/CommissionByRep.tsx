@@ -419,7 +419,7 @@ function CombinedRowTr({
         <td className="max-w-xs px-3 py-2">
           <span className="flex items-center gap-1.5">
             <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-600">CO</span>
-            <Link href={`/erp/projects/${co.projectId}`} className="min-w-0 truncate text-pink-600 hover:underline">
+            <Link href={`/erp/projects/${co.projectId}`} className="min-w-0 truncate text-pink-600 hover:underline" title={`${co.projectJobTitle} — ${co.title}`}>
               {co.projectJobTitle} — {co.title}
             </Link>
           </span>
@@ -458,7 +458,7 @@ function CombinedRowTr({
     return (
       <tr key={d.projectId} className="border-t border-gray-100 hover:bg-gray-50">
         <td className="px-3 py-2">{buildingCell}</td>
-        <td className="max-w-xs truncate px-3 py-2">
+        <td className="max-w-xs truncate px-3 py-2" title={d.jobTitle}>
           <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
             {d.jobTitle}
           </Link>
@@ -494,7 +494,7 @@ function CombinedRowTr({
   return (
     <tr key={r.periodId} className="border-t border-gray-100 bg-violet-50/50 hover:bg-violet-100/60">
       <td className="px-3 py-2">{buildingCell}</td>
-      <td className="max-w-xs truncate px-3 py-2">
+      <td className="max-w-xs truncate px-3 py-2" title={r.buildingName}>
         <Link href={`/erp/buildings/${r.buildingId}`} className="text-pink-600 hover:underline">
           {r.buildingName}
         </Link>

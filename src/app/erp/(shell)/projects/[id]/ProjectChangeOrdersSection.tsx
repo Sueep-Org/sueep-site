@@ -661,7 +661,7 @@ function ChangeOrderEditor({
           <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_COLORS[row.status]}`}>
             {row.status}
           </span>
-          <span className="truncate text-sm font-medium text-gray-900">{row.title}</span>
+          <span className="truncate text-sm font-medium text-gray-900" title={row.title}>{row.title}</span>
         </div>
         <div className="flex shrink-0 items-center gap-4">
           <span className="text-xs text-gray-500">

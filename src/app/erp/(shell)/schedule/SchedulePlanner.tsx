@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DayAssignmentModal } from "./DayAssignmentModal";
@@ -193,6 +194,20 @@ export function SchedulePlanner({
   const [openDayInitialProjectId, setOpenDayInitialProjectId] = useState<string | null>(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+
+  // Deep link from elsewhere (e.g. the schedule-nudge popup's "Schedule it"
+  // link) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
+  // pre-filled with that project, instead of landing on the bare calendar.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const projectId = searchParams.get("scheduleProjectId");
+    if (!projectId || !projectById.has(projectId)) return;
+    setOpenDayKey(dayKey(todayDate));
+    setOpenDayInitialProjectId(projectId);
+    router.replace("/erp/schedule");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Planned worker (crew) assignments — same local-state pattern as supervisor
   // day assignments, but no invite email is sent for these.
@@ -695,7 +710,7 @@ export function SchedulePlanner({
                               className={`w-full ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
                             >
                               <span aria-hidden>⚠</span>
-                              <span className="truncate">{p.jobTitle}</span>
+                              <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
                             </button>
                             {inMonth ? (
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -857,6 +872,7 @@ export function SchedulePlanner({
                                       href={`/erp/projects/${p.id}`}
                                       onClick={() => setExpandedDayKey(null)}
                                       className="truncate hover:underline"
+                                      title={p.jobTitle}
                                     >
                                       {p.jobTitle}
                                     </Link>
@@ -873,6 +889,7 @@ export function SchedulePlanner({
                                       href={`/erp/projects/${project.id}`}
                                       onClick={() => setExpandedDayKey(null)}
                                       className="truncate hover:underline"
+                                      title={project.jobTitle}
                                     >
                                       {project.jobTitle}
                                     </Link>
@@ -888,6 +905,7 @@ export function SchedulePlanner({
                                       href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
                                       onClick={() => setExpandedDayKey(null)}
                                       className="truncate hover:underline"
+                                      title={co.title}
                                     >
                                       {co.title}
                                     </Link>
@@ -900,6 +918,7 @@ export function SchedulePlanner({
                                       href={`/erp/projects/${r.projectId}`}
                                       onClick={() => setExpandedDayKey(null)}
                                       className="truncate hover:underline"
+                                      title={r.title}
                                     >
                                       {r.title}
                                     </Link>
@@ -980,7 +999,7 @@ export function SchedulePlanner({
                       idx % 2 === 1 ? "bg-gray-50/60" : "bg-white"
                     }`}
                   >
-                    <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-600 hover:underline">
+                    <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-600 hover:underline" title={p.jobTitle}>
                       {p.jobTitle}
                     </Link>
                     <select

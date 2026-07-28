@@ -34,7 +34,7 @@ export const registry: ArticleEntry[] = [
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
     order: 6,
     component: UploadingAContract,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/creating-a-project",
@@ -43,7 +43,7 @@ export const registry: ArticleEntry[] = [
     description: "How to manually create a new project in the ERP.",
     order: 1,
     component: CreatingAProject,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/hubspot-sync",
@@ -52,7 +52,7 @@ export const registry: ArticleEntry[] = [
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
     order: 7,
     component: HubSpotSync,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "turnover/creating-a-request",
@@ -61,7 +61,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create and manage a turnover or regular cleaning request.",
     order: 2,
     component: CreatingATurnoverRequest,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "sops/onboarding-new-employee",
@@ -79,7 +79,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create a change order for a post-construction project in the ERP",
     order: 3,
     component: CreatingAChangeOrder,
-    roles: ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
   },
   {
     slug: "projects/projects-overview",
@@ -88,7 +88,7 @@ export const registry: ArticleEntry[] = [
     description: "Overview of the projects table, project details page, and editing projects.",
     order: 4,
     component: ProjectsOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
   },
   {
     slug: "workers/labor-logs",
@@ -97,7 +97,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter, edit, and sort through labor logs on projects and change orders.",
     order: 3,
     component: InputtingLaborLogs,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"],
   },
   {
     slug: "workers/adding-employees",
@@ -106,7 +106,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter employees into the system and manage their documentation",
     order: 1,
     component: AddingEmployees,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/material-logs",
@@ -115,7 +115,7 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 5,
     component: MaterialsLog,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "workers/adding-contractors",
@@ -124,7 +124,7 @@ export const registry: ArticleEntry[] = [
     description: "How to register contractors in our system to be added onto projects",
     order: 4,
     component: AddingContractors,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "workers/logging-contractors",
@@ -133,7 +133,7 @@ export const registry: ArticleEntry[] = [
     description: "How to log contractors on projects much like you add laborers",
     order: 5,
     component: LoggingContractors,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "schedule/calendar-overview",
@@ -150,6 +150,6 @@ export const registry: ArticleEntry[] = [
     description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",
     order: 1,
     component: CompensationOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
 ];

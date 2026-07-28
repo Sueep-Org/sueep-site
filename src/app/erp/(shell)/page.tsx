@@ -217,7 +217,7 @@ export default async function ErpDashboardPage() {
                     <li key={p.id}>
                       <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                           <div className="mt-0.5 flex gap-1.5">
                             {p.estLaborCents == null && <span className="text-[10px] font-medium text-orange-500">Missing labor est.</span>}
                             {p.estMaterialCents == null && <span className="text-[10px] font-medium text-orange-500">Missing material est.</span>}
@@ -246,8 +246,8 @@ export default async function ErpDashboardPage() {
                     <li key={co.id}>
                       <Link href={`/erp/projects/${co.project.id}/change-orders/${co.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{co.title}</p>
-                          <p className="truncate text-xs text-gray-400">{co.project.jobTitle}</p>
+                          <p className="truncate text-sm font-medium text-gray-900" title={co.title}>{co.title}</p>
+                          <p className="truncate text-xs text-gray-400" title={co.project.jobTitle}>{co.project.jobTitle}</p>
                         </div>
                         <div className="ml-3 shrink-0 text-right">
                           <span className="text-xs font-medium text-gray-600">{co.status}</span>
@@ -481,7 +481,7 @@ export default async function ErpDashboardPage() {
                     <li key={p.id}>
                       <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                           {severity === "bad" && (
                             <span title={budgetTitle} className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
                               Over budget
@@ -539,7 +539,7 @@ export default async function ErpDashboardPage() {
                             }`}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">{e.jobTitle}</p>
+                            <p className="truncate text-sm font-medium text-gray-900" title={e.jobTitle}>{e.jobTitle}</p>
                             <p className="truncate text-xs text-gray-400 mt-0.5">
                               {e.kind === "logged" ? (e.workers ?? []).join(", ") : e.kind === "missed" ? "Planned, never logged" : "Planned"}
                             </p>
@@ -572,7 +572,7 @@ export default async function ErpDashboardPage() {
                       <Link href={`/erp/projects/${inc.project.id}?tab=${encodeURIComponent("Safety Checklist")}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gray-900">{inc.workerName}</p>
-                          <p className="truncate text-xs text-gray-400">{inc.project.jobTitle}</p>
+                          <p className="truncate text-xs text-gray-400" title={inc.project.jobTitle}>{inc.project.jobTitle}</p>
                         </div>
                         <div className="shrink-0 text-right">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${inc.status === "ESCALATED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
@@ -858,7 +858,7 @@ export default async function ErpDashboardPage() {
                     <li key={p.projectId}>
                       <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                           <p className="truncate text-xs text-gray-400">
                             {workers.length > 0 ? workers.join(", ") : "No crew assigned yet"}
                           </p>
@@ -890,7 +890,7 @@ export default async function ErpDashboardPage() {
                     <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
-                        <p className="truncate text-xs text-gray-400">{f.jobTitle}</p>
+                        <p className="truncate text-xs text-gray-400" title={f.jobTitle}>{f.jobTitle}</p>
                       </div>
                       <div className="ml-2 shrink-0 text-right">
                         <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
@@ -917,7 +917,7 @@ export default async function ErpDashboardPage() {
                 {recentMarginProjects.map((p) => (
                   <li key={p.id}>
                     <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                      <p className="min-w-0 truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                      <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                       <div className="shrink-0 text-right">
                         {p.marginPct != null && (
                           <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
@@ -946,7 +946,7 @@ export default async function ErpDashboardPage() {
                   <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                     <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${activity.dot}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
+                      <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                       <p className="text-xs text-gray-400">
                         {projectSegmentLabel(p.segment)}{p.supervisor ? ` · ${p.supervisor}` : ""}
                       </p>

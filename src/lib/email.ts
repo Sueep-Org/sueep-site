@@ -432,6 +432,29 @@ export function buildTurnoverMarginAlertEmail(params: {
   `;
 }
 
+export function buildScheduleNudgeEmail(params: {
+  cadence: "morning" | "midday";
+  projects: { id: string; jobTitle: string }[];
+  scheduleUrl: string;
+}) {
+  const headline = params.cadence === "morning" ? "Today's unscheduled projects" : "Still unscheduled for today";
+  const intro =
+    params.cadence === "morning"
+      ? "These active projects haven't been scheduled for today yet:"
+      : "It's midday and these active projects still haven't been scheduled for today:";
+  const items = params.projects.map((p) => `<li>${escapeHtml(p.jobTitle)}</li>`).join("");
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">${headline}</h2>
+      <p>${intro}</p>
+      <ul style="margin:12px 0 20px;padding-left:20px">${items}</ul>
+      <p style="margin:20px 0"><a href="${escapeHtml(params.scheduleUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open Schedule</a></p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")

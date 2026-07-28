@@ -2,23 +2,24 @@
 
 import { useState } from "react";
 
-const ROLES = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+const ROLES = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 type ErpRole = (typeof ROLES)[number];
 
 const ROLE_LABELS: Record<ErpRole, string> = {
   ADMIN: "Admin",
   PROJECT_MANAGER: "Project Manager",
+  SALES: "Sales",
   FINANCE: "Finance",
   SUPERVISOR: "Supervisor",
   ESTIMATION: "Estimation",
   EMPLOYEE: "Employee",
 };
 
-const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
-const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER"];
-const FINANCE_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "FINANCE"];
-const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SUPERVISOR"];
-const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "ESTIMATION"];
+const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES"];
+const FINANCE_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
+const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"];
+const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
 
 const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Dashboard", roles: ALL_ROLES },

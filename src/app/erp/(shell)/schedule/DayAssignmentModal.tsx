@@ -198,12 +198,14 @@ export function DayAssignmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6"
+        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-lg border border-gray-200 bg-white"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Assign to this day</h2>
-        <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
-
+        <div className="shrink-0 border-b border-gray-100 p-6 pb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Assign to this day</h2>
+          <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
+        </div>
+        <div className="min-h-0 overflow-y-auto p-6 pt-4">
         {existing.length > 0 ? (
           <ul className="mt-4 space-y-1.5">
             {existing.map((a) => {
@@ -214,7 +216,7 @@ export function DayAssignmentModal({
                   key={a.id}
                   className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs"
                 >
-                  <span className="truncate">
+                  <span className="truncate" title={project?.jobTitle}>
                     <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                     <span className="text-gray-500"> — {supervisor?.displayName ?? "Unknown supervisor"}</span>
                     {formatTimeRange(a.startTime, a.endTime) ? (
@@ -259,6 +261,7 @@ export function DayAssignmentModal({
                       setProjectQuery(p.jobTitle);
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
+                    title={p.jobTitle}
                   >
                     {p.jobTitle}
                   </button>
@@ -339,7 +342,7 @@ export function DayAssignmentModal({
                     key={w.id}
                     className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs"
                   >
-                    <span className="truncate">
+                    <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                       <span className="text-gray-500"> — {employee?.displayName ?? "Unknown worker"}</span>
                     </span>
@@ -407,6 +410,7 @@ export function DayAssignmentModal({
           {workerError ? (
             <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{workerError}</div>
           ) : null}
+        </div>
         </div>
       </div>
     </div>

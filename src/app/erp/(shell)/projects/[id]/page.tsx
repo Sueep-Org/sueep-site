@@ -43,7 +43,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
-  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "ESTIMATION";
+  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "SALES" || auth?.role === "ESTIMATION";
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   const canSeeCommission = auth ? canEditEmployeePayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();

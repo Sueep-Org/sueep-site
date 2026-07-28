@@ -101,6 +101,7 @@ model Project {
   dayAssignments ProjectDayAssignment[]
   workerDayAssignments ProjectWorkerDayAssignment[]
   notes ProjectNote[]
+  scheduleNudgeDismissals ProjectScheduleNudgeDismissal[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -818,6 +819,7 @@ model ErpUser {
   hubspotSovAliasesCreated  HubSpotSovAlias[]
   hubspotUnitAliasesCreated HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
+  scheduleNudgeDismissalsMade ProjectScheduleNudgeDismissal[]
 
   @@index([firebaseUid])
 }
@@ -894,6 +896,30 @@ model ProjectWorkerDayAssignment {
   @@unique([projectId, employeeId, date])
   @@index([date])
   @@index([employeeId])
+}
+
+/// A "not today" dismissal of the daily unscheduled-project nudge for one
+/// project on one calendar day — global per project+day (not scoped to the
+/// dismissing user), since PROJECT_MANAGER is a shared role and this means
+/// "the team already decided this doesn't need scheduling today," not a
+/// personal per-user to-do list. dismissedByUserId is an audit trail only
+/// (same pattern as ProjectNote.authorUser), not a scoping key.
+model ProjectScheduleNudgeDismissal {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC, same convention as ProjectDayAssignment.date — always
+  /// written via todayEasternAsUtcMidnight(), so exact-equality lookups are fine.
+  date DateTime
+
+  dismissedByUserId String?
+  dismissedByUser   ErpUser? @relation(fields: [dismissedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, date])
+  @@index([date])
 }
 
 model Employee {
