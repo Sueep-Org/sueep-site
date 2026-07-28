@@ -10,6 +10,7 @@ import {
   type TurnoverMarginSeverity,
 } from "@/lib/erp/turnoverHoursBudget";
 import { TRANSPORTATION_METHOD_OPTIONS, transportationMethodShortLabel } from "@/lib/erp/transportationMethods";
+import { CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { UnitScopeCard } from "./UnitScopeCard";
 
 export type LaborRow = {
@@ -314,6 +315,7 @@ export function ProjectLaborSection({
     projectedMarginPct: number;
     severity: TurnoverMarginSeverity;
   } | null>(null);
+  const [blockedModal, setBlockedModal] = useState<"quality" | "safety" | null>(null);
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
   const [roleStr, setRoleStr] = useState("");
@@ -451,11 +453,11 @@ export function ProjectLaborSection({
     const form = e.currentTarget;
     setError("");
     if (qualityChecklistBlocking) {
-      setError("Finish the quality checklist before logging labor on this unit. A PM can override if needed.");
+      setBlockedModal("quality");
       return;
     }
     if (safetyCheckBlocking) {
-      setError("Today's safety checklist has not been approved. Complete and approve it before logging labor. A PM can override if needed.");
+      setBlockedModal("safety");
       return;
     }
     if (!employeePick) {
@@ -712,7 +714,7 @@ export function ProjectLaborSection({
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
           <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
           <p className="text-sm text-red-800">
-            The quality checklist isn&apos;t finished yet. Complete it on the Checklist tab before logging labor on this unit. A PM can override this.
+            The quality checklist needs to be at least {CHECKLIST_LABOR_THRESHOLD_PCT}% complete before logging labor on this unit. Complete more of it on the Checklist tab, or ask a PM to override.
           </p>
         </div>
       )}
@@ -902,7 +904,7 @@ export function ProjectLaborSection({
         ) : null}
         <button
           type="submit"
-          disabled={loading || qualityChecklistBlocking || safetyCheckBlocking}
+          disabled={loading}
           className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
         >
           {loading ? "Adding…" : "Add entry"}
@@ -1261,6 +1263,40 @@ export function ProjectLaborSection({
               }`}
             >
               Add anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {blockedModal ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setBlockedModal(null)}
+      >
+        <div
+          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">!</span>
+            <h3 className="text-sm font-semibold text-gray-800">
+              {blockedModal === "quality" ? "Finish the quality checklist first" : "Safety checklist not approved"}
+            </h3>
+          </div>
+          <p className="mt-3 text-sm text-gray-600">
+            {blockedModal === "quality"
+              ? `The quality checklist needs to be at least ${CHECKLIST_LABOR_THRESHOLD_PCT}% complete before you can log labor on this unit. Go to the Checklist tab and finish more items.`
+              : "Today's safety checklist needs to be approved before you can log labor. Go to the Safety Checklist tab and complete and approve it."}
+          </p>
+          <p className="mt-2 text-xs text-gray-400">A PM can override this if needed.</p>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setBlockedModal(null)}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              Got it
             </button>
           </div>
         </div>

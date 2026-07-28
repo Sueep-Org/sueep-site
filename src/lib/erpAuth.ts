@@ -56,3 +56,10 @@ export function canOverrideQualityChecklist(role: ErpRole): boolean {
 export function canOverrideSafetyCheck(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
+
+/** SUPERVISOR shouldn't see contract $ or cost $ on the Projects table (or any
+ * other dollar figure that'd let contract value be derived), but should still
+ * see margin as a percentage — a health signal without the dollar exposure. */
+export function canSeeMarginOnly(role: ErpRole): boolean {
+  return role === "SUPERVISOR";
+}

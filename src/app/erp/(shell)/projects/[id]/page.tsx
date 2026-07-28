@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canEditPricing, canEditEmployeePayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
-import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
@@ -256,10 +256,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
   const checklistCompletedItems = (project.unitTurnoverChecklist?.completedItems ?? {}) as Record<string, boolean>;
-  const qualityChecklistComplete = ALL_CHECKLIST_ITEM_IDS.every((itemId) => checklistCompletedItems[itemId]);
+  const qualityChecklistMeetsLaborThreshold = checklistCompletionPct(checklistCompletedItems) >= CHECKLIST_LABOR_THRESHOLD_PCT;
   const canOverrideChecklist = auth ? canOverrideQualityChecklist(auth.role) : false;
   const canOverrideSafety = auth ? canOverrideSafetyCheck(auth.role) : false;
-  const qualityChecklistBlocking = isTurnover && !qualityChecklistComplete && !canOverrideChecklist;
+  const qualityChecklistBlocking = isTurnover && !qualityChecklistMeetsLaborThreshold && !canOverrideChecklist;
   // "Property" duplicates the page title (building - unit) and "Units" duplicates the Unit
   // Scope card shown above this block — both already shown elsewhere on Overview, so they're
   // dropped from the raw "Submitted details" dump.

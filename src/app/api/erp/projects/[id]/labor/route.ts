@@ -10,7 +10,7 @@ import {
   turnoverMarginWorsened,
 } from "@/lib/erp/turnoverHoursBudget";
 import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
-import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { getErpAuth, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { todayEasternKey } from "@/lib/erp/dates";
@@ -123,16 +123,16 @@ export async function POST(req: Request, ctx: Ctx) {
   const auth = needsOverrideCheck ? await getErpAuth() : null;
   if (needsOverrideCheck && !auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // A turnover unit's quality checklist has to be finished before any labor
-  // gets logged against it at all, not just before it's marked complete —
-  // unless the acting user is a PM/ADMIN, who can log through it regardless.
+  // A turnover unit's quality checklist has to be at least mostly done before
+  // any labor gets logged against it — not fully finished, just past the
+  // threshold — unless the acting user is a PM/ADMIN, who can log through it
+  // regardless.
   if (project.segment === "JANITORIAL_TURNOVER_REQUESTS" && !canOverrideQualityChecklist(auth!.role)) {
     const checklist = await prisma.unitTurnoverChecklist.findUnique({ where: { projectId: id }, select: { completedItems: true } });
     const completed = (checklist?.completedItems ?? {}) as Record<string, boolean>;
-    const allDone = ALL_CHECKLIST_ITEM_IDS.every((itemId) => completed[itemId]);
-    if (!allDone) {
+    if (checklistCompletionPct(completed) < CHECKLIST_LABOR_THRESHOLD_PCT) {
       return NextResponse.json(
-        { error: "Finish the quality checklist before logging labor on this unit. A PM can override if needed." },
+        { error: `The quality checklist needs to be at least ${CHECKLIST_LABOR_THRESHOLD_PCT}% complete before logging labor on this unit. A PM can override if needed.` },
         { status: 400 },
       );
     }

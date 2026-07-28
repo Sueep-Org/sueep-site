@@ -29,9 +29,11 @@ type Props = {
   postConstructionPipelineId: string | null;
   janitorialPipelineId: string | null;
   canSeeFinancials: boolean;
+  /** SUPERVISOR: hide dollar figures but still show a Margin % column. */
+  canSeeMarginOnly: boolean;
 };
 
-export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, canSeeFinancials }: Props) {
+export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, canSeeFinancials, canSeeMarginOnly }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [activeLifecycle, setActiveLifecycle] = useState<Lifecycle | null>(null);
   const [search, setSearch] = useState("");
@@ -193,9 +195,9 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
             {query ? `No projects matching "${search}".` : "No projects in this category."}
           </p>
         ) : activeTab === "janitorial" ? (
-          <JanitorialProjectsExpandableTable rows={filtered} />
+          <JanitorialProjectsExpandableTable rows={filtered} canSeeFinancials={canSeeFinancials} canSeeMarginOnly={canSeeMarginOnly} />
         ) : (
-          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} canSeeFinancials={canSeeFinancials} />
+          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} canSeeFinancials={canSeeFinancials} canSeeMarginOnly={canSeeMarginOnly} />
         )}
       </div>
     </div>

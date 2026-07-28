@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canSeeFinancials as checkFinancials } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
 import { ProjectsTabs } from "./ProjectsTabs";
@@ -54,6 +54,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   const cfg = parseHubSpotPipelineStageMap();
   const auth = await getErpAuth();
   const financials = checkFinancials(auth?.role ?? "EMPLOYEE");
+  const marginOnly = checkMarginOnly(auth?.role ?? "EMPLOYEE");
 
   // Supervisors default to seeing just their own projects (same rule as
   // their dashboard and the schedule calendar), but can switch to the full
@@ -401,6 +402,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           postConstructionPipelineId={cfg?.postConstruction.pipelineId ?? null}
           janitorialPipelineId={cfg?.janitorial.pipelineId ?? null}
           canSeeFinancials={financials}
+          canSeeMarginOnly={marginOnly}
         />
       )}
     </div>

@@ -287,3 +287,13 @@ export const UNIT_CHECKLIST_SECTIONS: ChecklistSection[] = [
 export const ALL_CHECKLIST_ITEM_IDS: string[] = UNIT_CHECKLIST_SECTIONS.flatMap((s) =>
   s.subsections.flatMap((ss) => ss.items.map((i) => i.id))
 );
+
+/** A supervisor can log labor on a turnover unit once the checklist is at
+ * least this complete, without needing every single item checked off yet. */
+export const CHECKLIST_LABOR_THRESHOLD_PCT = 75;
+
+export function checklistCompletionPct(completedItems: Record<string, boolean>): number {
+  if (ALL_CHECKLIST_ITEM_IDS.length === 0) return 100;
+  const done = ALL_CHECKLIST_ITEM_IDS.filter((id) => completedItems[id]).length;
+  return (done / ALL_CHECKLIST_ITEM_IDS.length) * 100;
+}

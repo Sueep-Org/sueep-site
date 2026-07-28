@@ -130,6 +130,28 @@ export function EmptyValue() {
   return <span className="text-gray-400">-</span>;
 }
 
+/** Sueep PM assigned to a unit — same derivation the row-level PM cell uses
+ * (Project.supervisor, falling back to a "SUEEP PM:" description line for
+ * older turnover projects that predate the dedicated field). */
+function sueepPmForRow(row: ProjectTableRow): string | null {
+  if (row.segment !== "JANITORIAL_TURNOVER_REQUESTS") return row.supervisor;
+  return row.supervisor || getDescriptionLine(row.description, "SUEEP PM");
+}
+
+/** Building-level PM label: every unit's assigned Sueep PM, deduped and
+ * joined — "David" if all units share one PM, "David, Sarah" if units in
+ * the building are split across PMs, null if none are assigned yet. */
+function groupSueepPmLabel(groupRows: ProjectTableRow[]): string | null {
+  const names = Array.from(
+    new Set(
+      groupRows
+        .map((row) => sueepPmForRow(row)?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  );
+  return names.length > 0 ? names.join(", ") : null;
+}
+
 function projectActualCostCents(project: ProjectTableRow) {
   return (project.actualLaborCents ?? 0) + (project.actualMaterialCents ?? 0);
 }
@@ -489,6 +511,7 @@ export function ProjectsExpandableTable({
   rows,
   janitorialPipelineId,
   canSeeFinancials = true,
+  canSeeMarginOnly = false,
   janitorialDetailMode = "pricing",
   groupTitleForRow,
   groupHrefForRow,
@@ -500,6 +523,10 @@ export function ProjectsExpandableTable({
   rows: ProjectTableRow[];
   janitorialPipelineId: string | null;
   canSeeFinancials?: boolean;
+  /** SUPERVISOR: hide every dollar figure (contract/cost/labor/material) but
+   * still show a Margin % column, so contract value can't be derived from
+   * cost + margin. No-op when canSeeFinancials is true. */
+  canSeeMarginOnly?: boolean;
   janitorialDetailMode?: "pricing" | "team";
   groupTitleForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   groupHrefForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
@@ -514,8 +541,9 @@ export function ProjectsExpandableTable({
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
-  // Financial columns: Contract, Act Cost, Margin, Est/Act Labor, Est/Act Material (7 columns)
-  const colCount = canSeeFinancials ? 14 : 7;
+  // Financial columns: Contract, Act Cost, Margin, Est/Act Labor, Est/Act Material (7 columns);
+  // margin-only mode adds just the one Margin % column instead.
+  const colCount = 7 + (canSeeFinancials ? 7 : canSeeMarginOnly ? 1 : 0);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -543,7 +571,11 @@ export function ProjectsExpandableTable({
               </th>
             )}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Cost</th>}
-            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Margin</th>}
+            {canSeeFinancials ? (
+              <th className="px-3 py-2 font-semibold">Margin</th>
+            ) : canSeeMarginOnly ? (
+              <th className="px-3 py-2 font-semibold">Margin %</th>
+            ) : null}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Labor</th>}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Labor</th>}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Material</th>}
@@ -570,6 +602,7 @@ export function ProjectsExpandableTable({
             const groupCount = groupTitle
               ? groupRows.length
               : 0;
+            const groupPm = groupTitle ? groupSueepPmLabel(groupRows) : null;
             const groupContract = groupTitle ? sumProjects(groupRows, (row) => row.contractValueCents) : 0;
             const groupEstLabor = groupTitle ? sumProjects(groupRows, (row) => row.estLaborCents) : 0;
             const groupActualLabor = groupTitle ? sumProjects(groupRows, (row) => row.actualLaborCents) : 0;
@@ -624,12 +657,12 @@ export function ProjectsExpandableTable({
                         {groupCount} unit{groupCount !== 1 ? "s" : ""}
                       </p>
                     </td>
-                    <td className="w-[130px] min-w-[130px] px-3 py-2 text-gray-400">
-                      -
+                    <td className="w-[130px] min-w-[130px] truncate px-3 py-2 text-gray-900" title={groupPm ?? undefined}>
+                      {groupPm ?? <span className="text-gray-400">-</span>}
                     </td>
                     {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualCost)}</td>}
-                    {canSeeFinancials && (
+                    {canSeeFinancials ? (
                       <td className={`px-3 py-2 font-medium ${groupActualCost === 0 ? "text-gray-400" : marginClass(groupMargin)}`}>
                         {groupActualCost === 0 || groupMargin == null ? (
                           "-"
@@ -640,7 +673,11 @@ export function ProjectsExpandableTable({
                           </>
                         )}
                       </td>
-                    )}
+                    ) : canSeeMarginOnly ? (
+                      <td className={`px-3 py-2 font-medium ${groupActualCost === 0 ? "text-gray-400" : marginClass(groupMargin)}`}>
+                        {groupActualCost === 0 || groupMarginPct == null ? "-" : groupMarginPct}
+                      </td>
+                    ) : null}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupEstLabor)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualLabor)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-400">-</td>}
@@ -696,7 +733,7 @@ export function ProjectsExpandableTable({
                   <td className="w-[130px] min-w-[130px] px-3 py-2 text-gray-900">
                     {(() => {
                       const isTurnover = p.segment === "JANITORIAL_TURNOVER_REQUESTS";
-                      const sueepPm = isTurnover ? (p.supervisor || getDescriptionLine(p.description, "SUEEP PM")) : p.supervisor;
+                      const sueepPm = sueepPmForRow(p);
                       const pm = isTurnover ? getDescriptionLine(p.description, "Property Manager/Maintenance Manager") : null;
                       return (
                         <>
@@ -712,7 +749,7 @@ export function ProjectsExpandableTable({
                   </td>
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(actualCost)}</td>}
-                  {canSeeFinancials && (
+                  {canSeeFinancials ? (
                     <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
                       {actualCost === 0 || margin == null ? (
                         <span className="text-gray-400">-</span>
@@ -723,7 +760,11 @@ export function ProjectsExpandableTable({
                         </>
                       )}
                     </td>
-                  )}
+                  ) : canSeeMarginOnly ? (
+                    <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
+                      {actualCost === 0 || marginPct == null ? <span className="text-gray-400">-</span> : marginPct}
+                    </td>
+                  ) : null}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estLaborCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualLaborCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estMaterialCents)}</td>}
@@ -793,7 +834,7 @@ export function ProjectsExpandableTable({
                                 {centsToDollars(coActualCost)}
                               </td>
                             )}
-                            {canSeeFinancials && (
+                            {canSeeFinancials ? (
                               <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${coActualCost === 0 ? "text-gray-400" : marginClass(coMargin)}`}>
                                 {coActualCost === 0 || coMargin == null ? (
                                   <span className="text-gray-400">-</span>
@@ -806,7 +847,11 @@ export function ProjectsExpandableTable({
                                   </>
                                 )}
                               </td>
-                            )}
+                            ) : canSeeMarginOnly ? (
+                              <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${coActualCost === 0 ? "text-gray-400" : marginClass(coMargin)}`}>
+                                {coActualCost === 0 || coMarginPercent == null ? <span className="text-gray-400">-</span> : coMarginPercent}
+                              </td>
+                            ) : null}
                             {/* Est. Labor */}
                             {canSeeFinancials && (
                               <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">

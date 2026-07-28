@@ -66,7 +66,15 @@ function lifecycleRank(row: ProjectTableRow): number {
   return 2;
 }
 
-export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
+export function JanitorialProjectsExpandableTable({
+  rows,
+  canSeeFinancials = true,
+  canSeeMarginOnly = false,
+}: {
+  rows: ProjectTableRow[];
+  canSeeFinancials?: boolean;
+  canSeeMarginOnly?: boolean;
+}) {
   // Legacy: projects created before one-per-unit architecture may have multiple units in
   // description — expand those into separate display rows for backward compatibility.
   const expandedRows = rows.flatMap((row) => {
@@ -102,6 +110,8 @@ export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTable
     <ProjectsExpandableTable
       rows={visibleRows}
       janitorialPipelineId={null}
+      canSeeFinancials={canSeeFinancials}
+      canSeeMarginOnly={canSeeMarginOnly}
       groupTitleForRow={janitorialBuildingTitle}
       groupHrefForRow={janitorialBuildingHref}
       collapsibleGroups
