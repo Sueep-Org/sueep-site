@@ -104,6 +104,7 @@ async function refreshDrawer(){
             const fileObj = new File([blob], blueprint.filename);
             await window.__handleFile?.(fileObj);
             activeProjectId = project.id;
+            try { window.__activeProjectId = activeProjectId; } catch (_) {}
             await window.__restoreAnnotations?.(project.id);
             const freshRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
             const freshData = freshRes.ok ? await freshRes.json() : projData;
@@ -343,6 +344,11 @@ async function initApp(){
 
   const highlightsStore = new HighlightsStore();
 
+  // Expose store and overlay for debugging in the console
+  try {
+    window.highlightsStore = highlightsStore;
+  } catch (_) {}
+
   const overlay = new CanvasOverlay({
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
@@ -383,21 +389,51 @@ async function initApp(){
     } catch(_) {}
   };
   window.__restoreAnnotations = async function(projectId) {
+    console.log('[restore] annotations projectId=', projectId);
     highlightsStore.clearAll();
+    let restoredAnnotations = false;
+    let hydratedVectors = false;
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
+      console.log('[restore] annotations response status=', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('[restore] annotation payload', data);
         if (data.annotations) {
           highlightsStore.deserialize(JSON.stringify(data.annotations));
+          restoredAnnotations = true;
+        }
+        if (data.vector_annotations || data.analysis) {
+          await hydrateDetectedWallsFromResult(data);
+          hydratedVectors = true;
+        }
+        if (restoredAnnotations || hydratedVectors) {
           overlay.redraw();
           updateMeasurementList();
+          if (!hydratedVectors) {
+            await loadProjectFigureAnalysis(projectId);
+          }
           return;
         }
       }
-    } catch(_) {}
+    } catch(error) {
+      console.warn('[restore] annotations fetch failed', error);
+    }
+
     const json = localStorage.getItem(`annotations_${projectId}`);
-    if (json) highlightsStore.deserialize(json);
+    if (json) {
+      console.log('[restore] found local annotations, deserializing');
+      highlightsStore.deserialize(json);
+      overlay.redraw();
+      updateMeasurementList();
+      if (!hydratedVectors) {
+        console.log('[restore] no vector hydration from annotations, loading figure analysis');
+        await loadProjectFigureAnalysis(projectId);
+      }
+      return;
+    }
+
+    await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
   };
@@ -1114,12 +1150,29 @@ async function initApp(){
     return;
   }
 
+  function hasTotalSquareFootageMeasurement(rows = []) {
+    return rows.some((row) => {
+      const label = normalizeTextLine(row?.label || '');
+      if (!label) return false;
+
+      return /total\s+area|total\s+square\s+feet/i.test(label);
+    });
+  }
+
   function renderExtractedMeasurementRows(container, rows, meta) {
     const list = container.querySelector('[data-extracted-list]');
+    const emptyState = container.querySelector('[data-extracted-empty-state]');
     if (!list) return;
 
     const hasQuery = !!_activeExtractedMeasurementQuery;
     const visibleRows = rows.filter((row) => matchesExtractedMeasurementQuery(row, _activeExtractedMeasurementQuery));
+    const showNoTotalSquareFootageMessage = !hasTotalSquareFootageMeasurement(rows);
+
+    if (emptyState) {
+      emptyState.innerHTML = showNoTotalSquareFootageMessage
+        ? '<div class="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700">no total square footage measurement</div>'
+        : '';
+    }
 
     list.innerHTML = `
       <div class="space-y-2">
@@ -1165,33 +1218,38 @@ async function initApp(){
     const container = document.getElementById('extractedMeasurementsContainer');
     if (!container) return;
 
-    if (!meta || !Array.isArray(meta.extractedMeasurements) || !meta.extractedMeasurements.length) {
-      container.style.display = 'none';
-      container.innerHTML = '';
-      return;
-    }
-
-    container.style.display = 'block';
-    const rows = meta.extractedMeasurements;
+    const rows = Array.isArray(meta?.extractedMeasurements) ? meta.extractedMeasurements : [];
 
     if (!container.querySelector('[data-extracted-search-input]')) {
       container.innerHTML = `
-        <div class="mb-2">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
-          <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
+        <div class="mb-3">
+          <div class="mb-2">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
+            <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
+          </div>
+          <div class="mb-2" data-extracted-empty-state></div>
+          <div class="mb-2">
+            <input
+              type="search"
+              data-extracted-search-input
+              value="${escapeHtml(_activeExtractedMeasurementQuery)}"
+              placeholder="Search extracted measurements or PDF"
+              class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+            />
+          </div>
+          <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
         </div>
-        <div class="mb-2">
-          <input
-            type="search"
-            data-extracted-search-input
-            value="${escapeHtml(_activeExtractedMeasurementQuery)}"
-            placeholder="Search extracted measurements or PDF"
-            class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-          />
+        <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted wall measurements</div>
+          <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
+          <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
+            No wall measurements detected yet.
+          </div>
         </div>
-        <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
       `;
     }
+
+    container.style.display = 'block';
 
     const searchInput = container.querySelector('[data-extracted-search-input]');
     if (searchInput && !searchInput.dataset.bound) {
@@ -1207,21 +1265,172 @@ async function initApp(){
     }
 
     renderExtractedMeasurementRows(container, rows, meta);
+    renderExtractedWallMeasurements(container);
+  }
+
+  function getExtractedWallMeasurementSummary() {
+    // Prefer explicit store data (works even if pdfDoc isn't present yet)
+    try {
+      const all = highlightsStore.listLinesAllPages();
+      let totalLines = 0;
+      const pages = [];
+      for (const entry of all) {
+        const count = Array.isArray(entry.lines) ? entry.lines.length : 0;
+        if (count > 0) {
+          pages.push({ page: Number(entry.page) || 0, count });
+          totalLines += count;
+        }
+      }
+      if (totalLines) return { totalLines, pages };
+    } catch (e) {
+      // ignore and fallback to old behavior
+    }
+
+    const pageCount = pdfDoc?.numPages || 0;
+    const pages = [];
+    let totalLines = 0;
+
+    for (let pageNum = 1; pageNum <= pageCount; pageNum += 1) {
+      const lines = highlightsStore.getLines(pageNum) || [];
+      if (lines.length) {
+        pages.push({ page: pageNum, count: lines.length });
+        totalLines += lines.length;
+      }
+    }
+
+    return { totalLines, pages };
+  }
+
+  async function renderExtractedWallMeasurements(container) {
+    const wallContainer = container.querySelector('[data-extracted-wall-measurements]');
+    if (!wallContainer) return;
+
+    const all = highlightsStore.listLinesAllPages() || [];
+    let totalLines = 0;
+    for (const e of all) totalLines += (Array.isArray(e.lines) ? e.lines.length : 0);
+
+    // If no lines in the in-memory store, fall back to the last fetched analysis (if any)
+    if (!totalLines) {
+      const analysis = window.__lastFetchedAnalysis || null;
+      const fallbackPages = [];
+      if (analysis && Array.isArray(analysis.pages)) {
+        for (let i = 0; i < analysis.pages.length; i += 1) {
+          const p = analysis.pages[i] || {};
+          const lines = getVectorPayloadLines(p) || [];
+          fallbackPages.push({ page: i + 1, lines });
+        }
+      } else if (analysis && typeof analysis === 'object') {
+        // pages could be object keyed by page number
+        const pagesObj = analysis.pages || analysis.vector_annotations || analysis;
+        if (pagesObj && typeof pagesObj === 'object') {
+          const keys = Array.isArray(pagesObj) ? pagesObj.map((_, idx) => String(idx + 1)) : Object.keys(pagesObj);
+          for (const k of keys) {
+            const p = pagesObj[k] || {};
+            const lines = getVectorPayloadLines(p) || [];
+            fallbackPages.push({ page: Number(k) || (fallbackPages.length + 1), lines });
+          }
+        }
+      }
+
+      const fallbackTotal = fallbackPages.reduce((s, it) => s + (Array.isArray(it.lines) ? it.lines.length : 0), 0);
+      if (!fallbackTotal) {
+        wallContainer.textContent = 'No wall measurements detected yet.';
+        return;
+      }
+      // render fallback pages below by reusing existing rows rendering logic
+      parts = [];
+      parts = [];
+      parts.push(`<div class="text-[11px] text-gray-700"><strong>${fallbackTotal}</strong> wall measurement ${fallbackTotal === 1 ? 'line' : 'lines'} detected (from analysis).</div>`);
+      for (const entry of fallbackPages) {
+        const pageNum = Number(entry.page) || 1;
+        const lines = Array.isArray(entry.lines) ? entry.lines : [];
+        if (!lines.length) continue;
+        const rows = lines.map((ln, i) => `<div class="rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">p${pageNum} — line ${i+1}: ${escapeHtml(JSON.stringify(ln))}</div>`);
+        parts.push(`<div class="mt-2"><div class="text-[10px] text-gray-500 mb-1">Page p${pageNum} — ${lines.length} line${lines.length===1?'':'s'}</div>${rows.join('')}</div>`);
+      }
+      wallContainer.innerHTML = `<div class="space-y-2 text-[11px]">${parts.join('')}</div>`;
+      return;
+    }
+
+    const parts = [];
+    parts.push(`<div class="text-[11px] text-gray-700"><strong>${totalLines}</strong> wall measurement ${totalLines === 1 ? 'line' : 'lines'} detected.</div>`);
+
+    for (const entry of all) {
+      const pageNum = Number(entry.page) || 1;
+      const lines = Array.isArray(entry.lines) ? entry.lines : [];
+      if (!lines.length) continue;
+
+      let pageViewport = null;
+      try {
+        if (pdfDoc) pageViewport = await pdfDoc.getPage(pageNum).then(p => p.getViewport({ scale: 1 }));
+      } catch (_) { pageViewport = null; }
+      const pageW = pageViewport?.width || (pdfCanvas?.width || 0);
+      const pageH = pageViewport?.height || (pdfCanvas?.height || 0);
+
+      const rows = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const ln = lines[i] || {};
+        const x1 = Number(ln.x1 ?? ln.x ?? 0);
+        const y1 = Number(ln.y1 ?? ln.y ?? 0);
+        const x2 = Number(ln.x2 ?? ln.x ?? 0);
+        const y2 = Number(ln.y2 ?? ln.y ?? 0);
+
+        const dx = ((x2 - x1) * pageW) || 0;
+        const dy = ((y2 - y1) * pageH) || 0;
+        const pxLen = Math.hypot(dx, dy) || 0;
+
+        const scale = highlightsStore.getScale(pageNum) || null;
+        let human = '';
+        if (scale && Number(scale.factor)) {
+          const inches = (pxLen / (overlay._pxPerPt || 1)) * Number(scale.factor);
+          human = formatInches(inches);
+        } else {
+          const inches = ((pxLen / (overlay._pxPerPt || 1)) / 72) || 0;
+          human = `${inches.toFixed(2)} in`;
+        }
+
+        rows.push(`<div class="rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">p${pageNum} — line ${i+1}: <strong>${escapeHtml(human)}</strong></div>`);
+      }
+
+      parts.push(`<div class="mt-2"><div class="text-[10px] text-gray-500 mb-1">Page p${pageNum} — ${lines.length} line${lines.length===1?'':'s'}</div>${rows.join('')}</div>`);
+    }
+
+    wallContainer.innerHTML = `<div class="space-y-2 text-[11px]">${parts.join('')}</div>`;
   }
 
   function getVectorPayloadLines(pageData = {}) {
+    if (Array.isArray(pageData)) return pageData;
+
     const candidates = [
       pageData.lines,
       pageData.lineData,
       pageData.vectorLines,
+      pageData.vector_lines,
       pageData.wallLines,
       pageData.walls,
       pageData.vector,
-      pageData.pageLines
+      pageData.pageLines,
+      pageData.vector_annotations,
+      pageData.annotations,
+      pageData.shapes,
+      pageData.path || pageData.paths,
     ];
 
     for (const candidate of candidates) {
       if (Array.isArray(candidate)) return candidate;
+      if (candidate && typeof candidate === 'object') {
+        const nested = getVectorPayloadLines(candidate);
+        if (Array.isArray(nested) && nested.length) return nested;
+      }
+    }
+
+    // Fallback: pick the first array of objects that look like lines
+    for (const key of Object.keys(pageData || {})) {
+      const value = pageData[key];
+      if (!Array.isArray(value)) continue;
+      if (value.length && value.every((item) => item && typeof item === 'object' && ('x1' in item || 'x2' in item || 'start' in item || 'points' in item))) {
+        return value;
+      }
     }
 
     return [];
@@ -1249,9 +1458,17 @@ async function initApp(){
   }
 
   async function hydrateDetectedWallsFromResult(result) {
-    if (!pdfDoc || !result) return;
+    if (!result) return;
+    if (!pdfDoc) {
+      // PDF not loaded yet — save for later hydration after file open
+      try { window.__pendingVectorAnalysis = result; } catch (_) {}
+      return;
+    }
 
-    const pages = result?.pages || result;
+    const source = result.analysis || result.result || result;
+    const pages = Array.isArray(source.pages)
+      ? source.pages
+      : source.pages || source.vector_annotations || source;
     const pageEntries = Array.isArray(pages)
       ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
       : Object.keys(pages || {}).map((key) => ({ page: Number(key), data: pages[key] }));
@@ -1272,6 +1489,89 @@ async function initApp(){
 
     overlay.redraw();
     updateVectorLineInfo();
+    updateMeasurementList();
+
+    const extractedContainer = document.getElementById('extractedMeasurementsContainer');
+    if (extractedContainer) {
+      renderExtractedWallMeasurements(extractedContainer);
+    }
+
+    if (_pdfMetadataSummary) {
+      renderExtractedMeasurements(_pdfMetadataSummary);
+    }
+  }
+
+  async function fetchProjectFigures(projectId, options = {}) {
+    const retries = Number(options.retries ?? 30);
+    const delayMs = Number(options.delayMs ?? 1500);
+    console.log('[figures] start fetchProjectFigures projectId=', projectId, 'retries=', retries);
+
+    let lastData = null;
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      try {
+        const res = await fetch(`${API_BASE}/api/projects/${projectId}/figures`, { cache: 'no-store' });
+        console.log('[figures] attempt', attempt + 1, 'status=', res.status);
+        if (!res.ok) {
+          console.warn('[figures] unexpected status', res.status);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        const data = await res.json();
+        console.log('[figures] attempt', attempt + 1, 'payload=', data);
+        const analysisPayload = data.analysis || data.result || data;
+        if (analysisPayload) {
+          lastData = { ...data, analysis: analysisPayload };
+        }
+        if (data.status === 'ready' || data.status === 'failed') {
+          return data;
+        }
+        if (data.status === 'analyzing') {
+          if (analysisPayload) {
+            console.log('[figures] analyzing state includes partial analysis, returning partial payload');
+            return lastData;
+          }
+          console.warn('[figures] analyzing state has no analysis payload yet');
+        }
+      } catch (e) {
+        console.warn('[figures] fetch failed', e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    if (lastData) {
+      console.warn('[figures] retries exhausted, returning last available analysis payload');
+    }
+    return lastData;
+  }
+
+  function summarizeAnalysis(analysis) {
+    if (!analysis || typeof analysis !== 'object') return 'no analysis';
+    const pages = Array.isArray(analysis.pages) ? analysis.pages : analysis.pages || analysis.vector_annotations || analysis;
+    const pageEntries = Array.isArray(pages)
+      ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
+      : Object.keys(pages || {}).map((key) => ({ page: Number(key) || 0, data: pages[key] }));
+    const summary = pageEntries.map((entry) => {
+      const lines = getVectorPayloadLines(entry.data);
+      return `p${entry.page}: ${Array.isArray(lines) ? lines.length : 0}`;
+    });
+    return `pages=${summary.length} [${summary.join(', ')}]`;
+  }
+
+  async function loadProjectFigureAnalysis(projectId) {
+    console.log('[analysis] loadProjectFigureAnalysis projectId=', projectId);
+    const figures = await fetchProjectFigures(projectId, { retries: 6, delayMs: 1000 });
+    if (!figures) {
+      console.warn('[analysis] no figures returned');
+      return null;
+    }
+    // Persist last fetched analysis for debug/fallback rendering
+    try { window.__lastFetchedAnalysis = figures.analysis || figures.result || figures; } catch (_) {}
+    window.__lastFetchedFigures = figures;
+    const analysisPayload = figures.analysis || figures.result || figures;
+    console.log('[analysis] fetched figures', figures?.status, summarizeAnalysis(analysisPayload), figures);
+    if (analysisPayload) {
+      await hydrateDetectedWallsFromResult(analysisPayload);
+    }
+    return figures;
   }
 
   async function patchProjectDetails(projectId, payload) {
@@ -2506,6 +2806,17 @@ async function initApp(){
         panOffset = { x: 0, y: 0 };
         await renderPage();
         _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
+
+        // If vector analysis arrived before the PDF was loaded, hydrate it now
+        try {
+          if (window.__pendingVectorAnalysis) {
+            await hydrateDetectedWallsFromResult(window.__pendingVectorAnalysis);
+            window.__pendingVectorAnalysis = null;
+          }
+        } catch (e) {
+          console.warn('pending vector hydration failed', e);
+        }
+
         renderExtractedMeasurements(_pdfMetadataSummary);
       }
 
@@ -2906,45 +3217,49 @@ async function initApp(){
       { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
       { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
       { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
-      { role: 'foreman', rate: 220, days: roughDays, _uid: uid() },
+      { role: 'foreman', rate: 28, hours: 8, days: roughDays, _uid: uid() },
     ];
     _phaseCrews.final = [
       { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
       { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
       { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
-      { role: 'foreman', rate: 220, days: finalDays, _uid: uid() },
+      { role: 'foreman', rate: 28, hours: 8, days: finalDays, _uid: uid() },
     ];
     _phaseCrews.touchup = [
       { role: 'cleaner', rate: 22, hours: 8, days: touchupDays, _uid: uid() },
-      { role: 'foreman', rate: 220, days: touchupDays, _uid: uid() },
+      { role: 'foreman', rate: 28, hours: 8, days: touchupDays, _uid: uid() },
     ];
     _deletedPhaseIds = new Set();
   }
 
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
-    let cleanersPay = 0, foremanPay = 0, pmPay = 0;
+    let cleanersPay = 0, foremanPay = 0, assistantPay = 0, painterPay = 0, pmPay = 0;
     if (crew.length > 0) {
       for (const m of crew) {
-        if (m.role === 'cleaner') cleanersPay += (m.rate || 0) * (m.hours ?? 8) * (m.days || 0);
-        else if (m.role === 'project_manager') pmPay += (m.rate || 0) * (m.days || 0);
-        else foremanPay += (m.rate || 0) * (m.days || 0);
+        const pay = (m.rate || 0) * (m.hours ?? 8) * (m.days || 0);
+        if (m.role === 'cleaner') cleanersPay += pay;
+        else if (m.role === 'foreman') foremanPay += pay;
+        else if (m.role === 'assistant') assistantPay += pay;
+        else if (m.role === 'painter') painterPay += pay;
+        else if (m.role === 'project_manager') pmPay += pay;
+        else foremanPay += pay;
       }
     } else {
       // backward compat: old format with persons/days + global rates
       cleanersPay = (p.persons || 0) * (p.days || 0) * (rates.cleanerRate || 0);
       foremanPay = (p.days || 0) * (rates.foremanRate || 0);
     }
-    const laborCost = cleanersPay + foremanPay + pmPay;
-    const materials = laborCost * 0.05;
-    const subtotal = laborCost + materials;
+    const laborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
+    const materials = 0;
+    const subtotal = laborCost;
     const oh = subtotal * rates.overhead;
     const pft = (subtotal + oh) * rates.profit;
     const price = pft + oh + subtotal;
     const taxes = price * rates.tax;
     const comm = price * rates.commission;
     const finalPrice = price + taxes;
-    return { cleanersPay, foremanPay, pmPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
+    return { cleanersPay, foremanPay, assistantPay, painterPay, pmPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
   }
 
   function _getRates() {
@@ -2989,7 +3304,7 @@ async function initApp(){
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
       crew.forEach((m) => {
-        const pay = m.role === 'cleaner' ? (m.rate||0)*(m.hours??8)*(m.days||0) : (m.rate||0)*(m.days||0);
+        const pay = (m.rate||0)*(m.hours??8)*(m.days||0);
         const el = document.getElementById(`crew_pay_${m._uid}`);
         if (el) el.textContent = fmt$(pay);
       });
@@ -2997,6 +3312,8 @@ async function initApp(){
       const setFoot = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt$(val); };
       setFoot(`phase_cleaners_${pid}`, c.cleanersPay);
       setFoot(`phase_foreman_${pid}`, c.foremanPay);
+      setFoot(`phase_assistant_${pid}`, c.assistantPay);
+      setFoot(`phase_painter_${pid}`, c.painterPay);
       setFoot(`phase_pm_${pid}`, c.pmPay);
       setFoot(`phase_labor_${pid}`, c.laborCost);
       setFoot(`phase_materials_${pid}`, c.materials);
@@ -3033,90 +3350,215 @@ async function initApp(){
       if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
     }
 
-    _updateChangeOrder();
+    _changeOrders.forEach(co => _updateOneChangeOrderCalc(co));
   }
 
   const _updateCalcCells = _updateCrewCalcs;
 
-  function _updateChangeOrder() {
-    if (document.getElementById('analysisEditForm')?.style.display === 'none') return;
-    const card = document.getElementById('changeOrderCard');
-    if (!card) return;
+  let _changeOrders = [];
 
-    const n = id => parseFloat(document.getElementById(id)?.value) || 0;
-    const cleanerBilling = n('coBillingCleanerInput');
-    const supervisorBilling = n('coBillingSupervisorInput');
-    const pmBilling = n('coBillingPmInput');
-    const hoursPerDay = n('coHoursPerDayInput') || 8;
-    const materials = n('coMaterialsInput');
-    const materialsGC = n('coMaterialsGCInput');
-
-    const rates = _getRates();
-    let laborChangeOrder = 0, laborCosts = 0;
-
-    PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach(pid => {
-      const crew = _phaseCrews[pid] || [];
-      const c = _calcPhase({ crew }, rates);
-      laborCosts += c.laborCost;
-      for (const m of crew) {
-        const days = m.days || 0;
-        if (m.role === 'cleaner') laborChangeOrder += cleanerBilling * hoursPerDay * days;
-        else if (m.role === 'foreman') laborChangeOrder += supervisorBilling * hoursPerDay * days;
-        else if (m.role === 'project_manager') laborChangeOrder += pmBilling * hoursPerDay * days;
+  function _getPhaseLaborCosts() {
+    const isEditing = document.getElementById('analysisEditForm')?.style.display !== 'none';
+    let laborCosts = 0;
+    if (isEditing) {
+      const rates = _getRates();
+      PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach(pid => {
+        laborCosts += _calcPhase({ crew: _phaseCrews[pid] || [] }, rates).laborCost;
+      });
+    } else {
+      const bd = _loadedProjectData?.labor_breakdown;
+      if (bd?.phases) {
+        const rates = { cleanerRate: 0, foremanRate: 0, overhead: 0, profit: 0, tax: 0, commission: 0 };
+        for (const p of bd.phases) laborCosts += _calcPhase(p, rates).laborCost;
       }
-    });
+    }
+    return laborCosts;
+  }
 
+  function _updateOneChangeOrderCalc(co) {
+    let laborChangeOrder = 0;
+    (co.crew || []).forEach(m => {
+      const pay = (m.rate || 0) * (m.hours ?? 8) * (m.days || 0);
+      laborChangeOrder += pay;
+      const payEl = document.getElementById(`co_pay_${m._uid}`);
+      if (payEl) payEl.textContent = fmt$(pay);
+    });
+    const laborCosts = _getPhaseLaborCosts();
+    const materials = co.materials ?? 0;
+    const materialsGC = co.materials_gc ?? 0;
     const profit = laborChangeOrder - laborCosts - materials + materialsGC;
-    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setText('coLaborChangeOrderDisplay', fmt$(laborChangeOrder));
-    setText('coLaborCostsDisplay', fmt$(laborCosts));
-    setText('coMaterialsDisplay', fmt$(materials));
-    setText('coMaterialsGCDisplay', fmt$(materialsGC));
-    setText('coProfitDisplay', fmt$(profit));
-    card.style.display = '';
+    const summaryEl = document.getElementById(`co_summary_${co.id}`);
+    if (summaryEl) {
+      summaryEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr auto;gap:3px 24px;max-width:380px;font-size:12px;">
+        <span style="color:#6b7280;">Labor Change Order</span><span style="font-weight:600;text-align:right;">${fmt$(laborChangeOrder)}</span>
+        <span style="color:#6b7280;">Labor Costs</span><span style="font-weight:600;text-align:right;">${fmt$(laborCosts)}</span>
+        <span style="color:#6b7280;">Materials</span><span style="font-weight:600;text-align:right;">${fmt$(materials)}</span>
+        <span style="color:#6b7280;">Materials GC</span><span style="font-weight:600;text-align:right;">${fmt$(materialsGC)}</span>
+        <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#2563eb;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
+      </div>`;
+    }
+  }
+
+  function _renderChangeOrders() {
+    const container = document.getElementById('changeOrdersContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
+    const coRoleDefs = [
+      { label: '+ Cleaner', role: 'cleaner', rate: 42, color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
+      { label: '+ Foreman', role: 'foreman', rate: 47, color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+      { label: '+ Assistant', role: 'assistant', rate: 22, color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+      { label: '+ Painter', role: 'painter', rate: 22, color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+      { label: '+ PM', role: 'project_manager', rate: 55, color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
+    ];
+    const roleLabels = { cleaner: 'Cleaner', foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'PM' };
+    const roleStyles = {
+      cleaner: 'background:#eff6ff;color:#2563eb;', foreman: 'background:#f0fdf4;color:#16a34a;',
+      assistant: 'background:#fffbeb;color:#d97706;', painter: 'background:#fef2f2;color:#dc2626;',
+      project_manager: 'background:#f5f3ff;color:#7c3aed;',
+    };
+
+    if (_changeOrders.length === 0) {
+      const empty = document.createElement('div');
+      empty.textContent = 'No change orders yet. Click "+ Add" to create one.';
+      empty.style.cssText = 'padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:8px;';
+      container.appendChild(empty);
+      return;
+    }
+
+    _changeOrders.forEach((co, idx) => {
+      const section = document.createElement('div');
+      section.style.cssText = 'margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
+
+      // Header: name input + delete
+      const hdr = document.createElement('div');
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb;';
+      const nameLabel = document.createElement('span');
+      nameLabel.textContent = 'Name:';
+      nameLabel.style.cssText = 'font-size:12px;color:#6b7280;font-weight:500;margin-right:6px;white-space:nowrap;';
+      const nameInp = document.createElement('input');
+      nameInp.type = 'text'; nameInp.value = co.name || `Change Order ${idx + 1}`; nameInp.placeholder = 'Change Order Name';
+      nameInp.style.cssText = 'font-weight:600;font-size:13px;color:#374151;border:1px solid #d1d5db;background:white;outline:none;flex:1;min-width:0;padding:3px 8px;border-radius:4px;';
+      nameInp.addEventListener('input', () => { co.name = nameInp.value; });
+      const delCOBtn = document.createElement('button');
+      delCOBtn.type = 'button'; delCOBtn.textContent = 'Delete';
+      delCOBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;flex-shrink:0;margin-left:8px;';
+      delCOBtn.onclick = () => { _changeOrders.splice(idx, 1); _renderChangeOrders(); };
+      hdr.appendChild(nameLabel); hdr.appendChild(nameInp); hdr.appendChild(delCOBtn);
+      section.appendChild(hdr);
+
+      // Add role buttons
+      const addRow = document.createElement('div');
+      addRow.style.cssText = 'display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;';
+      coRoleDefs.forEach(({ label, role, rate, color, bg, border }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = label;
+        btn.style.cssText = `padding:3px 10px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
+        btn.onclick = () => { co.crew.push({ role, name: '', rate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) }); _renderChangeOrders(); };
+        addRow.appendChild(btn);
+      });
+      section.appendChild(addRow);
+
+      // Crew table
+      if (co.crew.length > 0) {
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+        const thead = table.createTHead(); const hrow = thead.insertRow();
+        ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
+          const th = document.createElement('th'); th.textContent = h;
+          th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+          hrow.appendChild(th);
+        });
+        const tbody = table.createTBody();
+        co.crew.forEach(member => {
+          const tr = tbody.insertRow(); tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+          const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
+          const badge = document.createElement('span');
+          badge.textContent = roleLabels[member.role] || member.role;
+          badge.style.cssText = `padding:2px 7px;border-radius:10px;${roleStyles[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
+          roleTd.appendChild(badge);
+          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+          const nameI = document.createElement('input'); nameI.type = 'text'; nameI.placeholder = 'Name'; nameI.value = member.name || '';
+          nameI.style.cssText = iStyle + 'width:100px;'; nameI.addEventListener('input', () => { member.name = nameI.value.trim(); });
+          nameTd.appendChild(nameI);
+          const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
+          const rw = document.createElement('div'); rw.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          const rateI = document.createElement('input'); rateI.type = 'number'; rateI.min = '0'; rateI.step = '0.01'; rateI.value = member.rate;
+          rateI.style.cssText = iStyle + 'width:64px;';
+          rateI.addEventListener('input', () => { member.rate = parseFloat(rateI.value) || 0; _updateOneChangeOrderCalc(co); });
+          const rl = document.createElement('span'); rl.textContent = '$/hr'; rl.style.cssText = 'font-size:11px;color:#6b7280;';
+          rw.appendChild(rateI); rw.appendChild(rl); rateTd.appendChild(rw);
+          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+          const hw = document.createElement('div'); hw.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          const hoursI = document.createElement('input'); hoursI.type = 'number'; hoursI.min = '0'; hoursI.max = '24'; hoursI.step = '0.5'; hoursI.value = member.hours ?? 8;
+          hoursI.style.cssText = iStyle + 'width:44px;';
+          hoursI.addEventListener('input', () => { member.hours = parseFloat(hoursI.value) || 0; _updateOneChangeOrderCalc(co); });
+          const hl = document.createElement('span'); hl.textContent = 'hrs'; hl.style.cssText = 'font-size:11px;color:#6b7280;';
+          hw.appendChild(hoursI); hw.appendChild(hl); hoursTd.appendChild(hw);
+          const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
+          const daysI = document.createElement('input'); daysI.type = 'number'; daysI.min = '0'; daysI.step = '0.5'; daysI.value = member.days;
+          daysI.style.cssText = iStyle + 'width:56px;';
+          daysI.addEventListener('input', () => { member.days = parseFloat(daysI.value) || 0; _updateOneChangeOrderCalc(co); });
+          daysTd.appendChild(daysI);
+          const payTd = tr.insertCell(); payTd.id = `co_pay_${member._uid}`;
+          payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
+          payTd.textContent = fmt$((member.rate || 0) * (member.hours ?? 8) * (member.days || 0));
+          const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
+          const delMBtn = document.createElement('button'); delMBtn.type = 'button'; delMBtn.textContent = '×';
+          delMBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;';
+          delMBtn.onclick = () => { co.crew.splice(co.crew.indexOf(member), 1); _renderChangeOrders(); };
+          delTd.appendChild(delMBtn);
+        });
+        table.appendChild(tbody); section.appendChild(table);
+      } else {
+        const empty = document.createElement('div');
+        empty.textContent = 'No crew — add a role above';
+        empty.style.cssText = 'padding:10px 12px;color:#9ca3af;font-size:12px;';
+        section.appendChild(empty);
+      }
+
+      // Bottom: materials inputs + summary
+      const bottom = document.createElement('div');
+      bottom.style.cssText = 'padding:12px;background:#fafafa;border-top:1px solid #e5e7eb;';
+      const matRow = document.createElement('div'); matRow.style.cssText = 'display:flex;gap:16px;margin-bottom:10px;';
+      const mkMat = (label, key) => {
+        const wrap = document.createElement('div');
+        const lbl = document.createElement('label'); lbl.textContent = label;
+        lbl.style.cssText = 'display:block;font-size:10px;color:#6b7280;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;';
+        const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.step = '0.01'; inp.placeholder = '0.00';
+        inp.value = co[key] ?? ''; inp.id = `co_${co.id}_${key}`;
+        inp.style.cssText = 'width:120px;border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;outline:none;';
+        inp.addEventListener('input', () => { co[key] = parseFloat(inp.value) || 0; _updateOneChangeOrderCalc(co); });
+        wrap.appendChild(lbl); wrap.appendChild(inp); return wrap;
+      };
+      matRow.appendChild(mkMat('Materials ($)', 'materials'));
+      matRow.appendChild(mkMat('Materials GC ($)', 'materials_gc'));
+      bottom.appendChild(matRow);
+      const summaryDiv = document.createElement('div'); summaryDiv.id = `co_summary_${co.id}`;
+      bottom.appendChild(summaryDiv);
+      section.appendChild(bottom);
+      container.appendChild(section);
+      _updateOneChangeOrderCalc(co);
+    });
   }
 
   function showChangeOrderCard(projData) {
     const card = document.getElementById('changeOrderCard');
     if (!card) return;
-
     const bd = projData?.labor_breakdown;
-    const co = bd?.change_order || {};
-    const cleanerBilling = co.cleaner_billing_rate ?? 42;
-    const supervisorBilling = co.supervisor_billing_rate ?? 47;
-    const pmBilling = co.pm_billing_rate ?? 0;
-    const hoursPerDay = co.hours_per_day ?? 8;
-    const materials = co.materials ?? 0;
-    const materialsGC = co.materials_gc ?? 0;
-
-    const rates = {
-      cleanerRate: bd?.cleaner_rate || 0,
-      foremanRate: bd?.foreman_rate || 0,
-      overhead: (bd?.overhead_pct || 0) / 100,
-      profit: (bd?.profit_pct || 0) / 100,
-      tax: (bd?.tax_pct || 0) / 100,
-      commission: (bd?.commission_pct || 0) / 100,
-    };
-
-    let laborChangeOrder = 0, laborCosts = 0;
-    for (const p of (bd?.phases || [])) {
-      const c = _calcPhase(p, rates);
-      laborCosts += c.laborCost;
-      for (const m of (p.crew || [])) {
-        const days = m.days || 0;
-        if (m.role === 'cleaner') laborChangeOrder += cleanerBilling * hoursPerDay * days;
-        else if (m.role === 'foreman') laborChangeOrder += supervisorBilling * hoursPerDay * days;
-        else if (m.role === 'project_manager') laborChangeOrder += pmBilling * hoursPerDay * days;
-      }
+    const saved = bd?.change_orders || [];
+    _changeOrders = saved.map(co => ({
+      ...co,
+      crew: (co.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) })),
+    }));
+    // Migrate old single change_order format
+    if (_changeOrders.length === 0 && bd?.change_order?.crew?.length > 0) {
+      const old = bd.change_order;
+      _changeOrders = [{ id: Math.random().toString(36).slice(2), name: 'Change Order #1',
+        crew: old.crew.map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) })),
+        materials: old.materials || 0, materials_gc: old.materials_gc || 0 }];
     }
-
-    const profit = laborChangeOrder - laborCosts - materials + materialsGC;
-    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setText('coLaborChangeOrderDisplay', fmt$(laborChangeOrder));
-    setText('coLaborCostsDisplay', fmt$(laborCosts));
-    setText('coMaterialsDisplay', fmt$(materials));
-    setText('coMaterialsGCDisplay', fmt$(materialsGC));
-    setText('coProfitDisplay', fmt$(profit));
+    _renderChangeOrders();
     card.style.display = '';
   }
 
@@ -3221,16 +3663,17 @@ async function initApp(){
         btn.type = 'button'; btn.textContent = label;
         btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
         btn.onclick = () => {
-          const newMember = { role, rate: defaultRate, days: 1, _uid: Math.random().toString(36).slice(2) };
-          if (role === 'cleaner') newMember.hours = 8;
+          const newMember = { role, rate: defaultRate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) };
           _phaseCrews[pid].push(newMember);
           _renderPhaseTable();
         };
         return btn;
       };
       addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
-      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 220));
-      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 300));
+      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
+      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
+      addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
+      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
 
       const delPhaseBtn = document.createElement('button');
       delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
@@ -3265,7 +3708,7 @@ async function initApp(){
           th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
           hrow.appendChild(th);
         });
-        const roleOrder = { cleaner: 0, foreman: 1, project_manager: 2 };
+        const roleOrder = { cleaner: 0, foreman: 1, assistant: 2, painter: 3, project_manager: 4 };
         const sortedCrew = [...crew].sort((a, b) => (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1));
         const tbody = table.createTBody();
         sortedCrew.forEach((member, idx) => {
@@ -3274,12 +3717,14 @@ async function initApp(){
 
           const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
           const badge = document.createElement('span');
-          badge.textContent = member.role === 'cleaner' ? 'Cleaner' : member.role === 'project_manager' ? 'Project Manager' : 'Foreman';
-          badge.style.cssText = member.role === 'cleaner'
-            ? 'padding:2px 7px;border-radius:10px;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:500;'
-            : member.role === 'project_manager'
-            ? 'padding:2px 7px;border-radius:10px;background:#f5f3ff;color:#7c3aed;font-size:11px;font-weight:500;'
-            : 'padding:2px 7px;border-radius:10px;background:#f0fdf4;color:#16a34a;font-size:11px;font-weight:500;';
+          const _phaseRoleLabels = { cleaner: 'Cleaner', foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'Project Manager' };
+          const _phaseRoleColors = {
+            cleaner: 'background:#eff6ff;color:#2563eb;', foreman: 'background:#f0fdf4;color:#16a34a;',
+            assistant: 'background:#fffbeb;color:#d97706;', painter: 'background:#fef2f2;color:#dc2626;',
+            project_manager: 'background:#f5f3ff;color:#7c3aed;',
+          };
+          badge.textContent = _phaseRoleLabels[member.role] || member.role;
+          badge.style.cssText = `padding:2px 7px;border-radius:10px;${_phaseRoleColors[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
           roleTd.appendChild(badge);
 
           const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
@@ -3296,28 +3741,23 @@ async function initApp(){
           rateInput.style.cssText = iStyle + 'width:64px;';
           rateInput.addEventListener('input', () => { member.rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
           const rateLabel = document.createElement('span');
-          rateLabel.textContent = member.role === 'cleaner' ? '$/hr' : '$/day';
+          rateLabel.textContent = '$/hr';
           rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
           rateWrap.appendChild(rateInput); rateWrap.appendChild(rateLabel);
           rateTd.appendChild(rateWrap);
 
           const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
-          if (member.role === 'cleaner') {
-            const hoursWrap = document.createElement('div'); hoursWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
-            const hoursInput = document.createElement('input');
-            hoursInput.type = 'number'; hoursInput.min = '0'; hoursInput.max = '24'; hoursInput.step = '0.5';
-            hoursInput.value = member.hours ?? 8;
-            hoursInput.style.cssText = iStyle + 'width:44px;';
-            hoursInput.addEventListener('input', () => { member.hours = parseFloat(hoursInput.value) || 0; _updateCrewCalcs(); });
-            const hoursLabel = document.createElement('span');
-            hoursLabel.textContent = 'hrs';
-            hoursLabel.style.cssText = 'font-size:11px;color:#6b7280;';
-            hoursWrap.appendChild(hoursInput); hoursWrap.appendChild(hoursLabel);
-            hoursTd.appendChild(hoursWrap);
-          } else {
-            hoursTd.textContent = '—';
-            hoursTd.style.cssText += 'text-align:center;color:#d1d5db;font-size:12px;';
-          }
+          const hoursWrap = document.createElement('div'); hoursWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          const hoursInput = document.createElement('input');
+          hoursInput.type = 'number'; hoursInput.min = '0'; hoursInput.max = '24'; hoursInput.step = '0.5';
+          hoursInput.value = member.hours ?? 8;
+          hoursInput.style.cssText = iStyle + 'width:44px;';
+          hoursInput.addEventListener('input', () => { member.hours = parseFloat(hoursInput.value) || 0; _updateCrewCalcs(); });
+          const hoursLabel = document.createElement('span');
+          hoursLabel.textContent = 'hrs';
+          hoursLabel.style.cssText = 'font-size:11px;color:#6b7280;';
+          hoursWrap.appendChild(hoursInput); hoursWrap.appendChild(hoursLabel);
+          hoursTd.appendChild(hoursWrap);
 
           const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
           const daysInput = document.createElement('input');
@@ -3329,7 +3769,7 @@ async function initApp(){
           const payTd = tr.insertCell();
           payTd.id = `crew_pay_${member._uid || idx}`;
           payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
-          const pay = member.role === 'cleaner' ? (member.rate||0)*(member.hours??8)*(member.days||0) : (member.rate||0)*(member.days||0);
+          const pay = (member.rate||0)*(member.hours??8)*(member.days||0);
           payTd.textContent = fmt$(pay);
 
           const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
@@ -3348,6 +3788,8 @@ async function initApp(){
       [
         ['Cleaners Pay', `phase_cleaners_${pid}`],
         ['Foreman Pay', `phase_foreman_${pid}`],
+        ['Assistant Pay', `phase_assistant_${pid}`],
+        ['Painter Pay', `phase_painter_${pid}`],
         ['PM Pay', `phase_pm_${pid}`],
         ['Labor', `phase_labor_${pid}`],
         ['Materials', `phase_materials_${pid}`],
@@ -3599,17 +4041,6 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
 
-    // Change Order billing rates
-    const co = bd?.change_order || {};
-    setVal('coBillingCleanerInput', co.cleaner_billing_rate ?? 42);
-    setVal('coBillingSupervisorInput', co.supervisor_billing_rate ?? 47);
-    setVal('coBillingPmInput', co.pm_billing_rate ?? 0);
-    setVal('coHoursPerDayInput', co.hours_per_day ?? 8);
-    setVal('coMaterialsInput', co.materials !== undefined ? co.materials : '');
-    setVal('coMaterialsGCInput', co.materials_gc !== undefined ? co.materials_gc : '');
-    ['coBillingCleanerInput', 'coBillingSupervisorInput', 'coBillingPmInput', 'coHoursPerDayInput', 'coMaterialsInput', 'coMaterialsGCInput']
-      .forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', _updateChangeOrder); });
-    _updateChangeOrder();
 
     // ZIP manual lookup button
     const taxZipLookupBtn = document.getElementById('taxZipLookupBtn');
@@ -3723,14 +4154,7 @@ async function initApp(){
         tax_pct: taxPct,
         commission_pct: commPct,
         phases,
-        change_order: {
-          cleaner_billing_rate: pf('coBillingCleanerInput') || 42,
-          supervisor_billing_rate: pf('coBillingSupervisorInput') || 47,
-          pm_billing_rate: pf('coBillingPmInput'),
-          hours_per_day: pf('coHoursPerDayInput') || 8,
-          materials: pf('coMaterialsInput'),
-          materials_gc: pf('coMaterialsGCInput'),
-        },
+        change_orders: _changeOrders.map(co => ({ ...co })),
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
@@ -3782,6 +4206,31 @@ async function initApp(){
       }
     });
   }
+
+  // Change Order card buttons
+  const addCOBtn = document.getElementById('addChangeOrderBtn');
+  if (addCOBtn) addCOBtn.addEventListener('click', () => {
+    _changeOrders.push({ id: Math.random().toString(36).slice(2), name: `Change Order #${_changeOrders.length + 1}`, crew: [], materials: 0, materials_gc: 0 });
+    _renderChangeOrders();
+  });
+
+  const saveCOBtn = document.getElementById('saveChangeOrderBtn');
+  if (saveCOBtn) saveCOBtn.addEventListener('click', async () => {
+    if (!activeProjectId) return;
+    const bd = { ...(_loadedProjectData?.labor_breakdown || {}), change_orders: _changeOrders.map(co => ({ ...co })) };
+    try {
+      saveCOBtn.textContent = 'Saving…'; saveCOBtn.disabled = true;
+      const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labor_breakdown: bd }),
+      });
+      if (!r.ok) throw new Error('Save failed');
+      const updated = await r.json();
+      _loadedProjectData = { ..._loadedProjectData, ...updated };
+      toast('Change orders saved', 'info');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { saveCOBtn.textContent = 'Save All'; saveCOBtn.disabled = false; }
+  });
 
   // ======================================================
   // ZOOM HELPERS
@@ -4119,6 +4568,7 @@ async function initApp(){
           if (resp.ok) {
             const blob = await resp.blob();
             await handleFile(new File([blob], blueprint.filename));
+            await loadProjectFigureAnalysis(existing.id);
           }
         }
         if (extractedAddress && !normalizeTextLine(freshData.address)) {
@@ -4164,17 +4614,27 @@ async function initApp(){
       console.log('✅ BACKEND RESPONSE');
       console.log('Saved file:', data.file);
       console.log('PDF Type:', data.type);
-      console.log(
-        'Result keys:',
-        Object.keys(data.result || {})
-      );
-      console.log('FULL RESULT:', data.result);
+      console.log('Result status:', data.status);
+      console.log('Result keys:', Object.keys(data.result || data.analysis || {}));
+      console.log('FULL RESULT:', data.result || data.analysis || data);
       console.log('==============================');
 
-      // If backend returned vector lines per page, try to load them into the overlay store.
+      let analysis = null;
+      if (data.result) {
+        analysis = data.result;
+      } else if (data.analysis) {
+        analysis = data.analysis;
+      } else {
+        const figures = await fetchProjectFigures(projectId, { retries: 6, delayMs: 1000 });
+        if (figures?.status === 'ready' && figures.analysis) {
+          analysis = figures.analysis;
+        }
+      }
+
       try {
-        const pages = data.result && (data.result.pages || data.result);
-        await hydrateDetectedWallsFromResult(pages || data.result);
+        if (analysis) {
+          await hydrateDetectedWallsFromResult(analysis);
+        }
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);
       }

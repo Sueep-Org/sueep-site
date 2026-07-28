@@ -909,96 +909,6 @@ export default function EstimatorPage() {
                 </div>
               </div>
 
-              {/* Change Order Billing Rates */}
-              <div className="mb-4 pt-4 border-t border-gray-100">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Change Order Rates
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Cleaner ($/hr)
-                    </label>
-                    <input
-                      type="number"
-                      id="coBillingCleanerInput"
-                      defaultValue="42"
-                      min="0"
-                      step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Supervisor ($/hr)
-                    </label>
-                    <input
-                      type="number"
-                      id="coBillingSupervisorInput"
-                      defaultValue="47"
-                      min="0"
-                      step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      PM ($/hr)
-                    </label>
-                    <input
-                      type="number"
-                      id="coBillingPmInput"
-                      defaultValue="0"
-                      min="0"
-                      step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Hours / Day
-                    </label>
-                    <input
-                      type="number"
-                      id="coHoursPerDayInput"
-                      defaultValue="8"
-                      min="1"
-                      max="24"
-                      step="1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Materials ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="coMaterialsInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Materials GC ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="coMaterialsGCInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                </div>
-              </div>
-
               <div className="flex gap-2">
                 <button
                   id="saveAnalysisBtn"
@@ -1019,58 +929,24 @@ export default function EstimatorPage() {
             className="bg-white rounded-lg shadow-md p-6 mt-4"
             style={{ display: "none" }}
           >
-            <h3 className="text-base font-semibold text-gray-800 mb-4">
-              Change Order
-            </h3>
-            <div>
-              <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Labor Change Order</span>
-                <span
-                  id="coLaborChangeOrderDisplay"
-                  className="text-sm font-semibold text-gray-900"
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-800">
+                Change Orders
+              </h3>
+              <div className="flex gap-2">
+                <button id="addChangeOrderBtn" className="mini-btn">
+                  + Add
+                </button>
+                <button
+                  id="saveChangeOrderBtn"
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
                 >
-                  —
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Labor Costs</span>
-                <span
-                  id="coLaborCostsDisplay"
-                  className="text-sm font-semibold text-gray-900"
-                >
-                  —
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Materials</span>
-                <span
-                  id="coMaterialsDisplay"
-                  className="text-sm font-semibold text-gray-900"
-                >
-                  —
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
-                <span className="text-sm text-gray-600">
-                  Materials (General Contractor)
-                </span>
-                <span
-                  id="coMaterialsGCDisplay"
-                  className="text-sm font-semibold text-gray-900"
-                >
-                  —
-                </span>
-              </div>
-              <div className="flex items-center justify-between pt-3 mt-1">
-                <span className="text-sm font-bold text-gray-800">Profit</span>
-                <span
-                  id="coProfitDisplay"
-                  className="text-base font-bold text-blue-700"
-                >
-                  —
-                </span>
+                  Save All
+                </button>
               </div>
             </div>
+            {/* All change order sections rendered by JS */}
+            <div id="changeOrdersContainer"></div>
           </div>
 
           <div
