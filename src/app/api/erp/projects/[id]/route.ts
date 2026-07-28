@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
+import { getErpAuth, canOverrideQualityChecklist } from "@/lib/erpAuth";
+import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
@@ -172,6 +174,24 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const nextBillingStatus = data.billingStatus !== undefined ? (data.billingStatus as string | null) : existing.billingStatus;
   if ((nextBillingStatus === "INVOICE_PAID" || nextBillingStatus === "PAID") && !existing.billingCompletedAt) {
     data.billingCompletedAt = new Date();
+  }
+
+  // A turnover unit can't be marked complete with an unfinished quality
+  // checklist unless the acting user is a PM/ADMIN — SUPERVISOR must finish it.
+  if (data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS") {
+    const auth = await getErpAuth();
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!canOverrideQualityChecklist(auth.role)) {
+      const checklist = await prisma.unitTurnoverChecklist.findUnique({ where: { projectId: id }, select: { completedItems: true } });
+      const completed = (checklist?.completedItems ?? {}) as Record<string, boolean>;
+      const allDone = ALL_CHECKLIST_ITEM_IDS.every((itemId) => completed[itemId]);
+      if (!allDone) {
+        return NextResponse.json(
+          { error: "Finish the quality checklist before marking this unit complete. A PM can override if needed." },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   try {

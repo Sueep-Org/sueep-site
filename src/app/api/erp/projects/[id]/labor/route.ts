@@ -10,6 +10,10 @@ import {
   turnoverMarginWorsened,
 } from "@/lib/erp/turnoverHoursBudget";
 import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
+import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { getErpAuth, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 /** Same "Label: value" line format used to embed a Sueep PM name in the
  * description for older projects that predate the dedicated supervisor
@@ -25,6 +29,14 @@ function getDescLine(description: string | null, key: string): string {
       ?.replace(new RegExp(`^${key}:\\s*`, "i"), "")
       .trim() ?? ""
   );
+}
+
+/** Same rule projects/[id]/page.tsx uses to derive isPostConstruction for the
+ * safety-checklist banner: absent a configured post-construction pipeline id,
+ * every project is treated as post-construction. */
+function isPostConstructionProject(hubspotPipelineId: string | null): boolean {
+  const cfg = parseHubSpotPipelineStageMap();
+  return cfg?.postConstruction.pipelineId ? hubspotPipelineId === cfg.postConstruction.pipelineId : true;
 }
 
 async function findEmployeeEmailByName(fullName: string): Promise<string | null> {
@@ -104,8 +116,47 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const project = await prisma.project.findUnique({ where: { id }, select: { id: true, supervisor: true } });
+  const project = await prisma.project.findUnique({ where: { id }, select: { id: true, supervisor: true, segment: true, hubspotPipelineId: true } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const needsOverrideCheck = project.segment === "JANITORIAL_TURNOVER_REQUESTS" || isPostConstructionProject(project.hubspotPipelineId);
+  const auth = needsOverrideCheck ? await getErpAuth() : null;
+  if (needsOverrideCheck && !auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // A turnover unit's quality checklist has to be finished before any labor
+  // gets logged against it at all, not just before it's marked complete —
+  // unless the acting user is a PM/ADMIN, who can log through it regardless.
+  if (project.segment === "JANITORIAL_TURNOVER_REQUESTS" && !canOverrideQualityChecklist(auth!.role)) {
+    const checklist = await prisma.unitTurnoverChecklist.findUnique({ where: { projectId: id }, select: { completedItems: true } });
+    const completed = (checklist?.completedItems ?? {}) as Record<string, boolean>;
+    const allDone = ALL_CHECKLIST_ITEM_IDS.every((itemId) => completed[itemId]);
+    if (!allDone) {
+      return NextResponse.json(
+        { error: "Finish the quality checklist before logging labor on this unit. A PM can override if needed." },
+        { status: 400 },
+      );
+    }
+  }
+
+  // A post-construction project needs today's daily safety check approved
+  // before any labor gets logged — unless the acting user is a PM/ADMIN, who
+  // can log through it regardless.
+  if (isPostConstructionProject(project.hubspotPipelineId) && !canOverrideSafetyCheck(auth!.role)) {
+    const todayKey = todayEasternKey();
+    const checksToday = await prisma.dailySafetyCheck.findMany({
+      where: { projectId: id },
+      select: { checkDate: true, approvedForWork: true },
+    });
+    const approvedToday = checksToday.some(
+      (c) => c.approvedForWork && todayEasternKey(c.checkDate) === todayKey,
+    );
+    if (!approvedToday) {
+      return NextResponse.json(
+        { error: "Today's safety checklist has not been approved. Complete and approve it before logging labor. A PM can override if needed." },
+        { status: 400 },
+      );
+    }
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -142,7 +193,10 @@ export async function POST(req: Request, ctx: Ctx) {
   }
 
   const transportationMethodRaw = body.transportationMethod ? String(body.transportationMethod).toUpperCase() : null;
-  if (transportationMethodRaw && !TRANSPORTATION_METHODS.includes(transportationMethodRaw as (typeof TRANSPORTATION_METHODS)[number])) {
+  if (!transportationMethodRaw) {
+    return NextResponse.json({ error: "transportationMethod is required" }, { status: 400 });
+  }
+  if (!TRANSPORTATION_METHODS.includes(transportationMethodRaw as (typeof TRANSPORTATION_METHODS)[number])) {
     return NextResponse.json({ error: "Invalid transportationMethod" }, { status: 400 });
   }
   const transportationMethod = transportationMethodRaw;

@@ -50,7 +50,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.transportationMethod !== undefined) {
     const tm = body.transportationMethod ? String(body.transportationMethod).toUpperCase() : null;
-    if (tm && !TRANSPORTATION_METHODS.includes(tm as (typeof TRANSPORTATION_METHODS)[number])) {
+    if (!tm) return NextResponse.json({ error: "transportationMethod is required" }, { status: 400 });
+    if (!TRANSPORTATION_METHODS.includes(tm as (typeof TRANSPORTATION_METHODS)[number])) {
       return NextResponse.json({ error: "Invalid transportationMethod" }, { status: 400 });
     }
     data.transportationMethod = tm;

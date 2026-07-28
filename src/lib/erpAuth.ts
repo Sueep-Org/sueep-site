@@ -44,3 +44,15 @@ export function canFilterScheduleBySupervisor(role: ErpRole): boolean {
 export function canViewEmployeeSsn(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
+
+/** SUPERVISOR must finish the unit turnover quality checklist before a turnover
+ * unit can be marked complete; PM/ADMIN can override and complete it anyway. */
+export function canOverrideQualityChecklist(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
+/** SUPERVISOR needs an approved-for-work daily safety check before logging labor
+ * on a post-construction project; PM/ADMIN can override and log through it anyway. */
+export function canOverrideSafetyCheck(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}

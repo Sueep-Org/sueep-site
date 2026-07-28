@@ -30,6 +30,12 @@ function signedDollarsShort(cents: number): string {
   return cents < 0 ? `-${centsToDollarsShort(-cents)}` : centsToDollarsShort(cents);
 }
 
+function marginPctColorClass(pct: number): string {
+  if (pct >= 30) return "text-green-600";
+  if (pct >= 15) return "text-yellow-600";
+  return "text-red-600";
+}
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -669,24 +675,22 @@ export default async function ErpDashboardPage() {
       else if (lc === "UPCOMING") upcomingCount++;
     }
 
-    // Bad margins — ACTUAL cost vs. contract, computed the exact same way
-    // (OT-aware labor from logs + contractor cost + rolled-up change orders)
-    // as the Projects table itself, via the shared
+    // Recently updated margins — ACTUAL cost vs. contract, computed the exact
+    // same way (OT-aware labor from logs + contractor cost + rolled-up change
+    // orders) as the Projects table itself, via the shared
     // computeProjectActualsWithChangeOrders — so this and the table can
-    // never quietly disagree on a project's real margin again. Flags
-    // anything under a 10% margin, not just negative.
-    const BAD_MARGIN_THRESHOLD_PCT = 10;
+    // never quietly disagree on a project's real margin again. Ordered by how
+    // recently the project was updated (allProjects is already `orderBy:
+    // updatedAt desc`), not by worst margin, so this surfaces what changed.
     const projectActuals = await computeProjectActualsWithChangeOrders(allProjects);
-    const badMarginProjects = allProjects
+    const recentMarginProjects = allProjects
       .map((p) => {
         const actuals = projectActuals.get(p.id);
         if (!actuals || actuals.contractValueCents == null || actuals.contractValueCents === 0 || actuals.marginCents == null) return null;
         const marginPct = Math.round((actuals.marginCents / actuals.contractValueCents) * 100);
-        if (marginPct >= BAD_MARGIN_THRESHOLD_PCT) return null;
         return { id: p.id, jobTitle: p.jobTitle, marginCents: actuals.marginCents, marginPct };
       })
       .filter((p): p is NonNullable<typeof p> => p !== null)
-      .sort((a, b) => a.marginCents - b.marginCents)
       .slice(0, 8);
 
     // Employee compliance
@@ -900,26 +904,25 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
-        {/* Bad margins — financial data, so only shown to roles that can see it */}
+        {/* Recently updated margins — financial data, so only shown to roles that can see it */}
         {showFinancials && (
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders) under 10%">Bad margins</h2>
-              {badMarginProjects.length > 0 && (
-                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{badMarginProjects.length}</span>
-              )}
+              <h2 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h2>
             </div>
-            {badMarginProjects.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">No projects under a 10% margin.</p>
+            {recentMarginProjects.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No projects with a contract value yet.</p>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {badMarginProjects.map((p) => (
+                {recentMarginProjects.map((p) => (
                   <li key={p.id}>
                     <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                       <p className="min-w-0 truncate text-sm font-medium text-gray-900">{p.jobTitle}</p>
                       <div className="shrink-0 text-right">
-                        <p className="text-xs font-semibold text-red-600">{signedDollarsShort(p.marginCents)}</p>
-                        {p.marginPct != null && <p className="text-[11px] text-gray-400">{p.marginPct}%</p>}
+                        {p.marginPct != null && (
+                          <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
+                        )}
+                        <p className="text-[11px] text-gray-400">{signedDollarsShort(p.marginCents)}</p>
                       </div>
                     </Link>
                   </li>

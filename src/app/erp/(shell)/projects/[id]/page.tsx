@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canEditEmployeePayInfo } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canEditEmployeePayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
+import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
@@ -88,6 +89,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           orderBy: { createdAt: "desc" },
           select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
         },
+        unitTurnoverChecklist: { select: { completedItems: true } },
       },
     }),
     prisma.employee.findMany({
@@ -253,6 +255,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       .trim() || null;
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const checklistCompletedItems = (project.unitTurnoverChecklist?.completedItems ?? {}) as Record<string, boolean>;
+  const qualityChecklistComplete = ALL_CHECKLIST_ITEM_IDS.every((itemId) => checklistCompletedItems[itemId]);
+  const canOverrideChecklist = auth ? canOverrideQualityChecklist(auth.role) : false;
+  const canOverrideSafety = auth ? canOverrideSafetyCheck(auth.role) : false;
+  const qualityChecklistBlocking = isTurnover && !qualityChecklistComplete && !canOverrideChecklist;
   // "Property" duplicates the page title (building - unit) and "Units" duplicates the Unit
   // Scope card shown above this block — both already shown elsewhere on Overview, so they're
   // dropped from the raw "Submitted details" dump.
@@ -289,6 +296,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     const checkStr = check.checkDate.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     return checkStr === todayDateStr && check.approvedForWork;
   });
+  const safetyCheckBlocking = isPostConstruction && !hasApprovedCheckToday && !canOverrideSafety;
   const pipelineOptions = cfg
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
@@ -499,7 +507,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             daysFromLogs={daysFromLogs}
             qualifyingCoContractValueCents={qualifyingCoContractValueCents}
             qualifyingCoCount={qualifyingChangeOrders.length}
-            isTurnoverUnit={!!project.turnoverRequestId}
           />
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
@@ -513,7 +520,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     },
     {
       label: "Labor",
-      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} contractValueCents={project.contractValueCents} unitScope={isSupervisor && project.turnoverRequest ? {
+      content: <ProjectLaborSection projectId={project.id} initialEntries={laborRows} employees={laborEmployees} sovItems={sovItems} canEdit={!isEmployee} showFinancials={!isEmployee && !isSupervisor} isJanitorialUnit={isTurnover} safetyPassedKeys={safetyPassedKeysArr} hasApprovedCheckToday={hasApprovedCheckToday} requiresSafetyCheck={isPostConstruction} contractValueCents={project.contractValueCents} qualityChecklistBlocking={qualityChecklistBlocking} safetyCheckBlocking={safetyCheckBlocking} unitScope={isSupervisor && project.turnoverRequest ? {
         unitNumber: project.turnoverRequest.unitNumber,
         bedrooms: project.turnoverRequest.bedrooms,
         bathrooms: project.turnoverRequest.bathrooms,

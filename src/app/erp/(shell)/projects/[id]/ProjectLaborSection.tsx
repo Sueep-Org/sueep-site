@@ -258,6 +258,8 @@ export function ProjectLaborSection({
   requiresSafetyCheck = true,
   contractValueCents = null,
   unitScope = null,
+  qualityChecklistBlocking = false,
+  safetyCheckBlocking = false,
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -271,6 +273,15 @@ export function ProjectLaborSection({
   requiresSafetyCheck?: boolean;
   /** Turnovers only, powers the hours-budget callout below. */
   contractValueCents?: number | null;
+  /** True when this is a turnover unit with an unfinished quality checklist
+   * and the viewer isn't a PM/ADMIN who can override — blocks logging labor
+   * client-side as a courtesy; the API enforces this regardless. */
+  qualityChecklistBlocking?: boolean;
+  /** True when this is a post-construction project without today's daily
+   * safety check approved and the viewer isn't a PM/ADMIN who can override —
+   * blocks logging labor client-side as a courtesy; the API enforces this
+   * regardless. */
+  safetyCheckBlocking?: boolean;
   /** Read-only scope-of-work summary shown above the labor log, for roles
    * (supervisors) that don't have access to the Overview tab where this
    * normally lives. Null hides it entirely. */
@@ -394,6 +405,10 @@ export function ProjectLaborSection({
   }
 
   async function onSaveEdit(entryId: string) {
+    if (!editFields.transportationMethod) {
+      setError("Transportation is required.");
+      return;
+    }
     const sovItemId = editFields.sovItemId && editFields.sovItemId !== SOV_OTHER ? editFields.sovItemId : null;
     const taskDesc = (!sovItemId && editFields.sovItemId !== SOV_OTHER) || editFields.sovItemId === SOV_OTHER
       ? editFields.taskDescription || null
@@ -435,8 +450,20 @@ export function ProjectLaborSection({
     e.preventDefault();
     const form = e.currentTarget;
     setError("");
+    if (qualityChecklistBlocking) {
+      setError("Finish the quality checklist before logging labor on this unit. A PM can override if needed.");
+      return;
+    }
+    if (safetyCheckBlocking) {
+      setError("Today's safety checklist has not been approved. Complete and approve it before logging labor. A PM can override if needed.");
+      return;
+    }
     if (!employeePick) {
       setError('Choose an employee from the list, or "Other" if they are not in the roster.');
+      return;
+    }
+    if (!transportationMethodStr) {
+      setError("Transportation is required.");
       return;
     }
     const hours = calcHours(clockInStr, clockOutStr);
@@ -547,14 +574,23 @@ export function ProjectLaborSection({
       if (sovMarkComplete && sovItemId) {
         setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: true }));
       }
+      let unitCompleteError = "";
       if (unitCompleted) {
         const today = new Date();
         const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        await fetch(`/api/erp/projects/${projectId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ status: "COMPLETE", projectEndDate: todayISO }),
-        }).catch(() => {});
+        try {
+          const completeRes = await fetch(`/api/erp/projects/${projectId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ status: "COMPLETE", projectEndDate: todayISO }),
+          });
+          if (!completeRes.ok) {
+            const completeData = (await completeRes.json().catch(() => ({}))) as { error?: string };
+            unitCompleteError = completeData.error || "Failed to mark unit as completed.";
+          }
+        } catch {
+          unitCompleteError = "Network error marking unit as completed.";
+        }
       }
       setEntries((prev) => [row, ...prev]);
       form.reset();
@@ -568,6 +604,7 @@ export function ProjectLaborSection({
       setSovPick("");
       setSovMarkComplete(false);
       setUnitCompleted(false);
+      if (unitCompleteError) setError(unitCompleteError);
       router.refresh();
     } catch {
       setError("Network error");
@@ -671,7 +708,22 @@ export function ProjectLaborSection({
           </div>
         </div>
       )}
-      {requiresSafetyCheck && hasApprovedCheckToday === false && (
+      {qualityChecklistBlocking && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-red-800">
+            The quality checklist isn&apos;t finished yet. Complete it on the Checklist tab before logging labor on this unit. A PM can override this.
+          </p>
+        </div>
+      )}
+      {safetyCheckBlocking ? (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-red-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor. A PM can override this.
+          </p>
+        </div>
+      ) : requiresSafetyCheck && hasApprovedCheckToday === false && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
           <p className="text-sm text-amber-800">
@@ -763,14 +815,15 @@ export function ProjectLaborSection({
             <p className="mt-1 text-[11px] text-gray-400">Included in the hours above, not added on top.</p>
           </div>
           <div>
-            <label className={label} htmlFor="l-transportation">Transportation</label>
+            <label className={label} htmlFor="l-transportation">Transportation *</label>
             <select
               id="l-transportation"
+              required
               className={input}
               value={transportationMethodStr}
               onChange={(e) => setTransportationMethodStr(e.target.value)}
             >
-              <option value="">— Not set —</option>
+              <option value="" disabled>— Select —</option>
               {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -839,6 +892,7 @@ export function ProjectLaborSection({
               />
               Mark unit as completed
             </label>
+            <p className="mt-1 text-[11px] text-gray-400">Requires the quality checklist to be fully checked off (a PM can override).</p>
           </div>
         )}
         {error ? (
@@ -848,7 +902,7 @@ export function ProjectLaborSection({
         ) : null}
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || qualityChecklistBlocking || safetyCheckBlocking}
           className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
         >
           {loading ? "Adding…" : "Add entry"}
@@ -986,11 +1040,12 @@ export function ProjectLaborSection({
                           onChange={(e) => setEditFields((f) => ({ ...f, commuteMinutes: e.target.value }))}
                         />
                         <select
+                          required
                           className={`${editInput} mt-1`}
                           value={editFields.transportationMethod}
                           onChange={(e) => setEditFields((f) => ({ ...f, transportationMethod: e.target.value }))}
                         >
-                          <option value="">— Transport —</option>
+                          <option value="" disabled>— Transport —</option>
                           {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
