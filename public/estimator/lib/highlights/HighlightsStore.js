@@ -174,6 +174,17 @@ export class HighlightsStore {
   getLines(page){ this._ensure(page); return this._pageToLines.get(page); }
 
   clearLines(page){ this._ensure(page); this._pageToLines.set(page, []); }
+  
+  // Return all stored vector lines grouped by page as [{ page, lines }] for easy consumption
+  listLinesAllPages(){
+    const out = [];
+    for (const [page, arr] of this._pageToLines.entries()){
+      out.push({ page: Number(page), lines: Array.isArray(arr) ? arr.slice() : [] });
+    }
+    // sort by page number
+    out.sort((a,b)=>a.page - b.page);
+    return out;
+  }
 
   // Scale API (real_units per pixel). unit is a string like 'in' or 'ft'
   setScale(page, scaleObj){ this._ensure(page); this._pageToScale.set(page, scaleObj); }

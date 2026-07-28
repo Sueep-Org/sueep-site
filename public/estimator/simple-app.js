@@ -104,6 +104,7 @@ async function refreshDrawer(){
             const fileObj = new File([blob], blueprint.filename);
             await window.__handleFile?.(fileObj);
             activeProjectId = project.id;
+            try { window.__activeProjectId = activeProjectId; } catch (_) {}
             await window.__restoreAnnotations?.(project.id);
             const freshRes = await fetch(`${API_BASE}/api/projects/${project.id}`, { cache: 'no-store' });
             const freshData = freshRes.ok ? await freshRes.json() : projData;
@@ -343,6 +344,11 @@ async function initApp(){
 
   const highlightsStore = new HighlightsStore();
 
+  // Expose store and overlay for debugging in the console
+  try {
+    window.highlightsStore = highlightsStore;
+  } catch (_) {}
+
   const overlay = new CanvasOverlay({
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
@@ -383,21 +389,51 @@ async function initApp(){
     } catch(_) {}
   };
   window.__restoreAnnotations = async function(projectId) {
+    console.log('[restore] annotations projectId=', projectId);
     highlightsStore.clearAll();
+    let restoredAnnotations = false;
+    let hydratedVectors = false;
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
+      console.log('[restore] annotations response status=', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('[restore] annotation payload', data);
         if (data.annotations) {
           highlightsStore.deserialize(JSON.stringify(data.annotations));
+          restoredAnnotations = true;
+        }
+        if (data.vector_annotations || data.analysis) {
+          await hydrateDetectedWallsFromResult(data);
+          hydratedVectors = true;
+        }
+        if (restoredAnnotations || hydratedVectors) {
           overlay.redraw();
           updateMeasurementList();
+          if (!hydratedVectors) {
+            await loadProjectFigureAnalysis(projectId);
+          }
           return;
         }
       }
-    } catch(_) {}
+    } catch(error) {
+      console.warn('[restore] annotations fetch failed', error);
+    }
+
     const json = localStorage.getItem(`annotations_${projectId}`);
-    if (json) highlightsStore.deserialize(json);
+    if (json) {
+      console.log('[restore] found local annotations, deserializing');
+      highlightsStore.deserialize(json);
+      overlay.redraw();
+      updateMeasurementList();
+      if (!hydratedVectors) {
+        console.log('[restore] no vector hydration from annotations, loading figure analysis');
+        await loadProjectFigureAnalysis(projectId);
+      }
+      return;
+    }
+
+    await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
   };
@@ -1114,12 +1150,29 @@ async function initApp(){
     return;
   }
 
+  function hasTotalSquareFootageMeasurement(rows = []) {
+    return rows.some((row) => {
+      const label = normalizeTextLine(row?.label || '');
+      if (!label) return false;
+
+      return /total\s+area|total\s+square\s+feet/i.test(label);
+    });
+  }
+
   function renderExtractedMeasurementRows(container, rows, meta) {
     const list = container.querySelector('[data-extracted-list]');
+    const emptyState = container.querySelector('[data-extracted-empty-state]');
     if (!list) return;
 
     const hasQuery = !!_activeExtractedMeasurementQuery;
     const visibleRows = rows.filter((row) => matchesExtractedMeasurementQuery(row, _activeExtractedMeasurementQuery));
+    const showNoTotalSquareFootageMessage = !hasTotalSquareFootageMeasurement(rows);
+
+    if (emptyState) {
+      emptyState.innerHTML = showNoTotalSquareFootageMessage
+        ? '<div class="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700">no total square footage measurement</div>'
+        : '';
+    }
 
     list.innerHTML = `
       <div class="space-y-2">
@@ -1165,33 +1218,38 @@ async function initApp(){
     const container = document.getElementById('extractedMeasurementsContainer');
     if (!container) return;
 
-    if (!meta || !Array.isArray(meta.extractedMeasurements) || !meta.extractedMeasurements.length) {
-      container.style.display = 'none';
-      container.innerHTML = '';
-      return;
-    }
-
-    container.style.display = 'block';
-    const rows = meta.extractedMeasurements;
+    const rows = Array.isArray(meta?.extractedMeasurements) ? meta.extractedMeasurements : [];
 
     if (!container.querySelector('[data-extracted-search-input]')) {
       container.innerHTML = `
-        <div class="mb-2">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
-          <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
+        <div class="mb-3">
+          <div class="mb-2">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
+            <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
+          </div>
+          <div class="mb-2" data-extracted-empty-state></div>
+          <div class="mb-2">
+            <input
+              type="search"
+              data-extracted-search-input
+              value="${escapeHtml(_activeExtractedMeasurementQuery)}"
+              placeholder="Search extracted measurements or PDF"
+              class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+            />
+          </div>
+          <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
         </div>
-        <div class="mb-2">
-          <input
-            type="search"
-            data-extracted-search-input
-            value="${escapeHtml(_activeExtractedMeasurementQuery)}"
-            placeholder="Search extracted measurements or PDF"
-            class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-          />
+        <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted wall measurements</div>
+          <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
+          <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
+            No wall measurements detected yet.
+          </div>
         </div>
-        <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
       `;
     }
+
+    container.style.display = 'block';
 
     const searchInput = container.querySelector('[data-extracted-search-input]');
     if (searchInput && !searchInput.dataset.bound) {
@@ -1207,21 +1265,172 @@ async function initApp(){
     }
 
     renderExtractedMeasurementRows(container, rows, meta);
+    renderExtractedWallMeasurements(container);
+  }
+
+  function getExtractedWallMeasurementSummary() {
+    // Prefer explicit store data (works even if pdfDoc isn't present yet)
+    try {
+      const all = highlightsStore.listLinesAllPages();
+      let totalLines = 0;
+      const pages = [];
+      for (const entry of all) {
+        const count = Array.isArray(entry.lines) ? entry.lines.length : 0;
+        if (count > 0) {
+          pages.push({ page: Number(entry.page) || 0, count });
+          totalLines += count;
+        }
+      }
+      if (totalLines) return { totalLines, pages };
+    } catch (e) {
+      // ignore and fallback to old behavior
+    }
+
+    const pageCount = pdfDoc?.numPages || 0;
+    const pages = [];
+    let totalLines = 0;
+
+    for (let pageNum = 1; pageNum <= pageCount; pageNum += 1) {
+      const lines = highlightsStore.getLines(pageNum) || [];
+      if (lines.length) {
+        pages.push({ page: pageNum, count: lines.length });
+        totalLines += lines.length;
+      }
+    }
+
+    return { totalLines, pages };
+  }
+
+  async function renderExtractedWallMeasurements(container) {
+    const wallContainer = container.querySelector('[data-extracted-wall-measurements]');
+    if (!wallContainer) return;
+
+    const all = highlightsStore.listLinesAllPages() || [];
+    let totalLines = 0;
+    for (const e of all) totalLines += (Array.isArray(e.lines) ? e.lines.length : 0);
+
+    // If no lines in the in-memory store, fall back to the last fetched analysis (if any)
+    if (!totalLines) {
+      const analysis = window.__lastFetchedAnalysis || null;
+      const fallbackPages = [];
+      if (analysis && Array.isArray(analysis.pages)) {
+        for (let i = 0; i < analysis.pages.length; i += 1) {
+          const p = analysis.pages[i] || {};
+          const lines = getVectorPayloadLines(p) || [];
+          fallbackPages.push({ page: i + 1, lines });
+        }
+      } else if (analysis && typeof analysis === 'object') {
+        // pages could be object keyed by page number
+        const pagesObj = analysis.pages || analysis.vector_annotations || analysis;
+        if (pagesObj && typeof pagesObj === 'object') {
+          const keys = Array.isArray(pagesObj) ? pagesObj.map((_, idx) => String(idx + 1)) : Object.keys(pagesObj);
+          for (const k of keys) {
+            const p = pagesObj[k] || {};
+            const lines = getVectorPayloadLines(p) || [];
+            fallbackPages.push({ page: Number(k) || (fallbackPages.length + 1), lines });
+          }
+        }
+      }
+
+      const fallbackTotal = fallbackPages.reduce((s, it) => s + (Array.isArray(it.lines) ? it.lines.length : 0), 0);
+      if (!fallbackTotal) {
+        wallContainer.textContent = 'No wall measurements detected yet.';
+        return;
+      }
+      // render fallback pages below by reusing existing rows rendering logic
+      parts = [];
+      parts = [];
+      parts.push(`<div class="text-[11px] text-gray-700"><strong>${fallbackTotal}</strong> wall measurement ${fallbackTotal === 1 ? 'line' : 'lines'} detected (from analysis).</div>`);
+      for (const entry of fallbackPages) {
+        const pageNum = Number(entry.page) || 1;
+        const lines = Array.isArray(entry.lines) ? entry.lines : [];
+        if (!lines.length) continue;
+        const rows = lines.map((ln, i) => `<div class="rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">p${pageNum} — line ${i+1}: ${escapeHtml(JSON.stringify(ln))}</div>`);
+        parts.push(`<div class="mt-2"><div class="text-[10px] text-gray-500 mb-1">Page p${pageNum} — ${lines.length} line${lines.length===1?'':'s'}</div>${rows.join('')}</div>`);
+      }
+      wallContainer.innerHTML = `<div class="space-y-2 text-[11px]">${parts.join('')}</div>`;
+      return;
+    }
+
+    const parts = [];
+    parts.push(`<div class="text-[11px] text-gray-700"><strong>${totalLines}</strong> wall measurement ${totalLines === 1 ? 'line' : 'lines'} detected.</div>`);
+
+    for (const entry of all) {
+      const pageNum = Number(entry.page) || 1;
+      const lines = Array.isArray(entry.lines) ? entry.lines : [];
+      if (!lines.length) continue;
+
+      let pageViewport = null;
+      try {
+        if (pdfDoc) pageViewport = await pdfDoc.getPage(pageNum).then(p => p.getViewport({ scale: 1 }));
+      } catch (_) { pageViewport = null; }
+      const pageW = pageViewport?.width || (pdfCanvas?.width || 0);
+      const pageH = pageViewport?.height || (pdfCanvas?.height || 0);
+
+      const rows = [];
+      for (let i = 0; i < lines.length; i += 1) {
+        const ln = lines[i] || {};
+        const x1 = Number(ln.x1 ?? ln.x ?? 0);
+        const y1 = Number(ln.y1 ?? ln.y ?? 0);
+        const x2 = Number(ln.x2 ?? ln.x ?? 0);
+        const y2 = Number(ln.y2 ?? ln.y ?? 0);
+
+        const dx = ((x2 - x1) * pageW) || 0;
+        const dy = ((y2 - y1) * pageH) || 0;
+        const pxLen = Math.hypot(dx, dy) || 0;
+
+        const scale = highlightsStore.getScale(pageNum) || null;
+        let human = '';
+        if (scale && Number(scale.factor)) {
+          const inches = (pxLen / (overlay._pxPerPt || 1)) * Number(scale.factor);
+          human = formatInches(inches);
+        } else {
+          const inches = ((pxLen / (overlay._pxPerPt || 1)) / 72) || 0;
+          human = `${inches.toFixed(2)} in`;
+        }
+
+        rows.push(`<div class="rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-[11px] text-gray-700">p${pageNum} — line ${i+1}: <strong>${escapeHtml(human)}</strong></div>`);
+      }
+
+      parts.push(`<div class="mt-2"><div class="text-[10px] text-gray-500 mb-1">Page p${pageNum} — ${lines.length} line${lines.length===1?'':'s'}</div>${rows.join('')}</div>`);
+    }
+
+    wallContainer.innerHTML = `<div class="space-y-2 text-[11px]">${parts.join('')}</div>`;
   }
 
   function getVectorPayloadLines(pageData = {}) {
+    if (Array.isArray(pageData)) return pageData;
+
     const candidates = [
       pageData.lines,
       pageData.lineData,
       pageData.vectorLines,
+      pageData.vector_lines,
       pageData.wallLines,
       pageData.walls,
       pageData.vector,
-      pageData.pageLines
+      pageData.pageLines,
+      pageData.vector_annotations,
+      pageData.annotations,
+      pageData.shapes,
+      pageData.path || pageData.paths,
     ];
 
     for (const candidate of candidates) {
       if (Array.isArray(candidate)) return candidate;
+      if (candidate && typeof candidate === 'object') {
+        const nested = getVectorPayloadLines(candidate);
+        if (Array.isArray(nested) && nested.length) return nested;
+      }
+    }
+
+    // Fallback: pick the first array of objects that look like lines
+    for (const key of Object.keys(pageData || {})) {
+      const value = pageData[key];
+      if (!Array.isArray(value)) continue;
+      if (value.length && value.every((item) => item && typeof item === 'object' && ('x1' in item || 'x2' in item || 'start' in item || 'points' in item))) {
+        return value;
+      }
     }
 
     return [];
@@ -1249,9 +1458,17 @@ async function initApp(){
   }
 
   async function hydrateDetectedWallsFromResult(result) {
-    if (!pdfDoc || !result) return;
+    if (!result) return;
+    if (!pdfDoc) {
+      // PDF not loaded yet — save for later hydration after file open
+      try { window.__pendingVectorAnalysis = result; } catch (_) {}
+      return;
+    }
 
-    const pages = result?.pages || result;
+    const source = result.analysis || result.result || result;
+    const pages = Array.isArray(source.pages)
+      ? source.pages
+      : source.pages || source.vector_annotations || source;
     const pageEntries = Array.isArray(pages)
       ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
       : Object.keys(pages || {}).map((key) => ({ page: Number(key), data: pages[key] }));
@@ -1272,6 +1489,89 @@ async function initApp(){
 
     overlay.redraw();
     updateVectorLineInfo();
+    updateMeasurementList();
+
+    const extractedContainer = document.getElementById('extractedMeasurementsContainer');
+    if (extractedContainer) {
+      renderExtractedWallMeasurements(extractedContainer);
+    }
+
+    if (_pdfMetadataSummary) {
+      renderExtractedMeasurements(_pdfMetadataSummary);
+    }
+  }
+
+  async function fetchProjectFigures(projectId, options = {}) {
+    const retries = Number(options.retries ?? 30);
+    const delayMs = Number(options.delayMs ?? 1500);
+    console.log('[figures] start fetchProjectFigures projectId=', projectId, 'retries=', retries);
+
+    let lastData = null;
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      try {
+        const res = await fetch(`${API_BASE}/api/projects/${projectId}/figures`, { cache: 'no-store' });
+        console.log('[figures] attempt', attempt + 1, 'status=', res.status);
+        if (!res.ok) {
+          console.warn('[figures] unexpected status', res.status);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        const data = await res.json();
+        console.log('[figures] attempt', attempt + 1, 'payload=', data);
+        const analysisPayload = data.analysis || data.result || data;
+        if (analysisPayload) {
+          lastData = { ...data, analysis: analysisPayload };
+        }
+        if (data.status === 'ready' || data.status === 'failed') {
+          return data;
+        }
+        if (data.status === 'analyzing') {
+          if (analysisPayload) {
+            console.log('[figures] analyzing state includes partial analysis, returning partial payload');
+            return lastData;
+          }
+          console.warn('[figures] analyzing state has no analysis payload yet');
+        }
+      } catch (e) {
+        console.warn('[figures] fetch failed', e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    if (lastData) {
+      console.warn('[figures] retries exhausted, returning last available analysis payload');
+    }
+    return lastData;
+  }
+
+  function summarizeAnalysis(analysis) {
+    if (!analysis || typeof analysis !== 'object') return 'no analysis';
+    const pages = Array.isArray(analysis.pages) ? analysis.pages : analysis.pages || analysis.vector_annotations || analysis;
+    const pageEntries = Array.isArray(pages)
+      ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
+      : Object.keys(pages || {}).map((key) => ({ page: Number(key) || 0, data: pages[key] }));
+    const summary = pageEntries.map((entry) => {
+      const lines = getVectorPayloadLines(entry.data);
+      return `p${entry.page}: ${Array.isArray(lines) ? lines.length : 0}`;
+    });
+    return `pages=${summary.length} [${summary.join(', ')}]`;
+  }
+
+  async function loadProjectFigureAnalysis(projectId) {
+    console.log('[analysis] loadProjectFigureAnalysis projectId=', projectId);
+    const figures = await fetchProjectFigures(projectId, { retries: 6, delayMs: 1000 });
+    if (!figures) {
+      console.warn('[analysis] no figures returned');
+      return null;
+    }
+    // Persist last fetched analysis for debug/fallback rendering
+    try { window.__lastFetchedAnalysis = figures.analysis || figures.result || figures; } catch (_) {}
+    window.__lastFetchedFigures = figures;
+    const analysisPayload = figures.analysis || figures.result || figures;
+    console.log('[analysis] fetched figures', figures?.status, summarizeAnalysis(analysisPayload), figures);
+    if (analysisPayload) {
+      await hydrateDetectedWallsFromResult(analysisPayload);
+    }
+    return figures;
   }
 
   async function patchProjectDetails(projectId, payload) {
@@ -2506,6 +2806,17 @@ async function initApp(){
         panOffset = { x: 0, y: 0 };
         await renderPage();
         _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
+
+        // If vector analysis arrived before the PDF was loaded, hydrate it now
+        try {
+          if (window.__pendingVectorAnalysis) {
+            await hydrateDetectedWallsFromResult(window.__pendingVectorAnalysis);
+            window.__pendingVectorAnalysis = null;
+          }
+        } catch (e) {
+          console.warn('pending vector hydration failed', e);
+        }
+
         renderExtractedMeasurements(_pdfMetadataSummary);
       }
 
@@ -4119,6 +4430,7 @@ async function initApp(){
           if (resp.ok) {
             const blob = await resp.blob();
             await handleFile(new File([blob], blueprint.filename));
+            await loadProjectFigureAnalysis(existing.id);
           }
         }
         if (extractedAddress && !normalizeTextLine(freshData.address)) {
@@ -4164,17 +4476,27 @@ async function initApp(){
       console.log('✅ BACKEND RESPONSE');
       console.log('Saved file:', data.file);
       console.log('PDF Type:', data.type);
-      console.log(
-        'Result keys:',
-        Object.keys(data.result || {})
-      );
-      console.log('FULL RESULT:', data.result);
+      console.log('Result status:', data.status);
+      console.log('Result keys:', Object.keys(data.result || data.analysis || {}));
+      console.log('FULL RESULT:', data.result || data.analysis || data);
       console.log('==============================');
 
-      // If backend returned vector lines per page, try to load them into the overlay store.
+      let analysis = null;
+      if (data.result) {
+        analysis = data.result;
+      } else if (data.analysis) {
+        analysis = data.analysis;
+      } else {
+        const figures = await fetchProjectFigures(projectId, { retries: 6, delayMs: 1000 });
+        if (figures?.status === 'ready' && figures.analysis) {
+          analysis = figures.analysis;
+        }
+      }
+
       try {
-        const pages = data.result && (data.result.pages || data.result);
-        await hydrateDetectedWallsFromResult(pages || data.result);
+        if (analysis) {
+          await hydrateDetectedWallsFromResult(analysis);
+        }
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);
       }
