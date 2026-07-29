@@ -560,7 +560,7 @@ export default function EstimatorPage() {
                 </div>
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Toll Cost
+                    Total Transportation
                   </span>
                   <div
                     id="detailTollCost"
@@ -802,7 +802,7 @@ export default function EstimatorPage() {
                   <input
                     type="number"
                     id="overheadInput"
-                    defaultValue="10"
+                    defaultValue="0"
                     min="0"
                     step="0.1"
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
@@ -857,7 +857,7 @@ export default function EstimatorPage() {
                   <input
                     type="number"
                     id="commissionInput"
-                    defaultValue="10"
+                    defaultValue="5"
                     min="0"
                     step="0.1"
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
@@ -879,8 +879,22 @@ export default function EstimatorPage() {
                   className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Gasoline + Toll Cost + Drive info (read-only) */}
+              {/* Materials + Gasoline + Toll Cost */}
               <div className="flex flex-wrap gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Materials ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="materialsInput"
+                    placeholder="0.00"
+                    defaultValue="0"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
                     Gasoline ($)
@@ -906,6 +920,14 @@ export default function EstimatorPage() {
                     step="0.01"
                     className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Driver Cost ($)</label>
+                  <div id="driverCostDisplay" className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700">—</div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Total Transportation ($)</label>
+                  <div id="totalTransportDisplay" className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold">—</div>
                 </div>
               </div>
 

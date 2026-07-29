@@ -3220,23 +3220,37 @@ async function initApp(){
     const area = parseFloat(totalArea) || 0;
     if (area <= 0) return;
     const uid = () => Math.random().toString(36).slice(2);
-    const roughDays = Math.ceil(area / 9000);
-    const finalDays = Math.ceil(area / 7500);
-    const touchupDays = Math.ceil(area / 6000);
+
+    // Crew size by area tier
+    let mainCleaners, touchupCleaners;
+    if (area < 50000) {
+      mainCleaners = 4; touchupCleaners = 3;
+    } else if (area <= 100000) {
+      mainCleaners = 5; touchupCleaners = 4;
+    } else {
+      mainCleaners = 7; touchupCleaners = 6;
+    }
+
+    // Days = area / (cleaners * 8 hrs * productivity per person-hour)
+    // Using 500 SF per person-hour as baseline
+    const sqftPerPersonHour = 500;
+    const roughDays   = Math.ceil(area / (mainCleaners    * 8 * sqftPerPersonHour));
+    const finalDays   = Math.ceil(area / (mainCleaners    * 8 * sqftPerPersonHour));
+    const touchupDays = Math.ceil(area / (touchupCleaners * 8 * sqftPerPersonHour));
+
+    const makeCleaners = (count, days) =>
+      Array.from({ length: count }, () => ({ role: 'cleaner', rate: 22, hours: 8, days, _uid: uid() }));
+
     _phaseCrews.rough = [
-      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, hours: 8, days: roughDays, _uid: uid() },
+      ...makeCleaners(mainCleaners, roughDays),
       { role: 'foreman', rate: 28, hours: 8, days: roughDays, _uid: uid() },
     ];
     _phaseCrews.final = [
-      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
-      { role: 'cleaner', rate: 22, hours: 8, days: finalDays, _uid: uid() },
+      ...makeCleaners(mainCleaners, finalDays),
       { role: 'foreman', rate: 28, hours: 8, days: finalDays, _uid: uid() },
     ];
     _phaseCrews.touchup = [
-      { role: 'cleaner', rate: 22, hours: 8, days: touchupDays, _uid: uid() },
+      ...makeCleaners(touchupCleaners, touchupDays),
       { role: 'foreman', rate: 28, hours: 8, days: touchupDays, _uid: uid() },
     ];
     _deletedPhaseIds = new Set();
@@ -3261,15 +3275,13 @@ async function initApp(){
       foremanPay = (p.days || 0) * (rates.foremanRate || 0);
     }
     const laborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
-    const materials = laborCost * 0.05;
+    const materials = 0;
     const subtotal = laborCost;
     const oh = subtotal * rates.overhead;
-    const pft = (subtotal + oh) * rates.profit;
-    const price = pft + oh + subtotal;
-    const taxes = price * rates.tax;
-    const comm = price * rates.commission;
-    const finalPrice = price + taxes;
-    return { cleanersPay, foremanPay, assistantPay, painterPay, pmPay, laborCost, materials, subtotal, oh, pft, price, taxes, comm, finalPrice };
+    const pft = subtotal * rates.profit;
+    const comm = subtotal * rates.commission;
+    const finalPrice = subtotal + oh + pft + comm;
+    return { cleanersPay, foremanPay, assistantPay, painterPay, pmPay, laborCost, materials, subtotal, oh, pft, comm, finalPrice };
   }
 
   function _getRates() {
@@ -3305,13 +3317,13 @@ async function initApp(){
     const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
     const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
-    let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+    let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
 
     PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid) => {
       const crew = _phaseCrews[pid] || [];
       const c = _calcPhase({ crew }, rates);
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
-      totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
+      totPft += c.pft; totComm += c.comm;
 
       crew.forEach((m) => {
         const pay = (m.rate||0)*(m.hours??8)*(m.days||0);
@@ -3326,22 +3338,26 @@ async function initApp(){
       setFoot(`phase_painter_${pid}`, c.painterPay);
       setFoot(`phase_pm_${pid}`, c.pmPay);
       setFoot(`phase_labor_${pid}`, c.laborCost);
-      setFoot(`phase_materials_${pid}`, c.materials);
       setFoot(`phase_subtotal_${pid}`, c.subtotal);
     });
+
+    const manualMaterials = parseFloat(document.getElementById('materialsInput')?.value) || 0;
 
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
+      const totFinal = totSubtotal + manualMaterials + totOh + totPft + totComm;
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
-        [`Subtotal`, totSubtotal], [`Overhead (${overheadPct}%)`, totOh],
-        [`Profit (${profitPct}%)`, totPft], [`Price`, totPrice],
-        [`Tax (${taxPct}%)`, totTaxes], [`Commission (${commPct}%)`, totComm],
+        [`Subtotal`, totSubtotal],
+        [`Materials`, manualMaterials],
+        [`Overhead (${overheadPct}%)`, totOh],
+        [`Profit (${profitPct}%)`, totPft],
+        [`Commission (${commPct}%)`, totComm],
         [`Final Price`, totFinal],
       ].forEach(([label, val], i) => {
-        const isLast = i === 6;
+        const isLast = i === 5;
         const item = document.createElement('div');
         item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
@@ -3364,6 +3380,39 @@ async function initApp(){
   }
 
   const _updateCalcCells = _updateCrewCalcs;
+
+  function _parseDurationToHours(text) {
+    if (!text) return 0;
+    let hours = 0;
+    const h = text.match(/(\d+)\s*hour/);
+    const m = text.match(/(\d+)\s*min/);
+    if (h) hours += parseInt(h[1]);
+    if (m) hours += parseInt(m[1]) / 60;
+    return hours;
+  }
+
+  function _getForemanRate() {
+    for (const pid of PHASE_IDS) {
+      const foreman = (_phaseCrews[pid] || []).find(m => m.role === 'foreman');
+      if (foreman) return foreman.rate || 28;
+    }
+    return 28;
+  }
+
+  function _updateTransportCosts() {
+    const durationText = _loadedProjectData?.driving_info?.duration || '';
+    const hours = _parseDurationToHours(durationText);
+    const foremanRate = _getForemanRate();
+    const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
+    const gasoline = parseFloat(document.getElementById('gasolineInput')?.value) || 0;
+    const tollCost = parseFloat(document.getElementById('tollCostInput')?.value) || 0;
+    const total = driverCost + gasoline + tollCost;
+
+    const driverEl = document.getElementById('driverCostDisplay');
+    const totalEl  = document.getElementById('totalTransportDisplay');
+    if (driverEl) driverEl.textContent = hours > 0 ? fmt$(driverCost) : '—';
+    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
+  }
 
   let _changeOrders = [];
 
@@ -3802,7 +3851,6 @@ async function initApp(){
         ['Painter Pay', `phase_painter_${pid}`],
         ['PM Pay', `phase_pm_${pid}`],
         ['Labor', `phase_labor_${pid}`],
-        ['Materials', `phase_materials_${pid}`],
         ['Subtotal', `phase_subtotal_${pid}`],
       ].forEach(([label, id]) => {
         const span = document.createElement('span');
@@ -3813,7 +3861,7 @@ async function initApp(){
       container.appendChild(section);
     });
 
-    ['overheadInput', 'profitInput', 'taxInput', 'commissionInput'].forEach(id => {
+    ['overheadInput', 'profitInput', 'taxInput', 'commissionInput', 'materialsInput'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', _updateCrewCalcs);
     });
 
@@ -4147,11 +4195,11 @@ async function initApp(){
           hrow.appendChild(th);
         });
         const tbody = table.createTBody();
-        let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+        let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
         for (const p of bd.phases) {
           const c = _calcPhase(p, rates);
           totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
-          totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
+          totPft += c.pft; totComm += c.comm;
           const tr = tbody.insertRow();
           tr.style.cssText = 'border-top:1px solid #f3f4f6;';
           [
@@ -4166,15 +4214,19 @@ async function initApp(){
         }
         breakdownDiv.appendChild(table);
 
+        const savedMaterials = bd.materials || 0;
+        const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
-          [`Subtotal`, totSubtotal], [`Overhead (${bd.overhead_pct}%)`, totOh],
-          [`Profit (${bd.profit_pct}%)`, totPft], [`Price`, totPrice],
-          [`Tax (${bd.tax_pct}%)`, totTaxes], [`Commission (${bd.commission_pct}%)`, totComm],
+          [`Subtotal`, totSubtotal],
+          [`Materials`, savedMaterials],
+          [`Overhead (${bd.overhead_pct}%)`, totOh],
+          [`Profit (${bd.profit_pct}%)`, totPft],
+          [`Commission (${bd.commission_pct}%)`, totComm],
           [`Final Price`, totFinal],
         ].forEach(([label, val], i) => {
-          const isLast = i === 6;
+          const isLast = i === 5;
           const item = document.createElement('div');
           item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
@@ -4192,8 +4244,22 @@ async function initApp(){
     setText('analysisViewQuote', fmt$(projData.quote));
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
     setText('analysisViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
+    const di = projData.driving_info;
+    const driveHours = _parseDurationToHours(di?.duration || '');
+    const foremanRateView = (() => {
+      const bd = projData.labor_breakdown;
+      if (bd?.phases) {
+        for (const p of bd.phases) {
+          const f = (p.crew || []).find(m => m.role === 'foreman');
+          if (f) return f.rate || 28;
+        }
+      }
+      return 28;
+    })();
+    const driverCostView = driveHours > 0 ? 2 * driveHours * foremanRateView : 0;
+    const totalTransport = driverCostView + (projData.gasoline || 0) + (projData.toll_cost || 0);
+    setText('detailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
     setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
-    setText('detailTollCost', projData.toll_cost != null ? fmt$(projData.toll_cost) : '—');
     setText('analysisViewExpectedDays', projData.expected_days != null ? `${projData.expected_days} days` : '—');
 
     const totalAreaInput = document.getElementById('analysisTotalAreaInput');
@@ -4235,7 +4301,7 @@ async function initApp(){
     if (bd && bd.phases) {
       setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
       setVal('foremanRateInput', bd.foreman_rate ?? 220);
-      setVal('overheadInput', bd.overhead_pct ?? 10);
+      setVal('overheadInput', 0);
       setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
       setVal('commissionInput', bd.commission_pct ?? 10);
@@ -4345,6 +4411,7 @@ async function initApp(){
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
+    setVal('materialsInput', _loadedProjectData.labor_breakdown?.materials ?? 0);
 
 
     // ZIP manual lookup button
@@ -4417,6 +4484,11 @@ async function initApp(){
     document.getElementById('analysisView').style.display = 'none';
     document.getElementById('analysisEditForm').style.display = 'block';
     document.getElementById('editAnalysisBtn').style.display = 'none';
+
+    _updateTransportCosts();
+    ['gasolineInput', 'tollCostInput'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', _updateTransportCosts);
+    });
   }
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
@@ -4531,12 +4603,17 @@ async function initApp(){
       const rates = _getRates();
       const phases = _getPhaseInputs();
 
-      let totLabor = 0, totFinalPrice = 0;
+      let totLabor = 0, totSubtotalSave = 0, totOhSave = 0, totPftSave = 0, totCommSave = 0;
       for (const p of phases) {
         const c = _calcPhase(p, rates);
         totLabor += c.laborCost;
-        totFinalPrice += c.finalPrice;
+        totSubtotalSave += c.subtotal;
+        totOhSave += c.oh;
+        totPftSave += c.pft;
+        totCommSave += c.comm;
       }
+      const materialsSave = parseFloat(document.getElementById('materialsInput')?.value) || 0;
+      const totFinalPrice = totSubtotalSave + materialsSave + totOhSave + totPftSave + totCommSave;
 
       const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
       const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
@@ -4551,6 +4628,7 @@ async function initApp(){
         profit_pct: profitPct,
         tax_pct: taxPct,
         commission_pct: commPct,
+        materials: parseFloat(document.getElementById('materialsInput')?.value) || 0,
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
       };
