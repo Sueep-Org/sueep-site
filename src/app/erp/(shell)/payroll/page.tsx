@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
-import { computeProjectMargins } from "@/lib/erp/projectMargin";
+import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import { bidBonusCentsForCount, mondayOf, type BidBonusRow } from "@/lib/erp/bidBonus";
-import { CommissionByRep, type CommissionChangeOrderRow, type CommissionDealRow, type RecurringCommissionRow, type RepGroup } from "../commission/CommissionByRep";
+import { CommissionByRep, type CommissionDealRow, type RecurringCommissionRow, type RepGroup } from "../commission/CommissionByRep";
 import { BidsView, type BidRow } from "../commission/BidsView";
 import { BidCommissionView } from "../commission/BidCommissionView";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
@@ -20,17 +20,13 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [projects, employees, erpUsers, reimbursements, recurringPeriods, completedPaidChangeOrders, bidBonusEntries, salesBidEntries] = await Promise.all([
+  const [projects, employees, erpUsers, reimbursements, recurringPeriods, bidBonusEntries, salesBidEntries] = await Promise.all([
     prisma.project.findMany({
-      // Only deals that are actually PAID count toward commission — being
-      // fully billed/invoiced (percentInvoiced=100) isn't enough on its own,
-      // since a project can be fully invoiced and still awaiting payment.
-      // "PAID" is accepted alongside the canonical "INVOICE_PAID" since some
-      // rows were set outside the normal editor (same vocabulary drift seen
-      // on ProjectChangeOrder.billingStatus). Unbilled/unpaid revenue isn't
-      // tracked here at all, so it also doesn't count toward the annual
-      // accelerator threshold or margin math.
-      where: { contractValueCents: { not: null }, billingStatus: { in: ["INVOICE_PAID", "PAID"] } },
+      // Commission eligibility (is this project's own billing paid, AND is
+      // every one of its change orders done and paid too) is decided in
+      // memory below, not in this where clause, it needs to look at the
+      // change orders included here, not just the project's own billingStatus.
+      where: { contractValueCents: { not: null } },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -39,6 +35,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         contractValueCents: true,
         actualLaborCents: true,
         actualMaterialCents: true,
+        billingStatus: true,
         commissionPaidAt: true,
         commissionEmployeeId: true,
         hubspotOwnerEmail: true,
@@ -55,6 +52,28 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         },
         materialEntries: { select: { costCents: true } },
         contractorAssignments: { select: { costCents: true } },
+        // Change orders roll into the same combined commission row as their
+        // parent project (revenue, cost, and the "is this all paid yet" gate
+        // below) rather than showing as their own separate row.
+        changeOrders: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            billingStatus: true,
+            contractValueCents: true,
+            estimatedCostCents: true,
+            actualLaborCents: true,
+            actualMaterialCents: true,
+            commissionPaidAt: true,
+            completedAt: true,
+            updatedAt: true,
+            materialEntries: { select: { costCents: true } },
+            laborers: {
+              select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true },
+            },
+          },
+        },
       },
     }),
     prisma.employee.findMany({ select: { id: true, email: true, firstName: true, lastName: true, status: true } }),
@@ -71,42 +90,6 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         projects: { select: { id: true, contractValueCents: true, billingStatus: true } },
       },
     }),
-    // A CO only becomes commissionable once it's done AND paid — mirrors the
-    // "PAID"/"INVOICE_PAID" vocabulary split, since two different editors
-    // write different strings for the same "paid" state (see the CO PATCH route).
-    // contractValueCents is only set once a CO's final value is confirmed —
-    // plenty of real COs only ever get estimatedCostCents set, so the gate
-    // accepts either and the effective value falls back accordingly below.
-    prisma.projectChangeOrder.findMany({
-      where: {
-        status: "COMPLETED",
-        billingStatus: { in: ["PAID", "INVOICE_PAID"] },
-        OR: [{ contractValueCents: { not: null } }, { estimatedCostCents: { not: null } }],
-      },
-      select: {
-        id: true,
-        title: true,
-        contractValueCents: true,
-        estimatedCostCents: true,
-        actualLaborCents: true,
-        actualMaterialCents: true,
-        actualTravelCents: true,
-        commissionPaidAt: true,
-        completedAt: true,
-        updatedAt: true,
-        project: {
-          select: {
-            id: true,
-            jobTitle: true,
-            segment: true,
-            commissionEmployeeId: true,
-            hubspotOwnerEmail: true,
-            hubspotOwnerName: true,
-            createdByEmployeeId: true,
-          },
-        },
-      },
-    }),
     prisma.bidBonusEntry.findMany({
       orderBy: { weekStart: "desc" },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -121,32 +104,72 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const eligibleEmployees = employees.filter((e) => e.email && erpUserEmails.has(e.email.toLowerCase()));
   const employeeById = new Map(eligibleEmployees.map((e) => [e.id, e]));
 
-  // Commission is scoped to 2026 onward — 2024/2025 deals, COs, and recurring
-  // periods are excluded entirely rather than just hidden behind the year
-  // selector, since the accelerator threshold resets independently per
-  // (owner, calendar year) anyway, so dropping older years can't change what
-  // 2026+ commission looks like.
+  // Commission is scoped to 2026 onward, deals and recurring periods are
+  // excluded entirely rather than just hidden behind the year selector,
+  // since the accelerator threshold resets independently per (owner,
+  // calendar year) anyway, so dropping older years can't change what 2026+
+  // commission looks like.
   const COMMISSION_MIN_YEAR = 2026;
-  // Mirrors the `dealDate` precedence below — projectDate/projectEndDate are
-  // scheduling dates, so billingCompletedAt (when it's set) is the real
-  // signal for which year a deal actually counts toward.
-  const commissionProjects = projects.filter(
-    (p) => (p.billingCompletedAt ?? p.projectEndDate ?? p.projectDate ?? p.createdAt).getUTCFullYear() >= COMMISSION_MIN_YEAR
-  );
-  const commissionChangeOrders = completedPaidChangeOrders.filter(
-    (co) => (co.completedAt ?? co.updatedAt).getUTCFullYear() >= COMMISSION_MIN_YEAR
-  );
+
+  // A change order that's VOID/REJECTED never happened, it's excluded from
+  // consideration entirely, matching computeProjectActualsWithChangeOrders'
+  // own "qualifying" filter. Anything else still open (DRAFT/SUBMITTED/
+  // APPROVED/BILLING, or COMPLETED but not yet paid) means the deal isn't
+  // fully settled yet, so the whole project's commission row waits rather
+  // than showing the base project while a change order is still pending.
+  function qualifyingChangeOrders<T extends { status: string }>(p: { changeOrders: T[] }): T[] {
+    return p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
+  }
+
+  function isFullyPaidCo(co: { status: string; billingStatus: string | null }): boolean {
+    return co.status === "COMPLETED" && !!co.billingStatus && ["INVOICE_PAID", "PAID"].includes(co.billingStatus);
+  }
+
+  // A project only becomes commissionable once its own billing is fully paid
+  // (mirrors the "PAID"/"INVOICE_PAID" vocabulary split, some rows were set
+  // outside the normal editor) AND every real change order on it is done and
+  // paid too. Unbilled/unpaid revenue isn't tracked here at all, so it also
+  // doesn't count toward the annual accelerator threshold.
+  function isCommissionEligible(p: {
+    contractValueCents: number | null;
+    billingStatus: string | null;
+    changeOrders: { status: string; billingStatus: string | null }[];
+  }): boolean {
+    if (!p.contractValueCents) return false;
+    if (!p.billingStatus || !["INVOICE_PAID", "PAID"].includes(p.billingStatus)) return false;
+    return qualifyingChangeOrders(p).every(isFullyPaidCo);
+  }
+
+  // A deal's commission date is based on when billing actually completed,
+  // not when the work was scheduled, projectDate/projectEndDate are
+  // scheduling dates, so billingCompletedAt (when set) is the real signal.
+  // When a project has change orders, the combined row is dated to whichever
+  // closed last (the project's own billing, or its latest paid CO), that's
+  // when it actually became fully commissionable.
+  function dealDate(p: {
+    billingCompletedAt: Date | null;
+    projectEndDate: Date | null;
+    projectDate: Date | null;
+    createdAt: Date;
+    changeOrders: { status: string; completedAt: Date | null; updatedAt: Date }[];
+  }): Date {
+    const base = p.billingCompletedAt ?? p.projectEndDate ?? p.projectDate ?? p.createdAt;
+    const coDates = qualifyingChangeOrders(p).map((co) => co.completedAt ?? co.updatedAt);
+    return coDates.length === 0 ? base : new Date(Math.max(base.getTime(), ...coDates.map((d) => d.getTime())));
+  }
+
+  const eligibleProjects = projects.filter(isCommissionEligible);
+  const commissionProjects = eligibleProjects.filter((p) => dealDate(p).getUTCFullYear() >= COMMISSION_MIN_YEAR);
   const commissionRecurringPeriods = recurringPeriods.filter(
     (period) => period.periodStart.getUTCFullYear() >= COMMISSION_MIN_YEAR
   );
 
-  const margins = await computeProjectMargins(commissionProjects);
+  // Combined revenue + cost across each project and its (already-verified-
+  // paid, by isCommissionEligible above) change orders, same shared
+  // methodology the Projects table and dashboard margin widgets use, so this
+  // page never quietly disagrees with them on what a project's real value is.
+  const actuals = await computeProjectActualsWithChangeOrders(commissionProjects);
   const ownerIdByProject = new Map(commissionProjects.map((p) => [p.id, resolveCommissionEmployeeId(p, eligibleEmployees)]));
-  // A CO has no owner of its own — it inherits commission credit from the
-  // project it belongs to, same resolver as the base deal.
-  const ownerIdByChangeOrder = new Map(
-    commissionChangeOrders.map((co) => [co.id, resolveCommissionEmployeeId(co.project, eligibleEmployees)])
-  );
 
   // Recurring janitorial contract commission: 5% of ACV months 1-12, 2%
   // months 13-24, $0 after — a separate schedule from one-time deals, keyed
@@ -155,8 +178,8 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // commission calc below, since recurring revenue also counts toward the
   // $1.5M cumulative threshold that unlocks the accelerator rate on deals.
   // Only counts once that month's invoice is actually paid — mirrors the
-  // one-time-deal and change-order gates below, and matches the Billing
-  // page's Recurring tab, which is what marks a period's billing project paid.
+  // one-time-deal gate above, and matches the Billing page's Recurring tab,
+  // which is what marks a period's billing project paid.
   const recurringRowsAll: (RecurringCommissionRow & { ownerId: string | null; year: number })[] = commissionRecurringPeriods
     .map((period) => {
       const billingProject = period.projects.find((p) => p.id === period.billingProjectId);
@@ -181,23 +204,21 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
-  // A deal's commission year is based on when billing actually completed,
-  // not when the work was scheduled — projectDate/projectEndDate are
-  // scheduling dates (e.g. a janitorial unit's move-out date can be set
-  // months before the unit is actually billed and paid), so they're only a
-  // fallback for older rows that predate billingCompletedAt being tracked.
-  const dealDate = (p: { billingCompletedAt: Date | null; projectEndDate: Date | null; projectDate: Date | null; createdAt: Date }) =>
-    p.billingCompletedAt ?? p.projectEndDate ?? p.projectDate ?? p.createdAt;
-
   // Commission rate depends on margin % and is applied to contract value
   // (not margin dollars), plus an accelerator once a rep's cumulative
   // revenue for the calendar year passes $1.5M — see computeCommissionCentsByDeal.
+  // One event per project, combining its own value with every qualifying
+  // change order's (already rolled into contractValueCents/marginCents by
+  // computeProjectActualsWithChangeOrders above), since a project that
+  // reached this point already has all its change orders finished and paid.
   const dealsForCalc = commissionProjects.map((p) => {
-    const marginCents = margins.get(p.id)?.marginCents ?? 0;
+    const a = actuals.get(p.id)!;
+    const contractValueCents = a.contractValueCents ?? p.contractValueCents!;
+    const marginCents = a.marginCents ?? 0;
     return {
       id: p.id,
-      contractValueCents: p.contractValueCents!,
-      marginPercent: p.contractValueCents === 0 ? 0 : (marginCents / p.contractValueCents!) * 100,
+      contractValueCents,
+      marginPercent: contractValueCents === 0 ? 0 : (marginCents / contractValueCents) * 100,
       ownerId: ownerIdByProject.get(p.id) ?? null,
       // Must match the `completedAt` precedence below — otherwise a deal can be
       // bucketed into one year while displaying a date from a different year,
@@ -205,48 +226,25 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       date: dealDate(p),
     };
   });
-  // contractValueCents is only set once a CO's final value is confirmed —
-  // plenty of real COs only ever get an estimatedCostCents, so fall back to
-  // that rather than skip them.
-  const coValueCents = (co: { contractValueCents: number | null; estimatedCostCents: number | null }) =>
-    co.contractValueCents ?? co.estimatedCostCents ?? 0;
-
-  // Completed + paid COs are commissioned the same way as one-time deals —
-  // their own margin tier off their own actual costs — and their revenue
-  // counts toward the same per-owner annual accelerator threshold. Tagged
-  // with a "co:" id prefix so they get their own entry in the commission map
-  // without colliding with project ids.
-  const coDealsForCalc = commissionChangeOrders.map((co) => {
-    const value = coValueCents(co);
-    // Labor + material only, no travel — matches computeProjectMargins (base
-    // deals) and the Projects table's CO cost rollup, so margin-based
-    // commission tiers agree with what the Projects page displays.
-    const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0);
-    const marginCents = value - costCents;
-    return {
-      id: `co:${co.id}`,
-      contractValueCents: value,
-      marginPercent: value === 0 ? 0 : (marginCents / value) * 100,
-      ownerId: ownerIdByChangeOrder.get(co.id) ?? null,
-      date: co.completedAt ?? co.updatedAt,
-    };
-  });
   const recurringRevenueForCalc = recurringRowsAll.map((r) => ({
     contractValueCents: r.monthlyRateCents,
     ownerId: r.ownerId,
     date: new Date(r.periodStart),
   }));
-  const commissionCentsByDeal = computeCommissionCentsByDeal(
-    [...dealsForCalc, ...coDealsForCalc],
-    recurringRevenueForCalc
-  );
+  const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc, recurringRevenueForCalc);
   const yearByDeal = new Map(dealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
-  const yearByCo = new Map(coDealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
 
   const allRows: (CommissionDealRow & { ownerId: string | null; year: number })[] = commissionProjects.map((p) => {
-    const margin = margins.get(p.id);
+    const a = actuals.get(p.id)!;
     const ownerId = ownerIdByProject.get(p.id) ?? null;
     const owner = ownerId ? employeeById.get(ownerId) : null;
+    const qualifyingCOs = qualifyingChangeOrders(p);
+    // The combined row only shows as Paid once the project's own commission
+    // AND every included change order's have all been marked paid together
+    // (see the single combined toggle in CommissionByRep), a partial state
+    // (e.g. data from before this was combined) reads as unpaid rather than
+    // falsely paid.
+    const fullyPaid = !!p.commissionPaidAt && qualifyingCOs.every((co) => !!co.commissionPaidAt);
     return {
       projectId: p.id,
       jobTitle: p.jobTitle,
@@ -255,39 +253,19 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       ownerName: owner ? `${owner.firstName} ${owner.lastName}`.trim() : null,
       buildingId: p.buildingId,
       buildingName: p.building?.name ?? null,
-      contractValueCents: p.contractValueCents!,
-      marginCents: margin?.marginCents ?? null,
+      contractValueCents: a.contractValueCents ?? p.contractValueCents!,
+      marginCents: a.marginCents,
       commissionCents: commissionCentsByDeal.get(p.id) ?? 0,
-      paidAt: p.commissionPaidAt ? p.commissionPaidAt.toISOString() : null,
+      paidAt: fullyPaid ? p.commissionPaidAt!.toISOString() : null,
       completedAt: dealDate(p).toISOString(),
+      includedChangeOrders: qualifyingCOs.map((co) => ({
+        id: co.id,
+        title: co.title,
+        contractValueCents: co.contractValueCents ?? co.estimatedCostCents ?? 0,
+      })),
       year: yearByDeal.get(p.id)!,
     };
   });
-
-  const allCoRows: (CommissionChangeOrderRow & { ownerId: string | null; year: number })[] = commissionChangeOrders.map(
-    (co) => {
-      const value = coValueCents(co);
-      const costCents = (co.actualLaborCents ?? 0) + (co.actualMaterialCents ?? 0);
-      const ownerId = ownerIdByChangeOrder.get(co.id) ?? null;
-      const owner = ownerId ? employeeById.get(ownerId) : null;
-      const calcId = `co:${co.id}`;
-      return {
-        changeOrderId: co.id,
-        projectId: co.project.id,
-        projectJobTitle: co.project.jobTitle,
-        title: co.title,
-        segment: co.project.segment,
-        ownerId,
-        ownerName: owner ? `${owner.firstName} ${owner.lastName}`.trim() : null,
-        contractValueCents: value,
-        marginCents: value - costCents,
-        commissionCents: commissionCentsByDeal.get(calcId) ?? 0,
-        paidAt: co.commissionPaidAt ? co.commissionPaidAt.toISOString() : null,
-        completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
-        year: yearByCo.get(calcId)!,
-      };
-    }
-  );
 
   // The manual bid-pipeline log — a separate comp track from deal/CO/recurring
   // commission, shown as its own flat page ("Bids") rather than nested
@@ -340,7 +318,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   });
 
   const availableYears = [
-    ...new Set([...allRows.map((r) => r.year), ...recurringRowsAll.map((r) => r.year), ...allCoRows.map((r) => r.year)]),
+    ...new Set([...allRows.map((r) => r.year), ...recurringRowsAll.map((r) => r.year)]),
   ].sort((a, b) => b - a);
   const { year: yearParam } = await searchParams;
   const selectedYear = yearParam && availableYears.includes(Number(yearParam))
@@ -359,7 +337,6 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       paidCommissionCents: 0,
       deals: [],
       recurringRows: [],
-      changeOrders: [],
     };
     group.yearRevenueCents += row.contractValueCents;
     group.totalCommissionCents += row.commissionCents;
@@ -380,32 +357,11 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       paidCommissionCents: 0,
       deals: [],
       recurringRows: [],
-      changeOrders: [],
     };
     group.yearRevenueCents += row.monthlyRateCents;
     group.totalCommissionCents += row.commissionCents;
     if (row.paidAt) group.paidCommissionCents += row.commissionCents;
     group.recurringRows.push(row);
-    groupsByOwner.set(key, group);
-  }
-
-  const coYearRows = allCoRows.filter((r) => r.year === selectedYear);
-  for (const row of coYearRows) {
-    const key = row.ownerId ?? "unassigned";
-    const group = groupsByOwner.get(key) ?? {
-      ownerId: row.ownerId,
-      ownerName: row.ownerName ?? "Unassigned",
-      yearRevenueCents: 0,
-      totalCommissionCents: 0,
-      paidCommissionCents: 0,
-      deals: [],
-      recurringRows: [],
-      changeOrders: [],
-    };
-    group.yearRevenueCents += row.contractValueCents;
-    group.totalCommissionCents += row.commissionCents;
-    if (row.paidAt) group.paidCommissionCents += row.commissionCents;
-    group.changeOrders.push(row);
     groupsByOwner.set(key, group);
   }
 
@@ -442,10 +398,10 @@ export default async function PayrollPage({ searchParams }: PageProps) {
               {
                 label: "Sales",
                 // key={selectedYear} forces a full remount on year-tab switches —
-                // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner/
-                // coByOwner) is only initialized once from the `reps` prop, so
-                // without a fresh mount it kept showing the first-loaded year's
-                // rows even after navigating to a different year.
+                // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner)
+                // is only initialized once from the `reps` prop, so without a fresh
+                // mount it kept showing the first-loaded year's rows even after
+                // navigating to a different year.
                 content: (
                   <CommissionByRep key={selectedYear} years={availableYears} selectedYear={selectedYear} reps={repGroups} />
                 ),

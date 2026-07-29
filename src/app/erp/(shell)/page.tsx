@@ -314,7 +314,11 @@ export default async function ErpDashboardPage() {
         ? await Promise.all([
             prisma.projectWorkerDayAssignment.findMany({
               where: { projectId: { in: myProjectIds }, date: { gte: todayStart, lte: todayEnd } },
-              select: { projectId: true, employee: { select: { firstName: true, lastName: true } } },
+              select: {
+                projectId: true,
+                employee: { select: { firstName: true, lastName: true } },
+                contractor: { select: { name: true } },
+              },
             }),
             prisma.laborEntry.findMany({
               where: { projectId: { in: myProjectIds }, workDate: { gte: todayStart, lte: todayEnd } },
@@ -337,7 +341,8 @@ export default async function ErpDashboardPage() {
         loggedNamesByProject.set(entry.projectId, names);
       }
       for (const a of todayWorkerAssignments) {
-        const name = `${a.employee.firstName} ${a.employee.lastName}`.trim();
+        const name = a.employee ? `${a.employee.firstName} ${a.employee.lastName}`.trim() : a.contractor?.name;
+        if (!name) continue;
         if (loggedNamesByProject.get(a.projectId)?.has(name)) continue; // already counted as logged
         const list = crewByProject.get(a.projectId) ?? [];
         if (!list.some((c) => c.name === name)) list.push({ name, hours: null });
@@ -656,7 +661,12 @@ export default async function ErpDashboardPage() {
       }),
       prisma.projectWorkerDayAssignment.findMany({
         where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
-        select: { projectId: true, project: { select: { jobTitle: true } }, employee: { select: { firstName: true, lastName: true } } },
+        select: {
+          projectId: true,
+          project: { select: { jobTitle: true } },
+          employee: { select: { firstName: true, lastName: true } },
+          contractor: { select: { name: true } },
+        },
       }),
       prisma.dailySafetyCheck.findMany({
         where: { checkDate: { gte: adminTodayStart, lte: adminTodayEnd } },
@@ -723,7 +733,8 @@ export default async function ErpDashboardPage() {
     }
     for (const a of todayWorkerAssignments) {
       const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
-      entry.plannedWorkers.add(`${a.employee.firstName} ${a.employee.lastName}`.trim());
+      const name = a.employee ? `${a.employee.firstName} ${a.employee.lastName}`.trim() : a.contractor?.name;
+      if (name) entry.plannedWorkers.add(name);
     }
     for (const e of laborForFlags) {
       if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;

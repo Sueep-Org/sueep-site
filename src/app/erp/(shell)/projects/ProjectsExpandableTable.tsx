@@ -102,9 +102,10 @@ export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJE
   COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {
+export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING" | "ON_HOLD"): { row: string; detail: string; sticky: string; titleLink: string } {
   if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-gray-500 hover:underline" };
   if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-purple-600 hover:underline" };
+  if (state === "ON_HOLD") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-amber-600 hover:underline" };
   return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-emerald-600 hover:underline" };
 }
 

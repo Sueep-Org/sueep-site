@@ -5,23 +5,31 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
+  const q = searchParams.get("q")?.trim() || "";
 
-  if (!startParam || !endParam) {
+  if (!q && (!startParam || !endParam)) {
     return NextResponse.json(
       { error: "start and end query params required (YYYY-MM-DD)" },
       { status: 400 },
     );
   }
 
-  const start = new Date(`${startParam}T00:00:00Z`);
-  const end = new Date(`${endParam}T23:59:59.999Z`);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+  let start: Date | null = null;
+  let end: Date | null = null;
+  if (!q) {
+    start = new Date(`${startParam}T00:00:00Z`);
+    end = new Date(`${endParam}T23:59:59.999Z`);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
   }
 
+  // Searching bypasses the date range entirely, matching by building name
+  // across every period rather than only the ones in the visible window.
   const periods = await prisma.recurringContractPeriod.findMany({
-    where: { periodStart: { gte: start, lte: end } },
+    where: q
+      ? { recurringContract: { building: { name: { contains: q, mode: "insensitive" } } } }
+      : { periodStart: { gte: start!, lte: end! } },
     include: {
       recurringContract: {
         select: { building: { select: { id: true, name: true } } },
@@ -68,5 +76,5 @@ export async function GET(req: Request) {
   }
 
   const rows = Array.from(buildingMap.values());
-  return NextResponse.json({ start: startParam, end: endParam, rows });
+  return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
 }

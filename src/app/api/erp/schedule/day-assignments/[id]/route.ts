@@ -42,27 +42,31 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   // Send a cancellation for the invite sent when this assignment was
   // created, reusing the same UID so calendar apps remove the right event.
-  try {
-    const ics = buildDayAssignmentInvite({
-      uid: `day-assignment-${id}@sueep.com`,
-      dateKey: dayKey(existing.date),
-      startTime: existing.startTime,
-      endTime: existing.endTime,
-      summary: `Supervising: ${existing.project.jobTitle}`,
-      location,
-      organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-      organizerName: "Sueep Schedule",
-      attendeeEmail: existing.supervisorUser.email,
-      cancelled: true,
-    });
-    await sendEmail({
-      to: existing.supervisorUser.email,
-      subject: `Cancelled: ${existing.project.jobTitle} on ${dayKey(existing.date)}`,
-      html: `<p>Your assignment to <strong>${existing.project.jobTitle}</strong> on ${dayKey(existing.date)} has been removed.</p>`,
-      attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-    });
-  } catch (e) {
-    console.error("Failed to send day-assignment cancellation invite", e);
+  // No invite (so no cancellation) went out for a PM-only assignment, see
+  // the POST route's projectManagerUserId handling.
+  if (existing.supervisorUser) {
+    try {
+      const ics = buildDayAssignmentInvite({
+        uid: `day-assignment-${id}@sueep.com`,
+        dateKey: dayKey(existing.date),
+        startTime: existing.startTime,
+        endTime: existing.endTime,
+        summary: `Supervising: ${existing.project.jobTitle}`,
+        location,
+        organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
+        organizerName: "Sueep Schedule",
+        attendeeEmail: existing.supervisorUser.email,
+        cancelled: true,
+      });
+      await sendEmail({
+        to: existing.supervisorUser.email,
+        subject: `Cancelled: ${existing.project.jobTitle} on ${dayKey(existing.date)}`,
+        html: `<p>Your assignment to <strong>${existing.project.jobTitle}</strong> on ${dayKey(existing.date)} has been removed.</p>`,
+        attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
+      });
+    } catch (e) {
+      console.error("Failed to send day-assignment cancellation invite", e);
+    }
   }
 
   return NextResponse.json({ ok: true });

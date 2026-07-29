@@ -1,6 +1,6 @@
 import { todayEasternKey, utcDateKey } from "./dates";
 
-export type ProjectLifecycle = "UPCOMING" | "ACTIVE" | "COMPLETED";
+export type ProjectLifecycle = "UPCOMING" | "ACTIVE" | "ON_HOLD" | "COMPLETED";
 
 /** Change order statuses that count as real, ongoing work — not a draft
  * (not yet committed), not dead (rejected/void), not finished (completed). */
@@ -15,7 +15,9 @@ export function hasActiveChangeOrder(changeOrders: { status: string }[]): boolea
  * even when its own projectDate is still in the future — a change order's
  * work can start before the base project's official start date, and a
  * project actively being worked on shouldn't read as merely "upcoming"
- * just because of that.
+ * just because of that. Same override for ON_HOLD: a project whose base
+ * deal is on hold but has real work happening via a change order still
+ * counts as ACTIVE, since it isn't actually sitting idle.
  */
 export function deriveProjectLifecycle(
   status: string,
@@ -25,6 +27,7 @@ export function deriveProjectLifecycle(
   const s = status.toUpperCase();
   if (s === "COMPLETE" || s === "ARCHIVED") return "COMPLETED";
   if (s === "UPCOMING" && !hasActiveChangeOrder) return "UPCOMING";
+  if (s === "ON_HOLD" && !hasActiveChangeOrder) return "ON_HOLD";
   if (projectDateIso && !hasActiveChangeOrder) {
     const d = new Date(projectDateIso);
     // Compare calendar-day strings, not millisecond instants — "today" has

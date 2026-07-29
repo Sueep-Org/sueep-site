@@ -1,6 +1,30 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
+
+/** Exactly one of employeeId/contractorId is ever set per row, this builds
+ * the right upsert shape (and compound-unique key) for whichever it is. */
+function workerUpsertArgs(
+  projectId: string,
+  date: Date,
+  employeeId: string | null,
+  contractorId: string | null,
+  seriesId: string | null
+): Prisma.ProjectWorkerDayAssignmentUpsertArgs {
+  if (employeeId) {
+    return {
+      where: { projectId_employeeId_date: { projectId, employeeId, date } },
+      create: { projectId, employeeId, date, seriesId },
+      update: { seriesId },
+    };
+  }
+  return {
+    where: { projectId_contractorId_date: { projectId, contractorId: contractorId!, date } },
+    create: { projectId, contractorId, date, seriesId },
+    update: { seriesId },
+  };
+}
 
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -11,21 +35,29 @@ export async function POST(req: Request) {
   }
 
   const projectId = String(body.projectId || "").trim();
-  const employeeId = String(body.employeeId || "").trim();
+  const employeeId = String(body.employeeId || "").trim() || null;
+  const contractorId = String(body.contractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-  if (!employeeId) return NextResponse.json({ error: "employeeId is required" }, { status: 400 });
+  if (!employeeId && !contractorId) {
+    return NextResponse.json({ error: "employeeId or contractorId is required" }, { status: 400 });
+  }
+  if (employeeId && contractorId) {
+    return NextResponse.json({ error: "Only one of employeeId or contractorId may be set" }, { status: 400 });
+  }
   if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
 
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
 
-  const [project, employee] = await Promise.all([
+  const [project, worker] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }),
+    employeeId
+      ? prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } })
+      : prisma.contractor.findUnique({ where: { id: contractorId! }, select: { id: true } }),
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  if (!worker) return NextResponse.json({ error: employeeId ? "Employee not found" : "Contractor not found" }, { status: 404 });
 
   // Adding a worker to an active repeat range: either an existing series id
   // (a supervisor was already assigned to this range in the same modal
@@ -75,22 +107,12 @@ export async function POST(req: Request) {
   // route, which emails a calendar invite) — may be added later.
   if (seriesDates && seriesId) {
     const assignments = await prisma.$transaction(
-      seriesDates.map((d) =>
-        prisma.projectWorkerDayAssignment.upsert({
-          where: { projectId_employeeId_date: { projectId, employeeId, date: d } },
-          create: { projectId, employeeId, date: d, seriesId },
-          update: { seriesId },
-        })
-      )
+      seriesDates.map((d) => prisma.projectWorkerDayAssignment.upsert(workerUpsertArgs(projectId, d, employeeId, contractorId, seriesId)))
     );
     return NextResponse.json({ seriesId, assignments }, { status: 201 });
   }
 
-  const assignment = await prisma.projectWorkerDayAssignment.upsert({
-    where: { projectId_employeeId_date: { projectId, employeeId, date } },
-    create: { projectId, employeeId, date },
-    update: {},
-  });
+  const assignment = await prisma.projectWorkerDayAssignment.upsert(workerUpsertArgs(projectId, date, employeeId, contractorId, null));
 
   return NextResponse.json(assignment, { status: 201 });
 }

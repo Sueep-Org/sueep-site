@@ -6,19 +6,23 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
+  const q = searchParams.get("q")?.trim() || "";
 
-  if (!startParam || !endParam) {
+  if (!q && (!startParam || !endParam)) {
     return NextResponse.json(
       { error: "start and end query params required (YYYY-MM-DD)" },
       { status: 400 },
     );
   }
 
-  const start = new Date(`${startParam}T00:00:00Z`);
-  const end = new Date(`${endParam}T23:59:59.999Z`);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+  let start: Date | null = null;
+  let end: Date | null = null;
+  if (!q) {
+    start = new Date(`${startParam}T00:00:00Z`);
+    end = new Date(`${endParam}T23:59:59.999Z`);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
   }
 
   const cfg = parseHubSpotPipelineStageMap();
@@ -27,7 +31,16 @@ export async function GET(req: Request) {
   const items = await prisma.projectSOVItem.findMany({
     where: {
       completed: true,
-      updatedAt: { gte: start, lte: end },
+      // Searching bypasses the date range entirely (that's the point of a
+      // search), it doesn't bypass "is this actually billing-eligible."
+      ...(q
+        ? {
+            OR: [
+              { description: { contains: q, mode: "insensitive" } },
+              { sov: { project: { jobTitle: { contains: q, mode: "insensitive" } } } },
+            ],
+          }
+        : { updatedAt: { gte: start!, lte: end! } }),
       ...(postConPipelineId
         ? { sov: { project: { hubspotPipelineId: postConPipelineId } } }
         : {}),
@@ -49,15 +62,25 @@ export async function GET(req: Request) {
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
-  // Fetch completed change orders in the same date range.
+  // Fetch completed change orders in the same date range (or, when searching,
+  // across all time, see the items query above for why).
   // Use completedAt when set; fall back to updatedAt for older records where completedAt was never populated.
   const changeOrders = await prisma.projectChangeOrder.findMany({
     where: {
       status: { in: ["BILLING", "COMPLETED"] },
-      OR: [
-        { completedAt: { gte: start, lte: end } },
-        { completedAt: null, updatedAt: { gte: start, lte: end } },
-      ],
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { project: { jobTitle: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {
+            OR: [
+              { completedAt: { gte: start!, lte: end! } },
+              { completedAt: null, updatedAt: { gte: start!, lte: end! } },
+            ],
+          }),
       ...(postConPipelineId ? { project: { hubspotPipelineId: postConPipelineId } } : {}),
     },
     select: {
@@ -130,5 +153,5 @@ export async function GET(req: Request) {
     a.jobTitle.localeCompare(b.jobTitle),
   );
 
-  return NextResponse.json({ start: startParam, end: endParam, rows });
+  return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
 }

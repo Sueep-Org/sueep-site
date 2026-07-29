@@ -11,19 +11,23 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
+  const q = searchParams.get("q")?.trim() || "";
 
-  if (!startParam || !endParam) {
+  if (!q && (!startParam || !endParam)) {
     return NextResponse.json(
       { error: "start and end query params required (YYYY-MM-DD)" },
       { status: 400 },
     );
   }
 
-  const start = new Date(`${startParam}T00:00:00Z`);
-  const end = new Date(`${endParam}T23:59:59.999Z`);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+  let start: Date | null = null;
+  let end: Date | null = null;
+  if (!q) {
+    start = new Date(`${startParam}T00:00:00Z`);
+    end = new Date(`${endParam}T23:59:59.999Z`);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
   }
 
   const cfg = parseHubSpotPipelineStageMap();
@@ -45,12 +49,23 @@ export async function GET(req: Request) {
         // apart, so explicitly exclude anything actually synced from the
         // post-construction pipeline even if its segment matches.
         ...(postConstructionPipelineId ? [{ NOT: { hubspotPipelineId: postConstructionPipelineId } }] : []),
-        {
-          OR: [
-            { projectEndDate: { gte: start, lte: end } },
-            { projectEndDate: null, updatedAt: { gte: start, lte: end } },
-          ],
-        },
+        // Searching bypasses the date range entirely (that's the point of a
+        // search), it doesn't bypass "is this actually billing-eligible."
+        q
+          ? {
+              OR: [
+                { jobTitle: { contains: q, mode: "insensitive" as const } },
+                { building: { name: { contains: q, mode: "insensitive" as const } } },
+                { turnoverRequest: { unitNumber: { contains: q, mode: "insensitive" as const } } },
+                { turnoverRequest: { building: { name: { contains: q, mode: "insensitive" as const } } } },
+              ],
+            }
+          : {
+              OR: [
+                { projectEndDate: { gte: start!, lte: end! } },
+                { projectEndDate: null, updatedAt: { gte: start!, lte: end! } },
+              ],
+            },
       ],
     },
     include: {
@@ -117,5 +132,5 @@ export async function GET(req: Request) {
   }
 
   const rows = Array.from(buildingMap.values());
-  return NextResponse.json({ start: startParam, end: endParam, rows });
+  return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
 }

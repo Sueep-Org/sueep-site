@@ -133,26 +133,29 @@ function monthLabel(d: Date): string {
   return d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-type Supervisor = { id: string; displayName: string };
-type Employee = { id: string; displayName: string };
+type Person = { id: string; displayName: string };
 
 export function SchedulePlanner({
   projects,
   supervisors,
+  projectManagers,
   changeOrders,
   sovRequests,
   initialDayAssignments,
   canFilterBySupervisor,
   employees,
+  contractors,
   initialWorkerAssignments,
 }: {
   projects: ScheduleProject[];
-  supervisors: Supervisor[];
+  supervisors: Person[];
+  projectManagers: Person[];
   changeOrders: ScheduleChangeOrder[];
   sovRequests: ScheduleSovRequest[];
   initialDayAssignments: ScheduleDayAssignment[];
   canFilterBySupervisor: boolean;
-  employees: Employee[];
+  employees: Person[];
+  contractors: Person[];
   initialWorkerAssignments: ScheduleWorkerAssignment[];
 }) {
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
@@ -278,32 +281,50 @@ export function SchedulePlanner({
     }
   }
 
-  // Gantt only shows active projects — on hold / complete / archived jobs
-  // don't need a place on the timeline. Open-ended projects (no end date —
-  // i.e. not finished) are listed first; sort is stable so the existing
-  // start-date ordering is preserved within each group.
-  const windows = useMemo(
+  // Gantt only shows active, post-construction projects. On hold / complete
+  // / archived jobs don't need a place on the timeline, and janitorial/real
+  // estate/other segments have their own workflows that don't fit a
+  // start-to-end bar.
+  const allGanttWindows = useMemo(
     () =>
       projects
-        .filter((p) => p.status === "ACTIVE")
-        .slice()
-        .sort((a, b) => (a.projectEndDate ? 1 : 0) - (b.projectEndDate ? 1 : 0))
+        .filter((p) => p.status === "ACTIVE" && calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION")
         .map((p) => ({ p, ...projectWindow(p) })),
     [projects],
   );
 
+  const [ganttSearch, setGanttSearch] = useState("");
+
+  // Ongoing (today falls within its start/end window) first, then by start
+  // date, so what's actually being worked on right now is always at the
+  // top rather than wherever it happened to fall in the project list.
+  const windows = useMemo(() => {
+    const query = ganttSearch.trim().toLowerCase();
+    const matched = query
+      ? allGanttWindows.filter((w) => w.p.jobTitle.toLowerCase().includes(query))
+      : allGanttWindows;
+    const isOngoing = (w: (typeof allGanttWindows)[number]) => w.start <= todayDate && w.end >= todayDate;
+    return matched.slice().sort((a, b) => {
+      const rankDiff = (isOngoing(a) ? 0 : 1) - (isOngoing(b) ? 0 : 1);
+      if (rankDiff !== 0) return rankDiff;
+      return a.start.getTime() - b.start.getTime();
+    });
+  }, [allGanttWindows, ganttSearch, todayDate]);
+
+  // Kept on allGanttWindows (not the search-filtered windows) so the
+  // timeline's scale/columns stay put while searching, only the rows change.
   const ganttRange = useMemo(() => {
-    if (windows.length === 0) {
+    if (allGanttWindows.length === 0) {
       return { start: addDays(todayDate, -7), end: addDays(todayDate, 60) };
     }
-    let min = windows[0]!.start;
-    let max = windows[0]!.end;
-    for (const w of windows) {
+    let min = allGanttWindows[0]!.start;
+    let max = allGanttWindows[0]!.end;
+    for (const w of allGanttWindows) {
       if (w.start < min) min = w.start;
       if (w.end > max) max = w.end;
     }
     return { start: addDays(min, -7), end: addDays(max, 14) };
-  }, [windows, todayDate]);
+  }, [allGanttWindows, todayDate]);
 
   const totalDays = Math.max(
     1,
@@ -430,7 +451,7 @@ export function SchedulePlanner({
   // the project's overall supervisor when no day-level assignment exists.
   function projectSupervisorOnDay(projectId: string, k: string): string {
     const dayAssignment = (plannedByDay.get(k) ?? []).find((a) => a.projectId === projectId);
-    if (dayAssignment) return dayAssignment.supervisorUserId;
+    if (dayAssignment) return dayAssignment.supervisorUserId ?? "";
     const project = projectById.get(projectId);
     return project ? currentSupervisorId(project) : "";
   }
@@ -557,7 +578,14 @@ export function SchedulePlanner({
   );
 
   const ganttNav = (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={ganttSearch}
+        onChange={(e) => setGanttSearch(e.target.value)}
+        placeholder="Search projects..."
+        className="w-40 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
+      />
       <button
         type="button"
         onClick={() => scrollGanttBy(-14)}
@@ -761,7 +789,8 @@ export function SchedulePlanner({
                       {visiblePlanned.map(({ assignment, project }) => {
                         const isOverdue = !isFutureOrToday;
                         const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
-                        const supervisor = supervisors.find((s) => s.id === assignment.supervisorUserId);
+                        const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
+                        const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
                         return (
                         <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
                           <Link
@@ -788,7 +817,11 @@ export function SchedulePlanner({
                               <div className="text-gray-300">
                                 {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
                               </div>
-                              {supervisor ? <div className="text-gray-300">Supervisor: {supervisor.displayName}</div> : null}
+                              {supervisor ? (
+                                <div className="text-gray-300">Supervisor: {supervisor.displayName}</div>
+                              ) : pm ? (
+                                <div className="text-gray-300">PM: {pm.displayName}</div>
+                              ) : null}
                               {plannedWorkers.length > 0 ? (
                                 <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
                               ) : null}
@@ -980,11 +1013,13 @@ export function SchedulePlanner({
 
       <CollapsibleSection
         title="Gantt"
-        description="Bars use start / end dates; without an end date a 14-day window is assumed."
-        headerExtra={windows.length > 0 ? ganttNav : undefined}
+        description="Bars use start / end dates; without an end date a 20-day window is assumed."
+        headerExtra={allGanttWindows.length > 0 ? ganttNav : undefined}
       >
-        {windows.length === 0 ? (
+        {allGanttWindows.length === 0 ? (
           <p className="text-sm text-gray-500">No projects yet. Create one in Projects → New project.</p>
+        ) : windows.length === 0 ? (
+          <p className="text-sm text-gray-500">No projects match your search.</p>
         ) : (
           <div className="flex max-h-[min(70vh,720px)] flex-col overflow-hidden rounded-lg border border-gray-200">
             <div className="flex min-h-0 flex-1 overflow-auto">
@@ -1091,7 +1126,9 @@ export function SchedulePlanner({
           dateKey={openDayKey}
           projects={projects}
           supervisors={supervisors}
+          projectManagers={projectManagers}
           employees={employees}
+          contractors={contractors}
           existing={plannedByDay.get(openDayKey) ?? []}
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
@@ -1101,14 +1138,16 @@ export function SchedulePlanner({
           }}
           onCreated={(a) => {
             setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
-            // Assigning here also sets the project's supervisor server-side —
-            // mirror that in the Gantt's inline dropdown right away.
-            setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
+            // Assigning a supervisor here also sets the project's supervisor
+            // server-side, mirror that in the Gantt's inline dropdown right
+            // away. Skipped for a PM-only assignment, that never touches the
+            // project's supervisor field (see the day-assignments route).
+            if (a.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
           }}
           onSeriesCreated={(created) => {
             setDayAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created]);
             const last = created[created.length - 1];
-            if (last) setSupervisorOverrides((o) => ({ ...o, [last.projectId]: last.supervisorUserId }));
+            if (last?.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [last.projectId]: last.supervisorUserId }));
           }}
           onDeleted={(id) => setDayAssignments((prev) => prev.filter((a) => a.id !== id))}
           onSeriesDeleted={(seriesId) => {

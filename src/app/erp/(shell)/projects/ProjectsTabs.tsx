@@ -7,7 +7,7 @@ import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpanda
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
 type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
-type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
+type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },

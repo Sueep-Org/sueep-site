@@ -19,23 +19,9 @@ export type CommissionDealRow = {
   commissionCents: number;
   paidAt: string | null;
   completedAt: string;
-};
-
-// A completed + paid change order on a project — commissioned like a
-// one-time deal (own margin tier, own paid toggle) but always tied back to
-// its parent project rather than standing on its own.
-export type CommissionChangeOrderRow = {
-  changeOrderId: string;
-  projectId: string;
-  projectJobTitle: string;
-  title: string;
-  segment: string;
-  ownerName: string | null;
-  contractValueCents: number;
-  marginCents: number | null;
-  commissionCents: number;
-  paidAt: string | null;
-  completedAt: string;
+  /** Change orders rolled into this row's contract value/margin above, every one is
+   * already completed + paid by the time it shows up here, purely informational. */
+  includedChangeOrders: { id: string; title: string; contractValueCents: number }[];
 };
 
 // Same calendar-style grouping the Schedule page uses — painting/cleaning
@@ -85,7 +71,6 @@ export type RepGroup = {
   paidCommissionCents: number;
   deals: CommissionDealRow[];
   recurringRows: RecurringCommissionRow[];
-  changeOrders: CommissionChangeOrderRow[];
 };
 
 type PaidFilter = "all" | "paid" | "unpaid";
@@ -119,44 +104,36 @@ function sortValue(row: CommissionDealRow, key: SortKey): number {
 
 type CombinedRow =
   | { kind: "deal"; deal: CommissionDealRow }
-  | { kind: "recurring"; recurring: RecurringCommissionRow }
-  | { kind: "co"; co: CommissionChangeOrderRow };
+  | { kind: "recurring"; recurring: RecurringCommissionRow };
 
 function combinedDateIso(row: CombinedRow): string {
   if (row.kind === "deal") return row.deal.completedAt;
-  if (row.kind === "co") return row.co.completedAt;
   return row.recurring.periodStart;
 }
 function combinedPaidAt(row: CombinedRow): string | null {
   if (row.kind === "deal") return row.deal.paidAt;
-  if (row.kind === "co") return row.co.paidAt;
   return row.recurring.paidAt;
 }
 function combinedTypeGroup(row: CombinedRow): ProjectTypeGroup {
   if (row.kind === "deal") return projectTypeGroup(row.deal.segment);
-  if (row.kind === "co") return projectTypeGroup(row.co.segment);
   return "JANITORIAL_TURNOVER_REQUESTS";
 }
 function combinedSearchText(row: CombinedRow): string {
   if (row.kind === "deal") return row.deal.jobTitle;
-  if (row.kind === "co") return `${row.co.projectJobTitle} ${row.co.title}`;
   return row.recurring.buildingName;
 }
 function combinedSortValue(row: CombinedRow, key: SortKey): number {
   if (key === "date") return new Date(combinedDateIso(row)).getTime();
   if (key === "margin") {
     if (row.kind === "deal") return row.deal.marginCents ?? -Infinity;
-    if (row.kind === "co") return row.co.marginCents ?? -Infinity;
     return -Infinity;
   }
   if (row.kind === "deal") return row.deal.commissionCents;
-  if (row.kind === "co") return row.co.commissionCents;
   return row.recurring.commissionCents;
 }
 
 function combinedRowKey(row: CombinedRow): string {
   if (row.kind === "deal") return row.deal.projectId;
-  if (row.kind === "co") return row.co.changeOrderId;
   return row.recurring.periodId;
 }
 
@@ -397,8 +374,6 @@ function CombinedRowTr({
   savingId,
   onToggleRecurringPaid,
   savingRecurringId,
-  onToggleCoPaid,
-  savingCoId,
 }: {
   row: CombinedRow;
   buildingCell: ReactNode;
@@ -406,51 +381,7 @@ function CombinedRowTr({
   savingId: string | null;
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
   savingRecurringId: string | null;
-  onToggleCoPaid: (row: CommissionChangeOrderRow) => void;
-  savingCoId: string | null;
 }) {
-  if (row.kind === "co") {
-    const co = row.co;
-    const marginPct = marginPercentOf(co);
-    const tier = marginPct == null ? null : marginTierFor(marginPct);
-    return (
-      <tr key={co.changeOrderId} className="border-t border-gray-100 bg-blue-50/30 hover:bg-blue-100/60">
-        <td className="px-3 py-2">{buildingCell}</td>
-        <td className="max-w-xs px-3 py-2">
-          <span className="flex items-center gap-1.5">
-            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-600">CO</span>
-            <Link href={`/erp/projects/${co.projectId}`} className="min-w-0 truncate text-pink-600 hover:underline" title={`${co.projectJobTitle} — ${co.title}`}>
-              {co.projectJobTitle} — {co.title}
-            </Link>
-          </span>
-        </td>
-        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(co.completedAt)}</td>
-        <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(co.contractValueCents)}</td>
-        <td className={`px-3 py-2 text-right tabular-nums ${co.marginCents != null && co.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
-          {co.marginCents == null ? "—" : centsToDollars(co.marginCents)}
-        </td>
-        <td className="px-3 py-2 text-right tabular-nums text-gray-500">
-          {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
-        </td>
-        <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(co.commissionCents)}</td>
-        <td className="px-3 py-2">
-          <button
-            type="button"
-            onClick={() => onToggleCoPaid(co)}
-            disabled={savingCoId === co.changeOrderId}
-            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-              co.paidAt
-                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                : "border-gray-300 bg-gray-100 text-gray-600"
-            }`}
-          >
-            {co.paidAt ? "Paid" : "Not paid"}
-          </button>
-        </td>
-      </tr>
-    );
-  }
-
   if (row.kind === "deal") {
     const d = row.deal;
     const marginPct = marginPercentOf(d);
@@ -462,6 +393,21 @@ function CombinedRowTr({
           <Link href={`/erp/projects/${d.projectId}`} className="text-pink-600 hover:underline">
             {d.jobTitle}
           </Link>
+          {d.includedChangeOrders.length > 0 ? (
+            <details className="mt-0.5">
+              <summary className="cursor-pointer text-[10px] font-medium text-blue-600 hover:underline">
+                +{d.includedChangeOrders.length} change order{d.includedChangeOrders.length === 1 ? "" : "s"}
+              </summary>
+              <ul className="mt-1 space-y-0.5 pl-2 text-[10px] text-gray-500">
+                {d.includedChangeOrders.map((co) => (
+                  <li key={co.id} className="flex justify-between gap-2">
+                    <span className="truncate">{co.title}</span>
+                    <span className="tabular-nums">{centsToDollars(co.contractValueCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </td>
         <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
         <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
@@ -531,9 +477,6 @@ function RepPanel({
   recurringRows,
   onToggleRecurringPaid,
   savingRecurringId,
-  changeOrders,
-  onToggleCoPaid,
-  savingCoId,
 }: {
   yearRevenueCents: number;
   deals: CommissionDealRow[];
@@ -542,9 +485,6 @@ function RepPanel({
   recurringRows: RecurringCommissionRow[];
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
   savingRecurringId: string | null;
-  changeOrders: CommissionChangeOrderRow[];
-  onToggleCoPaid: (row: CommissionChangeOrderRow) => void;
-  savingCoId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
@@ -563,7 +503,6 @@ function RepPanel({
   const combined: CombinedRow[] = [
     ...deals.map((d) => ({ kind: "deal" as const, deal: d })),
     ...recurringRows.map((r) => ({ kind: "recurring" as const, recurring: r })),
-    ...changeOrders.map((co) => ({ kind: "co" as const, co })),
   ];
 
   const query = search.trim().toLowerCase();
@@ -645,8 +584,6 @@ function RepPanel({
                           savingId={savingId}
                           onToggleRecurringPaid={onToggleRecurringPaid}
                           savingRecurringId={savingRecurringId}
-                          onToggleCoPaid={onToggleCoPaid}
-                          savingCoId={savingCoId}
                         />
                       );
                     }
@@ -668,8 +605,6 @@ function RepPanel({
                             savingId={savingId}
                             onToggleRecurringPaid={onToggleRecurringPaid}
                             savingRecurringId={savingRecurringId}
-                            onToggleCoPaid={onToggleCoPaid}
-                            savingCoId={savingCoId}
                           />
                         ))}
                       </Fragment>
@@ -704,11 +639,9 @@ export function CommissionByRep({
   );
   const [savingRecurringId, setSavingRecurringId] = useState<string | null>(null);
 
-  const [coByOwner, setCoByOwner] = useState<Record<string, CommissionChangeOrderRow[]>>(() =>
-    Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.changeOrders]))
-  );
-  const [savingCoId, setSavingCoId] = useState<string | null>(null);
-
+  // Marking a combined row paid marks the project AND every change order
+  // rolled into it together, in one action, they're always toggled in
+  // lockstep now rather than separately (see includedChangeOrders).
   async function setPaid(row: CommissionDealRow, ownerKey: string, paid: boolean) {
     setSavingId(row.projectId);
     setDealsByOwner((prev) => ({
@@ -718,12 +651,21 @@ export function CommissionByRep({
       ),
     }));
     try {
-      const res = await fetch(`/api/erp/projects/${row.projectId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commissionPaid: paid }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
+      const results = await Promise.all([
+        fetch(`/api/erp/projects/${row.projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ commissionPaid: paid }),
+        }),
+        ...row.includedChangeOrders.map((co) =>
+          fetch(`/api/erp/projects/${row.projectId}/change-orders/${co.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ commissionPaid: paid }),
+          })
+        ),
+      ]);
+      if (results.some((r) => !r.ok)) throw new Error("Failed to update");
     } catch {
       setDealsByOwner((prev) => ({
         ...prev,
@@ -759,31 +701,6 @@ export function CommissionByRep({
     }
   }
 
-  async function setCoPaid(row: CommissionChangeOrderRow, ownerKey: string, paid: boolean) {
-    setSavingCoId(row.changeOrderId);
-    setCoByOwner((prev) => ({
-      ...prev,
-      [ownerKey]: prev[ownerKey].map((co) =>
-        co.changeOrderId === row.changeOrderId ? { ...co, paidAt: paid ? new Date().toISOString() : null } : co
-      ),
-    }));
-    try {
-      const res = await fetch(`/api/erp/projects/${row.projectId}/change-orders/${row.changeOrderId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commissionPaid: paid }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-    } catch {
-      setCoByOwner((prev) => ({
-        ...prev,
-        [ownerKey]: prev[ownerKey].map((co) => (co.changeOrderId === row.changeOrderId ? { ...co, paidAt: row.paidAt } : co)),
-      }));
-    } finally {
-      setSavingCoId(null);
-    }
-  }
-
   const totalCommission = reps.reduce((s, r) => s + r.totalCommissionCents, 0);
   const totalPaid = reps.reduce((s, r) => s + r.paidCommissionCents, 0);
 
@@ -816,9 +733,6 @@ export function CommissionByRep({
                   recurringRows={recurringByOwner[key] ?? []}
                   savingRecurringId={savingRecurringId}
                   onToggleRecurringPaid={(row) => setRecurringPaid(row, key, !row.paidAt)}
-                  changeOrders={coByOwner[key] ?? []}
-                  savingCoId={savingCoId}
-                  onToggleCoPaid={(row) => setCoPaid(row, key, !row.paidAt)}
                 />
               ),
             };

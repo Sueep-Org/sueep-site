@@ -23,10 +23,16 @@ export async function POST(req: Request) {
   }
 
   const projectId = String(body.projectId || "").trim();
-  const supervisorUserId = String(body.supervisorUserId || "").trim();
+  const supervisorUserId = String(body.supervisorUserId || "").trim() || null;
+  // Rare case: only the PM covers a day, no supervisor. Not synced onto
+  // Project (unlike supervisorUserId below) and no calendar-invite email
+  // goes out for it, calendar/day-assignment concept only.
+  const projectManagerUserId = String(body.projectManagerUserId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-  if (!supervisorUserId) return NextResponse.json({ error: "supervisorUserId is required" }, { status: 400 });
+  if (!supervisorUserId && !projectManagerUserId) {
+    return NextResponse.json({ error: "supervisorUserId or projectManagerUserId is required" }, { status: 400 });
+  }
   if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
 
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
@@ -75,7 +81,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const [project, supervisor] = await Promise.all([
+  const [project, supervisor, projectManager] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -87,10 +93,12 @@ export async function POST(req: Request) {
         workOrderRecord: { select: { siteAddress: true } },
       },
     }),
-    prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }),
+    supervisorUserId ? prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }) : null,
+    projectManagerUserId ? prisma.erpUser.findUnique({ where: { id: projectManagerUserId }, select: { id: true, email: true } }) : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  if (!supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
+  if (supervisorUserId && !supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
+  if (projectManagerUserId && !projectManager) return NextResponse.json({ error: "PM not found" }, { status: 404 });
 
   // Building.address has far broader coverage than the work-order siteAddress
   // (most projects are linked to a Building), so prefer it and fall back.
@@ -112,38 +120,91 @@ export async function POST(req: Request) {
 
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
-      data: { projectId, supervisorUserId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
+      data: { projectId, supervisorUserId, projectManagerUserId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
     });
 
     // Assigning a supervisor here also makes them the project's supervisor on
     // the project details page (Project.supervisorUserId), same field the
     // Gantt's inline reassignment dropdown writes to. Last assignment wins,
-    // consistent with that dropdown's behavior.
-    const [, ...assignments] = await prisma.$transaction([
-      prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }),
-      ...seriesDates.map((d) =>
-        prisma.projectDayAssignment.upsert({
-          where: { projectId_date: { projectId, date: d } },
-          create: { projectId, date: d, supervisorUserId, startTime, endTime, seriesId: series.id },
-          update: { supervisorUserId, startTime, endTime, seriesId: series.id },
-        })
-      ),
-    ]);
+    // consistent with that dropdown's behavior. Skipped for a PM-only series,
+    // there's no project-level PM field to sync to.
+    const writes = seriesDates.map((d) =>
+      prisma.projectDayAssignment.upsert({
+        where: { projectId_date: { projectId, date: d } },
+        create: { projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id },
+        update: { supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id },
+      })
+    );
+    const assignments = supervisorUserId
+      ? (await prisma.$transaction([prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }), ...writes])).slice(1)
+      : await prisma.$transaction(writes);
 
+    // No calendar invite for a PM-only series, see the field comment above.
+    if (supervisorUserId && supervisor) {
+      try {
+        const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
+        const descriptionLines = [
+          `Project: ${project.jobTitle}`,
+          ...(hoursBudgetText ? ["", hoursBudgetText] : []),
+          ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
+        ];
+        const ics = buildScheduleSeriesInvite({
+          uid: `day-assignment-series-${series.id}@sueep.com`,
+          firstDateKey: dayKey(seriesDates[0]!),
+          lastDateKey: dayKey(repeatUntil),
+          repeatDays,
+          startTime,
+          endTime,
+          summary: `Supervising: ${project.jobTitle}`,
+          description: descriptionLines.join("\n"),
+          location,
+          url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
+          organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
+          organizerName: "Sueep Schedule",
+          attendeeEmail: supervisor.email,
+        });
+        const budgetHtml = hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : "";
+        await sendEmail({
+          to: supervisor.email,
+          subject: `You're assigned: ${project.jobTitle}, ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}`,
+          html: `<p>You've been assigned to <strong>${project.jobTitle}</strong>, repeating from ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
+          attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
+        });
+      } catch (e) {
+        console.error("Failed to send schedule-series calendar invite", e);
+      }
+    }
+
+    return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
+  }
+
+  const writeAssignment = prisma.projectDayAssignment.upsert({
+    where: { projectId_date: { projectId, date } },
+    create: { projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime },
+    update: { supervisorUserId, projectManagerUserId, startTime, endTime },
+  });
+  const assignment = supervisorUserId
+    ? (await prisma.$transaction([writeAssignment, prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } })]))[0]
+    : await writeAssignment;
+
+  // Send a calendar invite (.ics) for the assignment. Reuses the same UID on
+  // every send for this assignment, so re-running this (e.g. reassigning the
+  // same project/day) updates the existing calendar event instead of adding
+  // a duplicate. Email delivery failures shouldn't block the assignment. No
+  // invite for a PM-only day, see the projectManagerUserId comment above.
+  if (supervisorUserId && supervisor) {
     try {
-      const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
+      const hoursBudgetText = await hoursBudgetTextFor(date);
       const descriptionLines = [
         `Project: ${project.jobTitle}`,
         ...(hoursBudgetText ? ["", hoursBudgetText] : []),
         ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
       ];
-      const ics = buildScheduleSeriesInvite({
-        uid: `day-assignment-series-${series.id}@sueep.com`,
-        firstDateKey: dayKey(seriesDates[0]!),
-        lastDateKey: dayKey(repeatUntil),
-        repeatDays,
-        startTime,
-        endTime,
+      const ics = buildDayAssignmentInvite({
+        uid: `day-assignment-${assignment.id}@sueep.com`,
+        dateKey: dayKey(assignment.date),
+        startTime: assignment.startTime,
+        endTime: assignment.endTime,
         summary: `Supervising: ${project.jobTitle}`,
         description: descriptionLines.join("\n"),
         location,
@@ -152,64 +213,18 @@ export async function POST(req: Request) {
         organizerName: "Sueep Schedule",
         attendeeEmail: supervisor.email,
       });
-      const budgetHtml = hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : "";
+      const budgetHtml = hoursBudgetText
+        ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>`
+        : "";
       await sendEmail({
         to: supervisor.email,
-        subject: `You're assigned: ${project.jobTitle}, ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}`,
-        html: `<p>You've been assigned to <strong>${project.jobTitle}</strong>, repeating from ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
+        subject: `You're assigned: ${project.jobTitle} on ${dayKey(assignment.date)}`,
+        html: `<p>You've been assigned to <strong>${project.jobTitle}</strong> on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
         attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
       });
     } catch (e) {
-      console.error("Failed to send schedule-series calendar invite", e);
+      console.error("Failed to send day-assignment calendar invite", e);
     }
-
-    return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
-  }
-
-  const [assignment] = await prisma.$transaction([
-    prisma.projectDayAssignment.upsert({
-      where: { projectId_date: { projectId, date } },
-      create: { projectId, date, supervisorUserId, startTime, endTime },
-      update: { supervisorUserId, startTime, endTime },
-    }),
-    prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }),
-  ]);
-
-  // Send a calendar invite (.ics) for the assignment. Reuses the same UID on
-  // every send for this assignment, so re-running this (e.g. reassigning the
-  // same project/day) updates the existing calendar event instead of adding
-  // a duplicate. Email delivery failures shouldn't block the assignment.
-  try {
-    const hoursBudgetText = await hoursBudgetTextFor(date);
-    const descriptionLines = [
-      `Project: ${project.jobTitle}`,
-      ...(hoursBudgetText ? ["", hoursBudgetText] : []),
-      ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
-    ];
-    const ics = buildDayAssignmentInvite({
-      uid: `day-assignment-${assignment.id}@sueep.com`,
-      dateKey: dayKey(assignment.date),
-      startTime: assignment.startTime,
-      endTime: assignment.endTime,
-      summary: `Supervising: ${project.jobTitle}`,
-      description: descriptionLines.join("\n"),
-      location,
-      url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
-      organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-      organizerName: "Sueep Schedule",
-      attendeeEmail: supervisor.email,
-    });
-    const budgetHtml = hoursBudgetText
-      ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>`
-      : "";
-    await sendEmail({
-      to: supervisor.email,
-      subject: `You're assigned: ${project.jobTitle} on ${dayKey(assignment.date)}`,
-      html: `<p>You've been assigned to <strong>${project.jobTitle}</strong> on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
-      attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-    });
-  } catch (e) {
-    console.error("Failed to send day-assignment calendar invite", e);
   }
 
   return NextResponse.json(assignment, { status: 201 });

@@ -34,6 +34,14 @@ function monthStartISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/** A non-empty search bypasses the date range entirely (that's the point of
+ * a search), the route drops its date filter and matches by name instead,
+ * see the billing API routes. Empty search keeps the normal date-scoped URL. */
+function billingUrl(base: string, start: string, end: string, search: string): string {
+  const q = search.trim();
+  return q ? `${base}?q=${encodeURIComponent(q)}` : `${base}?start=${start}&end=${end}`;
+}
+
 // ── Post-construction ─────────────────────────────────────────────────────────
 
 type SOVItemRow = {
@@ -97,23 +105,23 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
   return [headers, ...dataRows].join("\r\n");
 }
 
-function PostConstructionTab({ start, end }: { start: string; end: string }) {
+function PostConstructionTab({ start, end, search }: { start: string; end: string; search: string }) {
   const [data, setData] = useState<PostConResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!start || !end) return;
+    if (!search.trim() && (!start || !end)) return;
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(`/api/erp/billing/post-construction?start=${start}&end=${end}`)
+    fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
       .then((r) => r.json())
       .then((d: PostConResponse) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setError("Could not load billing data."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [start, end]);
+  }, [start, end, search]);
 
   const allItems = data?.rows.flatMap((r) => r.items) ?? [];
   const allCOs = data?.rows.flatMap((r) => r.changeOrders ?? []) ?? [];
@@ -142,7 +150,7 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
         body: JSON.stringify({ billingStatus }),
       });
     } catch {
-      fetch(`/api/erp/billing/post-construction?start=${start}&end=${end}`)
+      fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
         .then((r) => r.json()).then((d: PostConResponse) => setData(d)).catch(() => {});
     }
   }
@@ -167,7 +175,7 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
         body: JSON.stringify({ billingStatus }),
       });
     } catch {
-      fetch(`/api/erp/billing/post-construction?start=${start}&end=${end}`)
+      fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
         .then((r) => r.json()).then((d: PostConResponse) => setData(d)).catch(() => {});
     }
   }
@@ -179,7 +187,9 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `billing-post-construction-${start}-to-${end}.csv`;
+    a.download = search.trim()
+      ? `billing-post-construction-search-${search.trim()}.csv`
+      : `billing-post-construction-${start}-to-${end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -218,7 +228,7 @@ function PostConstructionTab({ start, end }: { start: string; end: string }) {
               ) : error ? (
                 <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No completed SOV items in this date range.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
               ) : (
                 data.rows.map((project) => {
                   const allProjectRows = [
@@ -346,23 +356,23 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
   return [headers, ...dataRows].join("\r\n");
 }
 
-function JanitorialTab({ start, end }: { start: string; end: string }) {
+function JanitorialTab({ start, end, search }: { start: string; end: string; search: string }) {
   const [data, setData] = useState<JanResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!start || !end) return;
+    if (!search.trim() && (!start || !end)) return;
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(`/api/erp/billing/janitorial?start=${start}&end=${end}`)
+    fetch(billingUrl("/api/erp/billing/janitorial", start, end, search))
       .then((r) => r.json())
       .then((d: JanResponse) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setError("Could not load billing data."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [start, end]);
+  }, [start, end, search]);
 
   const allUnits = data?.rows.flatMap((r) => r.units) ?? [];
   const totalCents = allUnits.reduce((s, u) => s + u.contractCents, 0);
@@ -393,7 +403,7 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
         });
       }
     } catch {
-      fetch(`/api/erp/billing/janitorial?start=${start}&end=${end}`)
+      fetch(billingUrl("/api/erp/billing/janitorial", start, end, search))
         .then((r) => r.json()).then((d: JanResponse) => setData(d)).catch(() => {});
     }
   }
@@ -405,7 +415,9 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `billing-janitorial-${start}-to-${end}.csv`;
+    a.download = search.trim()
+      ? `billing-janitorial-search-${search.trim()}.csv`
+      : `billing-janitorial-${start}-to-${end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -446,7 +458,7 @@ function JanitorialTab({ start, end }: { start: string; end: string }) {
               ) : error ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No completed units in this date range.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
               ) : (
                 data.rows.map((building) =>
                   building.units.map((unit, idx) => (
@@ -544,23 +556,23 @@ function buildRecurringCsv(rows: RecurringBuildingRow[], start: string, end: str
   return [headers, ...dataRows].join("\r\n");
 }
 
-function RecurringTab({ start, end }: { start: string; end: string }) {
+function RecurringTab({ start, end, search }: { start: string; end: string; search: string }) {
   const [data, setData] = useState<RecurringResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!start || !end) return;
+    if (!search.trim() && (!start || !end)) return;
     let cancelled = false;
     setLoading(true);
     setError("");
-    fetch(`/api/erp/billing/recurring?start=${start}&end=${end}`)
+    fetch(billingUrl("/api/erp/billing/recurring", start, end, search))
       .then((r) => r.json())
       .then((d: RecurringResponse) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setError("Could not load billing data."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [start, end]);
+  }, [start, end, search]);
 
   const allPeriods = data?.rows.flatMap((r) => r.periods) ?? [];
   const totalCents = allPeriods.reduce((s, p) => s + p.monthlyRateCents, 0);
@@ -583,7 +595,7 @@ function RecurringTab({ start, end }: { start: string; end: string }) {
         body: JSON.stringify({ billingStatus }),
       });
     } catch {
-      fetch(`/api/erp/billing/recurring?start=${start}&end=${end}`)
+      fetch(billingUrl("/api/erp/billing/recurring", start, end, search))
         .then((r) => r.json()).then((d: RecurringResponse) => setData(d)).catch(() => {});
     }
   }
@@ -595,7 +607,9 @@ function RecurringTab({ start, end }: { start: string; end: string }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `billing-recurring-${start}-to-${end}.csv`;
+    a.download = search.trim()
+      ? `billing-recurring-search-${search.trim()}.csv`
+      : `billing-recurring-${start}-to-${end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -634,7 +648,7 @@ function RecurringTab({ start, end }: { start: string; end: string }) {
               ) : error ? (
                 <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No recurring contract periods in this date range.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No recurring contract periods in this date range."}</td></tr>
               ) : (
                 data.rows.map((building) =>
                   building.periods.map((period, idx) => (
@@ -804,7 +818,7 @@ function ReviewRowCard({ row, onResolved }: { row: ReviewRow; onResolved: (id: s
   );
 }
 
-function NeedsReviewTab() {
+function NeedsReviewTab({ search }: { search: string }) {
   const [rows, setRows] = useState<ReviewRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -825,16 +839,32 @@ function NeedsReviewTab() {
     setRows((prev) => (prev ? prev.filter((r) => r.id !== id) : prev));
   }
 
+  // Already fetches everything regardless of date (there's no date range on
+  // this tab to begin with), so search is a plain client-side filter here.
+  const query = search.trim().toLowerCase();
+  const filteredRows = query
+    ? (rows ?? []).filter(
+        (r) =>
+          r.lineItemText.toLowerCase().includes(query) ||
+          r.project?.jobTitle.toLowerCase().includes(query) ||
+          r.building?.name.toLowerCase().includes(query),
+      )
+    : rows;
+
   return (
     <div className="space-y-3">
       {loading ? (
         <p className="py-8 text-center text-sm text-gray-400">Loading…</p>
       ) : error ? (
         <p className="py-8 text-center text-sm text-red-500">{error}</p>
-      ) : !rows || rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500">Nothing needs review right now — every matched HubSpot invoice line item was confidently applied.</p>
+      ) : !filteredRows || filteredRows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500">
+          {query
+            ? `No results for "${search.trim()}".`
+            : "Nothing needs review right now — every matched HubSpot invoice line item was confidently applied."}
+        </p>
       ) : (
-        rows.map((row) => <ReviewRowCard key={row.id} row={row} onResolved={handleResolved} />)
+        filteredRows.map((row) => <ReviewRowCard key={row.id} row={row} onResolved={handleResolved} />)
       )}
     </div>
   );
@@ -846,6 +876,16 @@ export default function BillingPage() {
   const [tab, setTab] = useState<Tab>("post-construction");
   const [start, setStart] = useState(monthStartISO);
   const [end, setEnd] = useState(todayISO);
+
+  // Debounced so typing doesn't fire a request per keystroke, search
+  // bypasses the date range entirely (see billingUrl above), so every
+  // keystroke here is a real, unscoped query, not a cheap client-side filter.
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
@@ -871,28 +911,43 @@ export default function BillingPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-pink-600">Project Billing</h1>
-        {/* Date range picker */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-600" htmlFor="bill-start">From</label>
+        <div className="flex flex-wrap items-center gap-2">
           <input
-            id="bill-start"
-            type="date"
-            value={start}
-            max={end}
-            onChange={(e) => setStart(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+            id="bill-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search project, building, unit…"
+            className="w-56 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           />
-          <label className="text-xs font-medium text-gray-600" htmlFor="bill-end">To</label>
-          <input
-            id="bill-end"
-            type="date"
-            value={end}
-            min={start}
-            onChange={(e) => setEnd(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-          />
+          {/* Date range picker, bypassed entirely while a search is active, see billingUrl above */}
+          <div className={`flex items-center gap-2 ${search.trim() ? "opacity-40" : ""}`}>
+            <label className="text-xs font-medium text-gray-600" htmlFor="bill-start">From</label>
+            <input
+              id="bill-start"
+              type="date"
+              value={start}
+              max={end}
+              disabled={!!search.trim()}
+              onChange={(e) => setStart(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:bg-gray-50"
+            />
+            <label className="text-xs font-medium text-gray-600" htmlFor="bill-end">To</label>
+            <input
+              id="bill-end"
+              type="date"
+              value={end}
+              min={start}
+              disabled={!!search.trim()}
+              onChange={(e) => setEnd(e.target.value)}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:bg-gray-50"
+            />
+          </div>
         </div>
       </div>
+      {search.trim() ? (
+        <p className="-mt-2 text-xs text-gray-500">Searching across all dates for &quot;{search.trim()}&quot;, the date range above is ignored until you clear the search.</p>
+      ) : null}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -916,10 +971,10 @@ export default function BillingPage() {
       </div>
 
       {/* Tab content */}
-      {tab === "post-construction" && <PostConstructionTab start={start} end={end} />}
-      {tab === "janitorial" && <JanitorialTab start={start} end={end} />}
-      {tab === "recurring" && <RecurringTab start={start} end={end} />}
-      {tab === "needs-review" && <NeedsReviewTab />}
+      {tab === "post-construction" && <PostConstructionTab start={start} end={end} search={search} />}
+      {tab === "janitorial" && <JanitorialTab start={start} end={end} search={search} />}
+      {tab === "recurring" && <RecurringTab start={start} end={end} search={search} />}
+      {tab === "needs-review" && <NeedsReviewTab search={search} />}
     </div>
   );
 }

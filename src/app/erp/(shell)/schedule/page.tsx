@@ -25,7 +25,19 @@ export default async function SchedulePage() {
   const auth = await getErpAuth();
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
 
-  const [projectRows, supervisorUsers, laborEntryRows, changeOrderRows, coLaborerRows, sovRequestRows, dayAssignmentRows, workerAssignmentRows, employeeRows] = await Promise.all([
+  const [
+    projectRows,
+    supervisorUsers,
+    projectManagerUsers,
+    laborEntryRows,
+    changeOrderRows,
+    coLaborerRows,
+    sovRequestRows,
+    dayAssignmentRows,
+    workerAssignmentRows,
+    employeeRows,
+    contractorRows,
+  ] = await Promise.all([
     prisma.project.findMany({
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
       select: {
@@ -45,6 +57,13 @@ export default async function SchedulePage() {
       select: { id: true, email: true },
       orderBy: { email: "asc" },
     }),
+    // PMs, for the rare "no supervisor, only PM" day assignment, same shape
+    // as supervisorUsers, resolved to display names the same way below.
+    prisma.erpUser.findMany({
+      where: { role: "PROJECT_MANAGER" },
+      select: { id: true, email: true },
+      orderBy: { email: "asc" },
+    }),
     prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
@@ -55,15 +74,29 @@ export default async function SchedulePage() {
       select: { id: true, projectId: true, requestedBy: true, requestedDate: true, sovItem: { select: { description: true } } },
     }),
     prisma.projectDayAssignment.findMany({
-      select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true, seriesId: true },
+      select: {
+        id: true,
+        projectId: true,
+        date: true,
+        supervisorUserId: true,
+        projectManagerUserId: true,
+        startTime: true,
+        endTime: true,
+        seriesId: true,
+      },
     }),
     prisma.projectWorkerDayAssignment.findMany({
-      select: { id: true, projectId: true, employeeId: true, date: true, seriesId: true },
+      select: { id: true, projectId: true, employeeId: true, contractorId: true, date: true, seriesId: true },
     }),
     prisma.employee.findMany({
       where: { status: { not: "INACTIVE" } },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+    prisma.contractor.findMany({
+      where: { status: { not: "INACTIVE" } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -71,6 +104,7 @@ export default async function SchedulePage() {
     id: a.id,
     projectId: a.projectId,
     employeeId: a.employeeId,
+    contractorId: a.contractorId,
     dateKey: dayKey(a.date),
     seriesId: a.seriesId,
   }));
@@ -81,6 +115,9 @@ export default async function SchedulePage() {
   }));
   const employeeNameById = new Map(employees.map((e) => [e.id, e.displayName]));
 
+  const contractors = contractorRows.map((c) => ({ id: c.id, displayName: c.name }));
+  const contractorNameById = new Map(contractors.map((c) => [c.id, c.displayName]));
+
   // Planned (not-yet-logged) worker names per project/day — surfaced in the
   // chip tooltip alongside actual logged hours/workers when a chip already
   // exists for that day (confirmed or planned-supervisor).
@@ -88,7 +125,7 @@ export default async function SchedulePage() {
   for (const a of workerAssignmentRows) {
     const byDay = plannedWorkersByProject.get(a.projectId) ?? new Map<string, string[]>();
     const list = byDay.get(dayKey(a.date)) ?? [];
-    const name = employeeNameById.get(a.employeeId);
+    const name = a.employeeId ? employeeNameById.get(a.employeeId) : a.contractorId ? contractorNameById.get(a.contractorId) : null;
     if (name) list.push(name);
     byDay.set(dayKey(a.date), list);
     plannedWorkersByProject.set(a.projectId, byDay);
@@ -99,6 +136,7 @@ export default async function SchedulePage() {
     projectId: a.projectId,
     dateKey: dayKey(a.date),
     supervisorUserId: a.supervisorUserId,
+    projectManagerUserId: a.projectManagerUserId,
     startTime: a.startTime,
     endTime: a.endTime,
     seriesId: a.seriesId,
@@ -172,18 +210,23 @@ export default async function SchedulePage() {
     workDayKeys: [dayKey(r.requestedDate)],
   }));
 
-  // Resolve display names for ERP supervisors from employee records, same as
-  // the per-project setup editor does.
-  const supervisorEmployees = await prisma.employee.findMany({
-    where: { email: { in: supervisorUsers.map((u) => u.email), mode: "insensitive" } },
+  // Resolve display names for ERP supervisors and PMs from employee records,
+  // same as the per-project setup editor does.
+  const scheduleErpEmails = [...supervisorUsers, ...projectManagerUsers].map((u) => u.email);
+  const scheduleEmployees = await prisma.employee.findMany({
+    where: { email: { in: scheduleErpEmails, mode: "insensitive" } },
     select: { email: true, firstName: true, lastName: true },
   });
   const employeeNameByEmail = new Map(
-    supervisorEmployees
+    scheduleEmployees
       .filter((e): e is typeof e & { email: string } => e.email != null)
       .map((e) => [e.email.toLowerCase(), `${e.firstName} ${e.lastName}`.trim()]),
   );
   const supervisors = supervisorUsers.map((u) => ({
+    id: u.id,
+    displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
+  }));
+  const projectManagers = projectManagerUsers.map((u) => ({
     id: u.id,
     displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
   }));
@@ -270,11 +313,13 @@ export default async function SchedulePage() {
       <SchedulePlanner
         projects={visibleProjects}
         supervisors={supervisors}
+        projectManagers={projectManagers}
         changeOrders={visibleChangeOrders}
         sovRequests={visibleSovRequests}
         initialDayAssignments={visibleDayAssignments}
         canFilterBySupervisor={canFilterBySupervisor}
         employees={employees}
+        contractors={contractors}
         initialWorkerAssignments={visibleWorkerAssignments}
       />
     </div>

@@ -5,8 +5,7 @@ import type { ScheduleDayAssignment, ScheduleWorkerAssignment } from "@/lib/erp/
 import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 
 type ProjectOption = { id: string; jobTitle: string };
-type Supervisor = { id: string; displayName: string };
-type Employee = { id: string; displayName: string };
+type Person = { id: string; displayName: string };
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -36,7 +35,9 @@ export function DayAssignmentModal({
   dateKey,
   projects,
   supervisors,
+  projectManagers,
   employees,
+  contractors,
   existing,
   existingWorkers,
   initialProjectId,
@@ -51,8 +52,10 @@ export function DayAssignmentModal({
 }: {
   dateKey: string;
   projects: ProjectOption[];
-  supervisors: Supervisor[];
-  employees: Employee[];
+  supervisors: Person[];
+  projectManagers: Person[];
+  employees: Person[];
+  contractors: Person[];
   existing: ScheduleDayAssignment[];
   existingWorkers: ScheduleWorkerAssignment[];
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
@@ -74,6 +77,9 @@ export function DayAssignmentModal({
     () => projects.find((p) => p.id === initialProjectId)?.jobTitle ?? ""
   );
   const [supervisorUserId, setSupervisorUserId] = useState("");
+  // Rare case: only the PM is on site that day, no supervisor. At least one
+  // of supervisorUserId/projectManagerUserId is required to submit.
+  const [projectManagerUserId, setProjectManagerUserId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [saving, setSaving] = useState(false);
@@ -81,8 +87,14 @@ export function DayAssignmentModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingSeriesId, setDeletingSeriesId] = useState<string | null>(null);
 
+  // Workers scheduled: either an Employee or a Contractor, picked via the
+  // toggle below. Kept as separate id/query state per type so switching the
+  // toggle doesn't lose whichever search was in progress on the other one.
+  const [workerType, setWorkerType] = useState<"employee" | "contractor">("employee");
   const [employeeId, setEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
+  const [contractorId, setContractorId] = useState("");
+  const [contractorQuery, setContractorQuery] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
   const [workerError, setWorkerError] = useState("");
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
@@ -106,6 +118,9 @@ export function DayAssignmentModal({
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
     : employees;
+  const filteredContractors = contractorQuery.trim()
+    ? contractors.filter((c) => c.displayName.toLowerCase().includes(contractorQuery.toLowerCase()))
+    : contractors;
 
   function toggleRepeatDay(weekday: number) {
     setRepeatDays((prev) =>
@@ -128,8 +143,8 @@ export function DayAssignmentModal({
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!projectId || !supervisorUserId) {
-      setError("Pick a project and a supervisor");
+    if (!projectId || (!supervisorUserId && !projectManagerUserId)) {
+      setError("Pick a project and a supervisor or PM");
       return;
     }
     if ((startTime && !endTime) || (endTime && !startTime)) {
@@ -152,7 +167,8 @@ export function DayAssignmentModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           projectId,
-          supervisorUserId,
+          supervisorUserId: supervisorUserId || undefined,
+          projectManagerUserId: projectManagerUserId || undefined,
           date: dateKey,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
@@ -173,7 +189,8 @@ export function DayAssignmentModal({
             id: a.id,
             projectId,
             dateKey: seriesDateKeys[i]!,
-            supervisorUserId,
+            supervisorUserId: supervisorUserId || null,
+            projectManagerUserId: projectManagerUserId || null,
             startTime: startTime || null,
             endTime: endTime || null,
             seriesId: data.seriesId!,
@@ -184,7 +201,8 @@ export function DayAssignmentModal({
           id: data.id,
           projectId,
           dateKey,
-          supervisorUserId,
+          supervisorUserId: supervisorUserId || null,
+          projectManagerUserId: projectManagerUserId || null,
           startTime: startTime || null,
           endTime: endTime || null,
           seriesId: null,
@@ -193,6 +211,7 @@ export function DayAssignmentModal({
       setProjectId("");
       setProjectQuery("");
       setSupervisorUserId("");
+      setProjectManagerUserId("");
       setStartTime("");
       setEndTime("");
     } catch (err) {
@@ -243,8 +262,9 @@ export function DayAssignmentModal({
       setWorkerError("Pick a project above first");
       return;
     }
-    if (!employeeId) {
-      setWorkerError("Pick a worker");
+    const workerId = workerType === "employee" ? employeeId : contractorId;
+    if (!workerId) {
+      setWorkerError(workerType === "employee" ? "Pick a worker" : "Pick a contractor");
       return;
     }
     if (repeatOpen && !activeSeriesId && seriesError) {
@@ -259,7 +279,8 @@ export function DayAssignmentModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           projectId,
-          employeeId,
+          employeeId: workerType === "employee" ? workerId : undefined,
+          contractorId: workerType === "contractor" ? workerId : undefined,
           date: dateKey,
           ...(usingSeries
             ? activeSeriesId
@@ -281,16 +302,26 @@ export function DayAssignmentModal({
           data.assignments.map((a, i) => ({
             id: a.id,
             projectId,
-            employeeId,
+            employeeId: workerType === "employee" ? workerId : null,
+            contractorId: workerType === "contractor" ? workerId : null,
             dateKey: seriesDateKeys[i]!,
             seriesId: data.seriesId!,
           }))
         );
       } else if (data.id) {
-        onWorkerCreated({ id: data.id, projectId, employeeId, dateKey, seriesId: null });
+        onWorkerCreated({
+          id: data.id,
+          projectId,
+          employeeId: workerType === "employee" ? workerId : null,
+          contractorId: workerType === "contractor" ? workerId : null,
+          dateKey,
+          seriesId: null,
+        });
       }
       setEmployeeId("");
       setEmployeeQuery("");
+      setContractorId("");
+      setContractorQuery("");
     } catch (err) {
       setWorkerError(err instanceof Error ? err.message : "Failed to assign worker");
     } finally {
@@ -326,7 +357,13 @@ export function DayAssignmentModal({
           <ul className="mt-4 space-y-1.5">
             {existing.map((a) => {
               const project = projects.find((p) => p.id === a.projectId);
-              const supervisor = supervisors.find((s) => s.id === a.supervisorUserId);
+              const supervisor = a.supervisorUserId ? supervisors.find((s) => s.id === a.supervisorUserId) : null;
+              const pm = !supervisor && a.projectManagerUserId ? projectManagers.find((p) => p.id === a.projectManagerUserId) : null;
+              const personLabel = supervisor
+                ? supervisor.displayName
+                : pm
+                ? `${pm.displayName} (PM)`
+                : "Unknown supervisor";
               return (
                 <li
                   key={a.id}
@@ -334,7 +371,7 @@ export function DayAssignmentModal({
                 >
                   <span className="truncate" title={project?.jobTitle}>
                     <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
-                    <span className="text-gray-500"> — {supervisor?.displayName ?? "Unknown supervisor"}</span>
+                    <span className="text-gray-500"> — {personLabel}</span>
                     {formatTimeRange(a.startTime, a.endTime) ? (
                       <span className="text-gray-400"> ({formatTimeRange(a.startTime, a.endTime)})</span>
                     ) : null}
@@ -403,20 +440,37 @@ export function DayAssignmentModal({
             ) : null}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Supervisor</label>
-            <select
-              value={supervisorUserId}
-              onChange={(e) => setSupervisorUserId(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
-            >
-              <option value="">Select a supervisor...</option>
-              {supervisors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Supervisor</label>
+              <select
+                value={supervisorUserId}
+                onChange={(e) => setSupervisorUserId(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+              >
+                <option value="">Select a supervisor...</option>
+                {supervisors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">PM (if no supervisor)</label>
+              <select
+                value={projectManagerUserId}
+                onChange={(e) => setProjectManagerUserId(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+              >
+                <option value="">None</option>
+                {projectManagers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
@@ -505,7 +559,7 @@ export function DayAssignmentModal({
               disabled={saving}
               className="flex-1 rounded bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              {saving ? "Assigning..." : "Assign supervisor"}
+              {saving ? "Assigning..." : "Assign"}
             </button>
           </div>
         </form>
@@ -516,7 +570,13 @@ export function DayAssignmentModal({
             <ul className="mt-1.5 space-y-1.5">
               {existingWorkers.map((w) => {
                 const project = projects.find((p) => p.id === w.projectId);
-                const employee = employees.find((e) => e.id === w.employeeId);
+                const employee = w.employeeId ? employees.find((e) => e.id === w.employeeId) : null;
+                const contractor = w.contractorId ? contractors.find((c) => c.id === w.contractorId) : null;
+                const workerLabel = employee
+                  ? employee.displayName
+                  : contractor
+                  ? `${contractor.displayName} (contractor)`
+                  : "Unknown worker";
                 return (
                   <li
                     key={w.id}
@@ -524,7 +584,7 @@ export function DayAssignmentModal({
                   >
                     <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
-                      <span className="text-gray-500"> — {employee?.displayName ?? "Unknown worker"}</span>
+                      <span className="text-gray-500"> — {workerLabel}</span>
                       {w.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
@@ -559,39 +619,96 @@ export function DayAssignmentModal({
           <p className="mt-3 text-[11px] text-gray-400">
             Uses the project selected above. Not emailed — for planning only.
           </p>
+
+          <div className="mt-1.5 flex gap-1">
+            <button
+              type="button"
+              onClick={() => setWorkerType("employee")}
+              className={`rounded px-2 py-1 text-[11px] font-medium ${
+                workerType === "employee" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Employee
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkerType("contractor")}
+              className={`rounded px-2 py-1 text-[11px] font-medium ${
+                workerType === "contractor" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Contractor
+            </button>
+          </div>
+
           <div className="mt-1.5 flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={employeeId ? employees.find((e) => e.id === employeeId)?.displayName ?? "" : employeeQuery}
-                onChange={(e) => {
-                  setEmployeeQuery(e.target.value);
-                  setEmployeeId("");
-                }}
-                placeholder="Search workers..."
-                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
-              />
-              {employeeQuery && !employeeId ? (
-                <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
-                  {filteredEmployees.slice(0, 8).map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => {
-                        setEmployeeId(e.id);
-                        setEmployeeQuery(e.displayName);
-                      }}
-                      className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
-                    >
-                      {e.displayName}
-                    </button>
-                  ))}
-                  {filteredEmployees.length === 0 ? (
-                    <div className="px-2 py-1.5 text-xs text-gray-400">No matching workers</div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            {workerType === "employee" ? (
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={employeeId ? employees.find((e) => e.id === employeeId)?.displayName ?? "" : employeeQuery}
+                  onChange={(e) => {
+                    setEmployeeQuery(e.target.value);
+                    setEmployeeId("");
+                  }}
+                  placeholder="Search workers..."
+                  className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+                />
+                {employeeQuery && !employeeId ? (
+                  <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                    {filteredEmployees.slice(0, 8).map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => {
+                          setEmployeeId(e.id);
+                          setEmployeeQuery(e.displayName);
+                        }}
+                        className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
+                      >
+                        {e.displayName}
+                      </button>
+                    ))}
+                    {filteredEmployees.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-gray-400">No matching workers</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={contractorId ? contractors.find((c) => c.id === contractorId)?.displayName ?? "" : contractorQuery}
+                  onChange={(e) => {
+                    setContractorQuery(e.target.value);
+                    setContractorId("");
+                  }}
+                  placeholder="Search contractors..."
+                  className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+                />
+                {contractorQuery && !contractorId ? (
+                  <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                    {filteredContractors.slice(0, 8).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setContractorId(c.id);
+                          setContractorQuery(c.displayName);
+                        }}
+                        className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
+                      >
+                        {c.displayName}
+                      </button>
+                    ))}
+                    {filteredContractors.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-gray-400">No matching contractors</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
             <button
               type="button"
               onClick={handleAddWorker}
