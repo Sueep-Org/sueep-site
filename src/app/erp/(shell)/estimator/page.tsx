@@ -491,6 +491,9 @@ export default function EstimatorPage() {
                 Analysis
               </h3>
               <div className="flex gap-2">
+                <button id="toggleToPaintingBtn" className="mini-btn">
+                  Show Painting
+                </button>
                 <button id="refreshDistanceBtn" className="mini-btn">
                   ↻ Distance
                 </button>
@@ -956,6 +959,9 @@ export default function EstimatorPage() {
                 Painting
               </h3>
               <div className="flex gap-2">
+                <button id="toggleToAnalysisBtn" className="mini-btn">
+                  Show Analysis
+                </button>
                 <button id="refreshPaintingDistanceBtn" className="mini-btn">
                   ↻ Distance
                 </button>
@@ -971,55 +977,137 @@ export default function EstimatorPage() {
                 <span className="text-gray-400 text-xs uppercase tracking-wide">
                   Expected Days to Complete
                 </span>
-                <div id="paintingViewExpectedDays" className="text-gray-800 font-semibold mt-0.5">—</div>
+                <div
+                  id="paintingViewExpectedDays"
+                  className="text-gray-800 font-semibold mt-0.5"
+                >
+                  —
+                </div>
               </div>
               <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Start Address</span>
-                  <div id="paintingViewStartAddress" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Start Address
+                  </span>
+                  <div
+                    id="paintingViewStartAddress"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Project Address</span>
-                  <div id="paintingViewAddress" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Project Address
+                  </span>
+                  <div
+                    id="paintingViewAddress"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Distance</span>
-                  <div id="paintingDetailDistance" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Drive Distance
+                  </span>
+                  <div
+                    id="paintingDetailDistance"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Drive Time</span>
-                  <div id="paintingDetailDuration" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Drive Time
+                  </span>
+                  <div
+                    id="paintingDetailDuration"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Toll Cost</span>
-                  <div id="paintingDetailTollCost" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Toll Cost
+                  </span>
+                  <div
+                    id="paintingDetailTollCost"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
               </div>
               <div id="paintingViewBreakdown" className="mb-4"></div>
               <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Total Labor</span>
-                  <div id="paintingViewLabor" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Total Labor
+                  </span>
+                  <div
+                    id="paintingViewLabor"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Total Area</span>
-                  <div id="paintingViewTotalArea" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Total Area
+                  </span>
+                  <div
+                    id="paintingViewTotalArea"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Quote</span>
-                  <div id="paintingViewQuote" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Quote
+                  </span>
+                  <div
+                    id="paintingViewQuote"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Labor / SF</span>
-                  <div id="paintingViewLaborPerSF" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Labor / SF
+                  </span>
+                  <div
+                    id="paintingViewLaborPerSF"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Gasoline</span>
-                  <div id="paintingViewGasoline" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Gasoline
+                  </span>
+                  <div
+                    id="paintingViewGasoline"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">Margin</span>
-                  <div id="paintingViewMargin" className="text-gray-800 font-semibold mt-0.5">—</div>
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Margin
+                  </span>
+                  <div
+                    id="paintingViewMargin"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
               </div>
             </div>
@@ -1028,7 +1116,9 @@ export default function EstimatorPage() {
             <div id="paintingEditForm" style={{ display: "none" }}>
               {/* Total Area */}
               <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Total Area (SF)</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Total Area (SF)
+                </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -1058,12 +1148,16 @@ export default function EstimatorPage() {
               </div>
               {/* Start Address */}
               <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">Start Address</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Start Address
+                </label>
                 <select
                   id="paintingStartAddressSelect"
                   className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
                 >
-                  <option value="default">Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004</option>
+                  <option value="default">
+                    Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
+                  </option>
                   <option value="custom">Custom address…</option>
                 </select>
                 <input
@@ -1076,7 +1170,9 @@ export default function EstimatorPage() {
               </div>
               {/* Project Address */}
               <div className="mb-3">
-                <label className="block text-xs text-gray-500 mb-1">Project Address</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Project Address
+                </label>
                 <input
                   type="text"
                   id="paintingAddressInput"
@@ -1087,17 +1183,33 @@ export default function EstimatorPage() {
               {/* Drive info */}
               <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Distance</label>
-                  <div id="paintingEditDriveDistance" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Drive Distance
+                  </label>
+                  <div
+                    id="paintingEditDriveDistance"
+                    className="text-sm text-gray-600 font-medium mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Drive Time</label>
-                  <div id="paintingEditDriveTime" className="text-sm text-gray-600 font-medium mt-0.5">—</div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Drive Time
+                  </label>
+                  <div
+                    id="paintingEditDriveTime"
+                    className="text-sm text-gray-600 font-medium mt-0.5"
+                  >
+                    —
+                  </div>
                 </div>
               </div>
               {/* Expected Days */}
               <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Expected Days to Complete</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Expected Days to Complete
+                </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -1126,12 +1238,22 @@ export default function EstimatorPage() {
                 </div>
               </div>
 
-              <input type="hidden" id="paintingCleanerRateInput" defaultValue="22" />
-              <input type="hidden" id="paintingForemanRateInput" defaultValue="220" />
+              <input
+                type="hidden"
+                id="paintingCleanerRateInput"
+                defaultValue="22"
+              />
+              <input
+                type="hidden"
+                id="paintingForemanRateInput"
+                defaultValue="220"
+              />
 
               {/* Phase table */}
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Phases</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Phases
+                </span>
                 <button
                   type="button"
                   id="paintingRegenPhasesBtn"
@@ -1140,66 +1262,138 @@ export default function EstimatorPage() {
                   ↺ Regenerate from Area
                 </button>
               </div>
-              <div id="paintingPhaseTableContainer" className="mb-4 overflow-x-auto"></div>
+              <div
+                id="paintingPhaseTableContainer"
+                className="mb-4 overflow-x-auto"
+              ></div>
               <div id="paintingCalcSummaryContainer" className="mb-4"></div>
 
               {/* Global rates */}
               <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Overhead (%)</label>
-                  <input type="number" id="paintingOverheadInput" defaultValue="10" min="0" step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Overhead (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingOverheadInput"
+                    defaultValue="0"
+                    min="0"
+                    step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Profit (%)</label>
-                  <input type="number" id="paintingProfitInput" defaultValue="30" min="0" step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Profit (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingProfitInput"
+                    defaultValue="30"
+                    min="0"
+                    step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Tax (%)</label>
-                  <input type="number" id="paintingTaxInput" defaultValue="6" min="0" step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Tax (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingTaxInput"
+                    defaultValue="6"
+                    min="0"
+                    step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                   <div className="flex items-center gap-1 mt-1">
-                    <input type="text" id="paintingTaxZipInput" placeholder="ZIP" maxLength={5}
-                      className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" />
-                    <button type="button" id="paintingTaxZipLookupBtn"
-                      className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="text"
+                      id="paintingTaxZipInput"
+                      placeholder="ZIP"
+                      maxLength={5}
+                      className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                    />
+                    <button
+                      type="button"
+                      id="paintingTaxZipLookupBtn"
+                      className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                    >
                       Lookup
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Commission (%)</label>
-                  <input type="number" id="paintingCommissionInput" defaultValue="10" min="0" step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Commission (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingCommissionInput"
+                    defaultValue="5"
+                    min="0"
+                    step="0.1"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
               </div>
 
               {/* Margin */}
               <div className="mb-3 pt-4 border-t border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">Margin ($)</label>
-                <input type="number" id="paintingMarginInput" placeholder="0.00" min="0" step="0.01"
-                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                <label className="block text-xs text-gray-500 mb-1">
+                  Margin ($)
+                </label>
+                <input
+                  type="number"
+                  id="paintingMarginInput"
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                />
               </div>
               {/* Gasoline + Toll Cost */}
               <div className="flex flex-wrap gap-4 mb-4">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Gasoline ($)</label>
-                  <input type="number" id="paintingGasolineInput" placeholder="0.00" min="0" step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Gasoline ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingGasolineInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Toll Cost ($)</label>
-                  <input type="number" id="paintingTollCostInput" placeholder="0.00" min="0" step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400" />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Toll Cost ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingTollCostInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
               </div>
 
               <div className="flex gap-2">
-                <button id="savePaintingBtn" className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700">
+                <button
+                  id="savePaintingBtn"
+                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                >
                   Save
                 </button>
-                <button id="cancelPaintingBtn" className="mini-btn">Cancel</button>
+                <button id="cancelPaintingBtn" className="mini-btn">
+                  Cancel
+                </button>
               </div>
             </div>
           </div>

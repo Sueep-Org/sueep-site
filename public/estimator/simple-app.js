@@ -3209,9 +3209,9 @@ async function initApp(){
   let _phasesLocked = true;
 
   // Painting phases
-  const PAINTING_PHASES = ['Phase 1', 'Phase 2', 'Phase 3'];
-  const PAINTING_PHASE_IDS = ['phase1', 'phase2', 'phase3'];
-  let _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
+  const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting'];
+  const PAINTING_PHASE_IDS = ['phase1', 'phase2'];
+  let _paintingPhaseCrews = { phase1: [], phase2: [] };
   let _deletedPaintingPhaseIds = new Set();
   let _paintingExpectedDaysManual = false;
   let _paintingPhasesLocked = true;
@@ -3904,6 +3904,7 @@ async function initApp(){
       setFoot(`pphase_foreman_${pid}`, c.foremanPay);
       setFoot(`pphase_assistant_${pid}`, c.assistantPay);
       setFoot(`pphase_painter_${pid}`, c.painterPay);
+      setFoot(`pphase_pm_${pid}`, c.pmPay);
       setFoot(`pphase_labor_${pid}`, c.laborCost);
       setFoot(`pphase_subtotal_${pid}`, c.subtotal);
     });
@@ -3963,6 +3964,7 @@ async function initApp(){
         const painters  = crew.filter(m => m.role === 'painter').length;
         const foremen   = crew.filter(m => m.role === 'foreman').length;
         const assistants = crew.filter(m => m.role === 'assistant').length;
+        const pms = crew.filter(m => m.role === 'project_manager').length;
 
         const section = document.createElement('div');
         section.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
@@ -3975,6 +3977,7 @@ async function initApp(){
         if (painters) parts.push(`${painters} Painter${painters > 1 ? 's' : ''}`);
         if (foremen) parts.push(`${foremen} Foreman`);
         if (assistants) parts.push(`${assistants} Assistant${assistants > 1 ? 's' : ''}`);
+        if (pms) parts.push(`${pms} PM${pms > 1 ? 's' : ''}`);
         const summary = document.createElement('span');
         summary.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
         summary.style.cssText = 'font-size:12px;color:#6b7280;';
@@ -4037,8 +4040,9 @@ async function initApp(){
         return btn;
       };
       addBtns.appendChild(mkAddBtn('+ Foreman',   'foreman',   '#16a34a', '#f0fdf4', '#86efac', 28));
-      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
+      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 20));
       addBtns.appendChild(mkAddBtn('+ Painter',   'painter',   '#dc2626', '#fef2f2', '#fca5a5', 22));
+      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 28.84));
 
       const delPhaseBtn = document.createElement('button');
       delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
@@ -4068,14 +4072,15 @@ async function initApp(){
           th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
           hrow.appendChild(th);
         });
-        const roleOrder = { foreman: 0, assistant: 1, painter: 2 };
+        const roleOrder = { foreman: 0, assistant: 1, painter: 2, project_manager: 3 };
         const sortedCrew = [...crew].sort((a, b) => (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1));
         const tbody = table.createTBody();
-        const roleLabels = { foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter' };
+        const roleLabels = { foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'Project Manager' };
         const roleColors = {
           foreman:   'background:#f0fdf4;color:#16a34a;',
           assistant: 'background:#fffbeb;color:#d97706;',
           painter:   'background:#fef2f2;color:#dc2626;',
+          project_manager: 'background:#f5f3ff;color:#7c3aed;',
         };
         sortedCrew.forEach(member => {
           const tr = tbody.insertRow();
@@ -4143,6 +4148,7 @@ async function initApp(){
         ['Foreman Pay',   `pphase_foreman_${pid}`],
         ['Assistant Pay', `pphase_assistant_${pid}`],
         ['Painter Pay',   `pphase_painter_${pid}`],
+        ['PM Pay',        `pphase_pm_${pid}`],
         ['Labor',         `pphase_labor_${pid}`],
         ['Subtotal',      `pphase_subtotal_${pid}`],
       ].forEach(([label, id]) => {
@@ -4159,6 +4165,19 @@ async function initApp(){
     });
 
     _updatePaintingCrewCalcs();
+  }
+
+  function _setEstimatorCardVisibility(activeCard) {
+    const analysisCard = document.getElementById('analysisCard');
+    const paintingCard = document.getElementById('paintingCard');
+    if (!analysisCard || !paintingCard) return;
+    if (activeCard === 'painting') {
+      analysisCard.style.display = 'none';
+      paintingCard.style.display = 'block';
+    } else {
+      analysisCard.style.display = 'block';
+      paintingCard.style.display = 'none';
+    }
   }
 
   function showAnalysisCard(projData) {
@@ -4281,8 +4300,7 @@ async function initApp(){
     document.getElementById('analysisEditForm').style.display = 'none';
     document.getElementById('editAnalysisBtn').style.display = '';
     card.style.display = 'block';
-    const pCard = document.getElementById('paintingCard');
-    if (pCard) pCard.style.display = 'block';
+    _setEstimatorCardVisibility('analysis');
     showChangeOrderCard(projData);
     renderSovCard();
   }
@@ -4491,6 +4509,16 @@ async function initApp(){
     });
   }
 
+  const toggleToPaintingBtn = document.getElementById('toggleToPaintingBtn');
+  if (toggleToPaintingBtn) toggleToPaintingBtn.addEventListener('click', () => {
+    _setEstimatorCardVisibility('painting');
+  });
+
+  const toggleToAnalysisBtn = document.getElementById('toggleToAnalysisBtn');
+  if (toggleToAnalysisBtn) toggleToAnalysisBtn.addEventListener('click', () => {
+    _setEstimatorCardVisibility('analysis');
+  });
+
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
   if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
     window.__analysisDirty = true;
@@ -4541,10 +4569,6 @@ async function initApp(){
       { role: 'foreman',   rate: 28, hours: 8, days, _uid: uid() },
     ];
     _paintingPhaseCrews.phase2 = [
-      { role: 'painter',   rate: 22, hours: 8, days, _uid: uid() },
-      { role: 'foreman',   rate: 28, hours: 8, days, _uid: uid() },
-    ];
-    _paintingPhaseCrews.phase3 = [
       { role: 'painter',   rate: 22, hours: 8, days, _uid: uid() },
       { role: 'assistant', rate: 22, hours: 8, days, _uid: uid() },
     ];
