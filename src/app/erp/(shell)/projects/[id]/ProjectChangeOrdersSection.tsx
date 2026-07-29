@@ -9,19 +9,37 @@ const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01
 
 type EstimatorCrewMember = { role?: string; rate?: number; hours?: number; days?: number };
 type EstimatorPhase = { persons?: number; days?: number; crew?: EstimatorCrewMember[] };
+/** A single change order in the estimator's own crew-based model (public/estimator/simple-app.js,
+ * _updateOneChangeOrderCalc / showChangeOrderCard), it carries its own crew and per-person rate,
+ * not a re-billing of the base phases at separate rates (that older shape no longer appears in
+ * real data). */
 type EstimatorChangeOrder = {
-  cleaner_billing_rate?: number;
-  supervisor_billing_rate?: number;
-  pm_billing_rate?: number;
-  hours_per_day?: number;
+  id?: string;
+  name?: string;
+  crew?: EstimatorCrewMember[];
   materials?: number;
+  materials_gc?: number;
 };
 type EstimatorLaborBreakdown = {
   cleaner_rate?: number;
   foreman_rate?: number;
   phases?: EstimatorPhase[];
+  /** Current shape, a project can carry several change orders. */
+  change_orders?: EstimatorChangeOrder[];
+  /** Legacy shape from before multi-CO support, always a single entry. */
   change_order?: EstimatorChangeOrder;
 };
+
+/** The change orders on an estimator project. Prefers the current plural shape, falling back to
+ * wrapping the legacy singular change_order into a one-item list, the same migration the
+ * estimator's own showChangeOrderCard runs (simple-app.js:3559-3569). */
+function resolveEstimatorChangeOrders(lb: EstimatorLaborBreakdown): EstimatorChangeOrder[] {
+  if (lb.change_orders && lb.change_orders.length > 0) return lb.change_orders;
+  if (lb.change_order?.crew?.length) {
+    return [{ ...lb.change_order, name: lb.change_order.name || "Change Order #1" }];
+  }
+  return [];
+}
 
 /** Mirrors the estimator's own per-phase labor cost math (public/estimator/simple-app.js,
  * _calcPhase) so a change order's cost lines match what the estimator would show, without
@@ -41,19 +59,13 @@ function estimatorPhaseLaborCost(phase: EstimatorPhase, cleanerRate: number, for
   return (phase.persons ?? 0) * (phase.days ?? 0) * cleanerRate * 8 + (phase.days ?? 0) * foremanRate;
 }
 
-/** The change order's billed labor for one phase, what's charged to the client at the
- * change-order billing rates, as opposed to estimatorPhaseLaborCost's internal cost. */
-function estimatorPhaseChangeOrderBilled(phase: EstimatorPhase, co: EstimatorChangeOrder): number {
-  const cleanerBilling = co.cleaner_billing_rate ?? 42;
-  const supervisorBilling = co.supervisor_billing_rate ?? 47;
-  const pmBilling = co.pm_billing_rate ?? 0;
-  const hoursPerDay = co.hours_per_day ?? 8;
+/** A change order's own billed labor, mirrors the estimator's _updateOneChangeOrderCalc
+ * (simple-app.js:3388-3410): each change order carries its own crew and per-person rate, it
+ * isn't the base phases re-billed at change-order rates. */
+function estimatorChangeOrderLabor(co: EstimatorChangeOrder): number {
   let billed = 0;
-  for (const m of phase.crew ?? []) {
-    const days = m.days ?? 0;
-    if (m.role === "cleaner") billed += cleanerBilling * hoursPerDay * days;
-    else if (m.role === "project_manager") billed += pmBilling * hoursPerDay * days;
-    else billed += supervisorBilling * hoursPerDay * days;
+  for (const m of co.crew ?? []) {
+    billed += (m.rate ?? 0) * (m.hours ?? 8) * (m.days ?? 0);
   }
   return billed;
 }
@@ -234,11 +246,19 @@ export function ProjectChangeOrdersSection({
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(defaultNotifyIds);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // Estimator import modal
+  // Estimator import modal: step 1 picks an estimator project, step 2 picks
+  // which of that project's change orders to bring in (a project can have
+  // several, see resolveEstimatorChangeOrders above).
   const [estModalOpen, setEstModalOpen] = useState(false);
   const [estProjects, setEstProjects] = useState<{ id: string; name: string }[]>([]);
   const [estModalLoading, setEstModalLoading] = useState(false);
   const [estModalError, setEstModalError] = useState("");
+  const [estCoOptions, setEstCoOptions] = useState<{ key: string; co: EstimatorChangeOrder; labor: number }[]>([]);
+  const [estBaseLaborCost, setEstBaseLaborCost] = useState(0);
+  const [estSelectedCoKeys, setEstSelectedCoKeys] = useState<Set<string>>(new Set());
+  const [estImporting, setEstImporting] = useState(false);
+  /** Non-null once a project's been picked, i.e. step 2 (the CO checklist) is showing. */
+  const [estSelectedProjectName, setEstSelectedProjectName] = useState<string | null>(null);
 
   useEffect(() => {
     setEntries(initialEntries);
@@ -246,6 +266,9 @@ export function ProjectChangeOrdersSection({
 
   async function openEstimatorImport() {
     const anonId = localStorage.getItem("ai_estimator_anon_id");
+    setEstCoOptions([]);
+    setEstSelectedCoKeys(new Set());
+    setEstSelectedProjectName(null);
     if (!anonId) {
       setEstModalError("Open the AI Estimator page at least once to link your account.");
       setEstModalOpen(true);
@@ -270,7 +293,7 @@ export function ProjectChangeOrdersSection({
     }
   }
 
-  async function importEstimatorChangeOrder(estId: string) {
+  async function openEstimatorProjectChangeOrders(estId: string) {
     const anonId = localStorage.getItem("ai_estimator_anon_id")!;
     setEstModalLoading(true);
     setEstModalError("");
@@ -287,49 +310,74 @@ export function ProjectChangeOrdersSection({
         setEstModalLoading(false);
         return;
       }
-      // change_order is only present once someone has actually opened and saved the
-      // Change Order card in the estimator, same as the estimator's own UI (showChangeOrderCard
-      // in simple-app.js), it just falls back to default billing rates rather than erroring.
-      const co = lb.change_order ?? {};
-      const usedDefaultRates = !lb.change_order;
-
       const cleanerRate = lb.cleaner_rate ?? 0;
       const foremanRate = lb.foreman_rate ?? 0;
       let laborCosts = 0;
-      let laborChangeOrder = 0;
-      for (const phase of lb.phases ?? []) {
-        laborCosts += estimatorPhaseLaborCost(phase, cleanerRate, foremanRate);
-        laborChangeOrder += estimatorPhaseChangeOrderBilled(phase, co);
-      }
-      const materials = co.materials ?? 0;
+      for (const phase of lb.phases ?? []) laborCosts += estimatorPhaseLaborCost(phase, cleanerRate, foremanRate);
+      setEstBaseLaborCost(laborCosts);
 
-      const res = await fetch(`/api/erp/projects/${projectId}/change-orders`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: "Change Order",
-          status: "DRAFT",
-          contractValue: laborChangeOrder,
-          estLabor: laborCosts,
-          estMaterial: materials,
-        }),
-      });
-      const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
-      if (!res.ok) {
-        setEstModalError(data.error || "Failed to create change order");
-        setEstModalLoading(false);
-        return;
+      const changeOrders = resolveEstimatorChangeOrders(lb);
+      const options = changeOrders.map((co, i) => ({
+        key: co.id || `co-${i}`,
+        co,
+        labor: estimatorChangeOrderLabor(co),
+      }));
+      setEstCoOptions(options);
+      setEstSelectedCoKeys(new Set(options.map((o) => o.key)));
+      if (options.length === 0) {
+        setEstModalError("No change orders in that estimator project yet.");
       }
-      setEntries((prev) => [data, ...prev]);
-      setEstModalOpen(false);
-      if (usedDefaultRates) {
-        setError("Imported, but no saved change-order billing rates were found for that estimator project, so default rates ($42/hr cleaner, $47/hr supervisor, $0 materials) were used. Edit the change order below if those aren't right.");
-      }
-      router.refresh();
     } catch {
       setEstModalError("Could not load that project. Try again.");
     } finally {
       setEstModalLoading(false);
+    }
+  }
+
+  function toggleEstCo(key: string) {
+    setEstSelectedCoKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function importSelectedChangeOrders() {
+    const selected = estCoOptions.filter((o) => estSelectedCoKeys.has(o.key));
+    if (selected.length === 0) return;
+    setEstImporting(true);
+    setEstModalError("");
+    try {
+      const results = await Promise.allSettled(
+        selected.map(async ({ co, labor }) => {
+          const res = await fetch(`/api/erp/projects/${projectId}/change-orders`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              title: co.name || "Change Order",
+              status: "DRAFT",
+              contractValue: labor,
+              estLabor: estBaseLaborCost,
+              estMaterial: co.materials ?? 0,
+            }),
+          });
+          const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
+          if (!res.ok) throw new Error(data.error || "Failed to create change order");
+          return data;
+        }),
+      );
+      const created = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (created.length > 0) setEntries((prev) => [...created, ...prev]);
+      if (failed > 0) {
+        setEstModalError(`Imported ${created.length} of ${selected.length}, ${failed} failed. Try again for the rest.`);
+      } else {
+        setEstModalOpen(false);
+      }
+      if (created.length > 0) router.refresh();
+    } finally {
+      setEstImporting(false);
     }
   }
 
@@ -432,7 +480,9 @@ export function ProjectChangeOrdersSection({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800">Import change order from AI Estimator</h3>
+              <h3 className="text-sm font-semibold text-gray-800">
+                {estSelectedProjectName ? `Change orders in ${estSelectedProjectName}` : "Import change orders from AI Estimator"}
+              </h3>
               <button
                 type="button"
                 onClick={() => setEstModalOpen(false)}
@@ -441,27 +491,92 @@ export function ProjectChangeOrdersSection({
                 ✕
               </button>
             </div>
-            <p className="mb-3 text-xs text-gray-500">
-              Select a project. Pulls the change order&apos;s billed labor as the contract value, its internal labor cost, and its materials cost.
-            </p>
-            {estModalLoading ? (
-              <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
-            ) : estModalError ? (
-              <p className="text-xs text-red-500">{estModalError}</p>
+
+            {estSelectedProjectName === null ? (
+              <>
+                <p className="mb-3 text-xs text-gray-500">Select a project to see its change orders.</p>
+                {estModalLoading ? (
+                  <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
+                ) : estModalError ? (
+                  <p className="text-xs text-red-500">{estModalError}</p>
+                ) : (
+                  <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
+                    {estProjects.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEstSelectedProjectName(p.name);
+                            openEstimatorProjectChangeOrders(p.id);
+                          }}
+                          className="w-full px-3 py-2.5 text-left text-sm text-gray-800 hover:bg-yellow-50 hover:text-yellow-900"
+                        >
+                          {p.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             ) : (
-              <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
-                {estProjects.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => importEstimatorChangeOrder(p.id)}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-800 hover:bg-yellow-50 hover:text-yellow-900"
-                    >
-                      {p.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="mb-3 text-xs text-gray-500">
+                  Pick which change orders to bring in. Each pulls its own labor as the contract value, its materials cost, and the project&apos;s labor cost.
+                </p>
+                {estModalLoading ? (
+                  <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
+                ) : (
+                  <>
+                    {estCoOptions.length > 0 ? (
+                      <ul className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-1.5">
+                        {estCoOptions.map(({ key, co, labor }) => {
+                          const checked = estSelectedCoKeys.has(key);
+                          return (
+                            <li key={key}>
+                              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-yellow-50">
+                                <span className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleEstCo(key)}
+                                    className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                                  />
+                                  <span className="text-gray-800">{co.name || "Change Order"}</span>
+                                </span>
+                                <span className="text-xs text-gray-400">${centsToDollars(Math.round(labor * 100))}</span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
+                    {estModalError ? <p className="mt-2 text-xs text-red-500">{estModalError}</p> : null}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEstSelectedProjectName(null);
+                          setEstCoOptions([]);
+                          setEstModalError("");
+                        }}
+                        className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                      >
+                        Back
+                      </button>
+                      {estCoOptions.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={importSelectedChangeOrders}
+                          disabled={estImporting || estSelectedCoKeys.size === 0}
+                          className="flex-1 rounded-md bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-yellow-900 hover:bg-yellow-300 disabled:opacity-50"
+                        >
+                          {estImporting ? "Importing…" : `Import ${estSelectedCoKeys.size || ""}`}
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>

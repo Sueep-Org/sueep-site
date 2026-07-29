@@ -1105,8 +1105,20 @@ export function SchedulePlanner({
             // mirror that in the Gantt's inline dropdown right away.
             setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
           }}
+          onSeriesCreated={(created) => {
+            setDayAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created]);
+            const last = created[created.length - 1];
+            if (last) setSupervisorOverrides((o) => ({ ...o, [last.projectId]: last.supervisorUserId }));
+          }}
           onDeleted={(id) => setDayAssignments((prev) => prev.filter((a) => a.id !== id))}
+          onSeriesDeleted={(seriesId) => {
+            setDayAssignments((prev) => prev.filter((a) => a.seriesId !== seriesId));
+            setWorkerAssignments((prev) => prev.filter((a) => a.seriesId !== seriesId));
+          }}
           onWorkerCreated={(a) => setWorkerAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a])}
+          onWorkerSeriesCreated={(created) =>
+            setWorkerAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created])
+          }
           onWorkerDeleted={(id) => setWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
         />
       ) : null}

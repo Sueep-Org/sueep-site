@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import type { ScheduleDayAssignment, ScheduleWorkerAssignment } from "@/lib/erp/schedule";
+import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 
 type ProjectOption = { id: string; jobTitle: string };
 type Supervisor = { id: string; displayName: string };
 type Employee = { id: string; displayName: string };
+
+const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 function dateLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
@@ -39,8 +42,11 @@ export function DayAssignmentModal({
   initialProjectId,
   onClose,
   onCreated,
+  onSeriesCreated,
   onDeleted,
+  onSeriesDeleted,
   onWorkerCreated,
+  onWorkerSeriesCreated,
   onWorkerDeleted,
 }: {
   dateKey: string;
@@ -53,8 +59,14 @@ export function DayAssignmentModal({
   initialProjectId?: string;
   onClose: () => void;
   onCreated: (assignment: ScheduleDayAssignment) => void;
+  /** Fired instead of onCreated when a repeat/range is active, one row per generated day. */
+  onSeriesCreated: (assignments: ScheduleDayAssignment[]) => void;
   onDeleted: (id: string) => void;
+  /** Fired when a whole repeating series (every day it generated) is removed. */
+  onSeriesDeleted: (seriesId: string) => void;
   onWorkerCreated: (assignment: ScheduleWorkerAssignment) => void;
+  /** Fired instead of onWorkerCreated when a repeat/range is active, one row per generated day. */
+  onWorkerSeriesCreated: (assignments: ScheduleWorkerAssignment[]) => void;
   onWorkerDeleted: (id: string) => void;
 }) {
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
@@ -67,12 +79,25 @@ export function DayAssignmentModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingSeriesId, setDeletingSeriesId] = useState<string | null>(null);
 
   const [employeeId, setEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
   const [workerError, setWorkerError] = useState("");
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
+
+  // A multi-day range and a weekly repeat are the same control here: pick
+  // which weekdays to include and an end date. A Mon-Fri job just means
+  // checking every weekday in between; "every Monday for 8 weeks" means
+  // checking only Monday. Once a series is created in this modal (either by
+  // assigning a supervisor or adding a worker while this is open),
+  // activeSeriesId is reused so later adds in the same session join the
+  // same series instead of creating a new one each time.
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [repeatDays, setRepeatDays] = useState<number[]>(() => [new Date(`${dateKey}T00:00:00.000Z`).getUTCDay()]);
+  const [repeatUntil, setRepeatUntil] = useState("");
+  const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
 
   const filteredProjects = projectQuery.trim()
     ? projects.filter((p) => p.jobTitle.toLowerCase().includes(projectQuery.toLowerCase()))
@@ -81,6 +106,24 @@ export function DayAssignmentModal({
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
     : employees;
+
+  function toggleRepeatDay(weekday: number) {
+    setRepeatDays((prev) =>
+      prev.includes(weekday) ? prev.filter((d) => d !== weekday) : [...prev, weekday].sort((a, b) => a - b)
+    );
+  }
+
+  let seriesDates: Date[] | null = null;
+  let seriesError = "";
+  if (repeatOpen && repeatUntil) {
+    try {
+      seriesDates = computeSeriesDates(new Date(`${dateKey}T00:00:00.000Z`), new Date(`${repeatUntil}T00:00:00.000Z`), repeatDays);
+      if (seriesDates.length === 0) seriesError = "No dates in range match the selected days";
+    } catch (err) {
+      seriesError = err instanceof SeriesDateRangeError ? err.message : "Invalid date range";
+    }
+  }
+  const seriesDateKeys = seriesDates?.map((d) => d.toISOString().slice(0, 10)) ?? null;
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -97,8 +140,13 @@ export function DayAssignmentModal({
       setError("End time must be after start time");
       return;
     }
+    if (repeatOpen && seriesError) {
+      setError(seriesError);
+      return;
+    }
     setSaving(true);
     try {
+      const usingSeries = repeatOpen && seriesDateKeys && seriesDateKeys.length > 0;
       const res = await fetch("/api/erp/schedule/day-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -108,18 +156,40 @@ export function DayAssignmentModal({
           date: dateKey,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
+          ...(usingSeries ? { repeatUntil, repeatDays } : {}),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        id?: string;
+        seriesId?: string;
+        assignments?: { id: string }[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error || "Failed to assign");
-      onCreated({
-        id: data.id,
-        projectId,
-        dateKey,
-        supervisorUserId,
-        startTime: startTime || null,
-        endTime: endTime || null,
-      });
+      if (usingSeries && seriesDateKeys && data.seriesId && data.assignments) {
+        setActiveSeriesId(data.seriesId);
+        onSeriesCreated(
+          data.assignments.map((a, i) => ({
+            id: a.id,
+            projectId,
+            dateKey: seriesDateKeys[i]!,
+            supervisorUserId,
+            startTime: startTime || null,
+            endTime: endTime || null,
+            seriesId: data.seriesId!,
+          }))
+        );
+      } else if (data.id) {
+        onCreated({
+          id: data.id,
+          projectId,
+          dateKey,
+          supervisorUserId,
+          startTime: startTime || null,
+          endTime: endTime || null,
+          seriesId: null,
+        });
+      }
       setProjectId("");
       setProjectQuery("");
       setSupervisorUserId("");
@@ -153,6 +223,20 @@ export function DayAssignmentModal({
     }
   }
 
+  async function handleDeleteSeries(seriesId: string) {
+    setDeletingSeriesId(seriesId);
+    try {
+      const res = await fetch(`/api/erp/schedule/series/${seriesId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+      onSeriesDeleted(seriesId);
+      if (activeSeriesId === seriesId) setActiveSeriesId(null);
+    } catch {
+      // leave it in place; user can retry
+    } finally {
+      setDeletingSeriesId(null);
+    }
+  }
+
   async function handleAddWorker() {
     setWorkerError("");
     if (!projectId) {
@@ -163,16 +247,48 @@ export function DayAssignmentModal({
       setWorkerError("Pick a worker");
       return;
     }
+    if (repeatOpen && !activeSeriesId && seriesError) {
+      setWorkerError(seriesError);
+      return;
+    }
     setAddingWorker(true);
     try {
+      const usingSeries = repeatOpen && (activeSeriesId || (seriesDateKeys && seriesDateKeys.length > 0));
       const res = await fetch("/api/erp/schedule/worker-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, employeeId, date: dateKey }),
+        body: JSON.stringify({
+          projectId,
+          employeeId,
+          date: dateKey,
+          ...(usingSeries
+            ? activeSeriesId
+              ? { seriesId: activeSeriesId }
+              : { repeatUntil, repeatDays }
+            : {}),
+        }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        id?: string;
+        seriesId?: string;
+        assignments?: { id: string }[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error || "Failed to assign worker");
-      onWorkerCreated({ id: data.id, projectId, employeeId, dateKey });
+      if (usingSeries && seriesDateKeys && data.seriesId && data.assignments) {
+        setActiveSeriesId(data.seriesId);
+        onWorkerSeriesCreated(
+          data.assignments.map((a, i) => ({
+            id: a.id,
+            projectId,
+            employeeId,
+            dateKey: seriesDateKeys[i]!,
+            seriesId: data.seriesId!,
+          }))
+        );
+      } else if (data.id) {
+        onWorkerCreated({ id: data.id, projectId, employeeId, dateKey, seriesId: null });
+      }
       setEmployeeId("");
       setEmployeeQuery("");
     } catch (err) {
@@ -222,15 +338,29 @@ export function DayAssignmentModal({
                     {formatTimeRange(a.startTime, a.endTime) ? (
                       <span className="text-gray-400"> ({formatTimeRange(a.startTime, a.endTime)})</span>
                     ) : null}
+                    {a.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(a.id)}
-                    disabled={deletingId === a.id}
-                    className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-50"
-                  >
-                    ×
-                  </button>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {a.seriesId ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSeries(a.seriesId!)}
+                        disabled={deletingSeriesId === a.seriesId}
+                        title="Remove every day in this repeating series"
+                        className="text-[10px] font-medium text-gray-400 hover:text-red-500 disabled:opacity-50"
+                      >
+                        remove all
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(a.id)}
+                      disabled={deletingId === a.id}
+                      className="text-gray-400 hover:text-red-500 disabled:opacity-50"
+                    >
+                      ×
+                    </button>
+                  </span>
                 </li>
               );
             })}
@@ -308,6 +438,56 @@ export function DayAssignmentModal({
             </div>
           </div>
 
+          <div className="rounded border border-gray-200 p-2">
+            <button
+              type="button"
+              onClick={() => setRepeatOpen((v) => !v)}
+              className="flex w-full items-center justify-between text-xs font-medium text-gray-600"
+            >
+              <span>Repeat / multi-day range</span>
+              <span className="text-gray-400">{repeatOpen ? "Hide" : "Set up"}</span>
+            </button>
+            {repeatOpen ? (
+              <div className="mt-2 space-y-2">
+                <div className="flex gap-1">
+                  {WEEKDAY_LABELS.map((label, weekday) => (
+                    <button
+                      key={weekday}
+                      type="button"
+                      onClick={() => toggleRepeatDay(weekday)}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${
+                        repeatDays.includes(weekday)
+                          ? "bg-pink-600 text-white"
+                          : "border border-gray-300 text-gray-500 hover:border-pink-400"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600">Ends on</label>
+                  <input
+                    type="date"
+                    value={repeatUntil}
+                    min={dateKey}
+                    onChange={(e) => setRepeatUntil(e.target.value)}
+                    className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                  />
+                </div>
+                {repeatUntil ? (
+                  seriesError ? (
+                    <p className="text-xs text-red-600">{seriesError}</p>
+                  ) : seriesDateKeys ? (
+                    <p className="text-xs text-gray-500">
+                      Applies to {seriesDateKeys.length} day{seriesDateKeys.length === 1 ? "" : "s"}: {dateKey} through {repeatUntil}
+                    </p>
+                  ) : null
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           {error ? (
             <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{error}</div>
           ) : null}
@@ -345,15 +525,29 @@ export function DayAssignmentModal({
                     <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                       <span className="text-gray-500"> — {employee?.displayName ?? "Unknown worker"}</span>
+                      {w.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteWorker(w.id)}
-                      disabled={deletingWorkerId === w.id}
-                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-50"
-                    >
-                      ×
-                    </button>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {w.seriesId ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSeries(w.seriesId!)}
+                          disabled={deletingSeriesId === w.seriesId}
+                          title="Remove every day in this repeating series"
+                          className="text-[10px] font-medium text-gray-400 hover:text-red-500 disabled:opacity-50"
+                        >
+                          remove all
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteWorker(w.id)}
+                        disabled={deletingWorkerId === w.id}
+                        className="text-gray-400 hover:text-red-500 disabled:opacity-50"
+                      >
+                        ×
+                      </button>
+                    </span>
                   </li>
                 );
               })}

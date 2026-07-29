@@ -55,10 +55,10 @@ export default async function SchedulePage() {
       select: { id: true, projectId: true, requestedBy: true, requestedDate: true, sovItem: { select: { description: true } } },
     }),
     prisma.projectDayAssignment.findMany({
-      select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true },
+      select: { id: true, projectId: true, date: true, supervisorUserId: true, startTime: true, endTime: true, seriesId: true },
     }),
     prisma.projectWorkerDayAssignment.findMany({
-      select: { id: true, projectId: true, employeeId: true, date: true },
+      select: { id: true, projectId: true, employeeId: true, date: true, seriesId: true },
     }),
     prisma.employee.findMany({
       where: { status: { not: "INACTIVE" } },
@@ -72,6 +72,7 @@ export default async function SchedulePage() {
     projectId: a.projectId,
     employeeId: a.employeeId,
     dateKey: dayKey(a.date),
+    seriesId: a.seriesId,
   }));
 
   const employees = employeeRows.map((e) => ({
@@ -100,6 +101,7 @@ export default async function SchedulePage() {
     supervisorUserId: a.supervisorUserId,
     startTime: a.startTime,
     endTime: a.endTime,
+    seriesId: a.seriesId,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full

@@ -24,7 +24,7 @@ model Project {
   status  String @default("ACTIVE")
 
   /// Primary / job-start date shown on PM dashboard
-  projectDate DateTime?
+  projectDate    DateTime?
   /// Target end / handoff — drives calendar span & Gantt bar end (optional)
   projectEndDate DateTime?
 
@@ -77,30 +77,31 @@ model Project {
   recurringContractPeriodId String?
   recurringContractPeriod   RecurringContractPeriod? @relation(fields: [recurringContractPeriodId], references: [id], onDelete: SetNull)
 
-  laborEntries LaborEntry[]
-  materialEntries MaterialEntry[]
-  distanceEntries DistanceEntry[]
-  workOrders ProjectWorkOrder[]
-  workOrderAttachments ProjectWorkOrderAttachment[]
-  images ProjectImage[]
-  changeOrders ProjectChangeOrder[]
-  sovScheduleRequests ProjectSovScheduleRequest[]
-  hubspotSovAliases HubSpotSovAlias[]
-  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
-  contacts ProjectContact[]
-  contractorAssignments ContractorAssignment[]
-  laborAssignments ProjectLaborAssignment[]
-  checklistItems ProjectChecklistItem[]
-  unitTurnoverChecklist UnitTurnoverChecklist?
-  workOrderRecord ProjectWorkOrderRecord?
-  qualityChecks QualityCheck[]
-  dailySafetyChecks DailySafetyCheck[]
-  contracts ProjectContract[]
-  safetyIncidents SafetyIncident[]
-  sov ProjectSOV?
-  dayAssignments ProjectDayAssignment[]
-  workerDayAssignments ProjectWorkerDayAssignment[]
-  notes ProjectNote[]
+  laborEntries            LaborEntry[]
+  materialEntries         MaterialEntry[]
+  distanceEntries         DistanceEntry[]
+  workOrders              ProjectWorkOrder[]
+  workOrderAttachments    ProjectWorkOrderAttachment[]
+  images                  ProjectImage[]
+  changeOrders            ProjectChangeOrder[]
+  sovScheduleRequests     ProjectSovScheduleRequest[]
+  hubspotSovAliases       HubSpotSovAlias[]
+  hubspotInvoiceMatches   HubSpotInvoiceLineItemMatch[]
+  contacts                ProjectContact[]
+  contractorAssignments   ContractorAssignment[]
+  laborAssignments        ProjectLaborAssignment[]
+  checklistItems          ProjectChecklistItem[]
+  unitTurnoverChecklist   UnitTurnoverChecklist?
+  workOrderRecord         ProjectWorkOrderRecord?
+  qualityChecks           QualityCheck[]
+  dailySafetyChecks       DailySafetyCheck[]
+  contracts               ProjectContract[]
+  safetyIncidents         SafetyIncident[]
+  sov                     ProjectSOV?
+  dayAssignments          ProjectDayAssignment[]
+  workerDayAssignments    ProjectWorkerDayAssignment[]
+  scheduleSeries          ProjectScheduleSeries[]
+  notes                   ProjectNote[]
   scheduleNudgeDismissals ProjectScheduleNudgeDismissal[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
@@ -123,7 +124,7 @@ model Project {
   /// to an Employee, but that match can be wrong (e.g. the HubSpot deal
   /// owner is an estimator, not the salesperson who should get credit) —
   /// commissionEmployeeId lets that be overridden per project.
-  commissionPaidAt    DateTime?
+  commissionPaidAt     DateTime?
   commissionEmployeeId String?
   commissionEmployee   Employee? @relation("ProjectCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
 
@@ -147,12 +148,12 @@ model Building {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  name    String
-  builder String?
-  address String
-  pmName  String?
-  pmEmail String?
-  pmPhone String?
+  name           String
+  builder        String?
+  address        String
+  pmName         String?
+  pmEmail        String?
+  pmPhone        String?
   pricingPackage Json?
 
   /// Salesperson who gets commission credit on turnover unit projects
@@ -210,7 +211,7 @@ model TurnoverRequest {
   unitQuality String?
 
   fullPaint           Boolean @default(false)
-  touchUpPaint        Int?     @default(0)
+  touchUpPaint        Int?    @default(0)
   fullClean           Boolean @default(false)
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
@@ -221,25 +222,25 @@ model TurnoverRequest {
   /// Manually entered price for the "Other" line item, in cents.
   otherCents       Int?
 
-  startDate DateTime?
-  endDate   DateTime?
-  priceCents Int?
+  startDate          DateTime?
+  endDate            DateTime?
+  priceCents         Int?
   approvedPriceCents Int?
-  pmSignatureUrl String?
-  pmSignedAt DateTime?
-  completedAt DateTime?
+  pmSignatureUrl     String?
+  pmSignedAt         DateTime?
+  completedAt        DateTime?
   invoiceGeneratedAt DateTime?
-  invoiceUrl String?
+  invoiceUrl         String?
   /// NOT_BILLED | BILLED | PAID
-  billingStatus String @default("NOT_BILLED")
+  billingStatus      String    @default("NOT_BILLED")
 
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
 
-  laborAssignments       LaborAssignment[]
-  qualityChecks          QualityCheck[]
-  projects               Project[]
-  hubspotInvoiceMatches  HubSpotInvoiceLineItemMatch[]
+  laborAssignments      LaborAssignment[]
+  qualityChecks         QualityCheck[]
+  projects              Project[]
+  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
 
   @@index([buildingId])
   @@index([status])
@@ -260,14 +261,14 @@ model RecurringContract {
   buildingId String   @unique
   building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
 
-  monthlyRateCents Int
+  monthlyRateCents  Int
   /// Day of month (1-28) generation runs for this contract
   billingDayOfMonth Int
   /// ACTIVE | PAUSED | ENDED
-  status    String    @default("ACTIVE")
-  startDate DateTime
-  endDate   DateTime?
-  notes     String?
+  status            String    @default("ACTIVE")
+  startDate         DateTime
+  endDate           DateTime?
+  notes             String?
 
   /// Salesperson who gets commission credit — manually assigned, since
   /// recurring contracts are created directly in the ERP rather than
@@ -350,21 +351,21 @@ model LaborAssignment {
 }
 
 model QualityCheck {
-  id                   String   @id @default(cuid())
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  turnoverRequestId    String?
-  turnoverRequest      TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+  turnoverRequestId String?
+  turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
 
-  projectId            String?
-  project              Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  supervisorName       String
+  supervisorName         String
   supervisorSignatureUrl String?
-  pmApproval           Boolean @default(false)
-  evidencePhotos       Json?
-  notes                String?
+  pmApproval             Boolean @default(false)
+  evidencePhotos         Json?
+  notes                  String?
 
   @@index([turnoverRequestId])
   @@index([projectId])
@@ -378,17 +379,17 @@ model DailySafetyCheck {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  checkDate           DateTime
-  supervisorName      String
-  groupPhotoData           Bytes?
-  groupPhotoMimeType       String?
-  groupPhotoUploadedAt     DateTime?
-  siteArrivalPhotoData     Bytes?
-  siteArrivalPhotoMimeType String?
+  checkDate                  DateTime
+  supervisorName             String
+  groupPhotoData             Bytes?
+  groupPhotoMimeType         String?
+  groupPhotoUploadedAt       DateTime?
+  siteArrivalPhotoData       Bytes?
+  siteArrivalPhotoMimeType   String?
   siteArrivalPhotoUploadedAt DateTime?
-  approvedForWork          Boolean  @default(false)
-  approvedAt               DateTime?
-  notes                    String?
+  approvedForWork            Boolean   @default(false)
+  approvedAt                 DateTime?
+  notes                      String?
 
   workers   SafetyCheckWorker[]
   incidents SafetyIncident[]
@@ -407,16 +408,16 @@ model SafetyCheckWorker {
   employeeId String?
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
-  workerName String
-  hasVest    Boolean @default(false)
-  hasHardHat Boolean @default(false)
-  hasBoots   Boolean @default(false)
-  hasUniform       Boolean @default(false)
-  photoData        Bytes?
-  photoMimeType    String?
-  photoUploadedAt  DateTime?
-  passed         Boolean @default(false)
-  notes          String?
+  workerName      String
+  hasVest         Boolean   @default(false)
+  hasHardHat      Boolean   @default(false)
+  hasBoots        Boolean   @default(false)
+  hasUniform      Boolean   @default(false)
+  photoData       Bytes?
+  photoMimeType   String?
+  photoUploadedAt DateTime?
+  passed          Boolean   @default(false)
+  notes           String?
 
   incidents SafetyIncident[]
 
@@ -435,8 +436,8 @@ model SafetyIncident {
   safetyCheckId String
   safetyCheck   DailySafetyCheck @relation(fields: [safetyCheckId], references: [id], onDelete: Cascade)
 
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   employeeId String?
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
@@ -469,15 +470,16 @@ model ProjectWorkOrder {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title         String
-  location      String?
-  requestedBy   String?
-  priority      String   @default("MEDIUM")
-  dueDate       DateTime?
-  scopeDetails  String?
+  title          String
+  location       String?
+  requestedBy    String?
+  priority       String    @default("MEDIUM")
+  dueDate        DateTime?
+  scopeDetails   String?
   specifications String?
-  supportInfo   String?
-  photoUrls     Json?
+  supportInfo    String?
+  photoUrls      Json?
+
   @@index([projectId, createdAt])
   @@index([priority])
   @@index([dueDate])
@@ -544,10 +546,10 @@ model ProjectImage {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  imageUrl  String
-  caption   String?
+  imageUrl   String
+  caption    String?
   uploadedBy String?
-  takenAt   DateTime?
+  takenAt    DateTime?
 
   @@index([projectId, createdAt])
 }
@@ -560,16 +562,16 @@ model ProjectChangeOrder {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title              String
-  description        String?
-  requestedBy        String?
-  supervisor         String?
-  status             String   @default("DRAFT")
-  requestedDate      DateTime? @default(now())
-  startDate          DateTime?
-  billingStatus      String?
-  percentInvoiced    Int      @default(0)
-  completedAt        DateTime?
+  title               String
+  description         String?
+  requestedBy         String?
+  supervisor          String?
+  status              String    @default("DRAFT")
+  requestedDate       DateTime? @default(now())
+  startDate           DateTime?
+  billingStatus       String?
+  percentInvoiced     Int       @default(0)
+  completedAt         DateTime?
   estimatedCostCents  Int?
   estimatedDays       Int?
   reason              String?
@@ -593,9 +595,9 @@ model ProjectChangeOrder {
   /// the base project's own commission was paid out.
   commissionPaidAt DateTime?
 
-  laborers        ProjectChangeOrderLaborer[]
-  contracts       ChangeOrderContract[]
-  materialEntries ChangeOrderMaterialEntry[]
+  laborers              ProjectChangeOrderLaborer[]
+  contracts             ChangeOrderContract[]
+  materialEntries       ChangeOrderMaterialEntry[]
   contractorAssignments ChangeOrderContractorAssignment[]
 
   @@index([projectId, createdAt])
@@ -671,8 +673,8 @@ model ProjectContract {
 }
 
 model ChangeOrderContract {
-  id            String   @id @default(cuid())
-  createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   changeOrderId String
   changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
@@ -698,22 +700,22 @@ model ProjectContact {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  fullName String
-  role     String?
-  company  String?
-  email    String?
-  phone    String?
-  notes    String?
+  fullName         String
+  role             String?
+  company          String?
+  email            String?
+  phone            String?
+  notes            String?
   hubspotContactId String?
   /// HUBSPOT | MANUAL
-  source   String   @default("MANUAL")
-  isPrimary Boolean @default(false)
+  source           String  @default("MANUAL")
+  isPrimary        Boolean @default(false)
 
+  @@unique([projectId, hubspotContactId])
   @@index([projectId, createdAt])
   @@index([projectId, source])
   @@index([email])
   @@index([phone])
-  @@unique([projectId, hubspotContactId])
 }
 
 model LaborEntry {
@@ -721,18 +723,18 @@ model LaborEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   employeeId String?
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   workDate DateTime
 
-  workerName String
-  role       String?
-  hours      Float
+  workerName      String
+  role            String?
+  hours           Float
   /// Clock-in time as "HH:MM" (24h), e.g. "08:00". Null for entries logged before this field existed.
-  clockIn    String?
+  clockIn         String?
   /// Cents per hour (e.g. $28.84/hr → 2884)
   hourlyRateCents Int
 
@@ -773,9 +775,9 @@ model MaterialEntry {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  usedOn DateTime
+  usedOn    DateTime
   /// CLEANING_PRODUCTS | PAINT
-  category String
+  category  String
   itemName  String
   quantity  Float?
   unit      String?
@@ -813,13 +815,13 @@ model ErpUser {
   email       String   @unique
   role        String   @default("EMPLOYEE")
 
-  supervisorProjects Project[]
-  dayAssignments     ProjectDayAssignment[]
-  projectNotes       ProjectNote[]
-  hubspotSovAliasesCreated  HubSpotSovAlias[]
-  hubspotUnitAliasesCreated HubSpotUnitAlias[]
+  supervisorProjects            Project[]
+  dayAssignments                ProjectDayAssignment[]
+  projectNotes                  ProjectNote[]
+  hubspotSovAliasesCreated      HubSpotSovAlias[]
+  hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
-  scheduleNudgeDismissalsMade ProjectScheduleNudgeDismissal[]
+  scheduleNudgeDismissalsMade   ProjectScheduleNudgeDismissal[]
 
   @@index([firebaseUid])
 }
@@ -869,9 +871,15 @@ model ProjectDayAssignment {
   supervisorUserId String
   supervisorUser   ErpUser @relation(fields: [supervisorUserId], references: [id], onDelete: Cascade)
 
+  /// Set when this row was generated by a multi-day range or repeat action
+  /// (see ProjectScheduleSeries) rather than a single one-off day assign.
+  seriesId String?
+  series   ProjectScheduleSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, date])
   @@index([date])
   @@index([supervisorUserId])
+  @@index([seriesId])
 }
 
 /// A worker planned to be on a project on a future day, before any labor is
@@ -893,9 +901,47 @@ model ProjectWorkerDayAssignment {
   /// The calendar date this assignment is for (stored as midnight UTC)
   date DateTime
 
+  /// Set when this row was generated by a multi-day range or repeat action
+  /// (see ProjectScheduleSeries) rather than a single one-off day assign.
+  seriesId String?
+  series   ProjectScheduleSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, employeeId, date])
   @@index([date])
   @@index([employeeId])
+  @@index([seriesId])
+}
+
+/// The rule behind a "multi-day range" or "repeat weekly" schedule action
+/// (see SchedulePlanner's day-assignment modal) — the concrete
+/// ProjectDayAssignment/ProjectWorkerDayAssignment rows it generated all
+/// point back here via seriesId, so the whole batch can be identified and
+/// removed together. Always bounded by an explicit endDate chosen at
+/// creation time (like Google Calendar's "Ends on"), so every date is
+/// materialized up front — no daily generation job needed.
+model ProjectScheduleSeries {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  supervisorUserId String?
+
+  startDate  DateTime
+  endDate    DateTime
+  /// 0-6 (Sun-Sat), the weekdays this series repeats on. A plain multi-day
+  /// range (e.g. Mon-Fri of one job) is just every weekday in between.
+  repeatDays Int[]
+
+  /// Optional "HH:MM" (24h) local time, applied to every generated day.
+  startTime String?
+  endTime   String?
+
+  dayAssignments    ProjectDayAssignment[]
+  workerAssignments ProjectWorkerDayAssignment[]
+
+  @@index([projectId])
 }
 
 /// A "not today" dismissal of the daily unscheduled-project nudge for one
@@ -927,29 +973,29 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  firstName String
-  lastName  String
-  email     String? @unique
-  phone     String?
-  role      String?
+  firstName         String
+  lastName          String
+  email             String? @unique
+  phone             String?
+  role              String?
   /// HOURLY | SALARY
-  payType        String  @default("HOURLY")
+  payType           String  @default("HOURLY")
   /// Cents per hour (e.g. $18.75 => 1875)
-  hourlyPayCents Int?
+  hourlyPayCents    Int?
   /// Annual salary in cents (e.g. $50,000 => 5000000)
   annualSalaryCents Int?
 
   /// Paid a fixed amount every month via the Offshore Payroll tab, not tied
   /// to logged hours — a distinct concept from HOURLY/SALARY payType.
-  isOffshore Boolean @default(false)
+  isOffshore               Boolean @default(false)
   /// Fixed monthly pay in cents, only used when isOffshore is true.
   offshoreMonthlyRateCents Int?
 
   defaultProject String?
   /// ACTIVE | INACTIVE
-  status String @default("ACTIVE")
-  hireDate DateTime?
-  notes    String?
+  status         String    @default("ACTIVE")
+  hireDate       DateTime?
+  notes          String?
 
   bankAccountType   String?
   bankAccountNumber String?
@@ -965,23 +1011,23 @@ model Employee {
   /// PASSED | FAILED | PENDING | NOT_DONE
   backgroundCheckStatus String? @default("NOT_DONE")
 
-  laborEntries LaborEntry[]
-  documents EmployeeDocument[]
-  laborAssignments LaborAssignment[]
-  projectLaborAssignments ProjectLaborAssignment[]
-  workerDayAssignments ProjectWorkerDayAssignment[]
-  changeOrderAssignments ProjectChangeOrderLaborer[]
-  contracts EmployeeContract[]
-  safetyCheckWorkers SafetyCheckWorker[]
-  safetyIncidents SafetyIncident[]
-  commissionProjects Project[] @relation("ProjectCommissionOwner")
-  createdProjects    Project[] @relation("ProjectCreatedBy")
-  reimbursements Reimbursement[]
+  laborEntries                 LaborEntry[]
+  documents                    EmployeeDocument[]
+  laborAssignments             LaborAssignment[]
+  projectLaborAssignments      ProjectLaborAssignment[]
+  workerDayAssignments         ProjectWorkerDayAssignment[]
+  changeOrderAssignments       ProjectChangeOrderLaborer[]
+  contracts                    EmployeeContract[]
+  safetyCheckWorkers           SafetyCheckWorker[]
+  safetyIncidents              SafetyIncident[]
+  commissionProjects           Project[]                    @relation("ProjectCommissionOwner")
+  createdProjects              Project[]                    @relation("ProjectCreatedBy")
+  reimbursements               Reimbursement[]
   recurringContractCommissions RecurringContract[]
-  buildingCommissions Building[] @relation("BuildingCommissionOwner")
-  offshorePayrollPayments OffshorePayrollPayment[]
-  bidBonusEntries BidBonusEntry[]
-  salesBidEntries SalesBidEntry[]
+  buildingCommissions          Building[]                   @relation("BuildingCommissionOwner")
+  offshorePayrollPayments      OffshorePayrollPayment[]
+  bidBonusEntries              BidBonusEntry[]
+  salesBidEntries              SalesBidEntry[]
 
   @@index([status])
   @@index([defaultProject])
@@ -1052,7 +1098,7 @@ model SalesBidEntry {
   /// YES | NO | ASKED
   drawings         String?
   payoutCents      Int?
-  sent             Boolean @default(false)
+  sent             Boolean   @default(false)
 
   @@index([employeeId])
 }
@@ -1069,7 +1115,7 @@ model EmployeeDocument {
   title        String?
   issuedAt     DateTime?
   expiresAt    DateTime?
-  isVerified   Boolean  @default(false)
+  isVerified   Boolean   @default(false)
   fileUrl      String?
   fileData     Bytes?
   fileMimeType String?
@@ -1138,9 +1184,9 @@ model Contractor {
   phone              String?
   hasInsurance       Boolean?
 
-  documents   ContractorDocument[]
-  assignments ContractorAssignment[]
-  contracts   ContractorContract[]
+  documents              ContractorDocument[]
+  assignments            ContractorAssignment[]
+  contracts              ContractorContract[]
   changeOrderAssignments ChangeOrderContractorAssignment[]
 
   @@index([status])
@@ -1192,9 +1238,9 @@ model ProjectLaborAssignment {
   endDate      DateTime?
   notes        String?
 
+  @@unique([projectId, employeeId])
   @@index([projectId])
   @@index([employeeId])
-  @@unique([projectId, employeeId])
 }
 
 model ContractorDocument {
@@ -1219,9 +1265,9 @@ model CandidateApplication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  fullName  String
-  email     String
-  phone     String?
+  fullName String
+  email    String
+  phone    String?
 
   /// Role or work type they are interested in (placeholder until full questionnaire).
   positionInterest String?
@@ -1252,11 +1298,11 @@ model CandidateApplication {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
-  documents  CandidateDocument[]
-  contracts  CandidateContract[]
+  documents CandidateDocument[]
+  contracts CandidateContract[]
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
-  questionnaireToken String? @unique
+  questionnaireToken       String?   @unique
   questionnaireSentAt      DateTime?
   questionnaireCompletedAt DateTime?
 
@@ -1283,8 +1329,8 @@ model CandidateDocument {
 }
 
 model EmployeeContract {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1303,8 +1349,8 @@ model EmployeeContract {
 }
 
 model ContractorContract {
-  id           String   @id @default(cuid())
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   contractorId String
   contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
@@ -1323,8 +1369,8 @@ model ContractorContract {
 }
 
 model CandidateContract {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   candidateId String
   candidate   CandidateApplication @relation(fields: [candidateId], references: [id], onDelete: Cascade)
@@ -1373,7 +1419,7 @@ model UnitTurnoverChecklist {
   supervisorSignature String?
 
   /// Record<sectionId, { before: string[], after: string[] }>
-  sectionPhotos Json @default("{}")
+  sectionPhotos  Json @default("{}")
   /// Record<itemId, boolean> — completion state for each checklist item
   completedItems Json @default("{}")
 
@@ -1381,18 +1427,18 @@ model UnitTurnoverChecklist {
 }
 
 model UnitChecklistPhoto {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   checklistId String
   checklist   UnitTurnoverChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
 
-  sectionId   String
-  photoType   String   // "before" | "after"
-  filename    String
-  mimeType    String
-  size        Int
-  data        Bytes
+  sectionId String
+  photoType String // "before" | "after"
+  filename  String
+  mimeType  String
+  size      Int
+  data      Bytes
 }
 
 model AppSetting {
@@ -1401,12 +1447,12 @@ model AppSetting {
 }
 
 model ProjectSOV {
-  id        String         @id @default(cuid())
-  projectId String         @unique
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String           @id @default(cuid())
+  projectId String           @unique
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   items     ProjectSOVItem[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 }
 
 model ProjectSOVItem {
@@ -1422,9 +1468,9 @@ model ProjectSOVItem {
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
-  laborEntries LaborEntry[]
-  scheduleRequests ProjectSovScheduleRequest[]
-  hubspotAliases HubSpotSovAlias[]
+  laborEntries          LaborEntry[]
+  scheduleRequests      ProjectSovScheduleRequest[]
+  hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
 
   @@index([sovId])
@@ -1449,7 +1495,7 @@ model ProjectSovScheduleRequest {
   requestedDate  DateTime
   comments       String?
   /// SUBMITTED | ACKNOWLEDGED
-  status         String @default("SUBMITTED")
+  status         String   @default("SUBMITTED")
 
   @@index([projectId])
   @@index([sovItemId])
@@ -1476,12 +1522,12 @@ model HubSpotSovAlias {
   hubspotText String
   /// Soft-disable — keeps an audit trail instead of silently deleting a
   /// mistaken alias.
-  active Boolean @default(true)
+  active      Boolean @default(true)
 
   createdByUserId String?
   createdByUser   ErpUser? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   /// Snapshot of who confirmed this, so it stays readable if their ERP account is later removed.
-  createdByName String
+  createdByName   String
 
   @@unique([projectId, hubspotText])
   @@index([sovItemId])
@@ -1538,11 +1584,11 @@ model HubSpotInvoiceLineItemMatch {
   resolvedAt DateTime?
 
   hubspotInvoiceId  String
-  hubspotLineItemId String @unique
+  hubspotLineItemId String  @unique
   hubspotDealId     String?
   /// Normalized combined name+description text this line item was matched against.
-  lineItemText String
-  amountCents  Int
+  lineItemText      String
+  amountCents       Int
 
   /// Exactly one of projectId (post-construction/SOV) or buildingId
   /// (janitorial) is set, depending on which billing shape this invoice's
@@ -1560,8 +1606,8 @@ model HubSpotInvoiceLineItemMatch {
   matchedTurnoverRequest   TurnoverRequest? @relation(fields: [matchedTurnoverRequestId], references: [id], onDelete: SetNull)
 
   /// ALIAS | SCORE | HUMAN
-  matchMethod String?
-  matchScore  Float?
+  matchMethod    String?
+  matchScore     Float?
   /// Top-N {id, label, score} candidates considered — audit/debug, and prefills the review UI.
   candidatesJson Json?
 
@@ -1571,7 +1617,7 @@ model HubSpotInvoiceLineItemMatch {
   resolvedByUser   ErpUser? @relation(fields: [resolvedByUserId], references: [id], onDelete: SetNull)
   resolvedByName   String?
   /// false = a one-off resolution the human didn't want remembered as a reusable alias.
-  createAlias Boolean @default(true)
+  createAlias      Boolean  @default(true)
 
   @@index([hubspotInvoiceId])
   @@index([status])

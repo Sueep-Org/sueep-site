@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
+import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
+import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -44,6 +45,36 @@ export async function POST(req: Request) {
     }
   }
 
+  // A multi-day range or weekly repeat, see ProjectScheduleSeries. Both are
+  // absent for the plain single-day assign, which keeps behaving exactly as
+  // it did before this was added.
+  const repeatUntilRaw = String(body.repeatUntil || "").trim();
+  const repeatDaysRaw = Array.isArray(body.repeatDays) ? body.repeatDays : null;
+  let seriesDates: Date[] | null = null;
+  let repeatUntil: Date | null = null;
+  let repeatDays: number[] = [];
+  if (repeatUntilRaw || repeatDaysRaw) {
+    if (!repeatUntilRaw) return NextResponse.json({ error: "repeatUntil is required when repeatDays is set" }, { status: 400 });
+    if (!repeatDaysRaw || repeatDaysRaw.length === 0) {
+      return NextResponse.json({ error: "repeatDays is required when repeatUntil is set" }, { status: 400 });
+    }
+    repeatUntil = new Date(`${repeatUntilRaw}T00:00:00.000Z`);
+    if (Number.isNaN(repeatUntil.getTime())) return NextResponse.json({ error: "Invalid repeatUntil" }, { status: 400 });
+    repeatDays = repeatDaysRaw.map((d) => Number(d));
+    if (repeatDays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
+      return NextResponse.json({ error: "repeatDays must be integers 0-6" }, { status: 400 });
+    }
+    try {
+      seriesDates = computeSeriesDates(date, repeatUntil, repeatDays);
+    } catch (err) {
+      if (err instanceof SeriesDateRangeError) return NextResponse.json({ error: err.message }, { status: 400 });
+      throw err;
+    }
+    if (seriesDates.length === 0) {
+      return NextResponse.json({ error: "No dates in range match the selected weekdays" }, { status: 400 });
+    }
+  }
+
   const [project, supervisor] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
@@ -69,18 +100,72 @@ export async function POST(req: Request) {
   // pricing model (contractValueCents ~= 2x target labor cost). Non-turnover
   // projects (recurring contracts, PDF-estimator commercial jobs) don't have
   // that relationship and would need their own derivation.
-  let hoursBudgetText: string | null = null;
-  if (project.turnoverRequestId && project.contractValueCents) {
+  async function hoursBudgetTextFor(onDate: Date): Promise<string | null> {
+    if (!project!.turnoverRequestId || !project!.contractValueCents) return null;
     const scheduledCrewSize = await prisma.projectWorkerDayAssignment.count({
-      where: { projectId, date },
+      where: { projectId, date: onDate },
     });
-    hoursBudgetText = formatTurnoverHoursBudgetText(project.contractValueCents, scheduledCrewSize);
+    return formatTurnoverHoursBudgetText(project!.contractValueCents, scheduledCrewSize);
   }
 
-  // Assigning a supervisor here also makes them the project's supervisor on
-  // the project details page (Project.supervisorUserId) — same field the
-  // Gantt's inline reassignment dropdown writes to. Last assignment wins,
-  // consistent with that dropdown's behavior.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+
+  if (seriesDates && repeatUntil) {
+    const series = await prisma.projectScheduleSeries.create({
+      data: { projectId, supervisorUserId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
+    });
+
+    // Assigning a supervisor here also makes them the project's supervisor on
+    // the project details page (Project.supervisorUserId), same field the
+    // Gantt's inline reassignment dropdown writes to. Last assignment wins,
+    // consistent with that dropdown's behavior.
+    const [, ...assignments] = await prisma.$transaction([
+      prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }),
+      ...seriesDates.map((d) =>
+        prisma.projectDayAssignment.upsert({
+          where: { projectId_date: { projectId, date: d } },
+          create: { projectId, date: d, supervisorUserId, startTime, endTime, seriesId: series.id },
+          update: { supervisorUserId, startTime, endTime, seriesId: series.id },
+        })
+      ),
+    ]);
+
+    try {
+      const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
+      const descriptionLines = [
+        `Project: ${project.jobTitle}`,
+        ...(hoursBudgetText ? ["", hoursBudgetText] : []),
+        ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
+      ];
+      const ics = buildScheduleSeriesInvite({
+        uid: `day-assignment-series-${series.id}@sueep.com`,
+        firstDateKey: dayKey(seriesDates[0]!),
+        lastDateKey: dayKey(repeatUntil),
+        repeatDays,
+        startTime,
+        endTime,
+        summary: `Supervising: ${project.jobTitle}`,
+        description: descriptionLines.join("\n"),
+        location,
+        url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
+        organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
+        organizerName: "Sueep Schedule",
+        attendeeEmail: supervisor.email,
+      });
+      const budgetHtml = hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : "";
+      await sendEmail({
+        to: supervisor.email,
+        subject: `You're assigned: ${project.jobTitle}, ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}`,
+        html: `<p>You've been assigned to <strong>${project.jobTitle}</strong>, repeating from ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
+        attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
+      });
+    } catch (e) {
+      console.error("Failed to send schedule-series calendar invite", e);
+    }
+
+    return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
+  }
+
   const [assignment] = await prisma.$transaction([
     prisma.projectDayAssignment.upsert({
       where: { projectId_date: { projectId, date } },
@@ -95,7 +180,7 @@ export async function POST(req: Request) {
   // same project/day) updates the existing calendar event instead of adding
   // a duplicate. Email delivery failures shouldn't block the assignment.
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+    const hoursBudgetText = await hoursBudgetTextFor(date);
     const descriptionLines = [
       `Project: ${project.jobTitle}`,
       ...(hoursBudgetText ? ["", hoursBudgetText] : []),
