@@ -70,6 +70,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
         return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
       }
       data.billingStatus = bs;
+      // Being marked paid is a strong enough signal that the work itself is
+      // done too, auto-complete the CO's own status so it doesn't drift
+      // (billingStatus=PAID with status stuck at an earlier stage used to
+      // require a separate manual "Mark complete" step and silently missed
+      // it, which also meant it could never count toward commission, see
+      // payroll/page.tsx's isFullyPaidCo). Only kicks in when this same
+      // request isn't already managing status itself.
+      if ((bs === "PAID" || bs === "INVOICE_PAID") && body.status === undefined && existing.status !== "COMPLETED") {
+        data.status = "COMPLETED";
+        if (!existing.completedAt) data.completedAt = new Date();
+      }
     }
   }
   if (body.percentInvoiced !== undefined) {
