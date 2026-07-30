@@ -16,6 +16,11 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const role = (req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE";
+  if (role === "SUPERVISOR" || role === "EMPLOYEE") {
+    return NextResponse.json({ error: "Not authorized to edit building details" }, { status: 403 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -62,14 +67,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hubspotDealId = trimmed || null;
   }
   if (body.pricingPackage !== undefined) {
-    if (!canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+    if (!canEditPricing(role)) {
       return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
     }
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);
   }
   if (body.commissionEmployeeId !== undefined) {
-    if (!canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+    if (!canEditPricing(role)) {
       return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit the commission owner" }, { status: 403 });
     }
     data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId) : null;
@@ -87,8 +92,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export async function DELETE(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const role = (req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE";
+  if (role === "SUPERVISOR" || role === "EMPLOYEE") {
+    return NextResponse.json({ error: "Not authorized to delete buildings" }, { status: 403 });
+  }
   try {
     await prisma.building.delete({ where: { id } });
     return NextResponse.json({ ok: true });

@@ -67,3 +67,11 @@ export function canSeeMarginOnly(role: ErpRole): boolean {
 export function isProjectManager(role: ErpRole): boolean {
   return role === "PROJECT_MANAGER";
 }
+
+/** Who can add a new janitorial turnover unit to a building. Deliberately
+ * includes SUPERVISOR (unlike canEditPricing) since supervisors can specify a
+ * unit's scope of work without ever touching the building's pricing package,
+ * that's computed automatically from the building's existing rate card. */
+export function canAddTurnoverUnit(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "SUPERVISOR";
+}

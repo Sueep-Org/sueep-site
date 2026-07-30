@@ -362,12 +362,14 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
               </Link>
             </div>
           )}
-          <Link
-            href="/erp/projects/new"
-            className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
-          >
-            New project
-          </Link>
+          {!isSupervisor && (
+            <Link
+              href="/erp/projects/new"
+              className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            >
+              New project
+            </Link>
+          )}
         </div>
       </div>
       {isSupervisor && scope === "mine" && supervisorScope?.unlinked && (
@@ -386,15 +388,21 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-8 text-center text-gray-600">
-          No projects yet.{" "}
-          <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
-            Create one
-          </Link>{" "}
-          or import from HubSpot under{" "}
-          <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
-            HubSpot sync
-          </Link>
-          .
+          {isSupervisor ? (
+            "No projects yet."
+          ) : (
+            <>
+              No projects yet.{" "}
+              <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
+                Create one
+              </Link>{" "}
+              or import from HubSpot under{" "}
+              <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
+                HubSpot sync
+              </Link>
+              .
+            </>
+          )}
         </div>
       ) : (
         <ProjectsTabs

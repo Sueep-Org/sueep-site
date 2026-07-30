@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { NewProjectForm } from "./NewProjectForm";
@@ -9,6 +10,14 @@ export const runtime = "nodejs";
 
 export default async function NewProjectPage() {
   const auth = await getErpAuth();
+  // Supervisors add janitorial units from a building's own Units tab, a
+  // simple scope-only form with no pricing exposure — not this full form,
+  // which covers every project type and shows PM-only detail (cost fields,
+  // HubSpot pipeline info, etc.). Redirect rather than just hiding the nav
+  // link/button, since this page has no other role gate of its own.
+  if (auth?.role === "SUPERVISOR" || auth?.role === "EMPLOYEE") {
+    redirect("/erp/projects");
+  }
   const cfg = parseHubSpotPipelineStageMap();
   const janitorialSegments = cfg?.janitorial.pipelineId
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
