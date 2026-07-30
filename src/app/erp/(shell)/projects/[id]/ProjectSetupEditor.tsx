@@ -80,19 +80,19 @@ export function ProjectSetupEditor({
 
   function handleLifecycleChange(next: ProjectLifecycle) {
     setLifecycle(next);
+    if (startDate) return;
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const current = startDate ? new Date(startDate) : null;
 
     if (next === "COMPLETED") {
       if (!endDate) setEndDate(toIsoDate(today));
     } else if (next === "UPCOMING") {
-      if (!current || current.getTime() <= today.getTime()) setStartDate(toIsoDate(tomorrow));
+      setStartDate(toIsoDate(tomorrow));
     } else {
-      if (!current) setStartDate(toIsoDate(today));
-      else if (current.getTime() > today.getTime()) setStartDate(toIsoDate(today));
+      setStartDate(toIsoDate(today));
     }
   }
 
@@ -109,19 +109,11 @@ export function ProjectSetupEditor({
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const current = startDate ? new Date(startDate) : null;
 
-    let nextStatus = "ACTIVE";
+    const nextStatus = lifecycle === "COMPLETED" ? "COMPLETE" : "ACTIVE";
     let nextProjectDate: string | null = startDate || null;
-    if (lifecycle === "COMPLETED") {
-      nextStatus = "COMPLETE";
-    } else if (lifecycle === "UPCOMING") {
-      nextStatus = "ACTIVE";
-      if (!current || current.getTime() <= today.getTime()) nextProjectDate = toIsoDate(tomorrow);
-    } else {
-      nextStatus = "ACTIVE";
-      if (!current) nextProjectDate = toIsoDate(today);
-      else if (current.getTime() > today.getTime()) nextProjectDate = toIsoDate(today);
+    if (!nextProjectDate) {
+      nextProjectDate = lifecycle === "UPCOMING" ? toIsoDate(tomorrow) : toIsoDate(today);
     }
 
     const payload: Record<string, unknown> = {
