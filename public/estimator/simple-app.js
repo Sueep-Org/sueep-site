@@ -3733,18 +3733,20 @@ async function initApp(){
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
+      const totTax = totSubtotal * (taxPct / 100);
       const totFinal = totSubtotal + manualMaterials + totOh + totPft + totComm;
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
         [`Materials`, manualMaterials],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
+        [`Tax (${taxPct}%)`, totTax],
         [`Commission (${commPct}%)`, totComm],
         [`Final Price`, totFinal],
       ].forEach(([label, val], i) => {
-        const isLast = i === 5;
+        const isLast = i === 6;
         const item = document.createElement('div');
         item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
@@ -4317,22 +4319,24 @@ async function initApp(){
     });
 
     const manualMaterials = parseFloat(document.getElementById('paintingMaterialsInput')?.value) || 0;
+    const totTax = totSubtotal * (taxPct / 100);
     const totFinalActual = totSubtotal + manualMaterials + totOh + totPft + totComm;
 
     const summaryContainer = document.getElementById('paintingCalcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
         [`Materials`, manualMaterials],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
+        [`Tax (${taxPct}%)`, totTax],
         [`Commission (${commPct}%)`, totComm],
         [`Final Price`, totFinalActual],
       ].forEach(([label, val], i) => {
-        const isLast = i === 5;
+        const isLast = i === 6;
         const item = document.createElement('div');
         item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
@@ -4652,18 +4656,20 @@ async function initApp(){
         breakdownDiv.appendChild(table);
 
         const savedMaterials = bd.materials || 0;
+        const totTax = totSubtotal * ((bd.tax_pct || 0) / 100);
         const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Subtotal`, totSubtotal],
           [`Materials`, savedMaterials],
-          [`Overhead (${bd.overhead_pct}%)`, totOh],
-          [`Profit (${bd.profit_pct}%)`, totPft],
-          [`Commission (${bd.commission_pct}%)`, totComm],
+          [`Overhead (${bd.overhead_pct || 0}%)`, totOh],
+          [`Profit (${bd.profit_pct || 0}%)`, totPft],
+          [`Tax (${bd.tax_pct || 0}%)`, totTax],
+          [`Commission (${bd.commission_pct || 0}%)`, totComm],
           [`Final Price`, totFinal],
         ].forEach(([label, val], i) => {
-          const isLast = i === 5;
+          const isLast = i === 6;
           const item = document.createElement('div');
           item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
@@ -4732,17 +4738,39 @@ async function initApp(){
     const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
 
     const bd = projData.painting_breakdown;
+    const resolvedArea = bd?.total_area ?? projData.total_area;
+    const resolvedAddress = bd?.address || projData.address || '';
+
+    // Build effective phases: from saved bd, or auto-generate from area
+    let effectivePhases = bd?.phases || null;
+    let effectiveRates = {
+      overhead: (bd?.overhead_pct || 0) / 100,
+      profit:   (bd?.profit_pct   || 30) / 100,
+      tax:      (bd?.tax_pct      || 6)  / 100,
+      commission: (bd?.commission_pct || 5) / 100,
+    };
+    let isAutoGenerated = false;
+    if (!effectivePhases && resolvedArea > 0) {
+      const uid = () => Math.random().toString(36).slice(2);
+      const days = Math.ceil(resolvedArea / 5000) || 1;
+      effectivePhases = [
+        { name: 'Phase 1', crew: [{ role: 'foreman', rate: 28, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 22, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 22, hours: 8, days, _uid: uid() }] },
+        { name: 'Phase 2', crew: [{ role: 'painter', rate: 22, hours: 8, days, _uid: uid() }, { role: 'assistant', rate: 20, hours: 8, days, _uid: uid() }] },
+        { name: 'Phase 3', crew: [{ role: 'painter', rate: 22, hours: 8, days, _uid: uid() }] },
+      ];
+      isAutoGenerated = true;
+    }
 
     const breakdownDiv = document.getElementById('paintingViewBreakdown');
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
-      if (bd && bd.phases && bd.phases.length > 0) {
-        const rates = {
-          overhead: (bd.overhead_pct || 0) / 100,
-          profit: (bd.profit_pct || 0) / 100,
-          tax: (bd.tax_pct || 0) / 100,
-          commission: (bd.commission_pct || 0) / 100,
-        };
+      if (effectivePhases && effectivePhases.length > 0) {
+        if (isAutoGenerated) {
+          const notice = document.createElement('div');
+          notice.textContent = 'Auto-generated — click Edit to customize and save';
+          notice.style.cssText = 'font-size:11px;color:#9ca3af;margin-bottom:6px;font-style:italic;';
+          breakdownDiv.appendChild(notice);
+        }
 
         const table = document.createElement('table');
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
@@ -4756,8 +4784,8 @@ async function initApp(){
         });
         const tbody = table.createTBody();
         let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
-        for (const p of bd.phases) {
-          const c = _calcPhase(p, rates);
+        for (const p of effectivePhases) {
+          const c = _calcPhase(p, effectiveRates);
           totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
           totPft += c.pft; totComm += c.comm;
           const crew = p.crew || [];
@@ -4777,19 +4805,25 @@ async function initApp(){
         }
         breakdownDiv.appendChild(table);
 
-        const savedMaterials = bd.materials || 0;
+        const savedMaterials = bd?.materials || 0;
+        const overheadPct = bd?.overhead_pct || 0;
+        const profitPct   = bd?.profit_pct   || 30;
+        const taxPct      = bd?.tax_pct      || 6;
+        const commPct     = bd?.commission_pct || 5;
+        const totTax  = totSubtotal * (taxPct / 100);
         const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Subtotal`, totSubtotal],
           [`Materials`, savedMaterials],
-          [`Overhead (${bd.overhead_pct || 0}%)`, totOh],
-          [`Profit (${bd.profit_pct || 0}%)`, totPft],
-          [`Commission (${bd.commission_pct || 0}%)`, totComm],
+          [`Overhead (${overheadPct}%)`, totOh],
+          [`Profit (${profitPct}%)`, totPft],
+          [`Tax (${taxPct}%)`, totTax],
+          [`Commission (${commPct}%)`, totComm],
           [`Final Price`, totFinal],
         ].forEach(([label, val], i) => {
-          const isLast = i === 5;
+          const isLast = i === 6;
           const item = document.createElement('div');
           item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
@@ -4798,31 +4832,27 @@ async function initApp(){
       }
     }
 
-    const resolvedArea = bd?.total_area ?? projData.total_area;
-    const resolvedAddress = bd?.address || projData.address || '';
     setText('paintingViewAddress', resolvedAddress);
     setText('paintingViewStartAddress', projData.start_address || DEFAULT_OFFICE);
     setText('paintingViewExpectedDays', bd?.expected_days != null ? `${bd.expected_days} days` : (projData.expected_days != null ? `${projData.expected_days} days` : '—'));
 
-    const labor = bd?.phases
-      ? bd.phases.reduce((sum, p) => sum + _calcPhase(p, {
-          overhead: 0, profit: 0, tax: 0, commission: 0,
-        }).laborCost, 0)
+    const zeroRates = { overhead: 0, profit: 0, tax: 0, commission: 0 };
+    const labor = effectivePhases
+      ? effectivePhases.reduce((sum, p) => sum + _calcPhase(p, zeroRates).laborCost, 0)
       : null;
     setText('paintingViewLabor', labor != null ? fmt$(labor) : '—');
     setText('paintingViewTotalArea', resolvedArea ? fmtSF(resolvedArea) : '—');
 
-    const rates = { overhead: (bd?.overhead_pct || 0) / 100, profit: (bd?.profit_pct || 0) / 100, tax: (bd?.tax_pct || 0) / 100, commission: (bd?.commission_pct || 0) / 100 };
     let totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
-    if (bd?.phases) {
-      for (const p of bd.phases) {
-        const c = _calcPhase(p, rates);
+    if (effectivePhases) {
+      for (const p of effectivePhases) {
+        const c = _calcPhase(p, effectiveRates);
         totSubtotal += c.subtotal; totOh += c.oh; totPft += c.pft; totComm += c.comm;
       }
     }
     const savedMaterials = bd?.materials || 0;
     const quote = totSubtotal + savedMaterials + totOh + totPft + totComm;
-    setText('paintingViewQuote', bd ? fmt$(quote) : '—');
+    setText('paintingViewQuote', fmt$(quote));
 
     const lps = (labor != null && resolvedArea) ? (labor / resolvedArea) : null;
     setText('paintingViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');

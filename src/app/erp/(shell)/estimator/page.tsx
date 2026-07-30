@@ -1039,7 +1039,7 @@ export default function EstimatorPage() {
                 </div>
                 <div>
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Toll Cost
+                    Total Transportation
                   </span>
                   <div
                     id="paintingDetailTollCost"
