@@ -5,7 +5,7 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, isProjectManager } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
 
@@ -441,6 +441,7 @@ export default async function ErpDashboardPage() {
       const projectsMissingCheck = myProjects.filter(
         (p) => p.segment === "POST_CONSTRUCTION" && p.dailySafetyChecks.length === 0
       ).length;
+      const missedLogCount = dayEntries.filter((e) => e.kind === "missed").length;
 
       return (
         <div className="space-y-6">
@@ -450,11 +451,12 @@ export default async function ErpDashboardPage() {
           </div>
 
           {/* Stat strip */}
-          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:grid-cols-4 sm:divide-y-0">
+          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:grid-cols-5 sm:divide-y-0">
             {[
               { label: "My Projects", value: myProjects.length, dot: "bg-blue-400", val: "text-blue-700", alert: false },
               { label: "Checks Today", value: `${projectsWithCheck}/${myProjects.length}`, dot: "bg-teal-400", val: "text-teal-700", alert: projectsMissingCheck > 0 },
               { label: "Compliance", value: complianceRate !== null ? `${complianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: complianceRate !== null && complianceRate < 100 },
+              { label: "Missing Logs", value: missedLogCount, dot: "bg-red-400", val: "text-gray-900", alert: missedLogCount > 0 },
               { label: "Open Incidents", value: openIncidents.length, dot: "bg-red-400", val: "text-gray-900", alert: openIncidents.length > 0 },
             ].map((k) => (
               <div key={k.label} className="px-4 py-3">
@@ -610,7 +612,7 @@ export default async function ErpDashboardPage() {
     const flagWindowStart = new Date(adminTodayStart);
     flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
 
-    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount] = await Promise.all([
+    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck] = await Promise.all([
       prisma.project.findMany({
         select: {
           id: true, jobTitle: true, status: true, projectDate: true, contractValueCents: true, segment: true,
@@ -674,6 +676,21 @@ export default async function ErpDashboardPage() {
       }),
       prisma.safetyIncident.count({ where: { status: { in: ["OPEN", "ESCALATED"] } } }),
       prisma.safetyIncident.count({ where: { status: "ESCALATED" } }),
+      // Planned coverage for a day that's already passed, company-wide —
+      // paired with loggedDaysForMissingCheck below to find ones with no
+      // labor ever logged for that project/day, same "missed" concept the
+      // Supervisor dashboard and the calendar's overdue-planned chip use.
+      prisma.projectDayAssignment.findMany({
+        where: { date: { gte: flagWindowStart, lt: adminTodayStart } },
+        select: { projectId: true, date: true, project: { select: { jobTitle: true, status: true } } },
+      }),
+      // No employeeId filter here (unlike laborForFlags) — a contractor-only
+      // or ad-hoc-named entry still proves labor was logged that day, and
+      // excluding it would falsely flag an already-logged day as missing.
+      prisma.laborEntry.findMany({
+        where: { workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
+        select: { projectId: true, workDate: true },
+      }),
     ]);
 
     // Lifecycle bucketing
@@ -743,6 +760,26 @@ export default async function ErpDashboardPage() {
     }
     const scheduledToday = [...scheduledTodayMap.values()].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
 
+    // Scheduled but never logged, company-wide (last 14 days) — a
+    // ProjectDayAssignment whose date has passed with no matching LaborEntry
+    // for that project on that day. Same "missed" signal as the Supervisor
+    // dashboard's per-project feed and the calendar's red ⚠ overdue-planned
+    // chip, just company-wide instead of scoped to one supervisor.
+    const loggedDayKeys = new Set(loggedDaysForMissingCheck.map((e) => `${e.projectId}::${utcDateKey(e.workDate)}`));
+    type MissingLaborProject = { projectId: string; jobTitle: string; dayKeys: string[] };
+    const missingLaborByProject = new Map<string, MissingLaborProject>();
+    for (const a of overdueDayAssignments) {
+      if (a.project.status === "COMPLETE" || a.project.status === "ARCHIVED") continue;
+      const dk = utcDateKey(a.date);
+      if (loggedDayKeys.has(`${a.projectId}::${dk}`)) continue;
+      const entry = missingLaborByProject.get(a.projectId) ?? { projectId: a.projectId, jobTitle: a.project.jobTitle, dayKeys: [] };
+      if (!entry.dayKeys.includes(dk)) entry.dayKeys.push(dk);
+      missingLaborByProject.set(a.projectId, entry);
+    }
+    const missingLaborProjects = [...missingLaborByProject.values()]
+      .sort((a, b) => b.dayKeys.length - a.dayKeys.length || a.jobTitle.localeCompare(b.jobTitle))
+      .slice(0, 8);
+
     // Labor red flags: hours concentrated on a single project, either in one
     // day or over a week, within the last 14 days (roughly a pay period).
     // Two independent signals merged into one list: a single long shift can
@@ -792,6 +829,39 @@ export default async function ErpDashboardPage() {
     const safetyTotal = safetyWorkers.length;
     const safetyPassed = safetyWorkers.filter((w) => w.passed).length;
     const safetyComplianceRate = safetyTotal > 0 ? Math.round((safetyPassed / safetyTotal) * 100) : null;
+
+    // "Needs labor logged" — company-wide, mirrors the calendar's red ⚠
+    // overdue-planned chip. Kept as a variable so it can be positioned high
+    // for PMs (who need to chase this) but pushed to the bottom for
+    // Admin/Sales (who see it, but it's not their day-to-day action item).
+    const needsLaborLoggedWidget = (
+      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+          <h2 className="text-sm font-semibold text-gray-900" title="Scheduled on the calendar, day already passed, still no labor logged">
+            <span aria-hidden className="mr-1 text-red-600">⚠</span>Needs labor logged
+          </h2>
+          {missingLaborProjects.length > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{missingLaborProjects.length}</span>
+          )}
+        </div>
+        {missingLaborProjects.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing overdue in the last 14 days.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {missingLaborProjects.map((p) => (
+              <li key={p.projectId}>
+                <Link href={`/erp/projects/${p.projectId}#labor-log`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                  <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                  <p className="shrink-0 text-xs font-semibold text-red-600">
+                    {p.dayKeys.length} day{p.dayKeys.length === 1 ? "" : "s"} missed
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
 
     return (
       <div className="space-y-6">
@@ -915,6 +985,11 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
+        {/* Needs labor logged — kept high for PMs (rendered right here), pushed
+            to the bottom for Admin/Sales (rendered after the activity feed
+            below), same widget either way. */}
+        {isProjectManager(role) && needsLaborLoggedWidget}
+
         {/* Recently updated margins — financial data, so only shown to roles that can see it */}
         {showFinancials && (
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -972,6 +1047,8 @@ export default async function ErpDashboardPage() {
             })}
           </ul>
         </div>
+
+        {!isProjectManager(role) && needsLaborLoggedWidget}
       </div>
     );
   } catch (e: unknown) {

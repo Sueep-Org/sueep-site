@@ -4,6 +4,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { getErpAuth, canOverrideQualityChecklist } from "@/lib/erpAuth";
 import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
@@ -194,8 +195,36 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
+  // A real projectDate change (not just touching other fields, and not
+  // clearing it to null) is a reschedule — covers every path that lands
+  // here: drag-and-drop on the calendar, the event card's "Save dates", and
+  // the project Setup tab, all of which PATCH this same route.
+  const newProjectDate = data.projectDate as Date | null | undefined;
+  const projectDateChanged =
+    newProjectDate !== undefined && (newProjectDate?.getTime() ?? null) !== (existing.projectDate?.getTime() ?? null);
+  const shouldNotifyReschedule = projectDateChanged && newProjectDate != null;
+
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });
+
+    if (shouldNotifyReschedule) {
+      const finalSupervisorUserId =
+        data.supervisorUserId !== undefined ? (data.supervisorUserId as string | null) : existing.supervisorUserId;
+      const finalSupervisorName = data.supervisor !== undefined ? (data.supervisor as string) : existing.supervisor;
+      try {
+        await notifyProjectRescheduled({
+          projectId: id,
+          jobTitle: project.jobTitle,
+          oldDateKey: existing.projectDate ? existing.projectDate.toISOString().slice(0, 10) : null,
+          newDateKey: newProjectDate!.toISOString().slice(0, 10),
+          supervisorUserId: finalSupervisorUserId,
+          projectManagerName: finalSupervisorName,
+        });
+      } catch (e) {
+        console.error("Failed to notify project reschedule", e);
+      }
+    }
+
     return NextResponse.json(project);
   } catch (e) {
     console.error("PATCH /api/erp/projects/[id]", e);

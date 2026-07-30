@@ -418,6 +418,20 @@ export function SchedulePlanner({
           ...prev.filter((w) => !(w.dateKey === fromK && w.projectId === projectId)),
           ...newWorkers,
         ]);
+        // Notify the supervisor/PM this was moved — same rule as a plain
+        // project-date reschedule (see PATCH /api/erp/projects/[id]), just
+        // triggered from here since this path never touches that route.
+        fetch("/api/erp/schedule/notify-reschedule", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            oldDateKey: fromK,
+            newDateKey: toK,
+            supervisorUserId: existingAssignment.supervisorUserId,
+            projectManagerUserId: existingAssignment.projectManagerUserId,
+          }),
+        }).catch(() => {});
       }
       return { ok: true };
     } catch (err) {
@@ -1623,6 +1637,7 @@ export function SchedulePlanner({
                             onClick={() => openEventPopover(k, project, assignment)}
                             className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
+                            {isOverdue ? <span aria-hidden className="shrink-0 text-red-600">⚠</span> : null}
                             <span className="truncate">{project.jobTitle}</span>
                           </button>
                           {renderEventPopover(k, project)}
@@ -1825,7 +1840,7 @@ export function SchedulePlanner({
             {dayAssignments.some((a) => a.dateKey < todayKey) ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`} />
-                Red dashed = scheduled but never logged
+                <span aria-hidden className="text-red-600">⚠</span> = scheduled but never logged
               </div>
             ) : null}
             {needsSupervisorByDay.size > 0 ? (
