@@ -911,7 +911,7 @@ export function ProjectLaborSection({
         </button>
       </form>}
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div id="labor-log" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
           <div className="flex items-center gap-3">

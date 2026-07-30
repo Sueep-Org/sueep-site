@@ -64,7 +64,7 @@ export default async function SchedulePage() {
       select: { id: true, email: true },
       orderBy: { email: "asc" },
     }),
-    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true } }),
+    prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true, clockIn: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
       select: { id: true, projectId: true, title: true, status: true, startDate: true, requestedDate: true },
@@ -148,6 +148,11 @@ export default async function SchedulePage() {
   // Per-project, per-day breakdown of hours/workers — powers the richer
   // tooltip on confirmed calendar chips.
   const laborSummaryByProject = new Map<string, Map<string, { hours: number; workers: Set<string> }>>();
+  // Per-project, per-day list of individual LaborEntry rows (worker, hours,
+  // clock-in) — powers the read-only labor detail card. Kept separate from
+  // the aggregate above since a calendar day can have several workers each
+  // with their own hours/clock-in, not just a combined total.
+  const laborEntriesByProject = new Map<string, Map<string, { workerName: string; hours: number; clockIn: string | null }[]>>();
   for (const le of laborEntryRows) {
     const k = dayKey(le.workDate);
     const set = workDayKeysByProject.get(le.projectId) ?? new Set<string>();
@@ -160,6 +165,12 @@ export default async function SchedulePage() {
     if (le.workerName) entry.workers.add(le.workerName);
     byDay.set(k, entry);
     laborSummaryByProject.set(le.projectId, byDay);
+
+    const entriesByDay = laborEntriesByProject.get(le.projectId) ?? new Map<string, { workerName: string; hours: number; clockIn: string | null }[]>();
+    const entries = entriesByDay.get(k) ?? [];
+    entries.push({ workerName: le.workerName, hours: le.hours, clockIn: le.clockIn });
+    entriesByDay.set(k, entries);
+    laborEntriesByProject.set(le.projectId, entriesByDay);
   }
 
   const workDayKeysByChangeOrder = new Map<string, Set<string>>();
@@ -236,6 +247,10 @@ export default async function SchedulePage() {
     for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
       laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
     }
+    const laborEntriesByDay: Record<string, { workerName: string; hours: number; clockIn: string | null }[]> = {};
+    for (const [k, entries] of laborEntriesByProject.get(r.id) ?? []) {
+      laborEntriesByDay[k] = entries;
+    }
     const plannedWorkersByDay: Record<string, string[]> = {};
     for (const [k, names] of plannedWorkersByProject.get(r.id) ?? []) {
       plannedWorkersByDay[k] = names;
@@ -252,6 +267,7 @@ export default async function SchedulePage() {
       supervisorUserId: r.supervisorUserId,
       workDayKeys: Array.from(workDayKeysByProject.get(r.id) ?? []),
       laborByDay,
+      laborEntriesByDay,
       plannedWorkersByDay,
     };
   });

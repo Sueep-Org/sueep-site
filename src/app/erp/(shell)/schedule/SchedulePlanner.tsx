@@ -114,6 +114,22 @@ function formatHours(hours: number): string {
   return `${n} hr${hours === 1 ? "" : "s"}`;
 }
 
+function formatClockTime(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const period = h! >= 12 ? "PM" : "AM";
+  const hour12 = h! % 12 === 0 ? 12 : h! % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function dayCellLabel(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 // "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, teal)
 // aren't project segments — they're layered on top as their own filterable
 // types alongside the segment-based groups.
@@ -325,12 +341,90 @@ export function SchedulePlanner({
     setEventWorkerWarning(null);
   }
 
-  // Moves and/or retimes a planned (ProjectDayAssignment) chip, rather than
-  // editing the project's own start/end date — the assignment's
-  // supervisor/PM carry over. Day-assignments POST is an upsert keyed by
-  // (projectId, date), so when the date is unchanged this just updates the
-  // same row's time in place; only an actual date change needs the
-  // create-on-new-date + migrate-workers + delete-old-row dance.
+  // Moves and/or retimes a planned (ProjectDayAssignment), shared by the
+  // event card's "Save planned date" button and drag-and-drop on the month
+  // calendar. Supervisor/PM carry over unchanged. Day-assignments POST is an
+  // upsert keyed by (projectId, date), so when the date is unchanged this
+  // just updates the same row's time in place; only an actual date change
+  // needs the create-on-new-date + migrate-workers + delete-old-row dance.
+  async function movePlannedAssignment(
+    projectId: string,
+    assignmentId: string,
+    fromK: string,
+    toK: string,
+    startTime: string | null,
+    endTime: string | null,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
+    if (!existingAssignment) return { ok: false, error: "Assignment not found" };
+    try {
+      const dayRes = await fetch("/api/erp/schedule/day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          date: toK,
+          supervisorUserId: existingAssignment.supervisorUserId || undefined,
+          projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
+        }),
+      });
+      const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!dayRes.ok || !dayData.id) return { ok: false, error: dayData.error || "Failed to save" };
+
+      const dateChanged = toK !== fromK;
+      const newWorkers: ScheduleWorkerAssignment[] = [];
+      if (dateChanged) {
+        const oldWorkers = workerAssignments.filter((w) => w.dateKey === fromK && w.projectId === projectId);
+        for (const w of oldWorkers) {
+          const wRes = await fetch("/api/erp/schedule/worker-assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              employeeId: w.employeeId || undefined,
+              contractorId: w.contractorId || undefined,
+              date: toK,
+            }),
+          });
+          const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
+          if (wRes.ok && wData.id) {
+            newWorkers.push({ id: wData.id, projectId, employeeId: w.employeeId, contractorId: w.contractorId, dateKey: toK, seriesId: null });
+          }
+        }
+
+        // Deletes the old-date row and (per that route) clears worker
+        // assignments still dated to the old day — safe to run after the
+        // above since the carried-over workers now live on toK instead.
+        await fetch(`/api/erp/schedule/day-assignments/${assignmentId}`, { method: "DELETE" });
+      }
+
+      setDayAssignments((prev) => [
+        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id),
+        {
+          id: dayData.id!,
+          projectId,
+          dateKey: toK,
+          supervisorUserId: existingAssignment.supervisorUserId,
+          projectManagerUserId: existingAssignment.projectManagerUserId,
+          startTime,
+          endTime,
+          seriesId: dateChanged ? null : existingAssignment.seriesId,
+        },
+      ]);
+      if (dateChanged) {
+        setWorkerAssignments((prev) => [
+          ...prev.filter((w) => !(w.dateKey === fromK && w.projectId === projectId)),
+          ...newWorkers,
+        ]);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Failed to save" };
+    }
+  }
+
   async function handleEventPlannedDateSave(oldK: string, projectId: string, assignmentId: string) {
     setEventError("");
     const newK = eventPlannedDate;
@@ -346,80 +440,156 @@ export function SchedulePlanner({
       setEventError("End time must be after start time");
       return;
     }
-    const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
-    if (!existingAssignment) {
-      setEventError("Assignment not found");
+    setEventSaving(true);
+    const result = await movePlannedAssignment(
+      projectId,
+      assignmentId,
+      oldK,
+      newK,
+      eventPlannedStartTime || null,
+      eventPlannedEndTime || null,
+    );
+    setEventSaving(false);
+    if (!result.ok) {
+      setEventError(result.error ?? "Failed to save");
       return;
     }
-    setEventSaving(true);
-    try {
-      const dayRes = await fetch("/api/erp/schedule/day-assignments", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          date: newK,
-          supervisorUserId: existingAssignment.supervisorUserId || undefined,
-          projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
-          startTime: eventPlannedStartTime || undefined,
-          endTime: eventPlannedEndTime || undefined,
-        }),
-      });
-      const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
-      if (!dayRes.ok || !dayData.id) throw new Error(dayData.error || "Failed to save");
+    setEventPopoverKey(null);
+  }
 
-      const dateChanged = newK !== oldK;
-      const newWorkers: ScheduleWorkerAssignment[] = [];
-      if (dateChanged) {
-        const oldWorkers = workerAssignments.filter((w) => w.dateKey === oldK && w.projectId === projectId);
-        for (const w of oldWorkers) {
-          const wRes = await fetch("/api/erp/schedule/worker-assignments", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              projectId,
-              employeeId: w.employeeId || undefined,
-              contractorId: w.contractorId || undefined,
-              date: newK,
-            }),
-          });
-          const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
-          if (wRes.ok && wData.id) {
-            newWorkers.push({ id: wData.id, projectId, employeeId: w.employeeId, contractorId: w.contractorId, dateKey: newK, seriesId: null });
-          }
-        }
+  // Drag-and-drop rescheduling on the month calendar, Google-Calendar style.
+  // Only chips backed by a date the app controls are draggable: the amber
+  // "needs supervisor" chip (moves Project.projectDate) and the dashed
+  // "planned" chip (moves its ProjectDayAssignment, workers included). A
+  // confirmed chip is backed by actual logged labor (a fact, not a plan) and
+  // is deliberately never made draggable — see the chip render sites below.
+  const [draggingChip, setDraggingChip] = useState<
+    | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string }
+    | { kind: "planned"; projectId: string; assignmentId: string; fromKey: string; jobTitle: string }
+    | null
+  >(null);
+  const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
+  const [dragError, setDragError] = useState<string | null>(null);
 
-        // Deletes the old-date row and (per that route) clears worker
-        // assignments still dated to the old day — safe to run after the
-        // above since the carried-over workers now live on newK instead.
-        await fetch(`/api/erp/schedule/day-assignments/${assignmentId}`, { method: "DELETE" });
+  async function handleDropOnDay(toKey: string) {
+    const chip = draggingChip;
+    setDraggingChip(null);
+    setDragOverDayKey(null);
+    if (!chip || toKey === chip.fromKey) return;
+    setDragError(null);
+    if (chip.kind === "needsSupervisor") {
+      try {
+        const res = await fetch(`/api/erp/projects/${chip.projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ projectDate: toKey }),
+        });
+        if (!res.ok) throw new Error("Failed to reschedule");
+        router.refresh();
+      } catch {
+        setDragError(`Couldn't move "${chip.jobTitle}" — try again`);
       }
-
-      setDayAssignments((prev) => [
-        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id),
-        {
-          id: dayData.id!,
-          projectId,
-          dateKey: newK,
-          supervisorUserId: existingAssignment.supervisorUserId,
-          projectManagerUserId: existingAssignment.projectManagerUserId,
-          startTime: eventPlannedStartTime || null,
-          endTime: eventPlannedEndTime || null,
-          seriesId: dateChanged ? null : existingAssignment.seriesId,
-        },
-      ]);
-      if (dateChanged) {
-        setWorkerAssignments((prev) => [
-          ...prev.filter((w) => !(w.dateKey === oldK && w.projectId === projectId)),
-          ...newWorkers,
-        ]);
-      }
-      setEventPopoverKey(null);
-    } catch (err) {
-      setEventError(err instanceof Error ? err.message : "Failed to save");
-    } finally {
-      setEventSaving(false);
+      return;
     }
+    const existingAssignment = dayAssignments.find((a) => a.id === chip.assignmentId);
+    const result = await movePlannedAssignment(
+      chip.projectId,
+      chip.assignmentId,
+      chip.fromKey,
+      toKey,
+      existingAssignment?.startTime ?? null,
+      existingAssignment?.endTime ?? null,
+    );
+    if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
+  }
+
+  // Read-only labor detail card — a "confirmed" chip is backed by actual
+  // logged LaborEntry rows, a fact rather than a plan, so unlike the event
+  // card above this one has no editable fields at all. Correcting a logged
+  // entry (wrong hours, wrong worker, etc.) has to happen on the project's
+  // own Labor log, which is the one place that write actually belongs.
+  const [laborPopoverKey, setLaborPopoverKey] = useState<string | null>(null);
+
+  function openLaborPopover(k: string, p: ScheduleProject) {
+    setLaborPopoverKey(`${k}:${p.id}`);
+  }
+
+  function renderLaborPopover(k: string, p: ScheduleProject) {
+    if (laborPopoverKey !== `${k}:${p.id}`) return null;
+    const entries = p.laborEntriesByDay[k] ?? [];
+    const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={() => setLaborPopoverKey(null)}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 text-left shadow-xl"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold text-gray-800">{p.jobTitle}</p>
+            <button
+              type="button"
+              onClick={() => setLaborPopoverKey(null)}
+              aria-label="Close"
+              className="shrink-0 text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          </div>
+          <p className="mt-0.5 text-[10px] text-gray-400">
+            {CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]} · {dayCellLabel(k)}
+          </p>
+
+          <div className="mt-3 border-t border-gray-100 pt-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] font-medium text-gray-500">Logged labor</label>
+              <span className="text-[10px] font-semibold text-gray-700">{formatHours(totalHours)} total</span>
+            </div>
+            {entries.length > 0 ? (
+              <ul className="mt-1.5 space-y-1">
+                {entries.map((e, i) => (
+                  <li
+                    key={`${e.workerName}-${i}`}
+                    className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700"
+                  >
+                    <span className="truncate font-medium">{e.workerName}</span>
+                    <span className="shrink-0 text-gray-500">
+                      {formatHours(e.hours)}
+                      {e.clockIn ? <span className="text-gray-400"> · started {formatClockTime(e.clockIn)}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1.5 text-[10px] text-gray-400">No labor entries found for this day.</p>
+            )}
+          </div>
+
+          <p className="mt-3 text-[10px] text-gray-400">
+            This is logged, historical labor — it can only be corrected from the project&apos;s Labor log, not from the calendar.
+          </p>
+
+          <div className="mt-2.5 flex items-center gap-1.5">
+            <Link
+              href={`/erp/projects/${p.id}#labor-log`}
+              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
+            >
+              Go to labor log
+            </Link>
+            <Link
+              href={`/erp/projects/${p.id}`}
+              className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
+            >
+              View project
+            </Link>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
   }
 
   async function handleEventDayAssignmentSave(k: string, projectId: string) {
@@ -1233,6 +1403,14 @@ export function SchedulePlanner({
   return (
     <div className="space-y-6">
       <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
+        {dragError ? (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs text-red-600">
+            <span>{dragError}</span>
+            <button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold hover:underline">
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
             <div className="grid grid-cols-7 gap-px rounded-lg border border-gray-200 bg-gray-200 text-center text-[10px] font-medium uppercase text-gray-500">
@@ -1315,7 +1493,20 @@ export function SchedulePlanner({
                 return (
                   <div
                     key={`${k}-${i}`}
-                    className={`min-h-[92px] bg-white p-1.5 text-left ${inMonth ? "" : "opacity-40"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""}`}
+                    onDragOver={(e) => {
+                      if (!draggingChip) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverDayKey !== k) setDragOverDayKey(k);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverDayKey === k) setDragOverDayKey(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDropOnDay(k);
+                    }}
+                    className={`min-h-[92px] bg-white p-1.5 text-left ${inMonth ? "" : "opacity-40"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
                   >
                     <div className="flex items-center justify-between">
                       <div
@@ -1345,8 +1536,18 @@ export function SchedulePlanner({
                           <li key={`needs-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", p.id);
+                                e.dataTransfer.effectAllowed = "move";
+                                setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle });
+                              }}
+                              onDragEnd={() => {
+                                setDraggingChip(null);
+                                setDragOverDayKey(null);
+                              }}
                               onClick={() => openEventPopover(k, p)}
-                              className={`w-full ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
+                              className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
                             >
                               <span aria-hidden>⚠</span>
                               <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
@@ -1374,12 +1575,12 @@ export function SchedulePlanner({
                           <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              onClick={() => openEventPopover(k, p)}
+                              onClick={() => openLaborPopover(k, p)}
                               className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
                             >
                               <span className="truncate">{p.jobTitle}</span>
                             </button>
-                            {renderEventPopover(k, p)}
+                            {renderLaborPopover(k, p)}
                             {inMonth ? (
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{p.jobTitle}</div>
@@ -1409,8 +1610,18 @@ export function SchedulePlanner({
                         <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
                           <button
                             type="button"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", assignment.id);
+                              e.dataTransfer.effectAllowed = "move";
+                              setDraggingChip({ kind: "planned", projectId: project.id, assignmentId: assignment.id, fromKey: k, jobTitle: project.jobTitle });
+                            }}
+                            onDragEnd={() => {
+                              setDraggingChip(null);
+                              setDragOverDayKey(null);
+                            }}
                             onClick={() => openEventPopover(k, project, assignment)}
-                            className={`flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
+                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
                           </button>
