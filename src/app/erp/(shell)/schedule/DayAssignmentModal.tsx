@@ -97,6 +97,9 @@ export function DayAssignmentModal({
   const [contractorQuery, setContractorQuery] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
   const [workerError, setWorkerError] = useState("");
+  // A worker legitimately can split a day across two jobs, so this is a soft
+  // warning shown before the request fires, not a hard block.
+  const [workerWarning, setWorkerWarning] = useState<string | null>(null);
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
 
   // A multi-day range and a weekly repeat are the same control here: pick
@@ -256,7 +259,7 @@ export function DayAssignmentModal({
     }
   }
 
-  async function handleAddWorker() {
+  async function handleAddWorker(force = false) {
     setWorkerError("");
     if (!projectId) {
       setWorkerError("Pick a project above first");
@@ -271,6 +274,20 @@ export function DayAssignmentModal({
       setWorkerError(seriesError);
       return;
     }
+    if (!force) {
+      const conflicts = existingWorkers.filter((w) => {
+        if (w.projectId === projectId) return false;
+        return workerType === "employee" ? w.employeeId === workerId : w.contractorId === workerId;
+      });
+      if (conflicts.length > 0) {
+        const names = conflicts
+          .map((c) => projects.find((p) => p.id === c.projectId)?.jobTitle ?? "another project")
+          .join(", ");
+        setWorkerWarning(`Already scheduled on ${names} this day — add anyway?`);
+        return;
+      }
+    }
+    setWorkerWarning(null);
     setAddingWorker(true);
     try {
       const usingSeries = repeatOpen && (activeSeriesId || (seriesDateKeys && seriesDateKeys.length > 0));
@@ -623,7 +640,10 @@ export function DayAssignmentModal({
           <div className="mt-1.5 flex gap-1">
             <button
               type="button"
-              onClick={() => setWorkerType("employee")}
+              onClick={() => {
+                setWorkerType("employee");
+                setWorkerWarning(null);
+              }}
               className={`rounded px-2 py-1 text-[11px] font-medium ${
                 workerType === "employee" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
               }`}
@@ -632,7 +652,10 @@ export function DayAssignmentModal({
             </button>
             <button
               type="button"
-              onClick={() => setWorkerType("contractor")}
+              onClick={() => {
+                setWorkerType("contractor");
+                setWorkerWarning(null);
+              }}
               className={`rounded px-2 py-1 text-[11px] font-medium ${
                 workerType === "contractor" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
               }`}
@@ -650,6 +673,7 @@ export function DayAssignmentModal({
                   onChange={(e) => {
                     setEmployeeQuery(e.target.value);
                     setEmployeeId("");
+                    setWorkerWarning(null);
                   }}
                   placeholder="Search workers..."
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
@@ -683,6 +707,7 @@ export function DayAssignmentModal({
                   onChange={(e) => {
                     setContractorQuery(e.target.value);
                     setContractorId("");
+                    setWorkerWarning(null);
                   }}
                   placeholder="Search contractors..."
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
@@ -711,13 +736,25 @@ export function DayAssignmentModal({
             )}
             <button
               type="button"
-              onClick={handleAddWorker}
+              onClick={() => handleAddWorker()}
               disabled={addingWorker}
               className="shrink-0 rounded bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-600 disabled:opacity-50"
             >
               {addingWorker ? "Adding..." : "Add"}
             </button>
           </div>
+          {workerWarning ? (
+            <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+              <p>⚠ {workerWarning}</p>
+              <button
+                type="button"
+                onClick={() => handleAddWorker(true)}
+                className="mt-1 font-semibold underline hover:no-underline"
+              >
+                Add anyway
+              </button>
+            </div>
+          ) : null}
           {workerError ? (
             <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{workerError}</div>
           ) : null}

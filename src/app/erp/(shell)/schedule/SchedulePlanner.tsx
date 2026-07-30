@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import {
@@ -248,6 +249,501 @@ export function SchedulePlanner({
     } finally {
       setDeletingAssignmentId(null);
     }
+  }
+
+  // Event popover — click any project chip on the month calendar to preview
+  // it and adjust its start/end date without leaving the calendar, plus a
+  // link through to the full project page. Same "one open at a time,
+  // outside-click closes it" pattern as the "+N more" popover above.
+  const [eventPopoverKey, setEventPopoverKey] = useState<string | null>(null);
+  const [eventStartDate, setEventStartDate] = useState("");
+  const [eventEndDate, setEventEndDate] = useState("");
+  const [eventSaving, setEventSaving] = useState(false);
+  const [eventError, setEventError] = useState("");
+  const eventPopoverRef = useRef<HTMLDivElement>(null);
+  // Rendered via a portal positioned from the clicked chip's screen
+  // coordinates, rather than as an absolutely-positioned descendant of the
+  // day cell — a dimmed (out-of-month) day cell is rendered at opacity-40,
+  // and CSS opacity is applied to the whole subtree as a unit, so a popover
+  // living inside it would be faded too regardless of its own bg-white.
+  // Portaling to document.body escapes that, and also escapes the month
+  // grid's overflow-x-auto clipping.
+  const [eventAnchorRect, setEventAnchorRect] = useState<{ top: number; bottom: number; left: number; right: number } | null>(null);
+
+  // Day-specific coverage (ProjectDayAssignment) for the popover's project —
+  // separate from Project.supervisorUserId, since a day can be covered by a
+  // PM only, with no supervisor at all (see the day-assignments API comment).
+  const [eventDaySupervisorId, setEventDaySupervisorId] = useState("");
+  const [eventDayPmId, setEventDayPmId] = useState("");
+  const [eventDaySaving, setEventDaySaving] = useState(false);
+  const [eventDayError, setEventDayError] = useState("");
+
+  // Worker add/remove for the specific (day, project) the popover is open
+  // for — separate from the day-assignment modal's worker picker, which
+  // isn't scoped to one project up front.
+  const [eventWorkerType, setEventWorkerType] = useState<"employee" | "contractor">("employee");
+  const [eventWorkerQuery, setEventWorkerQuery] = useState("");
+  const [eventWorkerId, setEventWorkerId] = useState("");
+  const [eventAddingWorker, setEventAddingWorker] = useState(false);
+  const [eventWorkerError, setEventWorkerError] = useState("");
+  // A worker legitimately can split a day across two jobs, so this is a
+  // soft warning shown before the request fires, not a hard block.
+  const [eventWorkerWarning, setEventWorkerWarning] = useState<string | null>(null);
+  const [deletingEventWorkerId, setDeletingEventWorkerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!eventPopoverKey) return;
+    function onMouseDown(e: MouseEvent) {
+      if (eventPopoverRef.current && !eventPopoverRef.current.contains(e.target as Node)) {
+        setEventPopoverKey(null);
+      }
+    }
+    // Closes on scroll elsewhere on the page, rather than trying to track
+    // the anchor's moving position — capture:true so it also catches the
+    // month grid's own overflow-x-auto wrapper scrolling, not just the
+    // window. Scrolling inside the popover's own overflow-y-auto body (a
+    // scroll event targeting a descendant of the popover) must NOT count,
+    // or the card would close the instant its content was long enough to
+    // scroll.
+    function onScroll(e: Event) {
+      if (eventPopoverRef.current && eventPopoverRef.current.contains(e.target as Node)) return;
+      setEventPopoverKey(null);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [eventPopoverKey]);
+
+  function openEventPopover(k: string, p: ScheduleProject, anchor: HTMLElement) {
+    const rect = anchor.getBoundingClientRect();
+    setEventAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
+    setEventPopoverKey(`${k}:${p.id}`);
+    setEventStartDate(p.projectDate ? p.projectDate.slice(0, 10) : "");
+    setEventEndDate(p.projectEndDate ? p.projectEndDate.slice(0, 10) : "");
+    setEventError("");
+    const da = dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
+    setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
+    setEventDayPmId(da?.projectManagerUserId ?? "");
+    setEventDayError("");
+    setEventWorkerType("employee");
+    setEventWorkerQuery("");
+    setEventWorkerId("");
+    setEventWorkerError("");
+    setEventWorkerWarning(null);
+  }
+
+  async function handleEventDayAssignmentSave(k: string, projectId: string) {
+    setEventDayError("");
+    const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
+    if (!eventDaySupervisorId && !eventDayPmId) {
+      if (!existing) return;
+      setEventDaySaving(true);
+      try {
+        const res = await fetch(`/api/erp/schedule/day-assignments/${existing.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to clear");
+        setDayAssignments((prev) => prev.filter((a) => a.id !== existing.id));
+      } catch {
+        setEventDayError("Failed to clear");
+      } finally {
+        setEventDaySaving(false);
+      }
+      return;
+    }
+    setEventDaySaving(true);
+    try {
+      const res = await fetch("/api/erp/schedule/day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          date: k,
+          supervisorUserId: eventDaySupervisorId || undefined,
+          projectManagerUserId: eventDayPmId || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      if (data.id) {
+        setDayAssignments((prev) => [
+          ...prev.filter((a) => !(a.dateKey === k && a.projectId === projectId)),
+          {
+            id: data.id!,
+            projectId,
+            dateKey: k,
+            supervisorUserId: eventDaySupervisorId || null,
+            projectManagerUserId: eventDayPmId || null,
+            startTime: existing?.startTime ?? null,
+            endTime: existing?.endTime ?? null,
+            seriesId: existing?.seriesId ?? null,
+          },
+        ]);
+      }
+      // Assigning a supervisor here also sets it as the project's overall
+      // supervisor server-side (see the day-assignments route) — mirror that
+      // in the Gantt's inline dropdown right away, same as the day-assignment
+      // modal does.
+      if (eventDaySupervisorId) setSupervisorOverrides((o) => ({ ...o, [projectId]: eventDaySupervisorId }));
+    } catch (err) {
+      setEventDayError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setEventDaySaving(false);
+    }
+  }
+
+  function findWorkerConflicts(k: string, projectId: string, type: "employee" | "contractor", workerId: string) {
+    return workerAssignments.filter((a) => {
+      if (a.dateKey !== k || a.projectId === projectId) return false;
+      return type === "employee" ? a.employeeId === workerId : a.contractorId === workerId;
+    });
+  }
+
+  async function handleEventAddWorker(k: string, projectId: string, force = false) {
+    setEventWorkerError("");
+    if (!eventWorkerId) {
+      setEventWorkerError(eventWorkerType === "employee" ? "Pick a worker" : "Pick a contractor");
+      return;
+    }
+    if (!force) {
+      const conflicts = findWorkerConflicts(k, projectId, eventWorkerType, eventWorkerId);
+      if (conflicts.length > 0) {
+        const names = conflicts.map((c) => projectById.get(c.projectId)?.jobTitle ?? "another project").join(", ");
+        setEventWorkerWarning(`Already scheduled on ${names} this day — add anyway?`);
+        return;
+      }
+    }
+    setEventWorkerWarning(null);
+    setEventAddingWorker(true);
+    try {
+      const res = await fetch("/api/erp/schedule/worker-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          employeeId: eventWorkerType === "employee" ? eventWorkerId : undefined,
+          contractorId: eventWorkerType === "contractor" ? eventWorkerId : undefined,
+          date: k,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to add worker");
+      if (data.id) {
+        setWorkerAssignments((prev) => [
+          ...prev,
+          {
+            id: data.id!,
+            projectId,
+            employeeId: eventWorkerType === "employee" ? eventWorkerId : null,
+            contractorId: eventWorkerType === "contractor" ? eventWorkerId : null,
+            dateKey: k,
+            seriesId: null,
+          },
+        ]);
+      }
+      setEventWorkerQuery("");
+      setEventWorkerId("");
+    } catch (err) {
+      setEventWorkerError(err instanceof Error ? err.message : "Failed to add worker");
+    } finally {
+      setEventAddingWorker(false);
+    }
+  }
+
+  async function handleEventDeleteWorker(id: string) {
+    setDeletingEventWorkerId(id);
+    const previous = workerAssignments;
+    setWorkerAssignments((prev) => prev.filter((a) => a.id !== id));
+    try {
+      const res = await fetch(`/api/erp/schedule/worker-assignments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+    } catch {
+      setWorkerAssignments(previous);
+    } finally {
+      setDeletingEventWorkerId(null);
+    }
+  }
+
+  // Dates are re-derived server-side (Gantt windows, "needs supervisor"
+  // bucket, work-day placement all key off them), so a plain router.refresh()
+  // after the PATCH is simpler and safer than trying to patch every derived
+  // map locally.
+  async function handleEventDatesSave(projectId: string) {
+    setEventSaving(true);
+    setEventError("");
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectDate: eventStartDate || null,
+          projectEndDate: eventEndDate || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      setEventPopoverKey(null);
+      router.refresh();
+    } catch {
+      setEventError("Failed to save");
+    } finally {
+      setEventSaving(false);
+    }
+  }
+
+  function renderEventPopover(k: string, p: ScheduleProject) {
+    if (eventPopoverKey !== `${k}:${p.id}` || !eventAnchorRect) return null;
+
+    const dayWorkers = workerAssignments.filter((a) => a.dateKey === k && a.projectId === p.id);
+    const workerOptions = eventWorkerType === "employee" ? employees : contractors;
+    const filteredWorkerOptions = eventWorkerQuery.trim()
+      ? workerOptions.filter((w) => w.displayName.toLowerCase().includes(eventWorkerQuery.toLowerCase()))
+      : workerOptions;
+
+    const POPOVER_WIDTH = 288;
+    const POPOVER_MAX_HEIGHT = 416;
+    const MARGIN = 8;
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : POPOVER_WIDTH + MARGIN * 2;
+    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : POPOVER_MAX_HEIGHT + MARGIN * 2;
+    let left = eventAnchorRect.left;
+    if (left + POPOVER_WIDTH > viewportWidth - MARGIN) left = Math.max(MARGIN, viewportWidth - POPOVER_WIDTH - MARGIN);
+    const spaceBelow = viewportHeight - eventAnchorRect.bottom;
+    const openUpward = spaceBelow < POPOVER_MAX_HEIGHT && eventAnchorRect.top > spaceBelow;
+    const style: React.CSSProperties = {
+      position: "fixed",
+      left,
+      width: POPOVER_WIDTH,
+      maxHeight: POPOVER_MAX_HEIGHT,
+      ...(openUpward ? { bottom: viewportHeight - eventAnchorRect.top + 4 } : { top: eventAnchorRect.bottom + 4 }),
+    };
+
+    return createPortal(
+      <div
+        ref={eventPopoverRef}
+        style={style}
+        className="z-50 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold text-gray-800">{p.jobTitle}</p>
+          <button
+            type="button"
+            onClick={() => setEventPopoverKey(null)}
+            aria-label="Close"
+            className="shrink-0 text-gray-400 hover:text-gray-600"
+          >
+            ×
+          </button>
+        </div>
+        <p className="mt-0.5 text-[10px] text-gray-400">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</p>
+
+        <div className="mt-2 space-y-1.5">
+          <label className="block text-[10px] font-medium text-gray-500">
+            Start date
+            <input
+              type="date"
+              value={eventStartDate}
+              onChange={(e) => setEventStartDate(e.target.value)}
+              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+            />
+          </label>
+          <label className="block text-[10px] font-medium text-gray-500">
+            End date
+            <input
+              type="date"
+              value={eventEndDate}
+              onChange={(e) => setEventEndDate(e.target.value)}
+              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+            />
+          </label>
+        </div>
+
+        {eventError ? <p className="mt-1 text-[10px] text-red-500">{eventError}</p> : null}
+
+        <div className="mt-2 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleEventDatesSave(p.id)}
+            disabled={eventSaving}
+            className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          >
+            {eventSaving ? "Saving…" : "Save dates"}
+          </button>
+          <Link
+            href={`/erp/projects/${p.id}`}
+            className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
+          >
+            View project
+          </Link>
+        </div>
+
+        <div className="mt-3 border-t border-gray-100 pt-2.5">
+          <label className="block text-[10px] font-medium text-gray-500">Coverage for this day</label>
+          <div className="mt-0.5 grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="block text-[9px] text-gray-400">Supervisor</label>
+              <select
+                value={eventDaySupervisorId}
+                onChange={(e) => setEventDaySupervisorId(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              >
+                <option value="">— None —</option>
+                {supervisors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[9px] text-gray-400">PM (if no supervisor)</label>
+              <select
+                value={eventDayPmId}
+                onChange={(e) => setEventDayPmId(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              >
+                <option value="">— None —</option>
+                {projectManagers.map((pm) => (
+                  <option key={pm.id} value={pm.id}>
+                    {pm.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {eventDayError ? <p className="mt-1 text-[10px] text-red-500">{eventDayError}</p> : null}
+          <button
+            type="button"
+            onClick={() => handleEventDayAssignmentSave(k, p.id)}
+            disabled={eventDaySaving}
+            className="mt-1.5 rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          >
+            {eventDaySaving ? "Saving…" : "Save coverage"}
+          </button>
+        </div>
+
+        <div className="mt-3 border-t border-gray-100 pt-2.5">
+          <label className="block text-[10px] font-medium text-gray-500">Workers scheduled this day</label>
+          {dayWorkers.length > 0 ? (
+            <ul className="mt-1 space-y-1">
+              {dayWorkers.map((w) => {
+                const name = w.employeeId
+                  ? employees.find((e) => e.id === w.employeeId)?.displayName
+                  : contractors.find((c) => c.id === w.contractorId)?.displayName;
+                return (
+                  <li
+                    key={w.id}
+                    className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
+                  >
+                    <span className="truncate">{name ?? "Unknown worker"}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleEventDeleteWorker(w.id)}
+                      disabled={deletingEventWorkerId === w.id}
+                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-1 text-[10px] text-gray-400">None scheduled yet.</p>
+          )}
+
+          <div className="mt-1.5 flex gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setEventWorkerType("employee");
+                setEventWorkerQuery("");
+                setEventWorkerId("");
+                setEventWorkerWarning(null);
+              }}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                eventWorkerType === "employee" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Employee
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEventWorkerType("contractor");
+                setEventWorkerQuery("");
+                setEventWorkerId("");
+                setEventWorkerWarning(null);
+              }}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                eventWorkerType === "contractor" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Contractor
+            </button>
+          </div>
+
+          <div className="relative mt-1.5">
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={eventWorkerId ? workerOptions.find((w) => w.id === eventWorkerId)?.displayName ?? "" : eventWorkerQuery}
+                onChange={(e) => {
+                  setEventWorkerQuery(e.target.value);
+                  setEventWorkerId("");
+                  setEventWorkerWarning(null);
+                }}
+                placeholder={eventWorkerType === "employee" ? "Search workers..." : "Search contractors..."}
+                className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => handleEventAddWorker(k, p.id)}
+                disabled={eventAddingWorker}
+                className="shrink-0 rounded bg-gray-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-gray-600 disabled:opacity-50"
+              >
+                {eventAddingWorker ? "Adding…" : "Add"}
+              </button>
+            </div>
+            {eventWorkerQuery && !eventWorkerId ? (
+              <div className="absolute z-10 mt-1 max-h-32 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                {filteredWorkerOptions.slice(0, 8).map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => {
+                      setEventWorkerId(w.id);
+                      setEventWorkerQuery(w.displayName);
+                      setEventWorkerWarning(null);
+                    }}
+                    className="block w-full truncate px-1.5 py-1 text-left text-[11px] text-gray-700 hover:bg-pink-50"
+                  >
+                    {w.displayName}
+                  </button>
+                ))}
+                {filteredWorkerOptions.length === 0 ? (
+                  <div className="px-1.5 py-1 text-[11px] text-gray-400">No matches</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {eventWorkerWarning ? (
+            <div className="mt-1.5 rounded border border-amber-300 bg-amber-50 p-1.5 text-[10px] text-amber-800">
+              <p>⚠ {eventWorkerWarning}</p>
+              <button
+                type="button"
+                onClick={() => handleEventAddWorker(k, p.id, true)}
+                className="mt-1 font-semibold underline hover:no-underline"
+              >
+                Add anyway
+              </button>
+            </div>
+          ) : null}
+          {eventWorkerError ? <p className="mt-1 text-[10px] text-red-500">{eventWorkerError}</p> : null}
+        </div>
+      </div>,
+      document.body,
+    );
   }
 
   // Local overrides so reassigning a supervisor updates the dropdown right
@@ -731,10 +1227,7 @@ export function SchedulePlanner({
                           <li key={`needs-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              onClick={() => {
-                                setOpenDayKey(k);
-                                setOpenDayInitialProjectId(p.id);
-                              }}
+                              onClick={(e) => openEventPopover(k, p, e.currentTarget)}
                               className={`w-full ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
                             >
                               <span aria-hidden>⚠</span>
@@ -746,9 +1239,10 @@ export function SchedulePlanner({
                                 <div className="text-amber-300">
                                   {isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
                                 </div>
-                                <div className="mt-1 text-gray-300">Click to assign one</div>
+                                <div className="mt-1 text-gray-300">Click to view or assign one</div>
                               </div>
                             ) : null}
+                            {renderEventPopover(k, p)}
                           </li>
                         ))}
                       </ul>
@@ -760,12 +1254,14 @@ export function SchedulePlanner({
                         const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
                         return (
                           <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
-                            <Link
-                              href={`/erp/projects/${p.id}`}
-                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
+                            <button
+                              type="button"
+                              onClick={(e) => openEventPopover(k, p, e.currentTarget)}
+                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
                             >
                               <span className="truncate">{p.jobTitle}</span>
-                            </Link>
+                            </button>
+                            {renderEventPopover(k, p)}
                             {inMonth ? (
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{p.jobTitle}</div>
@@ -793,12 +1289,14 @@ export function SchedulePlanner({
                         const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
                         return (
                         <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
-                          <Link
-                            href={`/erp/projects/${project.id}`}
-                            className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
+                          <button
+                            type="button"
+                            onClick={(e) => openEventPopover(k, project, e.currentTarget)}
+                            className={`flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
-                          </Link>
+                          </button>
+                          {renderEventPopover(k, project)}
                           <button
                             type="button"
                             onClick={(e) => {
