@@ -487,7 +487,7 @@ export default function EstimatorPage() {
             style={{ display: "none" }}
           >
             {/* Tab bar */}
-            <div className="flex border-b border-gray-200 px-6 pt-4">
+            <div id="estimatorTabBar" className="flex items-center border-b border-gray-200 px-6 pt-4">
               <button
                 id="tabAnalysisBtn"
                 className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
@@ -496,7 +496,7 @@ export default function EstimatorPage() {
               </button>
               <button
                 id="tabPaintingBtn"
-                className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2"
               >
                 Painting
               </button>
@@ -970,9 +970,6 @@ export default function EstimatorPage() {
                 Painting
               </h3>
               <div className="flex gap-2">
-                <button id="toggleToAnalysisBtn" className="mini-btn">
-                  Show Analysis
-                </button>
                 <button id="refreshPaintingDistanceBtn" className="mini-btn">
                   ↻ Distance
                 </button>
@@ -1365,8 +1362,22 @@ export default function EstimatorPage() {
                   className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                 />
               </div>
-              {/* Gasoline + Toll Cost */}
+              {/* Materials + Gasoline + Toll Cost + Driver Cost + Total Transportation */}
               <div className="flex flex-wrap gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Materials ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingMaterialsInput"
+                    placeholder="0.00"
+                    defaultValue="0"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
                     Gasoline ($)
@@ -1392,6 +1403,14 @@ export default function EstimatorPage() {
                     step="0.01"
                     className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Driver Cost ($)</label>
+                  <div id="paintingDriverCostDisplay" className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700">—</div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Total Transportation ($)</label>
+                  <div id="paintingTotalTransportDisplay" className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold">—</div>
                 </div>
               </div>
 

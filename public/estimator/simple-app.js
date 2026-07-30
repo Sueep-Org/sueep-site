@@ -3412,6 +3412,26 @@ async function initApp(){
     if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
   }
 
+  function _updatePaintingTransportCosts() {
+    const durationText = _loadedProjectData?.driving_info?.duration || '';
+    const hours = _parseDurationToHours(durationText);
+    const foremanRate = (() => {
+      for (const pid of PAINTING_PHASE_IDS) {
+        const f = (_paintingPhaseCrews[pid] || []).find(m => m.role === 'foreman');
+        if (f) return f.rate || 28;
+      }
+      return 28;
+    })();
+    const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
+    const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
+    const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
+    const total = driverCost + gasoline + tollCost;
+    const driverEl = document.getElementById('paintingDriverCostDisplay');
+    const totalEl  = document.getElementById('paintingTotalTransportDisplay');
+    if (driverEl) driverEl.textContent = hours > 0 ? fmt$(driverCost) : '—';
+    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
+  }
+
   let _changeOrders = [];
 
   function _getPhaseLaborCosts() {
@@ -3907,24 +3927,31 @@ async function initApp(){
       setFoot(`pphase_subtotal_${pid}`, c.subtotal);
     });
 
+    const manualMaterials = parseFloat(document.getElementById('paintingMaterialsInput')?.value) || 0;
+    const totFinalActual = totSubtotal + manualMaterials + totOh + totPft + totComm;
+
     const summaryContainer = document.getElementById('paintingCalcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
-        [`Subtotal`, totSubtotal], [`Overhead (${overheadPct}%)`, totOh],
-        [`Profit (${profitPct}%)`, totPft], [`Price`, totPrice],
-        [`Tax (${taxPct}%)`, totTaxes], [`Commission (${commPct}%)`, totComm],
-        [`Final Price`, totFinal],
+        [`Subtotal`, totSubtotal],
+        [`Materials`, manualMaterials],
+        [`Overhead (${overheadPct}%)`, totOh],
+        [`Profit (${profitPct}%)`, totPft],
+        [`Commission (${commPct}%)`, totComm],
+        [`Final Price`, totFinalActual],
       ].forEach(([label, val], i) => {
-        const isLast = i === 6;
+        const isLast = i === 5;
         const item = document.createElement('div');
         item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
     }
+
+    _updatePaintingTransportCosts();
 
     if (!_paintingExpectedDaysManual) {
       let totalDays = 0;
@@ -4168,18 +4195,18 @@ async function initApp(){
   function _setEstimatorTab(activeTab) {
     const analysisPanel = document.getElementById('analysisCard');
     const paintingPanel = document.getElementById('paintingCard');
-    const tabAnalysis  = document.getElementById('tabAnalysisBtn');
-    const tabPainting  = document.getElementById('tabPaintingBtn');
+    const tabAnalysis   = document.getElementById('tabAnalysisBtn');
+    const tabPainting   = document.getElementById('tabPaintingBtn');
     if (!analysisPanel || !paintingPanel) return;
-    const isAnalysis = activeTab !== 'painting';
-    analysisPanel.style.display = isAnalysis ? 'block' : 'none';
-    paintingPanel.style.display = isAnalysis ? 'none' : 'block';
-    if (tabAnalysis) {
-      tabAnalysis.className = `px-4 py-2 text-sm font-medium border-b-2 mr-2 ${isAnalysis ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
-    }
-    if (tabPainting) {
-      tabPainting.className = `px-4 py-2 text-sm font-medium border-b-2 ${!isAnalysis ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
-    }
+
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
+
+    analysisPanel.style.display = activeTab === 'analysis' ? 'block' : 'none';
+    paintingPanel.style.display = activeTab === 'painting' ? 'block' : 'none';
+    if (tabAnalysis) tabAnalysis.className = activeTab === 'analysis' ? activeStyle : inactiveStyle;
+    if (tabPainting) tabPainting.className = activeTab === 'painting' ? activeStyle : inactiveStyle;
+
   }
 
   function showAnalysisCard(projData) {
@@ -4308,6 +4335,148 @@ async function initApp(){
     renderSovCard();
   }
 
+
+  function showPaintingCard(projData) {
+    const card = document.getElementById('paintingCard');
+    if (!card) return;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
+
+    const bd = projData.painting_breakdown;
+
+    const breakdownDiv = document.getElementById('paintingViewBreakdown');
+    if (breakdownDiv) {
+      breakdownDiv.innerHTML = '';
+      if (bd && bd.phases && bd.phases.length > 0) {
+        const rates = {
+          overhead: (bd.overhead_pct || 0) / 100,
+          profit: (bd.profit_pct || 0) / 100,
+          tax: (bd.tax_pct || 0) / 100,
+          commission: (bd.commission_pct || 0) / 100,
+        };
+
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+        const thead = table.createTHead();
+        const hrow = thead.insertRow();
+        ['Phase', 'Days', 'Foreman Pay', 'Assistant Pay', 'Painter Pay', 'Labor Cost', 'Subtotal'].forEach((h, i) => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          th.style.cssText = `text-align:${i <= 1 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
+          hrow.appendChild(th);
+        });
+        const tbody = table.createTBody();
+        let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
+        for (const p of bd.phases) {
+          const c = _calcPhase(p, rates);
+          totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
+          totPft += c.pft; totComm += c.comm;
+          const crew = p.crew || [];
+          const days = crew.length > 0 ? Math.max(...crew.map(m => m.days || 0)) : 0;
+          const tr = tbody.insertRow();
+          tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+          [
+            { v: p.name, a: 'left' }, { v: days, a: 'left' },
+            { v: fmt$(c.foremanPay), a: 'right' }, { v: fmt$(c.assistantPay), a: 'right' },
+            { v: fmt$(c.painterPay), a: 'right' },
+            { v: fmt$(c.laborCost), a: 'right' }, { v: fmt$(c.subtotal), a: 'right' },
+          ].forEach(({ v, a }) => {
+            const td = tr.insertCell();
+            td.textContent = v;
+            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
+          });
+        }
+        breakdownDiv.appendChild(table);
+
+        const savedMaterials = bd.materials || 0;
+        const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
+        const pricingDiv = document.createElement('div');
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        [
+          [`Subtotal`, totSubtotal],
+          [`Materials`, savedMaterials],
+          [`Overhead (${bd.overhead_pct || 0}%)`, totOh],
+          [`Profit (${bd.profit_pct || 0}%)`, totPft],
+          [`Commission (${bd.commission_pct || 0}%)`, totComm],
+          [`Final Price`, totFinal],
+        ].forEach(([label, val], i) => {
+          const isLast = i === 5;
+          const item = document.createElement('div');
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          pricingDiv.appendChild(item);
+        });
+        breakdownDiv.appendChild(pricingDiv);
+      }
+    }
+
+    const resolvedArea = bd?.total_area ?? projData.total_area;
+    const resolvedAddress = bd?.address || projData.address || '';
+    setText('paintingViewAddress', resolvedAddress);
+    setText('paintingViewStartAddress', projData.start_address || DEFAULT_OFFICE);
+    setText('paintingViewExpectedDays', bd?.expected_days != null ? `${bd.expected_days} days` : (projData.expected_days != null ? `${projData.expected_days} days` : '—'));
+
+    const labor = bd?.phases
+      ? bd.phases.reduce((sum, p) => sum + _calcPhase(p, {
+          overhead: 0, profit: 0, tax: 0, commission: 0,
+        }).laborCost, 0)
+      : null;
+    setText('paintingViewLabor', labor != null ? fmt$(labor) : '—');
+    setText('paintingViewTotalArea', resolvedArea ? fmtSF(resolvedArea) : '—');
+
+    const rates = { overhead: (bd?.overhead_pct || 0) / 100, profit: (bd?.profit_pct || 0) / 100, tax: (bd?.tax_pct || 0) / 100, commission: (bd?.commission_pct || 0) / 100 };
+    let totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
+    if (bd?.phases) {
+      for (const p of bd.phases) {
+        const c = _calcPhase(p, rates);
+        totSubtotal += c.subtotal; totOh += c.oh; totPft += c.pft; totComm += c.comm;
+      }
+    }
+    const savedMaterials = bd?.materials || 0;
+    const quote = totSubtotal + savedMaterials + totOh + totPft + totComm;
+    setText('paintingViewQuote', bd ? fmt$(quote) : '—');
+
+    const lps = (labor != null && resolvedArea) ? (labor / resolvedArea) : null;
+    setText('paintingViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
+
+    const di = projData.driving_info;
+    setText('paintingDetailDistance', di?.distance || '—');
+    setText('paintingDetailDuration', di?.duration || '—');
+    const driveHours = _parseDurationToHours(di?.duration || '');
+    const foremanRateView = (() => {
+      if (bd?.phases) {
+        for (const p of bd.phases) {
+          const f = (p.crew || []).find(m => m.role === 'foreman');
+          if (f) return f.rate || 28;
+        }
+      }
+      return 28;
+    })();
+    const driverCostView = driveHours > 0 ? 2 * driveHours * foremanRateView : 0;
+    const totalTransport = driverCostView + (projData.gasoline || 0) + (projData.toll_cost || 0);
+    setText('paintingDetailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
+    setText('paintingViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
+    setText('paintingViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
+
+    // Initialize edit state from saved painting_breakdown
+    _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
+    _deletedPaintingPhaseIds = new Set();
+    if (bd?.phases) {
+      const pidMap = { 'Phase 1': 'phase1', 'Phase 2': 'phase2', 'Phase 3': 'phase3' };
+      const savedPids = new Set();
+      for (const p of bd.phases) {
+        const pid = pidMap[p.name];
+        if (!pid) continue;
+        savedPids.add(pid);
+        _paintingPhaseCrews[pid] = (p.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
+      }
+      for (const pid of PAINTING_PHASE_IDS) {
+        if (!savedPids.has(pid)) _deletedPaintingPhaseIds.add(pid);
+      }
+    }
+
+    document.getElementById('paintingView').style.display = 'block';
+    document.getElementById('paintingEditForm').style.display = 'none';
+  }
 
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
@@ -4516,10 +4685,10 @@ async function initApp(){
   document.getElementById('tabPaintingBtn')?.addEventListener('click', () => {
     _setEstimatorTab('painting');
     if (_loadedProjectData) {
-      _paintingPhasesLocked = true;
-      _renderPaintingPhaseTable();
+      showPaintingCard(_loadedProjectData);
     }
   });
+
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
   if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
@@ -4531,14 +4700,42 @@ async function initApp(){
   if (editPaintingBtn) editPaintingBtn.addEventListener('click', () => {
     document.getElementById('paintingView').style.display = 'none';
     document.getElementById('paintingEditForm').style.display = 'block';
+    // Pre-fill form inputs from saved painting_breakdown
+    const bd = _loadedProjectData?.painting_breakdown;
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    if (bd) {
+      setVal('paintingOverheadInput', bd.overhead_pct ?? 0);
+      setVal('paintingProfitInput', bd.profit_pct ?? 30);
+      setVal('paintingTaxInput', bd.tax_pct ?? 6);
+      setVal('paintingCommissionInput', bd.commission_pct ?? 5);
+      setVal('paintingMarginInput', bd.margin ?? 0);
+      setVal('paintingMaterialsInput', bd.materials ?? 0);
+      setVal('paintingGasolineInput', bd.gasoline ?? 0);
+      setVal('paintingTollCostInput', bd.toll_cost ?? 0);
+      setVal('paintingTotalAreaInput', bd.total_area ?? '');
+      setVal('paintingAddressInput', bd.address ?? '');
+      if (bd.expected_days != null) {
+        _paintingExpectedDaysManual = true;
+        setVal('paintingExpectedDaysInput', bd.expected_days);
+      }
+    }
+    // Drive info display
+    const di = _loadedProjectData?.driving_info || {};
+    const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    setEditText('paintingEditDriveDistance', di.distance);
+    setEditText('paintingEditDriveTime', di.duration);
     _paintingPhasesLocked = true;
     _renderPaintingPhaseTable();
+    _updatePaintingCrewCalcs();
+    ['paintingGasolineInput', 'paintingTollCostInput'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', _updatePaintingTransportCosts);
+    });
+    document.getElementById('paintingMaterialsInput')?.addEventListener('input', _updatePaintingCrewCalcs);
   });
 
   const cancelPaintingBtn = document.getElementById('cancelPaintingBtn');
   if (cancelPaintingBtn) cancelPaintingBtn.addEventListener('click', () => {
-    document.getElementById('paintingEditForm').style.display = 'none';
-    document.getElementById('paintingView').style.display = 'block';
+    if (_loadedProjectData) showPaintingCard(_loadedProjectData);
   });
 
   const paintingExpectedDaysModifyBtn = document.getElementById('paintingExpectedDaysModifyBtn');
@@ -4592,13 +4789,14 @@ async function initApp(){
     const tax      = parseFloat(document.getElementById('paintingTaxInput')?.value) || 0;
     const comm     = parseFloat(document.getElementById('paintingCommissionInput')?.value) || 0;
     const margin   = parseFloat(document.getElementById('paintingMarginInput')?.value) || 0;
+    const materials = parseFloat(document.getElementById('paintingMaterialsInput')?.value) || 0;
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
     const expectedDays = parseInt(document.getElementById('paintingExpectedDaysInput')?.value) || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address };
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
@@ -4609,8 +4807,7 @@ async function initApp(){
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
       _loadedProjectData = updated;
-      document.getElementById('paintingEditForm').style.display = 'none';
-      document.getElementById('paintingView').style.display = 'block';
+      showPaintingCard(updated);
     } catch (e) {
       alert('Save failed: ' + e.message);
     }
