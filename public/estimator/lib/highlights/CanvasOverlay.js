@@ -1,11 +1,13 @@
 import { toast } from '../toast.js';
 
 export class CanvasOverlay {
-  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged }) {
+  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved }) {
     this.wrapperEl = wrapperEl;
     this.canvasEl = canvasEl;
     this.store = store;
     this.onMeasurementsChanged = onMeasurementsChanged || null;
+    this.onLineMeasurementCreated = onLineMeasurementCreated || null;
+    this.onLineMeasurementRemoved = onLineMeasurementRemoved || null;
 
     this.overlay = null;
     this.ctx = null;
@@ -1043,14 +1045,16 @@ export class CanvasOverlay {
       // store measurement record (normalized coordinates)
       const label = formatInches(realInchesForLine);
       const measurementId = `drag-${Date.now()}`;
-      this.store.addMeasurement(this.currentPage, {
+      const measurement = {
         id: measurementId,
         inches: realInchesForLine,
         label,
         at: Date.now(),
         doubleSided: this.doubleSided,
         pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
-      });
+      };
+      this.onLineMeasurementCreated?.(measurement);
+      this.store.addMeasurement(this.currentPage, measurement);
 
       this._pushShapeUndo({
         type: 'add',
@@ -1299,6 +1303,7 @@ export class CanvasOverlay {
 
     const targetMeasurement = this._findMeasurementAtPoint(x, y);
     if (targetMeasurement) {
+      this.onLineMeasurementRemoved?.(targetMeasurement);
       this.store.removeMeasurement(this.currentPage, targetMeasurement.id);
       this.onMeasurementsChanged?.();
       toast('Measurement removed', 'info');
@@ -1450,6 +1455,7 @@ export class CanvasOverlay {
 
       if (targetMeasurement) {
         if (e.altKey) {
+          this.onLineMeasurementRemoved?.(targetMeasurement);
           this.store.removeMeasurement(this.currentPage, targetMeasurement.id);
           this.onMeasurementsChanged?.();
           toast('Measurement removed', 'info');
@@ -1507,14 +1513,16 @@ export class CanvasOverlay {
     if (measuredInches !== null) {
       const txt = formatInches(measuredInches);
       toast(`Length: ${txt}`, 'info');
-      this.store.addMeasurement(this.currentPage, {
+      const measurement = {
         id: `line-${Date.now()}`,
         inches: measuredInches,
         label: txt,
         at: Date.now(),
         doubleSided: this.doubleSided,
         pts: [{ x1: nearest.x1 || nearest.x, y1: nearest.y1 || nearest.y, x2: nearest.x2 || nearest.x1, y2: nearest.y2 || nearest.y1 }]
-      });
+      };
+      this.onLineMeasurementCreated?.(measurement);
+      this.store.addMeasurement(this.currentPage, measurement);
       this.onMeasurementsChanged?.();
     } else {
       toast(`Length: ${((pixelLength / this._pxPerPt) / 72).toFixed(2)} in`, 'info');
