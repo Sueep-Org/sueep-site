@@ -480,20 +480,35 @@ export default function EstimatorPage() {
             </div>
           </div>
 
-          {/* ANALYSIS CARD — below canvas, shown after project loaded */}
+          {/* TABBED ESTIMATOR CARD — Analysis / Painting */}
           <div
-            id="analysisCard"
-            className="bg-white rounded-lg shadow-md p-6 mt-6"
+            id="estimatorTabCard"
+            className="bg-white rounded-lg shadow-md mt-6"
             style={{ display: "none" }}
           >
+            {/* Tab bar */}
+            <div className="flex border-b border-gray-200 px-6 pt-4">
+              <button
+                id="tabAnalysisBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+              >
+                Analysis
+              </button>
+              <button
+                id="tabPaintingBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700"
+              >
+                Painting
+              </button>
+            </div>
+
+            {/* ANALYSIS PANEL */}
+            <div id="analysisCard" className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-800">
                 Analysis
               </h3>
               <div className="flex gap-2">
-                <button id="toggleToPaintingBtn" className="mini-btn">
-                  Show Painting
-                </button>
                 <button id="refreshDistanceBtn" className="mini-btn">
                   ↻ Distance
                 </button>
@@ -946,14 +961,10 @@ export default function EstimatorPage() {
                 </button>
               </div>
             </div>
-          </div>
+            </div>{/* end analysisCard panel */}
 
-          {/* PAINTING CARD */}
-          <div
-            id="paintingCard"
-            className="bg-white rounded-lg shadow-md p-6 mt-4"
-            style={{ display: "none" }}
-          >
+            {/* PAINTING PANEL */}
+            <div id="paintingCard" className="p-6" style={{ display: "none" }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-800">
                 Painting
@@ -1396,7 +1407,8 @@ export default function EstimatorPage() {
                 </button>
               </div>
             </div>
-          </div>
+            </div>{/* end paintingCard panel */}
+          </div>{/* end estimatorTabCard */}
 
           {/* CHANGE ORDER CARD */}
           <div

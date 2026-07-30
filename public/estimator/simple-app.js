@@ -2908,10 +2908,8 @@ async function initApp(){
     document.getElementById('projectLoadedCard').style.display = 'none';
     document.getElementById('newProjectForm').style.display = 'block';
     document.getElementById('editProjectForm').style.display = 'none';
-    const aCard = document.getElementById('analysisCard');
-    if (aCard) aCard.style.display = 'none';
-    const pCard = document.getElementById('paintingCard');
-    if (pCard) pCard.style.display = 'none';
+    const tabCard = document.getElementById('estimatorTabCard');
+    if (tabCard) tabCard.style.display = 'none';
   }
 
   function showEditProjectForm() {
@@ -4167,16 +4165,20 @@ async function initApp(){
     _updatePaintingCrewCalcs();
   }
 
-  function _setEstimatorCardVisibility(activeCard) {
-    const analysisCard = document.getElementById('analysisCard');
-    const paintingCard = document.getElementById('paintingCard');
-    if (!analysisCard || !paintingCard) return;
-    if (activeCard === 'painting') {
-      analysisCard.style.display = 'none';
-      paintingCard.style.display = 'block';
-    } else {
-      analysisCard.style.display = 'block';
-      paintingCard.style.display = 'none';
+  function _setEstimatorTab(activeTab) {
+    const analysisPanel = document.getElementById('analysisCard');
+    const paintingPanel = document.getElementById('paintingCard');
+    const tabAnalysis  = document.getElementById('tabAnalysisBtn');
+    const tabPainting  = document.getElementById('tabPaintingBtn');
+    if (!analysisPanel || !paintingPanel) return;
+    const isAnalysis = activeTab !== 'painting';
+    analysisPanel.style.display = isAnalysis ? 'block' : 'none';
+    paintingPanel.style.display = isAnalysis ? 'none' : 'block';
+    if (tabAnalysis) {
+      tabAnalysis.className = `px-4 py-2 text-sm font-medium border-b-2 mr-2 ${isAnalysis ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+    }
+    if (tabPainting) {
+      tabPainting.className = `px-4 py-2 text-sm font-medium border-b-2 ${!isAnalysis ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
     }
   }
 
@@ -4299,8 +4301,9 @@ async function initApp(){
     document.getElementById('analysisView').style.display = 'block';
     document.getElementById('analysisEditForm').style.display = 'none';
     document.getElementById('editAnalysisBtn').style.display = '';
-    card.style.display = 'block';
-    _setEstimatorCardVisibility('analysis');
+    const tabCard = document.getElementById('estimatorTabCard');
+    if (tabCard) tabCard.style.display = 'block';
+    _setEstimatorTab('analysis');
     showChangeOrderCard(projData);
     renderSovCard();
   }
@@ -4509,14 +4512,13 @@ async function initApp(){
     });
   }
 
-  const toggleToPaintingBtn = document.getElementById('toggleToPaintingBtn');
-  if (toggleToPaintingBtn) toggleToPaintingBtn.addEventListener('click', () => {
-    _setEstimatorCardVisibility('painting');
-  });
-
-  const toggleToAnalysisBtn = document.getElementById('toggleToAnalysisBtn');
-  if (toggleToAnalysisBtn) toggleToAnalysisBtn.addEventListener('click', () => {
-    _setEstimatorCardVisibility('analysis');
+  document.getElementById('tabAnalysisBtn')?.addEventListener('click', () => _setEstimatorTab('analysis'));
+  document.getElementById('tabPaintingBtn')?.addEventListener('click', () => {
+    _setEstimatorTab('painting');
+    if (_loadedProjectData) {
+      _paintingPhasesLocked = true;
+      _renderPaintingPhaseTable();
+    }
   });
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
