@@ -458,8 +458,11 @@ export default async function ErpDashboardPage() {
               { label: "Compliance", value: complianceRate !== null ? `${complianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: complianceRate !== null && complianceRate < 100 },
               { label: "Missing Logs", value: missedLogCount, dot: "bg-red-400", val: "text-gray-900", alert: missedLogCount > 0 },
               { label: "Open Incidents", value: openIncidents.length, dot: "bg-red-400", val: "text-gray-900", alert: openIncidents.length > 0 },
-            ].map((k) => (
-              <div key={k.label} className="px-4 py-3">
+            ].map((k, idx, arr) => (
+              <div
+                key={k.label}
+                className={`px-4 py-3 ${idx === arr.length - 1 && arr.length % 2 === 1 ? "col-span-2 sm:col-span-1" : ""}`}
+              >
                 <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
                   {k.label}
@@ -486,7 +489,7 @@ export default async function ErpDashboardPage() {
                     : undefined;
                   return (
                     <li key={p.id}>
-                      <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <Link href={`/erp/projects/${p.id}`} className="flex flex-col gap-1 px-4 py-2.5 hover:bg-gray-50 transition sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
                           {severity === "bad" && (
@@ -505,7 +508,7 @@ export default async function ErpDashboardPage() {
                             </span>
                           )}
                         </span>
-                        <p className="shrink-0 text-right text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 sm:shrink-0 sm:text-right">
                           {crew.map((c) => (c.hours != null ? `${c.name} (${c.hours.toFixed(1)}h)` : `${c.name} (planned)`)).join(", ")}
                         </p>
                       </Link>

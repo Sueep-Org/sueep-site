@@ -203,6 +203,7 @@ export function ChangeOrderLaborersSection({
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.completed]))
   );
   const [markCompleteOnAdd, setMarkCompleteOnAdd] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [qualityPopup, setQualityPopup] = useState<{ id: string; draft: string } | null>(null);
 
   useEffect(() => {
@@ -458,8 +459,17 @@ export function ChangeOrderLaborersSection({
         </div>
       )}
 
-      {canEdit && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+      {canEdit && showAddForm && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(false)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Close
+          </button>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
           &ldquo;Other&rdquo; only when the worker is not in the list.
@@ -526,24 +536,37 @@ export function ChangeOrderLaborersSection({
       </form>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          {showFinancials && (
-            <p className="text-sm text-gray-700">
-              {filterDate || filterLaborer ? (
-                <>
-                  Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
-                  <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
-                </>
-              ) : (
-                <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
-              )}
-            </p>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {showFinancials && (
+              <p className="text-sm text-gray-700">
+                {filterDate || filterLaborer ? (
+                  <>
+                    Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                    <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
+                  </>
+                ) : (
+                  <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
+                )}
+              </p>
+            )}
+            {canEdit && !showAddForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                aria-label="Add labor entry"
+                title="Add labor entry"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-lg font-semibold leading-none text-white shadow hover:bg-pink-500"
+              >
+                +
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[140px]">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
             <label className={label} htmlFor="co-filter-date">Filter by date</label>
             <input
               id="co-filter-date"
@@ -553,7 +576,7 @@ export function ChangeOrderLaborersSection({
               onChange={(e) => setFilterDate(e.target.value)}
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div>
             <label className={label} htmlFor="co-filter-laborer">Filter by laborer</label>
             <input
               id="co-filter-laborer"
@@ -565,11 +588,11 @@ export function ChangeOrderLaborersSection({
             />
           </div>
           {(filterDate || filterLaborer) && (
-            <div className="flex items-end">
+            <div className="flex sm:items-end">
               <button
                 type="button"
                 onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
-                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+                className="rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 sm:mb-0.5"
               >
                 Clear
               </button>

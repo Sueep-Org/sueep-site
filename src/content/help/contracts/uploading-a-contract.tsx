@@ -105,7 +105,7 @@ export function UploadingAContract() {
           you don&apos;t need to run it through DocuSeal at all. Click{" "}
           <strong>Already signed? Upload it here</strong> instead, and the PDF is stored directly
           with a Signed status.
-          <ImgPlaceholder label="Already signed? Upload it here link, next to Upload PDF for e-signature" size="sm" />
+          <Img src="/help/contracts/contracts.png" alt="View and download the contract" />
         </Step>
 
         <Step n={9} title="Removing a contract">

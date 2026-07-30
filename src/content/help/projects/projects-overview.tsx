@@ -29,7 +29,7 @@ export function ProjectsOverview() {
         <Step n={2} title="Overview tab">
           Clicking a project&apos;s title opens its details page, landing on the{" "}
           <strong>Overview</strong> tab.
-          <ImgPlaceholder label="Overview tab: work order fields plus lifecycle/segment/PM/dates setup" />
+          <Img src="/help/projects_overview/details_5.5.png" alt="Expanded project row" />
           This tab combines what used to be two separate tabs. It has the project&apos;s work
           order fields (name, address, service type, main points of contact, and any notes to the
           PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed), segment, PM,
@@ -46,7 +46,7 @@ export function ProjectsOverview() {
           services are included (clean, paint, carpet cleaning, and so on). This scope is what
           drives the unit&apos;s price against the building&apos;s pricing package. Click{" "}
           <strong>Save</strong> when you&apos;re done.
-          <ImgPlaceholder label="Layout tab showing unit scope of work fields" size="sm" />
+          <Img src="/help/turnover/turnover_3.png" alt="Material Log" />
           See <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A> for
           more on how this scope feeds into pricing.
         </Step>
@@ -56,7 +56,7 @@ export function ProjectsOverview() {
           done, percent invoiced, and billing status, plus estimated and actual costs. Actual labor
           and material costs are calculated from the project&apos;s own logs rather than typed in
           by hand.
-          <ImgPlaceholder label="Financials tab with contract value, costs, and Schedule of Values" />
+          <Img src="/help/projects_overview/financials.png" alt="Expanded project row" />
           Below that is the project&apos;s <strong>Schedule of Values</strong>, a line-item
           breakdown used to track what&apos;s been billed against the contract.
         </Step>
@@ -86,7 +86,7 @@ export function ProjectsOverview() {
           For janitorial turnover units, this tab is the unit&apos;s full quality checklist,
           tracking what&apos;s been completed before the unit can be marked done. Other project
           types get a simpler generic checklist.
-          <ImgPlaceholder label="Turnover unit quality checklist" size="sm" />
+          <Img src="/help/turnover/turnover_4.png" alt="Material Log" />
         </Step>
 
         <Step n={7} title="Other tabs you may see">
@@ -107,7 +107,10 @@ export function ProjectsOverview() {
             </LI>
             <LI>
               <strong>Quality Checks</strong>: quality checks logged against this project, with
-              photo evidence and a supervisor signature.
+              photo evidence and a supervisor signature. Every project type gets this tab{" "}
+              <strong>except</strong> janitorial turnover units, see{" "}
+              <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A> for
+              how quality checks work for those instead.
             </LI>
           </UL>
         </Step>

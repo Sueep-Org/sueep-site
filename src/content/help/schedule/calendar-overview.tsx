@@ -86,7 +86,7 @@ export function ScheduleCalendarOverview() {
           Click any amber, gray-dashed, or solid (not-yet-fully-logged) project chip to open its{" "}
           <strong>event card</strong>, centered on the screen, like a Google Calendar event
           popup.
-          <ImgPlaceholder label="Event card open on a chip, showing Start/End date, Coverage, and Workers sections" />
+          <Img src="/help/schedule_calendar_overview/calendar_card.png" alt="Filter panel with supervisor and project type options" size="sm" />
           The card has three parts:
           <UL>
             <LI>
@@ -116,7 +116,7 @@ export function ScheduleCalendarOverview() {
           A gray or red dashed chip (a planned assignment, not yet logged) opens the same event
           card, but with a <strong>Planned date</strong> field instead of Start/End date, plus an
           optional time range.
-          <ImgPlaceholder label="Event card open on a dashed/planned chip, showing the Planned date field and time range" size="sm" />
+          <Img src="/help/schedule_calendar_overview/calendar_card.png" alt="Filter panel with supervisor and project type options" size="sm" />
           Changing the planned date and clicking <strong>Save planned date</strong> moves just that
           day&apos;s assignment (and any workers already scheduled on it) to the new day. It does{" "}
           <strong>not</strong> change the project&apos;s overall Start/End date.
@@ -126,7 +126,7 @@ export function ScheduleCalendarOverview() {
           Clicking a <strong>solid</strong> chip that already has hours logged opens a different,
           fully read-only card: total hours worked that day, each worker with their hours and
           clock-in time, and a <strong>Go to labor log</strong> link.
-          <ImgPlaceholder label="Read-only labor detail card showing hours, workers, and clock-in times" size="sm" />
+          <Img src="/help/schedule_calendar_overview/solid_card.png" alt="Filter panel with supervisor and project type options" size="sm" />
           <Callout type="info">
             Nothing on this card is editable. Logged labor is historical fact, so a correction
             (wrong hours, wrong worker, etc.) has to happen on the project&apos;s own{" "}
@@ -139,7 +139,6 @@ export function ScheduleCalendarOverview() {
           calendar to reschedule them, the same way you&apos;d drag an event in Google Calendar.
           Dropping on a new day moves the project&apos;s start date (for an amber chip) or the
           planned assignment and its workers (for a dashed chip).
-          <ImgPlaceholder label="Dragging a chip from one day cell to another" size="sm" />
           <Callout type="warning">
             Solid (confirmed, logged-labor) chips can&apos;t be dragged. That&apos;s a historical
             record, not a plan, so it&apos;s never draggable.

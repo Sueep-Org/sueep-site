@@ -912,9 +912,9 @@ export function ProjectLaborSection({
       </form>}
 
       <div id="labor-log" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {showFinancials && (
               <p className="text-sm text-gray-700">
                 {filterDate || filterLaborer ? (
@@ -941,8 +941,8 @@ export function ProjectLaborSection({
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[140px]">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
             <label className={label} htmlFor="filter-date">Filter by date</label>
             <input
               id="filter-date"
@@ -952,7 +952,7 @@ export function ProjectLaborSection({
               onChange={(e) => setFilterDate(e.target.value)}
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div>
             <label className={label} htmlFor="filter-laborer">Filter by laborer</label>
             <input
               id="filter-laborer"
@@ -964,11 +964,11 @@ export function ProjectLaborSection({
             />
           </div>
           {(filterDate || filterLaborer) && (
-            <div className="flex items-end">
+            <div className="flex sm:items-end">
               <button
                 type="button"
                 onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
-                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+                className="rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 sm:mb-0.5"
               >
                 Clear
               </button>

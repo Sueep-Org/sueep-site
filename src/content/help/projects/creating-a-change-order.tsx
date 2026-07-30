@@ -86,7 +86,7 @@ export function CreatingAChangeOrder() {
 
             <Step n={7} title="Importing change orders from the Estimator">
                 Instead of creating a change order from scratch, you can pull one in from the AI Estimator tool. From a project&apos;s Change Orders tab, next to <strong>Start change order</strong>, click <strong>Import from Estimator</strong>, pick the estimate it came from, select which change orders to bring in, and import them.
-                <ImgPlaceholder label="Import from Estimator modal with change orders selected" />
+                <Img src="/help/change_order/details_6.png" alt="Signing tab" />
             </Step>
         </Steps>
     </>

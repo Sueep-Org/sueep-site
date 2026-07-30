@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, Steps, Step, ImgPlaceholder, A , Img} from "@/app/erp/components/help/HelpComponents";
 
 export function OnboardingNewEmployee() {
   return (
@@ -22,7 +22,7 @@ export function OnboardingNewEmployee() {
         <Step n={2} title="Pipeline tab">
           Open a candidate&apos;s record and use the <strong>Pipeline</strong> tab to move them
           through their status: Applied, Interviewing, Onboarding, or Denied.
-          <ImgPlaceholder label="Pipeline tab with status dropdown and internal notes" />
+          <Img src="/help/employees/pipeline.png" alt="Employees details" />
           <Callout type="tip">
             Setting status to <strong>Onboarding</strong> automatically fills in a default
             paperwork checklist (Driver&apos;s License, Social Security Card, Passport or ID, W-4,
@@ -36,7 +36,7 @@ export function OnboardingNewEmployee() {
           Once a candidate is Onboarding, use the <strong>Paperwork</strong> tab to send them a
           secure upload link by email. No ERP login is required on their end, and the link expires
           after 7 days.
-          <ImgPlaceholder label="Paperwork tab showing the send-link button and document checklist status" size="sm" />
+          <Img src="/help/employees/paperwork.png" alt="Employees details" />
           The tab shows which required documents are still pending, and updates once the candidate
           uploads each one. Click <strong>Resend upload link</strong> if it expires before
           they&apos;re done.
@@ -45,7 +45,7 @@ export function OnboardingNewEmployee() {
         <Step n={4} title="Onboarding tab: creating the employee record">
           Once every document is in, go to the <strong>Onboarding</strong> tab and click{" "}
           <strong>Finish onboarding &rarr; Add as employee</strong>.
-          <ImgPlaceholder label="Onboarding tab with the Finish onboarding button" size="sm" />
+          <Img src="/help/employees/onboarding.png" alt="Employees details" />
           This creates a new Employee record, copying over their name, email, phone, role, and
           bank info, and moves their uploaded documents onto that new Employee profile. Their
           candidate status flips to Hired.

@@ -57,6 +57,7 @@ export function ChangeOrderContractorsSection({
   const [editFields, setEditFields] = useState<EditFields>({ contractorId: "", role: "", startDate: "", endDate: "", notes: "", costDollars: "" });
   const [addError, setAddError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
     setAssignments(initialAssignments);
@@ -184,8 +185,17 @@ export function ChangeOrderContractorsSection({
   return (
     <div className="space-y-6">
       {/* Add form — above table */}
-      <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add contractor</h2>
+      {showAddForm && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add contractor</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(false)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Close
+          </button>
+        </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="sm:col-span-2 lg:col-span-2">
             <label className={label} htmlFor="co-c-contractor">Contractor *</label>
@@ -225,11 +235,24 @@ export function ChangeOrderContractorsSection({
         >
           {loading ? "Adding…" : "Add contractor"}
         </button>
-      </form>
+      </form>}
 
       {/* Table */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contractors</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contractors</h2>
+          {!showAddForm && (
+            <button
+              type="button"
+              onClick={() => setShowAddForm(true)}
+              aria-label="Add contractor"
+              title="Add contractor"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-lg font-semibold leading-none text-white shadow hover:bg-pink-500"
+            >
+              +
+            </button>
+          )}
+        </div>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[700px] text-left text-sm">
             <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">

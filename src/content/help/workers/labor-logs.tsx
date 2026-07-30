@@ -31,7 +31,8 @@ export function InputtingLaborLogs() {
         <Step n={2} title="Adding a labor entry">
           On the Labor (or Laborers) tab, click the <strong>+</strong> button to open the entry
           form.
-          <ImgPlaceholder label="Labor tab with the + button and the add-entry form open" />
+          <Img src="/help/labor_logs/labor_table.png" alt="Recent labor entries shown from the projects table" />
+          <Img src="/help/labor_logs/labor_form.png" alt="Recent labor entries shown from the projects table" />
           <Callout type="info">
             The employee you pick has to already exist as an Employee in the system. Their role
             and hourly rate auto-fill from their profile, but you can still edit them for this one
@@ -70,7 +71,6 @@ export function InputtingLaborLogs() {
 
         <Step n={4} title="Viewing and editing your entries">
           Saved entries show up in a table below the entry form.
-          <ImgPlaceholder label="Labor log table with filter/search controls and edit/delete buttons" size="sm" />
           In this table you can filter by date or search for an employee by name. Click{" "}
           <strong>Edit</strong> on a row to change any of its fields, or <strong>Delete</strong> to
           remove it entirely.
