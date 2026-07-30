@@ -3563,6 +3563,47 @@ async function initApp(){
     });
   }
 
+  const refreshPaintingDistanceBtn = document.getElementById('refreshPaintingDistanceBtn');
+  if (refreshPaintingDistanceBtn) {
+    refreshPaintingDistanceBtn.addEventListener('click', async () => {
+      if (!activeProjectId) return;
+      refreshPaintingDistanceBtn.textContent = '↻ Refreshing...';
+      refreshPaintingDistanceBtn.disabled = true;
+      try {
+        const isEditMode = document.getElementById('paintingEditForm')?.style.display !== 'none';
+        const body = {};
+        if (isEditMode) {
+          const addrInput = document.getElementById('paintingAddressInput')?.value?.trim();
+          const startSel = document.getElementById('paintingStartAddressSelect');
+          const startCustom = document.getElementById('paintingStartAddressInput');
+          if (addrInput) body.address = addrInput;
+          if (startSel?.value === 'custom' && startCustom?.value?.trim()) body.start_address = startCustom.value.trim();
+        }
+        const r = await fetch(`${API_BASE}/api/projects/${activeProjectId}/refresh-distance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error('Failed to refresh');
+        const data = await r.json();
+        const di = data.driving_info || {};
+        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+        setText('paintingDetailDistance', di.distance);
+        setText('paintingDetailDuration', di.duration);
+        setText('paintingEditDriveDistance', di.distance);
+        setText('paintingEditDriveTime', di.duration);
+        if (_loadedProjectData) _loadedProjectData.driving_info = di;
+        _updatePaintingTransportCosts();
+        toast('Distance updated', 'info');
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        refreshPaintingDistanceBtn.textContent = '↻ Distance';
+        refreshPaintingDistanceBtn.disabled = false;
+      }
+    });
+  }
+
   // ======================================================
   // ANALYSIS CARD
   // ======================================================
