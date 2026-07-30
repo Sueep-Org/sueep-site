@@ -251,24 +251,29 @@ export function SchedulePlanner({
     }
   }
 
-  // Event popover — click any project chip on the month calendar to preview
-  // it and adjust its start/end date without leaving the calendar, plus a
-  // link through to the full project page. Same "one open at a time,
-  // outside-click closes it" pattern as the "+N more" popover above.
+  // Event card — click any project chip on the month calendar to preview it
+  // and adjust its date/coverage/workers without leaving the calendar, plus
+  // a link through to the full project page. Rendered centered on screen
+  // (same modal shell as the "+" day-assignment modal below), via a portal
+  // to document.body — a dimmed (out-of-month) day cell is rendered at
+  // opacity-40, and CSS opacity applies to the whole subtree as a unit, so a
+  // card left nested inside that cell would be faded too regardless of its
+  // own bg-white.
   const [eventPopoverKey, setEventPopoverKey] = useState<string | null>(null);
+  // "project" chips (needs-supervisor / confirmed logged-work) edit the
+  // project's own start/end date. A "planned" chip (dashed border) is a
+  // single ProjectDayAssignment — editing its date means moving that planned
+  // day somewhere else on the calendar, not touching the project's overall
+  // start/end date, which is a different, project-wide field.
+  const [eventKind, setEventKind] = useState<"project" | "planned">("project");
+  const [eventAssignmentId, setEventAssignmentId] = useState<string | null>(null);
+  const [eventPlannedDate, setEventPlannedDate] = useState("");
+  const [eventPlannedStartTime, setEventPlannedStartTime] = useState("");
+  const [eventPlannedEndTime, setEventPlannedEndTime] = useState("");
   const [eventStartDate, setEventStartDate] = useState("");
   const [eventEndDate, setEventEndDate] = useState("");
   const [eventSaving, setEventSaving] = useState(false);
   const [eventError, setEventError] = useState("");
-  const eventPopoverRef = useRef<HTMLDivElement>(null);
-  // Rendered via a portal positioned from the clicked chip's screen
-  // coordinates, rather than as an absolutely-positioned descendant of the
-  // day cell — a dimmed (out-of-month) day cell is rendered at opacity-40,
-  // and CSS opacity is applied to the whole subtree as a unit, so a popover
-  // living inside it would be faded too regardless of its own bg-white.
-  // Portaling to document.body escapes that, and also escapes the month
-  // grid's overflow-x-auto clipping.
-  const [eventAnchorRect, setEventAnchorRect] = useState<{ top: number; bottom: number; left: number; right: number } | null>(null);
 
   // Day-specific coverage (ProjectDayAssignment) for the popover's project —
   // separate from Project.supervisorUserId, since a day can be covered by a
@@ -291,40 +296,25 @@ export function SchedulePlanner({
   const [eventWorkerWarning, setEventWorkerWarning] = useState<string | null>(null);
   const [deletingEventWorkerId, setDeletingEventWorkerId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!eventPopoverKey) return;
-    function onMouseDown(e: MouseEvent) {
-      if (eventPopoverRef.current && !eventPopoverRef.current.contains(e.target as Node)) {
-        setEventPopoverKey(null);
-      }
-    }
-    // Closes on scroll elsewhere on the page, rather than trying to track
-    // the anchor's moving position — capture:true so it also catches the
-    // month grid's own overflow-x-auto wrapper scrolling, not just the
-    // window. Scrolling inside the popover's own overflow-y-auto body (a
-    // scroll event targeting a descendant of the popover) must NOT count,
-    // or the card would close the instant its content was long enough to
-    // scroll.
-    function onScroll(e: Event) {
-      if (eventPopoverRef.current && eventPopoverRef.current.contains(e.target as Node)) return;
-      setEventPopoverKey(null);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("scroll", onScroll, true);
-    };
-  }, [eventPopoverKey]);
-
-  function openEventPopover(k: string, p: ScheduleProject, anchor: HTMLElement) {
-    const rect = anchor.getBoundingClientRect();
-    setEventAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right });
+  function openEventPopover(k: string, p: ScheduleProject, assignment?: ScheduleDayAssignment) {
     setEventPopoverKey(`${k}:${p.id}`);
+    if (assignment) {
+      setEventKind("planned");
+      setEventAssignmentId(assignment.id);
+      setEventPlannedDate(assignment.dateKey);
+      setEventPlannedStartTime(assignment.startTime ?? "");
+      setEventPlannedEndTime(assignment.endTime ?? "");
+    } else {
+      setEventKind("project");
+      setEventAssignmentId(null);
+      setEventPlannedDate("");
+      setEventPlannedStartTime("");
+      setEventPlannedEndTime("");
+    }
     setEventStartDate(p.projectDate ? p.projectDate.slice(0, 10) : "");
     setEventEndDate(p.projectEndDate ? p.projectEndDate.slice(0, 10) : "");
     setEventError("");
-    const da = dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
+    const da = assignment ?? dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
     setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
     setEventDayPmId(da?.projectManagerUserId ?? "");
     setEventDayError("");
@@ -333,6 +323,103 @@ export function SchedulePlanner({
     setEventWorkerId("");
     setEventWorkerError("");
     setEventWorkerWarning(null);
+  }
+
+  // Moves and/or retimes a planned (ProjectDayAssignment) chip, rather than
+  // editing the project's own start/end date — the assignment's
+  // supervisor/PM carry over. Day-assignments POST is an upsert keyed by
+  // (projectId, date), so when the date is unchanged this just updates the
+  // same row's time in place; only an actual date change needs the
+  // create-on-new-date + migrate-workers + delete-old-row dance.
+  async function handleEventPlannedDateSave(oldK: string, projectId: string, assignmentId: string) {
+    setEventError("");
+    const newK = eventPlannedDate;
+    if (!newK) {
+      setEventError("Pick a date");
+      return;
+    }
+    if ((eventPlannedStartTime && !eventPlannedEndTime) || (eventPlannedEndTime && !eventPlannedStartTime)) {
+      setEventError("Set both a start and end time, or leave both blank for all-day");
+      return;
+    }
+    if (eventPlannedStartTime && eventPlannedEndTime && eventPlannedEndTime <= eventPlannedStartTime) {
+      setEventError("End time must be after start time");
+      return;
+    }
+    const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
+    if (!existingAssignment) {
+      setEventError("Assignment not found");
+      return;
+    }
+    setEventSaving(true);
+    try {
+      const dayRes = await fetch("/api/erp/schedule/day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          date: newK,
+          supervisorUserId: existingAssignment.supervisorUserId || undefined,
+          projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
+          startTime: eventPlannedStartTime || undefined,
+          endTime: eventPlannedEndTime || undefined,
+        }),
+      });
+      const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!dayRes.ok || !dayData.id) throw new Error(dayData.error || "Failed to save");
+
+      const dateChanged = newK !== oldK;
+      const newWorkers: ScheduleWorkerAssignment[] = [];
+      if (dateChanged) {
+        const oldWorkers = workerAssignments.filter((w) => w.dateKey === oldK && w.projectId === projectId);
+        for (const w of oldWorkers) {
+          const wRes = await fetch("/api/erp/schedule/worker-assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              employeeId: w.employeeId || undefined,
+              contractorId: w.contractorId || undefined,
+              date: newK,
+            }),
+          });
+          const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
+          if (wRes.ok && wData.id) {
+            newWorkers.push({ id: wData.id, projectId, employeeId: w.employeeId, contractorId: w.contractorId, dateKey: newK, seriesId: null });
+          }
+        }
+
+        // Deletes the old-date row and (per that route) clears worker
+        // assignments still dated to the old day — safe to run after the
+        // above since the carried-over workers now live on newK instead.
+        await fetch(`/api/erp/schedule/day-assignments/${assignmentId}`, { method: "DELETE" });
+      }
+
+      setDayAssignments((prev) => [
+        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id),
+        {
+          id: dayData.id!,
+          projectId,
+          dateKey: newK,
+          supervisorUserId: existingAssignment.supervisorUserId,
+          projectManagerUserId: existingAssignment.projectManagerUserId,
+          startTime: eventPlannedStartTime || null,
+          endTime: eventPlannedEndTime || null,
+          seriesId: dateChanged ? null : existingAssignment.seriesId,
+        },
+      ]);
+      if (dateChanged) {
+        setWorkerAssignments((prev) => [
+          ...prev.filter((w) => !(w.dateKey === oldK && w.projectId === projectId)),
+          ...newWorkers,
+        ]);
+      }
+      setEventPopoverKey(null);
+    } catch (err) {
+      setEventError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setEventSaving(false);
+    }
   }
 
   async function handleEventDayAssignmentSave(k: string, projectId: string) {
@@ -492,7 +579,7 @@ export function SchedulePlanner({
   }
 
   function renderEventPopover(k: string, p: ScheduleProject) {
-    if (eventPopoverKey !== `${k}:${p.id}` || !eventAnchorRect) return null;
+    if (eventPopoverKey !== `${k}:${p.id}`) return null;
 
     const dayWorkers = workerAssignments.filter((a) => a.dateKey === k && a.projectId === p.id);
     const workerOptions = eventWorkerType === "employee" ? employees : contractors;
@@ -500,29 +587,15 @@ export function SchedulePlanner({
       ? workerOptions.filter((w) => w.displayName.toLowerCase().includes(eventWorkerQuery.toLowerCase()))
       : workerOptions;
 
-    const POPOVER_WIDTH = 288;
-    const POPOVER_MAX_HEIGHT = 416;
-    const MARGIN = 8;
-    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : POPOVER_WIDTH + MARGIN * 2;
-    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : POPOVER_MAX_HEIGHT + MARGIN * 2;
-    let left = eventAnchorRect.left;
-    if (left + POPOVER_WIDTH > viewportWidth - MARGIN) left = Math.max(MARGIN, viewportWidth - POPOVER_WIDTH - MARGIN);
-    const spaceBelow = viewportHeight - eventAnchorRect.bottom;
-    const openUpward = spaceBelow < POPOVER_MAX_HEIGHT && eventAnchorRect.top > spaceBelow;
-    const style: React.CSSProperties = {
-      position: "fixed",
-      left,
-      width: POPOVER_WIDTH,
-      maxHeight: POPOVER_MAX_HEIGHT,
-      ...(openUpward ? { bottom: viewportHeight - eventAnchorRect.top + 4 } : { top: eventAnchorRect.bottom + 4 }),
-    };
-
     return createPortal(
       <div
-        ref={eventPopoverRef}
-        style={style}
-        className="z-50 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 text-left shadow-xl"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={() => setEventPopoverKey(null)}
       >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 text-left shadow-xl"
+        >
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs font-semibold text-gray-800">{p.jobTitle}</p>
           <button
@@ -536,38 +609,82 @@ export function SchedulePlanner({
         </div>
         <p className="mt-0.5 text-[10px] text-gray-400">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</p>
 
-        <div className="mt-2 space-y-1.5">
-          <label className="block text-[10px] font-medium text-gray-500">
-            Start date
-            <input
-              type="date"
-              value={eventStartDate}
-              onChange={(e) => setEventStartDate(e.target.value)}
-              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-            />
-          </label>
-          <label className="block text-[10px] font-medium text-gray-500">
-            End date
-            <input
-              type="date"
-              value={eventEndDate}
-              onChange={(e) => setEventEndDate(e.target.value)}
-              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-            />
-          </label>
-        </div>
+        {eventKind === "planned" && eventAssignmentId ? (
+          <div className="mt-2 space-y-1.5">
+            <label className="block text-[10px] font-medium text-gray-500">
+              Planned date
+              <input
+                type="date"
+                value={eventPlannedDate}
+                onChange={(e) => setEventPlannedDate(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              />
+            </label>
+            <p className="text-[9px] text-gray-400">Moves this planned assignment (and its scheduled workers) to a different day.</p>
+            <label className="block text-[10px] font-medium text-gray-500">
+              Time (optional — leave blank for all-day)
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <input
+                  type="time"
+                  value={eventPlannedStartTime}
+                  onChange={(e) => setEventPlannedStartTime(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                />
+                <span className="text-[10px] text-gray-400">to</span>
+                <input
+                  type="time"
+                  value={eventPlannedEndTime}
+                  onChange={(e) => setEventPlannedEndTime(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                />
+              </div>
+            </label>
+          </div>
+        ) : (
+          <div className="mt-2 space-y-1.5">
+            <label className="block text-[10px] font-medium text-gray-500">
+              Start date
+              <input
+                type="date"
+                value={eventStartDate}
+                onChange={(e) => setEventStartDate(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              />
+            </label>
+            <label className="block text-[10px] font-medium text-gray-500">
+              End date
+              <input
+                type="date"
+                value={eventEndDate}
+                onChange={(e) => setEventEndDate(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              />
+            </label>
+          </div>
+        )}
 
         {eventError ? <p className="mt-1 text-[10px] text-red-500">{eventError}</p> : null}
 
         <div className="mt-2 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => handleEventDatesSave(p.id)}
-            disabled={eventSaving}
-            className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
-            {eventSaving ? "Saving…" : "Save dates"}
-          </button>
+          {eventKind === "planned" && eventAssignmentId ? (
+            <button
+              type="button"
+              onClick={() => handleEventPlannedDateSave(k, p.id, eventAssignmentId)}
+              disabled={eventSaving}
+              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+            >
+              {eventSaving ? "Moving…" : "Save planned date"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleEventDatesSave(p.id)}
+              disabled={eventSaving}
+              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+            >
+              {eventSaving ? "Saving…" : "Save dates"}
+            </button>
+          )}
           <Link
             href={`/erp/projects/${p.id}`}
             className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
@@ -740,6 +857,7 @@ export function SchedulePlanner({
             </div>
           ) : null}
           {eventWorkerError ? <p className="mt-1 text-[10px] text-red-500">{eventWorkerError}</p> : null}
+        </div>
         </div>
       </div>,
       document.body,
@@ -1227,7 +1345,7 @@ export function SchedulePlanner({
                           <li key={`needs-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              onClick={(e) => openEventPopover(k, p, e.currentTarget)}
+                              onClick={() => openEventPopover(k, p)}
                               className={`w-full ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
                             >
                               <span aria-hidden>⚠</span>
@@ -1256,7 +1374,7 @@ export function SchedulePlanner({
                           <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              onClick={(e) => openEventPopover(k, p, e.currentTarget)}
+                              onClick={() => openEventPopover(k, p)}
                               className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
                             >
                               <span className="truncate">{p.jobTitle}</span>
@@ -1291,7 +1409,7 @@ export function SchedulePlanner({
                         <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
                           <button
                             type="button"
-                            onClick={(e) => openEventPopover(k, project, e.currentTarget)}
+                            onClick={() => openEventPopover(k, project, assignment)}
                             className={`flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
                           >
                             <span className="truncate">{project.jobTitle}</span>
