@@ -280,7 +280,81 @@ async function initApp(){
   let _sovRows = [];
   let _pdfMetadataSummary = null;
   let _pageAggregateOverrides = {};
+  let _projectAggregateOverrides = {};
   let _sovUndoStack = [];
+
+  function getPageAggregateStorageKey(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default') {
+    return `estimator_page_aggregate_overrides_${projectId}`;
+  }
+
+  function persistPageAggregateOverrides() {
+    try {
+      localStorage.setItem(getPageAggregateStorageKey(), JSON.stringify(_pageAggregateOverrides));
+    } catch (_) {}
+  }
+
+  function getProjectAggregateStorageKey(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default') {
+    return `estimator_project_aggregate_overrides_${projectId}`;
+  }
+
+  function persistProjectAggregateOverrides() {
+    try {
+      localStorage.setItem(getProjectAggregateStorageKey(), JSON.stringify(_projectAggregateOverrides));
+    } catch (_) {}
+  }
+
+  function restoreProjectAggregateOverrides(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default') {
+    try {
+      const stored = localStorage.getItem(getProjectAggregateStorageKey(projectId));
+      if (!stored) {
+        _projectAggregateOverrides = {};
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') {
+        _projectAggregateOverrides = {};
+        return;
+      }
+
+      const restored = {};
+      if (typeof parsed.length === 'number') restored.length = Number(parsed.length);
+      if (typeof parsed.area === 'number') restored.area = Number(parsed.area);
+      _projectAggregateOverrides = restored;
+    } catch (_) {
+      _projectAggregateOverrides = {};
+    }
+  }
+
+  function restorePageAggregateOverrides(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default') {
+    try {
+      const stored = localStorage.getItem(getPageAggregateStorageKey(projectId));
+      if (!stored) {
+        _pageAggregateOverrides = {};
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') {
+        _pageAggregateOverrides = {};
+        return;
+      }
+
+      const restored = {};
+      Object.entries(parsed).forEach(([pageKey, value]) => {
+        const pageNum = Number(pageKey);
+        if (!Number.isFinite(pageNum) || !value || typeof value !== 'object') return;
+        const nextValue = {};
+        if (typeof value.length === 'number') nextValue.length = Number(value.length);
+        if (typeof value.area === 'number') nextValue.area = Number(value.area);
+        if (Object.keys(nextValue).length) restored[pageNum] = nextValue;
+      });
+
+      _pageAggregateOverrides = restored;
+    } catch (_) {
+      _pageAggregateOverrides = {};
+    }
+  }
   let _sovStateProjectId = null;
   let _activeExtractedMeasurementQuery = '';
   let _extractedMeasurementHighlightCanvas = null;
@@ -353,7 +427,20 @@ async function initApp(){
     wrapperEl: pdfWrapper,
     canvasEl: pdfCanvas,
     store: highlightsStore,
-    onMeasurementsChanged: () => { updateMeasurementList(); window.__saveAnnotations?.(); }
+    onMeasurementsChanged: () => { updateMeasurementList(); window.__saveAnnotations?.(); },
+    onLineMeasurementCreated: (measurement) => {
+      if (measurement && typeof measurement === 'object') {
+        measurement.wallMeasurementSection = activeWallMeasurementSection || null;
+      }
+      addMeasurementToActiveWallSection(measurement);
+      updateMeasurementList();
+      window.__saveAnnotations?.();
+    },
+    onLineMeasurementRemoved: (measurement) => {
+      removeMeasurementFromActiveWallSection(measurement);
+      updateMeasurementList();
+      window.__saveAnnotations?.();
+    }
   });
 
   overlay.attach();
@@ -1214,9 +1301,143 @@ async function initApp(){
     });
   }
 
+  let wallMeasurementSectionValues = {
+    rooms: { ft: '0', in: '0' },
+    hallways: { ft: '0', in: '0' },
+    storage: { ft: '0', in: '0' },
+    amenities: { ft: '0', in: '0' }
+  };
+  let wallMeasurementSectionLabels = {
+    rooms: 'Rooms',
+    hallways: 'Hallways',
+    storage: 'Storage',
+    amenities: 'Amenities'
+  };
+  let activeWallMeasurementSection = null;
+
+  function getWallMeasurementSectionValue(section, unit = 'ft') {
+    const sectionValues = wallMeasurementSectionValues[section];
+    if (sectionValues && typeof sectionValues === 'object') {
+      return sectionValues[unit] ?? '';
+    }
+    return '';
+  }
+
+  function getWallMeasurementStorageKey() {
+    const projectKey = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default';
+    return `wallMeasurementSectionValues_${projectKey}`;
+  }
+
+  function persistWallMeasurementSectionValues() {
+    try {
+      localStorage.setItem(getWallMeasurementStorageKey(), JSON.stringify({
+        values: wallMeasurementSectionValues,
+        labels: wallMeasurementSectionLabels
+      }));
+    } catch (_) {}
+  }
+
+  function restoreWallMeasurementSectionValues() {
+    try {
+      const stored = localStorage.getItem(getWallMeasurementStorageKey());
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') return;
+      const savedValues = parsed.values;
+      const savedLabels = parsed.labels;
+      if (savedValues && typeof savedValues === 'object') {
+        Object.keys(wallMeasurementSectionValues).forEach((section) => {
+          const savedSection = savedValues[section];
+          if (savedSection && typeof savedSection === 'object') {
+            wallMeasurementSectionValues[section] = {
+              ...wallMeasurementSectionValues[section],
+              ...savedSection
+            };
+          }
+        });
+      }
+      if (savedLabels && typeof savedLabels === 'object') {
+        Object.keys(wallMeasurementSectionLabels).forEach((section) => {
+          if (typeof savedLabels[section] === 'string') {
+            wallMeasurementSectionLabels[section] = savedLabels[section];
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  function setWallMeasurementSectionValue(section, unit, value) {
+    if (section && Object.prototype.hasOwnProperty.call(wallMeasurementSectionValues, section)) {
+      const sectionValues = wallMeasurementSectionValues[section];
+      if (sectionValues && typeof sectionValues === 'object') {
+        sectionValues[unit] = value;
+        persistWallMeasurementSectionValues();
+      }
+    }
+  }
+
+  function parseWallMeasurementSectionValue(value) {
+    const parsed = Number.parseFloat(String(value ?? '').trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function syncWallMeasurementSectionInputs(container) {
+    container?.querySelectorAll('[data-wall-measurement-section]').forEach((input) => {
+      const section = input.dataset.wallMeasurementSection;
+      const unit = input.dataset.wallMeasurementUnit || 'ft';
+      input.value = getWallMeasurementSectionValue(section, unit);
+    });
+  }
+
+  function setActiveWallMeasurementSection(section) {
+    activeWallMeasurementSection = activeWallMeasurementSection === section ? null : section;
+  }
+
+  function addMeasurementToActiveWallSection(measurement) {
+    const section = measurement?.wallMeasurementSection || activeWallMeasurementSection;
+    if (!section) return;
+    const sectionValues = wallMeasurementSectionValues[section];
+    if (!sectionValues) return;
+
+    const inches = Number(measurement?.inches || 0);
+    const currentTotalInches = parseWallMeasurementSectionValue(sectionValues.ft) * 12 + parseWallMeasurementSectionValue(sectionValues.in);
+    const nextTotalInches = currentTotalInches + inches;
+    const feet = Math.floor(nextTotalInches / 12);
+    const remainingInches = Math.round((nextTotalInches % 12) * 100) / 100;
+
+    sectionValues.ft = String(feet);
+    sectionValues.in = String(remainingInches);
+    persistWallMeasurementSectionValues();
+
+    const container = document.getElementById('extractedMeasurementsContainer');
+    syncWallMeasurementSectionInputs(container);
+  }
+
+  function removeMeasurementFromActiveWallSection(measurement) {
+    const section = measurement?.wallMeasurementSection || activeWallMeasurementSection;
+    if (!section) return;
+    const sectionValues = wallMeasurementSectionValues[section];
+    if (!sectionValues) return;
+
+    const inches = Number(measurement?.inches || 0);
+    const currentTotalInches = parseWallMeasurementSectionValue(sectionValues.ft) * 12 + parseWallMeasurementSectionValue(sectionValues.in);
+    const nextTotalInches = Math.max(0, currentTotalInches - inches);
+    const feet = Math.floor(nextTotalInches / 12);
+    const remainingInches = Math.round((nextTotalInches % 12) * 100) / 100;
+
+    sectionValues.ft = String(feet);
+    sectionValues.in = String(remainingInches);
+    persistWallMeasurementSectionValues();
+
+    const container = document.getElementById('extractedMeasurementsContainer');
+    syncWallMeasurementSectionInputs(container);
+  }
+
   function renderExtractedMeasurements(meta) {
     const container = document.getElementById('extractedMeasurementsContainer');
     if (!container) return;
+
+    restoreWallMeasurementSectionValues();
 
     const rows = Array.isArray(meta?.extractedMeasurements) ? meta.extractedMeasurements : [];
 
@@ -1240,16 +1461,101 @@ async function initApp(){
           <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
         </div>
         <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted wall measurements</div>
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Wall measurements</div>
           <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
           <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
             No wall measurements detected yet.
+          </div>
+          <div class="mt-2 space-y-2">
+            <div class="grid gap-2">
+              ${[
+                ['rooms', 'Rooms'],
+                ['hallways', 'Hallways'],
+                ['storage', 'Storage'],
+                ['amenities', 'Amenities']
+              ].map(([key, label]) => `
+                <div>
+                  <div class="mb-1">
+                    <button
+                      type="button"
+                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
+                      data-wall-measurement-button="${key}"
+                      data-wall-measurement-label="${key}"
+                    >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      data-wall-measurement-section="${key}"
+                      data-wall-measurement-unit="ft"
+                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
+                    />
+                    <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
+                    <input
+                      type="text"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      data-wall-measurement-section="${key}"
+                      data-wall-measurement-unit="in"
+                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
+                    />
+                    <span class="text-[10px] uppercase tracking-wide text-gray-400">in</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
           </div>
         </div>
       `;
     }
 
     container.style.display = 'block';
+
+    container.querySelectorAll('[data-wall-measurement-section]').forEach((input) => {
+      if (input.dataset.boundSection === 'true') return;
+      input.dataset.boundSection = 'true';
+      input.addEventListener('input', () => {
+        setWallMeasurementSectionValue(input.dataset.wallMeasurementSection, input.dataset.wallMeasurementUnit || 'ft', input.value);
+      });
+    });
+
+    container.querySelectorAll('[data-wall-measurement-button]').forEach((button) => {
+      if (button.dataset.boundButton === 'true') return;
+      button.dataset.boundButton = 'true';
+      button.addEventListener('click', () => {
+        const section = button.dataset.wallMeasurementButton;
+        if (!section) return;
+        setActiveWallMeasurementSection(section);
+        const sectionValues = wallMeasurementSectionValues[section];
+        if (!sectionValues) return;
+        const inputs = container.querySelectorAll(`[data-wall-measurement-section="${section}"]`);
+        inputs.forEach((input) => {
+          const unit = input.dataset.wallMeasurementUnit || 'ft';
+          input.value = sectionValues[unit] ?? '0';
+        });
+        container.querySelectorAll('[data-wall-measurement-button]').forEach((btn) => {
+          const isActive = btn.dataset.wallMeasurementButton === activeWallMeasurementSection;
+          btn.classList.toggle('text-blue-600', isActive);
+          btn.classList.toggle('font-semibold', isActive);
+          btn.classList.toggle('text-gray-400', !isActive);
+        });
+      });
+    });
+
+    container.querySelectorAll('[data-wall-measurement-button]').forEach((button) => {
+      if (button.dataset.boundLabel === 'true') return;
+      button.dataset.boundLabel = 'true';
+      button.addEventListener('dblclick', () => {
+        const section = button.dataset.wallMeasurementLabel;
+        if (!section) return;
+        const nextLabel = window.prompt('Edit section name', wallMeasurementSectionLabels[section] || '');
+        if (nextLabel == null) return;
+        const trimmedLabel = nextLabel.trim();
+        wallMeasurementSectionLabels[section] = trimmedLabel || 'Untitled';
+        button.textContent = wallMeasurementSectionLabels[section];
+        persistWallMeasurementSectionValues();
+      });
+    });
 
     const searchInput = container.querySelector('[data-extracted-search-input]');
     if (searchInput && !searchInput.dataset.bound) {
@@ -2440,9 +2746,13 @@ async function initApp(){
   }
 
   function updateMeasurementList(){
+    restoreProjectAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
+
+    const pageToDisplay = Number.isFinite(measurementViewPage) ? measurementViewPage : currentPage;
+
     // Get measurements for the viewed page (not current PDF page)
-    const measurements = highlightsStore.listMeasurements(measurementViewPage) || [];
-    const scale = getVisibleScaleInfo(measurementViewPage);
+    const measurements = highlightsStore.listMeasurements(pageToDisplay) || [];
+    const scale = getVisibleScaleInfo(pageToDisplay);
     
     // Update scale info based on viewed page
     if (measurementScaleInfo) {
@@ -2459,7 +2769,7 @@ async function initApp(){
 
     // Update page label
     if (measurementPageLabel) {
-      measurementPageLabel.textContent = `Page ${measurementViewPage}`;
+      measurementPageLabel.textContent = `Page ${pageToDisplay}`;
     }
 
     // Split measurements into line (length) and area measurements
@@ -2484,7 +2794,11 @@ async function initApp(){
         measurementListLeft.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
           btn.onclick = () => {
             const id = btn.dataset.measurementId;
-            highlightsStore.removeMeasurement(measurementViewPage, id);
+            const targetMeasurement = (highlightsStore.listMeasurements(pageToDisplay) || []).find((m) => m.id === id);
+            if (targetMeasurement && targetMeasurement.area == null) {
+              removeMeasurementFromActiveWallSection(targetMeasurement);
+            }
+            highlightsStore.removeMeasurement(pageToDisplay, id);
             updateMeasurementList();
             overlay.redraw();
             toast('Measurement removed', 'info');
@@ -2510,7 +2824,11 @@ async function initApp(){
         measurementListRight.querySelectorAll('button[data-measurement-id]').forEach((btn) => {
           btn.onclick = () => {
             const id = btn.dataset.measurementId;
-            highlightsStore.removeMeasurement(measurementViewPage, id);
+            const targetMeasurement = (highlightsStore.listMeasurements(pageToDisplay) || []).find((m) => m.id === id);
+            if (targetMeasurement && targetMeasurement.area == null) {
+              removeMeasurementFromActiveWallSection(targetMeasurement);
+            }
+            highlightsStore.removeMeasurement(pageToDisplay, id);
             updateMeasurementList();
             overlay.redraw();
             toast('Measurement removed', 'info');
@@ -2520,32 +2838,59 @@ async function initApp(){
     }
 
     // Page totals: include both length and area
-    const aggregateTotals = getPageAggregateTotals(measurementViewPage);
+    const aggregateTotals = getPageAggregateTotals(pageToDisplay);
     const pageTotalInches = aggregateTotals.length;
     const pageTotalArea = aggregateTotals.area;
 
-    // All pages totals including area
-    const allPageMeasurements = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
-    const allTotalInches = allPageMeasurements.reduce((sum, pageEntry) => {
-      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.inches) || 0), 0);
-    }, 0);
-    const allTotalArea = allPageMeasurements.reduce((sum, pageEntry) => {
-      return sum + pageEntry.measurements.reduce((pageSum, item) => pageSum + (Number(item.area) || 0), 0);
-    }, 0);
+    // Project totals: sum of all page-level totals, using overrides when present
+    const allPageMeasurementEntries = highlightsStore.listMeasurementsAllPages ? highlightsStore.listMeasurementsAllPages() : [];
+    const pageNumbers = Array.from(new Set([
+      ...allPageMeasurementEntries.map((entry) => Number(entry.page)).filter(Number.isFinite),
+      ...Object.keys(_pageAggregateOverrides).map((pageKey) => Number(pageKey)).filter(Number.isFinite)
+    ])).sort((a, b) => a - b);
+    const computedProjectTotalInches = pageNumbers.reduce((sum, pageNum) => sum + (getPageAggregateTotals(pageNum).length || 0), 0);
+    const computedProjectTotalArea = pageNumbers.reduce((sum, pageNum) => sum + (getPageAggregateTotals(pageNum).area || 0), 0);
+    const projectTotalInches = _projectAggregateOverrides.length != null ? Number(_projectAggregateOverrides.length) : computedProjectTotalInches;
+    const projectTotalArea = _projectAggregateOverrides.area != null ? Number(_projectAggregateOverrides.area) : computedProjectTotalArea;
 
     if (measurementPageAggregateInfo) {
       measurementPageAggregateInfo.innerHTML = `
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span>Page ${measurementViewPage} total:</span>
-          <input type="number" step="0.01" value="${escapeHtml(pageTotalInches)}" data-aggregate-kind="length" style="width:72px;font-size:11px;padding:2px 4px;" />
-          <span>| Area:</span>
-          <input type="number" step="0.01" value="${escapeHtml(pageTotalArea)}" data-aggregate-kind="area" style="width:72px;font-size:11px;padding:2px 4px;" />
-          <span>sq</span>
+        <div style="display:inline-flex;align-items:center;gap:2px;flex-wrap:nowrap;white-space:nowrap;">
+          <span style="font-size:11px;">Page ${pageToDisplay} total:</span>
+          <div style="display:inline-flex;align-items:center;gap:1px;">
+            <input type="text" inputmode="text" spellcheck="false" value="${escapeHtml(formatInches(pageTotalInches))}" data-aggregate-kind="length" style="width:66px;font-size:10px;padding:1px 3px;min-width:0;" />
+            <div style="display:flex;flex-direction:column;gap:1px;">
+              <button type="button" data-aggregate-step="up" style="font-size:8px;line-height:1;padding:1px 2px;">▲</button>
+              <button type="button" data-aggregate-step="down" style="font-size:8px;line-height:1;padding:1px 2px;">▼</button>
+            </div>
+          </div>
+          <span style="margin-left:1px;font-size:11px;">Area:</span>
+          <input type="number" step="0.01" inputmode="decimal" value="${escapeHtml(pageTotalArea)}" data-aggregate-kind="area" style="width:54px;font-size:10px;padding:1px 3px;min-width:0;" />
+          <span style="font-size:11px;line-height:1;">sq</span>
         </div>
       `;
-      measurementPageAggregateInfo.querySelectorAll('input[data-aggregate-kind]').forEach((input) => {
-        input.onchange = () => {
-          const parsedValue = Number(input.value);
+      measurementPageAggregateInfo.querySelectorAll('input[data-aggregate-kind], button[data-aggregate-step]').forEach((control) => {
+        if (control.tagName === 'BUTTON') {
+          control.onclick = (event) => {
+            event.preventDefault();
+            const lengthInput = measurementPageAggregateInfo?.querySelector('input[data-aggregate-kind="length"]');
+            if (!lengthInput) return;
+            const currentValue = parseMeasurementToInches(lengthInput.value) ?? Number(lengthInput.value);
+            if (!Number.isFinite(currentValue) || currentValue < 0) {
+              lengthInput.value = formatInches(pageTotalInches);
+              return;
+            }
+            const nextValue = control.dataset.aggregateStep === 'up' ? currentValue + 1 : Math.max(0, currentValue - 1);
+            lengthInput.value = formatInches(nextValue);
+            lengthInput.dispatchEvent(new Event('change', { bubbles: true }));
+          };
+          return;
+        }
+
+        control.onchange = () => {
+          const parsedValue = control.dataset.aggregateKind === 'length'
+            ? (parseMeasurementToInches(control.value) ?? Number(control.value))
+            : Number(control.value);
           if (!Number.isFinite(parsedValue) || parsedValue < 0) {
             toast('Please enter a valid non-negative value', 'error');
             updateMeasurementList();
@@ -2554,33 +2899,72 @@ async function initApp(){
 
           const pageTotalDisplay = measurementPageAggregateInfo?.querySelector('input[data-aggregate-kind="length"]');
           const pageAreaDisplay = measurementPageAggregateInfo?.querySelector('input[data-aggregate-kind="area"]');
-          if (input.dataset.aggregateKind === 'length') {
-            _pageAggregateOverrides[measurementViewPage] = {
-              ...( _pageAggregateOverrides[measurementViewPage] || {}),
+          if (control.dataset.aggregateKind === 'length') {
+            _pageAggregateOverrides[pageToDisplay] = {
+              ...( _pageAggregateOverrides[pageToDisplay] || {}),
               length: parsedValue
             };
-            if (pageTotalDisplay) pageTotalDisplay.value = parsedValue;
+            if (pageTotalDisplay) pageTotalDisplay.value = formatInches(parsedValue);
             if (pageAreaDisplay) pageAreaDisplay.value = pageAreaDisplay.value ?? pageTotalArea;
           } else {
-            _pageAggregateOverrides[measurementViewPage] = {
-              ...( _pageAggregateOverrides[measurementViewPage] || {}),
+            _pageAggregateOverrides[pageToDisplay] = {
+              ...( _pageAggregateOverrides[pageToDisplay] || {}),
               area: parsedValue
             };
             if (pageAreaDisplay) pageAreaDisplay.value = parsedValue;
-            if (pageTotalDisplay) pageTotalDisplay.value = pageTotalDisplay.value ?? pageTotalInches;
+            if (pageTotalDisplay) pageTotalDisplay.value = pageTotalDisplay.value ?? formatInches(pageTotalInches);
           }
 
+          persistPageAggregateOverrides();
           updateMeasurementList();
           overlay.redraw();
           toast('Page total updated', 'info');
         };
-        input.onkeydown = (event) => {
-          if (event.key === 'Enter') input.blur();
+        control.onkeydown = (event) => {
+          if (event.key === 'Enter') control.blur();
         };
       });
     }
     if (measurementTotalAggregateInfo) {
-      measurementTotalAggregateInfo.textContent = `All pages total: ${formatInches(allTotalInches)} | Area: ${allTotalArea.toFixed(2)} sq`;
+      measurementTotalAggregateInfo.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+          <div style="font-size:11px;color:#6b7280;">Project total</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;white-space:nowrap;">
+            <span style="font-size:11px;">Length:</span>
+            <input type="text" inputmode="text" spellcheck="false" value="${escapeHtml(formatInches(projectTotalInches))}" data-project-aggregate-kind="length" style="width:74px;font-size:10px;padding:1px 3px;min-width:0;" />
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;white-space:nowrap;">
+            <span style="font-size:11px;">Area:</span>
+            <input type="number" step="0.01" inputmode="decimal" value="${escapeHtml(projectTotalArea.toFixed(2))}" data-project-aggregate-kind="area" style="width:60px;font-size:10px;padding:1px 3px;min-width:0;" />
+            <span style="font-size:11px;">sq</span>
+          </div>
+        </div>
+      `;
+      measurementTotalAggregateInfo.querySelectorAll('input[data-project-aggregate-kind]').forEach((control) => {
+        control.onchange = () => {
+          const parsedValue = control.dataset.projectAggregateKind === 'length'
+            ? (parseMeasurementToInches(control.value) ?? Number(control.value))
+            : Number(control.value);
+          if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+            toast('Please enter a valid non-negative value', 'error');
+            updateMeasurementList();
+            return;
+          }
+
+          if (control.dataset.projectAggregateKind === 'length') {
+            _projectAggregateOverrides.length = parsedValue;
+          } else {
+            _projectAggregateOverrides.area = parsedValue;
+          }
+          persistProjectAggregateOverrides();
+          updateMeasurementList();
+          overlay.redraw();
+          toast('Project total updated', 'info');
+        };
+        control.onkeydown = (event) => {
+          if (event.key === 'Enter') control.blur();
+        };
+      });
     }
 
     renderSovCard();
@@ -2668,6 +3052,7 @@ async function initApp(){
     if (measurementPageInput) {
       measurementPageInput.value = measurementViewPage;
     }
+    restorePageAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
     updateVectorLineInfo();
     updateMeasurementList();
   }
@@ -2884,7 +3269,11 @@ async function initApp(){
 
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
-    if (projData?.id) sessionStorage.setItem('estimator_last_project_id', projData.id);
+    if (projData?.id) {
+      sessionStorage.setItem('estimator_last_project_id', projData.id);
+      activeProjectId = projData.id;
+      restorePageAggregateOverrides(projData.id);
+    }
     window.__estimatorProjectLoaded = true;
 
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
@@ -5076,6 +5465,7 @@ async function initApp(){
           freshData.address = extractedAddress;
         }
         activeProjectId = existing.id;
+        restorePageAggregateOverrides(existing.id);
         showProjectLoadedCard(freshData, blueprint?.filename || projectName);
         return;
       }
@@ -5086,6 +5476,7 @@ async function initApp(){
       const project = await projectRes.json();
       const projectId = project.id;
       activeProjectId = projectId;
+      restorePageAggregateOverrides(projectId);
       updateProjectDetails(project);
       console.log('[upload] project created:', projectId);
 
