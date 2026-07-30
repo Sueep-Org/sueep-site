@@ -81,6 +81,12 @@ export function CompensationOverview() {
             Commission rate and margin are calculated automatically. Nothing on this tab is
             manually edited except marking a row paid.
           </Callout>
+          <Callout type="warning">
+            Deals and recurring periods from before 2026 don&apos;t show up on this tab at all,
+            not just hidden by the year picker. A project also only counts once its own billing
+            and every one of its non-void change orders are completed and paid, so a deal can look
+            &quot;done&quot; elsewhere in the ERP while still not showing here yet.
+          </Callout>
 
           <H3>How commission is calculated</H3>
           <P>

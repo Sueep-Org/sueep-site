@@ -19,12 +19,14 @@ export function CreatingAProject() {
         <Step n={2} title="Creating your project manually">
           Once you click new project this page will come up called the new project form.
           <Img src="/help/projects/projects_2.png" alt="New Projects form locations" />
-          From here you can create commercial painting, cleaning, residential painting, change orders, and janitorial turnover requests.
+          From here you can create commercial painting, commercial cleaning, real estate, change
+          order, janitorial turnover request, and other projects.
           <br></br>
-          For information on <A href="/erp/help/projects/creating-a-change-order">change</A> orders or <A href="/erp/help/turnover/creating-a-request">janitorial turnover requests</A> visit their seperate tutorials. 
+          For information on <A href="/erp/help/projects/creating-a-change-order">change</A> orders or <A href="/erp/help/turnover/creating-a-request">janitorial turnover requests</A> visit their seperate tutorials.
           <br></br>
-          The creation for create commercial painting, cleaning, and residential painting
-          will be covered here as those 3 all follow the same creation process as well as views.
+          Commercial painting and commercial cleaning follow the same creation process and the
+          same detail-page view, so they&apos;re covered together here. Real estate projects use
+          this same form too, but land on a different detail page once created.
           <Img src="/help/projects/projects_3.png" alt="New Projects form locations" />
           Once you chose your segment you can enter your start and end date. This is all editable later so you do not have to enter it to start.
           <br></br>
@@ -41,7 +43,7 @@ export function CreatingAProject() {
           </Callout>
         </Step>
         <Step n={3} title="Save">
-          Click <strong>Create Project</strong>. The project will appear on the Projects list and the Schedule immediately.
+          Click <strong>Create project</strong>. The project will appear on the Projects list and the Schedule immediately.
           <br></br>
            For more information on projects details and the project table vistit the projects overview page.
         </Step>
