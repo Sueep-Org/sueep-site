@@ -53,32 +53,35 @@ export function BuildingTabs({
   const allTabs = [
     {
       label: "Details",
-      content: isSupervisor ? (
-        <BuildingReadOnlySummary
-          name={initial.name}
-          address={initial.address ?? ""}
-          builder={initial.builder}
-          pmName={initial.pmName}
-          pmEmail={initial.pmEmail}
-          pmPhone={initial.pmPhone}
-        />
-      ) : (
-        <BuildingProfileEditor
-          buildingId={buildingId}
-          initial={{ ...initial, address: initial.address ?? "" }}
-          commissionEmployeeId={commissionEmployeeId}
-          employees={employees}
-          canEditCommissionOwner={canEditPricing}
-        />
+      content: (
+        <>
+          {isSupervisor ? (
+            <BuildingReadOnlySummary
+              name={initial.name}
+              address={initial.address ?? ""}
+              builder={initial.builder}
+              pmName={initial.pmName}
+              pmEmail={initial.pmEmail}
+              pmPhone={initial.pmPhone}
+            />
+          ) : (
+            <BuildingProfileEditor
+              buildingId={buildingId}
+              initial={{ ...initial, address: initial.address ?? "" }}
+              commissionEmployeeId={commissionEmployeeId}
+              employees={employees}
+              canEditCommissionOwner={canEditPricing}
+            />
+          )}
+          <div className="mt-4">
+            <BuildingNotesSection buildingId={buildingId} initialNotes={initialNotes} currentUserId={currentUserId} />
+          </div>
+        </>
       ),
     },
     {
       label: "Units",
       content: <BuildingUnitsSection buildingId={buildingId} units={units} canAdd={canAddUnit} />,
-    },
-    {
-      label: "Notes",
-      content: <BuildingNotesSection buildingId={buildingId} initialNotes={initialNotes} currentUserId={currentUserId} />,
     },
     ...(canLogHours
       ? [
@@ -108,7 +111,7 @@ export function BuildingTabs({
   ];
 
   const tabs = isSupervisor
-    ? allTabs.filter((t) => t.label === "Details" || t.label === "Units" || t.label === "Log Hours" || t.label === "Notes")
+    ? allTabs.filter((t) => t.label === "Details" || t.label === "Units" || t.label === "Log Hours")
     : allTabs;
 
   return <DetailTabs tabs={tabs} />;
