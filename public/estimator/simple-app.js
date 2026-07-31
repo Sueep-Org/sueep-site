@@ -449,6 +449,8 @@ async function initApp(){
 
   overlay.setTool('area');
 
+  updateMeasurementList();
+
   if (undoShapeBtn) {
     undoShapeBtn.onclick = (e) => {
       e.preventDefault();
@@ -480,6 +482,7 @@ async function initApp(){
     highlightsStore.clearAll();
     let restoredAnnotations = false;
     let hydratedVectors = false;
+    await restoreWallMeasurementSectionValuesFromProject(projectId);
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
       console.log('[restore] annotations response status=', res.status);
@@ -1315,6 +1318,28 @@ async function initApp(){
   };
   let activeWallMeasurementSection = null;
 
+  function ensureWallMeasurementSection(section, label = '') {
+    if (!section) return null;
+    if (!Object.prototype.hasOwnProperty.call(wallMeasurementSectionValues, section)) {
+      wallMeasurementSectionValues[section] = { ft: '0', in: '0' };
+      wallMeasurementSectionLabels[section] = label || `Section ${Object.keys(wallMeasurementSectionValues).filter((key) => !['rooms', 'hallways', 'storage', 'amenities'].includes(key)).length}`;
+    }
+    return section;
+  }
+
+  function addWallMeasurementSection() {
+    let index = 1;
+    let key = `section${index}`;
+    while (Object.prototype.hasOwnProperty.call(wallMeasurementSectionValues, key)) {
+      index += 1;
+      key = `section${index}`;
+    }
+    ensureWallMeasurementSection(key, `Section ${index}`);
+    activeWallMeasurementSection = key;
+    persistWallMeasurementSectionValues();
+    return key;
+  }
+
   function getWallMeasurementSectionValue(section, unit = 'ft') {
     const sectionValues = wallMeasurementSectionValues[section];
     if (sectionValues && typeof sectionValues === 'object') {
@@ -1323,47 +1348,128 @@ async function initApp(){
     return '';
   }
 
-  function getWallMeasurementStorageKey() {
-    const projectKey = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default';
+  function getWallMeasurementStorageKey(projectKey = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default') {
     return `wallMeasurementSectionValues_${projectKey}`;
   }
 
-  function persistWallMeasurementSectionValues() {
-    try {
-      localStorage.setItem(getWallMeasurementStorageKey(), JSON.stringify({
-        values: wallMeasurementSectionValues,
-        labels: wallMeasurementSectionLabels
-      }));
-    } catch (_) {}
+  function applyWallMeasurementPayload(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+
+    const savedValues = payload.values;
+    const savedLabels = payload.labels;
+    let changed = false;
+
+    if (savedValues && typeof savedValues === 'object') {
+      Object.keys(savedValues).forEach((section) => {
+        ensureWallMeasurementSection(section);
+        const savedSection = savedValues[section];
+        if (savedSection && typeof savedSection === 'object') {
+          wallMeasurementSectionValues[section] = {
+            ...wallMeasurementSectionValues[section],
+            ...savedSection
+          };
+          changed = true;
+        }
+      });
+    }
+
+    if (savedLabels && typeof savedLabels === 'object') {
+      Object.keys(savedLabels).forEach((section) => {
+        ensureWallMeasurementSection(section);
+        if (typeof savedLabels[section] === 'string') {
+          wallMeasurementSectionLabels[section] = savedLabels[section];
+          changed = true;
+        }
+      });
+    }
+
+    if (payload.activeSection && Object.prototype.hasOwnProperty.call(wallMeasurementSectionValues, payload.activeSection)) {
+      activeWallMeasurementSection = payload.activeSection;
+      changed = true;
+    }
+
+    return changed;
   }
 
-  function restoreWallMeasurementSectionValues() {
+  function persistWallMeasurementSectionValues() {
+    const payload = {
+      values: wallMeasurementSectionValues,
+      labels: wallMeasurementSectionLabels,
+      activeSection: activeWallMeasurementSection
+    };
+
     try {
-      const stored = localStorage.getItem(getWallMeasurementStorageKey());
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      if (!parsed || typeof parsed !== 'object') return;
-      const savedValues = parsed.values;
-      const savedLabels = parsed.labels;
-      if (savedValues && typeof savedValues === 'object') {
-        Object.keys(wallMeasurementSectionValues).forEach((section) => {
-          const savedSection = savedValues[section];
-          if (savedSection && typeof savedSection === 'object') {
-            wallMeasurementSectionValues[section] = {
-              ...wallMeasurementSectionValues[section],
-              ...savedSection
-            };
-          }
-        });
-      }
-      if (savedLabels && typeof savedLabels === 'object') {
-        Object.keys(wallMeasurementSectionLabels).forEach((section) => {
-          if (typeof savedLabels[section] === 'string') {
-            wallMeasurementSectionLabels[section] = savedLabels[section];
-          }
-        });
+      localStorage.setItem(getWallMeasurementStorageKey(), JSON.stringify(payload));
+    } catch (_) {}
+
+    void persistWallMeasurementSectionValuesToBackend(payload);
+  }
+
+  async function persistWallMeasurementSectionValuesToBackend(payload) {
+    const projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id');
+    if (!projectId) return;
+
+    const body = { estimatorWallMeasurements: payload };
+    const requests = [
+      fetch(`/api/erp/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    ];
+
+    if (typeof API_BASE === 'string' && API_BASE) {
+      requests.push(fetch(`${API_BASE}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }));
+    }
+
+    for (const request of requests) {
+      try {
+        const response = await request;
+        if (response.ok) return;
+      } catch (_) {}
+    }
+  }
+
+  function restoreWallMeasurementSectionValues(payload = null) {
+    try {
+      const parsed = payload || JSON.parse(localStorage.getItem(getWallMeasurementStorageKey()) || 'null');
+      if (!parsed || typeof parsed !== 'object') return false;
+      return applyWallMeasurementPayload(parsed);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function restoreWallMeasurementSectionValuesFromProject(projectId) {
+    const endpoints = [`/api/erp/projects/${projectId}`, `${API_BASE}/api/projects/${projectId}`];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, { cache: 'no-store' });
+        if (!response.ok) continue;
+        const project = await response.json();
+        const payload = project?.estimatorWallMeasurements;
+        if (payload && typeof payload === 'object') {
+          restoreWallMeasurementSectionValues(payload);
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    try {
+      const stored = localStorage.getItem(getWallMeasurementStorageKey(projectId));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        restoreWallMeasurementSectionValues(parsed);
+        return true;
       }
     } catch (_) {}
+
+    return false;
   }
 
   function setWallMeasurementSectionValue(section, unit, value) {
@@ -1391,6 +1497,7 @@ async function initApp(){
 
   function setActiveWallMeasurementSection(section) {
     activeWallMeasurementSection = activeWallMeasurementSection === section ? null : section;
+    persistWallMeasurementSectionValues();
   }
 
   function addMeasurementToActiveWallSection(measurement) {
@@ -1466,14 +1573,17 @@ async function initApp(){
           <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
             No wall measurements detected yet.
           </div>
+          <div class="mt-2 flex items-center justify-end">
+            <button
+              type="button"
+              class="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:bg-blue-100 focus:outline-none"
+              data-add-wall-measurement-section
+              aria-label="Add wall measurement section"
+            >+</button>
+          </div>
           <div class="mt-2 space-y-2">
             <div class="grid gap-2">
-              ${[
-                ['rooms', 'Rooms'],
-                ['hallways', 'Hallways'],
-                ['storage', 'Storage'],
-                ['amenities', 'Amenities']
-              ].map(([key, label]) => `
+              ${Object.keys(wallMeasurementSectionValues).map((key) => `
                 <div>
                   <div class="mb-1">
                     <button
@@ -1481,7 +1591,7 @@ async function initApp(){
                       class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
                       data-wall-measurement-button="${key}"
                       data-wall-measurement-label="${key}"
-                    >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
+                    >${escapeHtml(wallMeasurementSectionLabels[key] || key)}</button>
                   </div>
                   <div class="flex items-center gap-2">
                     <input
@@ -1516,6 +1626,15 @@ async function initApp(){
       input.dataset.boundSection = 'true';
       input.addEventListener('input', () => {
         setWallMeasurementSectionValue(input.dataset.wallMeasurementSection, input.dataset.wallMeasurementUnit || 'ft', input.value);
+      });
+    });
+
+    container.querySelectorAll('[data-add-wall-measurement-section]').forEach((button) => {
+      if (button.dataset.boundAdd === 'true') return;
+      button.dataset.boundAdd = 'true';
+      button.addEventListener('click', () => {
+        addWallMeasurementSection();
+        renderExtractedMeasurements(meta);
       });
     });
 
@@ -2927,16 +3046,16 @@ async function initApp(){
     }
     if (measurementTotalAggregateInfo) {
       measurementTotalAggregateInfo.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
-          <div style="font-size:11px;color:#6b7280;">Project total</div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb;">
+          <div style="font-size:11px;font-weight:600;color:#374151;">Project total</div>
           <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;white-space:nowrap;">
-            <span style="font-size:11px;">Length:</span>
-            <input type="text" inputmode="text" spellcheck="false" value="${escapeHtml(formatInches(projectTotalInches))}" data-project-aggregate-kind="length" style="width:74px;font-size:10px;padding:1px 3px;min-width:0;" />
+            <span style="font-size:11px;color:#6b7280;">Length:</span>
+            <input type="text" inputmode="text" spellcheck="false" value="${escapeHtml(formatInches(projectTotalInches))}" data-project-aggregate-kind="length" style="width:78px;font-size:10px;padding:1px 3px;min-width:0;border:1px solid #d1d5db;border-radius:4px;" />
           </div>
           <div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;white-space:nowrap;">
-            <span style="font-size:11px;">Area:</span>
-            <input type="number" step="0.01" inputmode="decimal" value="${escapeHtml(projectTotalArea.toFixed(2))}" data-project-aggregate-kind="area" style="width:60px;font-size:10px;padding:1px 3px;min-width:0;" />
-            <span style="font-size:11px;">sq</span>
+            <span style="font-size:11px;color:#6b7280;">Area:</span>
+            <input type="number" step="0.01" inputmode="decimal" value="${escapeHtml(projectTotalArea.toFixed(2))}" data-project-aggregate-kind="area" style="width:64px;font-size:10px;padding:1px 3px;min-width:0;border:1px solid #d1d5db;border-radius:4px;" />
+            <span style="font-size:11px;color:#6b7280;">sq</span>
           </div>
         </div>
       `;
@@ -3267,8 +3386,35 @@ async function initApp(){
 
   let _loadedProjectData = null; // cache for edit form
 
+  function getPaintingStorageKey(projectId) {
+    return `estimator_painting_breakdown_${projectId || 'none'}`;
+  }
+
+  function savePaintingBreakdownToStorage(projectId, payload) {
+    if (!projectId || !payload || typeof payload !== 'object') return;
+    try {
+      localStorage.setItem(getPaintingStorageKey(projectId), JSON.stringify(payload));
+    } catch (_) {}
+  }
+
+  function loadPaintingBreakdownFromStorage(projectId) {
+    if (!projectId) return null;
+    try {
+      const stored = localStorage.getItem(getPaintingStorageKey(projectId));
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
+    const storedPainting = loadPaintingBreakdownFromStorage(projData?.id);
+    if (storedPainting && !projData?.painting_breakdown) {
+      _loadedProjectData = { ...projData, painting_breakdown: storedPainting };
+    }
     if (projData?.id) {
       sessionStorage.setItem('estimator_last_project_id', projData.id);
       activeProjectId = projData.id;
@@ -3287,6 +3433,7 @@ async function initApp(){
 
     updateProjectDetails(projData);
     showAnalysisCard(projData);
+    showPaintingCard(_loadedProjectData);
   }
 
   function showNewProjectForm() {
@@ -4677,6 +4824,101 @@ async function initApp(){
 
   }
 
+  function showPaintingCard(projData) {
+    const card = document.getElementById('paintingCard');
+    if (!card) return;
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    const pd = projData?.painting_breakdown || loadPaintingBreakdownFromStorage(projData?.id) || null;
+    const breakDiv = document.getElementById('paintingViewBreakdown');
+    const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
+    const resolvedAddress = [pd?.address, projData?.address, _pdfMetadataSummary?.address].find((value) => normalizeTextLine(value)) || '';
+    const resolvedArea = pd?.total_area ?? _pdfMetadataSummary?.totalArea ?? projData?.total_area;
+    const totalArea = Number.isFinite(resolvedArea) ? resolvedArea : null;
+    const resolvedStartAddress = projData?.start_address || DEFAULT_OFFICE;
+    const rates = {
+      overhead: (pd?.overhead_pct || 0) / 100,
+      profit: (pd?.profit_pct || 0) / 100,
+      tax: (pd?.tax_pct || 0) / 100,
+      commission: (pd?.commission_pct || 0) / 100,
+    };
+
+    let totLabor = 0;
+    let totSubtotal = 0;
+    let totFinal = 0;
+
+    if (breakDiv) {
+      breakDiv.innerHTML = '';
+      if (Array.isArray(pd?.phases) && pd.phases.length > 0) {
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+        const thead = table.createTHead();
+        const hrow = thead.insertRow();
+        ['Phase', 'Crew', 'Days', 'Labor', 'Subtotal'].forEach((h, i) => {
+          const th = document.createElement('th');
+          th.textContent = h;
+          th.style.cssText = `text-align:${i <= 1 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
+          hrow.appendChild(th);
+        });
+        const tbody = table.createTBody();
+        for (const p of pd.phases) {
+          const c = _calcPhase({ crew: Array.isArray(p.crew) ? p.crew : [] }, rates);
+          totLabor += c.laborCost;
+          totSubtotal += c.subtotal;
+          totFinal += c.finalPrice;
+          const tr = tbody.insertRow();
+          tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+          const crewCount = Array.isArray(p.crew) ? p.crew.length : 0;
+          const days = Math.max(0, ...(Array.isArray(p.crew) ? p.crew.map(m => m.days || 0) : [0]));
+          [
+            { v: p.name, a: 'left' },
+            { v: crewCount > 0 ? `${crewCount} crew` : '—', a: 'left' },
+            { v: days || 0, a: 'right' },
+            { v: fmt$(c.laborCost), a: 'right' },
+            { v: fmt$(c.subtotal), a: 'right' },
+          ].forEach(({ v, a }) => {
+            const td = tr.insertCell();
+            td.textContent = v;
+            td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
+          });
+        }
+        breakDiv.appendChild(table);
+        const pricingDiv = document.createElement('div');
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        const components = [
+          [`Subtotal`, totSubtotal],
+          [`Overhead (${pd?.overhead_pct ?? 0}%)`, totSubtotal * rates.overhead],
+          [`Profit (${pd?.profit_pct ?? 0}%)`, (totSubtotal + totSubtotal * rates.overhead) * rates.profit],
+          [`Price`, totSubtotal + (totSubtotal * rates.overhead) + ((totSubtotal + totSubtotal * rates.overhead) * rates.profit)],
+          [`Tax (${pd?.tax_pct ?? 0}%)`, (totSubtotal + (totSubtotal * rates.overhead) + ((totSubtotal + totSubtotal * rates.overhead) * rates.profit)) * rates.tax],
+          [`Commission (${pd?.commission_pct ?? 0}%)`, (totSubtotal + (totSubtotal * rates.overhead) + ((totSubtotal + totSubtotal * rates.overhead) * rates.profit)) * rates.commission],
+          [`Final Price`, totFinal],
+        ];
+        components.forEach(([label, val], i) => {
+          const isLast = i === 6;
+          const item = document.createElement('div');
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          pricingDiv.appendChild(item);
+        });
+        breakDiv.appendChild(pricingDiv);
+      }
+    }
+
+    setText('paintingViewExpectedDays', pd?.expected_days != null ? `${pd.expected_days} days` : '—');
+    setText('paintingViewStartAddress', resolvedStartAddress || '—');
+    setText('paintingViewAddress', resolvedAddress || '—');
+    setText('paintingDetailDistance', projData?.driving_info?.distance || '—');
+    setText('paintingDetailDuration', projData?.driving_info?.duration || '—');
+    setText('paintingDetailTollCost', pd?.toll_cost != null ? fmt$(pd.toll_cost) : '—');
+    setText('paintingViewLabor', pd ? fmt$(totLabor || 0) : '—');
+    setText('paintingViewTotalArea', totalArea != null ? fmtSF(totalArea) : '—');
+    setText('paintingViewQuote', pd ? fmt$(totFinal || 0) : '—');
+    setText('paintingViewLaborPerSF', totalArea && totalArea > 0 && pd ? `$${((totLabor || 0) / totalArea).toFixed(4)}/SF` : '—');
+    setText('paintingViewGasoline', pd?.gasoline != null ? fmt$(pd.gasoline) : '—');
+    setText('paintingViewMargin', pd?.margin != null ? fmt$(pd.margin) : '—');
+
+    card.style.display = 'block';
+  }
+
   function showAnalysisCard(projData) {
     const card = document.getElementById('analysisCard');
     if (!card) return;
@@ -5178,12 +5420,74 @@ async function initApp(){
     });
   }
 
+<<<<<<< Updated upstream
   document.getElementById('tabAnalysisBtn')?.addEventListener('click', () => _setEstimatorTab('analysis'));
   document.getElementById('tabPaintingBtn')?.addEventListener('click', () => {
     _setEstimatorTab('painting');
     if (_loadedProjectData) {
       showPaintingCard(_loadedProjectData);
     }
+=======
+  function showPaintingEditForm() {
+    const pd = _loadedProjectData?.painting_breakdown || loadPaintingBreakdownFromStorage(activeProjectId) || {};
+    const setVal = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value ?? '';
+    };
+    const uid = () => Math.random().toString(36).slice(2);
+    const phaseMap = {
+      'Interior Painting (primer)': 'phase1',
+      'Interior Painting': 'phase2',
+    };
+
+    _paintingPhaseCrews = { phase1: [], phase2: [] };
+    _deletedPaintingPhaseIds = new Set();
+    _paintingExpectedDaysManual = false;
+
+    setVal('paintingOverheadInput', pd.overhead_pct ?? 0);
+    setVal('paintingProfitInput', pd.profit_pct ?? 30);
+    setVal('paintingTaxInput', pd.tax_pct ?? 6);
+    setVal('paintingCommissionInput', pd.commission_pct ?? 10);
+    setVal('paintingMarginInput', pd.margin ?? 0);
+    setVal('paintingGasolineInput', pd.gasoline ?? 0);
+    setVal('paintingTollCostInput', pd.toll_cost ?? 0);
+    setVal('paintingTotalAreaInput', pd.total_area ?? 0);
+    setVal('paintingExpectedDaysInput', pd.expected_days ?? '');
+    setVal('paintingAddressInput', pd.address ?? '');
+
+    const savedPids = new Set();
+    if (Array.isArray(pd.phases)) {
+      for (const p of pd.phases) {
+        const pid = phaseMap[p.name];
+        if (!pid) continue;
+        savedPids.add(pid);
+        const crew = Array.isArray(p.crew) ? p.crew : [];
+        _paintingPhaseCrews[pid] = crew.map(m => ({ ...m, _uid: m._uid || uid() }));
+      }
+    }
+
+    for (const pid of PAINTING_PHASE_IDS) {
+      if (!savedPids.has(pid)) _deletedPaintingPhaseIds.add(pid);
+    }
+
+    const daysInput = document.getElementById('paintingExpectedDaysInput');
+    if (daysInput) {
+      daysInput.readOnly = !_paintingExpectedDaysManual;
+      daysInput.classList.toggle('bg-gray-50', !_paintingExpectedDaysManual);
+      daysInput.classList.toggle('text-gray-700', !_paintingExpectedDaysManual);
+    }
+
+    document.getElementById('paintingView').style.display = 'none';
+    document.getElementById('paintingEditForm').style.display = 'block';
+    _paintingPhasesLocked = true;
+    _renderPaintingPhaseTable();
+    _updatePaintingCrewCalcs();
+  }
+
+  const toggleToPaintingBtn = document.getElementById('toggleToPaintingBtn');
+  if (toggleToPaintingBtn) toggleToPaintingBtn.addEventListener('click', () => {
+    _setEstimatorCardVisibility('painting');
+>>>>>>> Stashed changes
   });
 
 
@@ -5195,6 +5499,7 @@ async function initApp(){
 
   const editPaintingBtn = document.getElementById('editPaintingBtn');
   if (editPaintingBtn) editPaintingBtn.addEventListener('click', () => {
+<<<<<<< Updated upstream
     document.getElementById('paintingView').style.display = 'none';
     document.getElementById('paintingEditForm').style.display = 'block';
     // Pre-fill form inputs from saved painting_breakdown
@@ -5228,6 +5533,9 @@ async function initApp(){
       document.getElementById(id)?.addEventListener('input', _updatePaintingTransportCosts);
     });
     document.getElementById('paintingMaterialsInput')?.addEventListener('input', _updatePaintingCrewCalcs);
+=======
+    showPaintingEditForm();
+>>>>>>> Stashed changes
   });
 
   const cancelPaintingBtn = document.getElementById('cancelPaintingBtn');
@@ -5276,7 +5584,6 @@ async function initApp(){
   const savePaintingBtn = document.getElementById('savePaintingBtn');
   if (savePaintingBtn) savePaintingBtn.addEventListener('click', async () => {
     if (!activeProjectId) return;
-    const rates = _getPaintingRates();
     const phases = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).map((pid, i) => ({
       name: PAINTING_PHASES[i],
       crew: (_paintingPhaseCrews[pid] || []).map(m => ({ ...m })),
@@ -5293,7 +5600,23 @@ async function initApp(){
     const expectedDays = parseInt(document.getElementById('paintingExpectedDaysInput')?.value) || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
 
+<<<<<<< Updated upstream
     const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address };
+=======
+    const painting_breakdown = {
+      phases,
+      overhead_pct: overhead,
+      profit_pct: profit,
+      tax_pct: tax,
+      commission_pct: comm,
+      margin,
+      gasoline,
+      toll_cost: tollCost,
+      total_area: totalArea,
+      expected_days: expectedDays,
+      address,
+    };
+>>>>>>> Stashed changes
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
@@ -5303,8 +5626,17 @@ async function initApp(){
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
+<<<<<<< Updated upstream
       _loadedProjectData = updated;
       showPaintingCard(updated);
+=======
+      _loadedProjectData = { ..._loadedProjectData, ...updated, painting_breakdown };
+      savePaintingBreakdownToStorage(activeProjectId, painting_breakdown);
+      showPaintingCard(_loadedProjectData);
+      document.getElementById('paintingEditForm').style.display = 'none';
+      document.getElementById('paintingView').style.display = 'block';
+      toast('Painting saved', 'info');
+>>>>>>> Stashed changes
     } catch (e) {
       alert('Save failed: ' + e.message);
     }

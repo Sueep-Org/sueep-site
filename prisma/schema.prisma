@@ -24,7 +24,7 @@ model Project {
   status  String @default("ACTIVE")
 
   /// Primary / job-start date shown on PM dashboard
-  projectDate DateTime?
+  projectDate    DateTime?
   /// Target end / handoff — drives calendar span & Gantt bar end (optional)
   projectEndDate DateTime?
 
@@ -50,18 +50,24 @@ model Project {
   estHours    Float?
   actualHours Float?
 
-  laborEntries LaborEntry[]
-  materialEntries MaterialEntry[]
-  distanceEntries DistanceEntry[]
-  workOrders ProjectWorkOrder[]
-  images ProjectImage[]
-  changeOrders ProjectChangeOrder[]
-  contacts ProjectContact[]
+  /// Wall-measurement section values captured in the estimator UI.
+  estimatorWallMeasurements Json?
+
+  /// Painting card breakdown values captured in the estimator UI.
+  paintingBreakdown Json?
+
+  laborEntries          LaborEntry[]
+  materialEntries       MaterialEntry[]
+  distanceEntries       DistanceEntry[]
+  workOrders            ProjectWorkOrder[]
+  images                ProjectImage[]
+  changeOrders          ProjectChangeOrder[]
+  contacts              ProjectContact[]
   contractorAssignments ContractorAssignment[]
-  laborAssignments ProjectLaborAssignment[]
-  checklistItems ProjectChecklistItem[]
-  workOrderRecord ProjectWorkOrderRecord?
-  qualityChecks QualityCheck[]
+  laborAssignments      ProjectLaborAssignment[]
+  checklistItems        ProjectChecklistItem[]
+  workOrderRecord       ProjectWorkOrderRecord?
+  qualityChecks         QualityCheck[]
 
   /// HubSpot Deal record id (sync from CRM). One ERP project per deal until multi-job-per-deal is modeled.
   hubspotDealId     String? @unique
@@ -78,12 +84,12 @@ model Building {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  name    String
-  builder String?
-  address String
-  pmName  String?
-  pmEmail String?
-  pmPhone String?
+  name           String
+  builder        String?
+  address        String
+  pmName         String?
+  pmEmail        String?
+  pmPhone        String?
   pricingPackage Json?
 
   turnoverRequests      TurnoverRequest[]
@@ -120,26 +126,26 @@ model TurnoverRequest {
   bathrooms   Int?
 
   fullPaint           Boolean @default(false)
-  touchUpPaint        Int?     @default(0)
+  touchUpPaint        Int?    @default(0)
   fullClean           Boolean @default(false)
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
 
-  startDate DateTime?
-  endDate   DateTime?
-  priceCents Int?
+  startDate          DateTime?
+  endDate            DateTime?
+  priceCents         Int?
   approvedPriceCents Int?
-  pmSignatureUrl String?
-  pmSignedAt DateTime?
-  completedAt DateTime?
+  pmSignatureUrl     String?
+  pmSignedAt         DateTime?
+  completedAt        DateTime?
   invoiceGeneratedAt DateTime?
-  invoiceUrl String?
+  invoiceUrl         String?
 
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
 
-  laborAssignments       LaborAssignment[]
-  qualityChecks          QualityCheck[]
+  laborAssignments LaborAssignment[]
+  qualityChecks    QualityCheck[]
 
   @@index([buildingId])
   @@index([status])
@@ -169,21 +175,21 @@ model LaborAssignment {
 }
 
 model QualityCheck {
-  id                   String   @id @default(cuid())
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  turnoverRequestId    String?
-  turnoverRequest      TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
+  turnoverRequestId String?
+  turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
 
-  projectId            String?
-  project              Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  supervisorName       String
+  supervisorName         String
   supervisorSignatureUrl String?
-  pmApproval           Boolean @default(false)
-  evidencePhotos       Json?
-  notes                String?
+  pmApproval             Boolean @default(false)
+  evidencePhotos         Json?
+  notes                  String?
 
   @@index([turnoverRequestId])
   @@index([projectId])
@@ -197,15 +203,15 @@ model ProjectWorkOrder {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title         String
-  location      String?
-  requestedBy   String?
-  priority      String   @default("MEDIUM")
-  dueDate       DateTime?
-  scopeDetails  String?
+  title          String
+  location       String?
+  requestedBy    String?
+  priority       String    @default("MEDIUM")
+  dueDate        DateTime?
+  scopeDetails   String?
   specifications String?
-  supportInfo   String?
-  photoUrls     Json?
+  supportInfo    String?
+  photoUrls      Json?
 
   @@index([projectId, createdAt])
   @@index([priority])
@@ -258,10 +264,10 @@ model ProjectImage {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  imageUrl  String
-  caption   String?
+  imageUrl   String
+  caption    String?
   uploadedBy String?
-  takenAt   DateTime?
+  takenAt    DateTime?
 
   @@index([projectId, createdAt])
 }
@@ -274,13 +280,13 @@ model ProjectChangeOrder {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title              String
-  description        String?
-  requestedBy        String?
-  supervisor         String?
-  status             String   @default("DRAFT")
-  billingStatus      String?
-  percentInvoiced    Int      @default(0)
+  title               String
+  description         String?
+  requestedBy         String?
+  supervisor          String?
+  status              String  @default("DRAFT")
+  billingStatus       String?
+  percentInvoiced     Int     @default(0)
   estimatedCostCents  Int?
   estimatedDays       Int?
   reason              String?
@@ -328,8 +334,8 @@ model ProjectChangeOrderLaborer {
 }
 
 model ChangeOrderContract {
-  id            String   @id @default(cuid())
-  createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   changeOrderId String
   changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
@@ -355,22 +361,22 @@ model ProjectContact {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  fullName String
-  role     String?
-  company  String?
-  email    String?
-  phone    String?
-  notes    String?
+  fullName         String
+  role             String?
+  company          String?
+  email            String?
+  phone            String?
+  notes            String?
   hubspotContactId String?
   /// HUBSPOT | MANUAL
-  source   String   @default("MANUAL")
-  isPrimary Boolean @default(false)
+  source           String  @default("MANUAL")
+  isPrimary        Boolean @default(false)
 
+  @@unique([projectId, hubspotContactId])
   @@index([projectId, createdAt])
   @@index([projectId, source])
   @@index([email])
   @@index([phone])
-  @@unique([projectId, hubspotContactId])
 }
 
 model LaborEntry {
@@ -378,16 +384,16 @@ model LaborEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   employeeId String?
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   workDate DateTime
 
-  workerName String
-  role       String?
-  hours      Float
+  workerName      String
+  role            String?
+  hours           Float
   /// Cents per hour (e.g. $28.84/hr → 2884)
   hourlyRateCents Int
 
@@ -418,9 +424,9 @@ model MaterialEntry {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  usedOn DateTime
+  usedOn    DateTime
   /// CLEANING_PRODUCTS | PAINT
-  category String
+  category  String
   itemName  String
   quantity  Float?
   unit      String?
@@ -454,18 +460,18 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  firstName String
-  lastName  String
-  email     String? @unique
-  phone     String?
-  role      String?
+  firstName      String
+  lastName       String
+  email          String?   @unique
+  phone          String?
+  role           String?
   /// Cents per hour (e.g. $18.75 => 1875)
   hourlyPayCents Int?
   defaultProject String?
   /// ACTIVE | INACTIVE
-  status String @default("ACTIVE")
-  hireDate DateTime?
-  notes    String?
+  status         String    @default("ACTIVE")
+  hireDate       DateTime?
+  notes          String?
 
   bankAccountType   String?
   bankAccountNumber String?
@@ -480,12 +486,12 @@ model Employee {
   /// PASSED | FAILED | PENDING | NOT_DONE
   backgroundCheckStatus String? @default("NOT_DONE")
 
-  laborEntries LaborEntry[]
-  documents EmployeeDocument[]
-  laborAssignments LaborAssignment[]
+  laborEntries            LaborEntry[]
+  documents               EmployeeDocument[]
+  laborAssignments        LaborAssignment[]
   projectLaborAssignments ProjectLaborAssignment[]
-  changeOrderAssignments ProjectChangeOrderLaborer[]
-  contracts EmployeeContract[]
+  changeOrderAssignments  ProjectChangeOrderLaborer[]
+  contracts               EmployeeContract[]
 
   @@index([status])
   @@index([defaultProject])
@@ -505,7 +511,7 @@ model EmployeeDocument {
   title        String?
   issuedAt     DateTime?
   expiresAt    DateTime?
-  isVerified   Boolean  @default(false)
+  isVerified   Boolean   @default(false)
   fileUrl      String?
   fileData     Bytes?
   fileMimeType String?
@@ -600,9 +606,9 @@ model ProjectLaborAssignment {
   endDate      DateTime?
   notes        String?
 
+  @@unique([projectId, employeeId])
   @@index([projectId])
   @@index([employeeId])
-  @@unique([projectId, employeeId])
 }
 
 model ContractorDocument {
@@ -627,9 +633,9 @@ model CandidateApplication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  fullName  String
-  email     String
-  phone     String?
+  fullName String
+  email    String
+  phone    String?
 
   /// Role or work type they are interested in (placeholder until full questionnaire).
   positionInterest String?
@@ -660,11 +666,11 @@ model CandidateApplication {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
-  documents  CandidateDocument[]
-  contracts  CandidateContract[]
+  documents CandidateDocument[]
+  contracts CandidateContract[]
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
-  questionnaireToken String? @unique
+  questionnaireToken       String?   @unique
   questionnaireSentAt      DateTime?
   questionnaireCompletedAt DateTime?
 
@@ -691,8 +697,8 @@ model CandidateDocument {
 }
 
 model EmployeeContract {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -711,8 +717,8 @@ model EmployeeContract {
 }
 
 model ContractorContract {
-  id           String   @id @default(cuid())
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   contractorId String
   contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
@@ -731,8 +737,8 @@ model ContractorContract {
 }
 
 model CandidateContract {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
   candidateId String
   candidate   CandidateApplication @relation(fields: [candidateId], references: [id], onDelete: Cascade)

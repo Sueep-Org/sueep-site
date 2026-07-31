@@ -8,16 +8,59 @@ const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };
 
+async function getProjectRecord(id: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT
+      "id",
+      "createdAt",
+      "updatedAt",
+      "segment",
+      "status",
+      "projectDate",
+      "projectEndDate",
+      "jobTitle",
+      "supervisor",
+      "description",
+      "percentDone",
+      "percentInvoiced",
+      "billingStatus",
+      "contractValueCents",
+      "estMaterialCents",
+      "estTravelCents",
+      "estLaborCents",
+      "actualLaborCents",
+      "actualMaterialCents",
+      "estHours",
+      "actualHours",
+      "hubspotDealId",
+      "hubspotPipelineId",
+      "hubspotStageId",
+      "estimatorWallMeasurements",
+      "paintingBreakdown"
+    FROM "Project"
+    WHERE "id" = $1
+    LIMIT 1`,
+    id,
+  );
+
+  if (!rows[0]) return null;
+
+  const laborEntries = await prisma.laborEntry.findMany({
+    where: { projectId: id },
+    orderBy: { workDate: "desc" },
+  });
+
+  return { ...rows[0], laborEntries };
+}
+
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      laborEntries: { orderBy: { workDate: "desc" } },
-    },
-  });
+  const project = await getProjectRecord(id);
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(project);
+  return NextResponse.json({
+    ...project,
+    painting_breakdown: project.paintingBreakdown ?? null,
+  });
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -43,6 +86,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (v === undefined) return undefined;
     if (v === null || v === "") return null;
     return inputToCents(v);
+  };
+
+  const parseJsonObject = (value: unknown, fieldName: string) => {
+    if (value === undefined) return undefined;
+    if (value === null || value === "") return null;
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === "object") return parsed;
+        return undefined;
+      } catch {
+        throw new Error(`${fieldName} must be valid JSON`);
+      }
+    }
+    if (typeof value === "object") return value;
+    return undefined;
   };
 
   const data: Record<string, unknown> = {};
@@ -89,6 +148,30 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
+  if (body.estimatorWallMeasurements !== undefined) {
+    if (body.estimatorWallMeasurements === null || body.estimatorWallMeasurements === "") {
+      data.estimatorWallMeasurements = null;
+    } else {
+      const parsed = parseJsonObject(body.estimatorWallMeasurements, "estimatorWallMeasurements");
+      if (parsed === undefined) {
+        return NextResponse.json({ error: "estimatorWallMeasurements must be valid JSON" }, { status: 400 });
+      }
+      data.estimatorWallMeasurements = parsed;
+    }
+  }
+
+  if (body.painting_breakdown !== undefined) {
+    if (body.painting_breakdown === null || body.painting_breakdown === "") {
+      data.paintingBreakdown = null;
+    } else {
+      const parsed = parseJsonObject(body.painting_breakdown, "painting_breakdown");
+      if (parsed === undefined) {
+        return NextResponse.json({ error: "painting_breakdown must be valid JSON" }, { status: 400 });
+      }
+      data.paintingBreakdown = parsed;
+    }
+  }
+
   if (body.contractValue !== undefined) data.contractValueCents = cents(body.contractValue);
   if (body.estMaterial !== undefined) data.estMaterialCents = cents(body.estMaterial);
   if (body.estTravel !== undefined) data.estTravelCents = cents(body.estTravel);
@@ -105,8 +188,30 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   try {
-    const project = await prisma.project.update({ where: { id }, data: data as object });
-    return NextResponse.json(project);
+    if (Object.keys(data).length > 0) {
+      await prisma.project.update({ where: { id }, data: data as object });
+    }
+
+    if (body.estimatorWallMeasurements !== undefined) {
+      const payload =
+        body.estimatorWallMeasurements === null || body.estimatorWallMeasurements === ""
+          ? null
+          : typeof body.estimatorWallMeasurements === "string"
+            ? body.estimatorWallMeasurements
+            : JSON.stringify(body.estimatorWallMeasurements);
+
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Project" SET "estimatorWallMeasurements" = CAST($2 AS jsonb) WHERE "id" = $1`,
+        id,
+        payload,
+      );
+    }
+
+    const project = await getProjectRecord(id);
+    return NextResponse.json({
+      ...project,
+      painting_breakdown: project.paintingBreakdown ?? null,
+    });
   } catch (e) {
     console.error("PATCH /api/erp/projects/[id]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
