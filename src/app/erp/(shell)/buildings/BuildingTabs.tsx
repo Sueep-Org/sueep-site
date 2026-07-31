@@ -6,6 +6,7 @@ import { BuildingReadOnlySummary } from "./[id]/BuildingReadOnlySummary";
 import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
 import { RecurringContractEditor } from "./RecurringContractEditor";
 import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSection";
+import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
 
 type Props = {
   buildingId: string;
@@ -23,8 +24,10 @@ type Props = {
   isSupervisor?: boolean;
   canEditPricing?: boolean;
   canAddUnit?: boolean;
+  canLogHours?: boolean;
   units: BuildingUnit[];
   employees: { id: string; name: string }[];
+  laborEmployees?: LaborEmployeeOption[];
   commissionEmployeeId?: string | null;
 };
 
@@ -36,8 +39,10 @@ export function BuildingTabs({
   isSupervisor,
   canEditPricing = false,
   canAddUnit = false,
+  canLogHours = false,
   units,
   employees,
+  laborEmployees = [],
   commissionEmployeeId = null,
 }: Props) {
   const allTabs = [
@@ -66,6 +71,14 @@ export function BuildingTabs({
       label: "Units",
       content: <BuildingUnitsSection buildingId={buildingId} units={units} canAdd={canAddUnit} />,
     },
+    ...(canLogHours
+      ? [
+          {
+            label: "Log Hours",
+            content: <BuildingLaborSection buildingId={buildingId} units={units} employees={laborEmployees} />,
+          },
+        ]
+      : []),
     {
       label: "Pricing Package",
       content: (
@@ -85,7 +98,9 @@ export function BuildingTabs({
     },
   ];
 
-  const tabs = isSupervisor ? allTabs.filter((t) => t.label === "Details" || t.label === "Units") : allTabs;
+  const tabs = isSupervisor
+    ? allTabs.filter((t) => t.label === "Details" || t.label === "Units" || t.label === "Log Hours")
+    : allTabs;
 
   return <DetailTabs tabs={tabs} />;
 }

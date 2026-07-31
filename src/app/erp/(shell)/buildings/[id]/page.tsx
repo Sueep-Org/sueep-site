@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing, canAddTurnoverUnit } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
 import type { BuildingUnit } from "./BuildingUnitsSection";
 
@@ -20,7 +20,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
     prisma.building.findUnique({ where: { id } }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
     prisma.project.findMany({
@@ -103,6 +103,8 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         }}
         initialPackage={building.pricingPackage}
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
+        laborEmployees={employees}
+        canLogHours={auth ? canAddLaborLogs(auth.role) : false}
         commissionEmployeeId={building.commissionEmployeeId}
       />
     </div>
