@@ -2,9 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 
 type Props = {
   buildingId: string;
+};
+
+const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+const LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
 };
 
 const checkboxRow = "flex items-center gap-2 text-sm text-gray-700";
@@ -24,6 +36,8 @@ export function AddUnitForm({ buildingId }: Props) {
   const [open, setOpen] = useState(false);
   const [unitNumber, setUnitNumber] = useState("");
   const [isCommonArea, setIsCommonArea] = useState(false);
+  const [isPartialTurn, setIsPartialTurn] = useState(false);
+  const [partialTurnLayout, setPartialTurnLayout] = useState("");
   const [bedrooms, setBedrooms] = useState("1");
   const [bathrooms, setBathrooms] = useState("1");
   const [sqft, setSqft] = useState("");
@@ -43,6 +57,8 @@ export function AddUnitForm({ buildingId }: Props) {
   function reset() {
     setUnitNumber("");
     setIsCommonArea(false);
+    setIsPartialTurn(false);
+    setPartialTurnLayout("");
     setBedrooms("1");
     setBathrooms("1");
     setSqft("");
@@ -78,6 +94,8 @@ export function AddUnitForm({ buildingId }: Props) {
             {
               unitNumber: unitNumber.trim() || undefined,
               isCommonArea,
+              isPartialTurn,
+              partialTurnLayout: isPartialTurn ? partialTurnLayout || null : null,
               bedrooms: isCommonArea ? null : Number(bedrooms) || 1,
               bathrooms: isCommonArea ? null : Number(bathrooms) || 1,
               sqft: sqft.trim() ? Number(sqft) : null,
@@ -154,11 +172,49 @@ export function AddUnitForm({ buildingId }: Props) {
         <input
           type="checkbox"
           checked={isCommonArea}
-          onChange={(e) => setIsCommonArea(e.target.checked)}
+          onChange={(e) => {
+            setIsCommonArea(e.target.checked);
+            if (e.target.checked) {
+              setIsPartialTurn(false);
+              setPartialTurnLayout("");
+            }
+          }}
           className={checkboxInput}
         />
         This is a common area, not a residential unit
       </label>
+
+      {!isCommonArea && (
+        <label className={checkboxRow}>
+          <input
+            type="checkbox"
+            checked={isPartialTurn}
+            onChange={(e) => {
+              setIsPartialTurn(e.target.checked);
+              if (!e.target.checked) setPartialTurnLayout("");
+            }}
+            className={checkboxInput}
+          />
+          This is a partial turn
+        </label>
+      )}
+
+      {isPartialTurn && !isCommonArea && (
+        <div>
+          <label className={label} htmlFor="au-partial-layout">Price as</label>
+          <select
+            id="au-partial-layout"
+            value={partialTurnLayout}
+            onChange={(e) => setPartialTurnLayout(e.target.value)}
+            className={input}
+          >
+            <option value="">Select a layout...</option>
+            {PARTIAL_TURN_LAYOUT_OPTIONS.map((l) => (
+              <option key={l} value={l}>{LAYOUT_LABELS[l] ?? l}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {!isCommonArea && (
         <div className="grid grid-cols-2 gap-3">

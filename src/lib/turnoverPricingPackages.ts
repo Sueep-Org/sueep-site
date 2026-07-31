@@ -220,8 +220,10 @@ export function normalizePricingBedrooms(value?: number | null): 1 | 2 | 3 {
 export function getTurnoverUnitLayout(
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ): TurnoverUnitLayout {
+  if (layoutOverride) return layoutOverride;
   if (isCommonArea) return "common-area";
   const rawBeds = Number(bedrooms ?? 1);
   if (rawBeds <= 0) return "studio";
@@ -239,9 +241,10 @@ export function getTurnoverCleaningRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   const beds = normalizePricingBedrooms(bedrooms);
   return {
     layout,
@@ -253,9 +256,10 @@ export function getTurnoverPaintingRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   const beds = normalizePricingBedrooms(bedrooms);
   return {
     layout,
@@ -267,9 +271,10 @@ export function getTurnoverTouchUpPaintRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   return {
     layout,
     dollars: pricingPackage.touchUpPaintLayoutRates?.[layout] ?? (isCommonArea ? 0 : 125),
@@ -280,9 +285,10 @@ export function getTurnoverCarpetCleaningRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   return {
     layout,
     dollars: pricingPackage.carpetCleaningLayoutRates?.[layout] ?? (isCommonArea ? 0 : 100),
@@ -293,9 +299,10 @@ export function getTurnoverAdditionalMaterialsRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   return {
     layout,
     dollars: pricingPackage.additionalMaterialsLayoutRates?.[layout] ?? (isCommonArea ? 0 : 85),
@@ -306,9 +313,10 @@ export function getTurnoverCeilingPaintRate(
   pricingPackage: TurnoverPricingPackage,
   bedrooms?: number | null,
   bathrooms?: number | null,
-  isCommonArea?: boolean
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
 ) {
-  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea);
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
   return {
     layout,
     dollars: pricingPackage.ceilingPaintLayoutRates?.[layout] ?? (isCommonArea ? 0 : 75),

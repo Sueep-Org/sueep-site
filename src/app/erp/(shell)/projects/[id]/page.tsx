@@ -72,6 +72,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             unitNumber: true,
             bedrooms: true,
             bathrooms: true,
+            isPartialTurn: true,
+            partialTurnLayout: true,
             sqft: true,
             unitQuality: true,
             fullClean: true,
@@ -387,6 +389,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 unitNumber={project.turnoverRequest.unitNumber}
                 bedrooms={project.turnoverRequest.bedrooms}
                 bathrooms={project.turnoverRequest.bathrooms}
+                isPartialTurn={project.turnoverRequest.isPartialTurn}
+                partialTurnLayout={project.turnoverRequest.partialTurnLayout}
                 sqft={project.turnoverRequest.sqft}
                 unitQuality={project.turnoverRequest.unitQuality}
                 fullClean={project.turnoverRequest.fullClean}
@@ -467,6 +471,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 pricingPackage={project.building?.pricingPackage ?? null}
                 bedrooms={project.turnoverRequest?.bedrooms ?? null}
                 bathrooms={project.turnoverRequest?.bathrooms ?? null}
+                isPartialTurn={project.turnoverRequest?.isPartialTurn ?? false}
+                partialTurnLayout={project.turnoverRequest?.partialTurnLayout ?? null}
                 sqft={project.turnoverRequest?.sqft ?? null}
                 unitQuality={project.turnoverRequest?.unitQuality ?? null}
                 fullClean={project.turnoverRequest?.fullClean ?? false}

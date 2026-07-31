@@ -1,11 +1,22 @@
 import { turnoverHoursBudget } from "@/lib/erp/turnoverHoursBudget";
 
 const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
+const PARTIAL_TURN_LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
+};
 
 type Props = {
   unitNumber: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  isPartialTurn?: boolean;
+  partialTurnLayout?: string | null;
   sqft: number | null;
   unitQuality: string | null;
   fullClean: boolean;
@@ -32,6 +43,8 @@ export function UnitScopeCard({
   unitNumber,
   bedrooms,
   bathrooms,
+  isPartialTurn = false,
+  partialTurnLayout = null,
   sqft,
   unitQuality,
   fullClean,
@@ -93,6 +106,14 @@ export function UnitScopeCard({
           </>
         )}
       </div>
+
+      {isPartialTurn && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
+          <span className="text-sm font-semibold text-amber-800">
+            Partial Turn{partialTurnLayout ? ` — working on ${PARTIAL_TURN_LAYOUT_LABELS[partialTurnLayout] ?? partialTurnLayout}` : ""}
+          </span>
+        </div>
+      )}
 
       {workItems.length > 0 ? (
         <div className="px-4 py-3">

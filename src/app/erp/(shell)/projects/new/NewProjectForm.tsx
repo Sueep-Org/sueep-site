@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
-import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 
 const input =
@@ -21,18 +22,18 @@ const fallbackJobTitles = [
 const checkboxLabel = "ml-2 text-sm text-gray-700";
 const sectionHeader = "text-sm font-semibold text-gray-900";
 
-const TOUCH_UP_PAINT_CENTS = 12500;
-const ADDITIONAL_MATERIALS_CENTS = 8500;
-const CARPET_WITH_CLEAN_CENTS = 10000;
-const PRICING_FIELD_LABELS = {
-  fullClean: "Full clean",
-  fullPaint: "Full paint",
-  touchUpPaint: "Touch-up paint",
-  additionalMaterials: "Additional materials",
-  carpetCleaning: "Carpet cleaning",
-} as const;
 const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
 const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
+const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+const PARTIAL_TURN_LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
+};
 const UNIT_QUALITY_OPTIONS = [
   { value: "GOOD", label: "Good" },
   { value: "FAIR", label: "Fair" },
@@ -53,8 +54,6 @@ const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
 
 type BedroomValue = (typeof BEDROOM_OPTIONS)[number];
 type BathroomValue = (typeof BATHROOM_OPTIONS)[number];
-type PricingField = keyof typeof PRICING_FIELD_LABELS;
-type PricePackageValues = Record<PricingField, string>;
 type UnitScope = {
   id: string;
   unitNumber: string;
@@ -66,6 +65,8 @@ type UnitScope = {
   bedrooms: BedroomValue;
   bathrooms: BathroomValue;
   isCommonArea: boolean;
+  isPartialTurn: boolean;
+  partialTurnLayout: string;
   sqft: string;
   unitQuality: string;
   fullPaint: boolean;
@@ -93,6 +94,8 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     bedrooms: "1",
     bathrooms: "1",
     isCommonArea: false,
+    isPartialTurn: false,
+    partialTurnLayout: "",
     sqft: "",
     unitQuality: "",
     fullPaint: false,
@@ -141,8 +144,11 @@ function formatUsd(cents: number) {
   );
 }
 
-function centsToDollarInput(cents: number) {
-  return (cents / 100).toFixed(2);
+/** computeTurnoverPricing's breakdown lines are "<description>: <$amount>" sentences — split for a two-column display instead of one run-on string. */
+function splitBreakdownLine(line: string): { text: string; amount: string | null } {
+  const idx = line.lastIndexOf(":");
+  if (idx === -1) return { text: line, amount: null };
+  return { text: line.slice(0, idx).trim(), amount: line.slice(idx + 1).trim() };
 }
 
 function dollarsToCents(value: string) {
@@ -245,8 +251,6 @@ interface NewProjectFormProps {
   disableNewBuilding?: boolean;
   /** Arbitrary extra fields merged into the submission payload */
   payloadExtra?: Record<string, unknown>;
-  /** Allow editing the pricing package rates (Admin / PM / Estimation) */
-  canEditPricing?: boolean;
 }
 
 function normalizeBuildingName(value: string) {
@@ -589,7 +593,6 @@ export function NewProjectForm({
   lockedSueepPm,
   disableNewBuilding = false,
   payloadExtra,
-  canEditPricing: canEditPricingProp = false,
 }: NewProjectFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -606,8 +609,6 @@ export function NewProjectForm({
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
-
-  const canEditPricing = !lockedSueepPm && canEditPricingProp;
 
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {
@@ -791,7 +792,6 @@ export function NewProjectForm({
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
 
   const unitCount = Math.max(1, unitScopes.length);
-  const firstUnitIsCommonArea = unitScopes[0]?.isCommonArea ?? false;
   const normalizedBeds = normalizeBeds(bedroomsToNumber(unitScopes[0]?.bedrooms ?? "1"));
   const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
@@ -803,27 +803,6 @@ export function NewProjectForm({
     () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
     [selectedBuilding]
   );
-  const defaultPricePackageValues = useMemo<PricePackageValues>(
-    () =>
-      firstUnitIsCommonArea
-        ? {
-            fullClean: centsToDollarInput((pricingPackage.cleaningLayoutRates?.["common-area"] ?? 0) * 100),
-            fullPaint: centsToDollarInput((pricingPackage.paintingLayoutRates?.["common-area"] ?? 0) * 100),
-            touchUpPaint: centsToDollarInput((pricingPackage.touchUpPaintLayoutRates?.["common-area"] ?? 0) * 100),
-            additionalMaterials: centsToDollarInput((pricingPackage.additionalMaterialsLayoutRates?.["common-area"] ?? 0) * 100),
-            carpetCleaning: centsToDollarInput((pricingPackage.carpetCleaningLayoutRates?.["common-area"] ?? 0) * 100),
-          }
-        : {
-            fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
-            fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
-            touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
-            additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
-            carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
-          },
-    [normalizedBeds, pricingPackage, firstUnitIsCommonArea]
-  );
-  const [pricePackageValues, setPricePackageValues] = useState<PricePackageValues>(() => defaultPricePackageValues);
-  const [pricePackageTouched, setPricePackageTouched] = useState(false);
   const addressOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -839,12 +818,6 @@ export function NewProjectForm({
     ).sort((a, b) => a.localeCompare(b));
   }, [buildings, scheduleBuildings, buildingAddress]);
 
-  useEffect(() => {
-    if (!pricePackageTouched) {
-      setPricePackageValues(defaultPricePackageValues);
-    }
-  }, [defaultPricePackageValues, pricePackageTouched]);
-
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
     setUnitScopes((prev) =>
       prev.map((unit) => {
@@ -854,6 +827,15 @@ export function NewProjectForm({
         if (patch.touchUpPaint) next.fullPaint = false;
         if (unit.fullPaint && patch.touchUpPaint) next.touchUpPaint = false;
         if (unit.touchUpPaint && patch.fullPaint) next.fullPaint = false;
+        if (patch.isCommonArea) {
+          next.isPartialTurn = false;
+          next.partialTurnLayout = "";
+        }
+        if (patch.isPartialTurn) {
+          next.isCommonArea = false;
+        } else if (patch.isPartialTurn === false) {
+          next.partialTurnLayout = "";
+        }
         return next;
       })
     );
@@ -944,60 +926,53 @@ export function NewProjectForm({
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
-    const pricePackageCents = {
-      fullClean: dollarsToCents(pricePackageValues.fullClean),
-      fullPaint: dollarsToCents(pricePackageValues.fullPaint),
-      touchUpPaint: dollarsToCents(pricePackageValues.touchUpPaint),
-      additionalMaterials: dollarsToCents(pricePackageValues.additionalMaterials),
-      carpetCleaning: dollarsToCents(pricePackageValues.carpetCleaning),
-    };
+    const perUnit: { id: string; label: string; description: string; lines: string[]; subtotal: number }[] = [];
 
     unitScopes.forEach((unit, index) => {
-      const unitLines: string[] = [];
+      const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`);
+      const lines: string[] = [];
       let unitTotal = 0;
 
       if (unit.recurringContractUnit) {
-        unitLines.push("covered by recurring contract — no charge");
+        lines.push("covered by recurring contract — no charge");
       } else {
-        if (unit.fullClean) {
-          unitTotal += pricePackageCents.fullClean;
-          unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
-        }
-
-        if (unit.fullPaint) {
-          unitTotal += pricePackageCents.fullPaint;
-          unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
-        } else if (unit.touchUpPaint) {
-          unitTotal += pricePackageCents.touchUpPaint;
-          unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
-        }
-
-        if (unit.materialsAdditional) {
-          unitTotal += pricePackageCents.additionalMaterials;
-          unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
-        }
-
-        if (unit.carpetCleaning) {
-          unitTotal += pricePackageCents.carpetCleaning;
-          unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
+        const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning;
+        if (hasPricedService) {
+          const unitPricing = computeTurnoverPricing({
+            requestType: "TURNOVER",
+            buildingName,
+            pricingPackage,
+            bedrooms: unit.isCommonArea ? null : bedroomsToNumber(unit.bedrooms),
+            bathrooms: unit.isCommonArea ? null : bathroomsToNumber(unit.bathrooms),
+            isCommonArea: unit.isCommonArea,
+            isPartialTurn: unit.isPartialTurn,
+            partialTurnLayout: unit.partialTurnLayout,
+            fullPaint: unit.fullPaint,
+            touchUpPaint: unit.touchUpPaint && !unit.fullPaint ? 1 : 0,
+            fullClean: unit.fullClean,
+            carpetCleaning: unit.carpetCleaning,
+            materialsAdditional: unit.materialsAdditional,
+            ceilingPaint: false,
+          });
+          lines.push(...unitPricing.breakdown);
+          unitTotal += unitPricing.priceCents;
         }
 
         if (unit.lightWallTouchUps) {
-          unitLines.push("light wall touch-ups not priced");
+          lines.push("Light wall touch-ups: not priced");
         }
       }
 
       if (unit.otherWork) {
         const otherCents = dollarsToCents(unit.otherPrice || "0");
         unitTotal += otherCents;
-        unitLines.push(`${unit.otherDescription.trim() || "other"} ${formatUsd(otherCents)}`);
+        lines.push(`${unit.otherDescription.trim() || "Other"}: ${formatUsd(otherCents)}`);
       }
 
       totalPrice += unitTotal;
-      if (unitLines.length > 0) {
-        breakdown.push(
-          `${unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`)} (${describeUnit(unit)}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
-        );
+      if (lines.length > 0) {
+        perUnit.push({ id: unit.id, label: unitLabel, description: describeUnit(unit), lines, subtotal: unitTotal });
+        breakdown.push(`${unitLabel} (${describeUnit(unit)}): ${lines.join(" | ")} = ${formatUsd(unitTotal)}`);
       }
     });
 
@@ -1010,10 +985,10 @@ export function NewProjectForm({
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
-      pricePackageCents,
+      perUnit,
       unitCount,
     };
-  }, [pricePackageValues, unitScopes, unitCount]);
+  }, [unitScopes, unitCount, buildingName, pricingPackage]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1097,9 +1072,6 @@ export function NewProjectForm({
       isTurnover && sueepPmName.trim() ? `SUEEP PM: ${sueepPmName.trim()}` : null,
       isTurnover && sueepPmEmail.trim() ? `SUEEP PM Email: ${sueepPmEmail.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
-      isTurnover
-        ? `Price Package: ${PRICING_FIELD_LABELS.fullClean} ${formatUsd(packagePricing.pricePackageCents.fullClean)} | ${PRICING_FIELD_LABELS.fullPaint} ${formatUsd(packagePricing.pricePackageCents.fullPaint)} | ${PRICING_FIELD_LABELS.touchUpPaint} ${formatUsd(packagePricing.pricePackageCents.touchUpPaint)} | ${PRICING_FIELD_LABELS.additionalMaterials} ${formatUsd(packagePricing.pricePackageCents.additionalMaterials)} | ${PRICING_FIELD_LABELS.carpetCleaning} ${formatUsd(packagePricing.pricePackageCents.carpetCleaning)}`
-        : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
       isTurnover && turnoverComments ? `Comments: ${turnoverComments}` : null,
@@ -1160,8 +1132,6 @@ export function NewProjectForm({
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
         totalPrice: packagePricing.totalPrice,
-        pricePackageCents: packagePricing.pricePackageCents,
-        pricePackageDollars: pricePackageValues,
       },
       ...(isTurnover && notifyEmployeeIds.length > 0 ? { notifyEmployeeIds } : {}),
       ...payloadExtra,
@@ -1711,6 +1681,39 @@ export function NewProjectForm({
                       </label>
                     </div>
                   </div>
+                  {!unit.isCommonArea && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="flex items-center">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={unit.isPartialTurn}
+                            onChange={(e) => updateUnitScope(unit.id, { isPartialTurn: e.target.checked })}
+                            className="h-4 w-4 text-pink-600"
+                          />
+                          <span className={checkboxLabel}>Partial turn</span>
+                        </label>
+                      </div>
+                      {unit.isPartialTurn && (
+                        <div className="min-w-0">
+                          <label className={label} htmlFor={`partial-turn-layout-${unit.id}`}>
+                            Price as
+                          </label>
+                          <select
+                            id={`partial-turn-layout-${unit.id}`}
+                            className={input}
+                            value={unit.partialTurnLayout}
+                            onChange={(e) => updateUnitScope(unit.id, { partialTurnLayout: e.target.value })}
+                          >
+                            <option value="">Select a layout...</option>
+                            {PARTIAL_TURN_LAYOUT_OPTIONS.map((l) => (
+                              <option key={l} value={l}>{PARTIAL_TURN_LAYOUT_LABELS[l] ?? l}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="min-w-0">
                       <label className={label} htmlFor={`move-out-date-${unit.id}`}>
@@ -1825,90 +1828,50 @@ export function NewProjectForm({
             </div>
             {isMultiStep && (
               <div className="space-y-4 lg:w-72 lg:shrink-0">
-                {canEditPricing && (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Price rates</p>
-                      <button
-                        type="button"
-                        onClick={() => { setPricePackageValues(defaultPricePackageValues); setPricePackageTouched(false); }}
-                        className="text-xs text-gray-400 underline hover:text-pink-600"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
-                        <div key={field} className="flex items-center gap-2">
-                          <label className="flex-1 text-xs text-gray-600">{PRICING_FIELD_LABELS[field]}</label>
-                          <div className="relative w-28">
-                            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              inputMode="decimal"
-                              className="w-full rounded border border-gray-300 bg-white py-1 pl-5 pr-2 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-                              value={pricePackageValues[field]}
-                              onChange={(e) => {
-                                setPricePackageTouched(true);
-                                setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                  <div className="border-b border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                     <p className="text-sm font-semibold text-gray-900">{lockedSueepPm ? "Unit Summary" : "Order summary"}</p>
+                    {!lockedSueepPm && selectedBuilding && (
+                      <a
+                        href={`/erp/buildings/${selectedBuilding.id}?tab=${encodeURIComponent("Pricing Package")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-pink-600 hover:underline"
+                      >
+                        Edit pricing package
+                      </a>
+                    )}
                   </div>
                   <div className="divide-y divide-gray-50 px-4">
-                    {unitScopes.every((u) => !u.fullClean && !u.fullPaint && !u.touchUpPaint && !u.materialsAdditional && !u.carpetCleaning && !u.lightWallTouchUps && !u.otherWork) ? (
+                    {packagePricing.perUnit.length === 0 ? (
                       <p className="py-4 text-xs italic text-gray-400">Select services to see {lockedSueepPm ? "a summary" : "pricing"}.</p>
                     ) : (
-                      unitScopes.map((unit, index) => {
-                        const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`);
-                        const pc = packagePricing.pricePackageCents;
-                        const items: { label: string; cents: number }[] = [];
-                        if (unit.fullClean) items.push({ label: "Full clean", cents: pc.fullClean });
-                        if (unit.fullPaint) items.push({ label: "Full paint", cents: pc.fullPaint });
-                        else if (unit.touchUpPaint) items.push({ label: "Touch-up paint", cents: pc.touchUpPaint });
-                        if (unit.materialsAdditional) items.push({ label: "Additional materials", cents: pc.additionalMaterials });
-                        if (unit.carpetCleaning) items.push({ label: "Carpet cleaning", cents: pc.carpetCleaning });
-                        if (unit.lightWallTouchUps) items.push({ label: "Light wall touch-ups", cents: 0 });
-                        if (unit.otherWork) items.push({ label: unit.otherDescription.trim() || "Other", cents: dollarsToCents(unit.otherPrice || "0") });
-                        if (items.length === 0) return null;
-                        const subtotal = items.reduce((s, item) => s + item.cents, 0);
-                        return (
-                          <div key={unit.id} className="py-3">
-                            <p className="mb-2 text-xs font-semibold text-gray-700">
-                              {unitLabel}{" "}
-                              <span className="font-normal text-gray-400">({describeUnit(unit)})</span>
-                            </p>
-                            <div className="space-y-1.5">
-                              {items.map((item) => (
-                                <div key={item.label} className={lockedSueepPm ? undefined : "flex justify-between"}>
-                                  <span className="text-xs text-gray-500">{item.label}</span>
-                                  {!lockedSueepPm && (
-                                    <span className="text-xs tabular-nums text-gray-600">
-                                      {item.cents > 0 ? formatUsd(item.cents) : "—"}
-                                    </span>
-                                  )}
+                      packagePricing.perUnit.map((unit) => (
+                        <div key={unit.id} className="py-3">
+                          <p className="mb-2 text-xs font-semibold text-gray-700">
+                            {unit.label}{" "}
+                            <span className="font-normal text-gray-400">({unit.description})</span>
+                          </p>
+                          <div className="space-y-1.5">
+                            {unit.lines.map((line) => {
+                              if (lockedSueepPm) return <div key={line} className="text-xs text-gray-500">{splitBreakdownLine(line).text}</div>;
+                              const { text, amount } = splitBreakdownLine(line);
+                              return (
+                                <div key={line} className="flex justify-between gap-2 text-xs">
+                                  <span className="text-gray-500">{text}</span>
+                                  <span className="shrink-0 tabular-nums text-gray-600">{amount ?? ""}</span>
                                 </div>
-                              ))}
-                              {!lockedSueepPm && items.length > 1 && (
-                                <div className="flex justify-between border-t border-gray-100 pt-1.5">
-                                  <span className="text-xs font-medium text-gray-600">Subtotal</span>
-                                  <span className="text-xs font-medium tabular-nums text-gray-700">{formatUsd(subtotal)}</span>
-                                </div>
-                              )}
-                            </div>
+                              );
+                            })}
+                            {!lockedSueepPm && unit.lines.length > 1 && (
+                              <div className="flex justify-between border-t border-gray-100 pt-1.5">
+                                <span className="text-xs font-medium text-gray-600">Subtotal</span>
+                                <span className="text-xs font-medium tabular-nums text-gray-700">{formatUsd(unit.subtotal)}</span>
+                              </div>
+                            )}
                           </div>
-                        );
-                      })
+                        </div>
+                      ))
                     )}
                   </div>
                   {!lockedSueepPm && (
@@ -1920,56 +1883,6 @@ export function NewProjectForm({
                 </div>
               </div>
             )}
-            </div>
-          </div>
-
-          <div className={isMultiStep ? "hidden" : "space-y-3"}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className={sectionHeader}>Step 3 - Price package</p>
-              {canEditPricing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPricePackageValues(defaultPricePackageValues);
-                    setPricePackageTouched(false);
-                  }}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
-                >
-                  Reset prices
-                </button>
-              )}
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
-                  <div key={field} className="min-w-0">
-                    <label className={label} htmlFor={`price-${field}`}>
-                      {PRICING_FIELD_LABELS[field]}
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                        $
-                      </span>
-                      <input
-                        id={`price-${field}`}
-                        name={`pricePackage-${field}`}
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        inputMode="decimal"
-                        readOnly={!canEditPricing}
-                        className={`${input} pl-7 ${!canEditPricing ? "bg-gray-100 text-gray-500 cursor-default" : ""}`}
-                        value={pricePackageValues[field]}
-                        onChange={(e) => {
-                          if (!canEditPricing) return;
-                          setPricePackageTouched(true);
-                          setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -1994,14 +1907,51 @@ export function NewProjectForm({
                   {sueepPmEmail && <p className="mt-1 text-xs text-gray-500">{sueepPmEmail}</p>}
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+                    {selectedBuilding && (
+                      <a
+                        href={`/erp/buildings/${selectedBuilding.id}?tab=${encodeURIComponent("Pricing Package")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-pink-600 hover:underline"
+                      >
+                        Edit pricing package
+                      </a>
+                    )}
+                  </div>
                   <div className="mt-3 border-t border-gray-200 pt-3">
                     <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
-                    <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                      {packagePricing.breakdown.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </ul>
+                    {packagePricing.perUnit.length === 0 ? (
+                      <p className="mt-2 text-sm italic text-gray-400">No priceable work selected yet.</p>
+                    ) : (
+                      <div className="mt-2 divide-y divide-gray-200">
+                        {packagePricing.perUnit.map((unit) => (
+                          <div key={unit.id} className="py-2 first:pt-0 last:pb-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              {unit.label} <span className="font-normal text-gray-400">({unit.description})</span>
+                            </p>
+                            <div className="mt-1 space-y-0.5">
+                              {unit.lines.map((line) => {
+                                const { text, amount } = splitBreakdownLine(line);
+                                return (
+                                  <div key={line} className="flex justify-between gap-2 text-sm text-gray-600">
+                                    <span>{text}</span>
+                                    <span className="shrink-0 tabular-nums">{amount ?? ""}</span>
+                                  </div>
+                                );
+                              })}
+                              {unit.lines.length > 1 && (
+                                <div className="flex justify-between border-t border-gray-200 pt-1 text-sm font-medium text-gray-700">
+                                  <span>Subtotal</span>
+                                  <span className="tabular-nums">{formatUsd(unit.subtotal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </>

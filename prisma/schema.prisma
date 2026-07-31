@@ -175,6 +175,7 @@ model Building {
   recurringContract     RecurringContract?
   hubspotUnitAliases    HubSpotUnitAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
+  notes                 BuildingNote[]
 
   @@index([name])
   @@index([commissionEmployeeId])
@@ -216,6 +217,13 @@ model TurnoverRequest {
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
   ceilingPaint        Boolean @default(false)
+
+  /// Only part of the unit's real bedrooms/bathrooms are being turned (e.g.
+  /// 2 of a 3BR/3BA). bedrooms/bathrooms above still record the unit's real
+  /// layout; partialTurnLayout is which smaller existing layout bucket
+  /// (e.g. "2/2") to price it as instead.
+  isPartialTurn     Boolean @default(false)
+  partialTurnLayout String?
 
   otherWork        Boolean @default(false)
   otherDescription String?
@@ -819,6 +827,7 @@ model ErpUser {
   dayAssignments                ProjectDayAssignment[]          @relation("ProjectDayAssignmentSupervisor")
   dayAssignmentsAsPM            ProjectDayAssignment[]          @relation("ProjectDayAssignmentPM")
   projectNotes                  ProjectNote[]
+  buildingNotes                 BuildingNote[]
   hubspotSovAliasesCreated      HubSpotSovAlias[]
   hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
@@ -847,6 +856,27 @@ model ProjectNote {
   authorUser   ErpUser? @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+}
+
+/// A team-visible, timestamped note on a building (e.g. PM contact changes,
+/// access instructions) — an append-only log, shown in the building's Notes tab.
+model BuildingNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  body String
+
+  /// Snapshot of the author's name at post time, so the note stays readable
+  /// even if their ERP account is later removed.
+  authorName   String
+  authorUserId String?
+  authorUser   ErpUser? @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([buildingId])
 }
 
 /// A supervisor's planned coverage of a project on a specific future day —

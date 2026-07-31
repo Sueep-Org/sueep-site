@@ -15,6 +15,8 @@ type Props = {
   pricingPackage: unknown;
   bedrooms: number | null;
   bathrooms: number | null;
+  isPartialTurn?: boolean;
+  partialTurnLayout?: string | null;
   sqft: number | null;
   unitQuality: string | null;
   fullClean: boolean;
@@ -37,6 +39,8 @@ export function UnitScopeEditor({
   pricingPackage,
   bedrooms,
   bathrooms,
+  isPartialTurn: initialIsPartialTurn = false,
+  partialTurnLayout: initialPartialTurnLayout,
   sqft,
   unitQuality,
   fullClean,
@@ -53,6 +57,8 @@ export function UnitScopeEditor({
   const [turnoverRequestId, setTurnoverRequestId] = useState(initialTurnoverRequestId);
   const [unitNumberVal, setUnitNumberVal] = useState(unitNumber ?? "");
   const [isCommonArea, setIsCommonArea] = useState(bedrooms === null && bathrooms === null);
+  const [isPartialTurn, setIsPartialTurn] = useState(initialIsPartialTurn);
+  const [partialTurnLayout, setPartialTurnLayout] = useState(initialPartialTurnLayout ?? "");
   const [bedroomsStr, setBedroomsStr] = useState(bedrooms?.toString() ?? "");
   const [bathroomsStr, setBathroomsStr] = useState(bathrooms?.toString() ?? "");
   const [sqftStr, setSqftStr] = useState(sqft?.toString() ?? "");
@@ -133,6 +139,8 @@ export function UnitScopeEditor({
         otherCents: otherWorkVal ? otherCentsVal : null,
         otherPrice: otherWorkVal ? otherPriceVal : undefined,
         isCommonArea,
+        isPartialTurn,
+        partialTurnLayout: isPartialTurn ? partialTurnLayout || null : null,
       };
       const newJobTitle = `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`;
 
@@ -247,6 +255,8 @@ export function UnitScopeEditor({
         bedrooms={bedroomsStr}
         bathrooms={bathroomsStr}
         isCommonArea={isCommonArea}
+        isPartialTurn={isPartialTurn}
+        partialTurnLayout={partialTurnLayout}
         fullPaint={fullPaintVal}
         touchUpPaint={touchUpPaintStr}
         fullClean={fullCleanVal}
@@ -260,6 +270,8 @@ export function UnitScopeEditor({
         setBedrooms={setBedroomsStr}
         setBathrooms={setBathroomsStr}
         setIsCommonArea={setIsCommonArea}
+        setIsPartialTurn={setIsPartialTurn}
+        setPartialTurnLayout={setPartialTurnLayout}
         setFullPaint={setFullPaint}
         setTouchUpPaint={setTouchUpPaint}
         setFullClean={setFullClean}

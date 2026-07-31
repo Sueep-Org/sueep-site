@@ -1,16 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 
 type RequestBody = Record<string, unknown>;
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
 
 function parseUnitQuality(value: unknown): string | null {
   const quality = String(value ?? "").trim().toUpperCase();
   return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
+}
+
+function parsePartialTurnLayout(value: unknown): string | null {
+  const layout = String(value ?? "").trim();
+  return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
 }
 
 function parseDate(value: unknown): Date | null | undefined {
@@ -66,6 +73,8 @@ export async function POST(req: Request) {
   const bedrooms = parseIntValue(body.bedrooms);
   const bathrooms = parseIntValue(body.bathrooms);
   const isCommonArea = Boolean(body.isCommonArea) || (bedrooms === null && bathrooms === null && body.isCommonArea !== false);
+  const isPartialTurn = !isCommonArea && Boolean(body.isPartialTurn);
+  const partialTurnLayout = isPartialTurn ? parsePartialTurnLayout(body.partialTurnLayout) : null;
   const sqft = parseIntValue(body.sqft);
   const unitQuality = parseUnitQuality(body.unitQuality);
   const fullPaint = Boolean(body.fullPaint);
@@ -97,6 +106,8 @@ export async function POST(req: Request) {
     carpetCleaning,
     materialsAdditional,
     ceilingPaint,
+    isPartialTurn,
+    partialTurnLayout,
   });
   const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
@@ -108,6 +119,8 @@ export async function POST(req: Request) {
         unitNumber: unitNumber || null,
         bedrooms: isCommonArea ? null : (bedrooms ?? null),
         bathrooms: isCommonArea ? null : (bathrooms ?? null),
+        isPartialTurn,
+        partialTurnLayout,
         sqft,
         unitQuality,
         fullPaint,

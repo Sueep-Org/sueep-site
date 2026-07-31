@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+
+function parsePartialTurnLayout(value: unknown): string | null {
+  const layout = String(value ?? "").trim();
+  return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
+}
 
 function parseDate(value: unknown): Date | null | undefined {
   if (value === undefined) return undefined;
@@ -69,6 +77,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.unitNumber !== undefined) data.unitNumber = String(body.unitNumber || "").trim() || null;
   if (body.bedrooms !== undefined) data.bedrooms = parseIntValue(body.bedrooms) ?? null;
   if (body.bathrooms !== undefined) data.bathrooms = parseIntValue(body.bathrooms) ?? null;
+  if (body.isPartialTurn !== undefined) data.isPartialTurn = Boolean(body.isPartialTurn);
+  if (body.partialTurnLayout !== undefined) data.partialTurnLayout = parsePartialTurnLayout(body.partialTurnLayout);
   if (body.sqft !== undefined) data.sqft = parseIntValue(body.sqft) ?? null;
   if (body.unitQuality !== undefined) data.unitQuality = parseUnitQuality(body.unitQuality);
   if (body.fullPaint !== undefined) data.fullPaint = Boolean(body.fullPaint);
@@ -122,6 +132,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     : (effectiveBedrooms === null && effectiveBathrooms === null);
   const effectiveOtherWork = data.otherWork !== undefined ? Boolean(data.otherWork) : existing.otherWork;
   const effectiveOtherCents = data.otherCents !== undefined ? (data.otherCents as number | null) : existing.otherCents;
+  const effectiveIsPartialTurn = data.isPartialTurn !== undefined ? Boolean(data.isPartialTurn) : existing.isPartialTurn;
+  const effectivePartialTurnLayout =
+    data.partialTurnLayout !== undefined ? (data.partialTurnLayout as string | null) : existing.partialTurnLayout;
 
   const pricingInput = {
     requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
@@ -138,6 +151,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     materialsAdditional:
       data.materialsAdditional !== undefined ? Boolean(data.materialsAdditional) : existing.materialsAdditional,
     ceilingPaint: data.ceilingPaint !== undefined ? Boolean(data.ceilingPaint) : existing.ceilingPaint,
+    isPartialTurn: effectiveIsPartialTurn,
+    partialTurnLayout: effectivePartialTurnLayout,
   };
 
   const pricing = computeTurnoverPricing(pricingInput);

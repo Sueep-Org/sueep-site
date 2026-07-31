@@ -16,8 +16,16 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
-  const [building, employees, unitProjects] = await Promise.all([
-    prisma.building.findUnique({ where: { id } }),
+  const [building, employees, unitProjects, currentErpUser] = await Promise.all([
+    prisma.building.findUnique({
+      where: { id },
+      include: {
+        notes: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
+        },
+      },
+    }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
       select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true },
@@ -33,6 +41,8 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
             unitNumber: true,
             bedrooms: true,
             bathrooms: true,
+            isPartialTurn: true,
+            partialTurnLayout: true,
             sqft: true,
             unitQuality: true,
             fullClean: true,
@@ -48,6 +58,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       },
       orderBy: { createdAt: "desc" },
     }),
+    auth ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : null,
   ]);
   if (!building) notFound();
 
@@ -59,6 +70,8 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       unitNumber: p.turnoverRequest!.unitNumber,
       bedrooms: p.turnoverRequest!.bedrooms,
       bathrooms: p.turnoverRequest!.bathrooms,
+      isPartialTurn: p.turnoverRequest!.isPartialTurn,
+      partialTurnLayout: p.turnoverRequest!.partialTurnLayout,
       sqft: p.turnoverRequest!.sqft,
       unitQuality: p.turnoverRequest!.unitQuality,
       fullClean: p.turnoverRequest!.fullClean,
@@ -106,6 +119,8 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         laborEmployees={employees}
         canLogHours={auth ? canAddLaborLogs(auth.role) : false}
         commissionEmployeeId={building.commissionEmployeeId}
+        initialNotes={building.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
+        currentUserId={currentErpUser?.id ?? null}
       />
     </div>
   );

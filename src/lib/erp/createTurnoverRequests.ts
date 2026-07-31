@@ -2,8 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import {
   sanitizeTurnoverPricingPackage,
+  TURNOVER_UNIT_LAYOUTS,
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
+
+const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
 
 type UnitScopePayload = {
   unitNumber?: unknown;
@@ -15,6 +18,8 @@ type UnitScopePayload = {
   bedrooms?: unknown;
   bathrooms?: unknown;
   isCommonArea?: unknown;
+  isPartialTurn?: unknown;
+  partialTurnLayout?: unknown;
   sqft?: unknown;
   unitQuality?: unknown;
   fullPaint?: unknown;
@@ -58,6 +63,11 @@ function parseUnitQuality(value: unknown): string | null {
   return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
 }
 
+function parsePartialTurnLayout(value: unknown): string | null {
+  const layout = stringValue(value);
+  return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
+}
+
 function parseUnitScopes(value: unknown): UnitScopePayload[] {
   if (!Array.isArray(value)) return [{}];
   const units = value.filter((unit): unit is UnitScopePayload => Boolean(unit) && typeof unit === "object");
@@ -76,8 +86,13 @@ function pricingPackageFromPayload(body: Record<string, unknown>, fallback: unkn
     pricing.pricePackageDollars && typeof pricing.pricePackageDollars === "object"
       ? (pricing.pricePackageDollars as Record<string, unknown>)
       : {};
-  const clean = readDollar(dollars.fullClean);
-  const paint = readDollar(dollars.fullPaint);
+  // A missing key means "no override intended, use the building's real rates"
+  // — distinct from an explicit $0 override — so this only reads/applies a
+  // rate when the caller actually sent one (readDollar(undefined) would
+  // otherwise resolve to 0, not null, and silently zero out every layout's
+  // rate for every caller that doesn't send a pricing override at all).
+  const clean = dollars.fullClean !== undefined ? readDollar(dollars.fullClean) : null;
+  const paint = dollars.fullPaint !== undefined ? readDollar(dollars.fullPaint) : null;
 
   if (clean == null && paint == null) return base;
 
@@ -167,6 +182,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const isCommonArea = Boolean(unit.isCommonArea);
       const bedrooms = isCommonArea ? null : parseIntValue(unit.bedrooms) ?? 1;
       const bathrooms = isCommonArea ? null : parseIntValue(unit.bathrooms) ?? 1;
+      const isPartialTurn = !isCommonArea && Boolean(unit.isPartialTurn);
+      const partialTurnLayout = isPartialTurn ? parsePartialTurnLayout(unit.partialTurnLayout) : null;
       const sqft = parseIntValue(unit.sqft);
       const unitQuality = parseUnitQuality(unit.unitQuality);
       const { startDate, endDate } = unitDateRange(unit);
@@ -203,6 +220,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
               carpetCleaning,
               materialsAdditional,
               ceilingPaint,
+              isPartialTurn,
+              partialTurnLayout,
             });
             return (pricing.priceCents || 0) + otherCents || null;
           })();
@@ -222,6 +241,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           unitNumber,
           bedrooms,
           bathrooms,
+          isPartialTurn,
+          partialTurnLayout,
           sqft,
           unitQuality,
           fullPaint,

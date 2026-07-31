@@ -8,6 +8,8 @@ export type BuildingUnit = {
   unitNumber: string | null;
   bedrooms: number | null;
   bathrooms: number | null;
+  isPartialTurn?: boolean;
+  partialTurnLayout?: string | null;
   sqft: number | null;
   unitQuality: string | null;
   fullClean: boolean;
@@ -41,6 +43,8 @@ export function BuildingUnitsSection({ buildingId, units, canAdd }: Props) {
                 unitNumber={unit.unitNumber}
                 bedrooms={unit.bedrooms}
                 bathrooms={unit.bathrooms}
+                isPartialTurn={unit.isPartialTurn}
+                partialTurnLayout={unit.partialTurnLayout}
                 sqft={unit.sqft}
                 unitQuality={unit.unitQuality}
                 fullClean={unit.fullClean}

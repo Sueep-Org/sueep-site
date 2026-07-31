@@ -7,6 +7,7 @@ import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
 import { RecurringContractEditor } from "./RecurringContractEditor";
 import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSection";
 import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
+import { BuildingNotesSection, type BuildingNoteRow } from "./[id]/BuildingNotesSection";
 
 type Props = {
   buildingId: string;
@@ -29,6 +30,8 @@ type Props = {
   employees: { id: string; name: string }[];
   laborEmployees?: LaborEmployeeOption[];
   commissionEmployeeId?: string | null;
+  initialNotes: BuildingNoteRow[];
+  currentUserId: string | null;
 };
 
 export function BuildingTabs({
@@ -44,6 +47,8 @@ export function BuildingTabs({
   employees,
   laborEmployees = [],
   commissionEmployeeId = null,
+  initialNotes,
+  currentUserId,
 }: Props) {
   const allTabs = [
     {
@@ -70,6 +75,10 @@ export function BuildingTabs({
     {
       label: "Units",
       content: <BuildingUnitsSection buildingId={buildingId} units={units} canAdd={canAddUnit} />,
+    },
+    {
+      label: "Notes",
+      content: <BuildingNotesSection buildingId={buildingId} initialNotes={initialNotes} currentUserId={currentUserId} />,
     },
     ...(canLogHours
       ? [
@@ -99,7 +108,7 @@ export function BuildingTabs({
   ];
 
   const tabs = isSupervisor
-    ? allTabs.filter((t) => t.label === "Details" || t.label === "Units" || t.label === "Log Hours")
+    ? allTabs.filter((t) => t.label === "Details" || t.label === "Units" || t.label === "Log Hours" || t.label === "Notes")
     : allTabs;
 
   return <DetailTabs tabs={tabs} />;

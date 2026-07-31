@@ -1,7 +1,18 @@
 "use client";
 
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
-import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+
+const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+const LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
+};
 
 type CommonAreaRates = {
   fullClean: string;
@@ -20,6 +31,10 @@ type TurnoverPricingPackageQuestionsProps = {
   isCommonArea?: boolean;
   commonAreaRates?: CommonAreaRates;
   setCommonAreaRates?: (rates: CommonAreaRates) => void;
+  isPartialTurn?: boolean;
+  setIsPartialTurn?: (value: boolean) => void;
+  partialTurnLayout?: string;
+  setPartialTurnLayout?: (value: string) => void;
   fullPaint: boolean;
   touchUpPaint: string;
   fullClean: boolean;
@@ -63,6 +78,10 @@ export function TurnoverPricingPackageQuestions({
   isCommonArea = false,
   commonAreaRates,
   setCommonAreaRates,
+  isPartialTurn = false,
+  setIsPartialTurn = () => {},
+  partialTurnLayout = "",
+  setPartialTurnLayout = () => {},
   fullPaint,
   touchUpPaint,
   fullClean,
@@ -111,6 +130,8 @@ export function TurnoverPricingPackageQuestions({
     carpetCleaning,
     materialsAdditional,
     ceilingPaint,
+    isPartialTurn,
+    partialTurnLayout,
   });
   const otherCents = otherWork ? dollarsToCents(otherPrice) : 0;
   const pricing = { ...basePricing, priceCents: basePricing.priceCents + otherCents };
@@ -121,6 +142,17 @@ export function TurnoverPricingPackageQuestions({
     if (checked) {
       setBedrooms("");
       setBathrooms("");
+      setIsPartialTurn(false);
+      setPartialTurnLayout("");
+    }
+  }
+
+  function togglePartialTurn(checked: boolean) {
+    setIsPartialTurn(checked);
+    if (checked) {
+      toggleCommonArea(false);
+    } else {
+      setPartialTurnLayout("");
     }
   }
 
@@ -145,6 +177,34 @@ export function TurnoverPricingPackageQuestions({
         />
         <span className="ml-2 text-sm text-gray-700">Common area</span>
       </label>
+
+      {!isCommonArea && (
+        <label className="mt-2 flex items-center">
+          <input
+            type="checkbox"
+            checked={isPartialTurn}
+            onChange={(event) => togglePartialTurn(event.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-pink-600"
+          />
+          <span className="ml-2 text-sm text-gray-700">Partial turn</span>
+        </label>
+      )}
+
+      {isPartialTurn && !isCommonArea && (
+        <label className="mt-2 block text-xs font-medium text-gray-600">
+          Price as
+          <select
+            value={partialTurnLayout}
+            onChange={(event) => setPartialTurnLayout(event.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+          >
+            <option value="">Select a layout...</option>
+            {PARTIAL_TURN_LAYOUT_OPTIONS.map((l) => (
+              <option key={l} value={l}>{LAYOUT_LABELS[l] ?? l}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {!isCommonArea && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
