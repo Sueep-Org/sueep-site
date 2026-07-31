@@ -492,7 +492,7 @@ export default function EstimatorPage() {
                 id="tabAnalysisBtn"
                 className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
               >
-                Analysis
+                Cleaning
               </button>
               <button
                 id="tabPaintingBtn"
@@ -506,7 +506,7 @@ export default function EstimatorPage() {
             <div id="analysisCard" className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-800">
-                Analysis
+                Cleaning
               </h3>
               <div className="flex gap-2">
                 <button id="refreshDistanceBtn" className="mini-btn">
@@ -789,6 +789,48 @@ export default function EstimatorPage() {
               {/* Hidden inputs keep default values for new crew members */}
               <input type="hidden" id="cleanerRateInput" defaultValue="22" />
               <input type="hidden" id="foremanRateInput" defaultValue="220" />
+
+              {/* Area per person per day per phase */}
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Area per Person per Day (SF)
+                </label>
+                <div className="flex flex-wrap gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Rough Cleaning</label>
+                    <input
+                      type="number"
+                      id="roughAreaPerPersonInput"
+                      defaultValue="4000"
+                      min="1"
+                      step="100"
+                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Final Cleaning</label>
+                    <input
+                      type="number"
+                      id="finalAreaPerPersonInput"
+                      defaultValue="4000"
+                      min="1"
+                      step="100"
+                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Touch Up Cleaning</label>
+                    <input
+                      type="number"
+                      id="touchupAreaPerPersonInput"
+                      defaultValue="4000"
+                      min="1"
+                      step="100"
+                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+              </div>
 
               {/* Phase table — rendered by JS */}
               <div className="flex justify-between items-center mb-2">

@@ -3632,6 +3632,7 @@ async function initApp(){
 
   // Per-phase crew state: each entry is { role: 'cleaner'|'foreman', rate: number, days: number }
   let _phaseCrews = { rough: [], final: [], touchup: [] };
+  let _phaseMaterials = { rough: 0, final: 0, touchup: 0 };
   let _deletedPhaseIds = new Set();
   let _expectedDaysManual = false;
   let _phasesLocked = true;
@@ -3659,12 +3660,13 @@ async function initApp(){
       mainCleaners = 7; touchupCleaners = 6;
     }
 
-    // Days = area / (cleaners * 8 hrs * productivity per person-hour)
-    // Using 500 SF per person-hour as baseline
-    const sqftPerPersonHour = 500;
-    const roughDays   = Math.ceil(area / (mainCleaners    * 8 * sqftPerPersonHour));
-    const finalDays   = Math.ceil(area / (mainCleaners    * 8 * sqftPerPersonHour));
-    const touchupDays = Math.ceil(area / (touchupCleaners * 8 * sqftPerPersonHour));
+    // Days = area / (cleaners * area-per-person-per-day)
+    const roughAppd   = parseFloat(document.getElementById('roughAreaPerPersonInput')?.value)   || 4000;
+    const finalAppd   = parseFloat(document.getElementById('finalAreaPerPersonInput')?.value)   || 4000;
+    const touchupAppd = parseFloat(document.getElementById('touchupAreaPerPersonInput')?.value) || 4000;
+    const roughDays   = Math.ceil(area / (mainCleaners    * roughAppd));
+    const finalDays   = Math.ceil(area / (mainCleaners    * finalAppd));
+    const touchupDays = Math.ceil(area / (touchupCleaners * touchupAppd));
 
     const makeCleaners = (count, days) =>
       Array.from({ length: count }, () => ({ role: 'cleaner', rate: 22, hours: 8, days, _uid: uid() }));
@@ -3703,7 +3705,7 @@ async function initApp(){
       foremanPay = (p.days || 0) * (rates.foremanRate || 0);
     }
     const laborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
-    const materials = 0;
+    const materials = p.materials || 0;
     const subtotal = laborCost;
     const oh = subtotal * rates.overhead;
     const pft = subtotal * rates.profit;
@@ -3734,6 +3736,7 @@ async function initApp(){
           crew: (_phaseCrews[pid] || []).map(m => ({ ...m })),
           persons: (_phaseCrews[pid] || []).filter(m => m.role === 'cleaner').length,
           days: Math.max(0, ...(_phaseCrews[pid] || []).map(m => m.days || 0), 0),
+          materials: _phaseMaterials[pid] || 0,
         };
       });
   }
@@ -3749,7 +3752,8 @@ async function initApp(){
 
     PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid) => {
       const crew = _phaseCrews[pid] || [];
-      const c = _calcPhase({ crew }, rates);
+      const phaseMat = _phaseMaterials[pid] || 0;
+      const c = _calcPhase({ crew, materials: phaseMat }, rates);
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
       totPft += c.pft; totComm += c.comm;
 
@@ -3769,18 +3773,22 @@ async function initApp(){
       setFoot(`phase_subtotal_${pid}`, c.subtotal);
     });
 
-    const manualMaterials = parseFloat(document.getElementById('materialsInput')?.value) || 0;
+    const totalPhaseMaterials = PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid))
+      .reduce((sum, pid) => sum + (_phaseMaterials[pid] || 0), 0);
+    // keep global materialsInput in sync for save handler compatibility
+    const matInput = document.getElementById('materialsInput');
+    if (matInput) matInput.value = totalPhaseMaterials;
 
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
       const totTax = totSubtotal * (taxPct / 100);
-      const totFinal = totSubtotal + manualMaterials + totOh + totPft + totComm;
+      const totFinal = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm;
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
-        [`Materials`, manualMaterials],
+        [`Materials`, totalPhaseMaterials],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
         [`Tax (${taxPct}%)`, totTax],
@@ -4090,7 +4098,8 @@ async function initApp(){
       PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid, i) => {
         const actualIdx = PHASE_IDS.indexOf(pid);
         const crew = _phaseCrews[pid] || [];
-        const c = _calcPhase({ crew }, rates);
+        const phaseMat = _phaseMaterials[pid] || 0;
+        const c = _calcPhase({ crew, materials: phaseMat }, rates);
         const days = crew.length > 0 ? Math.max(...crew.map(m => m.days || 0)) : 0;
         const cleaners = crew.filter(m => m.role === 'cleaner').length;
         const foremen = crew.filter(m => m.role === 'foreman').length;
@@ -4112,6 +4121,13 @@ async function initApp(){
         summary.style.cssText = 'font-size:12px;color:#6b7280;';
         header.appendChild(nameEl); header.appendChild(summary);
         section.appendChild(header);
+
+        // Materials row in locked mode
+        const matRow = document.createElement('div');
+        matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;color:#6b7280;';
+        matRow.innerHTML = `<span>Materials ($):</span><span style="color:#374151;font-weight:600;">${fmt$(phaseMat)}</span>`;
+        section.appendChild(matRow);
+
         container.appendChild(section);
       });
       _updateCrewCalcs();
@@ -4308,6 +4324,24 @@ async function initApp(){
         footer.appendChild(span);
       });
       section.appendChild(footer);
+
+      // Materials input row per phase
+      const matRow = document.createElement('div');
+      matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;';
+      const matLabel = document.createElement('label');
+      matLabel.textContent = 'Materials ($):';
+      matLabel.style.cssText = 'color:#6b7280;white-space:nowrap;';
+      const matInput = document.createElement('input');
+      matInput.type = 'number'; matInput.min = '0'; matInput.step = '0.01';
+      matInput.value = _phaseMaterials[pid] || 0;
+      matInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:120px;outline:none;';
+      matInput.addEventListener('input', () => {
+        _phaseMaterials[pid] = parseFloat(matInput.value) || 0;
+        _updateCrewCalcs();
+      });
+      matRow.appendChild(matLabel); matRow.appendChild(matInput);
+      section.appendChild(matRow);
+
       container.appendChild(section);
     });
 
@@ -4946,6 +4980,7 @@ async function initApp(){
 
     // Reset then restore crew from saved data
     _phaseCrews = { rough: [], final: [], touchup: [] };
+    _phaseMaterials = { rough: 0, final: 0, touchup: 0 };
     _deletedPhaseIds = new Set();
 
     if (bd && bd.phases) {
@@ -4961,6 +4996,7 @@ async function initApp(){
         const pid = phaseMap[p.name];
         if (!pid) continue;
         savedPids.add(pid);
+        _phaseMaterials[pid] = p.materials || 0;
         if (p.crew && p.crew.length > 0) {
           _phaseCrews[pid] = p.crew.map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
         } else {
@@ -5062,6 +5098,7 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
     setVal('materialsInput', _loadedProjectData.labor_breakdown?.materials ?? 0);
+    _updateCrewCalcs();
 
 
     // ZIP manual lookup button
