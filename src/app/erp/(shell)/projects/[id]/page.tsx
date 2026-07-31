@@ -5,6 +5,7 @@ import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canEditPricing, canEditEmployeePayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
 import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
@@ -259,7 +260,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const qualityChecklistMeetsLaborThreshold = checklistCompletionPct(checklistCompletedItems) >= CHECKLIST_LABOR_THRESHOLD_PCT;
   const canOverrideChecklist = auth ? canOverrideQualityChecklist(auth.role) : false;
   const canOverrideSafety = auth ? canOverrideSafetyCheck(auth.role) : false;
-  const qualityChecklistBlocking = isTurnover && !qualityChecklistMeetsLaborThreshold && !canOverrideChecklist;
+  const qualityChecklistBlocking = ENFORCE_LABOR_CHECKLIST_GATES && isTurnover && !qualityChecklistMeetsLaborThreshold && !canOverrideChecklist;
   // "Property" duplicates the page title (building - unit) and "Units" duplicates the Unit
   // Scope card shown above this block — both already shown elsewhere on Overview, so they're
   // dropped from the raw "Submitted details" dump.
@@ -296,7 +297,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     const checkStr = check.checkDate.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     return checkStr === todayDateStr && check.approvedForWork;
   });
-  const safetyCheckBlocking = isPostConstruction && !hasApprovedCheckToday && !canOverrideSafety;
+  const safetyCheckBlocking = ENFORCE_LABOR_CHECKLIST_GATES && isPostConstruction && !hasApprovedCheckToday && !canOverrideSafety;
   const pipelineOptions = cfg
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },

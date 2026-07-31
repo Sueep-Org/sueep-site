@@ -14,6 +14,7 @@ import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp
 import { getErpAuth, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { todayEasternKey } from "@/lib/erp/dates";
+import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 
 /** Same "Label: value" line format used to embed a Sueep PM name in the
  * description for older projects that predate the dedicated supervisor
@@ -119,7 +120,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const project = await prisma.project.findUnique({ where: { id }, select: { id: true, supervisor: true, segment: true, hubspotPipelineId: true } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const needsOverrideCheck = project.segment === "JANITORIAL_TURNOVER_REQUESTS" || isPostConstructionProject(project.hubspotPipelineId);
+  const needsOverrideCheck = ENFORCE_LABOR_CHECKLIST_GATES && (project.segment === "JANITORIAL_TURNOVER_REQUESTS" || isPostConstructionProject(project.hubspotPipelineId));
   const auth = needsOverrideCheck ? await getErpAuth() : null;
   if (needsOverrideCheck && !auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -127,7 +128,7 @@ export async function POST(req: Request, ctx: Ctx) {
   // any labor gets logged against it — not fully finished, just past the
   // threshold — unless the acting user is a PM/ADMIN, who can log through it
   // regardless.
-  if (project.segment === "JANITORIAL_TURNOVER_REQUESTS" && !canOverrideQualityChecklist(auth!.role)) {
+  if (ENFORCE_LABOR_CHECKLIST_GATES && project.segment === "JANITORIAL_TURNOVER_REQUESTS" && !canOverrideQualityChecklist(auth!.role)) {
     const checklist = await prisma.unitTurnoverChecklist.findUnique({ where: { projectId: id }, select: { completedItems: true } });
     const completed = (checklist?.completedItems ?? {}) as Record<string, boolean>;
     if (checklistCompletionPct(completed) < CHECKLIST_LABOR_THRESHOLD_PCT) {
@@ -141,7 +142,7 @@ export async function POST(req: Request, ctx: Ctx) {
   // A post-construction project needs today's daily safety check approved
   // before any labor gets logged — unless the acting user is a PM/ADMIN, who
   // can log through it regardless.
-  if (isPostConstructionProject(project.hubspotPipelineId) && !canOverrideSafetyCheck(auth!.role)) {
+  if (ENFORCE_LABOR_CHECKLIST_GATES && isPostConstructionProject(project.hubspotPipelineId) && !canOverrideSafetyCheck(auth!.role)) {
     const todayKey = todayEasternKey();
     const checksToday = await prisma.dailySafetyCheck.findMany({
       where: { projectId: id },
