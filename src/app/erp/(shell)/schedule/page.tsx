@@ -226,6 +226,7 @@ export default async function SchedulePage() {
         status: co.status,
         workDayKeys: Array.from(days),
         laborByDay,
+        scheduledDateKey: scheduledDate ? dayKey(scheduledDate) : null,
       };
     })
     .filter((co) => co.workDayKeys.length > 0);

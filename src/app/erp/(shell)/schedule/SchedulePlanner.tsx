@@ -482,13 +482,18 @@ export function SchedulePlanner({
 
   // Drag-and-drop rescheduling on the month calendar, Google-Calendar style.
   // Only chips backed by a date the app controls are draggable: the amber
-  // "needs supervisor" chip (moves Project.projectDate) and the dashed
-  // "planned" chip (moves its ProjectDayAssignment, workers included). A
-  // confirmed chip is backed by actual logged labor (a fact, not a plan) and
-  // is deliberately never made draggable — see the chip render sites below.
+  // "needs supervisor" chip (moves Project.projectDate), the dashed
+  // "planned" chip (moves its ProjectDayAssignment, workers included), and a
+  // change-order chip on its scheduledDateKey occurrence (moves
+  // ProjectChangeOrder.startDate). A confirmed chip — or a CO chip on a day
+  // that's only there because labor was logged, not because it's the
+  // scheduled date — is backed by actual logged labor (a fact, not a plan)
+  // and is deliberately never made draggable — see the chip render sites
+  // below.
   const [draggingChip, setDraggingChip] = useState<
     | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
     | { kind: "planned"; projectId: string; assignmentId: string; fromKey: string; jobTitle: string }
+    | { kind: "changeOrder"; projectId: string; changeOrderId: string; fromKey: string; jobTitle: string }
     | null
   >(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
@@ -506,6 +511,20 @@ export function SchedulePlanner({
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(chip.role === "end" ? { projectEndDate: toKey } : { projectDate: toKey }),
+        });
+        if (!res.ok) throw new Error("Failed to reschedule");
+        router.refresh();
+      } catch {
+        setDragError(`Couldn't move "${chip.jobTitle}" — try again`);
+      }
+      return;
+    }
+    if (chip.kind === "changeOrder") {
+      try {
+        const res = await fetch(`/api/erp/projects/${chip.projectId}/change-orders/${chip.changeOrderId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ startDate: toKey }),
         });
         if (!res.ok) throw new Error("Failed to reschedule");
         router.refresh();
@@ -604,6 +623,80 @@ export function SchedulePlanner({
             </Link>
             <Link
               href={`/erp/projects/${p.id}`}
+              className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
+            >
+              View project
+            </Link>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  // Read-only change-order detail card, same idea as the labor card above —
+  // a CO's own scope/pricing lives on its own page, this is just a calendar
+  // preview of which day it's shown on and what got logged against it.
+  const [coPopoverKey, setCoPopoverKey] = useState<string | null>(null);
+
+  function openCoPopover(k: string, co: ScheduleChangeOrder) {
+    setCoPopoverKey(`${k}:${co.id}`);
+  }
+
+  function renderCoPopover(k: string, co: ScheduleChangeOrder) {
+    if (coPopoverKey !== `${k}:${co.id}`) return null;
+    const summary = co.laborByDay[k];
+    const parentProject = projectById.get(co.projectId);
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={() => setCoPopoverKey(null)}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 text-left shadow-xl"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold text-gray-800">{co.title}</p>
+            <button
+              type="button"
+              onClick={() => setCoPopoverKey(null)}
+              aria-label="Close"
+              className="shrink-0 text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          </div>
+          <p className="mt-0.5 text-[10px] text-gray-400">
+            {CHANGE_ORDER_LABEL} · {dayCellLabel(k)}
+          </p>
+          {parentProject ? (
+            <p className="mt-0.5 text-[10px] text-gray-400">Project: {parentProject.jobTitle}</p>
+          ) : null}
+          <p className="mt-0.5 text-[10px] text-gray-400">Status: {co.status}</p>
+
+          <div className="mt-3 border-t border-gray-100 pt-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] font-medium text-gray-500">Logged labor this day</label>
+              <span className="text-[10px] font-semibold text-gray-700">{summary ? formatHours(summary.hours) : "0 hrs"}</span>
+            </div>
+            {summary && summary.workers.length > 0 ? (
+              <p className="mt-1.5 text-[11px] text-gray-600">Workers: {summary.workers.join(", ")}</p>
+            ) : (
+              <p className="mt-1.5 text-[10px] text-gray-400">No labor logged for this day.</p>
+            )}
+          </div>
+
+          <div className="mt-2.5 flex items-center gap-1.5">
+            <Link
+              href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
+              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
+            >
+              View change order
+            </Link>
+            <Link
+              href={`/erp/projects/${co.projectId}`}
               className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
             >
               View project
@@ -1573,6 +1666,7 @@ export function SchedulePlanner({
                 // two stacked copies of the same card).
                 const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
                 const visiblePlannedAssignmentIds = new Set(visiblePlanned.map(({ assignment }) => assignment.id));
+                const visibleChangeOrderIds = new Set(visibleChangeOrders.map((co) => co.id));
 
                 return (
                   <div
@@ -1590,8 +1684,15 @@ export function SchedulePlanner({
                       e.preventDefault();
                       handleDropOnDay(k);
                     }}
-                    className={`min-h-[92px] bg-white p-1.5 text-left ${inMonth ? "" : "opacity-40"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
+                    className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
                   >
+                  {/* Dimming for an out-of-month day is scoped to this inner
+                      wrapper, not the cell itself — opacity < 1 creates a new
+                      CSS stacking context, and the "+n more" popover below
+                      (a sibling of this wrapper, not a descendant) needs to
+                      escape that so it can render in front of other cells'
+                      content instead of being trapped behind it. */}
+                  <div className={inMonth ? "" : "opacity-40"}>
                     <div className="flex items-center justify-between">
                       <div
                         className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium ${
@@ -1757,14 +1858,27 @@ export function SchedulePlanner({
                       {visibleChangeOrders.map((co) => {
                         const summary = co.laborByDay[k];
                         const parentProject = projectById.get(co.projectId);
+                        const isScheduledDay = k === co.scheduledDateKey;
                         return (
                           <li key={`co-${co.id}`} className={inMonth ? "group relative" : "relative"}>
-                            <Link
-                              href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
-                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CHANGE_ORDER_CHIP_CLASS}`}
+                            <button
+                              type="button"
+                              draggable={isScheduledDay}
+                              onDragStart={isScheduledDay ? (e) => {
+                                e.dataTransfer.setData("text/plain", co.id);
+                                e.dataTransfer.effectAllowed = "move";
+                                setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title });
+                              } : undefined}
+                              onDragEnd={isScheduledDay ? () => {
+                                setDraggingChip(null);
+                                setDragOverDayKey(null);
+                              } : undefined}
+                              onClick={() => openCoPopover(k, co)}
+                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${isScheduledDay ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
                             >
                               <span className="truncate">{co.title}</span>
-                            </Link>
+                            </button>
+                            {renderCoPopover(k, co)}
                             {inMonth ? (
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{co.title}</div>
@@ -1778,6 +1892,11 @@ export function SchedulePlanner({
                                     ) : null}
                                   </>
                                 ) : null}
+                                {isScheduledDay ? (
+                                  <div className="mt-1 text-gray-300">Drag to reschedule</div>
+                                ) : (
+                                  <div className="mt-1 text-gray-300">Shown here from logged labor, not draggable</div>
+                                )}
                               </div>
                             ) : null}
                           </li>
@@ -1813,7 +1932,11 @@ export function SchedulePlanner({
                           >
                             +{overflow} more
                           </button>
-                          {expandedDayKey === k ? (
+                        </li>
+                      ) : null}
+                    </ul>
+                  </div>
+                  {overflow > 0 && expandedDayKey === k ? (
                             <div
                               ref={overflowRef}
                               className={`absolute z-40 w-56 rounded-md bg-gray-900 px-2.5 py-2 text-[10px] leading-snug text-white shadow-lg ${tooltipPositionClass}`}
@@ -1878,16 +2001,34 @@ export function SchedulePlanner({
                                   </li>
                                 ))}
                                 {dayChangeOrders.map((co) => (
-                                  <li key={`ov-co-${co.id}`} className="flex items-center gap-1.5">
+                                  <li
+                                    key={`ov-co-${co.id}`}
+                                    draggable={co.scheduledDateKey === k}
+                                    onDragStart={co.scheduledDateKey === k ? (e) => {
+                                      e.dataTransfer.setData("text/plain", co.id);
+                                      e.dataTransfer.effectAllowed = "move";
+                                      setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title });
+                                      setExpandedDayKey(null);
+                                    } : undefined}
+                                    onDragEnd={co.scheduledDateKey === k ? () => {
+                                      setDraggingChip(null);
+                                      setDragOverDayKey(null);
+                                    } : undefined}
+                                    className={`flex items-center gap-1.5 ${co.scheduledDateKey === k ? "cursor-grab active:cursor-grabbing" : ""}`}
+                                  >
                                     <span className={`h-2 w-2 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
-                                    <Link
-                                      href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
-                                      onClick={() => setExpandedDayKey(null)}
-                                      className="truncate hover:underline"
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setExpandedDayKey(null);
+                                        openCoPopover(k, co);
+                                      }}
+                                      className="truncate text-left hover:underline"
                                       title={co.title}
                                     >
                                       {co.title}
-                                    </Link>
+                                    </button>
+                                    {visibleChangeOrderIds.has(co.id) ? null : renderCoPopover(k, co)}
                                   </li>
                                 ))}
                                 {daySovRequests.map((r) => (
@@ -1906,9 +2047,6 @@ export function SchedulePlanner({
                               </ul>
                             </div>
                           ) : null}
-                        </li>
-                      ) : null}
-                    </ul>
                   </div>
                 );
               })}

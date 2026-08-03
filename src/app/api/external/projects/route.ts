@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const projects = await prisma.project.findMany({
     where: {
       segment: { in: ELIGIBLE_SEGMENTS },
-      status: { in: ["ACTIVE", "ON_HOLD"] },
+      status: { in: ["ACTIVE", "ON_HOLD", "UPCOMING"] },
       jobTitle: { contains: search, mode: "insensitive" },
     },
     select: {

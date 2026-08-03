@@ -98,6 +98,12 @@ export type ScheduleChangeOrder = {
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, from ProjectChangeOrderLaborer — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
+  /** Day key (YYYY-MM-DD) of startDate ?? requestedDate — the one day in
+   * workDayKeys that's a plan rather than a fact, so it's the only occurrence
+   * draggable on the calendar (same rule as confirmed labor chips: a day
+   * backed only by logged work isn't something dragging can meaningfully
+   * change). Null on the rare CO with neither date set. */
+  scheduledDateKey: string | null;
 };
 
 /** A "Schedule SOV Work" request (ProjectSovScheduleRequest) submitted via
