@@ -463,15 +463,19 @@ async function initApp(){
   }
 
   // Per-project annotation persistence via API (with localStorage fallback)
-  window.__saveAnnotations = async function() {
+  window.__saveAnnotations = async function(extraState = {}) {
     if (!activeProjectId) return;
     const json = highlightsStore.serialize();
     try { localStorage.setItem(`annotations_${activeProjectId}`, json); } catch(_) {}
     try {
+      const payload = {
+        annotations: JSON.parse(json),
+        ...extraState,
+      };
       await fetch(`${API_BASE}/api/projects/${activeProjectId}/annotations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ annotations: JSON.parse(json) }),
+        body: JSON.stringify(payload),
       });
     } catch(_) {}
   };
@@ -489,6 +493,9 @@ async function initApp(){
         if (data.annotations) {
           highlightsStore.deserialize(JSON.stringify(data.annotations));
           restoredAnnotations = true;
+        }
+        if (data.wall_measurements) {
+          restoreWallMeasurementSectionValues(data.wall_measurements);
         }
         if (data.vector_annotations || data.analysis) {
           await hydrateDetectedWallsFromResult(data);
@@ -1328,20 +1335,28 @@ async function initApp(){
     return `wallMeasurementSectionValues_${projectKey}`;
   }
 
-  function persistWallMeasurementSectionValues() {
-    try {
-      localStorage.setItem(getWallMeasurementStorageKey(), JSON.stringify({
-        values: wallMeasurementSectionValues,
-        labels: wallMeasurementSectionLabels
-      }));
-    } catch (_) {}
+  function getWallMeasurementStateSnapshot() {
+    return {
+      values: wallMeasurementSectionValues,
+      labels: wallMeasurementSectionLabels
+    };
   }
 
-  function restoreWallMeasurementSectionValues() {
+  function persistWallMeasurementSectionValues() {
+    const snapshot = getWallMeasurementStateSnapshot();
     try {
-      const stored = localStorage.getItem(getWallMeasurementStorageKey());
+      localStorage.setItem(getWallMeasurementStorageKey(), JSON.stringify(snapshot));
+    } catch (_) {}
+    if (activeProjectId && typeof window.__saveAnnotations === 'function') {
+      window.__saveAnnotations({ wall_measurements: snapshot }).catch(() => {});
+    }
+  }
+
+  function restoreWallMeasurementSectionValues(savedSnapshot = null) {
+    try {
+      const stored = savedSnapshot || localStorage.getItem(getWallMeasurementStorageKey());
       if (!stored) return;
-      const parsed = JSON.parse(stored);
+      const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
       if (!parsed || typeof parsed !== 'object') return;
       const savedValues = parsed.values;
       const savedLabels = parsed.labels;
@@ -3665,18 +3680,33 @@ async function initApp(){
     };
   }
 
+  function _getPaintingExpectedDaysFromPhases() {
+    let totalDays = 0;
+    PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).forEach(pid => {
+      const crew = _paintingPhaseCrews[pid] || [];
+      if (crew.length > 0) totalDays += Math.max(...crew.map(m => m.days || 0));
+    });
+    return totalDays;
+  }
+
   function _applyPaintingExpectedDaysSplit(totalDays) {
     const days = parseFloat(totalDays) || 0;
     if (days <= 0) return;
 
+    const activePhaseIds = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid));
+    if (activePhaseIds.length === 0) return;
+
     const phase1Days = days * 0.3;
     const phase2Days = days * 0.7;
+    const phase3Days = Math.max(0, days - phase1Days - phase2Days);
 
-    (_paintingPhaseCrews.phase1 || []).forEach((member) => {
-      member.days = phase1Days;
-    });
-    (_paintingPhaseCrews.phase2 || []).forEach((member) => {
-      member.days = phase2Days;
+    activePhaseIds.forEach((pid) => {
+      const crew = _paintingPhaseCrews[pid] || [];
+      if (crew.length === 0) return;
+      const memberDays = pid === 'phase1' ? phase1Days : pid === 'phase2' ? phase2Days : phase3Days;
+      crew.forEach((member) => {
+        member.days = memberDays;
+      });
     });
 
     _updatePaintingCrewCalcs();
@@ -4461,11 +4491,7 @@ async function initApp(){
     _updatePaintingTransportCosts();
 
     if (!_paintingExpectedDaysManual) {
-      let totalDays = 0;
-      PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).forEach(pid => {
-        const crew = _paintingPhaseCrews[pid] || [];
-        if (crew.length > 0) totalDays += Math.max(...crew.map(m => m.days || 0));
-      });
+      const totalDays = _getPaintingExpectedDaysFromPhases();
       const daysEl = document.getElementById('paintingExpectedDaysInput');
       if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
     }
@@ -5395,10 +5421,7 @@ async function initApp(){
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
-    const expectedDays = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).reduce((sum, pid) => {
-      const crew = _paintingPhaseCrews[pid] || [];
-      return sum + Math.max(0, ...crew.map(m => m.days || 0));
-    }, 0) || null;
+    const expectedDays = _getPaintingExpectedDaysFromPhases() || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
     const derived = _getPaintingAreaDerivedValues(totalArea);
     const materialsInput = document.getElementById('paintingMaterialsInput');
