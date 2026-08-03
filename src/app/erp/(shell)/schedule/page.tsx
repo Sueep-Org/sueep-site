@@ -99,6 +99,7 @@ export default async function SchedulePage() {
         scopeItems: true,
         sovItems: { select: { id: true } },
         changeOrders: { select: { id: true } },
+        comment: true,
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -159,6 +160,7 @@ export default async function SchedulePage() {
     sovItemIds: a.sovItems.map((s) => s.id),
     scopeItems: a.scopeItems,
     changeOrderIds: a.changeOrders.map((co) => co.id),
+    comment: a.comment,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full

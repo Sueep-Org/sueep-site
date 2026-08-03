@@ -294,6 +294,8 @@ export function SchedulePlanner({
   const [eventScopePicks, setEventScopePicks] = useState<string[]>([]);
   // Change order(s) this day's coverage is for, if any.
   const [eventCoPicks, setEventCoPicks] = useState<string[]>([]);
+  // Free-text note, mainly for when there are no SOV items yet to pick from.
+  const [eventComment, setEventComment] = useState("");
 
   // Worker add/remove for the specific (day, project) the popover is open
   // for — separate from the day-assignment modal's worker picker, which
@@ -333,6 +335,7 @@ export function SchedulePlanner({
     setEventSovPicks(da?.sovItemIds ?? []);
     setEventScopePicks(da?.scopeItems ?? []);
     setEventCoPicks(da?.changeOrderIds ?? []);
+    setEventComment(da?.comment ?? "");
     setEventWorkerType("employee");
     setEventWorkerQuery("");
     setEventWorkerId("");
@@ -379,6 +382,7 @@ export function SchedulePlanner({
           sovItemIds: finalSovItemIds.length > 0 ? finalSovItemIds : undefined,
           scopeItems: finalScopeItems.length > 0 ? finalScopeItems : undefined,
           changeOrderIds: finalChangeOrderIds.length > 0 ? finalChangeOrderIds : undefined,
+          comment: existingAssignment.comment || undefined,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -425,6 +429,7 @@ export function SchedulePlanner({
           sovItemIds: finalSovItemIds,
           scopeItems: finalScopeItems,
           changeOrderIds: finalChangeOrderIds,
+          comment: existingAssignment.comment,
         },
       ]);
       if (dateChanged) {
@@ -720,7 +725,12 @@ export function SchedulePlanner({
   async function handleEventDayAssignmentSave(k: string, projectId: string) {
     setEventDayError("");
     const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
-    if (!eventDaySupervisorId && !eventDayPmId) {
+    // A supervisor/PM isn't required to keep an assignment around — SOV
+    // picks, scope picks, change-order picks, or a comment are each enough
+    // coverage on their own. Only clear the row when literally nothing is set.
+    const hasCoverage =
+      eventSovPicks.length > 0 || eventScopePicks.length > 0 || eventCoPicks.length > 0 || eventComment.trim().length > 0;
+    if (!eventDaySupervisorId && !eventDayPmId && !hasCoverage) {
       if (!existing) return;
       setEventDaySaving(true);
       try {
@@ -747,6 +757,7 @@ export function SchedulePlanner({
           sovItemIds: eventSovPicks.length > 0 ? eventSovPicks : undefined,
           scopeItems: eventScopePicks.length > 0 ? eventScopePicks : undefined,
           changeOrderIds: eventCoPicks.length > 0 ? eventCoPicks : undefined,
+          comment: eventComment.trim() || undefined,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -766,6 +777,7 @@ export function SchedulePlanner({
             sovItemIds: eventSovPicks,
             scopeItems: eventScopePicks,
             changeOrderIds: eventCoPicks,
+            comment: eventComment.trim() || null,
           },
         ]);
       }
@@ -1035,7 +1047,16 @@ export function SchedulePlanner({
                 {p.sovItems.length > 0 ? (
                   <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} />
                 ) : (
-                  <p className="text-[10px] text-gray-400">No SOV items on this project yet.</p>
+                  <div>
+                    <p className="text-[10px] text-gray-400">No SOV items on this project yet.</p>
+                    <textarea
+                      value={eventComment}
+                      onChange={(e) => setEventComment(e.target.value)}
+                      placeholder="Describe what's being worked on this day..."
+                      rows={2}
+                      className="mt-1 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -1887,6 +1908,9 @@ export function SchedulePlanner({
                               ) : null}
                               {assignmentScopeLabels.length > 0 ? (
                                 <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>
+                              ) : null}
+                              {assignment.comment ? (
+                                <div className="mt-1 text-gray-300">Note: {assignment.comment}</div>
                               ) : null}
                             </div>
                           ) : null}

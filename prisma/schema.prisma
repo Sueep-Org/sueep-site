@@ -944,6 +944,11 @@ model ProjectDayAssignment {
   /// separate assignment row per CO.
   changeOrders ProjectChangeOrder[] @relation("DayAssignmentChangeOrders")
 
+  /// Free-text note about what's happening this day — mainly used when
+  /// there are no SOV items yet to pick from, so coverage can still be
+  /// described and shown on the calendar.
+  comment String?
+
   @@unique([projectId, date])
   @@index([date])
   @@index([supervisorUserId])

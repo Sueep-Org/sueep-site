@@ -30,10 +30,8 @@ export async function POST(req: Request) {
   // goes out for it, calendar/day-assignment concept only.
   const projectManagerUserId = String(body.projectManagerUserId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
+  const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-  if (!supervisorUserId && !projectManagerUserId) {
-    return NextResponse.json({ error: "supervisorUserId or projectManagerUserId is required" }, { status: 400 });
-  }
   if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
 
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
@@ -91,6 +89,23 @@ export async function POST(req: Request) {
   const changeOrderIds = Array.isArray(body.changeOrderIds)
     ? [...new Set(body.changeOrderIds.map((v) => String(v).trim()).filter(Boolean))]
     : [];
+
+  // A supervisor/PM isn't required — SOV items, scope, change orders, or a
+  // comment alone are enough to record coverage for the day — but there has
+  // to be *something*, otherwise this would just create an empty row.
+  if (
+    !supervisorUserId &&
+    !projectManagerUserId &&
+    sovItemIds.length === 0 &&
+    scopeItems.length === 0 &&
+    changeOrderIds.length === 0 &&
+    !comment
+  ) {
+    return NextResponse.json(
+      { error: "Provide a supervisor, PM, SOV item(s), scope, change order(s), or a comment" },
+      { status: 400 }
+    );
+  }
 
   const [project, supervisor, projectManager] = await Promise.all([
     prisma.project.findUnique({
@@ -153,13 +168,13 @@ export async function POST(req: Request) {
         where: { projectId_date: { projectId, date: d } },
         create: {
           projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
-          scopeItems,
+          scopeItems, comment,
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
           changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
         update: {
           supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
-          scopeItems,
+          scopeItems, comment,
           sovItems: { set: sovItemIds.map((id) => ({ id })) },
           changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
         },
@@ -213,13 +228,13 @@ export async function POST(req: Request) {
     where: { projectId_date: { projectId, date } },
     create: {
       projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
-      scopeItems,
+      scopeItems, comment,
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
     update: {
       supervisorUserId, projectManagerUserId, startTime, endTime,
-      scopeItems,
+      scopeItems, comment,
       sovItems: { set: sovItemIds.map((id) => ({ id })) },
       changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
     },

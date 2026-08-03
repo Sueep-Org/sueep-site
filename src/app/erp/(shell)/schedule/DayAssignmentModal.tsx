@@ -99,6 +99,8 @@ export function DayAssignmentModal({
   // Which change order(s), if any, this day's work is for — lets a CO be
   // scheduled on a day between its start/end, not just those two days.
   const [coPicks, setCoPicks] = useState<string[]>([]);
+  // Free-text note, mainly for when there are no SOV items yet to pick from.
+  const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -172,8 +174,13 @@ export function DayAssignmentModal({
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!projectId || (!supervisorUserId && !projectManagerUserId)) {
-      setError("Pick a project and a supervisor or PM");
+    const hasCoverage = sovPicks.length > 0 || scopePicks.length > 0 || coPicks.length > 0 || comment.trim().length > 0;
+    if (!projectId) {
+      setError("Pick a project");
+      return;
+    }
+    if (!supervisorUserId && !projectManagerUserId && !hasCoverage) {
+      setError("Pick a supervisor or PM, or record SOV item(s), scope, change order(s), or a comment");
       return;
     }
     if ((startTime && !endTime) || (endTime && !startTime)) {
@@ -204,6 +211,7 @@ export function DayAssignmentModal({
           sovItemIds: sovPicks.length > 0 ? sovPicks : undefined,
           scopeItems: scopePicks.length > 0 ? scopePicks : undefined,
           changeOrderIds: coPicks.length > 0 ? coPicks : undefined,
+          comment: comment.trim() || undefined,
           ...(usingSeries ? { repeatUntil, repeatDays } : {}),
         }),
       });
@@ -229,6 +237,7 @@ export function DayAssignmentModal({
             sovItemIds: sovPicks,
             scopeItems: scopePicks,
             changeOrderIds: coPicks,
+            comment: comment.trim() || null,
           }))
         );
       } else if (data.id) {
@@ -244,6 +253,7 @@ export function DayAssignmentModal({
           sovItemIds: sovPicks,
           scopeItems: scopePicks,
           changeOrderIds: coPicks,
+          comment: comment.trim() || null,
         });
       }
       setProjectId("");
@@ -254,6 +264,7 @@ export function DayAssignmentModal({
       setSovPicks([]);
       setScopePicks([]);
       setCoPicks([]);
+      setComment("");
       setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -418,7 +429,7 @@ export function DayAssignmentModal({
                 ? supervisor.displayName
                 : pm
                 ? `${pm.displayName} (PM)`
-                : "Unknown supervisor";
+                : "No supervisor/PM";
               return (
                 <li
                   key={a.id}
@@ -431,6 +442,7 @@ export function DayAssignmentModal({
                       <span className="text-gray-400"> ({formatTimeRange(a.startTime, a.endTime)})</span>
                     ) : null}
                     {a.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
+                    {a.comment ? <span className="text-gray-400"> — &quot;{a.comment}&quot;</span> : null}
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     {a.seriesId ? (
@@ -484,6 +496,7 @@ export function DayAssignmentModal({
                       setSovPicks([]);
                       setScopePicks([]);
                       setCoPicks([]);
+                      setComment("");
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                     title={p.jobTitle}
@@ -505,7 +518,16 @@ export function DayAssignmentModal({
                 {selectedProject.sovItems.length > 0 ? (
                   <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
                 ) : (
-                  <p className="text-xs text-gray-400">No SOV items on this project yet.</p>
+                  <div>
+                    <p className="text-xs text-gray-400">No SOV items on this project yet.</p>
+                    <textarea
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Describe what's being worked on this day..."
+                      rows={2}
+                      className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+                    />
+                  </div>
                 )}
               </div>
             </div>

@@ -154,6 +154,9 @@ export type ScheduleDayAssignment = {
    * chip show up on a day between its start/end that isn't otherwise its
    * scheduled date or a logged-labor day. */
   changeOrderIds: string[];
+  /** Free-text note about this day's coverage, mainly used when there are
+   * no SOV items yet to pick from. */
+  comment: string | null;
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future
