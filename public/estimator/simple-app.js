@@ -3849,7 +3849,7 @@ async function initApp(){
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
-      const totTax = totSubtotal * (taxPct / 100);
+      const totTax = (totSubtotal + totalPhaseMaterials) * (taxPct / 100);
       const totFinal = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm;
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
@@ -4463,7 +4463,7 @@ async function initApp(){
       setFoot(`pphase_subtotal_${pid}`, c.subtotal);
     });
 
-    const totTax = totSubtotal * (taxPct / 100);
+    const totTax = (totSubtotal + totalPhaseMaterials) * (taxPct / 100);
     const totFinalActual = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm + totTax;
 
     const summaryContainer = document.getElementById('paintingCalcSummaryContainer');
@@ -4813,7 +4813,7 @@ async function initApp(){
         breakdownDiv.appendChild(table);
 
         const savedMaterials = bd.materials || 0;
-        const totTax = totSubtotal * ((bd.tax_pct || 0) / 100);
+        const totTax = (totSubtotal + savedMaterials) * ((bd.tax_pct || 0) / 100);
         const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
@@ -4971,7 +4971,7 @@ async function initApp(){
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
         const commPct     = bd?.commission_pct || 5;
-        const totTax = totSubtotal * (taxPct / 100);
+        const totTax = (totSubtotal + savedMaterials) * (taxPct / 100);
         const totFinal = (bd?.phases ? totSubtotal + savedMaterials + totOh + totPft + totComm + totTax : areaDerived?.finalSubtotal ?? (totSubtotal + savedMaterials + totOh + totPft + totComm + totTax));
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
