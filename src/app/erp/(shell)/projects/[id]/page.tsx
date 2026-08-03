@@ -54,11 +54,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       include: {
         laborEntries: {
           orderBy: { workDate: "desc" },
-          include: { employee: { select: { firstName: true, lastName: true } } },
+          include: { employee: { select: { firstName: true, lastName: true } }, sovItems: { select: { id: true } } },
         },
         contractorAssignments: {
           orderBy: { createdAt: "desc" },
-          include: { contractor: { select: { id: true, name: true } } },
+          include: { contractor: { select: { id: true, name: true } }, sovItems: { select: { id: true } } },
         },
         contacts: {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
@@ -325,7 +325,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       otHours: split.otHours,
       hourlyRateCents: e.hourlyRateCents,
       taskDescription: e.taskDescription,
-      sovItemId: e.sovItemId ?? null,
+      sovItemIds: e.sovItems.map((s) => s.id),
       qualityNotes: e.qualityNotes ?? null,
     };
   });
@@ -373,6 +373,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     endDate: a.endDate ? a.endDate.toISOString() : null,
     notes: a.notes,
     costCents: a.costCents ?? null,
+    taskDescription: a.taskDescription,
+    sovItemIds: a.sovItems.map((s) => s.id),
   }));
 
   const allTabs = [
@@ -550,6 +552,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           projectId={project.id}
           initialAssignments={contractorRows}
           contractors={contractors}
+          sovItems={sovItems}
         />
       ),
     },

@@ -38,3 +38,21 @@ export const PROJECT_SEGMENTS = [
     const normalized = normalizeProjectSegment(raw);
     return SEGMENT_LABELS[normalized];
   }
+
+  // Groups the finer-grained segments above into the four buckets the
+  // Schedule calendar (and the day-assignment modal) actually cares about —
+  // painting/cleaning are both "Post-construction" for scheduling purposes.
+  export type CalendarSegmentGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
+
+  const SEGMENT_TO_CALENDAR_GROUP: Record<ProjectSegment, CalendarSegmentGroup> = {
+    COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
+    COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
+    CHANGE_ORDER: "OTHER",
+    JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
+    REAL_ESTATE: "REAL_ESTATE",
+    OTHER: "OTHER",
+  };
+
+  export function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
+    return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
+  }

@@ -50,6 +50,7 @@ export default async function SchedulePage() {
         createdAt: true,
         percentDone: true,
         supervisorUserId: true,
+        sov: { select: { items: { select: { id: true, description: true, completed: true } } } },
       },
     }),
     prisma.erpUser.findMany({
@@ -83,6 +84,8 @@ export default async function SchedulePage() {
         startTime: true,
         endTime: true,
         seriesId: true,
+        scopeItems: true,
+        sovItems: { select: { id: true } },
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -140,6 +143,8 @@ export default async function SchedulePage() {
     startTime: a.startTime,
     endTime: a.endTime,
     seriesId: a.seriesId,
+    sovItemIds: a.sovItems.map((s) => s.id),
+    scopeItems: a.scopeItems,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full
@@ -269,6 +274,7 @@ export default async function SchedulePage() {
       laborByDay,
       laborEntriesByDay,
       plannedWorkersByDay,
+      sovItems: r.sov?.items ?? [],
     };
   });
 

@@ -3,8 +3,11 @@
 import { useState } from "react";
 import type { ScheduleDayAssignment, ScheduleWorkerAssignment } from "@/lib/erp/schedule";
 import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
+import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
+import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
+import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
-type ProjectOption = { id: string; jobTitle: string };
+type ProjectOption = { id: string; jobTitle: string; segment: string; sovItems: SOVItemOption[] };
 type Person = { id: string; displayName: string };
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -82,6 +85,10 @@ export function DayAssignmentModal({
   const [projectManagerUserId, setProjectManagerUserId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  // Post-Construction: which SOV line item(s) this day's work is for.
+  const [sovPicks, setSovPicks] = useState<string[]>([]);
+  // Janitorial: which scope categories (clean, paint, etc.) this day covers.
+  const [scopePicks, setScopePicks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -117,6 +124,9 @@ export function DayAssignmentModal({
   const filteredProjects = projectQuery.trim()
     ? projects.filter((p) => p.jobTitle.toLowerCase().includes(projectQuery.toLowerCase()))
     : projects;
+
+  const selectedProject = projects.find((p) => p.id === projectId) ?? null;
+  const selectedGroup = selectedProject ? calendarSegmentGroup(selectedProject.segment) : null;
 
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
@@ -175,6 +185,8 @@ export function DayAssignmentModal({
           date: dateKey,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
+          sovItemIds: sovPicks.length > 0 ? sovPicks : undefined,
+          scopeItems: scopePicks.length > 0 ? scopePicks : undefined,
           ...(usingSeries ? { repeatUntil, repeatDays } : {}),
         }),
       });
@@ -197,6 +209,8 @@ export function DayAssignmentModal({
             startTime: startTime || null,
             endTime: endTime || null,
             seriesId: data.seriesId!,
+            sovItemIds: sovPicks,
+            scopeItems: scopePicks,
           }))
         );
       } else if (data.id) {
@@ -209,6 +223,8 @@ export function DayAssignmentModal({
           startTime: startTime || null,
           endTime: endTime || null,
           seriesId: null,
+          sovItemIds: sovPicks,
+          scopeItems: scopePicks,
         });
       }
       setProjectId("");
@@ -216,6 +232,8 @@ export function DayAssignmentModal({
       setSupervisorUserId("");
       setProjectManagerUserId("");
       setStartTime("");
+      setSovPicks([]);
+      setScopePicks([]);
       setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -443,6 +461,8 @@ export function DayAssignmentModal({
                     onClick={() => {
                       setProjectId(p.id);
                       setProjectQuery(p.jobTitle);
+                      setSovPicks([]);
+                      setScopePicks([]);
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                     title={p.jobTitle}
@@ -456,6 +476,42 @@ export function DayAssignmentModal({
               </div>
             ) : null}
           </div>
+
+          {selectedProject && selectedGroup === "POST_CONSTRUCTION" && selectedProject.sovItems.length > 0 ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
+              <div className="mt-1">
+                <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+              </div>
+            </div>
+          ) : null}
+
+          {selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Scope covered this day</label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {TURNOVER_SCOPE_OPTIONS.map((opt) => {
+                  const active = scopePicks.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setScopePicks((prev) =>
+                          prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
+                        )
+                      }
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        active ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-600 hover:border-pink-400"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-2">
             <div>

@@ -754,9 +754,13 @@ model LaborEntry {
 
   taskDescription String?
 
-  /// Optional link to a ProjectSOVItem (replaces taskDescription when set)
+  /// Deprecated: superseded by `sovItems` (multi-select). Kept only so old rows
+  /// aren't silently unlinked; no longer read or written by the app.
   sovItemId String?
   sovItem   ProjectSOVItem? @relation(fields: [sovItemId], references: [id], onDelete: SetNull)
+
+  /// SOV items this entry's work covers. A shift can span multiple tasks.
+  sovItems ProjectSOVItem[] @relation("LaborEntrySOVItems")
 
   qualityRating String?
   qualityNotes  String?
@@ -914,6 +918,15 @@ model ProjectDayAssignment {
   /// (see ProjectScheduleSeries) rather than a single one-off day assign.
   seriesId String?
   series   ProjectScheduleSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  /// SOV line items this scheduled day is working on (Post-Construction).
+  sovItems ProjectSOVItem[] @relation("DayAssignmentSOVItems")
+
+  /// Janitorial/turnover scope categories this scheduled day covers — values
+  /// from TURNOVER_SCOPE_OPTIONS (src/lib/erp/turnoverScope.ts), e.g. "CLEAN",
+  /// "PAINT". Free-standing from TurnoverRequest's contracted scope flags,
+  /// this is what's actually being worked on for this specific day.
+  scopeItems String[] @default([])
 
   @@unique([projectId, date])
   @@index([date])
@@ -1266,6 +1279,12 @@ model ContractorAssignment {
   notes        String?
   costCents    Int?
 
+  taskDescription String?
+
+  /// SOV items this assignment's work covers. A contractor can be responsible
+  /// for multiple line items.
+  sovItems ProjectSOVItem[] @relation("ContractorAssignmentSOVItems")
+
   @@index([contractorId])
   @@index([buildingId])
   @@index([projectId])
@@ -1518,7 +1537,11 @@ model ProjectSOVItem {
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 
+  /// Deprecated reverse of LaborEntry.sovItemId; superseded by laborEntriesMulti.
   laborEntries          LaborEntry[]
+  laborEntriesMulti     LaborEntry[]            @relation("LaborEntrySOVItems")
+  contractorAssignments ContractorAssignment[]   @relation("ContractorAssignmentSOVItems")
+  dayAssignments        ProjectDayAssignment[]   @relation("DayAssignmentSOVItems")
   scheduleRequests      ProjectSovScheduleRequest[]
   hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]

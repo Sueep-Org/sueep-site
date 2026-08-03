@@ -5,6 +5,7 @@ import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calen
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
+import { isTurnoverScopeValue } from "@/lib/erp/turnoverScope";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -81,6 +82,13 @@ export async function POST(req: Request) {
     }
   }
 
+  const sovItemIds = Array.isArray(body.sovItemIds)
+    ? [...new Set(body.sovItemIds.map((v) => String(v).trim()).filter(Boolean))]
+    : [];
+  const scopeItems = Array.isArray(body.scopeItems)
+    ? [...new Set(body.scopeItems.map((v) => String(v).trim()).filter(isTurnoverScopeValue))]
+    : [];
+
   const [project, supervisor, projectManager] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
@@ -99,6 +107,11 @@ export async function POST(req: Request) {
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (supervisorUserId && !supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
   if (projectManagerUserId && !projectManager) return NextResponse.json({ error: "PM not found" }, { status: 404 });
+
+  if (sovItemIds.length > 0) {
+    const found = await prisma.projectSOVItem.count({ where: { id: { in: sovItemIds }, sov: { projectId } } });
+    if (found !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+  }
 
   // Building.address has far broader coverage than the work-order siteAddress
   // (most projects are linked to a Building), so prefer it and fall back.
@@ -131,8 +144,17 @@ export async function POST(req: Request) {
     const writes = seriesDates.map((d) =>
       prisma.projectDayAssignment.upsert({
         where: { projectId_date: { projectId, date: d } },
-        create: { projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id },
-        update: { supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id },
+        create: {
+          projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
+          scopeItems,
+          sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+        },
+        update: {
+          supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
+          scopeItems,
+          sovItems: { set: sovItemIds.map((id) => ({ id })) },
+        },
+        include: { sovItems: { select: { id: true } } },
       })
     );
     const assignments = supervisorUserId
@@ -180,8 +202,17 @@ export async function POST(req: Request) {
 
   const writeAssignment = prisma.projectDayAssignment.upsert({
     where: { projectId_date: { projectId, date } },
-    create: { projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime },
-    update: { supervisorUserId, projectManagerUserId, startTime, endTime },
+    create: {
+      projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
+      scopeItems,
+      sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+    },
+    update: {
+      supervisorUserId, projectManagerUserId, startTime, endTime,
+      scopeItems,
+      sovItems: { set: sovItemIds.map((id) => ({ id })) },
+    },
+    include: { sovItems: { select: { id: true } } },
   });
   const assignment = supervisorUserId
     ? (await prisma.$transaction([writeAssignment, prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } })]))[0]

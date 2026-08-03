@@ -102,7 +102,7 @@ async function notifyPmIfMarginWorsened(projectId: string, priorHours: number, n
 }
 
 export type CreateLaborEntryResult =
-  | { ok: true; entry: LaborEntry }
+  | { ok: true; entry: LaborEntry & { sovItems: { id: string }[] } }
   | { ok: false; status: number; error: string };
 
 /**
@@ -254,11 +254,16 @@ export async function createLaborEntryForProject(
   const locationLongitude = body.locationLongitude != null ? parseFloat(String(body.locationLongitude)) : null;
   const locationAccuracy = body.locationAccuracy != null ? parseFloat(String(body.locationAccuracy)) : null;
 
-  const sovItemId = body.sovItemId ? String(body.sovItemId).trim() : null;
-  if (sovItemId) {
-    const sovItem = await prisma.projectSOVItem.findFirst({ where: { id: sovItemId, sov: { projectId } }, select: { id: true } });
-    if (!sovItem) return { ok: false, status: 404, error: "SOV item not found" };
+  const sovItemIds = Array.isArray(body.sovItemIds)
+    ? [...new Set(body.sovItemIds.map((v) => String(v).trim()).filter(Boolean))]
+    : [];
+  if (sovItemIds.length > 0) {
+    const found = await prisma.projectSOVItem.findMany({ where: { id: { in: sovItemIds }, sov: { projectId } }, select: { id: true } });
+    if (found.length !== sovItemIds.length) return { ok: false, status: 404, error: "SOV item not found" };
   }
+  const sovCompletedIds = new Set(
+    Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
+  );
 
   const priorHoursAgg = await prisma.laborEntry.aggregate({ where: { projectId }, _sum: { hours: true } });
   const priorHours = priorHoursAgg._sum.hours ?? 0;
@@ -277,16 +282,20 @@ export async function createLaborEntryForProject(
         transportationMethod,
         hourlyRateCents,
         taskDescription: body.taskDescription != null ? String(body.taskDescription).trim() || null : null,
-        sovItemId: sovItemId || null,
+        sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
         locationLatitude: Number.isFinite(locationLatitude) ? locationLatitude : null,
         locationLongitude: Number.isFinite(locationLongitude) ? locationLongitude : null,
         locationAccuracy: Number.isFinite(locationAccuracy) ? locationAccuracy : null,
         lastLocationAt: (Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude)) ? new Date() : null,
       },
+      include: { sovItems: { select: { id: true } } },
     });
-    if (sovItemId && body.sovCompleted !== undefined) {
-      await prisma.projectSOVItem.update({ where: { id: sovItemId }, data: { completed: Boolean(body.sovCompleted) } });
-      await syncSovPercentDone(projectId);
+    if (sovCompletedIds.size > 0) {
+      const idsToComplete = sovItemIds.filter((id) => sovCompletedIds.has(id));
+      if (idsToComplete.length > 0) {
+        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
+        await syncSovPercentDone(projectId);
+      }
     }
     try {
       await notifyPmIfMarginWorsened(projectId, priorHours, priorHours + hours);

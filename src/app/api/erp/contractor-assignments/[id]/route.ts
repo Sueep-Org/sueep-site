@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -51,9 +52,34 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
   if (body.notes !== undefined) data.notes = String(body.notes || "").trim() || null;
   if (body.costCents !== undefined) data.costCents = body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null;
+  if (body.taskDescription !== undefined) data.taskDescription = body.taskDescription ? String(body.taskDescription).trim() || null : null;
+
+  let sovItemIds: string[] | undefined;
+  if (body.sovItemIds !== undefined) {
+    sovItemIds = Array.isArray(body.sovItemIds)
+      ? [...new Set(body.sovItemIds.map((v) => String(v).trim()).filter(Boolean))]
+      : [];
+    const projectId = (data.projectId as string | null | undefined) ?? existing.projectId;
+    if (sovItemIds.length > 0) {
+      if (!projectId) return NextResponse.json({ error: "Assignment has no project to link SOV items to" }, { status: 400 });
+      const found = await prisma.projectSOVItem.findMany({ where: { id: { in: sovItemIds }, sov: { projectId } }, select: { id: true } });
+      if (found.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    }
+    data.sovItems = { set: sovItemIds.map((sovId) => ({ id: sovId })) };
+  }
 
   try {
-    const assignment = await prisma.contractorAssignment.update({ where: { id }, data: data as object });
+    const assignment = await prisma.contractorAssignment.update({ where: { id }, data: data as object, include: { sovItems: { select: { id: true } } } });
+    if (sovItemIds !== undefined && existing.projectId) {
+      const sovCompletedIds = new Set(
+        Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
+      );
+      const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
+      if (idsToComplete.length > 0) {
+        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
+      }
+      await syncSovPercentDone(existing.projectId);
+    }
     return NextResponse.json(assignment);
   } catch (e) {
     console.error("PATCH /api/erp/contractor-assignments/[id]", e);

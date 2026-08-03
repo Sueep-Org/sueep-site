@@ -72,20 +72,27 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.qualityNotes !== undefined) {
     data.qualityNotes = body.qualityNotes ? String(body.qualityNotes).trim() || null : null;
   }
-  if (body.sovItemId !== undefined) {
-    const sovItemId = body.sovItemId ? String(body.sovItemId).trim() : null;
-    if (sovItemId) {
-      const sovItem = await prisma.projectSOVItem.findFirst({ where: { id: sovItemId, sov: { projectId: id } }, select: { id: true } });
-      if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+  let sovItemIds: string[] | undefined;
+  if (body.sovItemIds !== undefined) {
+    sovItemIds = Array.isArray(body.sovItemIds)
+      ? [...new Set(body.sovItemIds.map((v) => String(v).trim()).filter(Boolean))]
+      : [];
+    if (sovItemIds.length > 0) {
+      const found = await prisma.projectSOVItem.findMany({ where: { id: { in: sovItemIds }, sov: { projectId: id } }, select: { id: true } });
+      if (found.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
     }
-    data.sovItemId = sovItemId;
+    data.sovItems = { set: sovItemIds.map((sovId) => ({ id: sovId })) };
   }
 
   try {
-    const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object });
-    if (body.sovItemId !== undefined && data.sovItemId) {
-      if (body.sovCompleted !== undefined) {
-        await prisma.projectSOVItem.update({ where: { id: String(data.sovItemId) }, data: { completed: Boolean(body.sovCompleted) } });
+    const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object, include: { sovItems: { select: { id: true } } } });
+    if (sovItemIds !== undefined) {
+      const sovCompletedIds = new Set(
+        Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
+      );
+      const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
+      if (idsToComplete.length > 0) {
+        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
       }
       await syncSovPercentDone(id);
     }

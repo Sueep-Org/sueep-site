@@ -208,6 +208,30 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const project = await prisma.project.update({ where: { id }, data: data as object });
 
     if (shouldNotifyReschedule) {
+      // Once a day is actually assigned (supervisor scheduled via the
+      // calendar), the calendar reads that ProjectDayAssignment's own date,
+      // not Project.projectDate — so without this, editing "Start date"
+      // here silently stops moving the chip. Only handled for the common
+      // single-day case (no seriesId); a multi-day/repeat series has no one
+      // unambiguous day to move, so those are left alone and should be
+      // rescheduled from the Schedule page instead.
+      try {
+        const dayAssignments = await prisma.projectDayAssignment.findMany({ where: { projectId: id } });
+        const soleAssignment =
+          dayAssignments.length === 1 && dayAssignments[0]!.seriesId == null ? dayAssignments[0]! : null;
+        if (soleAssignment && soleAssignment.date.getTime() !== newProjectDate!.getTime()) {
+          await prisma.$transaction([
+            prisma.projectDayAssignment.update({ where: { id: soleAssignment.id }, data: { date: newProjectDate! } }),
+            prisma.projectWorkerDayAssignment.updateMany({
+              where: { projectId: id, date: soleAssignment.date },
+              data: { date: newProjectDate! },
+            }),
+          ]);
+        }
+      } catch (e) {
+        console.error("Failed to move day assignment alongside projectDate", e);
+      }
+
       const finalSupervisorUserId =
         data.supervisorUserId !== undefined ? (data.supervisorUserId as string | null) : existing.supervisorUserId;
       const finalSupervisorName = data.supervisor !== undefined ? (data.supervisor as string) : existing.supervisor;

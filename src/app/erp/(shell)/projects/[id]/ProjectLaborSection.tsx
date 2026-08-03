@@ -12,6 +12,7 @@ import {
 import { TRANSPORTATION_METHOD_OPTIONS, transportationMethodShortLabel } from "@/lib/erp/transportationMethods";
 import { CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { UnitScopeCard } from "./UnitScopeCard";
+import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
 export type LaborRow = {
   id: string;
@@ -28,17 +29,9 @@ export type LaborRow = {
   otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
-  sovItemId: string | null;
+  sovItemIds: string[];
   qualityNotes: string | null;
 };
-
-export type SOVItemOption = {
-  id: string;
-  description: string;
-  completed: boolean;
-};
-
-const SOV_OTHER = "__sov_other__";
 
 export type LaborEmployeeOption = {
   id: string;
@@ -159,86 +152,6 @@ function EmployeeCombobox({
   );
 }
 
-function SOVCombobox({
-  sovItems,
-  value,
-  onChange,
-}: {
-  sovItems: SOVItemOption[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selected = value === SOV_OTHER ? null : sovItems.find((s) => s.id === value);
-  const displayLabel = value === SOV_OTHER ? "Other (custom entry)" : selected ? selected.description : "";
-
-  const filtered = query.trim()
-    ? sovItems.filter((s) => s.description.toLowerCase().includes(query.toLowerCase()))
-    : sovItems;
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        if (!value) setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [value]);
-
-  function handleSelect(id: string) {
-    onChange(id);
-    setQuery(id === SOV_OTHER ? "Other (custom entry)" : sovItems.find((s) => s.id === id)?.description ?? "");
-    setOpen(false);
-  }
-
-  return (
-    <div ref={containerRef} className="relative">
-      <input
-        type="text"
-        autoComplete="off"
-        className={input}
-        placeholder={displayLabel || "Search SOV items…"}
-        value={open ? query : displayLabel}
-        onFocus={() => { setQuery(""); setOpen(true); }}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
-        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(displayLabel); } }}
-      />
-      {open && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
-          {filtered.length === 0 && query ? (
-            <li className="px-3 py-2 text-gray-400">No matching items</li>
-          ) : null}
-          {filtered.map((sov) => (
-            <li
-              key={sov.id}
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(sov.id); }}
-              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
-            >
-              {sov.completed ? (
-                <span className="text-emerald-500 text-xs">✓</span>
-              ) : (
-                <span className="w-3" />
-              )}
-              {sov.description}
-            </li>
-          ))}
-          <li
-            onMouseDown={(e) => { e.preventDefault(); handleSelect(SOV_OTHER); }}
-            className="cursor-pointer border-t border-gray-100 px-3 py-2 text-gray-500 hover:bg-pink-50 hover:text-pink-700"
-          >
-            Other (custom entry)
-          </li>
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // Labor entries on or after this date are expected to have a safety check.
 const SAFETY_CUTOFF = "2026-06-18";
 
@@ -326,9 +239,9 @@ export function ProjectLaborSection({
   const [commuteMinutesStr, setCommuteMinutesStr] = useState("");
   const [transportationMethodStr, setTransportationMethodStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemId: string }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemId: "" });
-  const [sovPick, setSovPick] = useState<string>("");
-  const [sovMarkComplete, setSovMarkComplete] = useState(false);
+  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemIds: string[] }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemIds: [] });
+  const [sovPicks, setSovPicks] = useState<string[]>([]);
+  const [sovMarkCompleteIds, setSovMarkCompleteIds] = useState<Set<string>>(new Set());
   const [unitCompleted, setUnitCompleted] = useState(false);
   const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
@@ -402,7 +315,7 @@ export function ProjectLaborSection({
       transportationMethod: r.transportationMethod ?? "",
       hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
       taskDescription: r.taskDescription ?? "",
-      sovItemId: r.sovItemId ?? "",
+      sovItemIds: r.sovItemIds,
     });
   }
 
@@ -411,10 +324,6 @@ export function ProjectLaborSection({
       setError("Transportation is required.");
       return;
     }
-    const sovItemId = editFields.sovItemId && editFields.sovItemId !== SOV_OTHER ? editFields.sovItemId : null;
-    const taskDesc = (!sovItemId && editFields.sovItemId !== SOV_OTHER) || editFields.sovItemId === SOV_OTHER
-      ? editFields.taskDescription || null
-      : null;
     const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -427,16 +336,16 @@ export function ProjectLaborSection({
         commuteHours: editFields.commuteMinutes === "" ? null : String(Number(editFields.commuteMinutes) / 60),
         transportationMethod: editFields.transportationMethod || null,
         hourlyRate: editFields.hourlyRate,
-        taskDescription: taskDesc,
-        sovItemId: sovItemId,
+        taskDescription: editFields.taskDescription.trim() || null,
+        sovItemIds: editFields.sovItemIds,
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; transportationMethod: string | null; hourlyRateCents: number; taskDescription: string | null; sovItemId: string | null };
+      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; transportationMethod: string | null; hourlyRateCents: number; taskDescription: string | null; sovItems: { id: string }[] };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, transportationMethod: updated.transportationMethod ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemId: updated.sovItemId ?? null }
+            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, transportationMethod: updated.transportationMethod ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemIds: updated.sovItems.map((s) => s.id) }
             : e,
         ),
       );
@@ -495,8 +404,7 @@ export function ProjectLaborSection({
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
-    const sovItemId = sovPick && sovPick !== SOV_OTHER ? sovPick : null;
-    const taskDescription = (!sovItemId) ? String(fd.get("taskDescription") || "").trim() : null;
+    const taskDescription = String(fd.get("taskDescription") || "").trim();
 
     const picked = employees.find((x) => x.id === employeePick);
     const workerName =
@@ -527,8 +435,8 @@ export function ProjectLaborSection({
           transportationMethod: transportationMethodStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
-          sovItemId: sovItemId || undefined,
-          sovCompleted: sovItemId ? sovMarkComplete : undefined,
+          sovItemIds: sovPicks.length > 0 ? sovPicks : undefined,
+          sovCompletedIds: sovPicks.length > 0 ? sovPicks.filter((id) => sovMarkCompleteIds.has(id)) : undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -544,7 +452,7 @@ export function ProjectLaborSection({
         transportationMethod?: string | null;
         hourlyRateCents?: number;
         taskDescription?: string | null;
-        sovItemId?: string | null;
+        sovItems?: { id: string }[];
         error?: string;
       };
       if (!res.ok) {
@@ -570,11 +478,17 @@ export function ProjectLaborSection({
         otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,
         taskDescription: data.taskDescription ?? null,
-        sovItemId: data.sovItemId ?? null,
+        sovItemIds: (data.sovItems ?? []).map((s) => s.id),
         qualityNotes: null,
       };
-      if (sovMarkComplete && sovItemId) {
-        setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: true }));
+      if (sovMarkCompleteIds.size > 0) {
+        setSovCompletedMap((prev) => {
+          const next = { ...prev };
+          for (const id of sovPicks) {
+            if (sovMarkCompleteIds.has(id)) next[id] = true;
+          }
+          return next;
+        });
       }
       let unitCompleteError = "";
       if (unitCompleted) {
@@ -603,8 +517,8 @@ export function ProjectLaborSection({
       setClockOutStr("");
       setCommuteMinutesStr("");
       setTransportationMethodStr("");
-      setSovPick("");
-      setSovMarkComplete(false);
+      setSovPicks([]);
+      setSovMarkCompleteIds(new Set());
       setUnitCompleted(false);
       if (unitCompleteError) setError(unitCompleteError);
       router.refresh();
@@ -857,30 +771,50 @@ export function ProjectLaborSection({
             </div>
           )}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label}>
-              {sovItems.length > 0 ? "SOV Item / Task" : "Task"}
-            </label>
-            {sovItems.length > 0 ? (
-              <div className="space-y-2">
-                <SOVCombobox sovItems={sovItems} value={sovPick} onChange={(v) => { setSovPick(v); setSovMarkComplete(false); }} />
-                {sovPick === SOV_OTHER && (
-                  <input name="taskDescription" className={input} placeholder="Custom task description…" />
-                )}
-                {sovPick && sovPick !== SOV_OTHER && (
-                  <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
-                    <input
-                      type="checkbox"
-                      checked={sovMarkComplete}
-                      onChange={(e) => setSovMarkComplete(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                    />
-                    Mark SOV item as complete
-                  </label>
-                )}
+            {sovItems.length > 0 && (
+              <div>
+                <label className={label}>SOV Items / Tasks</label>
+                <div className="space-y-2">
+                  <SOVMultiCombobox sovItems={sovItems} selectedIds={sovPicks} onChange={(ids) => {
+                    setSovPicks(ids);
+                    setSovMarkCompleteIds((prev) => {
+                      const next = new Set<string>();
+                      for (const id of ids) if (prev.has(id)) next.add(id);
+                      return next;
+                    });
+                  }} />
+                  {sovPicks.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+                      {sovPicks.map((id) => {
+                        const item = sovItems.find((s) => s.id === id);
+                        if (!item) return null;
+                        return (
+                          <label key={id} className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={sovMarkCompleteIds.has(id)}
+                              onChange={(e) => setSovMarkCompleteIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(id); else next.delete(id);
+                                return next;
+                              })}
+                              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                            />
+                            Mark &quot;{item.description}&quot; complete
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : (
-              <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
             )}
+            <div className={sovItems.length > 0 ? "mt-3" : ""}>
+              <label className={label} htmlFor="l-task">
+                {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
+              </label>
+              <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+            </div>
           </div>
         </div>
         {isJanitorialUnit && (
@@ -1065,20 +999,18 @@ export function ProjectLaborSection({
                       <td className="py-1 pr-2">
                         {sovItems.length > 0 ? (
                           <div className="space-y-1">
-                            <SOVCombobox
+                            <SOVMultiCombobox
                               sovItems={sovItems}
-                              value={editFields.sovItemId}
-                              onChange={(v) => setEditFields((f) => ({ ...f, sovItemId: v, taskDescription: "" }))}
+                              selectedIds={editFields.sovItemIds}
+                              onChange={(ids) => setEditFields((f) => ({ ...f, sovItemIds: ids }))}
                             />
-                            {editFields.sovItemId === SOV_OTHER && (
-                              <input
-                                type="text"
-                                className={editInput}
-                                placeholder="Custom task…"
-                                value={editFields.taskDescription}
-                                onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))}
-                              />
-                            )}
+                            <input
+                              type="text"
+                              className={editInput}
+                              placeholder="Additional task notes…"
+                              value={editFields.taskDescription}
+                              onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))}
+                            />
                           </div>
                         ) : (
                           <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
@@ -1140,24 +1072,29 @@ export function ProjectLaborSection({
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>}
                       {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.regHours, r.otHours, r.hourlyRateCents))}</td>}
                       <td className="py-2 pr-2">
-                        {r.sovItemId ? (
-                          <div className="flex items-center gap-1.5">
-                            {canEdit ? (
-                              <input
-                                type="checkbox"
-                                checked={!!sovCompletedMap[r.sovItemId]}
-                                onChange={() => toggleSOVComplete(r.sovItemId!)}
-                                title="Mark SOV item complete"
-                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
-                              />
-                            ) : (
-                              <span className={`h-4 w-4 shrink-0 rounded border text-center text-[10px] ${sovCompletedMap[r.sovItemId] ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-gray-300"}`}>
-                                {sovCompletedMap[r.sovItemId] ? "✓" : ""}
-                              </span>
-                            )}
-                            <span className={`text-xs ${sovCompletedMap[r.sovItemId] ? "line-through text-gray-400" : "text-gray-700"}`}>
-                              {sovItems.find((s) => s.id === r.sovItemId)?.description ?? "—"}
-                            </span>
+                        {r.sovItemIds.length > 0 ? (
+                          <div className="space-y-1">
+                            {r.sovItemIds.map((sovItemId) => (
+                              <div key={sovItemId} className="flex items-center gap-1.5">
+                                {canEdit ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={!!sovCompletedMap[sovItemId]}
+                                    onChange={() => toggleSOVComplete(sovItemId)}
+                                    title="Mark SOV item complete"
+                                    className="h-4 w-4 shrink-0 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className={`h-4 w-4 shrink-0 rounded border text-center text-[10px] ${sovCompletedMap[sovItemId] ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-gray-300"}`}>
+                                    {sovCompletedMap[sovItemId] ? "✓" : ""}
+                                  </span>
+                                )}
+                                <span className={`text-xs ${sovCompletedMap[sovItemId] ? "line-through text-gray-400" : "text-gray-700"}`}>
+                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "—"}
+                                </span>
+                              </div>
+                            ))}
+                            {r.taskDescription ? <span className="block text-xs text-gray-500">{r.taskDescription}</span> : null}
                           </div>
                         ) : (
                           <span className="text-gray-500">{r.taskDescription || "—"}</span>

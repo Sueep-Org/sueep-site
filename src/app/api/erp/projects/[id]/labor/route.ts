@@ -13,6 +13,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const entries = await prisma.laborEntry.findMany({
     where: { projectId: id },
     orderBy: { workDate: "desc" },
+    include: { sovItems: { select: { id: true } } },
   });
   return NextResponse.json(entries);
 }

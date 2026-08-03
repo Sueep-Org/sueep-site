@@ -20,7 +20,8 @@ import {
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
+import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
+import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 
 const PX_PER_DAY = 10;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -39,15 +40,6 @@ function statusBarClass(status: string): string {
       return "bg-pink-600/80";
   }
 }
-
-// Calendar-only grouping of project types — commercial painting and
-// commercial cleaning are shown together as "Post-construction" here, even
-// though they remain distinct segments everywhere else in the app (forms,
-// filters, billing). Projects whose segment is itself CHANGE_ORDER are
-// folded into "Other" here — that's a different, rarely-used thing from the
-// blue "Change order (CO)" items below (ProjectChangeOrder records attached
-// to a parent project), and not worth its own filter/legend entry.
-type CalendarSegmentGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
 
 const CALENDAR_GROUP_LABEL: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "Post-construction",
@@ -95,19 +87,6 @@ const CALENDAR_GROUP_SWATCH_CLASS: Record<CalendarSegmentGroup, string> = {
   REAL_ESTATE: "bg-purple-200",
   OTHER: "bg-slate-200",
 };
-
-const SEGMENT_TO_CALENDAR_GROUP: Record<ProjectSegment, CalendarSegmentGroup> = {
-  COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
-  COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
-  CHANGE_ORDER: "OTHER",
-  JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
-  REAL_ESTATE: "REAL_ESTATE",
-  OTHER: "OTHER",
-};
-
-function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
-  return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
-}
 
 function formatHours(hours: number): string {
   const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
@@ -368,6 +347,8 @@ export function SchedulePlanner({
           projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
+          sovItemIds: existingAssignment.sovItemIds.length > 0 ? existingAssignment.sovItemIds : undefined,
+          scopeItems: existingAssignment.scopeItems.length > 0 ? existingAssignment.scopeItems : undefined,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -411,6 +392,8 @@ export function SchedulePlanner({
           startTime,
           endTime,
           seriesId: dateChanged ? null : existingAssignment.seriesId,
+          sovItemIds: existingAssignment.sovItemIds,
+          scopeItems: existingAssignment.scopeItems,
         },
       ]);
       if (dateChanged) {
@@ -633,6 +616,8 @@ export function SchedulePlanner({
           date: k,
           supervisorUserId: eventDaySupervisorId || undefined,
           projectManagerUserId: eventDayPmId || undefined,
+          sovItemIds: existing && existing.sovItemIds.length > 0 ? existing.sovItemIds : undefined,
+          scopeItems: existing && existing.scopeItems.length > 0 ? existing.scopeItems : undefined,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -649,6 +634,8 @@ export function SchedulePlanner({
             startTime: existing?.startTime ?? null,
             endTime: existing?.endTime ?? null,
             seriesId: existing?.seriesId ?? null,
+            sovItemIds: existing?.sovItemIds ?? [],
+            scopeItems: existing?.scopeItems ?? [],
           },
         ]);
       }
@@ -1620,6 +1607,10 @@ export function SchedulePlanner({
                         const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                         const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
                         const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
+                        const assignmentSovDescriptions = assignment.sovItemIds
+                          .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
+                          .filter((d): d is string => !!d);
+                        const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
                         return (
                         <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
                           <button
@@ -1666,6 +1657,12 @@ export function SchedulePlanner({
                               ) : null}
                               {plannedWorkers.length > 0 ? (
                                 <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
+                              ) : null}
+                              {assignmentSovDescriptions.length > 0 ? (
+                                <div className="mt-1 text-gray-300">SOV: {assignmentSovDescriptions.join(", ")}</div>
+                              ) : null}
+                              {assignmentScopeLabels.length > 0 ? (
+                                <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>
                               ) : null}
                             </div>
                           ) : null}
@@ -1754,7 +1751,21 @@ export function SchedulePlanner({
                                   </li>
                                 ))}
                                 {dayPlanned.map(({ assignment, project }) => (
-                                  <li key={`ov-plan-${assignment.id}`} className="flex items-center gap-1.5">
+                                  <li
+                                    key={`ov-plan-${assignment.id}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/plain", assignment.id);
+                                      e.dataTransfer.effectAllowed = "move";
+                                      setDraggingChip({ kind: "planned", projectId: project.id, assignmentId: assignment.id, fromKey: k, jobTitle: project.jobTitle });
+                                      setExpandedDayKey(null);
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggingChip(null);
+                                      setDragOverDayKey(null);
+                                    }}
+                                    className="flex cursor-grab items-center gap-1.5 active:cursor-grabbing"
+                                  >
                                     <span
                                       className={`h-2 w-2 shrink-0 rounded-sm border border-dashed ${
                                         isFutureOrToday ? "border-gray-400" : "border-red-500"
