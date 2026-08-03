@@ -7,7 +7,13 @@ import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
-type ProjectOption = { id: string; jobTitle: string; segment: string; sovItems: SOVItemOption[] };
+type ProjectOption = {
+  id: string;
+  jobTitle: string;
+  segment: string;
+  sovItems: SOVItemOption[];
+  contractedScopeItems: string[] | null;
+};
 type Person = { id: string; displayName: string };
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -127,6 +133,12 @@ export function DayAssignmentModal({
 
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
   const selectedGroup = selectedProject ? calendarSegmentGroup(selectedProject.segment) : null;
+  // Restrict to what was actually contracted for this unit (e.g. only
+  // "Clean"/"Paint" if that's all it has) — falls back to every category
+  // when there's no linked TurnoverRequest to restrict against.
+  const availableScopeOptions = selectedProject?.contractedScopeItems
+    ? TURNOVER_SCOPE_OPTIONS.filter((opt) => selectedProject.contractedScopeItems!.includes(opt.value))
+    : TURNOVER_SCOPE_OPTIONS;
 
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
@@ -477,20 +489,24 @@ export function DayAssignmentModal({
             ) : null}
           </div>
 
-          {selectedProject && selectedGroup === "POST_CONSTRUCTION" && selectedProject.sovItems.length > 0 ? (
+          {selectedProject && selectedGroup === "POST_CONSTRUCTION" ? (
             <div>
               <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
               <div className="mt-1">
-                <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                {selectedProject.sovItems.length > 0 ? (
+                  <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                ) : (
+                  <p className="text-xs text-gray-400">No SOV items on this project yet.</p>
+                )}
               </div>
             </div>
           ) : null}
 
-          {selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" ? (
+          {selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0 ? (
             <div>
               <label className="block text-xs font-medium text-gray-600">Scope covered this day</label>
               <div className="mt-1 flex flex-wrap gap-1.5">
-                {TURNOVER_SCOPE_OPTIONS.map((opt) => {
+                {availableScopeOptions.map((opt) => {
                   const active = scopePicks.includes(opt.value);
                   return (
                     <button

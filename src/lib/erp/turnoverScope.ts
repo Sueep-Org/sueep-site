@@ -23,3 +23,28 @@ export function isTurnoverScopeValue(value: string): value is TurnoverScopeValue
 export function turnoverScopeLabel(value: string): string {
   return TURNOVER_SCOPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
+
+/** Maps a TurnoverRequest's contracted-scope flags to the subset of
+ * TURNOVER_SCOPE_OPTIONS values actually selected for that unit — e.g. a
+ * unit with only fullClean and fullPaint checked returns ["CLEAN", "PAINT"].
+ * Used to restrict the day-assignment scope picker to what the unit was
+ * actually contracted for, instead of the full fixed category list. */
+export function contractedTurnoverScope(flags: {
+  fullClean: boolean;
+  fullPaint: boolean;
+  touchUpPaint: number | null;
+  carpetCleaning: boolean;
+  ceilingPaint: boolean;
+  materialsAdditional: boolean;
+  otherWork: boolean;
+}): TurnoverScopeValue[] {
+  const values: TurnoverScopeValue[] = [];
+  if (flags.fullClean) values.push("CLEAN");
+  if (flags.fullPaint) values.push("PAINT");
+  if (flags.touchUpPaint) values.push("TOUCH_UP_PAINT");
+  if (flags.carpetCleaning) values.push("CARPET");
+  if (flags.ceilingPaint) values.push("CEILING_PAINT");
+  if (flags.materialsAdditional) values.push("MATERIALS");
+  if (flags.otherWork) values.push("OTHER");
+  return values;
+}

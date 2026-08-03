@@ -21,7 +21,8 @@ import {
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
-import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { SOVMultiCombobox } from "@/app/erp/components/SOVCombobox";
 
 const PX_PER_DAY = 10;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -91,6 +92,15 @@ const CALENDAR_GROUP_SWATCH_CLASS: Record<CalendarSegmentGroup, string> = {
 function formatHours(hours: number): string {
   const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
   return `${n} hr${hours === 1 ? "" : "s"}`;
+}
+
+// Restricts the scope picker to what was actually contracted for the unit
+// (e.g. only "Clean"/"Paint" if that's all it has) — falls back to every
+// category when there's no linked TurnoverRequest to restrict against.
+function availableScopeOptionsFor(p: ScheduleProject) {
+  return p.contractedScopeItems
+    ? TURNOVER_SCOPE_OPTIONS.filter((opt) => p.contractedScopeItems!.includes(opt.value))
+    : TURNOVER_SCOPE_OPTIONS;
 }
 
 function formatClockTime(time: string): string {
@@ -277,6 +287,11 @@ export function SchedulePlanner({
   const [eventDayPmId, setEventDayPmId] = useState("");
   const [eventDaySaving, setEventDaySaving] = useState(false);
   const [eventDayError, setEventDayError] = useState("");
+  // SOV item(s) / janitorial scope for this specific day's coverage — same
+  // fields as the day-assignment modal, editable here too so a card doesn't
+  // have to be deleted and recreated via the modal just to set them.
+  const [eventSovPicks, setEventSovPicks] = useState<string[]>([]);
+  const [eventScopePicks, setEventScopePicks] = useState<string[]>([]);
 
   // Worker add/remove for the specific (day, project) the popover is open
   // for — separate from the day-assignment modal's worker picker, which
@@ -313,6 +328,8 @@ export function SchedulePlanner({
     setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
     setEventDayPmId(da?.projectManagerUserId ?? "");
     setEventDayError("");
+    setEventSovPicks(da?.sovItemIds ?? []);
+    setEventScopePicks(da?.scopeItems ?? []);
     setEventWorkerType("employee");
     setEventWorkerQuery("");
     setEventWorkerId("");
@@ -333,9 +350,16 @@ export function SchedulePlanner({
     toK: string,
     startTime: string | null,
     endTime: string | null,
+    /** Defaults to carrying over the assignment's current values (e.g. a
+     * plain drag-and-drop move) — pass explicit picks when saving from the
+     * event card, whose SOV/scope pickers may have just been edited. */
+    sovItemIds?: string[],
+    scopeItems?: string[],
   ): Promise<{ ok: boolean; error?: string }> {
     const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
     if (!existingAssignment) return { ok: false, error: "Assignment not found" };
+    const finalSovItemIds = sovItemIds ?? existingAssignment.sovItemIds;
+    const finalScopeItems = scopeItems ?? existingAssignment.scopeItems;
     try {
       const dayRes = await fetch("/api/erp/schedule/day-assignments", {
         method: "POST",
@@ -347,8 +371,8 @@ export function SchedulePlanner({
           projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
-          sovItemIds: existingAssignment.sovItemIds.length > 0 ? existingAssignment.sovItemIds : undefined,
-          scopeItems: existingAssignment.scopeItems.length > 0 ? existingAssignment.scopeItems : undefined,
+          sovItemIds: finalSovItemIds.length > 0 ? finalSovItemIds : undefined,
+          scopeItems: finalScopeItems.length > 0 ? finalScopeItems : undefined,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -392,8 +416,8 @@ export function SchedulePlanner({
           startTime,
           endTime,
           seriesId: dateChanged ? null : existingAssignment.seriesId,
-          sovItemIds: existingAssignment.sovItemIds,
-          scopeItems: existingAssignment.scopeItems,
+          sovItemIds: finalSovItemIds,
+          scopeItems: finalScopeItems,
         },
       ]);
       if (dateChanged) {
@@ -445,6 +469,8 @@ export function SchedulePlanner({
       newK,
       eventPlannedStartTime || null,
       eventPlannedEndTime || null,
+      eventSovPicks,
+      eventScopePicks,
     );
     setEventSaving(false);
     if (!result.ok) {
@@ -461,7 +487,7 @@ export function SchedulePlanner({
   // confirmed chip is backed by actual logged labor (a fact, not a plan) and
   // is deliberately never made draggable — see the chip render sites below.
   const [draggingChip, setDraggingChip] = useState<
-    | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string }
+    | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
     | { kind: "planned"; projectId: string; assignmentId: string; fromKey: string; jobTitle: string }
     | null
   >(null);
@@ -479,7 +505,7 @@ export function SchedulePlanner({
         const res = await fetch(`/api/erp/projects/${chip.projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ projectDate: toKey }),
+          body: JSON.stringify(chip.role === "end" ? { projectEndDate: toKey } : { projectDate: toKey }),
         });
         if (!res.ok) throw new Error("Failed to reschedule");
         router.refresh();
@@ -616,8 +642,8 @@ export function SchedulePlanner({
           date: k,
           supervisorUserId: eventDaySupervisorId || undefined,
           projectManagerUserId: eventDayPmId || undefined,
-          sovItemIds: existing && existing.sovItemIds.length > 0 ? existing.sovItemIds : undefined,
-          scopeItems: existing && existing.scopeItems.length > 0 ? existing.scopeItems : undefined,
+          sovItemIds: eventSovPicks.length > 0 ? eventSovPicks : undefined,
+          scopeItems: eventScopePicks.length > 0 ? eventScopePicks : undefined,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -634,8 +660,8 @@ export function SchedulePlanner({
             startTime: existing?.startTime ?? null,
             endTime: existing?.endTime ?? null,
             seriesId: existing?.seriesId ?? null,
-            sovItemIds: existing?.sovItemIds ?? [],
-            scopeItems: existing?.scopeItems ?? [],
+            sovItemIds: eventSovPicks,
+            scopeItems: eventScopePicks,
           },
         ]);
       }
@@ -791,7 +817,6 @@ export function SchedulePlanner({
                 className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
               />
             </label>
-            <p className="text-[9px] text-gray-400">Moves this planned assignment (and its scheduled workers) to a different day.</p>
             <label className="block text-[10px] font-medium text-gray-500">
               Time (optional — leave blank for all-day)
               <div className="mt-0.5 flex items-center gap-1.5">
@@ -898,6 +923,47 @@ export function SchedulePlanner({
               </select>
             </div>
           </div>
+
+          {calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION" ? (
+            <div className="mt-1.5">
+              <label className="block text-[9px] text-gray-400">SOV item(s) being worked on</label>
+              <div className="mt-0.5">
+                {p.sovItems.length > 0 ? (
+                  <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} />
+                ) : (
+                  <p className="text-[10px] text-gray-400">No SOV items on this project yet.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {calendarSegmentGroup(p.segment) === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptionsFor(p).length > 0 ? (
+            <div className="mt-1.5">
+              <label className="block text-[9px] text-gray-400">Scope covered this day</label>
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {availableScopeOptionsFor(p).map((opt) => {
+                  const active = eventScopePicks.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setEventScopePicks((prev) =>
+                          prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
+                        )
+                      }
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        active ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-600 hover:border-pink-400"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {eventDayError ? <p className="mt-1 text-[10px] text-red-500">{eventDayError}</p> : null}
           <button
             type="button"
@@ -1189,13 +1255,16 @@ export function SchedulePlanner({
     return map;
   }, [sovRequests]);
 
-  // Projects starting today or later that have never had a supervisor
-  // assigned and have no logged work yet — otherwise these are invisible on
-  // the calendar until someone happens to notice and assign a supervisor.
-  // Anchored to the project's own start date since there's no day
-  // assignment or labor log to place them by.
+  // Projects starting (or ending) today or later that have never had a
+  // supervisor assigned and have no logged work yet — otherwise these are
+  // invisible on the calendar until someone happens to notice and assign a
+  // supervisor. Anchored to the project's own start/end dates since there's
+  // no day assignment or labor log to place them by. Shown on both the start
+  // and end day when they differ (any day in between needs an explicit day
+  // assignment to appear) — a project with matching start/end dates (or no
+  // end date) only ever gets the one "start" occurrence, never doubled up.
   const needsSupervisorByDay = useMemo(() => {
-    const map = new Map<string, ScheduleProject[]>();
+    const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
     const todayK = dayKey(todayDate);
     for (const p of projects) {
       // Reads through supervisorOverrides (not just p.supervisorUserId) so
@@ -1206,17 +1275,23 @@ export function SchedulePlanner({
       if (p.workDayKeys.length > 0) continue;
       if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
       if (!p.projectDate) continue;
-      // projectDate is stored as UTC midnight for the intended calendar day
-      // (e.g. "2026-07-27T00:00:00.000Z" means July 27, full stop) — slicing
-      // the ISO string directly reads that day back out. Routing it through
-      // `new Date(...)` + dayKey() instead would re-interpret it in the
-      // browser's local timezone, shifting it a day earlier for anyone west
-      // of UTC (confirmed: shifted 7/27 to 7/26 in America/New_York).
-      const k = p.projectDate.slice(0, 10);
-      if (k < todayK) continue;
-      const list = map.get(k) ?? [];
-      list.push(p);
-      map.set(k, list);
+      // projectDate/projectEndDate are stored as UTC midnight for the
+      // intended calendar day (e.g. "2026-07-27T00:00:00.000Z" means July
+      // 27, full stop) — slicing the ISO string directly reads that day back
+      // out. Routing it through `new Date(...)` + dayKey() instead would
+      // re-interpret it in the browser's local timezone, shifting it a day
+      // earlier for anyone west of UTC (confirmed: shifted 7/27 to 7/26 in
+      // America/New_York).
+      const startK = p.projectDate.slice(0, 10);
+      const endK = p.projectEndDate ? p.projectEndDate.slice(0, 10) : null;
+      const occurrences: { k: string; role: "start" | "end" }[] =
+        endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
+      for (const { k, role } of occurrences) {
+        if (k < todayK) continue;
+        const list = map.get(k) ?? [];
+        list.push({ project: p, role });
+        map.set(k, list);
+      }
     }
     return map;
   }, [projects, supervisorOverrides, todayDate]);
@@ -1469,7 +1544,7 @@ export function SchedulePlanner({
                   const project = projectById.get(a.projectId);
                   return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
                 });
-                dayNeedsSupervisor = dayNeedsSupervisor.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
+                dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
 
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
                 // Planned assignments are only shown when there's no confirmed
@@ -1490,6 +1565,14 @@ export function SchedulePlanner({
                 const visibleSovRequests = daySovRequests.slice(0, remainingAfterChangeOrders);
                 const overflow =
                   totalCount - visibleProjects.length - visiblePlanned.length - visibleChangeOrders.length - visibleSovRequests.length;
+                // The "+n more" popover lists every item for the day, including
+                // ones already shown as a full chip above — those already have
+                // their own popover mount point next to that chip, so the
+                // overflow list must skip re-mounting one for them (mounting
+                // the same createPortal twice for a matching key would render
+                // two stacked copies of the same card).
+                const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
+                const visiblePlannedAssignmentIds = new Set(visiblePlanned.map(({ assignment }) => assignment.id));
 
                 return (
                   <div
@@ -1533,15 +1616,15 @@ export function SchedulePlanner({
                     </div>
                     {dayNeedsSupervisor.length > 0 ? (
                       <ul className="mt-1 space-y-1">
-                        {dayNeedsSupervisor.map((p) => (
-                          <li key={`needs-${p.id}`} className={inMonth ? "group relative" : "relative"}>
+                        {dayNeedsSupervisor.map(({ project: p, role }) => (
+                          <li key={`needs-${p.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("text/plain", p.id);
                                 e.dataTransfer.effectAllowed = "move";
-                                setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle });
+                                setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
                               }}
                               onDragEnd={() => {
                                 setDraggingChip(null);
@@ -1557,7 +1640,9 @@ export function SchedulePlanner({
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{p.jobTitle}</div>
                                 <div className="text-amber-300">
-                                  {isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                                  {role === "end"
+                                    ? isToday ? "Ends today" : "Ends this day"
+                                    : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
                                 </div>
                                 <div className="mt-1 text-gray-300">Click to view or assign one</div>
                               </div>
@@ -1740,14 +1825,18 @@ export function SchedulePlanner({
                                 {dayProjects.map((p) => (
                                   <li key={`ov-p-${p.id}`} className="flex items-center gap-1.5">
                                     <span className={`h-2 w-2 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(p.segment)]}`} />
-                                    <Link
-                                      href={`/erp/projects/${p.id}`}
-                                      onClick={() => setExpandedDayKey(null)}
-                                      className="truncate hover:underline"
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setExpandedDayKey(null);
+                                        openLaborPopover(k, p);
+                                      }}
+                                      className="truncate text-left hover:underline"
                                       title={p.jobTitle}
                                     >
                                       {p.jobTitle}
-                                    </Link>
+                                    </button>
+                                    {visibleProjectIds.has(p.id) ? null : renderLaborPopover(k, p)}
                                   </li>
                                 ))}
                                 {dayPlanned.map(({ assignment, project }) => (
@@ -1771,17 +1860,21 @@ export function SchedulePlanner({
                                         isFutureOrToday ? "border-gray-400" : "border-red-500"
                                       } ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(project.segment)]}`}
                                     />
-                                    <Link
-                                      href={`/erp/projects/${project.id}`}
-                                      onClick={() => setExpandedDayKey(null)}
-                                      className="truncate hover:underline"
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setExpandedDayKey(null);
+                                        openEventPopover(k, project, assignment);
+                                      }}
+                                      className="truncate text-left hover:underline"
                                       title={project.jobTitle}
                                     >
                                       {project.jobTitle}
-                                    </Link>
+                                    </button>
                                     <span className={`shrink-0 ${isFutureOrToday ? "text-gray-400" : "text-red-400"}`}>
                                       {isFutureOrToday ? "(planned)" : "(missed)"}
                                     </span>
+                                    {visiblePlannedAssignmentIds.has(assignment.id) ? null : renderEventPopover(k, project)}
                                   </li>
                                 ))}
                                 {dayChangeOrders.map((co) => (

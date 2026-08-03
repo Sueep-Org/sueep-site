@@ -43,19 +43,27 @@ html {
   overflow-x: clip;
 }
 
-/* The ERP shell (src/app/erp/(shell)/layout.tsx) clamps to exactly one
- * viewport tall at the md breakpoint and up, with its own <main> scrolling
- * internally, so it's the single source of truth for scroll position there.
- * html/body being independently scrollable at the same time, even by a
- * small amount, is enough for the browser to send wheel/scroll input to
- * html instead of main: confirmed by direct measurement, html could be
- * scrolled to a real position (window.scrollY reaching a value that main's
- * own content doesn't back), landing on genuinely empty space below main's
- * clamped box, while main's own scrollTop never moved. Below md, the shell
- * has no such clamp (content flows and grows the page naturally), so this
- * has to stay scoped to md and up rather than applying globally. */
+/* The ERP shell (src/app/erp/(shell)/layout.tsx, root element id="erp-shell")
+ * clamps to exactly one viewport tall at the md breakpoint and up, with its
+ * own <main> scrolling internally, so it's the single source of truth for
+ * scroll position there. html/body being independently scrollable at the
+ * same time, even by a small amount, is enough for the browser to send
+ * wheel/scroll input to html instead of main: confirmed by direct
+ * measurement, html could be scrolled to a real position (window.scrollY
+ * reaching a value that main's own content doesn't back), landing on
+ * genuinely empty space below main's clamped box, while main's own
+ * scrollTop never moved. Below md, the shell has no such clamp (content
+ * flows and grows the page naturally), so this has to stay scoped to md and
+ * up rather than applying globally.
+ *
+ * Scoped with :has(#erp-shell) rather than a bare `html, body` selector —
+ * this file is imported by the root layout, so an unscoped rule here also
+ * clamped the public marketing site (any page ≥768px wide, i.e. effectively
+ * every desktop/laptop visitor) with no internal scroll container to take
+ * over, making those pages completely unscrollable. */
 @media (min-width: 768px) {
-  html, body {
+  html:has(#erp-shell),
+  body:has(#erp-shell) {
     overflow: hidden;
   }
 }

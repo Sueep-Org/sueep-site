@@ -8,6 +8,7 @@ import {
   type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
+import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 
@@ -51,6 +52,17 @@ export default async function SchedulePage() {
         percentDone: true,
         supervisorUserId: true,
         sov: { select: { items: { select: { id: true, description: true, completed: true } } } },
+        turnoverRequest: {
+          select: {
+            fullClean: true,
+            fullPaint: true,
+            touchUpPaint: true,
+            carpetCleaning: true,
+            ceilingPaint: true,
+            materialsAdditional: true,
+            otherWork: true,
+          },
+        },
       },
     }),
     prisma.erpUser.findMany({
@@ -275,6 +287,7 @@ export default async function SchedulePage() {
       laborEntriesByDay,
       plannedWorkersByDay,
       sovItems: r.sov?.items ?? [],
+      contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
     };
   });
 

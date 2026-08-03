@@ -77,6 +77,12 @@ export type ScheduleProject = {
    * day-assignment modal offer an SOV-item picker for Post-Construction
    * projects. Empty for projects with no SOV. */
   sovItems: { id: string; description: string; completed: boolean }[];
+  /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit (from
+   * its TurnoverRequest), restricting the day-assignment scope picker to
+   * just what was selected — e.g. only "CLEAN"/"PAINT" if that's all the
+   * unit has. Null when there's no linked TurnoverRequest (falls back to
+   * offering every category, since there's nothing to restrict against). */
+  contractedScopeItems: string[] | null;
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
