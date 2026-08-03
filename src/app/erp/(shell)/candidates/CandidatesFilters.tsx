@@ -4,8 +4,17 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
 
 const STATUSES = ["APPLIED", "INTERVIEWING", "ONBOARDING", "DENIED"];
+const POSITIONS = ["Cleaner", "Painter"];
 
-export function CandidatesFilters({ search, status }: { search: string; status: string }) {
+export function CandidatesFilters({
+  search,
+  status,
+  position,
+}: {
+  search: string;
+  status: string;
+  position: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -43,6 +52,18 @@ export function CandidatesFilters({ search, status }: { search: string; status: 
         {STATUSES.map((s) => (
           <option key={s} value={s}>
             {s.charAt(0) + s.slice(1).toLowerCase()}
+          </option>
+        ))}
+      </select>
+      <select
+        defaultValue={position}
+        onChange={(e) => update("position", e.target.value)}
+        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
+      >
+        <option value="">All positions</option>
+        {POSITIONS.map((p) => (
+          <option key={p} value={p}>
+            {p}
           </option>
         ))}
       </select>

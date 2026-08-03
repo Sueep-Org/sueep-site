@@ -40,14 +40,18 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
   const responses = (row.responses ?? {}) as Record<string, string>;
   const location = responses.location;
-  const cleaningExp = responses.cleaningExperience;
-  const cleaningYears = responses.cleaningYears;
+  // "experience"/"experienceYears" are the current field names; older
+  // applications (submitted before the Cleaner/Painter role choice existed)
+  // stored these as "cleaningExperience"/"cleaningYears" — fall back to
+  // those so past candidates still display correctly.
+  const experience = responses.experience ?? responses.cleaningExperience;
+  const experienceYears = responses.experienceYears ?? responses.cleaningYears;
   const hasVehicle = responses.hasVehicle;
 
-  const cleaningExpLabel =
-    cleaningExp === "yes"
-      ? `Yes${cleaningYears ? ` — ${cleaningYears} yr${Number(cleaningYears) !== 1 ? "s" : ""}` : ""}`
-      : cleaningExp === "no"
+  const experienceLabel =
+    experience === "yes"
+      ? `Yes${experienceYears ? ` — ${experienceYears} yr${Number(experienceYears) !== 1 ? "s" : ""}` : ""}`
+      : experience === "no"
       ? "No"
       : "—";
 
@@ -137,8 +141,8 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-pink-500">Cleaning experience</dt>
-                  <dd className="mt-0.5 text-zinc-500">{cleaningExpLabel}</dd>
+                  <dt className="text-pink-500">Experience</dt>
+                  <dd className="mt-0.5 text-zinc-500">{experienceLabel}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-pink-500">Additional comments</dt>

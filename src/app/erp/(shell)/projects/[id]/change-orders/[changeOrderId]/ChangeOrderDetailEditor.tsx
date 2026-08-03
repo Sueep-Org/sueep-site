@@ -33,6 +33,7 @@ export type ChangeOrderDetailData = {
   createdAt: string;
   requestedDate: string | null;
   startDate: string | null;
+  endDate: string | null;
   completedAt: string | null;
   title: string;
   description: string | null;
@@ -272,6 +273,9 @@ export function ChangeOrderDetailEditor({
   const [startDate, setStartDate] = useState(
     data.startDate ? data.startDate.slice(0, 10) : "",
   );
+  const [endDate, setEndDate] = useState(
+    data.endDate ? data.endDate.slice(0, 10) : "",
+  );
   const [completedAt, setCompletedAt] = useState(
     data.completedAt ? data.completedAt.slice(0, 10) : "",
   );
@@ -330,6 +334,7 @@ export function ChangeOrderDetailEditor({
           status,
           requestedDate: requestedDate || null,
           startDate: startDate || null,
+          endDate: endDate || null,
           completedAt: completedAt || null,
           requestedBy: requestedBy.trim() || null,
           supervisor: supervisor.trim() || null,
@@ -465,6 +470,19 @@ export function ChangeOrderDetailEditor({
                     className={input}
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-end-date">
+                    End date
+                    <span className="ml-1 text-gray-400 font-normal">(for multi-day COs)</span>
+                  </label>
+                  <input
+                    id="co-end-date"
+                    type="date"
+                    className={input}
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
                   />
                 </div>
                 <div className="flex flex-col gap-2">

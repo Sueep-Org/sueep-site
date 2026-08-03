@@ -577,6 +577,11 @@ model ProjectChangeOrder {
   status              String    @default("DRAFT")
   requestedDate       DateTime? @default(now())
   startDate           DateTime?
+  /// Target end date — like Project.projectEndDate, this plus startDate lets
+  /// the CO show automatically on the schedule calendar on both its start
+  /// and end day. Days in between need an explicit ProjectDayAssignment (see
+  /// ProjectDayAssignment.changeOrders) to show up.
+  endDate             DateTime?
   billingStatus       String?
   percentInvoiced     Int       @default(0)
   completedAt         DateTime?
@@ -607,6 +612,10 @@ model ProjectChangeOrder {
   contracts             ChangeOrderContract[]
   materialEntries       ChangeOrderMaterialEntry[]
   contractorAssignments ChangeOrderContractorAssignment[]
+  /// Day assignments explicitly scheduling crew for this CO on a day between
+  /// its start and end (or beyond) — same day-assignment mechanism used to
+  /// plan regular project work, just tagged to this CO instead.
+  dayAssignments        ProjectDayAssignment[] @relation("DayAssignmentChangeOrders")
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -927,6 +936,13 @@ model ProjectDayAssignment {
   /// "PAINT". Free-standing from TurnoverRequest's contracted scope flags,
   /// this is what's actually being worked on for this specific day.
   scopeItems String[] @default([])
+
+  /// Change order(s) this scheduled day's work is for, if any — leaves it
+  /// untagged (empty) for plain project-scope work. A day already has at
+  /// most one ProjectDayAssignment (see @@unique below), so this tags which
+  /// CO(s) that single day's coverage applies to rather than creating a
+  /// separate assignment row per CO.
+  changeOrders ProjectChangeOrder[] @relation("DayAssignmentChangeOrders")
 
   @@unique([projectId, date])
   @@index([date])

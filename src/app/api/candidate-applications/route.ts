@@ -10,12 +10,17 @@ const KNOWN_BODY_KEYS = new Set([
   "email",
   "phone",
   "location",
-  "cleaningExperience",
-  "cleaningYears",
+  "role",
+  "experience",
+  "experienceYears",
   "hasVehicle",
   "additionalNotes",
   "_honey",
 ]);
+
+function positionInterestFromRole(role: string): "Painter" | "Cleaner" {
+  return role.trim().toLowerCase() === "painter" ? "Painter" : "Cleaner";
+}
 
 /**
  * POST /api/candidate-applications
@@ -32,8 +37,9 @@ export async function POST(req: NextRequest) {
     let email = "";
     let phone = "";
     let location = "";
-    let cleaningExperience = "";
-    let cleaningYears = "";
+    let role = "";
+    let experience = "";
+    let experienceYears = "";
     let hasVehicle = "";
     let additionalNotes = "";
     let honey = "";
@@ -45,8 +51,9 @@ export async function POST(req: NextRequest) {
       email = String(body.email || "").trim().toLowerCase();
       phone = String(body.phone || "").trim();
       location = String(body.location || "").trim();
-      cleaningExperience = String(body.cleaningExperience || "").trim();
-      cleaningYears = String(body.cleaningYears || "").trim();
+      role = String(body.role || "").trim();
+      experience = String(body.experience || "").trim();
+      experienceYears = String(body.experienceYears || "").trim();
       hasVehicle = String(body.hasVehicle || "").trim();
       additionalNotes = String(body.additionalNotes || "").trim();
       honey = String(body._honey || "");
@@ -61,8 +68,9 @@ export async function POST(req: NextRequest) {
       email = String(form.get("email") || "").trim().toLowerCase();
       phone = String(form.get("phone") || "").trim();
       location = String(form.get("location") || "").trim();
-      cleaningExperience = String(form.get("cleaningExperience") || "").trim();
-      cleaningYears = String(form.get("cleaningYears") || "").trim();
+      role = String(form.get("role") || "").trim();
+      experience = String(form.get("experience") || "").trim();
+      experienceYears = String(form.get("experienceYears") || "").trim();
       hasVehicle = String(form.get("hasVehicle") || "").trim();
       additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
@@ -77,17 +85,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
+    const positionInterest = positionInterestFromRole(role);
+
     if (!fullName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       if (isFormPost) {
-        return NextResponse.redirect(new URL("/careers?submitted=0", req.url), { status: 303 });
+        const url = new URL("/careers?submitted=0", req.url);
+        if (role) url.searchParams.set("role", role);
+        return NextResponse.redirect(url, { status: 303 });
       }
       return NextResponse.json({ error: "fullName and a valid email are required" }, { status: 400 });
     }
 
     const formResponses: Record<string, unknown> = {
       ...(location ? { location } : {}),
-      ...(cleaningExperience ? { cleaningExperience } : {}),
-      ...(cleaningYears ? { cleaningYears } : {}),
+      ...(experience ? { experience } : {}),
+      ...(experienceYears ? { experienceYears } : {}),
       ...(hasVehicle ? { hasVehicle } : {}),
       ...extraResponses,
     };
@@ -97,7 +109,7 @@ export async function POST(req: NextRequest) {
         fullName,
         email,
         phone: phone || null,
-        positionInterest: "Cleaning",
+        positionInterest,
         status: "APPLIED",
         additionalNotes: additionalNotes || null,
         ...(Object.keys(formResponses).length > 0

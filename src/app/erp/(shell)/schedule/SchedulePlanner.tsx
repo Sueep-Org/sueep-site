@@ -292,6 +292,8 @@ export function SchedulePlanner({
   // have to be deleted and recreated via the modal just to set them.
   const [eventSovPicks, setEventSovPicks] = useState<string[]>([]);
   const [eventScopePicks, setEventScopePicks] = useState<string[]>([]);
+  // Change order(s) this day's coverage is for, if any.
+  const [eventCoPicks, setEventCoPicks] = useState<string[]>([]);
 
   // Worker add/remove for the specific (day, project) the popover is open
   // for — separate from the day-assignment modal's worker picker, which
@@ -330,6 +332,7 @@ export function SchedulePlanner({
     setEventDayError("");
     setEventSovPicks(da?.sovItemIds ?? []);
     setEventScopePicks(da?.scopeItems ?? []);
+    setEventCoPicks(da?.changeOrderIds ?? []);
     setEventWorkerType("employee");
     setEventWorkerQuery("");
     setEventWorkerId("");
@@ -355,11 +358,13 @@ export function SchedulePlanner({
      * event card, whose SOV/scope pickers may have just been edited. */
     sovItemIds?: string[],
     scopeItems?: string[],
+    changeOrderIds?: string[],
   ): Promise<{ ok: boolean; error?: string }> {
     const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
     if (!existingAssignment) return { ok: false, error: "Assignment not found" };
     const finalSovItemIds = sovItemIds ?? existingAssignment.sovItemIds;
     const finalScopeItems = scopeItems ?? existingAssignment.scopeItems;
+    const finalChangeOrderIds = changeOrderIds ?? existingAssignment.changeOrderIds;
     try {
       const dayRes = await fetch("/api/erp/schedule/day-assignments", {
         method: "POST",
@@ -373,6 +378,7 @@ export function SchedulePlanner({
           endTime: endTime || undefined,
           sovItemIds: finalSovItemIds.length > 0 ? finalSovItemIds : undefined,
           scopeItems: finalScopeItems.length > 0 ? finalScopeItems : undefined,
+          changeOrderIds: finalChangeOrderIds.length > 0 ? finalChangeOrderIds : undefined,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -418,6 +424,7 @@ export function SchedulePlanner({
           seriesId: dateChanged ? null : existingAssignment.seriesId,
           sovItemIds: finalSovItemIds,
           scopeItems: finalScopeItems,
+          changeOrderIds: finalChangeOrderIds,
         },
       ]);
       if (dateChanged) {
@@ -471,6 +478,7 @@ export function SchedulePlanner({
       eventPlannedEndTime || null,
       eventSovPicks,
       eventScopePicks,
+      eventCoPicks,
     );
     setEventSaving(false);
     if (!result.ok) {
@@ -482,18 +490,19 @@ export function SchedulePlanner({
 
   // Drag-and-drop rescheduling on the month calendar, Google-Calendar style.
   // Only chips backed by a date the app controls are draggable: the amber
-  // "needs supervisor" chip (moves Project.projectDate), the dashed
-  // "planned" chip (moves its ProjectDayAssignment, workers included), and a
-  // change-order chip on its scheduledDateKey occurrence (moves
-  // ProjectChangeOrder.startDate). A confirmed chip — or a CO chip on a day
-  // that's only there because labor was logged, not because it's the
-  // scheduled date — is backed by actual logged labor (a fact, not a plan)
-  // and is deliberately never made draggable — see the chip render sites
-  // below.
+  // "needs supervisor" chip (moves Project.projectDate/projectEndDate), the
+  // dashed "planned" chip (moves its ProjectDayAssignment, workers
+  // included), and a change-order chip on its scheduledDateKey/
+  // scheduledEndDateKey occurrence (moves ProjectChangeOrder.startDate or
+  // .endDate). A confirmed chip — or a CO chip on a day that's only there
+  // because labor was logged or it was explicitly planned via a day
+  // assignment, not because it's the start/end date — is backed by a fact
+  // or an existing assignment (not this project-level "date" plan) and is
+  // deliberately never made draggable — see the chip render sites below.
   const [draggingChip, setDraggingChip] = useState<
     | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
     | { kind: "planned"; projectId: string; assignmentId: string; fromKey: string; jobTitle: string }
-    | { kind: "changeOrder"; projectId: string; changeOrderId: string; fromKey: string; jobTitle: string }
+    | { kind: "changeOrder"; projectId: string; changeOrderId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
     | null
   >(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
@@ -524,7 +533,7 @@ export function SchedulePlanner({
         const res = await fetch(`/api/erp/projects/${chip.projectId}/change-orders/${chip.changeOrderId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ startDate: toKey }),
+          body: JSON.stringify(chip.role === "end" ? { endDate: toKey } : { startDate: toKey }),
         });
         if (!res.ok) throw new Error("Failed to reschedule");
         router.refresh();
@@ -737,6 +746,7 @@ export function SchedulePlanner({
           projectManagerUserId: eventDayPmId || undefined,
           sovItemIds: eventSovPicks.length > 0 ? eventSovPicks : undefined,
           scopeItems: eventScopePicks.length > 0 ? eventScopePicks : undefined,
+          changeOrderIds: eventCoPicks.length > 0 ? eventCoPicks : undefined,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -755,6 +765,7 @@ export function SchedulePlanner({
             seriesId: existing?.seriesId ?? null,
             sovItemIds: eventSovPicks,
             scopeItems: eventScopePicks,
+            changeOrderIds: eventCoPicks,
           },
         ]);
       }
@@ -1050,6 +1061,33 @@ export function SchedulePlanner({
                       }`}
                     >
                       {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {p.changeOrders.length > 0 ? (
+            <div className="mt-1.5">
+              <label className="block text-[9px] text-gray-400">Change order(s) covered this day</label>
+              <div className="mt-0.5 flex flex-wrap gap-1">
+                {p.changeOrders.map((co) => {
+                  const active = eventCoPicks.includes(co.id);
+                  return (
+                    <button
+                      key={co.id}
+                      type="button"
+                      onClick={() =>
+                        setEventCoPicks((prev) =>
+                          prev.includes(co.id) ? prev.filter((v) => v !== co.id) : [...prev, co.id]
+                        )
+                      }
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        active ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-600 hover:border-blue-400"
+                      }`}
+                    >
+                      {co.title}
                     </button>
                   );
                 })}
@@ -1858,23 +1896,24 @@ export function SchedulePlanner({
                       {visibleChangeOrders.map((co) => {
                         const summary = co.laborByDay[k];
                         const parentProject = projectById.get(co.projectId);
-                        const isScheduledDay = k === co.scheduledDateKey;
+                        const role: "start" | "end" | null =
+                          k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
                         return (
                           <li key={`co-${co.id}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              draggable={isScheduledDay}
-                              onDragStart={isScheduledDay ? (e) => {
+                              draggable={role !== null}
+                              onDragStart={role !== null ? (e) => {
                                 e.dataTransfer.setData("text/plain", co.id);
                                 e.dataTransfer.effectAllowed = "move";
-                                setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title });
+                                setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
                               } : undefined}
-                              onDragEnd={isScheduledDay ? () => {
+                              onDragEnd={role !== null ? () => {
                                 setDraggingChip(null);
                                 setDragOverDayKey(null);
                               } : undefined}
                               onClick={() => openCoPopover(k, co)}
-                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${isScheduledDay ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
+                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${role !== null ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
                             >
                               <span className="truncate">{co.title}</span>
                             </button>
@@ -1892,10 +1931,12 @@ export function SchedulePlanner({
                                     ) : null}
                                   </>
                                 ) : null}
-                                {isScheduledDay ? (
-                                  <div className="mt-1 text-gray-300">Drag to reschedule</div>
+                                {role === "start" ? (
+                                  <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
+                                ) : role === "end" ? (
+                                  <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
                                 ) : (
-                                  <div className="mt-1 text-gray-300">Shown here from logged labor, not draggable</div>
+                                  <div className="mt-1 text-gray-300">Planned or logged for this day, not draggable</div>
                                 )}
                               </div>
                             ) : null}
@@ -2000,21 +2041,24 @@ export function SchedulePlanner({
                                     {visiblePlannedAssignmentIds.has(assignment.id) ? null : renderEventPopover(k, project)}
                                   </li>
                                 ))}
-                                {dayChangeOrders.map((co) => (
+                                {dayChangeOrders.map((co) => {
+                                  const role: "start" | "end" | null =
+                                    k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
+                                  return (
                                   <li
                                     key={`ov-co-${co.id}`}
-                                    draggable={co.scheduledDateKey === k}
-                                    onDragStart={co.scheduledDateKey === k ? (e) => {
+                                    draggable={role !== null}
+                                    onDragStart={role !== null ? (e) => {
                                       e.dataTransfer.setData("text/plain", co.id);
                                       e.dataTransfer.effectAllowed = "move";
-                                      setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title });
+                                      setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
                                       setExpandedDayKey(null);
                                     } : undefined}
-                                    onDragEnd={co.scheduledDateKey === k ? () => {
+                                    onDragEnd={role !== null ? () => {
                                       setDraggingChip(null);
                                       setDragOverDayKey(null);
                                     } : undefined}
-                                    className={`flex items-center gap-1.5 ${co.scheduledDateKey === k ? "cursor-grab active:cursor-grabbing" : ""}`}
+                                    className={`flex items-center gap-1.5 ${role !== null ? "cursor-grab active:cursor-grabbing" : ""}`}
                                   >
                                     <span className={`h-2 w-2 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
                                     <button
@@ -2030,7 +2074,8 @@ export function SchedulePlanner({
                                     </button>
                                     {visibleChangeOrderIds.has(co.id) ? null : renderCoPopover(k, co)}
                                   </li>
-                                ))}
+                                  );
+                                })}
                                 {daySovRequests.map((r) => (
                                   <li key={`ov-sov-${r.id}`} className="flex items-center gap-1.5">
                                     <span className={`h-2 w-2 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />

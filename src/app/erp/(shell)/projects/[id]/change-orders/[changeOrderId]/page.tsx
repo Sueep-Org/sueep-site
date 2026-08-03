@@ -157,6 +157,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     createdAt: changeOrder.createdAt.toISOString(),
     requestedDate: changeOrder.requestedDate?.toISOString() ?? null,
     startDate: changeOrder.startDate?.toISOString() ?? null,
+    endDate: changeOrder.endDate?.toISOString() ?? null,
     completedAt: changeOrder.completedAt?.toISOString() ?? null,
     title: changeOrder.title,
     description: changeOrder.description,

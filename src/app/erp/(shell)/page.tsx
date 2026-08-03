@@ -618,7 +618,8 @@ export default async function ErpDashboardPage() {
     const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck] = await Promise.all([
       prisma.project.findMany({
         select: {
-          id: true, jobTitle: true, status: true, projectDate: true, contractValueCents: true, segment: true,
+          id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
+          contractValueCents: true, segment: true,
           actualLaborCents: true, actualMaterialCents: true,
           laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
           materialEntries: { select: { costCents: true } },
@@ -734,17 +735,32 @@ export default async function ErpDashboardPage() {
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
 
     // "Where we are": which projects are actually scheduled today, company-
-    // wide — a supervisor day-assignment, a planned worker day-assignment, or
+    // wide — a supervisor day-assignment, a planned worker day-assignment,
     // actual labor already logged today (pulled out of laborForFlags, which
-    // already spans a window including today). Not "recently touched" —
-    // genuinely today, so an empty result is a real, meaningful signal
-    // ("nothing's on the calendar for today") rather than just quiet data.
-    type ScheduledToday = { projectId: string; jobTitle: string; loggedWorkers: Set<string>; plannedWorkers: Set<string> };
+    // already spans a window including today), OR a project whose start/end
+    // date is today with none of the above yet — i.e. work that's on the
+    // books for today but nobody has been assigned to. That last case used
+    // to be invisible here (this widget only ever looked at
+    // assignment/labor rows), which silently hid exactly the projects most
+    // in need of a supervisor. Not "recently touched" — genuinely today, so
+    // an empty result is a real, meaningful signal ("nothing's on the
+    // calendar for today") rather than just quiet data.
+    const supervisorByProjectId = new Map(allProjects.map((p) => [p.id, p.supervisorUserId]));
+    type ScheduledToday = {
+      projectId: string;
+      jobTitle: string;
+      loggedWorkers: Set<string>;
+      plannedWorkers: Set<string>;
+      supervisorUserId: string | null;
+    };
     const scheduledTodayMap = new Map<string, ScheduledToday>();
     function getOrInitScheduled(projectId: string, jobTitle: string): ScheduledToday {
       const existing = scheduledTodayMap.get(projectId);
       if (existing) return existing;
-      const created: ScheduledToday = { projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set() };
+      const created: ScheduledToday = {
+        projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set(),
+        supervisorUserId: supervisorByProjectId.get(projectId) ?? null,
+      };
       scheduledTodayMap.set(projectId, created);
       return created;
     }
@@ -760,6 +776,16 @@ export default async function ErpDashboardPage() {
       if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;
       const entry = getOrInitScheduled(e.project.id, e.project.jobTitle);
       entry.loggedWorkers.add(e.workerName);
+    }
+    // Same "starts or ends today" rule the schedule calendar's amber
+    // "needs a supervisor" chip uses — surfaces work that's on the books
+    // for today even when nobody (day-assignment, planned worker, or
+    // logged labor) has touched it yet.
+    for (const p of allProjects) {
+      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
+      const startsToday = p.projectDate != null && p.projectDate >= adminTodayStart && p.projectDate <= adminTodayEnd;
+      const endsToday = p.projectEndDate != null && p.projectEndDate >= adminTodayStart && p.projectEndDate <= adminTodayEnd;
+      if (startsToday || endsToday) getOrInitScheduled(p.id, p.jobTitle);
     }
     const scheduledToday = [...scheduledTodayMap.values()].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
 
@@ -927,7 +953,7 @@ export default async function ErpDashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Projects with a supervisor or crew scheduled, or labor already logged, today">Where we are</h2>
+              <h2 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h2>
             </div>
             {scheduledToday.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-gray-400">
@@ -942,13 +968,25 @@ export default async function ErpDashboardPage() {
                     <li key={p.projectId}>
                       <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                          <p className="flex items-center gap-1 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>
+                            {!p.supervisorUserId && (
+                              <span className="shrink-0 text-amber-500" title="No supervisor assigned">⚠</span>
+                            )}
+                            <span className="truncate">{p.jobTitle}</span>
+                          </p>
                           <p className="truncate text-xs text-gray-400">
                             {workers.length > 0 ? workers.join(", ") : "No crew assigned yet"}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.loggedWorkers.size > 0 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                          {p.loggedWorkers.size > 0 ? "Logged" : "Planned"}
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {!p.supervisorUserId && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              No supervisor
+                            </span>
+                          )}
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.loggedWorkers.size > 0 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                            {p.loggedWorkers.size > 0 ? "Logged" : "Planned"}
+                          </span>
                         </span>
                       </Link>
                     </li>

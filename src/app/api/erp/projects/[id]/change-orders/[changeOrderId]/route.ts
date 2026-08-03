@@ -123,6 +123,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       if (!isNaN(d.getTime())) data.startDate = d;
     }
   }
+  if (body.endDate !== undefined) {
+    if (body.endDate === null || body.endDate === "") {
+      data.endDate = null;
+    } else {
+      const d = new Date(String(body.endDate));
+      if (!isNaN(d.getTime())) data.endDate = d;
+    }
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;

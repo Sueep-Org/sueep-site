@@ -15,12 +15,16 @@ export const metadata = {
 export default async function CareersPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ submitted?: string }>;
+  searchParams?: Promise<{ submitted?: string; role?: string }>;
 }) {
   const sp = (searchParams ? await searchParams : undefined) ?? {};
   const submitted = sp.submitted;
   const showSuccess = submitted === "1";
   const showError = submitted === "0";
+  const role = sp.role === "painter" ? "painter" : "cleaner";
+  const isPainter = role === "painter";
+  const roleWord = isPainter ? "painting" : "cleaning";
+  const roleLabel = isPainter ? "Painting" : "Cleaning";
 
   const inputClass =
     "w-full rounded-lg border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/40 focus:border-[#E73C6E]";
@@ -61,9 +65,27 @@ export default async function CareersPage({
           </h1>
           <p className="mt-4 text-gray-600 text-base md:text-lg leading-relaxed">
             Submit this short application so we have your contact details and interests on file. If we move forward with
-            you, our hiring team will email you. Please note this application is for cleaning and janitorial positions.
+            you, our hiring team will email you. Please note this application is for {roleWord} and janitorial positions.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+              <a
+                href="/careers?role=cleaner#apply"
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  !isPainter ? "bg-[#E73C6E] text-white" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Cleaner
+              </a>
+              <a
+                href="/careers?role=painter#apply"
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isPainter ? "bg-[#E73C6E] text-white" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Painter
+              </a>
+            </div>
             <a href="#apply" className={primaryCtaClass}>
               Apply below
             </a>
@@ -73,7 +95,13 @@ export default async function CareersPage({
 
       <section id="apply" className="flex-1 pb-20 bg-gray-50 scroll-mt-20 border-t border-gray-100">
         <div className="max-w-2xl mx-auto px-5 pt-14 md:pt-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-center uppercase">Application</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center uppercase">{roleLabel} Application</h2>
+          <p className="mt-2 text-center text-gray-600 text-sm">
+            Applying as a <strong>{isPainter ? "Painter" : "Cleaner"}</strong>.{" "}
+            <a href={`/careers?role=${isPainter ? "cleaner" : "painter"}#apply`} className="text-[#E73C6E] hover:underline">
+              Switch to {isPainter ? "Cleaner" : "Painter"}
+            </a>
+          </p>
           <p className="mt-2 text-center text-gray-600 text-sm">
             Fields marked <span className="text-red-500">*</span> are required. Your submission goes to Sueep&apos;s
             internal hiring system.
@@ -86,6 +114,7 @@ export default async function CareersPage({
             autoComplete="on"
           >
             <input type="text" name="_honey" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+            <input type="hidden" name="role" value={role} />
 
             <div>
               <label htmlFor="fullName" className={labelClass}>
@@ -140,27 +169,27 @@ export default async function CareersPage({
 
             <div>
               <label className={labelClass}>
-                Do you have cleaning experience? <span className="text-red-500">*</span>
+                Do you have {roleWord} experience? <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-6 mt-1">
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="cleaningExperience" value="yes" required className="accent-[#E73C6E]" />
+                  <input type="radio" name="experience" value="yes" required className="accent-[#E73C6E]" />
                   Yes
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="cleaningExperience" value="no" required className="accent-[#E73C6E]" />
+                  <input type="radio" name="experience" value="no" required className="accent-[#E73C6E]" />
                   No
                 </label>
               </div>
             </div>
 
             <div>
-              <label htmlFor="cleaningYears" className={labelClass}>
-                If yes, how many years of cleaning experience?
+              <label htmlFor="experienceYears" className={labelClass}>
+                If yes, how many years of {roleWord} experience?
               </label>
               <input
-                id="cleaningYears"
-                name="cleaningYears"
+                id="experienceYears"
+                name="experienceYears"
                 type="number"
                 min="0"
                 max="99"

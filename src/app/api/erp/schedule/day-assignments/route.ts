@@ -88,6 +88,9 @@ export async function POST(req: Request) {
   const scopeItems = Array.isArray(body.scopeItems)
     ? [...new Set(body.scopeItems.map((v) => String(v).trim()).filter(isTurnoverScopeValue))]
     : [];
+  const changeOrderIds = Array.isArray(body.changeOrderIds)
+    ? [...new Set(body.changeOrderIds.map((v) => String(v).trim()).filter(Boolean))]
+    : [];
 
   const [project, supervisor, projectManager] = await Promise.all([
     prisma.project.findUnique({
@@ -111,6 +114,10 @@ export async function POST(req: Request) {
   if (sovItemIds.length > 0) {
     const found = await prisma.projectSOVItem.count({ where: { id: { in: sovItemIds }, sov: { projectId } } });
     if (found !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+  }
+  if (changeOrderIds.length > 0) {
+    const found = await prisma.projectChangeOrder.count({ where: { id: { in: changeOrderIds }, projectId } });
+    if (found !== changeOrderIds.length) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
   }
 
   // Building.address has far broader coverage than the work-order siteAddress
@@ -148,13 +155,15 @@ export async function POST(req: Request) {
           projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
           scopeItems,
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+          changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
         update: {
           supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
           scopeItems,
           sovItems: { set: sovItemIds.map((id) => ({ id })) },
+          changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
         },
-        include: { sovItems: { select: { id: true } } },
+        include: { sovItems: { select: { id: true } }, changeOrders: { select: { id: true } } },
       })
     );
     const assignments = supervisorUserId
@@ -206,13 +215,15 @@ export async function POST(req: Request) {
       projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
       scopeItems,
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+      changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
     update: {
       supervisorUserId, projectManagerUserId, startTime, endTime,
       scopeItems,
       sovItems: { set: sovItemIds.map((id) => ({ id })) },
+      changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
     },
-    include: { sovItems: { select: { id: true } } },
+    include: { sovItems: { select: { id: true } }, changeOrders: { select: { id: true } } },
   });
   const assignment = supervisorUserId
     ? (await prisma.$transaction([writeAssignment, prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } })]))[0]

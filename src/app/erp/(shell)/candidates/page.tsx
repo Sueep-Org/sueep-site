@@ -13,12 +13,14 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const search = typeof sp.search === "string" ? sp.search.trim() : "";
   const statusFilter = typeof sp.status === "string" ? sp.status.trim() : "";
+  const positionFilter = typeof sp.position === "string" ? sp.position.trim() : "";
   const requestedPage = typeof sp.page === "string" ? parseInt(sp.page, 10) : 1;
 
   const where = {
     ...(search ? { fullName: { contains: search, mode: "insensitive" as const } } : {}),
     // When no status filter is active, hide hired candidates (they are now employees)
     ...(statusFilter ? { status: statusFilter } : { status: { not: "HIRED" } }),
+    ...(positionFilter ? { positionInterest: positionFilter } : {}),
   };
 
   // Lightweight pass over just id/status/createdAt to work out ordering and
@@ -55,6 +57,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
+    if (positionFilter) params.set("position", positionFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/erp/candidates?${qs}` : "/erp/candidates";
@@ -66,7 +69,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
       </div>
 
-      <CandidatesFilters search={search} status={statusFilter} />
+      <CandidatesFilters search={search} status={statusFilter} position={positionFilter} />
 
       {candidates.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">

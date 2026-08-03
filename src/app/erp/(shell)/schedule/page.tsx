@@ -80,7 +80,7 @@ export default async function SchedulePage() {
     prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true, clockIn: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
-      select: { id: true, projectId: true, title: true, status: true, startDate: true, requestedDate: true },
+      select: { id: true, projectId: true, title: true, status: true, startDate: true, endDate: true, requestedDate: true },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
     prisma.projectSovScheduleRequest.findMany({
@@ -98,6 +98,7 @@ export default async function SchedulePage() {
         seriesId: true,
         scopeItems: true,
         sovItems: { select: { id: true } },
+        changeOrders: { select: { id: true } },
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -157,6 +158,7 @@ export default async function SchedulePage() {
     seriesId: a.seriesId,
     sovItemIds: a.sovItems.map((s) => s.id),
     scopeItems: a.scopeItems,
+    changeOrderIds: a.changeOrders.map((co) => co.id),
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full
@@ -208,6 +210,27 @@ export default async function SchedulePage() {
     laborSummaryByChangeOrder.set(cl.changeOrderId, byDay);
   }
 
+  // Days explicitly planned for a CO via a ProjectDayAssignment (see
+  // ProjectDayAssignment.changeOrders) — lets it show up on days between its
+  // start and end that aren't otherwise its scheduled date or a logged day.
+  const plannedDaysByChangeOrder = new Map<string, Set<string>>();
+  for (const a of dayAssignmentRows) {
+    const k = dayKey(a.date);
+    for (const co of a.changeOrders) {
+      const set = plannedDaysByChangeOrder.get(co.id) ?? new Set<string>();
+      set.add(k);
+      plannedDaysByChangeOrder.set(co.id, set);
+    }
+  }
+
+  // Open COs per project, for the day-assignment modal's CO picker.
+  const changeOrdersByProject = new Map<string, { id: string; title: string }[]>();
+  for (const co of changeOrderRows) {
+    const list = changeOrdersByProject.get(co.projectId) ?? [];
+    list.push({ id: co.id, title: co.title });
+    changeOrdersByProject.set(co.projectId, list);
+  }
+
   const changeOrders: ScheduleChangeOrder[] = changeOrderRows
     .map((co) => {
       const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
@@ -215,6 +238,10 @@ export default async function SchedulePage() {
       // a placeholder fallback for COs from before startDate was required.
       const scheduledDate = co.startDate ?? co.requestedDate;
       if (scheduledDate) days.add(dayKey(scheduledDate));
+      const scheduledDateKey = scheduledDate ? dayKey(scheduledDate) : null;
+      const scheduledEndDateKey = co.endDate ? dayKey(co.endDate) : null;
+      if (co.endDate) days.add(dayKey(co.endDate));
+      for (const k of plannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
       const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
       for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
         laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
@@ -226,7 +253,8 @@ export default async function SchedulePage() {
         status: co.status,
         workDayKeys: Array.from(days),
         laborByDay,
-        scheduledDateKey: scheduledDate ? dayKey(scheduledDate) : null,
+        scheduledDateKey,
+        scheduledEndDateKey: scheduledEndDateKey !== scheduledDateKey ? scheduledEndDateKey : null,
       };
     })
     .filter((co) => co.workDayKeys.length > 0);
@@ -289,6 +317,7 @@ export default async function SchedulePage() {
       plannedWorkersByDay,
       sovItems: r.sov?.items ?? [],
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
+      changeOrders: changeOrdersByProject.get(r.id) ?? [],
     };
   });
 

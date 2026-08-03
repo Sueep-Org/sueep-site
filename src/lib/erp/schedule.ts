@@ -83,13 +83,19 @@ export type ScheduleProject = {
    * unit has. Null when there's no linked TurnoverRequest (falls back to
    * offering every category, since there's nothing to restrict against). */
   contractedScopeItems: string[] | null;
+  /** This project's open change orders (id/title) — lets the day-assignment
+   * modal offer a CO picker so a scheduled day can be tagged as covering
+   * one or more of them. Excludes REJECTED/VOID COs. */
+  changeOrders: { id: string; title: string }[];
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from
- * its parent project — driven by its estimated start date (falling back to
- * its requested date only when startDate isn't set, for COs predating
- * startDate being required), plus any days its own laborers have logged
- * work. */
+ * its parent project — automatically on its start day (falling back to its
+ * requested date only when startDate isn't set, for COs predating startDate
+ * being required) and end day when different, plus any day its own laborers
+ * have logged work, plus any day explicitly planned for it via a
+ * ProjectDayAssignment (see ScheduleDayAssignment.changeOrderIds) — the same
+ * three-tier "auto / planned / logged" model regular projects use. */
 export type ScheduleChangeOrder = {
   id: string;
   projectId: string;
@@ -98,12 +104,14 @@ export type ScheduleChangeOrder = {
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, from ProjectChangeOrderLaborer — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
-  /** Day key (YYYY-MM-DD) of startDate ?? requestedDate — the one day in
-   * workDayKeys that's a plan rather than a fact, so it's the only occurrence
-   * draggable on the calendar (same rule as confirmed labor chips: a day
-   * backed only by logged work isn't something dragging can meaningfully
-   * change). Null on the rare CO with neither date set. */
+  /** Day key (YYYY-MM-DD) of startDate ?? requestedDate — a plan rather than
+   * a fact, so it's draggable on the calendar (moves startDate). Null on the
+   * rare CO with neither date set. */
   scheduledDateKey: string | null;
+  /** Day key (YYYY-MM-DD) of endDate, when set and different from
+   * scheduledDateKey — also draggable (moves endDate). Null if unset or
+   * equal to the start day (no separate occurrence in that case). */
+  scheduledEndDateKey: string | null;
 };
 
 /** A "Schedule SOV Work" request (ProjectSovScheduleRequest) submitted via
@@ -142,6 +150,10 @@ export type ScheduleDayAssignment = {
   /** Janitorial scope categories this scheduled day covers — values from
    * TURNOVER_SCOPE_OPTIONS (src/lib/erp/turnoverScope.ts). */
   scopeItems: string[];
+  /** Change order(s) this scheduled day's work is for, if any — lets a CO's
+   * chip show up on a day between its start/end that isn't otherwise its
+   * scheduled date or a logged-labor day. */
+  changeOrderIds: string[];
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future

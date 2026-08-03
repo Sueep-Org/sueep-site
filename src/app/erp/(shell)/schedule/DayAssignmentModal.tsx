@@ -13,6 +13,7 @@ type ProjectOption = {
   segment: string;
   sovItems: SOVItemOption[];
   contractedScopeItems: string[] | null;
+  changeOrders: { id: string; title: string }[];
 };
 type Person = { id: string; displayName: string };
 
@@ -95,6 +96,9 @@ export function DayAssignmentModal({
   const [sovPicks, setSovPicks] = useState<string[]>([]);
   // Janitorial: which scope categories (clean, paint, etc.) this day covers.
   const [scopePicks, setScopePicks] = useState<string[]>([]);
+  // Which change order(s), if any, this day's work is for — lets a CO be
+  // scheduled on a day between its start/end, not just those two days.
+  const [coPicks, setCoPicks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -199,6 +203,7 @@ export function DayAssignmentModal({
           endTime: endTime || undefined,
           sovItemIds: sovPicks.length > 0 ? sovPicks : undefined,
           scopeItems: scopePicks.length > 0 ? scopePicks : undefined,
+          changeOrderIds: coPicks.length > 0 ? coPicks : undefined,
           ...(usingSeries ? { repeatUntil, repeatDays } : {}),
         }),
       });
@@ -223,6 +228,7 @@ export function DayAssignmentModal({
             seriesId: data.seriesId!,
             sovItemIds: sovPicks,
             scopeItems: scopePicks,
+            changeOrderIds: coPicks,
           }))
         );
       } else if (data.id) {
@@ -237,6 +243,7 @@ export function DayAssignmentModal({
           seriesId: null,
           sovItemIds: sovPicks,
           scopeItems: scopePicks,
+          changeOrderIds: coPicks,
         });
       }
       setProjectId("");
@@ -246,6 +253,7 @@ export function DayAssignmentModal({
       setStartTime("");
       setSovPicks([]);
       setScopePicks([]);
+      setCoPicks([]);
       setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -475,6 +483,7 @@ export function DayAssignmentModal({
                       setProjectQuery(p.jobTitle);
                       setSovPicks([]);
                       setScopePicks([]);
+                      setCoPicks([]);
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                     title={p.jobTitle}
@@ -522,6 +531,36 @@ export function DayAssignmentModal({
                       }`}
                     >
                       {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {selectedProject && selectedProject.changeOrders.length > 0 ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Change order(s) covered this day</label>
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                Leave unchecked for plain project-scope work.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {selectedProject.changeOrders.map((co) => {
+                  const active = coPicks.includes(co.id);
+                  return (
+                    <button
+                      key={co.id}
+                      type="button"
+                      onClick={() =>
+                        setCoPicks((prev) =>
+                          prev.includes(co.id) ? prev.filter((v) => v !== co.id) : [...prev, co.id]
+                        )
+                      }
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        active ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-600 hover:border-blue-400"
+                      }`}
+                    >
+                      {co.title}
                     </button>
                   );
                 })}
