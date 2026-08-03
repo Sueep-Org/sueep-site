@@ -3638,9 +3638,18 @@ async function initApp(){
   let _phasesLocked = true;
 
   // Painting phases
-  const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting'];
-  const PAINTING_PHASE_IDS = ['phase1', 'phase2'];
-  let _paintingPhaseCrews = { phase1: [], phase2: [] };
+  const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting', 'Touch Up Painting'];
+  const PAINTING_PHASE_IDS = ['phase1', 'phase2', 'phase3'];
+  const PAINTING_PHASE_NAME_TO_ID = Object.freeze({
+    'Interior Painting (primer)': 'phase1',
+    'Interior Painting': 'phase2',
+    'Touch Up Painting': 'phase3',
+    'Phase 1': 'phase1',
+    'Phase 2': 'phase2',
+    'Phase 3': 'phase3',
+  });
+  let _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
+  let _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
   let _deletedPaintingPhaseIds = new Set();
   let _paintingExpectedDaysManual = false;
   let _paintingPhasesLocked = true;
@@ -4371,10 +4380,13 @@ async function initApp(){
     const commPct     = parseFloat(document.getElementById('paintingCommissionInput')?.value) || 0;
 
     let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
+    let totalPhaseMaterials = 0;
 
     PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).forEach(pid => {
       const crew = _paintingPhaseCrews[pid] || [];
-      const c = _calcPhase({ crew }, rates);
+      const phaseMat = _paintingPhaseMaterials[pid] || 0;
+      const c = _calcPhase({ crew, materials: phaseMat }, rates);
+      totalPhaseMaterials += phaseMat;
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
@@ -4393,9 +4405,8 @@ async function initApp(){
       setFoot(`pphase_subtotal_${pid}`, c.subtotal);
     });
 
-    const manualMaterials = parseFloat(document.getElementById('paintingMaterialsInput')?.value) || 0;
     const totTax = totSubtotal * (taxPct / 100);
-    const totFinalActual = totSubtotal + manualMaterials + totOh + totPft + totComm;
+    const totFinalActual = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm;
 
     const summaryContainer = document.getElementById('paintingCalcSummaryContainer');
     if (summaryContainer) {
@@ -4404,7 +4415,7 @@ async function initApp(){
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
-        [`Materials`, manualMaterials],
+        [`Materials`, totalPhaseMaterials],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
         [`Tax (${taxPct}%)`, totTax],
@@ -4650,6 +4661,23 @@ async function initApp(){
         footer.appendChild(span);
       });
       section.appendChild(footer);
+
+      const matRow = document.createElement('div');
+      matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;';
+      const matLabel = document.createElement('label');
+      matLabel.textContent = 'Materials ($):';
+      matLabel.style.cssText = 'color:#6b7280;white-space:nowrap;';
+      const matInput = document.createElement('input');
+      matInput.type = 'number'; matInput.min = '0'; matInput.step = '0.01';
+      matInput.value = _paintingPhaseMaterials[pid] || 0;
+      matInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:120px;outline:none;';
+      matInput.addEventListener('input', () => {
+        _paintingPhaseMaterials[pid] = parseFloat(matInput.value) || 0;
+        _updatePaintingCrewCalcs();
+      });
+      matRow.appendChild(matLabel); matRow.appendChild(matInput);
+      section.appendChild(matRow);
+
       container.appendChild(section);
     });
 
@@ -4818,6 +4846,7 @@ async function initApp(){
 
     // Build effective phases: from saved bd, or auto-generate from area
     let effectivePhases = bd?.phases || null;
+    const fallbackSavedMaterials = parseFloat(bd?.materials) || 0;
     let effectiveRates = {
       overhead: (bd?.overhead_pct || 0) / 100,
       profit:   (bd?.profit_pct   || 30) / 100,
@@ -4880,7 +4909,8 @@ async function initApp(){
         }
         breakdownDiv.appendChild(table);
 
-        const savedMaterials = bd?.materials || 0;
+        const phaseMaterials = effectivePhases.reduce((sum, p) => sum + (p.materials || 0), 0);
+        const savedMaterials = phaseMaterials || fallbackSavedMaterials;
         const overheadPct = bd?.overhead_pct || 0;
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
@@ -4925,7 +4955,9 @@ async function initApp(){
         totSubtotal += c.subtotal; totOh += c.oh; totPft += c.pft; totComm += c.comm;
       }
     }
-    const savedMaterials = bd?.materials || 0;
+    const savedMaterials = effectivePhases
+      ? effectivePhases.reduce((sum, p) => sum + (p.materials || 0), 0) || fallbackSavedMaterials
+      : fallbackSavedMaterials;
     const quote = totSubtotal + savedMaterials + totOh + totPft + totComm;
     setText('paintingViewQuote', fmt$(quote));
 
@@ -4953,15 +4985,16 @@ async function initApp(){
 
     // Initialize edit state from saved painting_breakdown
     _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
+    _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
     _deletedPaintingPhaseIds = new Set();
     if (bd?.phases) {
-      const pidMap = { 'Phase 1': 'phase1', 'Phase 2': 'phase2', 'Phase 3': 'phase3' };
       const savedPids = new Set();
       for (const p of bd.phases) {
-        const pid = pidMap[p.name];
+        const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
         if (!pid) continue;
         savedPids.add(pid);
         _paintingPhaseCrews[pid] = (p.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
+        _paintingPhaseMaterials[pid] = p.materials || 0;
       }
       for (const pid of PAINTING_PHASE_IDS) {
         if (!savedPids.has(pid)) _deletedPaintingPhaseIds.add(pid);
@@ -5200,6 +5233,7 @@ async function initApp(){
     // Pre-fill form inputs from saved painting_breakdown
     const bd = _loadedProjectData?.painting_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
     if (bd) {
       setVal('paintingOverheadInput', bd.overhead_pct ?? 0);
       setVal('paintingProfitInput', bd.profit_pct ?? 30);
@@ -5211,6 +5245,12 @@ async function initApp(){
       setVal('paintingTollCostInput', bd.toll_cost ?? 0);
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
+      if (bd.phases) {
+        for (const p of bd.phases) {
+          const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
+          if (pid) _paintingPhaseMaterials[pid] = p.materials || 0;
+        }
+      }
       if (bd.expected_days != null) {
         _paintingExpectedDaysManual = true;
         setVal('paintingExpectedDaysInput', bd.expected_days);
@@ -5280,13 +5320,14 @@ async function initApp(){
     const phases = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).map((pid, i) => ({
       name: PAINTING_PHASES[i],
       crew: (_paintingPhaseCrews[pid] || []).map(m => ({ ...m })),
+      materials: _paintingPhaseMaterials[pid] || 0,
     }));
     const overhead = parseFloat(document.getElementById('paintingOverheadInput')?.value) || 0;
     const profit   = parseFloat(document.getElementById('paintingProfitInput')?.value) || 0;
     const tax      = parseFloat(document.getElementById('paintingTaxInput')?.value) || 0;
     const comm     = parseFloat(document.getElementById('paintingCommissionInput')?.value) || 0;
     const margin   = parseFloat(document.getElementById('paintingMarginInput')?.value) || 0;
-    const materials = parseFloat(document.getElementById('paintingMaterialsInput')?.value) || 0;
+    const materials = phases.reduce((sum, phase) => sum + (phase.materials || 0), 0);
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
