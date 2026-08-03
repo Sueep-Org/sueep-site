@@ -3,6 +3,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
+
+// Real estate is no longer a segment new projects can be created under.
+// It's only still selectable on existing real-estate projects' own setup editor.
+const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
@@ -1169,7 +1173,7 @@ export function NewProjectForm({
         <div>
           <label className={label} htmlFor="co-segment">Segment</label>
           <select id="co-segment" className={input} value={segment} onChange={(e) => setSegment(e.target.value)}>
-            {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+            {CREATABLE_SEGMENT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -1271,7 +1275,7 @@ export function NewProjectForm({
                 value={segment}
                 onChange={(e) => setSegment(e.target.value)}
               >
-                {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+                {CREATABLE_SEGMENT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

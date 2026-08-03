@@ -169,9 +169,6 @@ export default function Home() {
           <div className="mt-4 flex justify-between items-center">
           <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-end">
-            <Link href="/referral" className="text-gray-500 hover:text-white text-xs sm:text-sm">
-              Referral program
-            </Link>
             <Link href="/blog" className="text-gray-500 hover:text-white text-xs sm:text-sm">
               Blog
             </Link>

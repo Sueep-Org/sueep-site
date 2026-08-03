@@ -70,6 +70,7 @@ export type ProjectTableRow = {
     id: string;
     title: string;
     status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED";
+    startDate: string | null;
     billingStatus: string | null;
     percentInvoiced: number;
     estimatedCostCents: number | null;
@@ -111,9 +112,15 @@ export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING" |
 
 type LaborRow = LaborRowBase;
 
+// Dates here (CO/contractor start-end, labor workDate) are stored as UTC
+// midnight standing for a calendar day with no real timezone attached, same
+// convention as the schedule calendar (see src/lib/erp/schedule.ts). Reading
+// them back with local getters instead of UTC ones rolls the date back a day
+// for anyone west of UTC (confirmed: a CO started 5/22 rendered as 5/21 in
+// Eastern) — has to stay UTC to match how it was stored.
 function fmtDate(iso: string) {
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${String(d.getUTCFullYear()).slice(-2)}`;
 }
 
 function getDescriptionLine(description: string | null, label: string) {
@@ -314,12 +321,14 @@ function SubRowTitleCell({
   statusClass,
   href,
   title,
+  date,
 }: {
   badge?: string;
   status: string;
   statusClass: string;
   href: string;
   title: string;
+  date?: string | null;
 }) {
   return (
     <td className="w-[280px] min-w-[280px] bg-gray-50 px-3 py-1.5">
@@ -341,6 +350,7 @@ function SubRowTitleCell({
         >
           {truncateAtHyphen(title)}
         </Link>
+        {date ? <span className="shrink-0 text-[11px] font-normal text-gray-400">{fmtDate(date)}</span> : null}
       </div>
     </td>
   );
@@ -819,6 +829,7 @@ export function ProjectsExpandableTable({
                               statusClass={CO_STATUS_COLORS[co.status]}
                               href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                               title={co.title}
+                              date={co.startDate}
                             />
                             {/* PM */}
                             <td className="w-[130px] min-w-[130px] truncate px-3 py-1.5 text-sm text-gray-700" title={co.supervisor ?? undefined}>

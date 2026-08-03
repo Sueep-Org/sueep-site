@@ -166,7 +166,7 @@ export function ProjectSetupEditor({
           <div>
             <label className={label} htmlFor="ps-segment">Segment</label>
             <select id="ps-segment" name="segment" className={input} defaultValue={segment}>
-              {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+              {PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE" || segment === "REAL_ESTATE").map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>

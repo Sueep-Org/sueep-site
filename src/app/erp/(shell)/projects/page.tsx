@@ -108,6 +108,8 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           id: true,
           title: true,
           status: true,
+          startDate: true,
+          requestedDate: true,
           billingStatus: true,
           percentInvoiced: true,
           estimatedCostCents: true,
@@ -299,6 +301,10 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
         id: co.id,
         title: co.title,
         status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED",
+        // startDate is the real scheduled date once set; requestedDate is only
+        // a placeholder fallback for COs from before startDate was required
+        // (same convention the schedule calendar uses).
+        startDate: (co.startDate ?? co.requestedDate)?.toISOString() ?? null,
         billingStatus: co.billingStatus,
         percentInvoiced: co.percentInvoiced,
         estimatedCostCents: co.estimatedCostCents,

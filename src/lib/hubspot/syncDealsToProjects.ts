@@ -126,8 +126,8 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       continue;
     }
 
-    const { segment, phase } = classified;
-    const projectSegment = segment === "REAL_ESTATE" ? "REAL_ESTATE" : "COMMERCIAL_CLEANING";
+    const { phase } = classified;
+    const projectSegment = "COMMERCIAL_CLEANING";
     const status = erpStatusFromPhase(phase);
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;
@@ -179,7 +179,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           hubspotDealId: deal.id,
           projectId: existing.id,
           action: "updated",
-          segment,
+          segment: projectSegment,
           phase,
         });
       } else {
@@ -206,7 +206,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           hubspotDealId: deal.id,
           projectId: created.id,
           action: "created",
-          segment,
+          segment: projectSegment,
           phase,
         });
       }
@@ -234,6 +234,9 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     where: {
       hubspotDealId: { not: null },
       NOT: { hubspotDealId: { in: [...seenDealIds] } },
+      // Real estate deals are no longer fetched from HubSpot at all, so their projects
+      // would always look "orphaned" here. Exclude them so this cleanup never touches them.
+      segment: { not: "REAL_ESTATE" },
     },
     select: { id: true, hubspotDealId: true },
   });

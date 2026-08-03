@@ -304,7 +304,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     ? [
         { id: cfg.postConstruction.pipelineId, label: "Post-Construction" },
         { id: cfg.janitorial.pipelineId, label: "Janitorial" },
-        ...(cfg.realEstate ? [{ id: cfg.realEstate.pipelineId, label: "Real Estate" }] : []),
       ].filter((o) => o.id?.trim())
     : [];
 
