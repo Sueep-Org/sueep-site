@@ -38,36 +38,95 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const requiredDocuments = parseRequiredDocuments(employee.requiredDocuments);
   const compliance = evaluateEmployeeCompliance(employee.status, requiredDocuments, employee.documents);
 
-  const [initialLaborEntries, laborProjectGroups] = await Promise.all([
-    prisma.laborEntry.findMany({
-      where: { employeeId: employee.id },
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
-      take: LABOR_PAGE_SIZE + 1,
-      select: {
-        id: true,
-        projectId: true,
-        workDate: true,
-        role: true,
-        hours: true,
-        hourlyRateCents: true,
-        taskDescription: true,
-        project: { select: { jobTitle: true } },
-      },
-    }),
-    prisma.laborEntry.groupBy({ by: ["projectId"], where: { employeeId: employee.id } }),
+  const [initialLaborEntries, initialChangeOrderEntries, laborProjectGroups, changeOrderProjectRows] =
+    await Promise.all([
+      prisma.laborEntry.findMany({
+        where: { employeeId: employee.id },
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+        take: LABOR_PAGE_SIZE + 1,
+        select: {
+          id: true,
+          projectId: true,
+          workDate: true,
+          createdAt: true,
+          role: true,
+          hours: true,
+          hourlyRateCents: true,
+          taskDescription: true,
+          project: { select: { jobTitle: true } },
+        },
+      }),
+      prisma.projectChangeOrderLaborer.findMany({
+        where: { employeeId: employee.id },
+        orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
+        take: LABOR_PAGE_SIZE + 1,
+        select: {
+          id: true,
+          workDate: true,
+          createdAt: true,
+          role: true,
+          hours: true,
+          hourlyRateCents: true,
+          taskDescription: true,
+          changeOrder: { select: { title: true, project: { select: { id: true, jobTitle: true } } } },
+        },
+      }),
+      prisma.laborEntry.groupBy({ by: ["projectId"], where: { employeeId: employee.id } }),
+      prisma.projectChangeOrderLaborer.findMany({
+        where: { employeeId: employee.id },
+        select: { changeOrder: { select: { projectId: true } } },
+        distinct: ["changeOrderId"],
+      }),
+    ]);
+  const laborProjectIds = new Set([
+    ...laborProjectGroups.map((g) => g.projectId),
+    ...changeOrderProjectRows.map((r) => r.changeOrder.projectId),
   ]);
-  const laborProjects = laborProjectGroups.length
+  const laborProjects = laborProjectIds.size
     ? await prisma.project.findMany({
-        where: { id: { in: laborProjectGroups.map((g) => g.projectId) } },
+        where: { id: { in: Array.from(laborProjectIds) } },
         select: { id: true, jobTitle: true },
         orderBy: { jobTitle: "asc" },
       })
     : [];
-  const initialLaborHasMore = initialLaborEntries.length > LABOR_PAGE_SIZE;
-  const laborEntryRows = initialLaborEntries.slice(0, LABOR_PAGE_SIZE).map((e) => ({
+  const combinedLaborEntries = [
+    ...initialLaborEntries.map((e) => ({
+      id: e.id,
+      source: "PROJECT" as const,
+      projectId: e.projectId,
+      projectTitle: e.project.jobTitle,
+      changeOrderTitle: null as string | null,
+      workDate: e.workDate,
+      createdAt: e.createdAt,
+      role: e.role,
+      hours: e.hours,
+      hourlyRateCents: e.hourlyRateCents,
+      taskDescription: e.taskDescription,
+    })),
+    ...initialChangeOrderEntries.map((e) => ({
+      id: e.id,
+      source: "CHANGE_ORDER" as const,
+      projectId: e.changeOrder.project.id,
+      projectTitle: e.changeOrder.project.jobTitle,
+      changeOrderTitle: e.changeOrder.title,
+      workDate: e.workDate,
+      createdAt: e.createdAt,
+      role: e.role,
+      hours: e.hours,
+      hourlyRateCents: e.hourlyRateCents,
+      taskDescription: e.taskDescription,
+    })),
+  ].sort((a, b) => {
+    const diff = b.workDate.getTime() - a.workDate.getTime();
+    return diff !== 0 ? diff : b.createdAt.getTime() - a.createdAt.getTime();
+  });
+  const initialLaborHasMore = combinedLaborEntries.length > LABOR_PAGE_SIZE;
+  const laborEntryRows = combinedLaborEntries.slice(0, LABOR_PAGE_SIZE).map((e) => ({
     id: e.id,
+    source: e.source,
     projectId: e.projectId,
-    projectTitle: e.project.jobTitle,
+    projectTitle: e.projectTitle,
+    changeOrderTitle: e.changeOrderTitle,
     workDate: e.workDate.toISOString(),
     role: e.role,
     hours: e.hours,

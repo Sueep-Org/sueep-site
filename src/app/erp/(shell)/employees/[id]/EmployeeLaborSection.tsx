@@ -7,8 +7,10 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 export type EmployeeLaborEntryRow = {
   id: string;
+  source: "PROJECT" | "CHANGE_ORDER";
   projectId: string;
   projectTitle: string;
+  changeOrderTitle: string | null;
   workDate: string;
   role: string | null;
   hours: number;
@@ -176,6 +178,14 @@ export function EmployeeLaborSection({
                       <Link href={`/erp/projects/${entry.projectId}`} className="text-pink-600 hover:underline">
                         {entry.projectTitle}
                       </Link>
+                      {entry.source === "CHANGE_ORDER" ? (
+                        <span
+                          className="ml-1.5 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                          title={entry.changeOrderTitle ? `Change order: ${entry.changeOrderTitle}` : "Change order"}
+                        >
+                          CO
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500">{entry.role || "—"}</td>
                     <td className="px-4 py-2.5 text-right text-pink-600">{entry.hours.toFixed(1)}</td>
