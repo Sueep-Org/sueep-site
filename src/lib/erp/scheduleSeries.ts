@@ -29,3 +29,22 @@ export function computeSeriesDates(startDate: Date, endDate: Date, repeatDays: n
   }
   return dates;
 }
+
+/** An explicit, possibly non-consecutive set of dates picked directly (the
+ * calendar's mini-picker for "duplicate this to more days") — same cap as
+ * computeSeriesDates, de-duplicated and sorted so the earliest/latest can be
+ * used as a series' startDate/endDate. */
+export function parseDatesList(dateKeys: string[]): Date[] {
+  const unique = [...new Set(dateKeys)];
+  if (unique.length === 0) throw new SeriesDateRangeError("Pick at least one date");
+  if (unique.length > MAX_SERIES_SPAN_DAYS) {
+    throw new SeriesDateRangeError(`Cannot duplicate to more than ${MAX_SERIES_SPAN_DAYS} days at once`);
+  }
+  const dates = unique.map((k) => {
+    const d = startOfDay(new Date(`${k}T00:00:00.000Z`));
+    if (Number.isNaN(d.getTime())) throw new SeriesDateRangeError(`Invalid date: ${k}`);
+    return d;
+  });
+  dates.sort((a, b) => a.getTime() - b.getTime());
+  return dates;
+}

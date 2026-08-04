@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
-import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
+import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue } from "@/lib/erp/turnoverScope";
 
@@ -32,10 +32,29 @@ export async function POST(req: Request) {
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-  if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
 
-  const date = new Date(`${dateRaw}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  // An explicit, possibly non-consecutive list of dates (the calendar's
+  // "duplicate to more days" picker) takes priority over date/repeatUntil/
+  // repeatDays below when present — date becomes just the earliest of them.
+  const datesListRaw = Array.isArray(body.dates)
+    ? body.dates.map((v) => String(v).trim()).filter(Boolean)
+    : null;
+
+  let date: Date;
+  let explicitDatesList: Date[] | null = null;
+  if (datesListRaw && datesListRaw.length > 0) {
+    try {
+      explicitDatesList = parseDatesList(datesListRaw);
+    } catch (err) {
+      if (err instanceof SeriesDateRangeError) return NextResponse.json({ error: err.message }, { status: 400 });
+      throw err;
+    }
+    date = explicitDatesList[0]!;
+  } else {
+    if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
+    date = new Date(`${dateRaw}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  }
 
   let startTime: string | null = null;
   let endTime: string | null = null;
@@ -50,15 +69,23 @@ export async function POST(req: Request) {
     }
   }
 
-  // A multi-day range or weekly repeat, see ProjectScheduleSeries. Both are
-  // absent for the plain single-day assign, which keeps behaving exactly as
-  // it did before this was added.
+  // A multi-day range, weekly repeat, or explicit (possibly non-consecutive)
+  // date list — see ProjectScheduleSeries. All are absent for the plain
+  // single-day assign, which keeps behaving exactly as it did before this
+  // was added. repeatUntil/repeatDays on the series row are derived from
+  // the explicit list (last date / distinct weekdays present) purely for
+  // record-keeping and the calendar-invite text below — the real source of
+  // truth for which days got a row is explicitDatesList itself.
   const repeatUntilRaw = String(body.repeatUntil || "").trim();
   const repeatDaysRaw = Array.isArray(body.repeatDays) ? body.repeatDays : null;
   let seriesDates: Date[] | null = null;
   let repeatUntil: Date | null = null;
   let repeatDays: number[] = [];
-  if (repeatUntilRaw || repeatDaysRaw) {
+  if (explicitDatesList) {
+    seriesDates = explicitDatesList;
+    repeatUntil = explicitDatesList[explicitDatesList.length - 1]!;
+    repeatDays = [...new Set(explicitDatesList.map((d) => d.getUTCDay()))].sort((a, b) => a - b);
+  } else if (repeatUntilRaw || repeatDaysRaw) {
     if (!repeatUntilRaw) return NextResponse.json({ error: "repeatUntil is required when repeatDays is set" }, { status: 400 });
     if (!repeatDaysRaw || repeatDaysRaw.length === 0) {
       return NextResponse.json({ error: "repeatDays is required when repeatUntil is set" }, { status: 400 });
