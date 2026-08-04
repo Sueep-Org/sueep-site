@@ -53,7 +53,18 @@ export default async function CareersPage({
         </div>
       )}
 
-      <CareersPixelEvents submitted={showSuccess} />
+      <CareersPixelEvents submitted={showSuccess} role={role} />
+      {isPainter && (
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            src="https://www.facebook.com/tr?id=248346263857750&ev=PageView&noscript=1"
+            alt=""
+          />
+        </noscript>
+      )}
       <MarketingNav />
 
       <section className="relative py-16 md:py-24 overflow-hidden">
