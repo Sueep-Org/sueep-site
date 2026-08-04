@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DayAssignmentModal } from "./DayAssignmentModal";
@@ -2065,6 +2065,79 @@ export function SchedulePlanner({
                   .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
                   .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
 
+                // A janitorial turnover request's change order(s) hang directly
+                // below that request's own chip instead of sitting in the flat
+                // CO list, so the two read as one unit. Post-construction COs
+                // stay in the flat list below for now — that segment's projects
+                // don't map onto a single day's chip the same simple way, so
+                // grouping them needs its own approach (deferred).
+                const janitorialCoByProjectId = new Map<string, ScheduleChangeOrder[]>();
+                const looseChangeOrders: ScheduleChangeOrder[] = [];
+                for (const co of dayChangeOrders) {
+                  const parent = projectById.get(co.projectId);
+                  if (parent?.segment === "JANITORIAL_TURNOVER_REQUESTS") {
+                    const list = janitorialCoByProjectId.get(co.projectId) ?? [];
+                    list.push(co);
+                    janitorialCoByProjectId.set(co.projectId, list);
+                  } else {
+                    looseChangeOrders.push(co);
+                  }
+                }
+
+                function renderCoChip(co: ScheduleChangeOrder, nested: boolean) {
+                  const summary = co.laborByDay[k];
+                  const parentProject = projectById.get(co.projectId);
+                  const role: "start" | "end" | null =
+                    k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
+                  return (
+                    <li
+                      key={`co-${co.id}`}
+                      className={`${inMonth ? "group relative" : "relative"} ${nested ? "ml-3 border-l-2 border-blue-200 pl-1.5" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        draggable={role !== null}
+                        onDragStart={role !== null ? (e) => {
+                          e.dataTransfer.setData("text/plain", co.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
+                        } : undefined}
+                        onDragEnd={role !== null ? () => {
+                          setDraggingChip(null);
+                          setDragOverDayKey(null);
+                        } : undefined}
+                        onClick={() => openCoPopover(k, co)}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${role !== null ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
+                      >
+                        <span className="truncate">{co.title}</span>
+                      </button>
+                      {renderCoPopover(k, co)}
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{co.title}</div>
+                          <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
+                          {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
+                          {summary ? (
+                            <>
+                              <div className="mt-1">{formatHours(summary.hours)} logged</div>
+                              {summary.workers.length > 0 ? (
+                                <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
+                              ) : null}
+                            </>
+                          ) : null}
+                          {role === "start" ? (
+                            <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
+                          ) : role === "end" ? (
+                            <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
+                          ) : (
+                            <div className="mt-1 text-gray-300">Planned or logged for this day, not draggable</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                }
+
                 return (
                   <div
                     key={`${k}-${i}`}
@@ -2109,7 +2182,8 @@ export function SchedulePlanner({
                     {dayNeedsSupervisor.length > 0 ? (
                       <ul className="mt-1 space-y-1">
                         {dayNeedsSupervisor.map(({ project: p, role }) => (
-                          <li key={`needs-${p.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
+                          <Fragment key={`needs-${p.id}-${role}`}>
+                          <li className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
                               draggable
@@ -2142,12 +2216,15 @@ export function SchedulePlanner({
                             ) : null}
                             {renderEventPopover(k, p)}
                           </li>
+                          {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                          </Fragment>
                         ))}
                       </ul>
                     ) : null}
                     <ul className="mt-1 space-y-1">
                       {dayProjectSpanEndpoints.map(({ project: p, role }) => (
-                        <li key={`span-${p.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
+                        <Fragment key={`span-${p.id}-${role}`}>
+                        <li className={inMonth ? "group relative" : "relative"}>
                           <button
                             type="button"
                             draggable
@@ -2189,13 +2266,16 @@ export function SchedulePlanner({
                           ) : null}
                           {renderEventPopover(k, p)}
                         </li>
+                        {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                        </Fragment>
                       ))}
                       {dayProjects.map((p) => {
                         const summary = p.laborByDay[k];
                         const loggedWorkers = new Set(summary?.workers ?? []);
                         const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
                         return (
-                          <li key={`p-${p.id}`} className={inMonth ? "group relative" : "relative"}>
+                          <Fragment key={`p-${p.id}`}>
+                          <li className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
                               onClick={() => openLaborPopover(k, p)}
@@ -2223,6 +2303,8 @@ export function SchedulePlanner({
                               </div>
                             ) : null}
                           </li>
+                          {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                          </Fragment>
                         );
                       })}
                       {dayPlanned.map(({ assignment, project }) => {
@@ -2235,7 +2317,8 @@ export function SchedulePlanner({
                           .filter((d): d is string => !!d);
                         const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
                         return (
-                        <li key={`plan-${assignment.id}`} className={inMonth ? "group relative" : "relative"}>
+                        <Fragment key={`plan-${assignment.id}`}>
+                        <li className={inMonth ? "group relative" : "relative"}>
                           <button
                             type="button"
                             draggable
@@ -2294,58 +2377,11 @@ export function SchedulePlanner({
                             </div>
                           ) : null}
                         </li>
+                        {(janitorialCoByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
+                        </Fragment>
                         );
                       })}
-                      {dayChangeOrders.map((co) => {
-                        const summary = co.laborByDay[k];
-                        const parentProject = projectById.get(co.projectId);
-                        const role: "start" | "end" | null =
-                          k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
-                        return (
-                          <li key={`co-${co.id}`} className={inMonth ? "group relative" : "relative"}>
-                            <button
-                              type="button"
-                              draggable={role !== null}
-                              onDragStart={role !== null ? (e) => {
-                                e.dataTransfer.setData("text/plain", co.id);
-                                e.dataTransfer.effectAllowed = "move";
-                                setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
-                              } : undefined}
-                              onDragEnd={role !== null ? () => {
-                                setDraggingChip(null);
-                                setDragOverDayKey(null);
-                              } : undefined}
-                              onClick={() => openCoPopover(k, co)}
-                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${role !== null ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
-                            >
-                              <span className="truncate">{co.title}</span>
-                            </button>
-                            {renderCoPopover(k, co)}
-                            {inMonth ? (
-                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                                <div className="font-semibold">{co.title}</div>
-                                <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
-                                {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
-                                {summary ? (
-                                  <>
-                                    <div className="mt-1">{formatHours(summary.hours)} logged</div>
-                                    {summary.workers.length > 0 ? (
-                                      <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                                {role === "start" ? (
-                                  <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
-                                ) : role === "end" ? (
-                                  <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
-                                ) : (
-                                  <div className="mt-1 text-gray-300">Planned or logged for this day, not draggable</div>
-                                )}
-                              </div>
-                            ) : null}
-                          </li>
-                        );
-                      })}
+                      {looseChangeOrders.map((co) => renderCoChip(co, false))}
                       {daySovRequests.map((r) => {
                         const parentProject = projectById.get(r.projectId);
                         return (
