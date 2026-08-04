@@ -630,6 +630,7 @@ export default async function ErpDashboardPage() {
               actualLaborCents: true, actualMaterialCents: true,
               materialEntries: { select: { costCents: true } },
               laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+              contractorAssignments: { select: { costCents: true } },
             },
           },
         },

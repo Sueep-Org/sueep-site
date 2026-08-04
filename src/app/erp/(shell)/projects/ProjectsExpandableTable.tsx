@@ -18,6 +18,19 @@ type LaborRowBase = {
   qualityNotes: string | null;
 };
 
+type ContractorEntryRow = {
+  name: string;
+  role: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  costCents: number | null;
+  notes: string | null;
+  /** SOV line item(s) this contractor's work covers — regular project-level
+   * contractor assignments only, change-order ones have no SOV link, so
+   * this is always empty for a CO's contractor rows. */
+  sovItems: { id: string; description: string; scheduledValueCents: number }[];
+};
+
 export type UnitQualityCheckRow = {
   id: string;
   createdAt: string;
@@ -58,14 +71,7 @@ export type ProjectTableRow = {
   miles: number;
   hubspotPipelineId: string | null;
   unitQualityChecks: UnitQualityCheckRow[];
-  contractorEntries: {
-    name: string;
-    role: string | null;
-    startDate: string | null;
-    endDate: string | null;
-    costCents: number | null;
-    notes: string | null;
-  }[];
+  contractorEntries: ContractorEntryRow[];
   changeOrders: {
     id: string;
     title: string;
@@ -90,6 +96,8 @@ export type ProjectTableRow = {
     laborers: LaborRowBase[];
     laborCostCents: number;
     materialCostCents: number;
+    contractorCostCents: number;
+    contractorEntries: ContractorEntryRow[];
   }[];
 };
 
@@ -274,44 +282,106 @@ function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white p
     <div className={className}>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Labor log</p>
       <LaborTable entries={project.laborEntries} showFinancials={showFinancials} />
-      {project.contractorEntries.length > 0 && (
-        <>
-          <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contractors</p>
-          <table className="w-full table-fixed text-xs">
-            <colgroup>
-              <col className="w-[16%]" />
+      <ContractorTable entries={project.contractorEntries} showSov />
+    </div>
+  );
+}
+
+/** `showSov` swaps the Notes column for SOV / SOV Value / Margin — only
+ * regular project-level contractor assignments carry an SOV link today
+ * (change-order ones don't), so callers showing CO contractor rows should
+ * leave this off and keep the plain Notes column. */
+function ContractorTable({ entries, showSov = false }: { entries: ContractorEntryRow[]; showSov?: boolean }) {
+  if (entries.length === 0) return null;
+  return (
+    <>
+      <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contractors</p>
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[14%]" />
+          <col className="w-[13%]" />
+          <col className="w-[11%]" />
+          <col className="w-[11%]" />
+          {showSov ? (
+            <>
               <col className="w-[20%]" />
-              <col className="w-[20%]" />
-              <col className="w-[16%]" />
-              <col className="w-[14%]" />
-              <col className="w-[14%]" />
-            </colgroup>
-            <thead>
-              <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
-                <th className="pb-1.5 pr-3 text-left font-semibold">Role</th>
-                <th className="pb-1.5 pr-3 text-left font-semibold">Start</th>
-                <th className="pb-1.5 pr-3 text-left font-semibold">End</th>
+              <col className="w-[11%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+            </>
+          ) : (
+            <>
+              <col className="w-[13%]" />
+              <col className="w-[27%]" />
+            </>
+          )}
+        </colgroup>
+        <thead>
+          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Role</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Start</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">End</th>
+            {showSov ? (
+              <>
+                <th className="pb-1.5 pr-3 text-left font-semibold">SOV</th>
+                <th className="pb-1.5 pr-3 text-right font-semibold">SOV Value</th>
+                <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
+                <th className="pb-1.5 text-right font-semibold">Margin</th>
+              </>
+            ) : (
+              <>
                 <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
                 <th className="pb-1.5 text-left font-semibold">Notes</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {entries.map((c, i) => {
+            const sovValueCents = c.sovItems.reduce((s, item) => s + item.scheduledValueCents, 0);
+            const margin = c.sovItems.length > 0 && c.costCents != null ? sovValueCents - c.costCents : null;
+            const marginPct = margin != null && sovValueCents !== 0 ? Math.round((margin / sovValueCents) * 100) : null;
+            return (
+              <tr key={i} className="text-slate-900">
+                <td className="py-1 pr-3 truncate font-medium">{c.name}</td>
+                <td className="py-1 pr-3 truncate">{c.role ?? "Contractor"}</td>
+                <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.startDate ? fmtDate(c.startDate) : <EmptyValue />}</td>
+                <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.endDate ? fmtDate(c.endDate) : <EmptyValue />}</td>
+                {showSov ? (
+                  <>
+                    <td className="py-1 pr-3 truncate" title={c.sovItems.map((s) => s.description).join(", ")}>
+                      {c.sovItems.length > 0 ? c.sovItems.map((s) => s.description).join(", ") : <EmptyValue />}
+                    </td>
+                    <td className="py-1 pr-3 text-right tabular-nums">
+                      {c.sovItems.length > 0 ? centsToDollars(sovValueCents) : <EmptyValue />}
+                    </td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
+                    <td className={`py-1 text-right font-medium tabular-nums ${marginClass(margin)}`}>
+                      {margin != null ? (
+                        <>
+                          {centsToDollars(margin)}
+                          {marginPct != null ? (
+                            <span className="ml-1 font-normal text-slate-400">({marginPct}%)</span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <EmptyValue />
+                      )}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
+                    <td className="py-1 truncate text-slate-500">{c.notes ?? <EmptyValue />}</td>
+                  </>
+                )}
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {project.contractorEntries.map((c, i) => (
-                <tr key={i} className="text-slate-900">
-                  <td className="py-1 pr-3 truncate font-medium">{c.name}</td>
-                  <td className="py-1 pr-3 truncate">{c.role ?? "Contractor"}</td>
-                  <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.startDate ? fmtDate(c.startDate) : <EmptyValue />}</td>
-                  <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.endDate ? fmtDate(c.endDate) : <EmptyValue />}</td>
-                  <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
-                  <td className="py-1 truncate text-slate-500">{c.notes ?? <EmptyValue />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-    </div>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
@@ -807,7 +877,8 @@ export function ProjectsExpandableTable({
                     {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
-                      const coActualLabor = co.laborCostCents > 0 ? co.laborCostCents : (co.actualLaborCents ?? 0);
+                      const coActualLabor =
+                        (co.laborCostCents > 0 ? co.laborCostCents : (co.actualLaborCents ?? 0)) + co.contractorCostCents;
                       const coActualMaterial = co.materialCostCents > 0 ? co.materialCostCents : (co.actualMaterialCents ?? 0);
                       const coActualCost = coActualLabor + coActualMaterial;
                       const coMargin = co.contractValueCents == null ? null : co.contractValueCents - coActualCost;
@@ -870,10 +941,10 @@ export function ProjectsExpandableTable({
                                 {centsToDollars(co.estLaborCents)}
                               </td>
                             )}
-                            {/* Act. Labor — from laborers log */}
+                            {/* Act. Labor — from laborers log + contractor cost */}
                             {canSeeFinancials && (
                               <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                                {centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}
+                                {centsToDollars(coActualLabor)}
                               </td>
                             )}
                             {/* Est. Material */}
@@ -916,6 +987,7 @@ export function ProjectsExpandableTable({
                                 <div className="rounded border border-gray-200 bg-white px-3 py-2">
                                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor log</p>
                                   <LaborTable entries={co.laborers} showFinancials={canSeeFinancials} />
+                                  <ContractorTable entries={co.contractorEntries} />
                                 </div>
                               </td>
                             </tr>

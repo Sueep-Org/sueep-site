@@ -188,6 +188,7 @@ function DuplicateToMoreDaysSection({
   startTime,
   endTime,
   supervisors,
+  projectEndDateKey,
   onCreated,
 }: {
   projectId: string;
@@ -201,8 +202,14 @@ function DuplicateToMoreDaysSection({
   startTime: string | null;
   endTime: string | null;
   supervisors: Person[];
+  /** The project's current declared end date (YYYY-MM-DD), if any — when a
+   * duplicate lands on a day after this, the project's end date gets pushed
+   * out to match, so it stays a true reflection of the last scheduled day
+   * rather than going stale the moment you schedule past it. */
+  projectEndDateKey: string | null;
   onCreated: (assignments: ScheduleDayAssignment[]) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [fallbackSupervisorId, setFallbackSupervisorId] = useState("");
   // Starts the day AFTER the card that's open — that day already has
@@ -305,6 +312,23 @@ function DuplicateToMoreDaysSection({
       onCreated(created);
       setOpen(false);
       setPickedKeys(new Set());
+      // Duplicated past the project's declared end date — push it out to the
+      // latest day just scheduled, best-effort (the duplicate itself already
+      // succeeded above regardless of whether this follow-up does).
+      const latestKey = sortedKeys[sortedKeys.length - 1]!;
+      if (!projectEndDateKey || latestKey > projectEndDateKey) {
+        try {
+          const patchRes = await fetch(`/api/erp/projects/${projectId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ projectEndDate: latestKey }),
+          });
+          if (patchRes.ok) router.refresh();
+        } catch {
+          // leave the project's end date as-is; the duplicated days are
+          // already saved, this just skips the follow-up date bump
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to duplicate");
     } finally {
@@ -500,6 +524,12 @@ export function SchedulePlanner({
   // day somewhere else on the calendar, not touching the project's overall
   // start/end date, which is a different, project-wide field.
   const [eventKind, setEventKind] = useState<"project" | "planned">("project");
+  // Only meaningful for eventKind "project" — which of the project's own
+  // start/end dates this particular occurrence is, so the card can say so
+  // explicitly instead of just showing two blank-looking date fields. Null
+  // for a "planned" card (a single day doesn't have a start/end role) or
+  // when opened some other way with no role context.
+  const [eventRole, setEventRole] = useState<"start" | "end" | null>(null);
   const [eventAssignmentId, setEventAssignmentId] = useState<string | null>(null);
   const [eventPlannedDate, setEventPlannedDate] = useState("");
   const [eventPlannedStartTime, setEventPlannedStartTime] = useState("");
@@ -539,8 +569,9 @@ export function SchedulePlanner({
   const [eventWorkerWarning, setEventWorkerWarning] = useState<string | null>(null);
   const [deletingEventWorkerId, setDeletingEventWorkerId] = useState<string | null>(null);
 
-  function openEventPopover(k: string, p: ScheduleProject, assignment?: ScheduleDayAssignment) {
+  function openEventPopover(k: string, p: ScheduleProject, assignment?: ScheduleDayAssignment, role?: "start" | "end") {
     setEventPopoverKey(`${k}:${p.id}`);
+    setEventRole(role ?? null);
     if (assignment) {
       setEventKind("planned");
       setEventAssignmentId(assignment.id);
@@ -873,6 +904,7 @@ export function SchedulePlanner({
             startTime={existingAssignment?.startTime ?? null}
             endTime={existingAssignment?.endTime ?? null}
             supervisors={supervisors}
+            projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
             onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
           />
 
@@ -1211,11 +1243,19 @@ export function SchedulePlanner({
               startTime={eventPlannedStartTime || null}
               endTime={eventPlannedEndTime || null}
               supervisors={supervisors}
+              projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
               onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
             />
           </div>
         ) : (
           <div className="mt-2 space-y-1.5">
+            {eventRole ? (
+              <p className="rounded bg-amber-50 px-1.5 py-1 text-[10px] font-medium text-amber-800">
+                {eventRole === "end"
+                  ? "This is the project's scheduled end date."
+                  : "This is the project's scheduled start date."}
+              </p>
+            ) : null}
             <label className="block text-[10px] font-medium text-gray-500">
               Start date
               <input
@@ -1234,6 +1274,21 @@ export function SchedulePlanner({
                 className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
               />
             </label>
+            <DuplicateToMoreDaysSection
+              projectId={p.id}
+              fromDateKey={k}
+              supervisorUserId={eventDaySupervisorId}
+              projectManagerUserId={eventDayPmId}
+              sovItemIds={eventSovPicks}
+              scopeItems={eventScopePicks}
+              changeOrderIds={eventCoPicks}
+              comment={eventComment}
+              startTime={null}
+              endTime={null}
+              supervisors={supervisors}
+              projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
+              onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
+            />
           </div>
         )}
 
@@ -2067,7 +2122,7 @@ export function SchedulePlanner({
                                 setDraggingChip(null);
                                 setDragOverDayKey(null);
                               }}
-                              onClick={() => openEventPopover(k, p)}
+                              onClick={() => openEventPopover(k, p, undefined, role)}
                               className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${projectStatusChipClass(p.status)}`}
                             >
                               <span aria-hidden>⚠</span>
@@ -2105,7 +2160,7 @@ export function SchedulePlanner({
                               setDraggingChip(null);
                               setDragOverDayKey(null);
                             }}
-                            onClick={() => openEventPopover(k, p)}
+                            onClick={() => openEventPopover(k, p, undefined, role)}
                             className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
                           >
                             <ProjectStatusIcon status={p.status} />

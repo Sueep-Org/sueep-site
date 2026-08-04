@@ -53,6 +53,7 @@ type ChangeOrderLine = {
   actualMaterialCents: number | null;
   materialEntries: { costCents: number }[];
   laborers: LaborLine[];
+  contractorAssignments: { costCents: number | null }[];
 };
 
 export type ProjectActualsInput = ProjectMarginInput & { changeOrders: ChangeOrderLine[] };
@@ -90,7 +91,8 @@ export async function computeProjectActualsWithChangeOrders(
     }, 0);
     const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
       const lab = otAwareLaborCents(co.laborers, otSplits);
-      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0));
+      const contractorCost = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
+      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0)) + contractorCost;
     }, 0);
 
     const contractValueCents =

@@ -100,6 +100,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           endDate: true,
           notes: true,
           contractor: { select: { name: true } },
+          sovItems: { select: { id: true, description: true, scheduledValueCents: true } },
         },
       },
       building: { select: { id: true, name: true } },
@@ -130,6 +131,16 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           laborers: {
             select: { id: true, employeeId: true, name: true, role: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
             orderBy: { workDate: "desc" },
+          },
+          contractorAssignments: {
+            select: {
+              costCents: true,
+              role: true,
+              startDate: true,
+              endDate: true,
+              notes: true,
+              contractor: { select: { name: true } },
+            },
           },
         },
         orderBy: { createdAt: "desc" },
@@ -205,7 +216,8 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
     const coEstLaborCents = qualifyingCOs.reduce((s, co) => s + (co.estLaborCents ?? 0), 0);
     const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
       const lab = otAwareLaborCents(co.laborers, otSplits);
-      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0));
+      const contractorCost = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
+      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0)) + contractorCost;
     }, 0);
     const coEstHours = qualifyingCOs.reduce((s, co) => s + (co.estHours ?? 0), 0);
     const coActualHours = qualifyingCOs.reduce((s, co) => {
@@ -334,6 +346,19 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
         })),
         laborCostCents: otAwareLaborCents(co.laborers, otSplits),
         materialCostCents: co.materialEntries.reduce((s, e) => s + e.costCents, 0),
+        contractorCostCents: co.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0),
+        contractorEntries: co.contractorAssignments.map((a) => ({
+          name: a.contractor.name,
+          role: a.role ?? null,
+          startDate: a.startDate ? a.startDate.toISOString() : null,
+          endDate: a.endDate ? a.endDate.toISOString() : null,
+          costCents: a.costCents ?? null,
+          notes: a.notes ?? null,
+          // Change-order contractor assignments have no SOV linkage (only
+          // regular project-level ones do) — always empty here so the
+          // ContractorTable's Notes column keeps rendering for COs.
+          sovItems: [] as { id: string; description: string; scheduledValueCents: number }[],
+        })),
       })),
       contractorEntries: p.contractorAssignments.map((a) => ({
         name: a.contractor.name,
@@ -342,6 +367,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
         endDate: a.endDate ? a.endDate.toISOString() : null,
         costCents: a.costCents ?? null,
         notes: a.notes ?? null,
+        sovItems: a.sovItems.map((s) => ({ id: s.id, description: s.description, scheduledValueCents: s.scheduledValueCents })),
       })),
     };
   });

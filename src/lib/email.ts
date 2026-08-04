@@ -257,9 +257,9 @@ export function buildWorkOrderNotificationEmailHtml(params: {
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">Work Order Created</h2>
+      <h2 style="margin-bottom:12px;color:#E73C6E">Job Brief</h2>
       <p>Hi ${escapeHtml(params.recipientName)},</p>
-      <p>A work order has been created for the following project and assigned to you for review.</p>
+      <p>A job brief has been created for the following project and assigned to you for review.</p>
       <p><strong>Project Name:</strong> ${escapeHtml(params.projectName)}</p>
       <p><strong>Site Address:</strong> ${escapeHtml(params.siteAddress || "—")}</p>
       ${contactsBlock}

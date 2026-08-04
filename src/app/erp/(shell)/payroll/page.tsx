@@ -72,6 +72,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
             laborers: {
               select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true },
             },
+            contractorAssignments: { select: { costCents: true } },
           },
         },
       },

@@ -72,7 +72,7 @@ export async function POST(req: Request, ctx: Ctx) {
   try {
     await sendEmail({
       to: employee.email,
-      subject: `Work Order: ${projectName}`,
+      subject: `Job Brief: ${projectName}`,
       html,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });

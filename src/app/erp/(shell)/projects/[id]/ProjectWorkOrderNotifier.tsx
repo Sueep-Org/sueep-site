@@ -326,7 +326,7 @@ export function ProjectWorkOrderNotifier({
   return (
     <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Work Order</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Job Brief</h2>
         {lastSentToName && lastSentAt && (
           <span className="text-xs text-gray-400">
             Last sent to <span className="font-medium text-gray-600">{lastSentToName}</span>{" "}
@@ -335,7 +335,7 @@ export function ProjectWorkOrderNotifier({
         )}
       </div>
 
-      {/* Work order fields */}
+      {/* Job brief fields */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls} htmlFor="wo-project-name">Project Name</label>
@@ -471,14 +471,14 @@ export function ProjectWorkOrderNotifier({
           </div>
           <div className="flex flex-col gap-2">
             {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
-            {sendSuccess && <p className="text-xs text-green-600">Work order sent.</p>}
+            {sendSuccess && <p className="text-xs text-green-600">Job brief sent.</p>}
             <button
               type="button"
               onClick={onSend}
               disabled={sending || !selectedEmployeeId}
               className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              {sending ? "Sending…" : "Send Work Order"}
+              {sending ? "Sending…" : "Send Job Brief"}
             </button>
           </div>
         </div>
