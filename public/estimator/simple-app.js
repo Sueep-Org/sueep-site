@@ -3651,6 +3651,7 @@ async function initApp(){
   let _deletedPhaseIds = new Set();
   let _expectedDaysManual = false;
   let _phasesLocked = true;
+  let _analysisMaterialsManual = false;
 
   // Painting phases
   const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting', 'Touch Up Painting'];
@@ -3753,6 +3754,10 @@ async function initApp(){
     _deletedPhaseIds = new Set();
   }
 
+  function _calcProfitAmount(subtotal, materials, profitRate) {
+    return (subtotal + materials) * profitRate;
+  }
+
   function _calcPhase(p, rates) {
     const crew = p.crew || [];
     let cleanersPay = 0, foremanPay = 0, assistantPay = 0, painterPay = 0, pmPay = 0;
@@ -3775,9 +3780,9 @@ async function initApp(){
     const materials = p.materials || 0;
     const subtotal = laborCost;
     const oh = subtotal * rates.overhead;
-    const pft = subtotal * rates.profit;
+    const pft = _calcProfitAmount(subtotal, materials, rates.profit);
     const comm = subtotal * rates.commission;
-    const finalPrice = subtotal + oh + pft + comm;
+    const finalPrice = subtotal + materials + oh + pft + comm;
     return { cleanersPay, foremanPay, assistantPay, painterPay, pmPay, laborCost, materials, subtotal, oh, pft, comm, finalPrice };
   }
 
@@ -3842,22 +3847,25 @@ async function initApp(){
 
     const totalPhaseMaterials = PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid))
       .reduce((sum, pid) => sum + (_phaseMaterials[pid] || 0), 0);
-    // keep global materialsInput in sync for save handler compatibility
     const matInput = document.getElementById('materialsInput');
-    if (matInput) matInput.value = totalPhaseMaterials;
+    const materialsForSummary = matInput && matInput.value !== ''
+      ? (parseFloat(matInput.value) || 0)
+      : totalPhaseMaterials;
+    if (matInput && !_analysisMaterialsManual) matInput.value = totalPhaseMaterials;
 
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
-      const totTax = (totSubtotal + totalPhaseMaterials) * (taxPct / 100);
-      const totFinal = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm;
+      const totPftSummary = _calcProfitAmount(totSubtotal, materialsForSummary, profitPct / 100);
+      const totTax = (totSubtotal + materialsForSummary) * (taxPct / 100);
+      const totFinal = totSubtotal + materialsForSummary + totOh + totPftSummary + totComm;
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
-        [`Materials`, totalPhaseMaterials],
+        [`Materials`, materialsForSummary],
         [`Overhead (${overheadPct}%)`, totOh],
-        [`Profit (${profitPct}%)`, totPft],
+        [`Profit (${profitPct}%)`, totPftSummary],
         [`Tax (${taxPct}%)`, totTax],
         [`Commission (${commPct}%)`, totComm],
         [`Final Price`, totFinal],
@@ -4813,15 +4821,16 @@ async function initApp(){
         breakdownDiv.appendChild(table);
 
         const savedMaterials = bd.materials || 0;
+        const totPftSummary = _calcProfitAmount(totSubtotal, savedMaterials, (bd.profit_pct || 0) / 100);
         const totTax = (totSubtotal + savedMaterials) * ((bd.tax_pct || 0) / 100);
-        const totFinal = totSubtotal + savedMaterials + totOh + totPft + totComm;
+        const totFinal = totSubtotal + savedMaterials + totOh + totPftSummary + totComm;
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Subtotal`, totSubtotal],
           [`Materials`, savedMaterials],
           [`Overhead (${bd.overhead_pct || 0}%)`, totOh],
-          [`Profit (${bd.profit_pct || 0}%)`, totPft],
+          [`Profit (${bd.profit_pct || 0}%)`, totPftSummary],
           [`Tax (${bd.tax_pct || 0}%)`, totTax],
           [`Commission (${bd.commission_pct || 0}%)`, totComm],
           [`Final Price`, totFinal],
@@ -5188,6 +5197,14 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
     setVal('materialsInput', _loadedProjectData.labor_breakdown?.materials ?? 0);
+    _analysisMaterialsManual = _loadedProjectData.labor_breakdown?.materials != null;
+    const materialsInput = document.getElementById('materialsInput');
+    if (materialsInput) {
+      materialsInput.oninput = () => {
+        _analysisMaterialsManual = true;
+        _updateCrewCalcs();
+      };
+    }
     _updateCrewCalcs();
 
 
@@ -5459,21 +5476,20 @@ async function initApp(){
       const rates = _getRates();
       const phases = _getPhaseInputs();
 
-      let totLabor = 0, totSubtotalSave = 0, totOhSave = 0, totPftSave = 0, totCommSave = 0;
+      const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
+      const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
+      const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+      let totLabor = 0, totSubtotalSave = 0, totOhSave = 0, totCommSave = 0;
       for (const p of phases) {
         const c = _calcPhase(p, rates);
         totLabor += c.laborCost;
         totSubtotalSave += c.subtotal;
         totOhSave += c.oh;
-        totPftSave += c.pft;
         totCommSave += c.comm;
       }
       const materialsSave = parseFloat(document.getElementById('materialsInput')?.value) || 0;
+      const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
       const totFinalPrice = totSubtotalSave + materialsSave + totOhSave + totPftSave + totCommSave;
-
-      const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
-      const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
-      const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
       const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;

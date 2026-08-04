@@ -487,7 +487,10 @@ export default function EstimatorPage() {
             style={{ display: "none" }}
           >
             {/* Tab bar */}
-            <div id="estimatorTabBar" className="flex items-center border-b border-gray-200 px-6 pt-4">
+            <div
+              id="estimatorTabBar"
+              className="flex items-center border-b border-gray-200 px-6 pt-4"
+            >
               <button
                 id="tabAnalysisBtn"
                 className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
@@ -504,972 +507,1021 @@ export default function EstimatorPage() {
 
             {/* ANALYSIS PANEL */}
             <div id="analysisCard" className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800">
-                Cleaning
-              </h3>
-              <div className="flex gap-2">
-                <button id="refreshDistanceBtn" className="mini-btn">
-                  ↻ Distance
-                </button>
-                <button id="editAnalysisBtn" className="mini-btn">
-                  Edit
-                </button>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-800">
+                  Cleaning
+                </h3>
+                <div className="flex gap-2">
+                  <button id="refreshDistanceBtn" className="mini-btn">
+                    ↻ Distance
+                  </button>
+                  <button id="editAnalysisBtn" className="mini-btn">
+                    Edit
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* READ-ONLY VIEW */}
-            <div id="analysisView">
-              {/* Expected days — single row above address block */}
-              <div className="text-sm mb-4 pb-3 border-b border-gray-100">
-                <span className="text-gray-400 text-xs uppercase tracking-wide">
-                  Expected Days to Complete
-                </span>
-                <div
-                  id="analysisViewExpectedDays"
-                  className="text-gray-800 font-semibold mt-0.5"
-                >
-                  —
-                </div>
-              </div>
-              {/* Address + Drive info */}
-              <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
-                <div>
+              {/* READ-ONLY VIEW */}
+              <div id="analysisView">
+                {/* Expected days — single row above address block */}
+                <div className="text-sm mb-4 pb-3 border-b border-gray-100">
                   <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Start Address
+                    Expected Days to Complete
                   </span>
                   <div
-                    id="analysisViewStartAddress"
+                    id="analysisViewExpectedDays"
                     className="text-gray-800 font-semibold mt-0.5"
                   >
                     —
                   </div>
                 </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Project Address
-                  </span>
-                  <div
-                    id="analysisViewAddress"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  ></div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Distance
-                  </span>
-                  <div
-                    id="detailDistance"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Time
-                  </span>
-                  <div
-                    id="detailDuration"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Transportation
-                  </span>
-                  <div
-                    id="detailTollCost"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-              {/* Labor breakdown table — rendered by JS */}
-              <div id="analysisViewBreakdown" className="mb-4"></div>
-              {/* Summary row */}
-              <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Labor
-                  </span>
-                  <div
-                    id="analysisViewLabor"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Area
-                  </span>
-                  <div
-                    id="analysisViewTotalArea"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Quote
-                  </span>
-                  <div
-                    id="analysisViewQuote"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Labor / SF
-                  </span>
-                  <div
-                    id="analysisViewLaborPerSF"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Gasoline
-                  </span>
-                  <div
-                    id="analysisViewGasoline"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Margin
-                  </span>
-                  <div
-                    id="analysisViewMargin"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* EDIT FORM */}
-            <div id="analysisEditForm" style={{ display: "none" }}>
-              {/* Total Area */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Total Area (SF)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    id="analysisTotalAreaInput"
-                    placeholder="0"
-                    min="0"
-                    step="1"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                  <button
-                    type="button"
-                    id="totalAreaModifyBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                  >
-                    Modify
-                  </button>
-                  <button
-                    type="button"
-                    id="totalAreaResetBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                  >
-                    Reset to auto
-                  </button>
-                </div>
-              </div>
-              {/* Start Address */}
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Start Address
-                </label>
-                <select
-                  id="startAddressSelect"
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
-                >
-                  <option value="default">
-                    Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
-                  </option>
-                  <option value="custom">Custom address…</option>
-                </select>
-                <input
-                  type="text"
-                  id="startAddressInput"
-                  placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
-                  style={{ display: "none" }}
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {/* Project Address */}
-              <div className="mb-3">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Project Address
-                </label>
-                <input
-                  type="text"
-                  id="analysisAddressInput"
-                  placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {/* Drive info (read-only, below address) */}
-              <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Drive Distance
-                  </label>
-                  <div
-                    id="editDriveDistance"
-                    className="text-sm text-gray-600 font-medium mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Drive Time
-                  </label>
-                  <div
-                    id="editDriveTime"
-                    className="text-sm text-gray-600 font-medium mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-              {/* Expected Days to Complete */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Expected Days to Complete
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    id="expectedDaysInput"
-                    placeholder="—"
-                    min="0"
-                    step="1"
-                    readOnly
-                    className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    id="expectedDaysModifyBtn"
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                  >
-                    Modify
-                  </button>
-                  <button
-                    type="button"
-                    id="expectedDaysResetBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                  >
-                    Reset to auto
-                  </button>
-                </div>
-              </div>
-              {/* Hidden inputs keep default values for new crew members */}
-              <input type="hidden" id="cleanerRateInput" defaultValue="22" />
-              <input type="hidden" id="foremanRateInput" defaultValue="220" />
-
-              {/* Area per person per day per phase */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  Area per Person per Day (SF)
-                </label>
-                <div className="flex flex-wrap gap-4">
+                {/* Address + Drive info */}
+                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Rough Cleaning</label>
-                    <input
-                      type="number"
-                      id="roughAreaPerPersonInput"
-                      defaultValue="4000"
-                      min="1"
-                      step="100"
-                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Start Address
+                    </span>
+                    <div
+                      id="analysisViewStartAddress"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Final Cleaning</label>
-                    <input
-                      type="number"
-                      id="finalAreaPerPersonInput"
-                      defaultValue="4000"
-                      min="1"
-                      step="100"
-                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Project Address
+                    </span>
+                    <div
+                      id="analysisViewAddress"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    ></div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Touch Up Cleaning</label>
-                    <input
-                      type="number"
-                      id="touchupAreaPerPersonInput"
-                      defaultValue="4000"
-                      min="1"
-                      step="100"
-                      className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Drive Distance
+                    </span>
+                    <div
+                      id="detailDistance"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Drive Time
+                    </span>
+                    <div
+                      id="detailDuration"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Transportation
+                    </span>
+                    <div
+                      id="detailTollCost"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+                {/* Labor breakdown table — rendered by JS */}
+                <div id="analysisViewBreakdown" className="mb-4"></div>
+                {/* Summary row */}
+                <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Labor
+                    </span>
+                    <div
+                      id="analysisViewLabor"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Area
+                    </span>
+                    <div
+                      id="analysisViewTotalArea"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Quote
+                    </span>
+                    <div
+                      id="analysisViewQuote"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Labor / SF
+                    </span>
+                    <div
+                      id="analysisViewLaborPerSF"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Gasoline
+                    </span>
+                    <div
+                      id="analysisViewGasoline"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Margin
+                    </span>
+                    <div
+                      id="analysisViewMargin"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Phase table — rendered by JS */}
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Phases
-                </span>
-                <button
-                  type="button"
-                  id="regenPhasesBtn"
-                  className="px-3 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                >
-                  ↺ Regenerate from Area
-                </button>
-              </div>
-              <div
-                id="phaseTableContainer"
-                className="mb-4 overflow-x-auto"
-              ></div>
-
-              {/* Calc summary — rendered by JS */}
-              <div id="calcSummaryContainer" className="mb-4"></div>
-
-              {/* Global rates */}
-              <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
-                <div>
+              {/* EDIT FORM */}
+              <div id="analysisEditForm" style={{ display: "none" }}>
+                {/* Total Area */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
-                    Overhead (%)
+                    Total Area (SF)
                   </label>
-                  <input
-                    type="number"
-                    id="overheadInput"
-                    defaultValue="0"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Profit (%)
-                  </label>
-                  <input
-                    type="number"
-                    id="profitInput"
-                    defaultValue="30"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Tax (%)
-                  </label>
-                  <input
-                    type="number"
-                    id="taxInput"
-                    defaultValue="6"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-2">
                     <input
-                      type="text"
-                      id="taxZipInput"
-                      placeholder="ZIP"
-                      maxLength={5}
-                      className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                      type="number"
+                      id="analysisTotalAreaInput"
+                      placeholder="0"
+                      min="0"
+                      step="1"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                     <button
                       type="button"
-                      id="taxZipLookupBtn"
-                      className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                      id="totalAreaModifyBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
                     >
-                      Lookup
+                      Modify
+                    </button>
+                    <button
+                      type="button"
+                      id="totalAreaResetBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                    >
+                      Reset to auto
                     </button>
                   </div>
                 </div>
-                <div>
+                {/* Start Address */}
+                <div className="mb-4">
                   <label className="block text-xs text-gray-500 mb-1">
-                    Commission (%)
+                    Start Address
                   </label>
+                  <select
+                    id="startAddressSelect"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                  >
+                    <option value="default">
+                      Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
+                    </option>
+                    <option value="custom">Custom address…</option>
+                  </select>
                   <input
-                    type="number"
-                    id="commissionInput"
-                    defaultValue="5"
-                    min="0"
-                    step="0.1"
+                    type="text"
+                    id="startAddressInput"
+                    placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
+                    style={{ display: "none" }}
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
                 </div>
-              </div>
+                {/* Project Address */}
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Project Address
+                  </label>
+                  <input
+                    type="text"
+                    id="analysisAddressInput"
+                    placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Drive info (read-only, below address) */}
+                <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Distance
+                    </label>
+                    <div
+                      id="editDriveDistance"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Time
+                    </label>
+                    <div
+                      id="editDriveTime"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+                {/* Expected Days to Complete */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Expected Days to Complete
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      id="expectedDaysInput"
+                      placeholder="—"
+                      min="0"
+                      step="1"
+                      readOnly
+                      className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      id="expectedDaysModifyBtn"
+                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                    >
+                      Modify
+                    </button>
+                    <button
+                      type="button"
+                      id="expectedDaysResetBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                    >
+                      Reset to auto
+                    </button>
+                  </div>
+                </div>
+                {/* Comments */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Comments
+                  </label>
+                  <textarea
+                    id="cleaningCommentsInput"
+                    rows={3}
+                    placeholder="Add any cleaning notes or comments"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Hidden inputs keep default values for new crew members */}
+                <input type="hidden" id="cleanerRateInput" defaultValue="22" />
+                <input type="hidden" id="foremanRateInput" defaultValue="220" />
 
-              {/* Margin — single row */}
-              <div className="mb-3 pt-4 border-t border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Margin ($)
-                </label>
-                <input
-                  type="number"
-                  id="marginInput"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {/* Materials + Gasoline + Toll Cost */}
-              <div className="flex flex-wrap gap-4 mb-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Materials ($)
+                {/* Area per person per day per phase */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Area per Person per Day (SF)
                   </label>
-                  <input
-                    type="number"
-                    id="materialsInput"
-                    placeholder="0.00"
-                    defaultValue="0"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Rough Cleaning
+                      </label>
+                      <input
+                        type="number"
+                        id="roughAreaPerPersonInput"
+                        defaultValue="4000"
+                        min="1"
+                        step="100"
+                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Final Cleaning
+                      </label>
+                      <input
+                        type="number"
+                        id="finalAreaPerPersonInput"
+                        defaultValue="4000"
+                        min="1"
+                        step="100"
+                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Touch Up Cleaning
+                      </label>
+                      <input
+                        type="number"
+                        id="touchupAreaPerPersonInput"
+                        defaultValue="4000"
+                        min="1"
+                        step="100"
+                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Gasoline ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="gasolineInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Toll Cost ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="tollCostInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Driver Cost ($)</label>
-                  <div id="driverCostDisplay" className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700">—</div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Total Transportation ($)</label>
-                  <div id="totalTransportDisplay" className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold">—</div>
-                </div>
-              </div>
 
-              <div className="flex gap-2">
-                <button
-                  id="saveAnalysisBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-                >
-                  Save
-                </button>
-                <button id="cancelAnalysisBtn" className="mini-btn">
-                  Cancel
-                </button>
+                {/* Phase table — rendered by JS */}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Phases
+                  </span>
+                  <button
+                    type="button"
+                    id="regenPhasesBtn"
+                    className="px-3 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                  >
+                    ↺ Regenerate from Area
+                  </button>
+                </div>
+                <div
+                  id="phaseTableContainer"
+                  className="mb-4 overflow-x-auto"
+                ></div>
+
+                {/* Calc summary — rendered by JS */}
+                <div id="calcSummaryContainer" className="mb-4"></div>
+
+                {/* Global rates */}
+                <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Overhead (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="overheadInput"
+                      defaultValue="0"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="profitInput"
+                      defaultValue="30"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Tax (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="taxInput"
+                      defaultValue="6"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                    <div className="flex items-center gap-1 mt-1">
+                      <input
+                        type="text"
+                        id="taxZipInput"
+                        placeholder="ZIP"
+                        maxLength={5}
+                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                      />
+                      <button
+                        type="button"
+                        id="taxZipLookupBtn"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                      >
+                        Lookup
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Commission (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="commissionInput"
+                      defaultValue="5"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Margin — single row */}
+                <div className="mb-3 pt-4 border-t border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Margin ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="marginInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Materials + Gasoline + Toll Cost */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Materials ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="materialsInput"
+                      placeholder="0.00"
+                      defaultValue="0"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Gasoline ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="gasolineInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Toll Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="tollCostInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Driver Cost ($)
+                    </label>
+                    <div
+                      id="driverCostDisplay"
+                      className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Total Transportation ($)
+                    </label>
+                    <div
+                      id="totalTransportDisplay"
+                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    id="saveAnalysisBtn"
+                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  >
+                    Save
+                  </button>
+                  <button id="cancelAnalysisBtn" className="mini-btn">
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-            </div>{/* end analysisCard panel */}
+            {/* end analysisCard panel */}
 
             {/* PAINTING PANEL */}
             <div id="paintingCard" className="p-6" style={{ display: "none" }}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800">
-                Painting
-              </h3>
-              <div className="flex gap-2">
-                <button id="refreshPaintingDistanceBtn" className="mini-btn">
-                  ↻ Distance
-                </button>
-                <button id="editPaintingBtn" className="mini-btn">
-                  Edit
-                </button>
-              </div>
-            </div>
-
-            {/* READ-ONLY VIEW */}
-            <div id="paintingView">
-              <div className="text-sm mb-4 pb-3 border-b border-gray-100">
-                <span className="text-gray-400 text-xs uppercase tracking-wide">
-                  Expected Days to Complete
-                </span>
-                <div
-                  id="paintingViewExpectedDays"
-                  className="text-gray-800 font-semibold mt-0.5"
-                >
-                  —
-                </div>
-              </div>
-              <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Start Address
-                  </span>
-                  <div
-                    id="paintingViewStartAddress"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Project Address
-                  </span>
-                  <div
-                    id="paintingViewAddress"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Distance
-                  </span>
-                  <div
-                    id="paintingDetailDistance"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Drive Time
-                  </span>
-                  <div
-                    id="paintingDetailDuration"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Transportation
-                  </span>
-                  <div
-                    id="paintingDetailTollCost"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-              <div id="paintingViewBreakdown" className="mb-4"></div>
-              <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Labor
-                  </span>
-                  <div
-                    id="paintingViewLabor"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Total Area
-                  </span>
-                  <div
-                    id="paintingViewTotalArea"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Quote
-                  </span>
-                  <div
-                    id="paintingViewQuote"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Labor / SF
-                  </span>
-                  <div
-                    id="paintingViewLaborPerSF"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Gasoline
-                  </span>
-                  <div
-                    id="paintingViewGasoline"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-400 text-xs uppercase tracking-wide">
-                    Margin
-                  </span>
-                  <div
-                    id="paintingViewMargin"
-                    className="text-gray-800 font-semibold mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* EDIT FORM */}
-            <div id="paintingEditForm" style={{ display: "none" }}>
-              {/* Total Area */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Total Area (SF)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    id="paintingTotalAreaInput"
-                    placeholder="0"
-                    min="0"
-                    step="1"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                  <button
-                    type="button"
-                    id="paintingTotalAreaModifyBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                  >
-                    Modify
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-800">
+                  Painting
+                </h3>
+                <div className="flex gap-2">
+                  <button id="refreshPaintingDistanceBtn" className="mini-btn">
+                    ↻ Distance
                   </button>
-                  <button
-                    type="button"
-                    id="paintingTotalAreaResetBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                  >
-                    Reset to auto
-                  </button>
-                </div>
-              </div>
-              {/* Start Address */}
-              <div className="mb-4">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Start Address
-                </label>
-                <select
-                  id="paintingStartAddressSelect"
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
-                >
-                  <option value="default">
-                    Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
-                  </option>
-                  <option value="custom">Custom address…</option>
-                </select>
-                <input
-                  type="text"
-                  id="paintingStartAddressInput"
-                  placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
-                  style={{ display: "none" }}
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {/* Project Address */}
-              <div className="mb-3">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Project Address
-                </label>
-                <input
-                  type="text"
-                  id="paintingAddressInput"
-                  placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {/* Drive info */}
-              <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Drive Distance
-                  </label>
-                  <div
-                    id="paintingEditDriveDistance"
-                    className="text-sm text-gray-600 font-medium mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Drive Time
-                  </label>
-                  <div
-                    id="paintingEditDriveTime"
-                    className="text-sm text-gray-600 font-medium mt-0.5"
-                  >
-                    —
-                  </div>
-                </div>
-              </div>
-              {/* Expected Days */}
-              <div className="mb-4 pb-4 border-b border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Expected Days to Complete
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    id="paintingExpectedDaysInput"
-                    placeholder="—"
-                    min="0"
-                    step="1"
-                    readOnly
-                    className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    id="paintingExpectedDaysModifyBtn"
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                  >
-                    Modify
-                  </button>
-                  <button
-                    type="button"
-                    id="paintingExpectedDaysResetBtn"
-                    style={{ display: "none" }}
-                    className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                  >
-                    Reset to auto
+                  <button id="editPaintingBtn" className="mini-btn">
+                    Edit
                   </button>
                 </div>
               </div>
 
-              <input
-                type="hidden"
-                id="paintingCleanerRateInput"
-                defaultValue="22"
-              />
-              <input
-                type="hidden"
-                id="paintingForemanRateInput"
-                defaultValue="220"
-              />
-
-              {/* Phase table */}
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Phases
-                </span>
-                <button
-                  type="button"
-                  id="paintingRegenPhasesBtn"
-                  className="px-3 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                >
-                  ↺ Regenerate from Area
-                </button>
+              {/* READ-ONLY VIEW */}
+              <div id="paintingView">
+                <div className="text-sm mb-4 pb-3 border-b border-gray-100">
+                  <span className="text-gray-400 text-xs uppercase tracking-wide">
+                    Expected Days to Complete
+                  </span>
+                  <div
+                    id="paintingViewExpectedDays"
+                    className="text-gray-800 font-semibold mt-0.5"
+                  >
+                    —
+                  </div>
+                </div>
+                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Start Address
+                    </span>
+                    <div
+                      id="paintingViewStartAddress"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Project Address
+                    </span>
+                    <div
+                      id="paintingViewAddress"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Drive Distance
+                    </span>
+                    <div
+                      id="paintingDetailDistance"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Drive Time
+                    </span>
+                    <div
+                      id="paintingDetailDuration"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Transportation
+                    </span>
+                    <div
+                      id="paintingDetailTollCost"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+                <div id="paintingViewBreakdown" className="mb-4"></div>
+                <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Labor
+                    </span>
+                    <div
+                      id="paintingViewLabor"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Total Area
+                    </span>
+                    <div
+                      id="paintingViewTotalArea"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Quote
+                    </span>
+                    <div
+                      id="paintingViewQuote"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Labor / SF
+                    </span>
+                    <div
+                      id="paintingViewLaborPerSF"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Gasoline
+                    </span>
+                    <div
+                      id="paintingViewGasoline"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide">
+                      Margin
+                    </span>
+                    <div
+                      id="paintingViewMargin"
+                      className="text-gray-800 font-semibold mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div
-                id="paintingPhaseTableContainer"
-                className="mb-4 overflow-x-auto"
-              ></div>
-              <div id="paintingCalcSummaryContainer" className="mb-4"></div>
 
-              {/* Global rates */}
-              <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
-                <div>
+              {/* EDIT FORM */}
+              <div id="paintingEditForm" style={{ display: "none" }}>
+                {/* Total Area */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
-                    Overhead (%)
+                    Total Area (SF)
                   </label>
-                  <input
-                    type="number"
-                    id="paintingOverheadInput"
-                    defaultValue="0"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Profit (%)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingProfitInput"
-                    defaultValue="30"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Tax (%)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingTaxInput"
-                    defaultValue="6"
-                    min="0"
-                    step="0.1"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-2">
                     <input
-                      type="text"
-                      id="paintingTaxZipInput"
-                      placeholder="ZIP"
-                      maxLength={5}
-                      className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                      type="number"
+                      id="paintingTotalAreaInput"
+                      placeholder="0"
+                      min="0"
+                      step="1"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                     <button
                       type="button"
-                      id="paintingTaxZipLookupBtn"
-                      className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                      id="paintingTotalAreaModifyBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
                     >
-                      Lookup
+                      Modify
+                    </button>
+                    <button
+                      type="button"
+                      id="paintingTotalAreaResetBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                    >
+                      Reset to auto
                     </button>
                   </div>
                 </div>
-                <div>
+                {/* Start Address */}
+                <div className="mb-4">
                   <label className="block text-xs text-gray-500 mb-1">
-                    Commission (%)
+                    Start Address
                   </label>
+                  <select
+                    id="paintingStartAddressSelect"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                  >
+                    <option value="default">
+                      Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
+                    </option>
+                    <option value="custom">Custom address…</option>
+                  </select>
                   <input
-                    type="number"
-                    id="paintingCommissionInput"
-                    defaultValue="5"
-                    min="0"
-                    step="0.1"
+                    type="text"
+                    id="paintingStartAddressInput"
+                    placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
+                    style={{ display: "none" }}
                     className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
                 </div>
-              </div>
+                {/* Project Address */}
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Project Address
+                  </label>
+                  <input
+                    type="text"
+                    id="paintingAddressInput"
+                    placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Drive info */}
+                <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Distance
+                    </label>
+                    <div
+                      id="paintingEditDriveDistance"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Time
+                    </label>
+                    <div
+                      id="paintingEditDriveTime"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+                {/* Expected Days */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Expected Days to Complete
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      id="paintingExpectedDaysInput"
+                      placeholder="—"
+                      min="0"
+                      step="1"
+                      readOnly
+                      className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      id="paintingExpectedDaysModifyBtn"
+                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                    >
+                      Modify
+                    </button>
+                    <button
+                      type="button"
+                      id="paintingExpectedDaysResetBtn"
+                      style={{ display: "none" }}
+                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                    >
+                      Reset to auto
+                    </button>
+                  </div>
+                </div>
 
-              {/* Margin */}
-              <div className="mb-3 pt-4 border-t border-gray-100">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Margin ($)
-                </label>
                 <input
-                  type="number"
-                  id="paintingMarginInput"
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  type="hidden"
+                  id="paintingCleanerRateInput"
+                  defaultValue="22"
                 />
-              </div>
-              {/* Materials + Gasoline + Toll Cost + Driver Cost + Total Transportation */}
-              <div className="flex flex-wrap gap-4 mb-4">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Materials ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingMaterialsInput"
-                    placeholder="0.00"
-                    defaultValue="0"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Gasoline ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingGasolineInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Toll Cost ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingTollCostInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Driver Cost ($)</label>
-                  <div id="paintingDriverCostDisplay" className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700">—</div>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Total Transportation ($)</label>
-                  <div id="paintingTotalTransportDisplay" className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold">—</div>
-                </div>
-              </div>
+                <input
+                  type="hidden"
+                  id="paintingForemanRateInput"
+                  defaultValue="220"
+                />
 
-              <div className="flex gap-2">
-                <button
-                  id="savePaintingBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-                >
-                  Save
-                </button>
-                <button id="cancelPaintingBtn" className="mini-btn">
-                  Cancel
-                </button>
+                {/* Phase table */}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Phases
+                  </span>
+                  <button
+                    type="button"
+                    id="paintingRegenPhasesBtn"
+                    className="px-3 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                  >
+                    ↺ Regenerate from Area
+                  </button>
+                </div>
+                <div
+                  id="paintingPhaseTableContainer"
+                  className="mb-4 overflow-x-auto"
+                ></div>
+                <div id="paintingCalcSummaryContainer" className="mb-4"></div>
+
+                {/* Global rates */}
+                <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Overhead (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingOverheadInput"
+                      defaultValue="0"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingProfitInput"
+                      defaultValue="30"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Tax (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingTaxInput"
+                      defaultValue="6"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                    <div className="flex items-center gap-1 mt-1">
+                      <input
+                        type="text"
+                        id="paintingTaxZipInput"
+                        placeholder="ZIP"
+                        maxLength={5}
+                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                      />
+                      <button
+                        type="button"
+                        id="paintingTaxZipLookupBtn"
+                        className="px-2 py-1 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                      >
+                        Lookup
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Commission (%)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingCommissionInput"
+                      defaultValue="5"
+                      min="0"
+                      step="0.1"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Margin */}
+                <div className="mb-3 pt-4 border-t border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Margin ($)
+                  </label>
+                  <input
+                    type="number"
+                    id="paintingMarginInput"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Materials + Gasoline + Toll Cost + Driver Cost + Total Transportation */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Materials ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingMaterialsInput"
+                      placeholder="0.00"
+                      defaultValue="0"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Gasoline ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingGasolineInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Toll Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingTollCostInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Driver Cost ($)
+                    </label>
+                    <div
+                      id="paintingDriverCostDisplay"
+                      className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Total Transportation ($)
+                    </label>
+                    <div
+                      id="paintingTotalTransportDisplay"
+                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    id="savePaintingBtn"
+                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  >
+                    Save
+                  </button>
+                  <button id="cancelPaintingBtn" className="mini-btn">
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-            </div>{/* end paintingCard panel */}
-          </div>{/* end estimatorTabCard */}
+            {/* end paintingCard panel */}
+          </div>
+          {/* end estimatorTabCard */}
 
           {/* CHANGE ORDER CARD */}
           <div
