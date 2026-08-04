@@ -5618,25 +5618,23 @@ async function initApp(){
       const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
       const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
       const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
-      let totLabor = 0, totSubtotalSave = 0, totOhSave = 0, totCommSave = 0;
+      let totLabor = 0, totSubtotalSave = 0;
       for (const p of phases) {
         const c = _calcPhase(p, rates);
         totLabor += c.laborCost;
         totSubtotalSave += c.subtotal;
-        totOhSave += c.oh;
-        totCommSave += c.comm;
       }
       const materialsSave = parseFloat(document.getElementById('materialsInput')?.value) || 0;
-      const gasolineVal = document.getElementById('gasolineInput')?.value;
-      const gasolineSave = gasolineVal !== '' && gasolineVal !== undefined ? parseFloat(gasolineVal) || 0 : 0;
+      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+      const gasolineInputValue = document.getElementById('gasolineInput')?.value;
+      const gasolineSave = gasolineInputValue !== '' && gasolineInputValue !== undefined ? parseFloat(gasolineInputValue) || 0 : 0;
       const markupBaseSave = totSubtotalSave + materialsSave;
-      const totOhSave = markupBaseSave * (overheadPct / 100);
-      const totCommSave = markupBaseSave * (commPct / 100);
+      const ohSave = markupBaseSave * (overheadPct / 100);
+      const commSave = markupBaseSave * (commPct / 100);
       const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
-      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + totOhSave + totPftSave + totCommSave;
+      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + ohSave + totPftSave + commSave;
       const totTaxSave = taxBaseSave * (taxPct / 100);
       const totFinalPrice = taxBaseSave + totTaxSave;
-      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
@@ -5660,7 +5658,6 @@ async function initApp(){
       }
       const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
       const prevAddr = _loadedProjectData.address || '';
-      const gasolineVal = document.getElementById('gasolineInput')?.value;
       const tollCostVal = document.getElementById('tollCostInput')?.value;
       const marginVal = document.getElementById('marginInput')?.value;
       const startSel = document.getElementById('startAddressSelect');
@@ -5674,7 +5671,7 @@ async function initApp(){
         start_address: startAddrVal || null,
       };
       if (areaVal !== '' && areaVal !== undefined) body.total_area = parseFloat(areaVal) ?? null;
-      if (gasolineVal !== '' && gasolineVal !== undefined) body.gasoline = parseFloat(gasolineVal) ?? null;
+      if (gasolineInputValue !== '' && gasolineInputValue !== undefined) body.gasoline = parseFloat(gasolineInputValue) ?? null;
       if (tollCostVal !== '' && tollCostVal !== undefined) body.toll_cost = parseFloat(tollCostVal) ?? null;
       const expectedDaysVal = document.getElementById('expectedDaysInput')?.value;
       if (expectedDaysVal !== '' && expectedDaysVal !== undefined) body.expected_days = parseInt(expectedDaysVal) || null;
