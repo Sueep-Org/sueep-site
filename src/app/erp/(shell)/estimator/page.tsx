@@ -1012,6 +1012,19 @@ export default function EstimatorPage() {
                       —
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Cost/Mile
+                    </label>
+                    <input
+                      type="number"
+                      id="costPerMileInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
                 </div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
@@ -1503,6 +1516,19 @@ export default function EstimatorPage() {
                     >
                       —
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Cost/Mile
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingCostPerMileInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
                   </div>
                 </div>
 

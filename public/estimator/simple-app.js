@@ -297,6 +297,30 @@ async function initApp(){
     return `estimator_project_aggregate_overrides_${projectId}`;
   }
 
+  function getCostPerMileStorageKey(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    return `estimator_${card}_cost_per_mile_${projectId}`;
+  }
+
+  function persistCostPerMileValue(value, projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    try {
+      const key = getCostPerMileStorageKey(projectId, card);
+      if (value === '' || value == null) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, String(value));
+      }
+    } catch (_) {}
+  }
+
+  function restoreCostPerMileValue(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    try {
+      const stored = localStorage.getItem(getCostPerMileStorageKey(projectId, card));
+      return stored == null ? null : stored;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function persistProjectAggregateOverrides() {
     try {
       localStorage.setItem(getProjectAggregateStorageKey(), JSON.stringify(_projectAggregateOverrides));
@@ -3946,6 +3970,12 @@ async function initApp(){
       ? (parseFloat(gasInput.value) || 0)
       : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
     const tollCost = parseFloat(document.getElementById('tollCostInput')?.value) || 0;
+    const costPerMileInput = document.getElementById('costPerMileInput');
+    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
+    if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
+      costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
+    }
     const total = driverCost + gasoline + tollCost;
 
     const driverEl = document.getElementById('driverCostDisplay');
@@ -3970,6 +4000,12 @@ async function initApp(){
       ? (parseFloat(gasInput.value) || 0)
       : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
+    const costPerMileInput = document.getElementById('paintingCostPerMileInput');
+    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
+    if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
+      costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
+    }
     const total = driverCost + gasoline + tollCost;
     const driverEl = document.getElementById('paintingDriverCostDisplay');
     const totalEl  = document.getElementById('paintingTotalTransportDisplay');
@@ -5311,6 +5347,25 @@ async function initApp(){
         _updateTransportCosts();
       });
     }
+    const costPerMileInput = document.getElementById('costPerMileInput');
+    if (costPerMileInput) {
+      const savedCostPerMile = _loadedProjectData?.cost_per_mile;
+      const restoredCostPerMile = restoreCostPerMileValue(activeProjectId, 'analysis');
+      const initialCostPerMile = savedCostPerMile != null && savedCostPerMile !== ''
+        ? savedCostPerMile
+        : (restoredCostPerMile != null && restoredCostPerMile !== '' ? restoredCostPerMile : null);
+      if (initialCostPerMile != null && initialCostPerMile !== '') {
+        costPerMileInput.dataset.manual = 'true';
+        costPerMileInput.value = parseFloat(initialCostPerMile).toFixed(2);
+      } else {
+        costPerMileInput.dataset.manual = 'false';
+        costPerMileInput.value = '';
+      }
+      costPerMileInput.addEventListener('input', () => {
+        costPerMileInput.dataset.manual = 'true';
+        _updateTransportCosts();
+      });
+    }
     setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
     _updateCrewCalcs();
 
@@ -5476,6 +5531,25 @@ async function initApp(){
         _updatePaintingTransportCosts();
       });
     }
+    const costPerMileInput = document.getElementById('paintingCostPerMileInput');
+    if (costPerMileInput) {
+      const savedCostPerMile = bd?.cost_per_mile;
+      const restoredCostPerMile = restoreCostPerMileValue(activeProjectId, 'painting');
+      const initialCostPerMile = savedCostPerMile != null && savedCostPerMile !== ''
+        ? savedCostPerMile
+        : (restoredCostPerMile != null && restoredCostPerMile !== '' ? restoredCostPerMile : null);
+      if (initialCostPerMile != null && initialCostPerMile !== '') {
+        costPerMileInput.dataset.manual = 'true';
+        costPerMileInput.value = parseFloat(initialCostPerMile).toFixed(2);
+      } else {
+        costPerMileInput.dataset.manual = 'false';
+        costPerMileInput.value = '';
+      }
+      costPerMileInput.addEventListener('input', () => {
+        costPerMileInput.dataset.manual = 'true';
+        _updatePaintingTransportCosts();
+      });
+    }
     if (daysInput) {
       daysInput.oninput = () => {
         if (daysInput.readOnly) return;
@@ -5563,6 +5637,7 @@ async function initApp(){
     const margin   = parseFloat(document.getElementById('paintingMarginInput')?.value) || 0;
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
+    const costPerMile = parseFloat(document.getElementById('paintingCostPerMileInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
     const expectedDays = _getPaintingExpectedDaysFromPhases() || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
@@ -5589,7 +5664,7 @@ async function initApp(){
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, cost_per_mile: costPerMile, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
@@ -5602,7 +5677,10 @@ async function initApp(){
       _loadedProjectData = updated;
       if (_loadedProjectData) {
         _loadedProjectData.total_area = totalArea > 0 ? totalArea : _loadedProjectData.total_area;
+        _loadedProjectData.painting_breakdown = _loadedProjectData.painting_breakdown || {};
+        _loadedProjectData.painting_breakdown.cost_per_mile = costPerMile;
       }
+      persistCostPerMileValue(costPerMile, activeProjectId, 'painting');
       showPaintingCard(updated);
     } catch (e) {
       alert('Save failed: ' + e.message);
@@ -5635,6 +5713,8 @@ async function initApp(){
       const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
       const gasolineInputValue = document.getElementById('gasolineInput')?.value;
       const gasolineSave = gasolineInputValue !== '' && gasolineInputValue !== undefined ? parseFloat(gasolineInputValue) || 0 : 0;
+      const costPerMileInputValue = document.getElementById('costPerMileInput')?.value;
+      const costPerMileSave = costPerMileInputValue !== '' && costPerMileInputValue !== undefined ? parseFloat(costPerMileInputValue) || 0 : 0;
       const markupBaseSave = totSubtotalSave + materialsSave;
       const ohSave = markupBaseSave * (overheadPct / 100);
       const commSave = markupBaseSave * (commPct / 100);
@@ -5680,6 +5760,7 @@ async function initApp(){
       if (areaVal !== '' && areaVal !== undefined) body.total_area = parseFloat(areaVal) ?? null;
       if (gasolineInputValue !== '' && gasolineInputValue !== undefined) body.gasoline = parseFloat(gasolineInputValue) ?? null;
       if (tollCostVal !== '' && tollCostVal !== undefined) body.toll_cost = parseFloat(tollCostVal) ?? null;
+      if (costPerMileInputValue !== '' && costPerMileInputValue !== undefined) body.cost_per_mile = parseFloat(costPerMileInputValue) ?? null;
       const expectedDaysVal = document.getElementById('expectedDaysInput')?.value;
       if (expectedDaysVal !== '' && expectedDaysVal !== undefined) body.expected_days = parseInt(expectedDaysVal) || null;
       if (marginVal !== '' && marginVal !== undefined) body.margin = parseFloat(marginVal) ?? null;
@@ -5697,6 +5778,8 @@ async function initApp(){
         _loadedProjectData = { ..._loadedProjectData, ...updated };
         if (!_loadedProjectData.labor_breakdown) _loadedProjectData.labor_breakdown = {};
         _loadedProjectData.labor_breakdown.overhead_pct = overheadPct;
+        _loadedProjectData.cost_per_mile = costPerMileSave;
+        persistCostPerMileValue(costPerMileSave, activeProjectId, 'analysis');
         _loadedProjectData.labor_breakdown.profit_pct = profitPct;
         _loadedProjectData.labor_breakdown.tax_pct = taxPct;
         _loadedProjectData.labor_breakdown.commission_pct = commPct;
