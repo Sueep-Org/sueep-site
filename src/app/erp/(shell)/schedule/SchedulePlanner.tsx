@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DayAssignmentModal } from "./DayAssignmentModal";
+import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import {
   addDays,
   dayKey,
@@ -20,7 +21,6 @@ import {
   type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
-import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
@@ -73,6 +73,31 @@ const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
 // buried behind "+N more" the way a low-priority item could be.
 const NEEDS_SUPERVISOR_CHIP_CLASS =
   "flex items-center gap-1 truncate rounded border-2 border-amber-600 bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-950 shadow transition-colors hover:bg-amber-300";
+
+// WIP-vs-complete marker shown on every calendar chip for a project,
+// regardless of which day/occurrence it's rendered on — a project scheduled
+// both Monday and Wednesday reads Project.status off the same live record
+// either day, so marking it COMPLETE updates every chip for it at once, not
+// just the day it was completed on. Complete chips also fade slightly (a
+// glance at a busy day tells done from still-in-progress at a glance).
+function ProjectStatusIcon({ status }: { status: string }) {
+  return status === "COMPLETE" ? (
+    <span aria-hidden title="Complete" className="shrink-0 text-emerald-700">
+      ✓
+    </span>
+  ) : (
+    // Gear — a plain text glyph (not an emoji-presentation character like
+    // 🔧), so no color of its own: it just inherits whichever text color
+    // the chip it's sitting in already uses.
+    <span aria-hidden title="In progress" className="shrink-0">
+      ⚙
+    </span>
+  );
+}
+
+function projectStatusChipClass(status: string): string {
+  return status === "COMPLETE" ? "opacity-60" : "";
+}
 
 // Muted, pastel-ish colors keyed by calendar group — used for the
 // month-calendar chips, which need to read as a scannable legend rather than
@@ -143,16 +168,15 @@ function monthLabel(d: Date): string {
 
 type Person = { id: string; displayName: string };
 
-const REPEAT_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
-
-/** Extends a calendar card (or a logged-labor day) forward by upserting more
- * ProjectDayAssignment rows for it via the same day-assignments endpoint the
- * "Assign to day" modal's repeat/range control uses — one call, starting the
- * day after the card currently open, running through `repeatUntil` on the
- * picked weekdays. For a labor card specifically, this is the only thing it
- * writes: it never touches LaborEntry, so the logged hours it's opened from
- * are never duplicated or altered, only future coverage is scheduled. */
-function RepeatToMoreDaysSection({
+/** Duplicates a calendar card (or a logged-labor day) onto whichever other
+ * days get picked on the mini calendar — they don't need to be consecutive
+ * or follow a weekly pattern, each click just toggles that day in or out of
+ * the batch. One POST to the same day-assignments endpoint the "Assign to
+ * day" modal uses, passing the exact picked dates. For a labor card
+ * specifically, this is the only thing it writes: it never touches
+ * LaborEntry, so the logged hours it's opened from are never duplicated or
+ * altered, only future coverage is scheduled. */
+function DuplicateToMoreDaysSection({
   projectId,
   fromDateKey,
   supervisorUserId,
@@ -182,12 +206,10 @@ function RepeatToMoreDaysSection({
   const [open, setOpen] = useState(false);
   const [fallbackSupervisorId, setFallbackSupervisorId] = useState("");
   // Starts the day AFTER the card that's open — that day already has
-  // whatever this card represents, repeating onto it would just re-upsert
+  // whatever this card represents, duplicating onto it would just re-upsert
   // the same row.
-  const startFromDate = addDays(new Date(`${fromDateKey}T00:00:00.000Z`), 1);
-  const startFromKey = dayKey(startFromDate);
-  const [days, setDays] = useState<number[]>(() => [startFromDate.getUTCDay()]);
-  const [until, setUntil] = useState("");
+  const startFromKey = dayAfter(fromDateKey);
+  const [pickedKeys, setPickedKeys] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -199,40 +221,28 @@ function RepeatToMoreDaysSection({
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
     changeOrderIds.length > 0;
+  const sortedKeys = [...pickedKeys].sort();
 
-  function toggleDay(weekday: number) {
-    setDays((prev) => (prev.includes(weekday) ? prev.filter((d) => d !== weekday) : [...prev, weekday].sort((a, b) => a - b)));
-  }
-
-  let seriesDates: Date[] | null = null;
-  let seriesError = "";
-  if (open && until) {
-    try {
-      seriesDates = computeSeriesDates(startFromDate, new Date(`${until}T00:00:00.000Z`), days);
-      if (seriesDates.length === 0) seriesError = "No dates in range match the selected days";
-    } catch (err) {
-      seriesError = err instanceof SeriesDateRangeError ? err.message : "Invalid date range";
-    }
+  function togglePicked(k: string) {
+    setPickedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
   }
 
   async function handleSave() {
     setError("");
-    if (!until) {
-      setError("Pick an end date");
-      return;
-    }
-    if (days.length === 0) {
-      setError("Pick at least one day of the week");
-      return;
-    }
-    if (seriesError) {
-      setError(seriesError);
+    if (sortedKeys.length === 0) {
+      setError("Pick at least one day on the calendar");
       return;
     }
     if (!hasCoverage) {
-      setError("Pick a supervisor to repeat with");
+      setError("Pick a supervisor to duplicate with");
       return;
     }
+    const isBatch = sortedKeys.length > 1;
     setSaving(true);
     try {
       const res = await fetch("/api/erp/schedule/day-assignments", {
@@ -240,7 +250,7 @@ function RepeatToMoreDaysSection({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           projectId,
-          date: startFromKey,
+          date: sortedKeys[0],
           supervisorUserId: effectiveSupervisorId || undefined,
           projectManagerUserId: projectManagerUserId || undefined,
           startTime: startTime || undefined,
@@ -249,36 +259,54 @@ function RepeatToMoreDaysSection({
           scopeItems: scopeItems.length > 0 ? scopeItems : undefined,
           changeOrderIds: changeOrderIds.length > 0 ? changeOrderIds : undefined,
           comment: comment.trim() || undefined,
-          repeatUntil: until,
-          repeatDays: days,
+          ...(isBatch ? { dates: sortedKeys } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
+        id?: string;
         seriesId?: string;
         assignments?: { id: string }[];
         error?: string;
       };
-      if (!res.ok) throw new Error(data.error || "Failed to repeat");
-      const dateKeys = (seriesDates ?? []).map((d) => dayKey(d));
-      const created: ScheduleDayAssignment[] = (data.assignments ?? []).map((a, i) => ({
-        id: a.id,
-        projectId,
-        dateKey: dateKeys[i]!,
-        supervisorUserId: effectiveSupervisorId || null,
-        projectManagerUserId: projectManagerUserId || null,
-        startTime: startTime || null,
-        endTime: endTime || null,
-        seriesId: data.seriesId ?? null,
-        sovItemIds,
-        scopeItems,
-        changeOrderIds,
-        comment: comment.trim() || null,
-      }));
+      if (!res.ok) throw new Error(data.error || "Failed to duplicate");
+      const created: ScheduleDayAssignment[] = isBatch
+        ? (data.assignments ?? []).map((a, i) => ({
+            id: a.id,
+            projectId,
+            dateKey: sortedKeys[i]!,
+            supervisorUserId: effectiveSupervisorId || null,
+            projectManagerUserId: projectManagerUserId || null,
+            startTime: startTime || null,
+            endTime: endTime || null,
+            seriesId: data.seriesId ?? null,
+            sovItemIds,
+            scopeItems,
+            changeOrderIds,
+            comment: comment.trim() || null,
+          }))
+        : data.id
+        ? [
+            {
+              id: data.id,
+              projectId,
+              dateKey: sortedKeys[0]!,
+              supervisorUserId: effectiveSupervisorId || null,
+              projectManagerUserId: projectManagerUserId || null,
+              startTime: startTime || null,
+              endTime: endTime || null,
+              seriesId: null,
+              sovItemIds,
+              scopeItems,
+              changeOrderIds,
+              comment: comment.trim() || null,
+            },
+          ]
+        : [];
       onCreated(created);
       setOpen(false);
-      setUntil("");
+      setPickedKeys(new Set());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to repeat");
+      setError(err instanceof Error ? err.message : "Failed to duplicate");
     } finally {
       setSaving(false);
     }
@@ -291,40 +319,19 @@ function RepeatToMoreDaysSection({
         onClick={() => setOpen((o) => !o)}
         className="text-[10px] font-medium text-pink-600 hover:underline"
       >
-        {open ? "Cancel repeat" : "Repeat this to more days"}
+        {open ? "Cancel duplicate" : "Duplicate this to more days"}
       </button>
       {open ? (
         <div className="mt-1.5 space-y-1.5">
-          <div>
-            <label className="block text-[9px] text-gray-400">Repeat on</label>
-            <div className="mt-0.5 flex gap-1">
-              {REPEAT_WEEKDAY_LABELS.map((label, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => toggleDay(idx)}
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
-                    days.includes(idx) ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-500 hover:border-pink-400"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="block text-[9px] text-gray-400">
-            Repeat until
-            <input
-              type="date"
-              value={until}
-              min={startFromKey}
-              onChange={(e) => setUntil(e.target.value)}
-              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-            />
-          </label>
+          <MiniCalendarPicker selectedKeys={pickedKeys} onToggle={togglePicked} minDateKey={startFromKey} initialMonthAnchor={startFromKey} />
+          <p className="text-[9px] text-gray-400">
+            {sortedKeys.length === 0
+              ? "Tap the days to duplicate to — they don't need to be in a row."
+              : `${sortedKeys.length} day${sortedKeys.length === 1 ? "" : "s"} picked: ${sortedKeys.join(", ")}`}
+          </p>
           {!hasCoverage ? (
             <label className="block text-[9px] text-gray-400">
-              Supervisor (needed to repeat)
+              Supervisor (needed to duplicate)
               <select
                 value={fallbackSupervisorId}
                 onChange={(e) => setFallbackSupervisorId(e.target.value)}
@@ -343,10 +350,10 @@ function RepeatToMoreDaysSection({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || sortedKeys.length === 0}
             className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
           >
-            {saving ? "Repeating…" : `Repeat starting ${startFromKey}`}
+            {saving ? "Duplicating…" : `Duplicate to ${sortedKeys.length || ""} day${sortedKeys.length === 1 ? "" : "s"}`}
           </button>
         </div>
       ) : null}
@@ -854,7 +861,7 @@ export function SchedulePlanner({
             This is logged, historical labor — it can only be corrected from the project&apos;s Labor log, not from the calendar.
           </p>
 
-          <RepeatToMoreDaysSection
+          <DuplicateToMoreDaysSection
             projectId={p.id}
             fromDateKey={k}
             supervisorUserId={existingAssignment?.supervisorUserId ?? currentSupervisorId(p)}
@@ -1192,7 +1199,7 @@ export function SchedulePlanner({
                 />
               </div>
             </label>
-            <RepeatToMoreDaysSection
+            <DuplicateToMoreDaysSection
               projectId={p.id}
               fromDateKey={k}
               supervisorUserId={eventDaySupervisorId}
@@ -2061,9 +2068,10 @@ export function SchedulePlanner({
                                 setDragOverDayKey(null);
                               }}
                               onClick={() => openEventPopover(k, p)}
-                              className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
+                              className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${projectStatusChipClass(p.status)}`}
                             >
                               <span aria-hidden>⚠</span>
+                              <ProjectStatusIcon status={p.status} />
                               <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
                             </button>
                             {inMonth ? (
@@ -2098,8 +2106,9 @@ export function SchedulePlanner({
                               setDragOverDayKey(null);
                             }}
                             onClick={() => openEventPopover(k, p)}
-                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS}`}
+                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
                           >
+                            <ProjectStatusIcon status={p.status} />
                             <span className="truncate">{p.jobTitle}</span>
                           </button>
                           <button
@@ -2135,8 +2144,9 @@ export function SchedulePlanner({
                             <button
                               type="button"
                               onClick={() => openLaborPopover(k, p)}
-                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
+                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${projectStatusChipClass(p.status)}`}
                             >
+                              <ProjectStatusIcon status={p.status} />
                               <span className="truncate">{p.jobTitle}</span>
                             </button>
                             {renderLaborPopover(k, p)}
@@ -2184,9 +2194,10 @@ export function SchedulePlanner({
                               setDragOverDayKey(null);
                             }}
                             onClick={() => openEventPopover(k, project, assignment)}
-                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`}
+                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(project.status)}`}
                           >
                             {isOverdue ? <span aria-hidden className="shrink-0 text-red-600">⚠</span> : null}
+                            <ProjectStatusIcon status={project.status} />
                             <span className="truncate">{project.jobTitle}</span>
                           </button>
                           {renderEventPopover(k, project)}
@@ -2345,6 +2356,13 @@ export function SchedulePlanner({
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
                 ⚠ = starting soon, needs a supervisor
+              </div>
+            ) : null}
+            {presentGroups.length > 0 ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span aria-hidden>⚙</span>
+                <span aria-hidden className="text-emerald-700">✓</span>
+                = in progress vs. complete (faded)
               </div>
             ) : null}
           </div>

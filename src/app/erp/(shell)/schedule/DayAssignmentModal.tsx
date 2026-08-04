@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { matchesSearchQuery, type ScheduleDayAssignment, type ScheduleWorkerAssignment } from "@/lib/erp/schedule";
-import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { MiniCalendarPicker } from "./MiniCalendarPicker";
 
 type ProjectOption = {
   id: string;
@@ -16,8 +16,6 @@ type ProjectOption = {
   changeOrders: { id: string; title: string }[];
 };
 type Person = { id: string; displayName: string };
-
-const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 function dateLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
@@ -104,16 +102,14 @@ export function DayAssignmentModal({
   const [workerWarning, setWorkerWarning] = useState<string | null>(null);
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
 
-  // A multi-day range and a weekly repeat are the same control here: pick
-  // which weekdays to include and an end date. A Mon-Fri job just means
-  // checking every weekday in between; "every Monday for 8 weeks" means
-  // checking only Monday. Once a series is created in this modal (either by
-  // assigning a supervisor or adding a worker while this is open),
-  // activeSeriesId is reused so later adds in the same session join the
-  // same series instead of creating a new one each time.
+  // Duplicates this same day's assignment onto whichever other days get
+  // picked on the mini calendar below — not necessarily consecutive or a
+  // weekly pattern, just an explicit set of extra days. Once a series is
+  // created in this modal (either by assigning a supervisor or adding a
+  // worker while this is open), activeSeriesId is reused so later adds in
+  // the same session join the same series instead of creating a new one.
   const [repeatOpen, setRepeatOpen] = useState(false);
-  const [repeatDays, setRepeatDays] = useState<number[]>(() => [new Date(`${dateKey}T00:00:00.000Z`).getUTCDay()]);
-  const [repeatUntil, setRepeatUntil] = useState("");
+  const [pickedKeys, setPickedKeys] = useState<Set<string>>(new Set());
   const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
 
   const filteredProjects = projectQuery.trim()
@@ -136,23 +132,17 @@ export function DayAssignmentModal({
     ? contractors.filter((c) => matchesSearchQuery(c.displayName, contractorQuery))
     : contractors;
 
-  function toggleRepeatDay(weekday: number) {
-    setRepeatDays((prev) =>
-      prev.includes(weekday) ? prev.filter((d) => d !== weekday) : [...prev, weekday].sort((a, b) => a - b)
-    );
-  }
+  const allDateKeys = pickedKeys.size > 0 ? [...new Set([dateKey, ...pickedKeys])].sort() : null;
 
-  let seriesDates: Date[] | null = null;
-  let seriesError = "";
-  if (repeatOpen && repeatUntil) {
-    try {
-      seriesDates = computeSeriesDates(new Date(`${dateKey}T00:00:00.000Z`), new Date(`${repeatUntil}T00:00:00.000Z`), repeatDays);
-      if (seriesDates.length === 0) seriesError = "No dates in range match the selected days";
-    } catch (err) {
-      seriesError = err instanceof SeriesDateRangeError ? err.message : "Invalid date range";
-    }
+  function toggleDuplicateDay(k: string) {
+    if (k === dateKey) return; // the anchor day is always included, not toggleable
+    setPickedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
   }
-  const seriesDateKeys = seriesDates?.map((d) => d.toISOString().slice(0, 10)) ?? null;
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -174,13 +164,9 @@ export function DayAssignmentModal({
       setError("End time must be after start time");
       return;
     }
-    if (repeatOpen && seriesError) {
-      setError(seriesError);
-      return;
-    }
     setSaving(true);
     try {
-      const usingSeries = repeatOpen && seriesDateKeys && seriesDateKeys.length > 0;
+      const usingSeries = !!allDateKeys;
       const res = await fetch("/api/erp/schedule/day-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -195,7 +181,7 @@ export function DayAssignmentModal({
           scopeItems: scopePicks.length > 0 ? scopePicks : undefined,
           changeOrderIds: coPicks.length > 0 ? coPicks : undefined,
           comment: comment.trim() || undefined,
-          ...(usingSeries ? { repeatUntil, repeatDays } : {}),
+          ...(usingSeries ? { dates: allDateKeys } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -205,13 +191,13 @@ export function DayAssignmentModal({
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || "Failed to assign");
-      if (usingSeries && seriesDateKeys && data.seriesId && data.assignments) {
+      if (usingSeries && allDateKeys && data.seriesId && data.assignments) {
         setActiveSeriesId(data.seriesId);
         onSeriesCreated(
           data.assignments.map((a, i) => ({
             id: a.id,
             projectId,
-            dateKey: seriesDateKeys[i]!,
+            dateKey: allDateKeys[i]!,
             supervisorUserId: supervisorUserId || null,
             projectManagerUserId: projectManagerUserId || null,
             startTime: startTime || null,
@@ -281,10 +267,6 @@ export function DayAssignmentModal({
       setWorkerError(workerType === "employee" ? "Pick a worker" : "Pick a contractor");
       return;
     }
-    if (repeatOpen && !activeSeriesId && seriesError) {
-      setWorkerError(seriesError);
-      return;
-    }
     if (!force) {
       const conflicts = existingWorkers.filter((w) => {
         if (w.projectId === projectId) return false;
@@ -301,7 +283,7 @@ export function DayAssignmentModal({
     setWorkerWarning(null);
     setAddingWorker(true);
     try {
-      const usingSeries = repeatOpen && (activeSeriesId || (seriesDateKeys && seriesDateKeys.length > 0));
+      const usingSeries = !!(activeSeriesId || allDateKeys);
       const res = await fetch("/api/erp/schedule/worker-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -313,7 +295,7 @@ export function DayAssignmentModal({
           ...(usingSeries
             ? activeSeriesId
               ? { seriesId: activeSeriesId }
-              : { repeatUntil, repeatDays }
+              : { dates: allDateKeys }
             : {}),
         }),
       });
@@ -324,7 +306,7 @@ export function DayAssignmentModal({
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || "Failed to assign worker");
-      if (usingSeries && seriesDateKeys && data.seriesId && data.assignments) {
+      if (usingSeries && allDateKeys && data.seriesId && data.assignments) {
         setActiveSeriesId(data.seriesId);
         onWorkerSeriesCreated(
           data.assignments.map((a, i) => ({
@@ -332,7 +314,7 @@ export function DayAssignmentModal({
             projectId,
             employeeId: workerType === "employee" ? workerId : null,
             contractorId: workerType === "contractor" ? workerId : null,
-            dateKey: seriesDateKeys[i]!,
+            dateKey: allDateKeys[i]!,
             seriesId: data.seriesId!,
           }))
         );
@@ -558,46 +540,22 @@ export function DayAssignmentModal({
               onClick={() => setRepeatOpen((v) => !v)}
               className="flex w-full items-center justify-between text-xs font-medium text-gray-600"
             >
-              <span>Repeat / multi-day range</span>
+              <span>Duplicate to more days</span>
               <span className="text-gray-400">{repeatOpen ? "Hide" : "Set up"}</span>
             </button>
             {repeatOpen ? (
               <div className="mt-2 space-y-2">
-                <div className="flex gap-1">
-                  {WEEKDAY_LABELS.map((label, weekday) => (
-                    <button
-                      key={weekday}
-                      type="button"
-                      onClick={() => toggleRepeatDay(weekday)}
-                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${
-                        repeatDays.includes(weekday)
-                          ? "bg-pink-600 text-white"
-                          : "border border-gray-300 text-gray-500 hover:border-pink-400"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600">Ends on</label>
-                  <input
-                    type="date"
-                    value={repeatUntil}
-                    min={dateKey}
-                    onChange={(e) => setRepeatUntil(e.target.value)}
-                    className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
-                  />
-                </div>
-                {repeatUntil ? (
-                  seriesError ? (
-                    <p className="text-xs text-red-600">{seriesError}</p>
-                  ) : seriesDateKeys ? (
-                    <p className="text-xs text-gray-500">
-                      Applies to {seriesDateKeys.length} day{seriesDateKeys.length === 1 ? "" : "s"}: {dateKey} through {repeatUntil}
-                    </p>
-                  ) : null
-                ) : null}
+                <MiniCalendarPicker
+                  selectedKeys={new Set([dateKey, ...pickedKeys])}
+                  onToggle={toggleDuplicateDay}
+                  minDateKey={dateKey}
+                  initialMonthAnchor={dateKey}
+                />
+                <p className="text-xs text-gray-500">
+                  {pickedKeys.size === 0
+                    ? "This day is always included — tap more days to also duplicate onto, they don't need to be in a row."
+                    : `Duplicates to ${allDateKeys!.length} days: ${allDateKeys!.join(", ")}`}
+                </p>
               </div>
             ) : null}
           </div>
