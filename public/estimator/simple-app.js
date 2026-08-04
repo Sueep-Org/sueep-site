@@ -5197,6 +5197,7 @@ async function initApp(){
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
     setVal('materialsInput', _loadedProjectData.labor_breakdown?.materials ?? 0);
+    setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
     _analysisMaterialsManual = _loadedProjectData.labor_breakdown?.materials != null;
     const materialsInput = document.getElementById('materialsInput');
     if (materialsInput) {
@@ -5318,6 +5319,7 @@ async function initApp(){
       setVal('paintingTollCostInput', bd.toll_cost ?? 0);
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
+      setVal('paintingCommentsInput', bd.comments ?? '');
       if (bd.phases) {
         for (const p of bd.phases) {
           const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
@@ -5445,8 +5447,9 @@ async function initApp(){
     const materials = materialsInput && materialsInput.value !== ''
       ? parseFloat(materialsInput.value) || derived.materials
       : derived.materials;
+    const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address };
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address, comments };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
@@ -5493,6 +5496,7 @@ async function initApp(){
       const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
         foreman_rate: rates.foremanRate,
@@ -5503,6 +5507,7 @@ async function initApp(){
         materials: parseFloat(document.getElementById('materialsInput')?.value) || 0,
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
+        comments,
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
