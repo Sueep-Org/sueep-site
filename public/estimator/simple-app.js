@@ -3652,6 +3652,21 @@ async function initApp(){
   let _expectedDaysManual = false;
   let _phasesLocked = true;
   let _analysisMaterialsManual = false;
+  let _analysisAreaManual = false;
+  let _analysisAreaManualValue = null;
+  const CLEANING_MATERIALS_PER_SF = 57.4;
+  const GASOLINE_PER_DISTANCE = 1.210580204778157;
+
+  function _getCleaningMaterialsDerivedValue(totalArea) {
+    const area = parseFloat(totalArea) || 0;
+    return area > 0 ? area / CLEANING_MATERIALS_PER_SF : 0;
+  }
+
+  function _getDistanceDerivedGasoline(distanceText) {
+    const distance = parseFloat(String(distanceText || '').replace(/[^0-9.\-]/g, ''));
+    if (!Number.isFinite(distance)) return 0;
+    return distance * GASOLINE_PER_DISTANCE;
+  }
 
   // Painting phases
   const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting', 'Touch Up Painting'];
@@ -3779,9 +3794,10 @@ async function initApp(){
     const laborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
     const materials = p.materials || 0;
     const subtotal = laborCost;
-    const oh = subtotal * rates.overhead;
+    const markupBase = subtotal + materials;
+    const oh = markupBase * rates.overhead;
     const pft = _calcProfitAmount(subtotal, materials, rates.profit);
-    const comm = subtotal * rates.commission;
+    const comm = markupBase * rates.commission;
     const finalPrice = subtotal + materials + oh + pft + comm;
     return { cleanersPay, foremanPay, assistantPay, painterPay, pmPay, laborCost, materials, subtotal, oh, pft, comm, finalPrice };
   }
@@ -3856,18 +3872,26 @@ async function initApp(){
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
+      const markUpBase = totSubtotal + materialsForSummary;
       const totPftSummary = _calcProfitAmount(totSubtotal, materialsForSummary, profitPct / 100);
-      const totTax = (totSubtotal + materialsForSummary) * (taxPct / 100);
-      const totFinal = totSubtotal + materialsForSummary + totOh + totPftSummary + totComm;
+      const totOhSummary = markUpBase * (overheadPct / 100);
+      const totCommSummary = markUpBase * (commPct / 100);
+      const gasInput = document.getElementById('gasolineInput');
+      const gasCost = gasInput && gasInput.dataset.manual === 'true'
+        ? (parseFloat(gasInput.value) || 0)
+        : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+      const taxBase = totSubtotal + materialsForSummary + gasCost + totOhSummary + totPftSummary + totCommSummary;
+      const totTax = taxBase * (taxPct / 100);
+      const totFinal = taxBase + totTax;
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
         [`Materials`, materialsForSummary],
-        [`Overhead (${overheadPct}%)`, totOh],
+        [`Overhead (${overheadPct}%)`, totOhSummary],
         [`Profit (${profitPct}%)`, totPftSummary],
         [`Tax (${taxPct}%)`, totTax],
-        [`Commission (${commPct}%)`, totComm],
+        [`Commission (${commPct}%)`, totCommSummary],
         [`Final Price`, totFinal],
       ].forEach(([label, val], i) => {
         const isLast = i === 6;
@@ -3917,7 +3941,10 @@ async function initApp(){
     const hours = _parseDurationToHours(durationText);
     const foremanRate = _getForemanRate();
     const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
-    const gasoline = parseFloat(document.getElementById('gasolineInput')?.value) || 0;
+    const gasInput = document.getElementById('gasolineInput');
+    const gasoline = gasInput && gasInput.dataset.manual === 'true'
+      ? (parseFloat(gasInput.value) || 0)
+      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
     const tollCost = parseFloat(document.getElementById('tollCostInput')?.value) || 0;
     const total = driverCost + gasoline + tollCost;
 
@@ -3938,7 +3965,10 @@ async function initApp(){
       return 28;
     })();
     const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
-    const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
+    const gasInput = document.getElementById('paintingGasolineInput');
+    const gasoline = gasInput && gasInput.dataset.manual === 'true'
+      ? (parseFloat(gasInput.value) || 0)
+      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const total = driverCost + gasoline + tollCost;
     const driverEl = document.getElementById('paintingDriverCostDisplay');
@@ -4471,8 +4501,13 @@ async function initApp(){
       setFoot(`pphase_subtotal_${pid}`, c.subtotal);
     });
 
-    const totTax = (totSubtotal + totalPhaseMaterials) * (taxPct / 100);
-    const totFinalActual = totSubtotal + totalPhaseMaterials + totOh + totPft + totComm + totTax;
+    const gasInput = document.getElementById('paintingGasolineInput');
+    const gasCost = gasInput && gasInput.dataset.manual === 'true'
+      ? (parseFloat(gasInput.value) || 0)
+      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+    const taxBase = totSubtotal + totalPhaseMaterials + gasCost + totOh + totPft + totComm;
+    const totTax = taxBase * (taxPct / 100);
+    const totFinalActual = taxBase + totTax;
 
     const summaryContainer = document.getElementById('paintingCalcSummaryContainer');
     if (summaryContainer) {
@@ -4767,13 +4802,25 @@ async function initApp(){
 
   }
 
+  function _getAnalysisDisplayArea(projData) {
+    if (_analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== '') {
+      const parsed = parseFloat(_analysisAreaManualValue);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if (projData?.total_area != null && projData.total_area !== '') {
+      const parsed = parseFloat(projData.total_area);
+      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return _pdfMetadataSummary?.totalArea ?? null;
+  }
+
   function showAnalysisCard(projData) {
     const card = document.getElementById('analysisCard');
     if (!card) return;
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
     const resolvedAddress = [projData.address, _pdfMetadataSummary?.address].find((value) => normalizeTextLine(value)) || '';
-    const resolvedArea = _pdfMetadataSummary?.totalArea ?? projData.total_area;
+    const resolvedArea = _getAnalysisDisplayArea(projData);
     const resolvedName = _pdfMetadataSummary?.projectName || projData.name || '';
 
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
@@ -4821,18 +4868,23 @@ async function initApp(){
         breakdownDiv.appendChild(table);
 
         const savedMaterials = bd.materials || 0;
+        const markupBase = totSubtotal + savedMaterials;
         const totPftSummary = _calcProfitAmount(totSubtotal, savedMaterials, (bd.profit_pct || 0) / 100);
-        const totTax = (totSubtotal + savedMaterials) * ((bd.tax_pct || 0) / 100);
-        const totFinal = totSubtotal + savedMaterials + totOh + totPftSummary + totComm;
+        const totOhSummary = markupBase * ((bd.overhead_pct || 0) / 100);
+        const totCommSummary = markupBase * ((bd.commission_pct || 0) / 100);
+        const gasCost = _getDistanceDerivedGasoline(projData?.driving_info?.distance || '');
+        const taxBase = totSubtotal + savedMaterials + gasCost + totOhSummary + totPftSummary + totCommSummary;
+        const totTax = taxBase * ((bd.tax_pct || 0) / 100);
+        const totFinal = taxBase + totTax;
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Subtotal`, totSubtotal],
           [`Materials`, savedMaterials],
-          [`Overhead (${bd.overhead_pct || 0}%)`, totOh],
+          [`Overhead (${bd.overhead_pct || 0}%)`, totOhSummary],
           [`Profit (${bd.profit_pct || 0}%)`, totPftSummary],
           [`Tax (${bd.tax_pct || 0}%)`, totTax],
-          [`Commission (${bd.commission_pct || 0}%)`, totComm],
+          [`Commission (${bd.commission_pct || 0}%)`, totCommSummary],
           [`Final Price`, totFinal],
         ].forEach(([label, val], i) => {
           const isLast = i === 6;
@@ -4980,8 +5032,10 @@ async function initApp(){
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
         const commPct     = bd?.commission_pct || 5;
-        const totTax = (totSubtotal + savedMaterials) * (taxPct / 100);
-        const totFinal = (bd?.phases ? totSubtotal + savedMaterials + totOh + totPft + totComm + totTax : areaDerived?.finalSubtotal ?? (totSubtotal + savedMaterials + totOh + totPft + totComm + totTax));
+        const gasCost = _getDistanceDerivedGasoline(projData?.driving_info?.distance || '');
+        const taxBase = totSubtotal + savedMaterials + gasCost + totOh + totPft + totComm;
+        const totTax = taxBase * (taxPct / 100);
+        const totFinal = (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
@@ -5073,6 +5127,8 @@ async function initApp(){
 
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
+    _analysisAreaManual = false;
+    _analysisAreaManualValue = null;
     const bd = _loadedProjectData.labor_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
     const phaseMap = { 'Rough Cleaning': 'rough', 'Final Cleaning': 'final', 'Touch Up Cleaning': 'touchup' };
@@ -5082,14 +5138,16 @@ async function initApp(){
     _phaseMaterials = { rough: 0, final: 0, touchup: 0 };
     _deletedPhaseIds = new Set();
 
-    if (bd && bd.phases) {
+    if (bd) {
       setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
       setVal('foremanRateInput', bd.foreman_rate ?? 220);
-      setVal('overheadInput', 0);
+      setVal('overheadInput', bd.overhead_pct ?? 0);
       setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
       setVal('commissionInput', bd.commission_pct ?? 10);
+    }
 
+    if (bd && bd.phases) {
       const savedPids = new Set();
       for (const p of bd.phases) {
         const pid = phaseMap[p.name];
@@ -5167,7 +5225,9 @@ async function initApp(){
     const totalAreaInput = document.getElementById('analysisTotalAreaInput');
     const totalAreaModifyBtn = document.getElementById('totalAreaModifyBtn');
     const totalAreaResetBtn = document.getElementById('totalAreaResetBtn');
-    setVal('analysisTotalAreaInput', autoTotalArea ?? _loadedProjectData.total_area);
+    const persistedAreaValue = _loadedProjectData?.total_area;
+    const initialAreaValue = persistedAreaValue != null && persistedAreaValue !== '' ? persistedAreaValue : (autoTotalArea ?? _loadedProjectData?.total_area);
+    setVal('analysisTotalAreaInput', initialAreaValue);
     if (totalAreaInput) {
       totalAreaInput.readOnly = true;
       totalAreaInput.className = 'w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
@@ -5178,7 +5238,24 @@ async function initApp(){
       const area = parseFloat(totalAreaInput?.value) || 0;
       if (area > 0) { _autoGeneratePhases(area); _phasesLocked = true; _renderPhaseTable(); _updateCrewCalcs(); }
     };
-    if (totalAreaInput) totalAreaInput.addEventListener('change', _regenPhasesFromAreaInput);
+    const _syncMaterialsFromArea = () => {
+      const materialsInput = document.getElementById('materialsInput');
+      if (!materialsInput || _analysisMaterialsManual) return;
+      const derived = _getCleaningMaterialsDerivedValue(totalAreaInput?.value);
+      materialsInput.value = derived.toFixed(2);
+      _updateCrewCalcs();
+    };
+    if (totalAreaInput) {
+      totalAreaInput.addEventListener('input', () => {
+        _analysisAreaManual = true;
+        _analysisAreaManualValue = totalAreaInput.value;
+        _syncMaterialsFromArea();
+      });
+      totalAreaInput.addEventListener('change', () => {
+        _regenPhasesFromAreaInput();
+        _syncMaterialsFromArea();
+      });
+    }
     if (totalAreaModifyBtn) totalAreaModifyBtn.onclick = () => {
       if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; totalAreaInput.focus(); }
       totalAreaModifyBtn.style.display = 'none';
@@ -5186,26 +5263,48 @@ async function initApp(){
     };
     if (totalAreaResetBtn) totalAreaResetBtn.onclick = () => {
       if (totalAreaInput) { totalAreaInput.readOnly = true; totalAreaInput.className = 'w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none'; }
+      _analysisAreaManual = false;
+      _analysisAreaManualValue = null;
       setVal('analysisTotalAreaInput', autoTotalArea ?? _loadedProjectData.total_area);
       totalAreaResetBtn.style.display = 'none';
       if (totalAreaModifyBtn) totalAreaModifyBtn.style.display = '';
       _regenPhasesFromAreaInput();
     };
     setVal('analysisAddressInput', (_loadedProjectData.address || _pdfMetadataSummary?.address || '').toString());
-    setVal('gasolineInput', _loadedProjectData.gasoline);
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
     setVal('marginInput', _loadedProjectData.margin);
-    setVal('materialsInput', _loadedProjectData.labor_breakdown?.materials ?? 0);
-    setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
-    _analysisMaterialsManual = _loadedProjectData.labor_breakdown?.materials != null;
+    const savedMaterials = _loadedProjectData.labor_breakdown?.materials;
     const materialsInput = document.getElementById('materialsInput');
     if (materialsInput) {
+      if (savedMaterials != null && savedMaterials !== '') {
+        _analysisMaterialsManual = true;
+        materialsInput.value = savedMaterials;
+      } else {
+        _analysisMaterialsManual = false;
+        materialsInput.value = _getCleaningMaterialsDerivedValue(initialAreaValue).toFixed(2);
+      }
       materialsInput.oninput = () => {
         _analysisMaterialsManual = true;
         _updateCrewCalcs();
       };
     }
+    const gasolineInput = document.getElementById('gasolineInput');
+    if (gasolineInput) {
+      const savedGasoline = _loadedProjectData?.gasoline;
+      if (savedGasoline != null && savedGasoline !== '') {
+        gasolineInput.dataset.manual = 'true';
+        gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
+      } else {
+        gasolineInput.dataset.manual = 'false';
+        gasolineInput.value = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '').toFixed(2);
+      }
+      gasolineInput.addEventListener('input', () => {
+        gasolineInput.dataset.manual = 'true';
+        _updateTransportCosts();
+      });
+    }
+    setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
     _updateCrewCalcs();
 
 
@@ -5315,7 +5414,6 @@ async function initApp(){
       setVal('paintingTaxInput', bd.tax_pct ?? 6);
       setVal('paintingCommissionInput', bd.commission_pct ?? 5);
       setVal('paintingMarginInput', bd.margin ?? 0);
-      setVal('paintingGasolineInput', bd.gasoline ?? 0);
       setVal('paintingTollCostInput', bd.toll_cost ?? 0);
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
@@ -5336,7 +5434,11 @@ async function initApp(){
     const daysInput = document.getElementById('paintingExpectedDaysInput');
     const openAreaDerived = _getPaintingAreaDerivedValues(areaInput?.value || 0);
     _paintingMaterialsManual = bd?.materials != null;
+    const persistedPaintingArea = _loadedProjectData?.total_area ?? bd?.total_area;
     if (areaInput) {
+      if (persistedPaintingArea != null && persistedPaintingArea !== '') {
+        setVal('paintingTotalAreaInput', persistedPaintingArea);
+      }
       if (materialsInput) {
         materialsInput.value = bd?.materials != null ? (bd.materials || 0).toFixed(2) : openAreaDerived.materials.toFixed(2);
       }
@@ -5351,6 +5453,21 @@ async function initApp(){
         _paintingMaterialsManual = true;
         _updatePaintingCrewCalcs();
       };
+    }
+    const gasolineInput = document.getElementById('paintingGasolineInput');
+    if (gasolineInput) {
+      const savedGasoline = bd?.gasoline;
+      if (savedGasoline != null && savedGasoline !== '') {
+        gasolineInput.dataset.manual = 'true';
+        gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
+      } else {
+        gasolineInput.dataset.manual = 'false';
+        gasolineInput.value = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '').toFixed(2);
+      }
+      gasolineInput.addEventListener('input', () => {
+        gasolineInput.dataset.manual = 'true';
+        _updatePaintingTransportCosts();
+      });
     }
     if (daysInput) {
       daysInput.oninput = () => {
@@ -5449,17 +5566,36 @@ async function initApp(){
       : derived.materials;
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address, comments };
+    const paintRates = _getPaintingRates();
+    let paintSubtotal = 0;
+    let paintOh = 0;
+    let paintPft = 0;
+    let paintComm = 0;
+    for (const p of phases) {
+      const c = _calcPhase(p, paintRates);
+      paintSubtotal += c.subtotal;
+      paintOh += c.oh;
+      paintPft += c.pft;
+      paintComm += c.comm;
+    }
+    const paintTaxBase = paintSubtotal + materials + gasoline + paintOh + paintPft + paintComm;
+    const paintTax = paintTaxBase * ((tax || 0) / 100);
+    const paintFinalPrice = paintTaxBase + paintTax;
+
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ painting_breakdown }),
+        body: JSON.stringify({ painting_breakdown, total_area: totalArea > 0 ? totalArea : null }),
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
       _loadedProjectData = updated;
+      if (_loadedProjectData) {
+        _loadedProjectData.total_area = totalArea > 0 ? totalArea : _loadedProjectData.total_area;
+      }
       showPaintingCard(updated);
     } catch (e) {
       alert('Save failed: ' + e.message);
@@ -5491,8 +5627,15 @@ async function initApp(){
         totCommSave += c.comm;
       }
       const materialsSave = parseFloat(document.getElementById('materialsInput')?.value) || 0;
+      const gasolineVal = document.getElementById('gasolineInput')?.value;
+      const gasolineSave = gasolineVal !== '' && gasolineVal !== undefined ? parseFloat(gasolineVal) || 0 : 0;
+      const markupBaseSave = totSubtotalSave + materialsSave;
+      const totOhSave = markupBaseSave * (overheadPct / 100);
+      const totCommSave = markupBaseSave * (commPct / 100);
       const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
-      const totFinalPrice = totSubtotalSave + materialsSave + totOhSave + totPftSave + totCommSave;
+      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + totOhSave + totPftSave + totCommSave;
+      const totTaxSave = taxBaseSave * (taxPct / 100);
+      const totFinalPrice = taxBaseSave + totTaxSave;
       const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
@@ -5511,6 +5654,10 @@ async function initApp(){
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
+      if (areaVal !== '' && areaVal !== undefined) {
+        _analysisAreaManual = true;
+        _analysisAreaManualValue = areaVal;
+      }
       const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
       const prevAddr = _loadedProjectData.address || '';
       const gasolineVal = document.getElementById('gasolineInput')?.value;
@@ -5544,6 +5691,14 @@ async function initApp(){
         if (!r.ok) throw new Error('Save failed');
         const updated = await r.json();
         _loadedProjectData = { ..._loadedProjectData, ...updated };
+        if (!_loadedProjectData.labor_breakdown) _loadedProjectData.labor_breakdown = {};
+        _loadedProjectData.labor_breakdown.overhead_pct = overheadPct;
+        _loadedProjectData.labor_breakdown.profit_pct = profitPct;
+        _loadedProjectData.labor_breakdown.tax_pct = taxPct;
+        _loadedProjectData.labor_breakdown.commission_pct = commPct;
+        if (areaVal !== '' && areaVal !== undefined) {
+          _loadedProjectData.total_area = parseFloat(areaVal) ?? _loadedProjectData.total_area;
+        }
         // refresh drive distance if address changed
         if (addrVal && addrVal !== prevAddr) {
           document.getElementById('refreshDistanceBtn')?.click();
