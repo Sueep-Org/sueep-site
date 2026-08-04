@@ -759,34 +759,52 @@ export default function EstimatorPage() {
                 </div>
                 {/* Expected Days to Complete */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Expected Days to Complete
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      id="expectedDaysInput"
-                      placeholder="—"
-                      min="0"
-                      step="1"
-                      readOnly
-                      className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      id="expectedDaysModifyBtn"
-                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                    >
-                      Modify
-                    </button>
-                    <button
-                      type="button"
-                      id="expectedDaysResetBtn"
-                      style={{ display: "none" }}
-                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                    >
-                      Reset to auto
-                    </button>
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Expected Days to Complete
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          id="expectedDaysInput"
+                          placeholder="—"
+                          min="0"
+                          step="1"
+                          readOnly
+                          className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          id="expectedDaysModifyBtn"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                        >
+                          Modify
+                        </button>
+                        <button
+                          type="button"
+                          id="expectedDaysResetBtn"
+                          style={{ display: "none" }}
+                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        >
+                          Reset to auto
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Mobilizations
+                      </label>
+                      <input
+                        type="number"
+                        id="mobilizationsInput"
+                        placeholder="0"
+                        min="0"
+                        step="1"
+                        readOnly
+                        className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
                 {/* Hidden inputs keep default values for new crew members */}
@@ -994,12 +1012,14 @@ export default function EstimatorPage() {
                     <label className="block text-xs text-gray-500 mb-1">
                       Driver Cost ($)
                     </label>
-                    <div
+                    <input
+                      type="number"
                       id="driverCostDisplay"
-                      className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700"
-                    >
-                      —
-                    </div>
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
@@ -1306,34 +1326,52 @@ export default function EstimatorPage() {
                 </div>
                 {/* Expected Days */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Expected Days to Complete
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      id="paintingExpectedDaysInput"
-                      placeholder="—"
-                      min="0"
-                      step="1"
-                      readOnly
-                      className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      id="paintingExpectedDaysModifyBtn"
-                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                    >
-                      Modify
-                    </button>
-                    <button
-                      type="button"
-                      id="paintingExpectedDaysResetBtn"
-                      style={{ display: "none" }}
-                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                    >
-                      Reset to auto
-                    </button>
+                  <div className="flex flex-wrap gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Expected Days to Complete
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          id="paintingExpectedDaysInput"
+                          placeholder="—"
+                          min="0"
+                          step="1"
+                          readOnly
+                          className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          id="paintingExpectedDaysModifyBtn"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                        >
+                          Modify
+                        </button>
+                        <button
+                          type="button"
+                          id="paintingExpectedDaysResetBtn"
+                          style={{ display: "none" }}
+                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        >
+                          Reset to auto
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Mobilizations
+                      </label>
+                      <input
+                        type="number"
+                        id="paintingMobilizationsInput"
+                        placeholder="0"
+                        min="0"
+                        step="1"
+                        readOnly
+                        className="w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1499,12 +1537,14 @@ export default function EstimatorPage() {
                     <label className="block text-xs text-gray-500 mb-1">
                       Driver Cost ($)
                     </label>
-                    <div
+                    <input
+                      type="number"
                       id="paintingDriverCostDisplay"
-                      className="w-40 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700"
-                    >
-                      —
-                    </div>
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
