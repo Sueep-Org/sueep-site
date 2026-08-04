@@ -13,6 +13,11 @@ function endOfDay(date: Date): Date {
   return d;
 }
 
+function lastNameOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? name;
+}
+
 function mondayOf(date: Date): Date {
   const d = new Date(date);
   const day = d.getUTCDay();
@@ -83,6 +88,7 @@ export async function GET(req: Request) {
   const employeeMap = new Map<EmployeeKey, {
     employeeId: string | null;
     name: string;
+    lastName: string;
     payType: string;
     hourlyRateCents: number;
     weeklyHours: Map<WeekKey, number>;
@@ -95,11 +101,13 @@ export async function GET(req: Request) {
     const name = entry.employee
       ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
       : entry.workerName;
+    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.workerName);
 
     if (!employeeMap.has(key)) {
       employeeMap.set(key, {
         employeeId: entry.employeeId,
         name,
+        lastName: rowLastName,
         payType: entry.employee?.payType ?? "HOURLY",
         hourlyRateCents: entry.hourlyRateCents,
         weeklyHours: new Map(),
@@ -126,12 +134,14 @@ export async function GET(req: Request) {
     const name = entry.employee
       ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
       : entry.name;
+    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.name);
     const projectTitle = entry.changeOrder.project?.jobTitle ?? "—";
 
     if (!employeeMap.has(key)) {
       employeeMap.set(key, {
         employeeId: entry.employeeId,
         name,
+        lastName: rowLastName,
         payType: entry.employee?.payType ?? "HOURLY",
         hourlyRateCents: entry.hourlyRateCents,
         weeklyHours: new Map(),
@@ -179,6 +189,7 @@ export async function GET(req: Request) {
       isContractor: false as const,
       employeeId: emp.employeeId,
       name: emp.name,
+      lastName: emp.lastName,
       payType: emp.payType,
       hourlyRateCents: emp.hourlyRateCents,
       totalHours,
@@ -207,6 +218,7 @@ export async function GET(req: Request) {
     isContractor: true as const,
     employeeId: null,
     name: c.name,
+    lastName: lastNameOf(c.name),
     payType: "CONTRACTOR",
     hourlyRateCents: 0,
     totalHours: 0,
@@ -217,13 +229,8 @@ export async function GET(req: Request) {
     entries: [],
   }));
 
-  function lastName(name: string) {
-    const parts = name.trim().split(/\s+/);
-    return parts[parts.length - 1] ?? name;
-  }
-
-  const rows = [...employeeRows, ...contractorRows].sort((a, b) =>
-    lastName(a.name).localeCompare(lastName(b.name))
+  const rows = [...employeeRows, ...contractorRows].sort(
+    (a, b) => a.lastName.localeCompare(b.lastName) || a.name.localeCompare(b.name)
   );
 
   return NextResponse.json({ periodStart: startParam, periodEnd: endParam, rows });

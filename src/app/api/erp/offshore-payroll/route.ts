@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     prisma.employee.findMany({
       where: { isOffshore: true, status: "ACTIVE" },
       select: { id: true, firstName: true, lastName: true, offshoreMonthlyRateCents: true },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),
     prisma.offshorePayrollPayment.findMany({ where: { periodStart } }),
   ]);
