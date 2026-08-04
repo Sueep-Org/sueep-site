@@ -665,10 +665,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
-    // Hidden (not removed) for post-construction for now — signing for that
-    // segment happens per change order instead, via ChangeOrderSigningSection
-    // on each CO's own detail page, which is unaffected by this flag.
-    ...(!isPostConstruction && (project.segment === "REAL_ESTATE" || project.segment === "JANITORIAL_TURNOVER_REQUESTS")
+    // Hidden (not removed) for post-construction and janitorial for now —
+    // signing for those segments happens per change order instead, via
+    // ChangeOrderSigningSection on each CO's own detail page, which is
+    // unaffected by this and stays visible regardless of project segment.
+    ...(project.segment === "REAL_ESTATE"
       ? [
           {
             label: "Signing",
