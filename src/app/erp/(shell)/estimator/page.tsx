@@ -789,18 +789,6 @@ export default function EstimatorPage() {
                     </button>
                   </div>
                 </div>
-                {/* Comments */}
-                <div className="mb-4 pb-4 border-b border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Comments
-                  </label>
-                  <textarea
-                    id="cleaningCommentsInput"
-                    rows={3}
-                    placeholder="Add any cleaning notes or comments"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
                 {/* Hidden inputs keep default values for new crew members */}
                 <input type="hidden" id="cleanerRateInput" defaultValue="22" />
                 <input type="hidden" id="foremanRateInput" defaultValue="220" />
@@ -1024,6 +1012,18 @@ export default function EstimatorPage() {
                       —
                     </div>
                   </div>
+                </div>
+
+                <div className="mb-4 pt-4 border-t border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Comments
+                  </label>
+                  <textarea
+                    id="cleaningCommentsInput"
+                    rows={3}
+                    placeholder="Add any cleaning notes or comments"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
 
                 <div className="flex gap-2">
@@ -1504,6 +1504,18 @@ export default function EstimatorPage() {
                       —
                     </div>
                   </div>
+                </div>
+
+                <div className="mb-4 pt-4 border-t border-gray-100">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Comments
+                  </label>
+                  <textarea
+                    id="paintingCommentsInput"
+                    rows={3}
+                    placeholder="Add any painting notes or comments"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
                 </div>
 
                 <div className="flex gap-2">
