@@ -4802,16 +4802,22 @@ async function initApp(){
 
   }
 
-  function _getAnalysisDisplayArea(projData) {
+  function _getAnalysisAreaValue(projData) {
     if (_analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== '') {
       const parsed = parseFloat(_analysisAreaManualValue);
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      return _analysisAreaManualValue;
     }
     if (projData?.total_area != null && projData.total_area !== '') {
       const parsed = parseFloat(projData.total_area);
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      return projData.total_area;
     }
     return _pdfMetadataSummary?.totalArea ?? null;
+  }
+
+  function _getAnalysisDisplayArea(projData) {
+    return _getAnalysisAreaValue(projData);
   }
 
   function showAnalysisCard(projData) {
@@ -5127,8 +5133,6 @@ async function initApp(){
 
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
-    _analysisAreaManual = false;
-    _analysisAreaManualValue = null;
     const bd = _loadedProjectData.labor_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
     const phaseMap = { 'Rough Cleaning': 'rough', 'Final Cleaning': 'final', 'Touch Up Cleaning': 'touchup' };
@@ -5226,7 +5230,10 @@ async function initApp(){
     const totalAreaModifyBtn = document.getElementById('totalAreaModifyBtn');
     const totalAreaResetBtn = document.getElementById('totalAreaResetBtn');
     const persistedAreaValue = _loadedProjectData?.total_area;
-    const initialAreaValue = persistedAreaValue != null && persistedAreaValue !== '' ? persistedAreaValue : (autoTotalArea ?? _loadedProjectData?.total_area);
+    const manualAreaValue = _analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== ''
+      ? _analysisAreaManualValue
+      : null;
+    const initialAreaValue = manualAreaValue ?? (persistedAreaValue != null && persistedAreaValue !== '' ? persistedAreaValue : (autoTotalArea ?? _loadedProjectData?.total_area));
     setVal('analysisTotalAreaInput', initialAreaValue);
     if (totalAreaInput) {
       totalAreaInput.readOnly = true;
