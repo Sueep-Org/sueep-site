@@ -4908,6 +4908,26 @@ async function initApp(){
     const resolvedName = _pdfMetadataSummary?.projectName || projData.name || '';
 
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
+    const mobilizationsView = (projData.mobilizations != null && projData.mobilizations !== '' ? parseFloat(projData.mobilizations) : (projData.expected_days != null && projData.expected_days !== '' ? parseFloat(projData.expected_days) * 2 : 0)) || 0;
+    const gasCost = (() => {
+      const savedGas = projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null;
+      if (savedGas != null) return savedGas;
+      return _getDistanceDerivedGasoline(projData?.driving_info?.distance || '', mobilizationsView);
+    })();
+    const driveHoursView = _parseDurationToHours(projData?.driving_info?.duration || '');
+    const foremanRateView = (() => {
+      const bd = projData.labor_breakdown;
+      if (bd?.phases) {
+        for (const p of bd.phases) {
+          const f = (p.crew || []).find(m => m.role === 'foreman');
+          if (f) return f.rate || 28;
+        }
+      }
+      return 28;
+    })();
+    const driverCostView = driveHoursView > 0 ? (mobilizationsView * 2 * driveHoursView * foremanRateView) : 0;
+    const tollCostView = (projData.toll_cost != null && projData.toll_cost !== '' ? parseFloat(projData.toll_cost) : 0) || 0;
+    const totalTransport = driverCostView + gasCost + tollCostView;
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
       const bd = projData.labor_breakdown;
@@ -4956,8 +4976,7 @@ async function initApp(){
         const totPftSummary = _calcProfitAmount(totSubtotal, savedMaterials, (bd.profit_pct || 0) / 100);
         const totOhSummary = markupBase * ((bd.overhead_pct || 0) / 100);
         const totCommSummary = markupBase * ((bd.commission_pct || 0) / 100);
-        const gasCost = _getDistanceDerivedGasoline(projData?.driving_info?.distance || '');
-        const taxBase = totSubtotal + savedMaterials + gasCost + totOhSummary + totPftSummary + totCommSummary;
+        const taxBase = totSubtotal + savedMaterials + totalTransport + totOhSummary + totPftSummary + totCommSummary;
         const totTax = taxBase * ((bd.tax_pct || 0) / 100);
         const totFinal = taxBase + totTax;
         const pricingDiv = document.createElement('div');
@@ -4988,21 +5007,8 @@ async function initApp(){
     setText('analysisViewTotalArea', fmtSF(resolvedArea));
     setText('analysisViewQuote', fmt$(projData.quote));
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
-    setText('analysisViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
+    setText('analysisViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
     const di = projData.driving_info;
-    const driveHours = _parseDurationToHours(di?.duration || '');
-    const foremanRateView = (() => {
-      const bd = projData.labor_breakdown;
-      if (bd?.phases) {
-        for (const p of bd.phases) {
-          const f = (p.crew || []).find(m => m.role === 'foreman');
-          if (f) return f.rate || 28;
-        }
-      }
-      return 28;
-    })();
-    const driverCostView = driveHours > 0 ? 2 * driveHours * foremanRateView : 0;
-    const totalTransport = driverCostView + (projData.gasoline || 0) + (projData.toll_cost || 0);
     setText('detailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
     setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
     setText('analysisViewExpectedDays', projData.expected_days != null ? `${projData.expected_days} days` : '—');
@@ -5067,6 +5073,25 @@ async function initApp(){
     const areaDerived = (!bd?.phases && resolvedArea > 0) ? _getPaintingAreaDerivedValues(resolvedArea) : null;
 
     const breakdownDiv = document.getElementById('paintingViewBreakdown');
+    const mobilizationsView = (projData.mobilizations != null && projData.mobilizations !== '' ? parseFloat(projData.mobilizations) : (projData.expected_days != null && projData.expected_days !== '' ? parseFloat(projData.expected_days) * 2 : 0)) || 0;
+    const gasCost = (() => {
+      const savedGas = projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null;
+      if (savedGas != null) return savedGas;
+      return _getDistanceDerivedGasoline(projData?.driving_info?.distance || '', mobilizationsView);
+    })();
+    const driveHoursView = _parseDurationToHours(projData?.driving_info?.duration || '');
+    const foremanRateView = (() => {
+      if (bd?.phases) {
+        for (const p of bd.phases) {
+          const f = (p.crew || []).find(m => m.role === 'foreman');
+          if (f) return f.rate || 28;
+        }
+      }
+      return 28;
+    })();
+    const driverCostView = driveHoursView > 0 ? (mobilizationsView * 2 * driveHoursView * foremanRateView) : 0;
+    const tollCostView = (projData.toll_cost != null && projData.toll_cost !== '' ? parseFloat(projData.toll_cost) : 0) || 0;
+    const totalTransport = driverCostView + gasCost + tollCostView;
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
       if (effectivePhases && effectivePhases.length > 0) {
@@ -5116,8 +5141,7 @@ async function initApp(){
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
         const commPct     = bd?.commission_pct || 5;
-        const gasCost = _getDistanceDerivedGasoline(projData?.driving_info?.distance || '');
-        const taxBase = totSubtotal + savedMaterials + gasCost + totOh + totPft + totComm;
+        const taxBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
         const totTax = taxBase * (taxPct / 100);
         const totFinal = (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
         const pricingDiv = document.createElement('div');
@@ -5161,7 +5185,8 @@ async function initApp(){
     const savedMaterials = effectivePhases
       ? effectivePhases.reduce((sum, p) => sum + (p.materials || 0), 0) || fallbackSavedMaterials || areaDerived?.materials || 0
       : fallbackSavedMaterials || areaDerived?.materials || 0;
-    const quote = (bd?.phases ? totSubtotal + savedMaterials + totOh + totPft + totComm + (totSubtotal * ((bd?.tax_pct || 0) / 100)) : areaDerived?.finalSubtotal ?? (totSubtotal + savedMaterials + totOh + totPft + totComm + (totSubtotal * ((bd?.tax_pct || 0) / 100))));
+    const quoteBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
+    const quote = (bd?.phases ? quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100)) : areaDerived?.finalSubtotal ?? (quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100))));
     setText('paintingViewQuote', fmt$(quote));
 
     const lps = (labor != null && resolvedArea) ? (labor / resolvedArea) : null;
@@ -5170,20 +5195,8 @@ async function initApp(){
     const di = projData.driving_info;
     setText('paintingDetailDistance', di?.distance || '—');
     setText('paintingDetailDuration', di?.duration || '—');
-    const driveHours = _parseDurationToHours(di?.duration || '');
-    const foremanRateView = (() => {
-      if (bd?.phases) {
-        for (const p of bd.phases) {
-          const f = (p.crew || []).find(m => m.role === 'foreman');
-          if (f) return f.rate || 28;
-        }
-      }
-      return 28;
-    })();
-    const driverCostView = driveHours > 0 ? 2 * driveHours * foremanRateView : 0;
-    const totalTransport = driverCostView + (projData.gasoline || 0) + (projData.toll_cost || 0);
     setText('paintingDetailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
-    setText('paintingViewGasoline', projData.gasoline != null ? fmt$(projData.gasoline) : '—');
+    setText('paintingViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
     setText('paintingViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
 
     // Initialize edit state from saved painting_breakdown
@@ -5756,7 +5769,8 @@ async function initApp(){
       paintPft += c.pft;
       paintComm += c.comm;
     }
-    const paintTaxBase = paintSubtotal + materials + gasoline + paintOh + paintPft + paintComm;
+    const transportCost = driverCost + gasoline + tollCost;
+    const paintTaxBase = paintSubtotal + materials + transportCost + paintOh + paintPft + paintComm;
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
@@ -5825,7 +5839,8 @@ async function initApp(){
       const ohSave = markupBaseSave * (overheadPct / 100);
       const commSave = markupBaseSave * (commPct / 100);
       const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
-      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + ohSave + totPftSave + commSave;
+      const transportCostSave = gasolineSave + driverCostSave + (parseFloat(document.getElementById('tollCostInput')?.value) || 0);
+      const taxBaseSave = totSubtotalSave + materialsSave + transportCostSave + ohSave + totPftSave + commSave;
       const totTaxSave = taxBaseSave * (taxPct / 100);
       const totFinalPrice = taxBaseSave + totTaxSave;
 
