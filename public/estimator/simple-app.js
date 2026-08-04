@@ -297,6 +297,30 @@ async function initApp(){
     return `estimator_project_aggregate_overrides_${projectId}`;
   }
 
+  function getCostPerMileStorageKey(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    return `estimator_${card}_cost_per_mile_${projectId}`;
+  }
+
+  function persistCostPerMileValue(value, projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    try {
+      const key = getCostPerMileStorageKey(projectId, card);
+      if (value === '' || value == null) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, String(value));
+      }
+    } catch (_) {}
+  }
+
+  function restoreCostPerMileValue(projectId = activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default', card = 'analysis') {
+    try {
+      const stored = localStorage.getItem(getCostPerMileStorageKey(projectId, card));
+      return stored == null ? null : stored;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function persistProjectAggregateOverrides() {
     try {
       localStorage.setItem(getProjectAggregateStorageKey(), JSON.stringify(_projectAggregateOverrides));
@@ -3662,10 +3686,11 @@ async function initApp(){
     return area > 0 ? area / CLEANING_MATERIALS_PER_SF : 0;
   }
 
-  function _getDistanceDerivedGasoline(distanceText) {
+  function _getDistanceDerivedGasoline(distanceText, mobilizationsValue) {
     const distance = parseFloat(String(distanceText || '').replace(/[^0-9.\-]/g, ''));
-    if (!Number.isFinite(distance)) return 0;
-    return distance * GASOLINE_PER_DISTANCE;
+    const mobilizations = parseFloat(String(mobilizationsValue ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+    if (!Number.isFinite(distance) || mobilizations <= 0) return 0;
+    return (distance * mobilizations / 28) * 5.08;
   }
 
   // Painting phases
@@ -3912,6 +3937,7 @@ async function initApp(){
       const daysEl = document.getElementById('expectedDaysInput');
       if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
     }
+    _syncAnalysisMobilizations();
 
     _changeOrders.forEach(co => _updateOneChangeOrderCalc(co));
   }
@@ -3928,6 +3954,24 @@ async function initApp(){
     return hours;
   }
 
+  function _syncAnalysisMobilizations() {
+    const daysInput = document.getElementById('expectedDaysInput');
+    const mobilizationsInput = document.getElementById('mobilizationsInput');
+    if (!mobilizationsInput) return;
+    const expectedDays = parseFloat(daysInput?.value) || 0;
+    const derived = expectedDays > 0 ? expectedDays * 2 : '';
+    mobilizationsInput.value = derived !== '' ? derived.toFixed(0) : '';
+  }
+
+  function _syncPaintingMobilizations() {
+    const daysInput = document.getElementById('paintingExpectedDaysInput');
+    const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
+    if (!mobilizationsInput) return;
+    const expectedDays = parseFloat(daysInput?.value) || 0;
+    const derived = expectedDays > 0 ? expectedDays * 2 : '';
+    mobilizationsInput.value = derived !== '' ? derived.toFixed(0) : '';
+  }
+
   function _getForemanRate() {
     for (const pid of PHASE_IDS) {
       const foreman = (_phaseCrews[pid] || []).find(m => m.role === 'foreman');
@@ -3940,18 +3984,34 @@ async function initApp(){
     const durationText = _loadedProjectData?.driving_info?.duration || '';
     const hours = _parseDurationToHours(durationText);
     const foremanRate = _getForemanRate();
-    const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
+    const mobilizationsInput = document.getElementById('mobilizationsInput');
+    const mobilizations = parseFloat(mobilizationsInput?.value) || 0;
+    const driverCostInput = document.getElementById('driverCostDisplay');
+    const manualDriverCost = driverCostInput && driverCostInput.dataset.manual === 'true'
+      ? (parseFloat(driverCostInput.value) || 0)
+      : null;
+    const autoDriverCost = hours > 0 ? (mobilizations * 2 * hours * foremanRate) : 0;
+    const driverCost = manualDriverCost != null ? manualDriverCost : autoDriverCost;
     const gasInput = document.getElementById('gasolineInput');
     const gasoline = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
-      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizations);
+    if (gasInput && gasInput.dataset.manual !== 'true') {
+      gasInput.value = gasoline > 0 ? gasoline.toFixed(2) : '';
+    }
     const tollCost = parseFloat(document.getElementById('tollCostInput')?.value) || 0;
+    const costPerMileInput = document.getElementById('costPerMileInput');
+    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
+    if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
+      costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
+    }
     const total = driverCost + gasoline + tollCost;
 
     const driverEl = document.getElementById('driverCostDisplay');
     const totalEl  = document.getElementById('totalTransportDisplay');
-    if (driverEl) driverEl.textContent = hours > 0 ? fmt$(driverCost) : '—';
-    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
+    if (driverEl) driverEl.value = driverCost > 0 ? driverCost.toFixed(2) : '';
+    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0 || driverCost > 0) ? fmt$(total) : '—';
   }
 
   function _updatePaintingTransportCosts() {
@@ -3964,17 +4024,33 @@ async function initApp(){
       }
       return 28;
     })();
-    const driverCost = hours > 0 ? 2 * hours * foremanRate : 0;
+    const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
+    const mobilizations = parseFloat(mobilizationsInput?.value) || 0;
+    const driverCostInput = document.getElementById('paintingDriverCostDisplay');
+    const manualDriverCost = driverCostInput && driverCostInput.dataset.manual === 'true'
+      ? (parseFloat(driverCostInput.value) || 0)
+      : null;
+    const autoDriverCost = hours > 0 ? (mobilizations * 2 * hours * foremanRate) : 0;
+    const driverCost = manualDriverCost != null ? manualDriverCost : autoDriverCost;
     const gasInput = document.getElementById('paintingGasolineInput');
     const gasoline = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
-      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizations);
+    if (gasInput && gasInput.dataset.manual !== 'true') {
+      gasInput.value = gasoline > 0 ? gasoline.toFixed(2) : '';
+    }
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
+    const costPerMileInput = document.getElementById('paintingCostPerMileInput');
+    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
+    if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
+      costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
+    }
     const total = driverCost + gasoline + tollCost;
     const driverEl = document.getElementById('paintingDriverCostDisplay');
     const totalEl  = document.getElementById('paintingTotalTransportDisplay');
-    if (driverEl) driverEl.textContent = hours > 0 ? fmt$(driverCost) : '—';
-    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
+    if (driverEl) driverEl.value = driverCost > 0 ? driverCost.toFixed(2) : '';
+    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0 || driverCost > 0) ? fmt$(total) : '—';
   }
 
   let _changeOrders = [];
@@ -4531,6 +4607,8 @@ async function initApp(){
       summaryContainer.appendChild(grid);
     }
 
+    _syncPaintingMobilizations();
+
     _updatePaintingTransportCosts();
 
     if (!_paintingExpectedDaysManual) {
@@ -4802,16 +4880,22 @@ async function initApp(){
 
   }
 
-  function _getAnalysisDisplayArea(projData) {
+  function _getAnalysisAreaValue(projData) {
     if (_analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== '') {
       const parsed = parseFloat(_analysisAreaManualValue);
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      return _analysisAreaManualValue;
     }
     if (projData?.total_area != null && projData.total_area !== '') {
       const parsed = parseFloat(projData.total_area);
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      return projData.total_area;
     }
     return _pdfMetadataSummary?.totalArea ?? null;
+  }
+
+  function _getAnalysisDisplayArea(projData) {
+    return _getAnalysisAreaValue(projData);
   }
 
   function showAnalysisCard(projData) {
@@ -5127,8 +5211,6 @@ async function initApp(){
 
   function showAnalysisEditForm() {
     if (!_loadedProjectData) return;
-    _analysisAreaManual = false;
-    _analysisAreaManualValue = null;
     const bd = _loadedProjectData.labor_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
     const phaseMap = { 'Rough Cleaning': 'rough', 'Final Cleaning': 'final', 'Touch Up Cleaning': 'touchup' };
@@ -5203,6 +5285,11 @@ async function initApp(){
       daysInput.className = _expectedDaysManual
         ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'
         : 'w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
+      daysInput.addEventListener('input', () => {
+        if (daysInput.readOnly) return;
+        _syncAnalysisMobilizations();
+        _updateTransportCosts();
+      });
     }
     if (modifyBtn) modifyBtn.style.display = _expectedDaysManual ? 'none' : '';
     if (resetBtn) resetBtn.style.display = _expectedDaysManual ? '' : 'none';
@@ -5226,7 +5313,10 @@ async function initApp(){
     const totalAreaModifyBtn = document.getElementById('totalAreaModifyBtn');
     const totalAreaResetBtn = document.getElementById('totalAreaResetBtn');
     const persistedAreaValue = _loadedProjectData?.total_area;
-    const initialAreaValue = persistedAreaValue != null && persistedAreaValue !== '' ? persistedAreaValue : (autoTotalArea ?? _loadedProjectData?.total_area);
+    const manualAreaValue = _analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== ''
+      ? _analysisAreaManualValue
+      : null;
+    const initialAreaValue = manualAreaValue ?? (persistedAreaValue != null && persistedAreaValue !== '' ? persistedAreaValue : (autoTotalArea ?? _loadedProjectData?.total_area));
     setVal('analysisTotalAreaInput', initialAreaValue);
     if (totalAreaInput) {
       totalAreaInput.readOnly = true;
@@ -5273,6 +5363,7 @@ async function initApp(){
     setVal('analysisAddressInput', (_loadedProjectData.address || _pdfMetadataSummary?.address || '').toString());
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
+    _syncAnalysisMobilizations();
     setVal('marginInput', _loadedProjectData.margin);
     const savedMaterials = _loadedProjectData.labor_breakdown?.materials;
     const materialsInput = document.getElementById('materialsInput');
@@ -5289,18 +5380,59 @@ async function initApp(){
         _updateCrewCalcs();
       };
     }
+    const mobilizationsInput = document.getElementById('mobilizationsInput');
+    if (mobilizationsInput) {
+      const expectedDays = parseFloat(document.getElementById('expectedDaysInput')?.value) || 0;
+      const savedMobilizations = _loadedProjectData?.mobilizations;
+      const derivedMobilizations = expectedDays > 0 ? expectedDays * 2 : (savedMobilizations != null && savedMobilizations !== '' ? parseFloat(savedMobilizations) : null);
+      mobilizationsInput.value = derivedMobilizations != null ? derivedMobilizations.toFixed(0) : '';
+    }
+    const driverCostInput = document.getElementById('driverCostDisplay');
+    if (driverCostInput) {
+      const savedDriverCost = _loadedProjectData?.driver_cost;
+      if (savedDriverCost != null && savedDriverCost !== '') {
+        driverCostInput.dataset.manual = 'true';
+        driverCostInput.value = parseFloat(savedDriverCost).toFixed(2);
+      } else {
+        driverCostInput.dataset.manual = 'false';
+      }
+      driverCostInput.addEventListener('input', () => {
+        driverCostInput.dataset.manual = 'true';
+        _updateTransportCosts();
+      });
+    }
     const gasolineInput = document.getElementById('gasolineInput');
     if (gasolineInput) {
       const savedGasoline = _loadedProjectData?.gasoline;
+      const derivedGasoline = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizationsInput?.value || 0);
       if (savedGasoline != null && savedGasoline !== '') {
         gasolineInput.dataset.manual = 'true';
         gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
       } else {
         gasolineInput.dataset.manual = 'false';
-        gasolineInput.value = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '').toFixed(2);
+        gasolineInput.value = derivedGasoline > 0 ? derivedGasoline.toFixed(2) : '';
       }
       gasolineInput.addEventListener('input', () => {
         gasolineInput.dataset.manual = 'true';
+        _updateTransportCosts();
+      });
+    }
+    const costPerMileInput = document.getElementById('costPerMileInput');
+    if (costPerMileInput) {
+      const savedCostPerMile = _loadedProjectData?.cost_per_mile;
+      const restoredCostPerMile = restoreCostPerMileValue(activeProjectId, 'analysis');
+      const initialCostPerMile = savedCostPerMile != null && savedCostPerMile !== ''
+        ? savedCostPerMile
+        : (restoredCostPerMile != null && restoredCostPerMile !== '' ? restoredCostPerMile : null);
+      if (initialCostPerMile != null && initialCostPerMile !== '') {
+        costPerMileInput.dataset.manual = 'true';
+        costPerMileInput.value = parseFloat(initialCostPerMile).toFixed(2);
+      } else {
+        costPerMileInput.dataset.manual = 'false';
+        costPerMileInput.value = '';
+      }
+      costPerMileInput.addEventListener('input', () => {
+        costPerMileInput.dataset.manual = 'true';
         _updateTransportCosts();
       });
     }
@@ -5454,18 +5586,59 @@ async function initApp(){
         _updatePaintingCrewCalcs();
       };
     }
+    const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
+    if (mobilizationsInput) {
+      const expectedDays = parseFloat(document.getElementById('paintingExpectedDaysInput')?.value) || 0;
+      const savedMobilizations = bd?.mobilizations;
+      const derivedMobilizations = expectedDays > 0 ? expectedDays * 2 : (savedMobilizations != null && savedMobilizations !== '' ? parseFloat(savedMobilizations) : null);
+      mobilizationsInput.value = derivedMobilizations != null ? derivedMobilizations.toFixed(0) : '';
+    }
+    const driverCostInput = document.getElementById('paintingDriverCostDisplay');
+    if (driverCostInput) {
+      const savedDriverCost = bd?.driver_cost;
+      if (savedDriverCost != null && savedDriverCost !== '') {
+        driverCostInput.dataset.manual = 'true';
+        driverCostInput.value = parseFloat(savedDriverCost).toFixed(2);
+      } else {
+        driverCostInput.dataset.manual = 'false';
+      }
+      driverCostInput.addEventListener('input', () => {
+        driverCostInput.dataset.manual = 'true';
+        _updatePaintingTransportCosts();
+      });
+    }
     const gasolineInput = document.getElementById('paintingGasolineInput');
     if (gasolineInput) {
       const savedGasoline = bd?.gasoline;
+      const derivedGasoline = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizationsInput?.value || 0);
       if (savedGasoline != null && savedGasoline !== '') {
         gasolineInput.dataset.manual = 'true';
         gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
       } else {
         gasolineInput.dataset.manual = 'false';
-        gasolineInput.value = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '').toFixed(2);
+        gasolineInput.value = derivedGasoline > 0 ? derivedGasoline.toFixed(2) : '';
       }
       gasolineInput.addEventListener('input', () => {
         gasolineInput.dataset.manual = 'true';
+        _updatePaintingTransportCosts();
+      });
+    }
+    const costPerMileInput = document.getElementById('paintingCostPerMileInput');
+    if (costPerMileInput) {
+      const savedCostPerMile = bd?.cost_per_mile;
+      const restoredCostPerMile = restoreCostPerMileValue(activeProjectId, 'painting');
+      const initialCostPerMile = savedCostPerMile != null && savedCostPerMile !== ''
+        ? savedCostPerMile
+        : (restoredCostPerMile != null && restoredCostPerMile !== '' ? restoredCostPerMile : null);
+      if (initialCostPerMile != null && initialCostPerMile !== '') {
+        costPerMileInput.dataset.manual = 'true';
+        costPerMileInput.value = parseFloat(initialCostPerMile).toFixed(2);
+      } else {
+        costPerMileInput.dataset.manual = 'false';
+        costPerMileInput.value = '';
+      }
+      costPerMileInput.addEventListener('input', () => {
+        costPerMileInput.dataset.manual = 'true';
         _updatePaintingTransportCosts();
       });
     }
@@ -5473,6 +5646,8 @@ async function initApp(){
       daysInput.oninput = () => {
         if (daysInput.readOnly) return;
         _applyPaintingExpectedDaysSplit(daysInput.value);
+        _syncPaintingMobilizations();
+        _updatePaintingTransportCosts();
       };
     }
     // Drive info display
@@ -5556,6 +5731,9 @@ async function initApp(){
     const margin   = parseFloat(document.getElementById('paintingMarginInput')?.value) || 0;
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
+    const mobilizations = parseFloat(document.getElementById('paintingMobilizationsInput')?.value) || 0;
+    const driverCost = parseFloat(document.getElementById('paintingDriverCostDisplay')?.value) || 0;
+    const costPerMile = parseFloat(document.getElementById('paintingCostPerMileInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
     const expectedDays = _getPaintingExpectedDaysFromPhases() || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
@@ -5582,7 +5760,7 @@ async function initApp(){
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, mobilizations, driver_cost: driverCost, cost_per_mile: costPerMile, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
@@ -5595,7 +5773,16 @@ async function initApp(){
       _loadedProjectData = updated;
       if (_loadedProjectData) {
         _loadedProjectData.total_area = totalArea > 0 ? totalArea : _loadedProjectData.total_area;
+        _loadedProjectData.painting_breakdown = _loadedProjectData.painting_breakdown || {};
+        _loadedProjectData.painting_breakdown.cost_per_mile = costPerMile;
+        _loadedProjectData.painting_breakdown.gasoline = gasoline;
+        _loadedProjectData.painting_breakdown.mobilizations = mobilizations;
+        _loadedProjectData.painting_breakdown.driver_cost = driverCost;
+        _loadedProjectData.gasoline = gasoline;
+        _loadedProjectData.mobilizations = mobilizations;
+        _loadedProjectData.driver_cost = driverCost;
       }
+      persistCostPerMileValue(costPerMile, activeProjectId, 'painting');
       showPaintingCard(updated);
     } catch (e) {
       alert('Save failed: ' + e.message);
@@ -5618,25 +5805,29 @@ async function initApp(){
       const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
       const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
       const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
-      let totLabor = 0, totSubtotalSave = 0, totOhSave = 0, totCommSave = 0;
+      let totLabor = 0, totSubtotalSave = 0;
       for (const p of phases) {
         const c = _calcPhase(p, rates);
         totLabor += c.laborCost;
         totSubtotalSave += c.subtotal;
-        totOhSave += c.oh;
-        totCommSave += c.comm;
       }
       const materialsSave = parseFloat(document.getElementById('materialsInput')?.value) || 0;
-      const gasolineVal = document.getElementById('gasolineInput')?.value;
-      const gasolineSave = gasolineVal !== '' && gasolineVal !== undefined ? parseFloat(gasolineVal) || 0 : 0;
+      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
+      const gasolineInputValue = document.getElementById('gasolineInput')?.value;
+      const gasolineSave = gasolineInputValue !== '' && gasolineInputValue !== undefined ? parseFloat(gasolineInputValue) || 0 : 0;
+      const mobilizationsInputValue = document.getElementById('mobilizationsInput')?.value;
+      const mobilizationsSave = mobilizationsInputValue !== '' && mobilizationsInputValue !== undefined ? parseFloat(mobilizationsInputValue) || 0 : 0;
+      const driverCostInputValue = document.getElementById('driverCostDisplay')?.value;
+      const driverCostSave = driverCostInputValue !== '' && driverCostInputValue !== undefined ? parseFloat(driverCostInputValue) || 0 : 0;
+      const costPerMileInputValue = document.getElementById('costPerMileInput')?.value;
+      const costPerMileSave = costPerMileInputValue !== '' && costPerMileInputValue !== undefined ? parseFloat(costPerMileInputValue) || 0 : 0;
       const markupBaseSave = totSubtotalSave + materialsSave;
-      const totOhSave = markupBaseSave * (overheadPct / 100);
-      const totCommSave = markupBaseSave * (commPct / 100);
+      const ohSave = markupBaseSave * (overheadPct / 100);
+      const commSave = markupBaseSave * (commPct / 100);
       const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
-      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + totOhSave + totPftSave + totCommSave;
+      const taxBaseSave = totSubtotalSave + materialsSave + gasolineSave + ohSave + totPftSave + commSave;
       const totTaxSave = taxBaseSave * (taxPct / 100);
       const totFinalPrice = taxBaseSave + totTaxSave;
-      const commPct = parseFloat(document.getElementById('commissionInput')?.value) || 0;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
@@ -5660,7 +5851,6 @@ async function initApp(){
       }
       const addrVal = document.getElementById('analysisAddressInput')?.value?.trim() || '';
       const prevAddr = _loadedProjectData.address || '';
-      const gasolineVal = document.getElementById('gasolineInput')?.value;
       const tollCostVal = document.getElementById('tollCostInput')?.value;
       const marginVal = document.getElementById('marginInput')?.value;
       const startSel = document.getElementById('startAddressSelect');
@@ -5674,8 +5864,11 @@ async function initApp(){
         start_address: startAddrVal || null,
       };
       if (areaVal !== '' && areaVal !== undefined) body.total_area = parseFloat(areaVal) ?? null;
-      if (gasolineVal !== '' && gasolineVal !== undefined) body.gasoline = parseFloat(gasolineVal) ?? null;
+      if (gasolineInputValue !== '' && gasolineInputValue !== undefined) body.gasoline = parseFloat(gasolineInputValue) ?? null;
       if (tollCostVal !== '' && tollCostVal !== undefined) body.toll_cost = parseFloat(tollCostVal) ?? null;
+      if (mobilizationsInputValue !== '' && mobilizationsInputValue !== undefined) body.mobilizations = parseFloat(mobilizationsInputValue) ?? null;
+      if (driverCostInputValue !== '' && driverCostInputValue !== undefined) body.driver_cost = parseFloat(driverCostInputValue) ?? null;
+      if (costPerMileInputValue !== '' && costPerMileInputValue !== undefined) body.cost_per_mile = parseFloat(costPerMileInputValue) ?? null;
       const expectedDaysVal = document.getElementById('expectedDaysInput')?.value;
       if (expectedDaysVal !== '' && expectedDaysVal !== undefined) body.expected_days = parseInt(expectedDaysVal) || null;
       if (marginVal !== '' && marginVal !== undefined) body.margin = parseFloat(marginVal) ?? null;
@@ -5693,6 +5886,11 @@ async function initApp(){
         _loadedProjectData = { ..._loadedProjectData, ...updated };
         if (!_loadedProjectData.labor_breakdown) _loadedProjectData.labor_breakdown = {};
         _loadedProjectData.labor_breakdown.overhead_pct = overheadPct;
+        _loadedProjectData.cost_per_mile = costPerMileSave;
+        _loadedProjectData.gasoline = gasolineSave;
+        _loadedProjectData.mobilizations = mobilizationsSave;
+        _loadedProjectData.driver_cost = driverCostSave;
+        persistCostPerMileValue(costPerMileSave, activeProjectId, 'analysis');
         _loadedProjectData.labor_breakdown.profit_pct = profitPct;
         _loadedProjectData.labor_breakdown.tax_pct = taxPct;
         _loadedProjectData.labor_breakdown.commission_pct = commPct;
