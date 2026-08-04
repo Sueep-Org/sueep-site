@@ -9,6 +9,7 @@ import { DayAssignmentModal } from "./DayAssignmentModal";
 import {
   addDays,
   dayKey,
+  matchesSearchQuery,
   monthMatrix,
   projectWindow,
   startOfDay,
@@ -19,6 +20,7 @@ import {
   type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
+import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
@@ -141,6 +143,217 @@ function monthLabel(d: Date): string {
 
 type Person = { id: string; displayName: string };
 
+const REPEAT_WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/** Extends a calendar card (or a logged-labor day) forward by upserting more
+ * ProjectDayAssignment rows for it via the same day-assignments endpoint the
+ * "Assign to day" modal's repeat/range control uses — one call, starting the
+ * day after the card currently open, running through `repeatUntil` on the
+ * picked weekdays. For a labor card specifically, this is the only thing it
+ * writes: it never touches LaborEntry, so the logged hours it's opened from
+ * are never duplicated or altered, only future coverage is scheduled. */
+function RepeatToMoreDaysSection({
+  projectId,
+  fromDateKey,
+  supervisorUserId,
+  projectManagerUserId,
+  sovItemIds,
+  scopeItems,
+  changeOrderIds,
+  comment,
+  startTime,
+  endTime,
+  supervisors,
+  onCreated,
+}: {
+  projectId: string;
+  fromDateKey: string;
+  supervisorUserId: string;
+  projectManagerUserId: string;
+  sovItemIds: string[];
+  scopeItems: string[];
+  changeOrderIds: string[];
+  comment: string;
+  startTime: string | null;
+  endTime: string | null;
+  supervisors: Person[];
+  onCreated: (assignments: ScheduleDayAssignment[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [fallbackSupervisorId, setFallbackSupervisorId] = useState("");
+  // Starts the day AFTER the card that's open — that day already has
+  // whatever this card represents, repeating onto it would just re-upsert
+  // the same row.
+  const startFromDate = addDays(new Date(`${fromDateKey}T00:00:00.000Z`), 1);
+  const startFromKey = dayKey(startFromDate);
+  const [days, setDays] = useState<number[]>(() => [startFromDate.getUTCDay()]);
+  const [until, setUntil] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const effectiveSupervisorId = supervisorUserId || fallbackSupervisorId;
+  const hasCoverage =
+    !!effectiveSupervisorId ||
+    !!projectManagerUserId ||
+    comment.trim().length > 0 ||
+    sovItemIds.length > 0 ||
+    scopeItems.length > 0 ||
+    changeOrderIds.length > 0;
+
+  function toggleDay(weekday: number) {
+    setDays((prev) => (prev.includes(weekday) ? prev.filter((d) => d !== weekday) : [...prev, weekday].sort((a, b) => a - b)));
+  }
+
+  let seriesDates: Date[] | null = null;
+  let seriesError = "";
+  if (open && until) {
+    try {
+      seriesDates = computeSeriesDates(startFromDate, new Date(`${until}T00:00:00.000Z`), days);
+      if (seriesDates.length === 0) seriesError = "No dates in range match the selected days";
+    } catch (err) {
+      seriesError = err instanceof SeriesDateRangeError ? err.message : "Invalid date range";
+    }
+  }
+
+  async function handleSave() {
+    setError("");
+    if (!until) {
+      setError("Pick an end date");
+      return;
+    }
+    if (days.length === 0) {
+      setError("Pick at least one day of the week");
+      return;
+    }
+    if (seriesError) {
+      setError(seriesError);
+      return;
+    }
+    if (!hasCoverage) {
+      setError("Pick a supervisor to repeat with");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/erp/schedule/day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          date: startFromKey,
+          supervisorUserId: effectiveSupervisorId || undefined,
+          projectManagerUserId: projectManagerUserId || undefined,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
+          sovItemIds: sovItemIds.length > 0 ? sovItemIds : undefined,
+          scopeItems: scopeItems.length > 0 ? scopeItems : undefined,
+          changeOrderIds: changeOrderIds.length > 0 ? changeOrderIds : undefined,
+          comment: comment.trim() || undefined,
+          repeatUntil: until,
+          repeatDays: days,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        seriesId?: string;
+        assignments?: { id: string }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Failed to repeat");
+      const dateKeys = (seriesDates ?? []).map((d) => dayKey(d));
+      const created: ScheduleDayAssignment[] = (data.assignments ?? []).map((a, i) => ({
+        id: a.id,
+        projectId,
+        dateKey: dateKeys[i]!,
+        supervisorUserId: effectiveSupervisorId || null,
+        projectManagerUserId: projectManagerUserId || null,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        seriesId: data.seriesId ?? null,
+        sovItemIds,
+        scopeItems,
+        changeOrderIds,
+        comment: comment.trim() || null,
+      }));
+      onCreated(created);
+      setOpen(false);
+      setUntil("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to repeat");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 border-t border-gray-100 pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-[10px] font-medium text-pink-600 hover:underline"
+      >
+        {open ? "Cancel repeat" : "Repeat this to more days"}
+      </button>
+      {open ? (
+        <div className="mt-1.5 space-y-1.5">
+          <div>
+            <label className="block text-[9px] text-gray-400">Repeat on</label>
+            <div className="mt-0.5 flex gap-1">
+              {REPEAT_WEEKDAY_LABELS.map((label, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => toggleDay(idx)}
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                    days.includes(idx) ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-500 hover:border-pink-400"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="block text-[9px] text-gray-400">
+            Repeat until
+            <input
+              type="date"
+              value={until}
+              min={startFromKey}
+              onChange={(e) => setUntil(e.target.value)}
+              className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+            />
+          </label>
+          {!hasCoverage ? (
+            <label className="block text-[9px] text-gray-400">
+              Supervisor (needed to repeat)
+              <select
+                value={fallbackSupervisorId}
+                onChange={(e) => setFallbackSupervisorId(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+              >
+                <option value="">— None —</option>
+                {supervisors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {error ? <p className="text-[10px] text-red-500">{error}</p> : null}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          >
+            {saving ? "Repeating…" : `Repeat starting ${startFromKey}`}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function SchedulePlanner({
   projects,
   supervisors,
@@ -202,6 +415,7 @@ export function SchedulePlanner({
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [openDayInitialProjectId, setOpenDayInitialProjectId] = useState<string | null>(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
+  const [clearingSpanDateKey, setClearingSpanDateKey] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   // Deep link from elsewhere (e.g. the schedule-nudge popup's "Schedule it"
@@ -222,22 +436,6 @@ export function SchedulePlanner({
   // day assignments, but no invite email is sent for these.
   const [workerAssignments, setWorkerAssignments] = useState(initialWorkerAssignments);
 
-  // "+N more" popover — lists everything on a day without needing the full
-  // assign-a-supervisor modal. Only one open at a time, closes on outside click.
-  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
-  const overflowRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!expandedDayKey) return;
-    function onMouseDown(e: MouseEvent) {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setExpandedDayKey(null);
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [expandedDayKey]);
-
   // Deletes a planned (ProjectDayAssignment) entry directly from its chip —
   // works on any day, including past ones where the "+" button is hidden, so
   // stale planned entries that never got a real labor log can still be
@@ -253,6 +451,30 @@ export function SchedulePlanner({
       setDayAssignments(previous);
     } finally {
       setDeletingAssignmentId(null);
+    }
+  }
+
+  // Clears a project's own start or end date straight from its calendar
+  // marker's × — the marker isn't backed by its own row (see
+  // projectSpanEndpointsByDay below), it's just projectDate/projectEndDate
+  // itself, so "deleting" it means nulling out that field, same field the
+  // marker's drag-to-reschedule already writes to. Dates are re-derived
+  // server-side, so router.refresh() picks up the change the same way
+  // handleEventDatesSave below does.
+  async function handleClearProjectSpanDate(projectId: string, role: "start" | "end") {
+    setClearingSpanDateKey(`${projectId}:${role}`);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(role === "end" ? { projectEndDate: null } : { projectDate: null }),
+      });
+      if (!res.ok) throw new Error("Failed to clear");
+      router.refresh();
+    } catch {
+      setDragError("Couldn't clear that date — try again");
+    } finally {
+      setClearingSpanDateKey(null);
     }
   }
 
@@ -574,6 +796,10 @@ export function SchedulePlanner({
     if (laborPopoverKey !== `${k}:${p.id}`) return null;
     const entries = p.laborEntriesByDay[k] ?? [];
     const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+    // Coverage to carry forward when repeating this day — from an explicit
+    // day-assignment recorded alongside the logged labor if one exists,
+    // otherwise just the project's current supervisor.
+    const existingAssignment = dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
 
     return createPortal(
       <div
@@ -627,6 +853,21 @@ export function SchedulePlanner({
           <p className="mt-3 text-[10px] text-gray-400">
             This is logged, historical labor — it can only be corrected from the project&apos;s Labor log, not from the calendar.
           </p>
+
+          <RepeatToMoreDaysSection
+            projectId={p.id}
+            fromDateKey={k}
+            supervisorUserId={existingAssignment?.supervisorUserId ?? currentSupervisorId(p)}
+            projectManagerUserId={existingAssignment?.projectManagerUserId ?? ""}
+            sovItemIds={existingAssignment?.sovItemIds ?? []}
+            scopeItems={existingAssignment?.scopeItems ?? []}
+            changeOrderIds={existingAssignment?.changeOrderIds ?? []}
+            comment={existingAssignment?.comment ?? ""}
+            startTime={existingAssignment?.startTime ?? null}
+            endTime={existingAssignment?.endTime ?? null}
+            supervisors={supervisors}
+            onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
+          />
 
           <div className="mt-2.5 flex items-center gap-1.5">
             <Link
@@ -897,7 +1138,7 @@ export function SchedulePlanner({
     const dayWorkers = workerAssignments.filter((a) => a.dateKey === k && a.projectId === p.id);
     const workerOptions = eventWorkerType === "employee" ? employees : contractors;
     const filteredWorkerOptions = eventWorkerQuery.trim()
-      ? workerOptions.filter((w) => w.displayName.toLowerCase().includes(eventWorkerQuery.toLowerCase()))
+      ? workerOptions.filter((w) => matchesSearchQuery(w.displayName, eventWorkerQuery))
       : workerOptions;
 
     return createPortal(
@@ -951,6 +1192,20 @@ export function SchedulePlanner({
                 />
               </div>
             </label>
+            <RepeatToMoreDaysSection
+              projectId={p.id}
+              fromDateKey={k}
+              supervisorUserId={eventDaySupervisorId}
+              projectManagerUserId={eventDayPmId}
+              sovItemIds={eventSovPicks}
+              scopeItems={eventScopePicks}
+              changeOrderIds={eventCoPicks}
+              comment={eventComment}
+              startTime={eventPlannedStartTime || null}
+              endTime={eventPlannedEndTime || null}
+              supervisors={supervisors}
+              onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
+            />
           </div>
         ) : (
           <div className="mt-2 space-y-1.5">
@@ -1302,9 +1557,9 @@ export function SchedulePlanner({
   // date, so what's actually being worked on right now is always at the
   // top rather than wherever it happened to fall in the project list.
   const windows = useMemo(() => {
-    const query = ganttSearch.trim().toLowerCase();
+    const query = ganttSearch.trim();
     const matched = query
-      ? allGanttWindows.filter((w) => w.p.jobTitle.toLowerCase().includes(query))
+      ? allGanttWindows.filter((w) => matchesSearchQuery(w.p.jobTitle, query))
       : allGanttWindows;
     const isOngoing = (w: (typeof allGanttWindows)[number]) => w.start <= todayDate && w.end >= todayDate;
     return matched.slice().sort((a, b) => {
@@ -1447,6 +1702,42 @@ export function SchedulePlanner({
     }
     return map;
   }, [projects, supervisorOverrides, todayDate]);
+
+  // A project's declared start/end date (projectDate/projectEndDate) with no
+  // other marker on the calendar that day — no logged labor, no planned
+  // day-assignment — so the date would otherwise look like it doesn't exist
+  // even though the project record says it does (e.g. a project logged as
+  // ending 8/4 with the last actual day-assignment on 8/3 never gets an 8/4
+  // marker unless someone explicitly schedules that day). Unlike
+  // needsSupervisorByDay above — a deliberately narrow actionable alert for
+  // unsupervised jobs — this applies regardless of supervisor status, so it
+  // skips exactly the population the alert above already marks (unsupervised
+  // with zero logged work) to avoid stacking two markers on the same day.
+  const projectSpanEndpointsByDay = useMemo(() => {
+    const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
+    const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
+    const todayK = dayKey(todayDate);
+    for (const p of projects) {
+      if (p.status === "ARCHIVED") continue;
+      if (!p.projectDate) continue;
+      const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
+      if (!supervisorId && p.workDayKeys.length === 0) continue;
+      const workDayKeySet = new Set(p.workDayKeys);
+      const startK = p.projectDate.slice(0, 10);
+      const endK = p.projectEndDate ? p.projectEndDate.slice(0, 10) : null;
+      const occurrences: { k: string; role: "start" | "end" }[] =
+        endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
+      for (const { k, role } of occurrences) {
+        if (k < todayK) continue;
+        if (workDayKeySet.has(k)) continue;
+        if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
+        const list = map.get(k) ?? [];
+        list.push({ project: p, role });
+        map.set(k, list);
+      }
+    }
+    return map;
+  }, [projects, dayAssignments, supervisorOverrides, todayDate]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -1675,6 +1966,7 @@ export function SchedulePlanner({
                 // Unassigned by definition, so a supervisor filter can never
                 // match one — hide rather than show under the wrong supervisor.
                 let dayNeedsSupervisor = selectedSupervisorId ? [] : needsSupervisorByDay.get(k) ?? [];
+                let dayProjectSpanEndpoints = projectSpanEndpointsByDay.get(k) ?? [];
 
                 if (selectedSupervisorId) {
                   dayProjects = dayProjects.filter(
@@ -1687,6 +1979,9 @@ export function SchedulePlanner({
                   daySovRequests = daySovRequests.filter(
                     (r) => projectSupervisorOnDay(r.projectId, k) === selectedSupervisorId,
                   );
+                  dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter(
+                    (x) => projectSupervisorOnDay(x.project.id, k) === selectedSupervisorId,
+                  );
                 }
 
                 dayProjects = dayProjects.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
@@ -1697,6 +1992,7 @@ export function SchedulePlanner({
                   return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
                 });
                 dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
+                dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
 
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
                 // Planned assignments are only shown when there's no confirmed
@@ -1706,26 +2002,6 @@ export function SchedulePlanner({
                   .filter((a) => !confirmedProjectIds.has(a.projectId))
                   .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
                   .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
-
-                const totalCount = dayProjects.length + dayPlanned.length + dayChangeOrders.length + daySovRequests.length;
-                const visibleProjects = dayProjects.slice(0, 4);
-                const remainingAfterProjects = Math.max(0, 4 - visibleProjects.length);
-                const visiblePlanned = dayPlanned.slice(0, remainingAfterProjects);
-                const remainingAfterPlanned = Math.max(0, remainingAfterProjects - visiblePlanned.length);
-                const visibleChangeOrders = dayChangeOrders.slice(0, remainingAfterPlanned);
-                const remainingAfterChangeOrders = Math.max(0, remainingAfterPlanned - visibleChangeOrders.length);
-                const visibleSovRequests = daySovRequests.slice(0, remainingAfterChangeOrders);
-                const overflow =
-                  totalCount - visibleProjects.length - visiblePlanned.length - visibleChangeOrders.length - visibleSovRequests.length;
-                // The "+n more" popover lists every item for the day, including
-                // ones already shown as a full chip above — those already have
-                // their own popover mount point next to that chip, so the
-                // overflow list must skip re-mounting one for them (mounting
-                // the same createPortal twice for a matching key would render
-                // two stacked copies of the same card).
-                const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
-                const visiblePlannedAssignmentIds = new Set(visiblePlanned.map(({ assignment }) => assignment.id));
-                const visibleChangeOrderIds = new Set(visibleChangeOrders.map((co) => co.id));
 
                 return (
                   <div
@@ -1745,12 +2021,6 @@ export function SchedulePlanner({
                     }}
                     className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
                   >
-                  {/* Dimming for an out-of-month day is scoped to this inner
-                      wrapper, not the cell itself — opacity < 1 creates a new
-                      CSS stacking context, and the "+n more" popover below
-                      (a sibling of this wrapper, not a descendant) needs to
-                      escape that so it can render in front of other cells'
-                      content instead of being trapped behind it. */}
                   <div className={inMonth ? "" : "opacity-40"}>
                     <div className="flex items-center justify-between">
                       <div
@@ -1813,7 +2083,50 @@ export function SchedulePlanner({
                       </ul>
                     ) : null}
                     <ul className="mt-1 space-y-1">
-                      {visibleProjects.map((p) => {
+                      {dayProjectSpanEndpoints.map(({ project: p, role }) => (
+                        <li key={`span-${p.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
+                          <button
+                            type="button"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", p.id);
+                              e.dataTransfer.effectAllowed = "move";
+                              setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
+                            }}
+                            onDragEnd={() => {
+                              setDraggingChip(null);
+                              setDragOverDayKey(null);
+                            }}
+                            onClick={() => openEventPopover(k, p)}
+                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS}`}
+                          >
+                            <span className="truncate">{p.jobTitle}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleClearProjectSpanDate(p.id, role);
+                            }}
+                            disabled={clearingSpanDateKey === `${p.id}:${role}`}
+                            title={role === "end" ? "Clear this project's end date" : "Clear this project's start date"}
+                            className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                          >
+                            ×
+                          </button>
+                          {inMonth ? (
+                            <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                              <div className="font-semibold">{p.jobTitle}</div>
+                              <div className="text-gray-300">
+                                {role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled
+                              </div>
+                              <div className="mt-1 text-gray-300">Click to view or schedule it</div>
+                            </div>
+                          ) : null}
+                          {renderEventPopover(k, p)}
+                        </li>
+                      ))}
+                      {dayProjects.map((p) => {
                         const summary = p.laborByDay[k];
                         const loggedWorkers = new Set(summary?.workers ?? []);
                         const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
@@ -1847,7 +2160,7 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
-                      {visiblePlanned.map(({ assignment, project }) => {
+                      {dayPlanned.map(({ assignment, project }) => {
                         const isOverdue = !isFutureOrToday;
                         const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                         const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
@@ -1917,7 +2230,7 @@ export function SchedulePlanner({
                         </li>
                         );
                       })}
-                      {visibleChangeOrders.map((co) => {
+                      {dayChangeOrders.map((co) => {
                         const summary = co.laborByDay[k];
                         const parentProject = projectById.get(co.projectId);
                         const role: "start" | "end" | null =
@@ -1967,7 +2280,7 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
-                      {visibleSovRequests.map((r) => {
+                      {daySovRequests.map((r) => {
                         const parentProject = projectById.get(r.projectId);
                         return (
                           <li key={`sov-${r.id}`} className={inMonth ? "group relative" : "relative"}>
@@ -1988,134 +2301,8 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
-                      {overflow > 0 ? (
-                        <li className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedDayKey((prev) => (prev === k ? null : k))}
-                            className="px-1 text-[10px] font-medium text-gray-500 hover:text-pink-600 hover:underline"
-                          >
-                            +{overflow} more
-                          </button>
-                        </li>
-                      ) : null}
                     </ul>
                   </div>
-                  {overflow > 0 && expandedDayKey === k ? (
-                            <div
-                              ref={overflowRef}
-                              className={`absolute z-40 w-56 rounded-md bg-gray-900 px-2.5 py-2 text-[10px] leading-snug text-white shadow-lg ${tooltipPositionClass}`}
-                            >
-                              <div className="mb-1.5 font-semibold text-gray-300">
-                                {cell.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })}
-                              </div>
-                              <ul className="max-h-48 space-y-1 overflow-y-auto">
-                                {dayProjects.map((p) => (
-                                  <li key={`ov-p-${p.id}`} className="flex items-center gap-1.5">
-                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(p.segment)]}`} />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setExpandedDayKey(null);
-                                        openLaborPopover(k, p);
-                                      }}
-                                      className="truncate text-left hover:underline"
-                                      title={p.jobTitle}
-                                    >
-                                      {p.jobTitle}
-                                    </button>
-                                    {visibleProjectIds.has(p.id) ? null : renderLaborPopover(k, p)}
-                                  </li>
-                                ))}
-                                {dayPlanned.map(({ assignment, project }) => (
-                                  <li
-                                    key={`ov-plan-${assignment.id}`}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData("text/plain", assignment.id);
-                                      e.dataTransfer.effectAllowed = "move";
-                                      setDraggingChip({ kind: "planned", projectId: project.id, assignmentId: assignment.id, fromKey: k, jobTitle: project.jobTitle });
-                                      setExpandedDayKey(null);
-                                    }}
-                                    onDragEnd={() => {
-                                      setDraggingChip(null);
-                                      setDragOverDayKey(null);
-                                    }}
-                                    className="flex cursor-grab items-center gap-1.5 active:cursor-grabbing"
-                                  >
-                                    <span
-                                      className={`h-2 w-2 shrink-0 rounded-sm border border-dashed ${
-                                        isFutureOrToday ? "border-gray-400" : "border-red-500"
-                                      } ${CALENDAR_GROUP_SWATCH_CLASS[calendarSegmentGroup(project.segment)]}`}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setExpandedDayKey(null);
-                                        openEventPopover(k, project, assignment);
-                                      }}
-                                      className="truncate text-left hover:underline"
-                                      title={project.jobTitle}
-                                    >
-                                      {project.jobTitle}
-                                    </button>
-                                    <span className={`shrink-0 ${isFutureOrToday ? "text-gray-400" : "text-red-400"}`}>
-                                      {isFutureOrToday ? "(planned)" : "(missed)"}
-                                    </span>
-                                    {visiblePlannedAssignmentIds.has(assignment.id) ? null : renderEventPopover(k, project)}
-                                  </li>
-                                ))}
-                                {dayChangeOrders.map((co) => {
-                                  const role: "start" | "end" | null =
-                                    k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
-                                  return (
-                                  <li
-                                    key={`ov-co-${co.id}`}
-                                    draggable={role !== null}
-                                    onDragStart={role !== null ? (e) => {
-                                      e.dataTransfer.setData("text/plain", co.id);
-                                      e.dataTransfer.effectAllowed = "move";
-                                      setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
-                                      setExpandedDayKey(null);
-                                    } : undefined}
-                                    onDragEnd={role !== null ? () => {
-                                      setDraggingChip(null);
-                                      setDragOverDayKey(null);
-                                    } : undefined}
-                                    className={`flex items-center gap-1.5 ${role !== null ? "cursor-grab active:cursor-grabbing" : ""}`}
-                                  >
-                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setExpandedDayKey(null);
-                                        openCoPopover(k, co);
-                                      }}
-                                      className="truncate text-left hover:underline"
-                                      title={co.title}
-                                    >
-                                      {co.title}
-                                    </button>
-                                    {visibleChangeOrderIds.has(co.id) ? null : renderCoPopover(k, co)}
-                                  </li>
-                                  );
-                                })}
-                                {daySovRequests.map((r) => (
-                                  <li key={`ov-sov-${r.id}`} className="flex items-center gap-1.5">
-                                    <span className={`h-2 w-2 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
-                                    <Link
-                                      href={`/erp/projects/${r.projectId}`}
-                                      onClick={() => setExpandedDayKey(null)}
-                                      className="truncate hover:underline"
-                                      title={r.title}
-                                    >
-                                      {r.title}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
                   </div>
                 );
               })}
@@ -2282,7 +2469,6 @@ export function SchedulePlanner({
           projectManagers={projectManagers}
           employees={employees}
           contractors={contractors}
-          existing={plannedByDay.get(openDayKey) ?? []}
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
           onClose={() => {
@@ -2302,7 +2488,6 @@ export function SchedulePlanner({
             const last = created[created.length - 1];
             if (last?.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [last.projectId]: last.supervisorUserId }));
           }}
-          onDeleted={(id) => setDayAssignments((prev) => prev.filter((a) => a.id !== id))}
           onSeriesDeleted={(seriesId) => {
             setDayAssignments((prev) => prev.filter((a) => a.seriesId !== seriesId));
             setWorkerAssignments((prev) => prev.filter((a) => a.seriesId !== seriesId));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ScheduleDayAssignment, ScheduleWorkerAssignment } from "@/lib/erp/schedule";
+import { matchesSearchQuery, type ScheduleDayAssignment, type ScheduleWorkerAssignment } from "@/lib/erp/schedule";
 import { computeSeriesDates, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
@@ -29,18 +29,6 @@ function dateLabel(dateKey: string): string {
   });
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const period = h! >= 12 ? "PM" : "AM";
-  const hour12 = h! % 12 === 0 ? 12 : h! % 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function formatTimeRange(startTime: string | null, endTime: string | null): string | null {
-  if (!startTime || !endTime) return null;
-  return `${formatTime(startTime)}–${formatTime(endTime)}`;
-}
-
 export function DayAssignmentModal({
   dateKey,
   projects,
@@ -48,13 +36,11 @@ export function DayAssignmentModal({
   projectManagers,
   employees,
   contractors,
-  existing,
   existingWorkers,
   initialProjectId,
   onClose,
   onCreated,
   onSeriesCreated,
-  onDeleted,
   onSeriesDeleted,
   onWorkerCreated,
   onWorkerSeriesCreated,
@@ -66,7 +52,6 @@ export function DayAssignmentModal({
   projectManagers: Person[];
   employees: Person[];
   contractors: Person[];
-  existing: ScheduleDayAssignment[];
   existingWorkers: ScheduleWorkerAssignment[];
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
   initialProjectId?: string;
@@ -74,7 +59,6 @@ export function DayAssignmentModal({
   onCreated: (assignment: ScheduleDayAssignment) => void;
   /** Fired instead of onCreated when a repeat/range is active, one row per generated day. */
   onSeriesCreated: (assignments: ScheduleDayAssignment[]) => void;
-  onDeleted: (id: string) => void;
   /** Fired when a whole repeating series (every day it generated) is removed. */
   onSeriesDeleted: (seriesId: string) => void;
   onWorkerCreated: (assignment: ScheduleWorkerAssignment) => void;
@@ -103,7 +87,6 @@ export function DayAssignmentModal({
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingSeriesId, setDeletingSeriesId] = useState<string | null>(null);
 
   // Workers scheduled: either an Employee or a Contractor, picked via the
@@ -134,7 +117,7 @@ export function DayAssignmentModal({
   const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
 
   const filteredProjects = projectQuery.trim()
-    ? projects.filter((p) => p.jobTitle.toLowerCase().includes(projectQuery.toLowerCase()))
+    ? projects.filter((p) => matchesSearchQuery(p.jobTitle, projectQuery))
     : projects;
 
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
@@ -147,10 +130,10 @@ export function DayAssignmentModal({
     : TURNOVER_SCOPE_OPTIONS;
 
   const filteredEmployees = employeeQuery.trim()
-    ? employees.filter((e) => e.displayName.toLowerCase().includes(employeeQuery.toLowerCase()))
+    ? employees.filter((e) => matchesSearchQuery(e.displayName, employeeQuery))
     : employees;
   const filteredContractors = contractorQuery.trim()
-    ? contractors.filter((c) => c.displayName.toLowerCase().includes(contractorQuery.toLowerCase()))
+    ? contractors.filter((c) => matchesSearchQuery(c.displayName, contractorQuery))
     : contractors;
 
   function toggleRepeatDay(weekday: number) {
@@ -270,27 +253,6 @@ export function DayAssignmentModal({
       setError(err instanceof Error ? err.message : "Failed to assign");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    setDeletingId(id);
-    try {
-      const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to remove");
-      onDeleted(id);
-      // The server also clears planned workers for this project/day — mirror
-      // that here so the list doesn't show now-deleted worker assignments.
-      const deleted = existing.find((a) => a.id === id);
-      if (deleted) {
-        existingWorkers
-          .filter((w) => w.projectId === deleted.projectId && w.dateKey === deleted.dateKey)
-          .forEach((w) => onWorkerDeleted(w.id));
-      }
-    } catch {
-      // leave it in place; user can retry
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -419,59 +381,7 @@ export function DayAssignmentModal({
           <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
         </div>
         <div className="min-h-0 overflow-y-auto p-6 pt-4">
-        {existing.length > 0 ? (
-          <ul className="mt-4 space-y-1.5">
-            {existing.map((a) => {
-              const project = projects.find((p) => p.id === a.projectId);
-              const supervisor = a.supervisorUserId ? supervisors.find((s) => s.id === a.supervisorUserId) : null;
-              const pm = !supervisor && a.projectManagerUserId ? projectManagers.find((p) => p.id === a.projectManagerUserId) : null;
-              const personLabel = supervisor
-                ? supervisor.displayName
-                : pm
-                ? `${pm.displayName} (PM)`
-                : "No supervisor/PM";
-              return (
-                <li
-                  key={a.id}
-                  className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs"
-                >
-                  <span className="truncate" title={project?.jobTitle}>
-                    <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
-                    <span className="text-gray-500"> — {personLabel}</span>
-                    {formatTimeRange(a.startTime, a.endTime) ? (
-                      <span className="text-gray-400"> ({formatTimeRange(a.startTime, a.endTime)})</span>
-                    ) : null}
-                    {a.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
-                    {a.comment ? <span className="text-gray-400"> — &quot;{a.comment}&quot;</span> : null}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    {a.seriesId ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSeries(a.seriesId!)}
-                        disabled={deletingSeriesId === a.seriesId}
-                        title="Remove every day in this repeating series"
-                        className="text-[10px] font-medium text-gray-400 hover:text-red-500 disabled:opacity-50"
-                      >
-                        remove all
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(a.id)}
-                      disabled={deletingId === a.id}
-                      className="text-gray-400 hover:text-red-500 disabled:opacity-50"
-                    >
-                      ×
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-
-        <form onSubmit={handleAssign} className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+        <form onSubmit={handleAssign} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600">Project</label>
             <input

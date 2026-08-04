@@ -1,5 +1,19 @@
 /** Pure date helpers for ERP schedule / Gantt (no external deps). */
 
+// A plain `text.includes(query)` requires the whole typed phrase to appear
+// contiguously and in order, which fails for a very common search pattern:
+// "<project name> <unit number>", where the unit number sits at the end of
+// a longer descriptive title (e.g. "J Centra Burlington - Building 5000 -
+// Unit 5101" doesn't contain "J Centra 5101" as a substring even though
+// every word is in there). Splitting the query into words and requiring
+// each one to appear somewhere (in any order) fixes that without pulling in
+// a fuzzy-search dependency.
+export function matchesSearchQuery(text: string, query: string): boolean {
+  const haystack = text.toLowerCase();
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return words.every((w) => haystack.includes(w));
+}
+
 // UTC, not local — date-only fields (projectDate, requestedDate, workDate,
 // etc.) are stored as literal UTC midnight with no real timezone attached
 // (see dates.ts). Zeroing via local setHours() depended on the server
