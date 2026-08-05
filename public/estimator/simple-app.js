@@ -3740,7 +3740,9 @@ async function initApp(){
     const area = parseFloat(totalArea) || 0;
     if (area <= 0) return 1;
     const rate = _getPaintingAreaPerPersonRate(pid);
-    const painters = 3;
+    // Use actual number of painters in the phase when available, fall back to default 3
+    const crew = _paintingPhaseCrews[pid] || [];
+    const painters = crew.filter(m => m.role === 'painter').length || 3;
     return Math.max(1, Math.ceil(area / (painters * rate)));
   }
 
@@ -4019,7 +4021,7 @@ async function initApp(){
     const daysInput = document.getElementById('paintingExpectedDaysInput');
     const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
     if (!mobilizationsInput) return;
-    if (mobilizationsInput.dataset.manual === 'true' || mobilizationsInput.value !== '') return;
+    if (mobilizationsInput.dataset.manual === 'true') return;
     const expectedDays = parseFloat(daysInput?.value) || 0;
     const derived = expectedDays > 0 ? expectedDays * 2 : '';
     mobilizationsInput.value = derived !== '' ? derived.toFixed(0) : '';
@@ -4667,7 +4669,18 @@ async function initApp(){
     if (!_paintingExpectedDaysManual) {
       const totalDays = _getPaintingExpectedDaysFromPhases();
       const daysEl = document.getElementById('paintingExpectedDaysInput');
-      if (daysEl) daysEl.value = totalDays > 0 ? totalDays : '';
+      if (daysEl) {
+        const previousDays = parseFloat(daysEl.value) || 0;
+        const newDays = totalDays > 0 ? totalDays : '';
+        if (previousDays !== newDays) {
+          const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
+          if (mobilizationsInput) {
+            mobilizationsInput.dataset.manual = 'false';
+          }
+        }
+        daysEl.value = newDays;
+      }
+      _syncPaintingMobilizations();
     }
   }
 
@@ -4767,7 +4780,9 @@ async function initApp(){
         btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
         btn.onclick = () => {
           _paintingPhaseCrews[pid].push({ role, rate: defaultRate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) });
+          if (!_paintingExpectedDaysManual) _refreshPaintingDays();
           _renderPaintingPhaseTable();
+          _updatePaintingCrewCalcs();
         };
         return btn;
       };
@@ -4867,7 +4882,15 @@ async function initApp(){
           const delBtn = document.createElement('button');
           delBtn.type = 'button'; delBtn.textContent = '×';
           delBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;line-height:1;';
-          delBtn.onclick = () => { const idx = _paintingPhaseCrews[pid].indexOf(member); if (idx !== -1) _paintingPhaseCrews[pid].splice(idx, 1); _renderPaintingPhaseTable(); };
+          delBtn.onclick = () => {
+            const idx = _paintingPhaseCrews[pid].indexOf(member);
+            if (idx !== -1) {
+              _paintingPhaseCrews[pid].splice(idx, 1);
+              if (!_paintingExpectedDaysManual) _refreshPaintingDays();
+              _renderPaintingPhaseTable();
+              _updatePaintingCrewCalcs();
+            }
+          };
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
@@ -5633,8 +5656,8 @@ async function initApp(){
         }
       }
       if (bd.expected_days != null) {
-        _paintingExpectedDaysManual = true;
         setVal('paintingExpectedDaysInput', bd.expected_days);
+        _paintingExpectedDaysManual = false;
       }
       setVal('paintingPrimerAreaPerPersonInput', bd.primer_area_per_person ?? PAINTING_PRIMER_SF_PER_PERSON_DAY);
       setVal('paintingInteriorAreaPerPersonInput', bd.interior_area_per_person ?? PAINTING_INTERIOR_SF_PER_PERSON_DAY);
@@ -5676,12 +5699,11 @@ async function initApp(){
     if (mobilizationsInput) {
       const expectedDays = parseFloat(document.getElementById('paintingExpectedDaysInput')?.value) || 0;
       const savedMobilizations = bd?.mobilizations;
-      const hasSavedMobilizations = savedMobilizations != null && savedMobilizations !== '';
-      const derivedMobilizations = hasSavedMobilizations
+      const derivedMobilizations = (savedMobilizations != null && savedMobilizations !== '')
         ? parseFloat(savedMobilizations)
         : (expectedDays > 0 ? expectedDays * 2 : null);
       mobilizationsInput.value = derivedMobilizations != null ? derivedMobilizations.toFixed(0) : '';
-      mobilizationsInput.dataset.manual = hasSavedMobilizations ? 'true' : 'false';
+      mobilizationsInput.dataset.manual = (savedMobilizations != null && savedMobilizations !== '') ? 'true' : 'false';
       mobilizationsInput.addEventListener('input', () => {
         mobilizationsInput.dataset.manual = 'true';
         _updatePaintingTransportCosts();
@@ -5691,6 +5713,12 @@ async function initApp(){
       const autoArea = parseFloat(paintingAreaValue || areaInput?.value) || 0;
       if (autoArea > 0) {
         _autoGeneratePaintingPhases(autoArea);
+      }
+    }
+    if (!_paintingExpectedDaysManual) {
+      const area = parseFloat(areaInput?.value) || 0;
+      if (area > 0) {
+        _refreshPaintingDays();
       }
     }
     if (areaInput) {
@@ -5751,12 +5779,18 @@ async function initApp(){
       });
     }
     if (daysInput) {
-      daysInput.oninput = () => {
+      const handlePaintingDaysInput = () => {
         if (daysInput.readOnly) return;
+        if (mobilizationsInput) {
+          mobilizationsInput.dataset.manual = 'false';
+        }
         _applyPaintingExpectedDaysSplit(daysInput.value);
+        _updatePaintingCrewCalcs();
         _syncPaintingMobilizations();
         _updatePaintingTransportCosts();
       };
+      daysInput.addEventListener('input', handlePaintingDaysInput);
+      daysInput.addEventListener('change', handlePaintingDaysInput);
     }
     // Drive info display
     const di = _loadedProjectData?.driving_info || {};
@@ -5793,6 +5827,7 @@ async function initApp(){
     if (inp) { inp.readOnly = true; inp.classList.add('bg-gray-50'); }
     document.getElementById('paintingExpectedDaysModifyBtn').style.display = '';
     document.getElementById('paintingExpectedDaysResetBtn').style.display = 'none';
+    _refreshPaintingDays();
     _updatePaintingCrewCalcs();
   });
 
