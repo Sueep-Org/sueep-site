@@ -4599,6 +4599,24 @@ async function initApp(){
     };
   }
 
+  function _syncPaintingMaterialsInputFromPhases() {
+    const materialsInput = document.getElementById('paintingMaterialsInput');
+    if (!materialsInput) return;
+
+    const activePhaseIds = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid));
+    const totalPhaseMaterials = activePhaseIds.reduce((sum, pid) => sum + (parseFloat(_paintingPhaseMaterials[pid]) || 0), 0);
+    if (!_paintingMaterialsManual) {
+      materialsInput.value = totalPhaseMaterials.toFixed(2);
+    }
+
+    document.querySelectorAll('[data-painting-phase-material-input]').forEach(el => {
+      const pid = el.dataset.paintingPhasePid;
+      if (!pid) return;
+      const phaseValue = Number.isFinite(parseFloat(_paintingPhaseMaterials[pid])) ? parseFloat(_paintingPhaseMaterials[pid]) : 0;
+      el.value = phaseValue.toFixed(2);
+    });
+  }
+
   function _updatePaintingCrewCalcs() {
     const rates = _getPaintingRates();
     const overheadPct = parseFloat(document.getElementById('paintingOverheadInput')?.value) || 0;
@@ -4606,14 +4624,23 @@ async function initApp(){
     const taxPct      = parseFloat(document.getElementById('paintingTaxInput')?.value) || 0;
     const commPct     = parseFloat(document.getElementById('paintingCommissionInput')?.value) || 0;
 
+    const activePhaseIds = PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid));
+    const totalPhaseMaterials = activePhaseIds.reduce((sum, pid) => sum + (parseFloat(_paintingPhaseMaterials[pid]) || 0), 0);
+    const materialsInput = document.getElementById('paintingMaterialsInput');
+    const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
+    const derivedMaterials = _getPaintingAreaDerivedValues(totalArea).materials;
+    const materialsForPricing = Number.isFinite(parseFloat(materialsInput?.value))
+      ? parseFloat(materialsInput.value)
+      : derivedMaterials;
+
     let totLabor = 0, totSubtotal = 0, totOh = 0, totPft = 0, totPrice = 0, totTaxes = 0, totComm = 0, totFinal = 0;
-    let totalPhaseMaterials = 0;
+    let phaseMaterialsTotal = 0;
 
     PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).forEach(pid => {
       const crew = _paintingPhaseCrews[pid] || [];
       const phaseMat = _paintingPhaseMaterials[pid] || 0;
       const c = _calcPhase({ crew, materials: phaseMat }, rates);
-      totalPhaseMaterials += phaseMat;
+      phaseMaterialsTotal += phaseMat;
       totLabor += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
       totPft += c.pft; totPrice += c.price; totTaxes += c.taxes; totComm += c.comm; totFinal += c.finalPrice;
 
@@ -4636,7 +4663,7 @@ async function initApp(){
     const gasCost = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
       : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
-    const taxBase = totSubtotal + totalPhaseMaterials + gasCost + totOh + totPft + totComm;
+    const taxBase = totSubtotal + materialsForPricing + gasCost + totOh + totPft + totComm;
     const totTax = taxBase * (taxPct / 100);
     const totFinalActual = taxBase + totTax;
 
@@ -4647,7 +4674,7 @@ async function initApp(){
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Subtotal`, totSubtotal],
-        [`Materials`, totalPhaseMaterials],
+        [`Materials`, materialsForPricing],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
         [`Tax (${taxPct}%)`, totTax],
@@ -4921,10 +4948,20 @@ async function initApp(){
       matLabel.style.cssText = 'color:#6b7280;white-space:nowrap;';
       const matInput = document.createElement('input');
       matInput.type = 'number'; matInput.min = '0'; matInput.step = '0.01';
-      matInput.value = _paintingPhaseMaterials[pid] || 0;
+      matInput.dataset.paintingPhaseMaterialInput = 'true';
+      const savedMatFallback = Number.isFinite(parseFloat(document.getElementById('paintingMaterialsInput')?.value))
+        ? parseFloat(document.getElementById('paintingMaterialsInput').value)
+        : (Number.isFinite(parseFloat(_paintingPhaseMaterials[pid])) ? parseFloat(_paintingPhaseMaterials[pid]) : 0);
+      matInput.value = savedMatFallback;
       matInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:120px;outline:none;';
       matInput.addEventListener('input', () => {
         _paintingPhaseMaterials[pid] = parseFloat(matInput.value) || 0;
+        const materialsInput = document.getElementById('paintingMaterialsInput');
+        if (materialsInput) {
+          materialsInput.value = matInput.value;
+          _paintingMaterialsManual = true;
+        }
+        _syncPaintingMaterialsFromInput();
         _updatePaintingCrewCalcs();
       });
       matRow.appendChild(matLabel); matRow.appendChild(matInput);
@@ -5048,7 +5085,8 @@ async function initApp(){
         }
         breakdownDiv.appendChild(table);
 
-        const savedMaterials = bd.materials || 0;
+        const totalPhaseMaterials = bd.phases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
+        const savedMaterials = Number.isFinite(parseFloat(bd.materials)) ? parseFloat(bd.materials) : totalPhaseMaterials;
         const markupBase = totSubtotal + savedMaterials;
         const totPftSummary = _calcProfitAmount(totSubtotal, savedMaterials, (bd.profit_pct || 0) / 100);
         const totOhSummary = markupBase * ((bd.overhead_pct || 0) / 100);
@@ -5127,8 +5165,8 @@ async function initApp(){
     const resolvedAddress = bd?.address || projData.address || '';
 
     // Build effective phases: from saved bd, or auto-generate from area
-    let effectivePhases = bd?.phases || null;
-    const fallbackSavedMaterials = parseFloat(bd?.materials) || 0;
+    let effectivePhases = Array.isArray(bd?.phases) && bd.phases.length > 0 ? bd.phases : null;
+    const fallbackSavedMaterials = Number.isFinite(parseFloat(bd?.materials)) ? parseFloat(bd.materials) : null;
     let effectiveRates = {
       overhead: (bd?.overhead_pct || 0) / 100,
       profit:   (bd?.profit_pct   || 30) / 100,
@@ -5228,15 +5266,19 @@ async function initApp(){
         }
         breakdownDiv.appendChild(table);
 
-        const phaseMaterials = effectivePhases.reduce((sum, p) => sum + (p.materials || 0), 0);
-        const savedMaterials = phaseMaterials || fallbackSavedMaterials || areaDerived?.materials || 0;
+        const phaseMaterials = effectivePhases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
+        const savedMaterials = Number.isFinite(parseFloat(bd?.materials))
+          ? parseFloat(bd.materials)
+          : (phaseMaterials > 0 ? phaseMaterials : (areaDerived?.materials ?? 0));
         const overheadPct = bd?.overhead_pct || 0;
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
         const commPct     = bd?.commission_pct || 5;
         const taxBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
         const totTax = taxBase * (taxPct / 100);
-        const totFinal = (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
+        const totFinal = bd?.final_price != null
+          ? parseFloat(bd.final_price)
+          : (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
@@ -5275,11 +5317,16 @@ async function initApp(){
         totSubtotal += c.subtotal; totOh += c.oh; totPft += c.pft; totComm += c.comm;
       }
     }
-    const savedMaterials = effectivePhases
-      ? effectivePhases.reduce((sum, p) => sum + (p.materials || 0), 0) || fallbackSavedMaterials || areaDerived?.materials || 0
-      : fallbackSavedMaterials || areaDerived?.materials || 0;
+    const phaseMaterialSum = effectivePhases
+      ? effectivePhases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0)
+      : 0;
+    const savedMaterials = fallbackSavedMaterials != null
+      ? fallbackSavedMaterials
+      : (phaseMaterialSum > 0 ? phaseMaterialSum : (areaDerived?.materials ?? 0));
     const quoteBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
-    const quote = (bd?.phases ? quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100)) : areaDerived?.finalSubtotal ?? (quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100))));
+    const quote = bd?.final_price != null
+      ? parseFloat(bd.final_price)
+      : (bd?.phases ? quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100)) : areaDerived?.finalSubtotal ?? (quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100))));
     setText('paintingViewQuote', fmt$(quote));
 
     const lps = (labor != null && resolvedArea) ? (labor / resolvedArea) : null;
@@ -5297,6 +5344,7 @@ async function initApp(){
     _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
     _paintingMaterialsManual = false;
     _deletedPaintingPhaseIds = new Set();
+    const savedMainMaterials = Number.isFinite(parseFloat(bd?.materials)) ? parseFloat(bd.materials) : 0;
     if (bd?.phases) {
       const savedPids = new Set();
       for (const p of bd.phases) {
@@ -5304,7 +5352,10 @@ async function initApp(){
         if (!pid) continue;
         savedPids.add(pid);
         _paintingPhaseCrews[pid] = (p.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
-        _paintingPhaseMaterials[pid] = p.materials || 0;
+        const phaseSavedMaterials = parseFloat(p.materials);
+        _paintingPhaseMaterials[pid] = Number.isFinite(phaseSavedMaterials)
+          ? phaseSavedMaterials
+          : savedMainMaterials;
       }
       for (const pid of PAINTING_PHASE_IDS) {
         if (!savedPids.has(pid)) _deletedPaintingPhaseIds.add(pid);
@@ -5654,6 +5705,7 @@ async function initApp(){
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
     _paintingPhaseCrews = { phase1: [], phase2: [] };
     _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
+    const editSavedMainMaterials = Number.isFinite(parseFloat(bd?.materials)) ? parseFloat(bd.materials) : 0;
     if (bd) {
       setVal('paintingOverheadInput', bd.overhead_pct ?? 0);
       setVal('paintingProfitInput', bd.profit_pct ?? 30);
@@ -5668,7 +5720,10 @@ async function initApp(){
         for (const p of bd.phases) {
           const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
           if (pid) {
-            _paintingPhaseMaterials[pid] = p.materials || 0;
+            const phaseSavedMaterials = parseFloat(p.materials);
+            _paintingPhaseMaterials[pid] = Number.isFinite(phaseSavedMaterials)
+              ? phaseSavedMaterials
+              : editSavedMainMaterials;
             _paintingPhaseCrews[pid] = (p.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
           }
         }
@@ -5695,7 +5750,7 @@ async function initApp(){
         setVal('paintingTotalAreaInput', paintingAreaValue);
       }
       if (materialsInput) {
-        materialsInput.value = bd?.materials != null ? (bd.materials || 0).toFixed(2) : openAreaDerived.materials.toFixed(2);
+        materialsInput.value = bd?.materials != null ? Number(bd.materials).toFixed(2) : openAreaDerived.materials.toFixed(2);
       }
       areaInput.oninput = () => {
         const derived = _getPaintingAreaDerivedValues(areaInput.value);
@@ -5933,26 +5988,32 @@ async function initApp(){
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
-      _loadedProjectData = updated;
+      _loadedProjectData = { ..._loadedProjectData, ...updated };
       if (_loadedProjectData) {
         _loadedProjectData.total_area = totalArea > 0 ? totalArea : _loadedProjectData.total_area;
-        _loadedProjectData.painting_breakdown = _loadedProjectData.painting_breakdown || {};
-        _loadedProjectData.painting_breakdown.cost_per_mile = costPerMile;
-        _loadedProjectData.painting_breakdown.gasoline = gasoline;
-        _loadedProjectData.painting_breakdown.mobilizations = mobilizations;
-        _loadedProjectData.painting_breakdown.driver_cost = driverCost;
-        _loadedProjectData.painting_breakdown.toll_cost = tollCost;
-        _loadedProjectData.painting_breakdown.expected_days = expectedDays;
-        _loadedProjectData.painting_breakdown.total_area = totalArea;
-        _loadedProjectData.painting_breakdown.address = address;
-        _loadedProjectData.painting_breakdown.comments = comments;
-        _loadedProjectData.painting_breakdown.margin = margin;
+        _loadedProjectData.painting_breakdown = {
+          ...(_loadedProjectData.painting_breakdown || {}),
+          ...painting_breakdown,
+          phases,
+          total_area: totalArea,
+          address,
+          comments,
+          expected_days: expectedDays,
+          cost_per_mile: costPerMile,
+          gasoline,
+          mobilizations,
+          driver_cost: driverCost,
+          toll_cost: tollCost,
+          final_price: paintFinalPrice,
+        };
         _loadedProjectData.gasoline = gasoline;
         _loadedProjectData.mobilizations = mobilizations;
         _loadedProjectData.driver_cost = driverCost;
+        _loadedProjectData.toll_cost = tollCost;
+        _loadedProjectData.quote = paintFinalPrice;
       }
       persistCostPerMileValue(costPerMile, activeProjectId, 'painting');
-      showPaintingCard(updated);
+      showPaintingCard(_loadedProjectData);
     } catch (e) {
       alert('Save failed: ' + e.message);
     }
@@ -6054,16 +6115,14 @@ async function initApp(){
         if (!r.ok) throw new Error('Save failed');
         const updated = await r.json();
         _loadedProjectData = { ..._loadedProjectData, ...updated };
-        if (!_loadedProjectData.labor_breakdown) _loadedProjectData.labor_breakdown = {};
-        _loadedProjectData.labor_breakdown.overhead_pct = overheadPct;
+        _loadedProjectData.labor_breakdown = { ...(_loadedProjectData.labor_breakdown || {}), ...laborBreakdown };
+        _loadedProjectData.labor = totLabor;
+        _loadedProjectData.quote = totFinalPrice;
         _loadedProjectData.cost_per_mile = costPerMileSave;
         _loadedProjectData.gasoline = gasolineSave;
         _loadedProjectData.mobilizations = mobilizationsSave;
         _loadedProjectData.driver_cost = driverCostSave;
         persistCostPerMileValue(costPerMileSave, activeProjectId, 'analysis');
-        _loadedProjectData.labor_breakdown.profit_pct = profitPct;
-        _loadedProjectData.labor_breakdown.tax_pct = taxPct;
-        _loadedProjectData.labor_breakdown.commission_pct = commPct;
         if (areaVal !== '' && areaVal !== undefined) {
           _loadedProjectData.total_area = parseFloat(areaVal) ?? _loadedProjectData.total_area;
         }
