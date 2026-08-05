@@ -26,17 +26,47 @@ type Props = {
   initialDocuments: DocumentRow[];
   initialRequiredDocuments: string[];
   initialBackgroundCheckStatus: BackgroundCheckStatus;
+  initialBackgroundCheckedAt: string | null;
+  initialBackgroundCheckExpiresAt: string | null;
+  initialBackgroundCheckProvider: string | null;
+  initialBackgroundCheckNotes: string | null;
 };
+
+// yyyy-mm-dd for <input type="date">
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const labelCls = "block text-xs font-medium text-gray-600";
 
-export function EmployeeDocumentsSection({ employeeId, initialDocuments, initialRequiredDocuments, initialBackgroundCheckStatus }: Props) {
+export function EmployeeDocumentsSection({
+  employeeId,
+  initialDocuments,
+  initialRequiredDocuments,
+  initialBackgroundCheckStatus,
+  initialBackgroundCheckedAt,
+  initialBackgroundCheckExpiresAt,
+  initialBackgroundCheckProvider,
+  initialBackgroundCheckNotes,
+}: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>(initialDocuments);
   const [required, setRequired] = useState<string[]>(initialRequiredDocuments);
   const [bgStatus, setBgStatus] = useState<BackgroundCheckStatus>(initialBackgroundCheckStatus);
   const [bgSaving, setBgSaving] = useState(false);
+  const [bgCheckedAt, setBgCheckedAt] = useState(toDateInputValue(initialBackgroundCheckedAt));
+  const [bgExpiresAt, setBgExpiresAt] = useState(toDateInputValue(initialBackgroundCheckExpiresAt));
+  const [bgProvider, setBgProvider] = useState(initialBackgroundCheckProvider ?? "");
+  const [bgNotes, setBgNotes] = useState(initialBackgroundCheckNotes ?? "");
+  const [bgDetailsSaving, setBgDetailsSaving] = useState(false);
+  const [bgDetailsOk, setBgDetailsOk] = useState(false);
+  const expiringSoon = useMemo(() => {
+    if (!bgExpiresAt) return false;
+    const days = (new Date(bgExpiresAt).getTime() - Date.now()) / 86_400_000;
+    return days <= 30;
+  }, [bgExpiresAt]);
   const [newReq, setNewReq] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -64,6 +94,27 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
       });
     } finally {
       setBgSaving(false);
+    }
+  }
+
+  async function saveBgDetails() {
+    setBgDetailsSaving(true);
+    setBgDetailsOk(false);
+    try {
+      await fetch(`/api/erp/employees/${employeeId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          backgroundCheckedAt: bgCheckedAt || null,
+          backgroundCheckExpiresAt: bgExpiresAt || null,
+          backgroundCheckProvider: bgProvider || null,
+          backgroundCheckNotes: bgNotes || null,
+        }),
+      });
+      setBgDetailsOk(true);
+      setTimeout(() => setBgDetailsOk(false), 2000);
+    } finally {
+      setBgDetailsSaving(false);
     }
   }
 
@@ -181,30 +232,6 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
         <p className="text-xs text-gray-500">
           Define which document types this employee must have on file. Compliance is met when all are present.
         </p>
-
-        <div>
-          <p className="text-xs font-medium text-gray-600 mb-2">Background check</p>
-          <div className="flex flex-wrap gap-2">
-            {BG_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={bgSaving}
-                onClick={() => {
-                  setBgStatus(opt.value);
-                  void saveBgStatus(opt.value);
-                }}
-                className={[
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-opacity",
-                  bgStatus === opt.value ? opt.cls + " opacity-100 ring-2 ring-offset-1 ring-current" : "border-gray-200 bg-white text-gray-400 hover:border-gray-300",
-                  bgSaving ? "opacity-50 cursor-not-allowed" : "",
-                ].join(" ")}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {required.length > 0 && (
           <div>
@@ -404,6 +431,97 @@ export function EmployeeDocumentsSection({ employeeId, initialDocuments, initial
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <h3 className="text-sm font-semibold text-gray-700">Background Check</h3>
+        <p className="text-xs text-gray-500">Track the status, dates, and provider for this employee&apos;s background check.</p>
+
+        <div className="flex flex-wrap gap-2">
+          {BG_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={bgSaving}
+              onClick={() => {
+                setBgStatus(opt.value);
+                void saveBgStatus(opt.value);
+              }}
+              className={[
+                "rounded-full border px-3 py-1 text-xs font-medium transition-opacity",
+                bgStatus === opt.value ? opt.cls + " opacity-100 ring-2 ring-offset-1 ring-current" : "border-gray-200 bg-white text-gray-400 hover:border-gray-300",
+                bgSaving ? "opacity-50 cursor-not-allowed" : "",
+              ].join(" ")}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {expiringSoon ? (
+            <span className="rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
+              Expires soon
+            </span>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className={labelCls} htmlFor="bgCheckedAt">
+              Checked on
+            </label>
+            <input
+              id="bgCheckedAt"
+              type="date"
+              value={bgCheckedAt}
+              onChange={(e) => setBgCheckedAt(e.target.value)}
+              onBlur={() => void saveBgDetails()}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="bgExpiresAt">
+              Expires / renew on
+            </label>
+            <input
+              id="bgExpiresAt"
+              type="date"
+              value={bgExpiresAt}
+              onChange={(e) => setBgExpiresAt(e.target.value)}
+              onBlur={() => void saveBgDetails()}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="bgProvider">
+              Provider
+            </label>
+            <input
+              id="bgProvider"
+              type="text"
+              placeholder="e.g. Checkr, Sterling"
+              value={bgProvider}
+              onChange={(e) => setBgProvider(e.target.value)}
+              onBlur={() => void saveBgDetails()}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="bgNotes">
+              Notes
+            </label>
+            <input
+              id="bgNotes"
+              type="text"
+              placeholder="e.g. reference #, adjudication notes"
+              value={bgNotes}
+              onChange={(e) => setBgNotes(e.target.value)}
+              onBlur={() => void saveBgDetails()}
+              className={inputCls}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-400" aria-live="polite">
+          {bgDetailsSaving ? "Saving..." : bgDetailsOk ? "Saved." : ""}
+        </p>
       </section>
     </div>
   );

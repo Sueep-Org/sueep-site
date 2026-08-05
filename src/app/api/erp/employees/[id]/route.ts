@@ -120,6 +120,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     data.backgroundCheckStatus = bcs;
   }
+  if (body.backgroundCheckedAt !== undefined) {
+    const d = parseDate(body.backgroundCheckedAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckedAt" }, { status: 400 });
+    data.backgroundCheckedAt = d;
+  }
+  if (body.backgroundCheckExpiresAt !== undefined) {
+    const d = parseDate(body.backgroundCheckExpiresAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckExpiresAt" }, { status: 400 });
+    data.backgroundCheckExpiresAt = d;
+  }
+  if (body.backgroundCheckProvider !== undefined) {
+    data.backgroundCheckProvider = body.backgroundCheckProvider ? String(body.backgroundCheckProvider).trim() : null;
+  }
+  if (body.backgroundCheckNotes !== undefined) {
+    data.backgroundCheckNotes = body.backgroundCheckNotes ? String(body.backgroundCheckNotes).trim() : null;
+  }
 
   try {
     const employee = await prisma.employee.update({ where: { id }, data });

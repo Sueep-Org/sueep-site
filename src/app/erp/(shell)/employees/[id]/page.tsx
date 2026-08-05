@@ -181,6 +181,24 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-4">
+              <EmployeeDocumentsSection
+                employeeId={employee.id}
+                initialRequiredDocuments={requiredDocuments}
+                initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+                initialBackgroundCheckedAt={employee.backgroundCheckedAt ? employee.backgroundCheckedAt.toISOString() : null}
+                initialBackgroundCheckExpiresAt={employee.backgroundCheckExpiresAt ? employee.backgroundCheckExpiresAt.toISOString() : null}
+                initialBackgroundCheckProvider={employee.backgroundCheckProvider}
+                initialBackgroundCheckNotes={employee.backgroundCheckNotes}
+                initialDocuments={employee.documents.map((d) => ({
+                  id: d.id,
+                  documentType: d.documentType,
+                  title: d.title,
+                  issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
+                  expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
+                  fileUrl: d.fileUrl,
+                  notes: d.notes,
+                }))}
+              />
               {canSeeSsn && <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />}
               {canSeePay && (
                 <EmployeeBankAccountSection
@@ -192,20 +210,6 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                   }}
                 />
               )}
-              <EmployeeDocumentsSection
-                employeeId={employee.id}
-                initialRequiredDocuments={requiredDocuments}
-                initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
-                initialDocuments={employee.documents.map((d) => ({
-                  id: d.id,
-                  documentType: d.documentType,
-                  title: d.title,
-                  issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
-                  expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
-                  fileUrl: d.fileUrl,
-                  notes: d.notes,
-                }))}
-              />
             </div>
           ),
         },

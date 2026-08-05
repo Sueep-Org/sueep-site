@@ -1092,7 +1092,14 @@ model Employee {
   requiredDocuments Json @default("[]")
 
   /// PASSED | FAILED | PENDING | NOT_DONE
-  backgroundCheckStatus String? @default("NOT_DONE")
+  backgroundCheckStatus    String?   @default("NOT_DONE")
+  /// Date the check was completed / result received
+  backgroundCheckedAt      DateTime?
+  /// When this check needs to be re-run (most providers are only good for 1-3 years)
+  backgroundCheckExpiresAt DateTime?
+  /// Vendor that ran the check (e.g. Checkr, Sterling)
+  backgroundCheckProvider  String?
+  backgroundCheckNotes     String?
 
   laborEntries                 LaborEntry[]
   documents                    EmployeeDocument[]
