@@ -254,6 +254,7 @@ export function ProjectLaborSection({
   const [sovPicks, setSovPicks] = useState<string[]>([]);
   const [sovMarkCompleteIds, setSovMarkCompleteIds] = useState<Set<string>>(new Set());
   const [scopeMarkCompleteIds, setScopeMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [editScopeMarkComplete, setEditScopeMarkComplete] = useState(false);
   const [scopeCompletedItems, setScopeCompletedItems] = useState<string[]>(completedScopeItems);
   const availableScopeItems = contractedScopeItems.filter((v) => !scopeCompletedItems.includes(v));
   const [unitCompleted, setUnitCompleted] = useState(false);
@@ -350,7 +351,14 @@ export function ProjectLaborSection({
       taskDescription: r.taskDescription ?? "",
       sovItemIds: r.sovItemIds,
     });
+    setEditScopeMarkComplete(false);
   }
+
+  // Raw TURNOVER_SCOPE_OPTIONS value behind the edit row's Task select
+  // (which stores/displays the human label), so the "mark complete" checkbox
+  // and save handler can work with the same value markScopeItemsComplete
+  // expects.
+  const editScopeRawValue = contractedScopeItems.find((v) => turnoverScopeLabel(v) === editFields.taskDescription);
 
   async function onSaveEdit(entryId: string) {
     if (!editFields.transportationMethod) {
@@ -382,6 +390,8 @@ export function ProjectLaborSection({
             : e,
         ),
       );
+      if (editScopeMarkComplete && editScopeRawValue) void markScopeItemsComplete([editScopeRawValue]);
+      setEditScopeMarkComplete(false);
       setEditingId(null);
       router.refresh();
     } else {
@@ -871,7 +881,20 @@ export function ProjectLaborSection({
               <label className={label} htmlFor="l-task">
                 {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
               </label>
-              <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+              {isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                <select id="l-task" name="taskDescription" className={input} defaultValue="">
+                  <option value="" disabled>
+                    Select scope item
+                  </option>
+                  {contractedScopeItems.map((value) => (
+                    <option key={value} value={turnoverScopeLabel(value)}>
+                      {turnoverScopeLabel(value)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+              )}
             </div>
           </div>
         </div>
@@ -1069,6 +1092,35 @@ export function ProjectLaborSection({
                               value={editFields.taskDescription}
                               onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))}
                             />
+                          </div>
+                        ) : isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                          <div className="space-y-1">
+                            <select
+                              className={editInput}
+                              value={editFields.taskDescription}
+                              onChange={(e) => {
+                                setEditFields((f) => ({ ...f, taskDescription: e.target.value }));
+                                setEditScopeMarkComplete(false);
+                              }}
+                            >
+                              <option value="">Select scope item</option>
+                              {contractedScopeItems.map((value) => (
+                                <option key={value} value={turnoverScopeLabel(value)}>
+                                  {turnoverScopeLabel(value)}
+                                </option>
+                              ))}
+                            </select>
+                            {editScopeRawValue && !scopeCompletedItems.includes(editScopeRawValue) && (
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={editScopeMarkComplete}
+                                  onChange={(e) => setEditScopeMarkComplete(e.target.checked)}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                                />
+                                Mark complete
+                              </label>
+                            )}
                           </div>
                         ) : (
                           <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />

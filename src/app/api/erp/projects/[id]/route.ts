@@ -5,6 +5,7 @@ import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegm
 import { getErpAuth, canOverrideQualityChecklist } from "@/lib/erpAuth";
 import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
+import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
@@ -204,8 +205,38 @@ export async function PATCH(req: Request, ctx: Ctx) {
     newProjectDate !== undefined && (newProjectDate?.getTime() ?? null) !== (existing.projectDate?.getTime() ?? null);
   const shouldNotifyReschedule = projectDateChanged && newProjectDate != null;
 
+  // Marking a turnover unit complete means every part of its contracted
+  // scope is done, whether or not each item was individually checked off
+  // along the way (see UnitScopeChecklist/ProjectLaborSection). Persisting
+  // this (rather than just assuming it at display time) keeps every reader
+  // in sync, including the schedule's day-assignment scope picker, which
+  // reads TurnoverRequest.completedScopeItems directly.
+  const becomingComplete =
+    data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS";
+
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });
+
+    if (becomingComplete && existing.turnoverRequestId) {
+      const tr = await prisma.turnoverRequest.findUnique({
+        where: { id: existing.turnoverRequestId },
+        select: {
+          fullClean: true,
+          fullPaint: true,
+          touchUpPaint: true,
+          carpetCleaning: true,
+          ceilingPaint: true,
+          materialsAdditional: true,
+          otherWork: true,
+        },
+      });
+      if (tr) {
+        await prisma.turnoverRequest.update({
+          where: { id: existing.turnoverRequestId },
+          data: { completedScopeItems: contractedTurnoverScope(tr) },
+        });
+      }
+    }
 
     if (shouldNotifyReschedule) {
       // Once a day is actually assigned (supervisor scheduled via the

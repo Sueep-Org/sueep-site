@@ -66,6 +66,13 @@ const SOV_REQUEST_LABEL = "SOV schedule request";
 // an upcoming plan.
 const PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-gray-500";
 const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
+// Whole-chip yellow, same as NEEDS_SUPERVISOR_CHIP_CLASS below, just dashed
+// instead of solid-bordered since this is still a "planned, not logged"
+// chip. Replaces the project-type background entirely (rather than layering
+// on top of it) so it reads as unmistakably yellow, not fighting the
+// segment color for which utility class wins.
+const NO_SUPERVISOR_PLANNED_CHIP_CLASS =
+  "border-2 border-dashed border-amber-600 bg-amber-400 text-amber-950 hover:bg-amber-300";
 
 // A project with a future (or today's) start date that has never had a
 // supervisor assigned and has no logged work at all — solid, loud, and
@@ -2320,6 +2327,7 @@ export function SchedulePlanner({
                           .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
                           .filter((d): d is string => !!d);
                         const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
+                        const noSupervisor = !isOverdue && !supervisor && !pm;
                         return (
                         <Fragment key={`plan-${assignment.id}`}>
                         <li className={inMonth ? "group relative" : "relative"}>
@@ -2336,12 +2344,16 @@ export function SchedulePlanner({
                               setDragOverDayKey(null);
                             }}
                             onClick={() => openEventPopover(k, project, assignment)}
-                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(project.status)}`}
+                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${
+                              noSupervisor
+                                ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
+                                : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
+                            } ${projectStatusChipClass(project.status)}`}
                           >
                             {isOverdue ? (
                               <span aria-hidden className="shrink-0 text-red-600">⚠</span>
-                            ) : !supervisor && !pm ? (
-                              <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-600">⚠</span>
+                            ) : noSupervisor ? (
+                              <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                             ) : null}
                             <ProjectStatusIcon status={project.status} />
                             <span className="truncate">{project.jobTitle}</span>
@@ -2461,8 +2473,8 @@ export function SchedulePlanner({
             ) : null}
             {dayAssignments.some((a) => !a.supervisorUserId && !a.projectManagerUserId) ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${PLANNED_CHIP_EXTRA_CLASS}`} />
-                <span aria-hidden className="text-amber-600">⚠</span> on a dashed chip = planned, no supervisor assigned yet
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${NO_SUPERVISOR_PLANNED_CHIP_CLASS}`} />
+                <span aria-hidden className="text-amber-950">⚠</span> = planned, no supervisor assigned yet
               </div>
             ) : null}
             {presentGroups.length > 0 ? (
