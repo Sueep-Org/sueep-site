@@ -757,6 +757,72 @@ export default function EstimatorPage() {
                     </div>
                   </div>
                 </div>
+                {/* Transportation */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Gasoline ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="gasolineInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Toll Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="tollCostInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Driver Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="driverCostDisplay"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Total Transportation ($)
+                    </label>
+                    <div
+                      id="totalTransportDisplay"
+                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Cost/Mile
+                    </label>
+                    <input
+                      type="number"
+                      id="costPerMileInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
                 {/* Expected Days to Complete */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <div className="flex flex-wrap gap-4">
@@ -810,54 +876,6 @@ export default function EstimatorPage() {
                 <input type="hidden" id="cleanerRateInput" defaultValue="22" />
                 <input type="hidden" id="foremanRateInput" defaultValue="220" />
 
-                {/* Area per person per day per phase */}
-                <div className="mb-4 pb-4 border-b border-gray-100">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Area per Person per Day (SF)
-                  </label>
-                  <div className="flex flex-wrap gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">
-                        Rough Cleaning
-                      </label>
-                      <input
-                        type="number"
-                        id="roughAreaPerPersonInput"
-                        defaultValue="4000"
-                        min="1"
-                        step="100"
-                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">
-                        Final Cleaning
-                      </label>
-                      <input
-                        type="number"
-                        id="finalAreaPerPersonInput"
-                        defaultValue="4000"
-                        min="1"
-                        step="100"
-                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">
-                        Touch Up Cleaning
-                      </label>
-                      <input
-                        type="number"
-                        id="touchupAreaPerPersonInput"
-                        defaultValue="4000"
-                        min="1"
-                        step="100"
-                        className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Phase table — rendered by JS */}
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -876,11 +894,8 @@ export default function EstimatorPage() {
                   className="mb-4 overflow-x-auto"
                 ></div>
 
-                {/* Calc summary — rendered by JS */}
-                <div id="calcSummaryContainer" className="mb-4"></div>
-
                 {/* Global rates */}
-                <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-5 pb-4 border-b border-gray-100">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
                       Overhead (%)
@@ -949,6 +964,20 @@ export default function EstimatorPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Materials ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="materialsInput"
+                      placeholder="0.00"
+                      defaultValue="0"
+                      min="0"
+                      step="0.01"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
                 </div>
 
                 {/* Margin — single row */}
@@ -965,86 +994,8 @@ export default function EstimatorPage() {
                     className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
                 </div>
-                {/* Materials + Gasoline + Toll Cost */}
-                <div className="flex flex-wrap gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Materials ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="materialsInput"
-                      placeholder="0.00"
-                      defaultValue="0"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Gasoline ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="gasolineInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Toll Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="tollCostInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Driver Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="driverCostDisplay"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Total Transportation ($)
-                    </label>
-                    <div
-                      id="totalTransportDisplay"
-                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Cost/Mile
-                    </label>
-                    <input
-                      type="number"
-                      id="costPerMileInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                </div>
+
+                <div id="calcSummaryContainer" className="mb-4"></div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
@@ -1357,6 +1308,72 @@ export default function EstimatorPage() {
                     </div>
                   </div>
                 </div>
+                {/* Transportation */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Gasoline ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingGasolineInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Toll Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingTollCostInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Driver Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingDriverCostDisplay"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Total Transportation ($)
+                    </label>
+                    <div
+                      id="paintingTotalTransportDisplay"
+                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Cost/Mile
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingCostPerMileInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
                 {/* Expected Days */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <div className="flex flex-wrap gap-4">
@@ -1435,10 +1452,8 @@ export default function EstimatorPage() {
                   id="paintingPhaseTableContainer"
                   className="mb-4 overflow-x-auto"
                 ></div>
-                <div id="paintingCalcSummaryContainer" className="mb-4"></div>
-
                 {/* Global rates */}
-                <div className="grid grid-cols-2 gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-5 pb-4 border-b border-gray-100">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">
                       Overhead (%)
@@ -1507,6 +1522,20 @@ export default function EstimatorPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Materials ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingMaterialsInput"
+                      placeholder="0.00"
+                      defaultValue="0"
+                      min="0"
+                      step="0.01"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
                 </div>
 
                 {/* Margin */}
@@ -1523,86 +1552,8 @@ export default function EstimatorPage() {
                     className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                   />
                 </div>
-                {/* Materials + Gasoline + Toll Cost + Driver Cost + Total Transportation */}
-                <div className="flex flex-wrap gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Materials ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingMaterialsInput"
-                      placeholder="0.00"
-                      defaultValue="0"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Gasoline ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingGasolineInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Toll Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingTollCostInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Driver Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingDriverCostDisplay"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Total Transportation ($)
-                    </label>
-                    <div
-                      id="paintingTotalTransportDisplay"
-                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Cost/Mile
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingCostPerMileInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                </div>
+
+                <div id="paintingCalcSummaryContainer" className="mb-4"></div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
