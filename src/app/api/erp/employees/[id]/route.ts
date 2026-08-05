@@ -45,6 +45,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const auth = await getErpAuth();
+
   const existing = await prisma.employee.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -101,7 +103,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;
   if (body.ssn !== undefined) {
-    const auth = await getErpAuth();
     if (!auth || !canViewEmployeeSsn(auth.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -136,11 +137,35 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.backgroundCheckNotes !== undefined) {
     data.backgroundCheckNotes = body.backgroundCheckNotes ? String(body.backgroundCheckNotes).trim() : null;
   }
+  if (body.backgroundCheckConsentAt !== undefined) {
+    const d = parseDate(body.backgroundCheckConsentAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckConsentAt" }, { status: 400 });
+    data.backgroundCheckConsentAt = d;
+  }
+
+  // Record a history event whenever the background check status actually changes,
+  // so "when did this person get cleared" can be answered later without trusting
+  // only the current snapshot.
+  const statusChanged =
+    typeof data.backgroundCheckStatus === "string" && data.backgroundCheckStatus !== existing.backgroundCheckStatus;
 
   try {
-    const employee = await prisma.employee.update({ where: { id }, data });
+    const { employee, backgroundCheckEvent } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.employee.update({ where: { id }, data });
+      const event = statusChanged
+        ? await tx.employeeBackgroundCheckEvent.create({
+            data: {
+              employeeId: id,
+              previousStatus: existing.backgroundCheckStatus,
+              newStatus: data.backgroundCheckStatus as string,
+              changedBy: auth?.email ?? null,
+            },
+          })
+        : null;
+      return { employee: updated, backgroundCheckEvent: event };
+    });
     const { ssn: _ssn, ...safeEmployee } = employee;
-    return NextResponse.json(safeEmployee);
+    return NextResponse.json({ ...safeEmployee, backgroundCheckEvent });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });

@@ -1100,9 +1100,12 @@ model Employee {
   /// Vendor that ran the check (e.g. Checkr, Sterling)
   backgroundCheckProvider  String?
   backgroundCheckNotes     String?
+  /// Date the employee signed the FCRA consent form authorizing the check
+  backgroundCheckConsentAt DateTime?
 
   laborEntries                 LaborEntry[]
   documents                    EmployeeDocument[]
+  backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
   workerDayAssignments         ProjectWorkerDayAssignment[]
@@ -1123,6 +1126,27 @@ model Employee {
   @@index([defaultProject])
   @@index([hourlyPayCents])
   @@index([lastName, firstName])
+}
+
+/// Audit trail of backgroundCheckStatus transitions on Employee — a row is
+/// written automatically whenever the status changes, so "when did this
+/// person get cleared" can be answered later without trusting the current
+/// snapshot alone.
+model EmployeeBackgroundCheckEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// NULL for the first event recorded on an employee
+  previousStatus String?
+  /// PASSED | FAILED | PENDING | NOT_DONE
+  newStatus String
+  /// Email of the ERP user who made the change
+  changedBy String?
+
+  @@index([employeeId, createdAt])
 }
 
 /// Tracks whether an offshore employee's fixed monthly pay has been paid for

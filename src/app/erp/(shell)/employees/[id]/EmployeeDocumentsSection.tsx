@@ -21,6 +21,21 @@ const BG_OPTIONS: { value: BackgroundCheckStatus; label: string; cls: string }[]
   { value: "FAILED",    label: "Failed",    cls: "border-red-300 bg-red-50 text-red-700" },
 ];
 
+const BG_LABELS: Record<BackgroundCheckStatus, string> = {
+  NOT_DONE: "Not done",
+  PENDING: "Pending",
+  PASSED: "Passed",
+  FAILED: "Failed",
+};
+
+type BackgroundCheckEvent = {
+  id: string;
+  createdAt: string;
+  previousStatus: string | null;
+  newStatus: string;
+  changedBy: string | null;
+};
+
 type Props = {
   employeeId: string;
   initialDocuments: DocumentRow[];
@@ -30,6 +45,8 @@ type Props = {
   initialBackgroundCheckExpiresAt: string | null;
   initialBackgroundCheckProvider: string | null;
   initialBackgroundCheckNotes: string | null;
+  initialBackgroundCheckConsentAt: string | null;
+  initialBackgroundCheckEvents: BackgroundCheckEvent[];
 };
 
 // yyyy-mm-dd for <input type="date">
@@ -51,6 +68,8 @@ export function EmployeeDocumentsSection({
   initialBackgroundCheckExpiresAt,
   initialBackgroundCheckProvider,
   initialBackgroundCheckNotes,
+  initialBackgroundCheckConsentAt,
+  initialBackgroundCheckEvents,
 }: Props) {
   const [docs, setDocs] = useState<DocumentRow[]>(initialDocuments);
   const [required, setRequired] = useState<string[]>(initialRequiredDocuments);
@@ -60,8 +79,10 @@ export function EmployeeDocumentsSection({
   const [bgExpiresAt, setBgExpiresAt] = useState(toDateInputValue(initialBackgroundCheckExpiresAt));
   const [bgProvider, setBgProvider] = useState(initialBackgroundCheckProvider ?? "");
   const [bgNotes, setBgNotes] = useState(initialBackgroundCheckNotes ?? "");
+  const [bgConsentAt, setBgConsentAt] = useState(toDateInputValue(initialBackgroundCheckConsentAt));
   const [bgDetailsSaving, setBgDetailsSaving] = useState(false);
   const [bgDetailsOk, setBgDetailsOk] = useState(false);
+  const [bgEvents, setBgEvents] = useState<BackgroundCheckEvent[]>(initialBackgroundCheckEvents);
   const expiringSoon = useMemo(() => {
     if (!bgExpiresAt) return false;
     const days = (new Date(bgExpiresAt).getTime() - Date.now()) / 86_400_000;
@@ -87,11 +108,15 @@ export function EmployeeDocumentsSection({
   async function saveBgStatus(next: BackgroundCheckStatus) {
     setBgSaving(true);
     try {
-      await fetch(`/api/erp/employees/${employeeId}`, {
+      const res = await fetch(`/api/erp/employees/${employeeId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ backgroundCheckStatus: next }),
       });
+      const data = (await res.json()) as { backgroundCheckEvent?: BackgroundCheckEvent | null };
+      if (data.backgroundCheckEvent) {
+        setBgEvents((prev) => [data.backgroundCheckEvent as BackgroundCheckEvent, ...prev]);
+      }
     } finally {
       setBgSaving(false);
     }
@@ -109,6 +134,7 @@ export function EmployeeDocumentsSection({
           backgroundCheckExpiresAt: bgExpiresAt || null,
           backgroundCheckProvider: bgProvider || null,
           backgroundCheckNotes: bgNotes || null,
+          backgroundCheckConsentAt: bgConsentAt || null,
         }),
       });
       setBgDetailsOk(true);
@@ -463,7 +489,20 @@ export function EmployeeDocumentsSection({
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <label className={labelCls} htmlFor="bgConsentAt">
+              Consent signed on
+            </label>
+            <input
+              id="bgConsentAt"
+              type="date"
+              value={bgConsentAt}
+              onChange={(e) => setBgConsentAt(e.target.value)}
+              onBlur={() => void saveBgDetails()}
+              className={inputCls}
+            />
+          </div>
           <div>
             <label className={labelCls} htmlFor="bgCheckedAt">
               Checked on
@@ -522,6 +561,26 @@ export function EmployeeDocumentsSection({
         <p className="text-xs text-gray-400" aria-live="polite">
           {bgDetailsSaving ? "Saving..." : bgDetailsOk ? "Saved." : ""}
         </p>
+
+        {bgEvents.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-600 mb-2">History</p>
+            <ul className="space-y-1.5">
+              {bgEvents.map((event) => (
+                <li key={event.id} className="text-xs text-gray-600">
+                  <span className="text-gray-400">{new Date(event.createdAt).toLocaleString()}</span>
+                  {" · "}
+                  {event.previousStatus ? BG_LABELS[event.previousStatus as BackgroundCheckStatus] ?? event.previousStatus : "no status"}
+                  {" to "}
+                  <span className="font-medium text-gray-800">
+                    {BG_LABELS[event.newStatus as BackgroundCheckStatus] ?? event.newStatus}
+                  </span>
+                  {event.changedBy ? ` by ${event.changedBy}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
     </div>
   );

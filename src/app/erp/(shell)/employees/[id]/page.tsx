@@ -31,6 +31,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     include: {
       documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
       contracts: { orderBy: { createdAt: "asc" } },
+      backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!employee) notFound();
@@ -167,7 +168,6 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 payType: employee.payType,
                 hourlyPayCents: employee.hourlyPayCents,
                 annualSalaryCents: employee.annualSalaryCents,
-                defaultProject: employee.defaultProject,
                 status: employee.status,
                 hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
                 notes: employee.notes,
@@ -189,6 +189,14 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 initialBackgroundCheckExpiresAt={employee.backgroundCheckExpiresAt ? employee.backgroundCheckExpiresAt.toISOString() : null}
                 initialBackgroundCheckProvider={employee.backgroundCheckProvider}
                 initialBackgroundCheckNotes={employee.backgroundCheckNotes}
+                initialBackgroundCheckConsentAt={employee.backgroundCheckConsentAt ? employee.backgroundCheckConsentAt.toISOString() : null}
+                initialBackgroundCheckEvents={employee.backgroundCheckEvents.map((e) => ({
+                  id: e.id,
+                  createdAt: e.createdAt.toISOString(),
+                  previousStatus: e.previousStatus,
+                  newStatus: e.newStatus,
+                  changedBy: e.changedBy,
+                }))}
                 initialDocuments={employee.documents.map((d) => ({
                   id: d.id,
                   documentType: d.documentType,

@@ -70,6 +70,10 @@ export async function POST(req: Request) {
   if (body.annualSalary !== undefined && annualSalaryCents === undefined) {
     return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
   }
+  const offshoreMonthlyRateCents = parseHourlyPayCents(body.offshoreMonthlyRate);
+  if (body.offshoreMonthlyRate !== undefined && offshoreMonthlyRateCents === undefined) {
+    return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
+  }
 
   try {
     const employee = await prisma.employee.create({
@@ -86,6 +90,8 @@ export async function POST(req: Request) {
         status,
         hireDate: hireDate ?? null,
         notes: body.notes ? String(body.notes).trim() : null,
+        isOffshore: Boolean(body.isOffshore),
+        offshoreMonthlyRateCents: offshoreMonthlyRateCents ?? null,
       },
     });
     return NextResponse.json(employee);

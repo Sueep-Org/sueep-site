@@ -19,7 +19,6 @@ type Props = {
     payType: string;
     hourlyPayCents: number | null;
     annualSalaryCents: number | null;
-    defaultProject: string | null;
     status: string;
     hireDate: string | null;
     notes: string | null;
@@ -34,8 +33,14 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
-  const [payType, setPayType] = useState<"HOURLY" | "SALARY">(initial.payType === "SALARY" ? "SALARY" : "HOURLY");
-  const [isOffshore, setIsOffshore] = useState(initial.isOffshore);
+  // UI-only grouping: Offshore is shown as a third Pay Type option, but under
+  // the hood it's still the separate isOffshore flag. payType/hourlyPay/
+  // annualSalary are left completely untouched (omitted from the PATCH
+  // payload) whenever Offshore is selected, so switching into/out of it
+  // never overwrites whatever those fields already held.
+  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">(
+    initial.isOffshore ? "OFFSHORE" : initial.payType === "SALARY" ? "SALARY" : "HOURLY"
+  );
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,22 +49,27 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
     setOk("");
     const fd = new FormData(e.currentTarget);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       firstName: fd.get("firstName"),
       lastName: fd.get("lastName"),
       email: fd.get("email") || null,
       phone: fd.get("phone") || null,
       role: fd.get("role") || null,
-      payType,
-      hourlyPay: fd.get("hourlyPay") || null,
-      annualSalary: payType === "SALARY" ? (fd.get("annualSalary") || null) : null,
-      defaultProject: fd.get("defaultProject") || null,
       status: fd.get("status"),
       hireDate: fd.get("hireDate") || null,
       notes: fd.get("notes") || null,
-      isOffshore,
-      offshoreMonthlyRate: isOffshore ? (fd.get("offshoreMonthlyRate") || null) : null,
+      isOffshore: payMode === "OFFSHORE",
+      offshoreMonthlyRate: payMode === "OFFSHORE" ? (fd.get("offshoreMonthlyRate") || null) : null,
     };
+    // payType/hourlyPay/annualSalary are only sent for Hourly/Salary. For
+    // Offshore they're left out of the payload entirely so the PATCH
+    // endpoint (which skips any field not present in the body) leaves
+    // whatever those already held untouched.
+    if (payMode !== "OFFSHORE") {
+      payload.payType = payMode;
+      payload.hourlyPay = fd.get("hourlyPay") || null;
+      payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || null) : null;
+    }
 
     try {
       const res = await fetch(`/api/erp/employees/${employeeId}`, {
@@ -146,48 +156,59 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
               <div className="mt-1 flex rounded-md border border-gray-300 overflow-hidden text-sm">
                 <button
                   type="button"
-                  onClick={() => setPayType("HOURLY")}
-                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={() => setPayMode("HOURLY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
                   Hourly
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPayType("SALARY")}
-                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={() => setPayMode("SALARY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
                   Salary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayMode("OFFSHORE")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "OFFSHORE" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Offshore
                 </button>
               </div>
             </div>
           )}
           {canSeePay && (
             <div>
-              {payType === "HOURLY" ? (
+              {payMode === "HOURLY" ? (
                 <>
                   <label className={label} htmlFor="hourlyPay">Hourly pay</label>
                   <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 18.75" />
                 </>
-              ) : (
+              ) : payMode === "SALARY" ? (
                 <>
                   <label className={label} htmlFor="annualSalary">Annual salary</label>
                   <input id="annualSalary" name="annualSalary" type="number" min="0" step="0.01" defaultValue={annualSalary} className={input} placeholder="e.g. 50000" />
                 </>
+              ) : (
+                <>
+                  <label className={label} htmlFor="offshoreMonthlyRate">Fixed monthly rate</label>
+                  <input id="offshoreMonthlyRate" name="offshoreMonthlyRate" type="number" min="0" step="0.01" defaultValue={offshoreMonthlyRate} className={input} placeholder="e.g. 1200.00" />
+                </>
               )}
             </div>
           )}
-          {canSeePay && payType === "SALARY" && (
+          {canSeePay && payMode === "SALARY" && (
             <div>
               <label className={label} htmlFor="hourlyPay">Est. hourly rate (for labor cost tracking)</label>
               <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 24.04" />
             </div>
           )}
-          <div>
-            <label className={label} htmlFor="defaultProject">
-              Default project
-            </label>
-            <input id="defaultProject" name="defaultProject" defaultValue={initial.defaultProject ?? ""} className={input} />
-          </div>
+          {canSeePay && payMode === "OFFSHORE" && (
+            <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
+              Paid a fixed amount every month via the Offshore Payroll tab, not tied to logged hours.
+            </p>
+          )}
           <div>
             <label className={label} htmlFor="status">
               Status
@@ -204,20 +225,6 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
             <input id="hireDate" name="hireDate" type="date" defaultValue={hireDate} className={input} />
           </div>
         </div>
-        {canSeePay && (
-          <div className="rounded-md border border-gray-200 bg-white p-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
-              <input type="checkbox" checked={isOffshore} onChange={(e) => setIsOffshore(e.target.checked)} />
-              Offshore employee (paid a fixed monthly rate via the Offshore Payroll tab, not hours-based)
-            </label>
-            {isOffshore && (
-              <div className="mt-3">
-                <label className={label} htmlFor="offshoreMonthlyRate">Fixed monthly rate</label>
-                <input id="offshoreMonthlyRate" name="offshoreMonthlyRate" type="number" min="0" step="0.01" defaultValue={offshoreMonthlyRate} className={input} placeholder="e.g. 1200.00" />
-              </div>
-            )}
-          </div>
-        )}
         <div>
           <label className={label} htmlFor="notes">
             Notes

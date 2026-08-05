@@ -68,14 +68,28 @@ export async function POST(req: Request) {
     if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
   }
 
-  const [project, worker] = await Promise.all([
+  const [project, employee, contractor] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
     employeeId
-      ? prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } })
-      : prisma.contractor.findUnique({ where: { id: contractorId! }, select: { id: true } }),
+      ? prisma.employee.findUnique({
+          where: { id: employeeId },
+          select: { id: true, firstName: true, lastName: true, backgroundCheckStatus: true },
+        })
+      : null,
+    contractorId ? prisma.contractor.findUnique({ where: { id: contractorId }, select: { id: true } }) : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  const worker = employeeId ? employee : contractor;
   if (!worker) return NextResponse.json({ error: employeeId ? "Employee not found" : "Contractor not found" }, { status: 404 });
+  // Only a FAILED result blocks scheduling. PENDING/NOT_DONE/PASSED (or no
+  // check on file at all) shouldn't stop someone from being put on the
+  // calendar, only a confirmed failure should.
+  if (employee && employee.backgroundCheckStatus === "FAILED") {
+    return NextResponse.json(
+      { error: `${employee.firstName} ${employee.lastName} failed their background check and cannot be scheduled.` },
+      { status: 409 }
+    );
+  }
 
   // Adding a worker to an active repeat range: either an existing series id
   // (a supervisor was already assigned to this range in the same modal

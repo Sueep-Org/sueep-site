@@ -12,7 +12,9 @@ export function NewEmployeeForm({ title }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [payType, setPayType] = useState<"HOURLY" | "SALARY">("HOURLY");
+  // Offshore is presented as a 3rd Pay Type option (matching the employee
+  // detail page), but stays the separate isOffshore flag underneath.
+  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">("HOURLY");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -20,20 +22,23 @@ export function NewEmployeeForm({ title }: Props) {
     setLoading(true);
     const fd = new FormData(e.currentTarget);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       firstName: fd.get("firstName"),
       lastName: fd.get("lastName"),
       email: fd.get("email") || undefined,
       phone: fd.get("phone") || undefined,
       role: fd.get("role") || undefined,
-      payType,
-      hourlyPay: fd.get("hourlyPay") || undefined,
-      annualSalary: payType === "SALARY" ? (fd.get("annualSalary") || undefined) : undefined,
-      defaultProject: fd.get("defaultProject") || undefined,
       hireDate: fd.get("hireDate") || undefined,
       status: fd.get("status") || "ACTIVE",
       notes: fd.get("notes") || undefined,
+      isOffshore: payMode === "OFFSHORE",
+      offshoreMonthlyRate: payMode === "OFFSHORE" ? (fd.get("offshoreMonthlyRate") || undefined) : undefined,
     };
+    if (payMode !== "OFFSHORE") {
+      payload.payType = payMode;
+      payload.hourlyPay = fd.get("hourlyPay") || undefined;
+      payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || undefined) : undefined;
+    }
 
     try {
       const res = await fetch("/api/erp/employees", {
@@ -81,29 +86,37 @@ export function NewEmployeeForm({ title }: Props) {
               <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
                 <button
                   type="button"
-                  onClick={() => setPayType("HOURLY")}
-                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={() => setPayMode("HOURLY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "HOURLY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
                   Hourly
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPayType("SALARY")}
-                  className={`flex-1 py-2 text-center font-medium transition-colors ${payType === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={() => setPayMode("SALARY")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "SALARY" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
                   Salary
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPayMode("OFFSHORE")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "OFFSHORE" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Offshore
+                </button>
               </div>
-              {payType === "HOURLY" ? (
+              {payMode === "HOURLY" ? (
                 <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Hourly pay (e.g. 18.75)" className={inputCls} />
-              ) : (
+              ) : payMode === "SALARY" ? (
                 <input name="annualSalary" type="number" min="0" step="0.01" placeholder="Annual salary (e.g. 50000)" className={inputCls} />
+              ) : (
+                <input name="offshoreMonthlyRate" type="number" min="0" step="0.01" placeholder="Fixed monthly rate (e.g. 1200.00)" className={inputCls} />
               )}
             </div>
-            {payType === "SALARY" && (
+            {payMode === "SALARY" && (
               <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Est. hourly rate for labor cost" className={inputCls} />
             )}
-            <input name="defaultProject" placeholder="Default project" className={inputCls} />
             <input name="hireDate" type="date" className={inputCls} />
             <select name="status" defaultValue="ACTIVE" className={inputCls}>
               <option value="ACTIVE">Active</option>
