@@ -3694,24 +3694,32 @@ async function initApp(){
   }
 
   // Painting phases
-  const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting', 'Touch Up Painting'];
-  const PAINTING_PHASE_IDS = ['phase1', 'phase2', 'phase3'];
+  const PAINTING_PHASES = ['Interior Painting (primer)', 'Interior Painting'];
+  const PAINTING_PHASE_IDS = ['phase1', 'phase2'];
   const PAINTING_PHASE_NAME_TO_ID = Object.freeze({
     'Interior Painting (primer)': 'phase1',
     'Interior Painting': 'phase2',
-    'Touch Up Painting': 'phase3',
     'Phase 1': 'phase1',
     'Phase 2': 'phase2',
-    'Phase 3': 'phase3',
   });
   const PAINTING_MATERIALS_PER_SF = 0.5569993851;
   const PAINTING_FINAL_SUBTOTAL_PER_SF = 1.536175446;
-  let _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
-  let _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
+  let _paintingPhaseCrews = { phase1: [], phase2: [] };
+  let _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
   let _deletedPaintingPhaseIds = new Set();
   let _paintingExpectedDaysManual = false;
   let _paintingMaterialsManual = false;
   let _paintingPhasesLocked = true;
+
+  const PAINTING_PRIMER_SF_PER_PERSON_DAY = 2000;
+  const PAINTING_INTERIOR_SF_PER_PERSON_DAY = 1200;
+  const PAINTING_STANDARD_CREW = [
+    { role: 'project_manager', rate: 28.84, hours: 8 },
+    { role: 'assistant', rate: 22, hours: 8 },
+    { role: 'painter', rate: 25, hours: 8 },
+    { role: 'painter', rate: 25, hours: 8 },
+    { role: 'painter', rate: 25, hours: 8 },
+  ];
 
   function _getPaintingAreaDerivedValues(totalArea) {
     const area = parseFloat(totalArea) || 0;
@@ -3719,6 +3727,50 @@ async function initApp(){
       materials: area * PAINTING_MATERIALS_PER_SF,
       finalSubtotal: area * PAINTING_FINAL_SUBTOTAL_PER_SF,
     };
+  }
+
+  function _getPaintingAreaPerPersonRate(pid) {
+    if (pid === 'phase1') {
+      return parseFloat(document.getElementById('paintingPrimerAreaPerPersonInput')?.value) || PAINTING_PRIMER_SF_PER_PERSON_DAY;
+    }
+    return parseFloat(document.getElementById('paintingInteriorAreaPerPersonInput')?.value) || PAINTING_INTERIOR_SF_PER_PERSON_DAY;
+  }
+
+  function _getPaintingPhaseDays(totalArea, pid) {
+    const area = parseFloat(totalArea) || 0;
+    if (area <= 0) return 1;
+    const rate = _getPaintingAreaPerPersonRate(pid);
+    const painters = 3;
+    return Math.max(1, Math.ceil(area / (painters * rate)));
+  }
+
+  function _refreshPaintingDays() {
+    const areaInput = document.getElementById('paintingTotalAreaInput');
+    const area = parseFloat(areaInput?.value) || 0;
+    if (area <= 0) return;
+    PAINTING_PHASE_IDS.forEach(pid => {
+      const crew = _paintingPhaseCrews[pid] || [];
+      if (crew.length === 0) return;
+      const days = _getPaintingPhaseDays(area, pid);
+      crew.forEach(member => { member.days = days; });
+    });
+    _updatePaintingCrewCalcs();
+  }
+
+  function _generatePaintingCrewForPhase(pid, totalArea) {
+    const days = _getPaintingPhaseDays(totalArea, pid);
+    const uid = () => Math.random().toString(36).slice(2);
+    return PAINTING_STANDARD_CREW.map(member => ({ ...member, days, _uid: uid() }));
+  }
+
+  function _autoGeneratePaintingPhases(totalArea) {
+    const area = parseFloat(totalArea) || 0;
+    if (area <= 0) return;
+    _deletedPaintingPhaseIds.clear();
+    PAINTING_PHASE_IDS.forEach((pid) => {
+      _paintingPhaseCrews[pid] = _generatePaintingCrewForPhase(pid, area);
+      _paintingPhaseMaterials[pid] = 0;
+    });
   }
 
   function _getPaintingExpectedDaysFromPhases() {
@@ -3739,12 +3791,11 @@ async function initApp(){
 
     const phase1Days = days * 0.3;
     const phase2Days = days * 0.7;
-    const phase3Days = Math.max(0, days - phase1Days - phase2Days);
 
     activePhaseIds.forEach((pid) => {
       const crew = _paintingPhaseCrews[pid] || [];
       if (crew.length === 0) return;
-      const memberDays = pid === 'phase1' ? phase1Days : pid === 'phase2' ? phase2Days : phase3Days;
+      const memberDays = pid === 'phase1' ? phase1Days : phase2Days;
       crew.forEach((member) => {
         member.days = memberDays;
       });
@@ -3958,6 +4009,7 @@ async function initApp(){
     const daysInput = document.getElementById('expectedDaysInput');
     const mobilizationsInput = document.getElementById('mobilizationsInput');
     if (!mobilizationsInput) return;
+    if (mobilizationsInput.dataset.manual === 'true' || mobilizationsInput.value !== '') return;
     const expectedDays = parseFloat(daysInput?.value) || 0;
     const derived = expectedDays > 0 ? expectedDays * 2 : '';
     mobilizationsInput.value = derived !== '' ? derived.toFixed(0) : '';
@@ -3967,6 +4019,7 @@ async function initApp(){
     const daysInput = document.getElementById('paintingExpectedDaysInput');
     const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
     if (!mobilizationsInput) return;
+    if (mobilizationsInput.dataset.manual === 'true' || mobilizationsInput.value !== '') return;
     const expectedDays = parseFloat(daysInput?.value) || 0;
     const derived = expectedDays > 0 ? expectedDays * 2 : '';
     mobilizationsInput.value = derived !== '' ? derived.toFixed(0) : '';
@@ -5065,7 +5118,6 @@ async function initApp(){
       effectivePhases = [
         { name: 'Phase 1', crew: [{ role: 'foreman', rate: 28, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 25, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 25, hours: 8, days, _uid: uid() }] },
         { name: 'Phase 2', crew: [{ role: 'painter', rate: 25, hours: 8, days, _uid: uid() }, { role: 'assistant', rate: 22, hours: 8, days, _uid: uid() }] },
-        { name: 'Phase 3', crew: [{ role: 'painter', rate: 25, hours: 8, days, _uid: uid() }] },
       ];
       isAutoGenerated = true;
     }
@@ -5200,8 +5252,8 @@ async function initApp(){
     setText('paintingViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
 
     // Initialize edit state from saved painting_breakdown
-    _paintingPhaseCrews = { phase1: [], phase2: [], phase3: [] };
-    _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
+    _paintingPhaseCrews = { phase1: [], phase2: [] };
+    _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
     _paintingMaterialsManual = false;
     _deletedPaintingPhaseIds = new Set();
     if (bd?.phases) {
@@ -5376,7 +5428,6 @@ async function initApp(){
     setVal('analysisAddressInput', (_loadedProjectData.address || _pdfMetadataSummary?.address || '').toString());
     setVal('tollCostInput', _loadedProjectData.toll_cost);
     setVal('expectedDaysInput', _loadedProjectData.expected_days);
-    _syncAnalysisMobilizations();
     setVal('marginInput', _loadedProjectData.margin);
     const savedMaterials = _loadedProjectData.labor_breakdown?.materials;
     const materialsInput = document.getElementById('materialsInput');
@@ -5397,8 +5448,16 @@ async function initApp(){
     if (mobilizationsInput) {
       const expectedDays = parseFloat(document.getElementById('expectedDaysInput')?.value) || 0;
       const savedMobilizations = _loadedProjectData?.mobilizations;
-      const derivedMobilizations = expectedDays > 0 ? expectedDays * 2 : (savedMobilizations != null && savedMobilizations !== '' ? parseFloat(savedMobilizations) : null);
+      const hasSavedMobilizations = savedMobilizations != null && savedMobilizations !== '';
+      const derivedMobilizations = hasSavedMobilizations
+        ? parseFloat(savedMobilizations)
+        : (expectedDays > 0 ? expectedDays * 2 : null);
       mobilizationsInput.value = derivedMobilizations != null ? derivedMobilizations.toFixed(0) : '';
+      mobilizationsInput.dataset.manual = hasSavedMobilizations ? 'true' : 'false';
+      mobilizationsInput.addEventListener('input', () => {
+        mobilizationsInput.dataset.manual = 'true';
+        _updateTransportCosts();
+      });
     }
     const driverCostInput = document.getElementById('driverCostDisplay');
     if (driverCostInput) {
@@ -5552,7 +5611,8 @@ async function initApp(){
     // Pre-fill form inputs from saved painting_breakdown
     const bd = _loadedProjectData?.painting_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
-    _paintingPhaseMaterials = { phase1: 0, phase2: 0, phase3: 0 };
+    _paintingPhaseCrews = { phase1: [], phase2: [] };
+    _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
     if (bd) {
       setVal('paintingOverheadInput', bd.overhead_pct ?? 0);
       setVal('paintingProfitInput', bd.profit_pct ?? 30);
@@ -5566,23 +5626,30 @@ async function initApp(){
       if (bd.phases) {
         for (const p of bd.phases) {
           const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
-          if (pid) _paintingPhaseMaterials[pid] = p.materials || 0;
+          if (pid) {
+            _paintingPhaseMaterials[pid] = p.materials || 0;
+            _paintingPhaseCrews[pid] = (p.crew || []).map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
+          }
         }
       }
       if (bd.expected_days != null) {
         _paintingExpectedDaysManual = true;
         setVal('paintingExpectedDaysInput', bd.expected_days);
       }
+      setVal('paintingPrimerAreaPerPersonInput', bd.primer_area_per_person ?? PAINTING_PRIMER_SF_PER_PERSON_DAY);
+      setVal('paintingInteriorAreaPerPersonInput', bd.interior_area_per_person ?? PAINTING_INTERIOR_SF_PER_PERSON_DAY);
     }
     const areaInput = document.getElementById('paintingTotalAreaInput');
     const materialsInput = document.getElementById('paintingMaterialsInput');
     const daysInput = document.getElementById('paintingExpectedDaysInput');
+    const primerRateInput = document.getElementById('paintingPrimerAreaPerPersonInput');
+    const interiorRateInput = document.getElementById('paintingInteriorAreaPerPersonInput');
     const openAreaDerived = _getPaintingAreaDerivedValues(areaInput?.value || 0);
     _paintingMaterialsManual = bd?.materials != null;
-    const persistedPaintingArea = _loadedProjectData?.total_area ?? bd?.total_area;
+    const paintingAreaValue = _loadedProjectData?.total_area ?? bd?.total_area;
     if (areaInput) {
-      if (persistedPaintingArea != null && persistedPaintingArea !== '') {
-        setVal('paintingTotalAreaInput', persistedPaintingArea);
+      if (paintingAreaValue != null && paintingAreaValue !== '') {
+        setVal('paintingTotalAreaInput', paintingAreaValue);
       }
       if (materialsInput) {
         materialsInput.value = bd?.materials != null ? (bd.materials || 0).toFixed(2) : openAreaDerived.materials.toFixed(2);
@@ -5599,12 +5666,40 @@ async function initApp(){
         _updatePaintingCrewCalcs();
       };
     }
+    if (primerRateInput) {
+      primerRateInput.addEventListener('input', _refreshPaintingDays);
+    }
+    if (interiorRateInput) {
+      interiorRateInput.addEventListener('input', _refreshPaintingDays);
+    }
     const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
     if (mobilizationsInput) {
       const expectedDays = parseFloat(document.getElementById('paintingExpectedDaysInput')?.value) || 0;
       const savedMobilizations = bd?.mobilizations;
-      const derivedMobilizations = expectedDays > 0 ? expectedDays * 2 : (savedMobilizations != null && savedMobilizations !== '' ? parseFloat(savedMobilizations) : null);
+      const hasSavedMobilizations = savedMobilizations != null && savedMobilizations !== '';
+      const derivedMobilizations = hasSavedMobilizations
+        ? parseFloat(savedMobilizations)
+        : (expectedDays > 0 ? expectedDays * 2 : null);
       mobilizationsInput.value = derivedMobilizations != null ? derivedMobilizations.toFixed(0) : '';
+      mobilizationsInput.dataset.manual = hasSavedMobilizations ? 'true' : 'false';
+      mobilizationsInput.addEventListener('input', () => {
+        mobilizationsInput.dataset.manual = 'true';
+        _updatePaintingTransportCosts();
+      });
+    }
+    if (PAINTING_PHASE_IDS.every(pid => !_paintingPhaseCrews[pid] || _paintingPhaseCrews[pid].length === 0)) {
+      const autoArea = parseFloat(paintingAreaValue || areaInput?.value) || 0;
+      if (autoArea > 0) {
+        _autoGeneratePaintingPhases(autoArea);
+      }
+    }
+    if (areaInput) {
+      areaInput.addEventListener('input', () => {
+        const area = parseFloat(areaInput.value) || 0;
+        if (area > 0) {
+          _refreshPaintingDays();
+        }
+      });
     }
     const driverCostInput = document.getElementById('paintingDriverCostDisplay');
     if (driverCostInput) {
@@ -5705,17 +5800,7 @@ async function initApp(){
   if (paintingRegenPhasesBtn) paintingRegenPhasesBtn.addEventListener('click', () => {
     const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
     if (area <= 0) { alert('Enter a Total Area first'); return; }
-    const days = Math.ceil(area / 5000) || 1;
-    const uid = () => Math.random().toString(36).slice(2);
-    _paintingPhaseCrews.phase1 = [
-      { role: 'painter',   rate: 25, hours: 8, days: days * 0.3, _uid: uid() },
-      { role: 'foreman',   rate: 28, hours: 8, days: days * 0.3, _uid: uid() },
-    ];
-    _paintingPhaseCrews.phase2 = [
-      { role: 'painter',   rate: 25, hours: 8, days: days * 0.7, _uid: uid() },
-      { role: 'assistant', rate: 22, hours: 8, days: days * 0.7, _uid: uid() },
-    ];
-    _deletedPaintingPhaseIds.clear();
+    _autoGeneratePaintingPhases(area);
     _paintingExpectedDaysManual = false;
     const derived = _getPaintingAreaDerivedValues(area);
     const materialsInput = document.getElementById('paintingMaterialsInput');
@@ -5748,6 +5833,8 @@ async function initApp(){
     const driverCost = parseFloat(document.getElementById('paintingDriverCostDisplay')?.value) || 0;
     const costPerMile = parseFloat(document.getElementById('paintingCostPerMileInput')?.value) || 0;
     const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
+    const primerAreaPerPerson = parseFloat(document.getElementById('paintingPrimerAreaPerPersonInput')?.value) || PAINTING_PRIMER_SF_PER_PERSON_DAY;
+    const interiorAreaPerPerson = parseFloat(document.getElementById('paintingInteriorAreaPerPersonInput')?.value) || PAINTING_INTERIOR_SF_PER_PERSON_DAY;
     const expectedDays = _getPaintingExpectedDaysFromPhases() || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
     const derived = _getPaintingAreaDerivedValues(totalArea);
@@ -5774,7 +5861,7 @@ async function initApp(){
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, mobilizations, driver_cost: driverCost, cost_per_mile: costPerMile, total_area: totalArea, expected_days: expectedDays, address, comments, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
+    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, mobilizations, driver_cost: driverCost, cost_per_mile: costPerMile, total_area: totalArea, expected_days: expectedDays, address, comments, primer_area_per_person: primerAreaPerPerson, interior_area_per_person: interiorAreaPerPerson, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
