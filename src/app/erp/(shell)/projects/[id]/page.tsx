@@ -14,6 +14,7 @@ import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
+import { SupervisorChangeOrderRequestForm } from "./SupervisorChangeOrderRequestForm";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
@@ -362,6 +363,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     laborers: (co.laborers ?? []).map((l) => ({ id: l.id, employeeId: l.employeeId, name: l.name, role: l.role })),
   }));
 
+  // Supervisors can request a change order but never see pricing, so this
+  // strips every cost field before it ever reaches their browser (defense in
+  // depth beyond just not rendering it).
+  const changeOrderRowsForSupervisor = changeOrders.map((co) => ({
+    id: co.id,
+    createdAt: co.createdAt.toISOString(),
+    title: co.title,
+    description: co.description,
+    requestedBy: co.requestedBy,
+    status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED",
+  }));
+
   const contractorRows = project.contractorAssignments.map((a) => ({
     id: a.id,
     contractorId: a.contractorId,
@@ -650,7 +663,19 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       ? [
           {
             label: "Change Orders",
-            content: (
+            content: isSupervisor ? (
+              <SupervisorChangeOrderRequestForm
+                projectId={project.id}
+                defaultRequestedBy={project.supervisor ?? ""}
+                initialEntries={changeOrderRowsForSupervisor}
+                employees={laborEmployees.map((e) => ({
+                  id: e.id,
+                  firstName: e.firstName,
+                  lastName: e.lastName,
+                  email: e.email ?? null,
+                }))}
+              />
+            ) : (
               <ProjectChangeOrdersSection
                 projectId={project.id}
                 initialEntries={changeOrderRows}
@@ -723,7 +748,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const tabs = isEmployee
     ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist")
     : isSupervisor
-    ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist" || t.label === "Safety Checklist")
+    ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist" || t.label === "Safety Checklist" || t.label === "Change Orders")
     : allTabs;
 
   return (
