@@ -4674,7 +4674,8 @@ async function initApp(){
         const newDays = totalDays > 0 ? totalDays : '';
         if (previousDays !== newDays) {
           const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
-          if (mobilizationsInput) {
+          const isManualMobilizations = mobilizationsInput?.dataset.manual === 'true' || (mobilizationsInput?.value ?? '') !== '';
+          if (mobilizationsInput && !isManualMobilizations) {
             mobilizationsInput.dataset.manual = 'false';
           }
         }
@@ -5148,9 +5149,20 @@ async function initApp(){
     const areaDerived = (!bd?.phases && resolvedArea > 0) ? _getPaintingAreaDerivedValues(resolvedArea) : null;
 
     const breakdownDiv = document.getElementById('paintingViewBreakdown');
-    const mobilizationsView = (projData.mobilizations != null && projData.mobilizations !== '' ? parseFloat(projData.mobilizations) : (projData.expected_days != null && projData.expected_days !== '' ? parseFloat(projData.expected_days) * 2 : 0)) || 0;
+    const expectedDaysView = (bd?.expected_days != null && bd?.expected_days !== '')
+      ? parseFloat(bd.expected_days)
+      : (projData.expected_days != null && projData.expected_days !== ''
+        ? parseFloat(projData.expected_days)
+        : 0);
+    const mobilizationsView = (bd?.mobilizations != null && bd?.mobilizations !== '')
+      ? parseFloat(bd.mobilizations)
+      : ((projData.mobilizations != null && projData.mobilizations !== '')
+        ? parseFloat(projData.mobilizations)
+        : (expectedDaysView > 0 ? expectedDaysView * 2 : 0));
     const gasCost = (() => {
-      const savedGas = projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null;
+      const savedGas = (bd?.gasoline != null && bd?.gasoline !== '')
+        ? parseFloat(bd.gasoline)
+        : (projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null);
       if (savedGas != null) return savedGas;
       return _getDistanceDerivedGasoline(projData?.driving_info?.distance || '', mobilizationsView);
     })();
@@ -5164,8 +5176,14 @@ async function initApp(){
       }
       return 28;
     })();
-    const driverCostView = driveHoursView > 0 ? (mobilizationsView * 2 * driveHoursView * foremanRateView) : 0;
-    const tollCostView = (projData.toll_cost != null && projData.toll_cost !== '' ? parseFloat(projData.toll_cost) : 0) || 0;
+    const driverCostView = (bd?.driver_cost != null && bd?.driver_cost !== '')
+      ? parseFloat(bd.driver_cost)
+      : ((projData.driver_cost != null && projData.driver_cost !== '')
+        ? parseFloat(projData.driver_cost)
+        : (driveHoursView > 0 ? mobilizationsView * 2 * driveHoursView * foremanRateView : 0));
+    const tollCostView = (bd?.toll_cost != null && bd?.toll_cost !== '')
+      ? parseFloat(bd.toll_cost)
+      : ((projData.toll_cost != null && projData.toll_cost !== '') ? parseFloat(projData.toll_cost) : 0) || 0;
     const totalTransport = driverCostView + gasCost + tollCostView;
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
@@ -5272,7 +5290,7 @@ async function initApp(){
     setText('paintingDetailDuration', di?.duration || '—');
     setText('paintingDetailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
     setText('paintingViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
-    setText('paintingViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
+    setText('paintingViewMargin', bd?.margin != null ? fmt$(bd.margin) : (projData.margin != null ? fmt$(projData.margin) : '—'));
 
     // Initialize edit state from saved painting_breakdown
     _paintingPhaseCrews = { phase1: [], phase2: [] };
@@ -5657,6 +5675,8 @@ async function initApp(){
       }
       if (bd.expected_days != null) {
         setVal('paintingExpectedDaysInput', bd.expected_days);
+        _paintingExpectedDaysManual = true;
+      } else {
         _paintingExpectedDaysManual = false;
       }
       setVal('paintingPrimerAreaPerPersonInput', bd.primer_area_per_person ?? PAINTING_PRIMER_SF_PER_PERSON_DAY);
@@ -5781,6 +5801,7 @@ async function initApp(){
     if (daysInput) {
       const handlePaintingDaysInput = () => {
         if (daysInput.readOnly) return;
+        _paintingExpectedDaysManual = true;
         if (mobilizationsInput) {
           mobilizationsInput.dataset.manual = 'false';
         }
@@ -5867,15 +5888,21 @@ async function initApp(){
     const mobilizations = parseFloat(document.getElementById('paintingMobilizationsInput')?.value) || 0;
     const driverCost = parseFloat(document.getElementById('paintingDriverCostDisplay')?.value) || 0;
     const costPerMile = parseFloat(document.getElementById('paintingCostPerMileInput')?.value) || 0;
-    const totalArea = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
+    const totalAreaValue = document.getElementById('paintingTotalAreaInput')?.value;
+    const totalArea = totalAreaValue !== '' && Number.isFinite(parseFloat(totalAreaValue))
+      ? parseFloat(totalAreaValue)
+      : null;
     const primerAreaPerPerson = parseFloat(document.getElementById('paintingPrimerAreaPerPersonInput')?.value) || PAINTING_PRIMER_SF_PER_PERSON_DAY;
     const interiorAreaPerPerson = parseFloat(document.getElementById('paintingInteriorAreaPerPersonInput')?.value) || PAINTING_INTERIOR_SF_PER_PERSON_DAY;
-    const expectedDays = _getPaintingExpectedDaysFromPhases() || null;
+    const paintingExpectedDaysInput = document.getElementById('paintingExpectedDaysInput');
+    const expectedDays = paintingExpectedDaysInput && paintingExpectedDaysInput.value !== ''
+      ? parseFloat(paintingExpectedDaysInput.value) || null
+      : _getPaintingExpectedDaysFromPhases() || null;
     const address = document.getElementById('paintingAddressInput')?.value?.trim() || '';
     const derived = _getPaintingAreaDerivedValues(totalArea);
     const materialsInput = document.getElementById('paintingMaterialsInput');
     const materials = materialsInput && materialsInput.value !== ''
-      ? parseFloat(materialsInput.value) || derived.materials
+      ? (Number.isFinite(parseFloat(materialsInput.value)) ? parseFloat(materialsInput.value) : derived.materials)
       : derived.materials;
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
 
@@ -5902,7 +5929,7 @@ async function initApp(){
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ painting_breakdown, total_area: totalArea > 0 ? totalArea : null }),
+        body: JSON.stringify({ painting_breakdown, total_area: totalArea > 0 ? totalArea : null, gasoline, margin }),
       });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
@@ -5914,6 +5941,12 @@ async function initApp(){
         _loadedProjectData.painting_breakdown.gasoline = gasoline;
         _loadedProjectData.painting_breakdown.mobilizations = mobilizations;
         _loadedProjectData.painting_breakdown.driver_cost = driverCost;
+        _loadedProjectData.painting_breakdown.toll_cost = tollCost;
+        _loadedProjectData.painting_breakdown.expected_days = expectedDays;
+        _loadedProjectData.painting_breakdown.total_area = totalArea;
+        _loadedProjectData.painting_breakdown.address = address;
+        _loadedProjectData.painting_breakdown.comments = comments;
+        _loadedProjectData.painting_breakdown.margin = margin;
         _loadedProjectData.gasoline = gasoline;
         _loadedProjectData.mobilizations = mobilizations;
         _loadedProjectData.driver_cost = driverCost;
