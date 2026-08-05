@@ -122,12 +122,16 @@ function formatHours(hours: number): string {
 }
 
 // Restricts the scope picker to what was actually contracted for the unit
-// (e.g. only "Clean"/"Paint" if that's all it has) — falls back to every
-// category when there's no linked TurnoverRequest to restrict against.
+// (e.g. only "Clean"/"Paint" if that's all it has), then drops anything
+// already marked complete, a finished item can't go back on the calendar.
+// Falls back to every category when there's no linked TurnoverRequest to
+// restrict against.
 function availableScopeOptionsFor(p: ScheduleProject) {
-  return p.contractedScopeItems
-    ? TURNOVER_SCOPE_OPTIONS.filter((opt) => p.contractedScopeItems!.includes(opt.value))
-    : TURNOVER_SCOPE_OPTIONS;
+  return (
+    p.contractedScopeItems
+      ? TURNOVER_SCOPE_OPTIONS.filter((opt) => p.contractedScopeItems!.includes(opt.value))
+      : TURNOVER_SCOPE_OPTIONS
+  ).filter((opt) => !p.completedScopeItems.includes(opt.value));
 }
 
 function formatClockTime(time: string): string {
@@ -2334,7 +2338,11 @@ export function SchedulePlanner({
                             onClick={() => openEventPopover(k, project, assignment)}
                             className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(project.status)}`}
                           >
-                            {isOverdue ? <span aria-hidden className="shrink-0 text-red-600">⚠</span> : null}
+                            {isOverdue ? (
+                              <span aria-hidden className="shrink-0 text-red-600">⚠</span>
+                            ) : !supervisor && !pm ? (
+                              <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-600">⚠</span>
+                            ) : null}
                             <ProjectStatusIcon status={project.status} />
                             <span className="truncate">{project.jobTitle}</span>
                           </button>
@@ -2361,7 +2369,9 @@ export function SchedulePlanner({
                                 <div className="text-gray-300">Supervisor: {supervisor.displayName}</div>
                               ) : pm ? (
                                 <div className="text-gray-300">PM: {pm.displayName}</div>
-                              ) : null}
+                              ) : (
+                                <div className="text-amber-400">No supervisor assigned yet</div>
+                              )}
                               {plannedWorkers.length > 0 ? (
                                 <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
                               ) : null}
@@ -2447,6 +2457,12 @@ export function SchedulePlanner({
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
                 ⚠ = starting soon, needs a supervisor
+              </div>
+            ) : null}
+            {dayAssignments.some((a) => !a.supervisorUserId && !a.projectManagerUserId) ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${PLANNED_CHIP_EXTRA_CLASS}`} />
+                <span aria-hidden className="text-amber-600">⚠</span> on a dashed chip = planned, no supervisor assigned yet
               </div>
             ) : null}
             {presentGroups.length > 0 ? (

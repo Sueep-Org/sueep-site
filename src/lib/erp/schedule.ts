@@ -97,6 +97,10 @@ export type ScheduleProject = {
    * unit has. Null when there's no linked TurnoverRequest (falls back to
    * offering every category, since there's nothing to restrict against). */
   contractedScopeItems: string[] | null;
+  /** Subset of contractedScopeItems already marked done (see
+   * TurnoverRequest.completedScopeItems). The day-assignment scope picker
+   * excludes these, a finished item can't be put back on the calendar. */
+  completedScopeItems: string[];
   /** This project's open change orders (id/title) — lets the day-assignment
    * modal offer a CO picker so a scheduled day can be tagged as covering
    * one or more of them. Excludes REJECTED/VOID COs. */

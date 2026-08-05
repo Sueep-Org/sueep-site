@@ -24,6 +24,8 @@ import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { UnitScopeCard } from "./UnitScopeCard";
 import { UnitScopeEditor } from "./UnitScopeEditor";
+import { UnitScopeChecklist } from "./UnitScopeChecklist";
+import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
 import { ProjectSOVSection } from "./ProjectSOVSection";
 import type { SOVItem } from "./ProjectSOVSection";
 import { WorkOrderAttachmentsSection } from "./WorkOrderAttachmentsSection";
@@ -87,6 +89,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             otherDescription: true,
             otherCents: true,
             priceCents: true,
+            status: true,
+            completedScopeItems: true,
           },
         },
         notes: {
@@ -259,6 +263,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       .trim() || null;
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
+  // Once the unit's overall status is COMPLETED, every contracted scope item
+  // counts as done regardless of what was individually checked off along the
+  // way, that's the whole point of the overall status. Otherwise, only what
+  // was actually toggled complete counts.
+  const contractedScopeItems = project.turnoverRequest ? contractedTurnoverScope(project.turnoverRequest) : [];
+  const completedScopeItems =
+    project.turnoverRequest?.status === "COMPLETED"
+      ? contractedScopeItems
+      : project.turnoverRequest
+      ? parseCompletedScopeItems(project.turnoverRequest.completedScopeItems)
+      : [];
   const checklistCompletedItems = (project.unitTurnoverChecklist?.completedItems ?? {}) as Record<string, boolean>;
   const qualityChecklistMeetsLaborThreshold = checklistCompletionPct(checklistCompletedItems) >= CHECKLIST_LABOR_THRESHOLD_PCT;
   const canOverrideChecklist = auth ? canOverrideQualityChecklist(auth.role) : false;
@@ -416,6 +431,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 otherWork={project.turnoverRequest.otherWork}
                 otherDescription={project.turnoverRequest.otherDescription}
                 contractValueCents={project.contractValueCents}
+                completedScopeItems={completedScopeItems}
               />
             </div>
           )}
@@ -555,7 +571,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         ceilingPaint: project.turnoverRequest.ceilingPaint,
         otherWork: project.turnoverRequest.otherWork,
         otherDescription: project.turnoverRequest.otherDescription,
-      } : null} />,
+      } : null} contractedScopeItems={contractedScopeItems} completedScopeItems={completedScopeItems} />,
     },
     {
       label: "Contractors",
@@ -591,7 +607,15 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           {
             label: "Checklist",
             content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
-              <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
+              <div className="space-y-6">
+                <UnitScopeChecklist
+                  projectId={project.id}
+                  contractedScopeItems={contractedScopeItems}
+                  initialCompletedScopeItems={completedScopeItems}
+                  canEdit={!isEmployee}
+                />
+                <ProjectUnitTurnoverChecklist projectId={project.id} buildingName={project.building?.name ?? null} />
+              </div>
             ) : (
               <ProjectChecklistSection
                 projectId={project.id}

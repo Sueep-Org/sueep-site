@@ -245,6 +245,13 @@ model TurnoverRequest {
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
 
+  /// Which of the contracted scope items (CLEAN, PAINT, etc, see
+  /// lib/erp/turnoverScope.ts) have actually been finished, independent of
+  /// the unit's overall status above. Once status is COMPLETED every
+  /// contracted item is treated as done regardless of what's in here, this
+  /// only matters while the unit is still in progress.
+  completedScopeItems Json @default("[]")
+
   laborAssignments      LaborAssignment[]
   qualityChecks         QualityCheck[]
   projects              Project[]

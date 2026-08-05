@@ -1,4 +1,5 @@
 import { turnoverHoursBudget } from "@/lib/erp/turnoverHoursBudget";
+import type { TurnoverScopeValue } from "@/lib/erp/turnoverScope";
 
 const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
 const PARTIAL_TURN_LAYOUT_LABELS: Record<string, string> = {
@@ -28,6 +29,10 @@ type Props = {
   otherWork: boolean;
   otherDescription: string | null;
   contractValueCents: number | null;
+  /** Which contracted scope items are actually finished (already resolved to
+   * "everything" when the unit's overall status is COMPLETED). Omit to fall
+   * back to the plain "in scope" checkmarks with no done/pending status. */
+  completedScopeItems?: string[];
 };
 
 function Check() {
@@ -56,16 +61,17 @@ export function UnitScopeCard({
   otherWork,
   otherDescription,
   contractValueCents,
+  completedScopeItems,
 }: Props) {
-  const workItems = [
-    fullClean ? "Full Clean" : null,
-    fullPaint ? "Full Paint" : null,
-    touchUpPaint ? `Touch-Up Paint (${touchUpPaint} rooms)` : null,
-    carpetCleaning ? "Carpet Cleaning" : null,
-    materialsAdditional ? "Materials" : null,
-    ceilingPaint ? "Ceiling Painting" : null,
-    otherWork ? (otherDescription?.trim() || "Other") : null,
-  ].filter(Boolean) as string[];
+  const workItems: { label: string; scopeValue: TurnoverScopeValue }[] = [
+    fullClean ? { label: "Full Clean", scopeValue: "CLEAN" as const } : null,
+    fullPaint ? { label: "Full Paint", scopeValue: "PAINT" as const } : null,
+    touchUpPaint ? { label: `Touch-Up Paint (${touchUpPaint} rooms)`, scopeValue: "TOUCH_UP_PAINT" as const } : null,
+    carpetCleaning ? { label: "Carpet Cleaning", scopeValue: "CARPET" as const } : null,
+    materialsAdditional ? { label: "Materials", scopeValue: "MATERIALS" as const } : null,
+    ceilingPaint ? { label: "Ceiling Painting", scopeValue: "CEILING_PAINT" as const } : null,
+    otherWork ? { label: otherDescription?.trim() || "Other", scopeValue: "OTHER" as const } : null,
+  ].filter((v): v is { label: string; scopeValue: TurnoverScopeValue } => v !== null);
 
   const isCommonArea = bedrooms === null && bathrooms === null;
 
@@ -119,12 +125,20 @@ export function UnitScopeCard({
         <div className="px-4 py-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-2">Work scope</p>
           <ul className="space-y-1.5">
-            {workItems.map((item) => (
-              <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
-                <Check />
-                {item}
-              </li>
-            ))}
+            {workItems.map((item) => {
+              const isDone = completedScopeItems?.includes(item.scopeValue);
+              return (
+                <li key={item.scopeValue} className="flex items-center gap-2 text-sm text-gray-700">
+                  <Check />
+                  <span className={isDone ? "text-gray-400 line-through" : undefined}>{item.label}</span>
+                  {completedScopeItems ? (
+                    <span className={`ml-auto text-xs font-medium ${isDone ? "text-emerald-600" : "text-amber-600"}`}>
+                      {isDone ? "Done" : "Pending"}
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : (

@@ -5,7 +5,7 @@ import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calen
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
-import { isTurnoverScopeValue } from "@/lib/erp/turnoverScope";
+import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -117,22 +117,11 @@ export async function POST(req: Request) {
     ? [...new Set(body.changeOrderIds.map((v) => String(v).trim()).filter(Boolean))]
     : [];
 
-  // A supervisor/PM isn't required — SOV items, scope, change orders, or a
-  // comment alone are enough to record coverage for the day — but there has
-  // to be *something*, otherwise this would just create an empty row.
-  if (
-    !supervisorUserId &&
-    !projectManagerUserId &&
-    sovItemIds.length === 0 &&
-    scopeItems.length === 0 &&
-    changeOrderIds.length === 0 &&
-    !comment
-  ) {
-    return NextResponse.json(
-      { error: "Provide a supervisor, PM, SOV item(s), scope, change order(s), or a comment" },
-      { status: 400 }
-    );
-  }
+  // A supervisor/PM/SOV/scope/CO/comment are all optional. A project can be
+  // put on the calendar for a day with none of them set, just to hold the
+  // day, and it renders the same as any other planned assignment (with a
+  // "no supervisor assigned" warning on the chip). The only thing actually
+  // required is a project and a date, both already validated above.
 
   const [project, supervisor, projectManager] = await Promise.all([
     prisma.project.findUnique({
@@ -144,6 +133,7 @@ export async function POST(req: Request) {
         contractValueCents: true,
         building: { select: { address: true } },
         workOrderRecord: { select: { siteAddress: true } },
+        turnoverRequest: { select: { completedScopeItems: true } },
       },
     }),
     supervisorUserId ? prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }) : null,
@@ -160,6 +150,19 @@ export async function POST(req: Request) {
   if (changeOrderIds.length > 0) {
     const found = await prisma.projectChangeOrder.count({ where: { id: { in: changeOrderIds }, projectId } });
     if (found !== changeOrderIds.length) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
+  }
+  // A scope item already marked complete (see /projects/[id]/scope-items)
+  // can't be put back on the calendar, that's the whole point of marking it
+  // done. Checked server-side too, not just filtered out of the picker.
+  if (scopeItems.length > 0 && project.turnoverRequest) {
+    const completed = parseCompletedScopeItems(project.turnoverRequest.completedScopeItems);
+    const blocked = scopeItems.filter((s) => completed.includes(s));
+    if (blocked.length > 0) {
+      return NextResponse.json(
+        { error: `${blocked.map(turnoverScopeLabel).join(", ")} already marked complete, can't be scheduled` },
+        { status: 400 }
+      );
+    }
   }
 
   // Building.address has far broader coverage than the work-order siteAddress

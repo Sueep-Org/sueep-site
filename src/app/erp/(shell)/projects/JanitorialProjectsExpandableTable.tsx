@@ -41,6 +41,17 @@ function unitTitleFromJobTitle(row: ProjectTableRow) {
   return title.replace(/\s+-\s+Turnover request$/i, "").trim();
 }
 
+/** Building-wide (non-per-unit) janitorial projects, like Nittany's separate
+ * "Turn Cleaning" and "Touch Up" contracts, distinguish themselves by the
+ * trailing " - <service>" segment on the jobTitle rather than a unit number
+ * — use that instead of the generic "1 unit" filler so sibling projects
+ * under the same building group read as distinct rows. */
+function serviceLabelFromJobTitle(row: ProjectTableRow) {
+  const parts = row.jobTitle.trim().split(/\s+-\s+/);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 1].trim();
+}
+
 function janitorialRowTitle(row: ProjectTableRow) {
   const rawUnits = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
   const units = unitsFromDescription(row);
@@ -49,7 +60,7 @@ function janitorialRowTitle(row: ProjectTableRow) {
     return formatUnitDisplay(units);
   }
 
-  return unitTitleFromJobTitle(row) || "1 unit";
+  return unitTitleFromJobTitle(row) || serviceLabelFromJobTitle(row) || "1 unit";
 }
 
 function janitorialRowDescription(_row: ProjectTableRow) {

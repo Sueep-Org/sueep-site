@@ -13,6 +13,7 @@ import { TRANSPORTATION_METHOD_OPTIONS, transportationMethodShortLabel } from "@
 import { CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { UnitScopeCard } from "./UnitScopeCard";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 
 export type LaborRow = {
   id: string;
@@ -174,6 +175,8 @@ export function ProjectLaborSection({
   unitScope = null,
   qualityChecklistBlocking = false,
   safetyCheckBlocking = false,
+  contractedScopeItems = [],
+  completedScopeItems = [],
 }: {
   projectId: string;
   initialEntries: LaborRow[];
@@ -214,6 +217,14 @@ export function ProjectLaborSection({
     otherWork: boolean;
     otherDescription: string | null;
   } | null;
+  /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit, lets
+   * a labor entry be tagged with which part of the scope it covers, same
+   * idea as sovItems. Empty for non-turnover projects. */
+  contractedScopeItems?: string[];
+  /** Subset of contractedScopeItems already marked done, same "assume
+   * everything's done once the unit is COMPLETED" resolution as the
+   * Overview/Checklist tabs, computed by the parent page. */
+  completedScopeItems?: string[];
 }) {
   const router = useRouter();
   const passedKeySet = new Set(safetyPassedKeys);
@@ -242,6 +253,9 @@ export function ProjectLaborSection({
   const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemIds: string[] }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemIds: [] });
   const [sovPicks, setSovPicks] = useState<string[]>([]);
   const [sovMarkCompleteIds, setSovMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [scopeMarkCompleteIds, setScopeMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [scopeCompletedItems, setScopeCompletedItems] = useState<string[]>(completedScopeItems);
+  const availableScopeItems = contractedScopeItems.filter((v) => !scopeCompletedItems.includes(v));
   const [unitCompleted, setUnitCompleted] = useState(false);
   const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
@@ -255,6 +269,10 @@ export function ProjectLaborSection({
     setEntries(initialEntries);
     setNotesMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""])));
   }, [initialEntries]);
+
+  useEffect(() => {
+    setScopeCompletedItems(completedScopeItems);
+  }, [completedScopeItems]);
 
   useEffect(() => {
     if (!employeePick || employeePick === OTHER_VALUE) {
@@ -285,6 +303,21 @@ export function ProjectLaborSection({
     if (res.ok) {
       setEntries((prev) => prev.filter((e) => e.id !== entryId));
       router.refresh();
+    }
+  }
+
+  async function markScopeItemsComplete(values: string[]) {
+    if (values.length === 0) return;
+    const next = [...new Set([...scopeCompletedItems, ...values])];
+    setScopeCompletedItems(next);
+    try {
+      await fetch(`/api/erp/projects/${projectId}/scope-items`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ completedScopeItems: next }),
+      });
+    } catch {
+      setScopeCompletedItems(scopeCompletedItems);
     }
   }
 
@@ -519,6 +552,8 @@ export function ProjectLaborSection({
       setTransportationMethodStr("");
       setSovPicks([]);
       setSovMarkCompleteIds(new Set());
+      if (scopeMarkCompleteIds.size > 0) void markScopeItemsComplete(Array.from(scopeMarkCompleteIds));
+      setScopeMarkCompleteIds(new Set());
       setUnitCompleted(false);
       if (unitCompleteError) setError(unitCompleteError);
       router.refresh();
@@ -571,6 +606,7 @@ export function ProjectLaborSection({
           otherWork={unitScope.otherWork}
           otherDescription={unitScope.otherDescription}
           contractValueCents={contractValueCents}
+          completedScopeItems={scopeCompletedItems}
         />
       )}
       {hoursBudget != null && impliedMarginPct != null && (
@@ -809,7 +845,29 @@ export function ProjectLaborSection({
                 </div>
               </div>
             )}
-            <div className={sovItems.length > 0 ? "mt-3" : ""}>
+            {isJanitorialUnit && availableScopeItems.length > 0 && (
+              <div className={sovItems.length > 0 ? "mt-3" : ""}>
+                <label className={label}>Mark scope complete</label>
+                <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+                  {availableScopeItems.map((value) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={scopeMarkCompleteIds.has(value)}
+                        onChange={(e) => setScopeMarkCompleteIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(value); else next.delete(value);
+                          return next;
+                        })}
+                        className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      This entry finishes &quot;{turnoverScopeLabel(value)}&quot;
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className={sovItems.length > 0 || (isJanitorialUnit && availableScopeItems.length > 0) ? "mt-3" : ""}>
               <label className={label} htmlFor="l-task">
                 {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
               </label>

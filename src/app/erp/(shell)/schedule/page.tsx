@@ -8,7 +8,7 @@ import {
   type ScheduleSovRequest,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
-import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
+import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
 import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 
@@ -61,6 +61,7 @@ export default async function SchedulePage() {
             ceilingPaint: true,
             materialsAdditional: true,
             otherWork: true,
+            completedScopeItems: true,
           },
         },
       },
@@ -319,6 +320,7 @@ export default async function SchedulePage() {
       plannedWorkersByDay,
       sovItems: r.sov?.items ?? [],
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
+      completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
     };
   });

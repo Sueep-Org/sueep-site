@@ -13,6 +13,7 @@ type ProjectOption = {
   segment: string;
   sovItems: SOVItemOption[];
   contractedScopeItems: string[] | null;
+  completedScopeItems: string[];
   changeOrders: { id: string; title: string }[];
 };
 type Person = { id: string; displayName: string };
@@ -119,11 +120,15 @@ export function DayAssignmentModal({
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
   const selectedGroup = selectedProject ? calendarSegmentGroup(selectedProject.segment) : null;
   // Restrict to what was actually contracted for this unit (e.g. only
-  // "Clean"/"Paint" if that's all it has) — falls back to every category
-  // when there's no linked TurnoverRequest to restrict against.
-  const availableScopeOptions = selectedProject?.contractedScopeItems
-    ? TURNOVER_SCOPE_OPTIONS.filter((opt) => selectedProject.contractedScopeItems!.includes(opt.value))
-    : TURNOVER_SCOPE_OPTIONS;
+  // "Clean"/"Paint" if that's all it has), then drop anything already
+  // marked complete, a finished item can't go back on the calendar. Falls
+  // back to every category when there's no linked TurnoverRequest to
+  // restrict against.
+  const availableScopeOptions = (
+    selectedProject?.contractedScopeItems
+      ? TURNOVER_SCOPE_OPTIONS.filter((opt) => selectedProject.contractedScopeItems!.includes(opt.value))
+      : TURNOVER_SCOPE_OPTIONS
+  ).filter((opt) => !selectedProject?.completedScopeItems.includes(opt.value));
 
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => matchesSearchQuery(e.displayName, employeeQuery))
@@ -147,15 +152,13 @@ export function DayAssignmentModal({
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const hasCoverage = sovPicks.length > 0 || scopePicks.length > 0 || coPicks.length > 0 || comment.trim().length > 0;
     if (!projectId) {
       setError("Pick a project");
       return;
     }
-    if (!supervisorUserId && !projectManagerUserId && !hasCoverage) {
-      setError("Pick a supervisor or PM, or record SOV item(s), scope, change order(s), or a comment");
-      return;
-    }
+    // Supervisor/PM/SOV/scope/CO/comment are all optional. Saving with none
+    // of them still puts the project on the calendar for this day, just
+    // flagged with a "no supervisor assigned" warning until one's added.
     if ((startTime && !endTime) || (endTime && !startTime)) {
       setError("Set both a start and end time, or leave both blank for an all-day event");
       return;

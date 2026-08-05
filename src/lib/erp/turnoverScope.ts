@@ -24,6 +24,14 @@ export function turnoverScopeLabel(value: string): string {
   return TURNOVER_SCOPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+/** Parses TurnoverRequest.completedScopeItems (a raw Json column) down to the
+ * subset of values that are actually valid scope categories, same defensive
+ * pattern as Employee.requiredDocuments. */
+export function parseCompletedScopeItems(value: unknown): TurnoverScopeValue[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is TurnoverScopeValue => typeof v === "string" && isTurnoverScopeValue(v));
+}
+
 /** Maps a TurnoverRequest's contracted-scope flags to the subset of
  * TURNOVER_SCOPE_OPTIONS values actually selected for that unit — e.g. a
  * unit with only fullClean and fullPaint checked returns ["CLEAN", "PAINT"].
