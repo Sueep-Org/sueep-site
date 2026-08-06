@@ -6,6 +6,8 @@ import { ContractSigningSection } from "@/app/erp/components/ContractSigningSect
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoPanel } from "./ContractorInfoPanel";
+import { ContractorLaborSection } from "./ContractorLaborSection";
+import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,6 +26,113 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const resendConfigured = Boolean(process.env.RESEND_API_KEY);
 
   const paperwork = (contractor.paperwork ?? []) as { label: string; url: string }[];
+
+  // A contractor's work lives in two tables, same split as Employee's
+  // LaborEntry vs ProjectChangeOrderLaborer: ContractorAssignment for
+  // project/building-level work, ChangeOrderContractorAssignment for CO
+  // work. Fetched in full and merged here, same as /api/erp/contractor-labor
+  // does for subsequent pages, so the initial load and "Load more" agree on
+  // ordering.
+  const [assignments, coAssignments, laborProjectGroups, coProjectRows] = await Promise.all([
+    prisma.contractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: {
+        id: true,
+        projectId: true,
+        role: true,
+        startDate: true,
+        endDate: true,
+        assignedDate: true,
+        costCents: true,
+        taskDescription: true,
+        createdAt: true,
+        project: { select: { id: true, jobTitle: true } },
+        building: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.changeOrderContractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: {
+        id: true,
+        role: true,
+        startDate: true,
+        endDate: true,
+        assignedDate: true,
+        costCents: true,
+        notes: true,
+        createdAt: true,
+        changeOrder: { select: { id: true, title: true, project: { select: { id: true, jobTitle: true } } } },
+      },
+    }),
+    prisma.contractorAssignment.groupBy({ by: ["projectId"], where: { contractorId: contractor.id, projectId: { not: null } } }),
+    prisma.changeOrderContractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: { changeOrder: { select: { projectId: true } } },
+      distinct: ["changeOrderId"],
+    }),
+  ]);
+
+  const laborProjectIds = new Set([
+    ...laborProjectGroups.map((g) => g.projectId).filter((pid): pid is string => pid != null),
+    ...coProjectRows.map((r) => r.changeOrder.projectId),
+  ]);
+  const laborProjects = laborProjectIds.size
+    ? await prisma.project.findMany({
+        where: { id: { in: Array.from(laborProjectIds) } },
+        select: { id: true, jobTitle: true },
+        orderBy: { jobTitle: "asc" },
+      })
+    : [];
+
+  const combinedLaborRows = [
+    ...assignments.map((a) => ({
+      id: a.id,
+      source: "PROJECT" as const,
+      projectId: a.project?.id ?? null,
+      projectTitle: a.project?.jobTitle ?? null,
+      buildingName: a.building?.name ?? null,
+      changeOrderTitle: null as string | null,
+      role: a.role,
+      date: a.startDate ?? a.assignedDate,
+      endDate: a.endDate,
+      costCents: a.costCents,
+      taskDescription: a.taskDescription,
+      createdAt: a.createdAt,
+    })),
+    ...coAssignments.map((a) => ({
+      id: a.id,
+      source: "CHANGE_ORDER" as const,
+      projectId: a.changeOrder.project.id,
+      projectTitle: a.changeOrder.project.jobTitle,
+      buildingName: null as string | null,
+      changeOrderTitle: a.changeOrder.title,
+      role: a.role,
+      date: a.startDate ?? a.assignedDate,
+      endDate: a.endDate,
+      costCents: a.costCents,
+      taskDescription: a.notes,
+      createdAt: a.createdAt,
+    })),
+  ].sort((a, b) => {
+    const dateDiff = (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0);
+    return dateDiff !== 0 ? dateDiff : b.createdAt.getTime() - a.createdAt.getTime();
+  });
+  const assignmentTotalCount = combinedLaborRows.length;
+
+  const laborRows = combinedLaborRows.slice(0, CONTRACTOR_LABOR_PAGE_SIZE).map((a) => ({
+    id: a.id,
+    source: a.source,
+    projectId: a.projectId,
+    projectTitle: a.projectTitle,
+    buildingName: a.buildingName,
+    changeOrderTitle: a.changeOrderTitle,
+    role: a.role,
+    date: a.date?.toISOString() ?? null,
+    endDate: a.endDate?.toISOString() ?? null,
+    costCents: a.costCents,
+    taskDescription: a.taskDescription,
+  }));
+  const initialLaborHasMore = assignmentTotalCount > CONTRACTOR_LABOR_PAGE_SIZE;
 
   return (
     <div className="space-y-4">
@@ -97,6 +206,17 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 phone: contractor.phone,
                 hasInsurance: contractor.hasInsurance,
               }}
+            />
+          ),
+        },
+        {
+          label: "Labor",
+          content: (
+            <ContractorLaborSection
+              contractorId={contractor.id}
+              initialEntries={laborRows}
+              initialHasMore={initialLaborHasMore}
+              projectOptions={laborProjects}
             />
           ),
         },
