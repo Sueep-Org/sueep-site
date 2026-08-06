@@ -485,6 +485,27 @@ export function SchedulePlanner({
   // day assignments, but no invite email is sent for these.
   const [workerAssignments, setWorkerAssignments] = useState(initialWorkerAssignments);
 
+  // Legacy ProjectSovScheduleRequest chips. The portal's "Schedule SOV Work"
+  // flow now creates a real ProjectDayAssignment instead (see the API route),
+  // so this only ever holds rows from before that change. Local state so
+  // deleting one of these leftovers reflects immediately.
+  const [sovRequestRows, setSovRequestRows] = useState(sovRequests);
+  const [deletingSovRequestId, setDeletingSovRequestId] = useState<string | null>(null);
+
+  async function handleDeleteSovRequest(id: string) {
+    setDeletingSovRequestId(id);
+    const previous = sovRequestRows;
+    setSovRequestRows((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const res = await fetch(`/api/erp/schedule/sov-requests/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+    } catch {
+      setSovRequestRows(previous);
+    } finally {
+      setDeletingSovRequestId(null);
+    }
+  }
+
   // Deletes a planned (ProjectDayAssignment) entry directly from its chip —
   // works on any day, including past ones where the "+" button is hidden, so
   // stale planned entries that never got a real labor log can still be
@@ -1732,7 +1753,7 @@ export function SchedulePlanner({
 
   const sovRequestsByDay = useMemo(() => {
     const map = new Map<string, ScheduleSovRequest[]>();
-    for (const r of sovRequests) {
+    for (const r of sovRequestRows) {
       for (const k of r.workDayKeys) {
         const list = map.get(k) ?? [];
         list.push(r);
@@ -1740,7 +1761,7 @@ export function SchedulePlanner({
       }
     }
     return map;
-  }, [sovRequests]);
+  }, [sovRequestRows]);
 
   // Projects starting (or ending) today or later that have never had a
   // supervisor assigned and have no logged work yet — otherwise these are
@@ -2417,11 +2438,23 @@ export function SchedulePlanner({
                           <li key={`sov-${r.id}`} className={inMonth ? "group relative" : "relative"}>
                             <Link
                               href={`/erp/projects/${r.projectId}`}
-                              className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${SOV_REQUEST_CHIP_CLASS}`}
+                              className={`flex items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors ${SOV_REQUEST_CHIP_CLASS}`}
                             >
                               <span aria-hidden title="No supervisor assigned" className="shrink-0">⚠</span>
                               <span className="truncate">{r.title}</span>
                             </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleDeleteSovRequest(r.id);
+                              }}
+                              disabled={deletingSovRequestId === r.id}
+                              title="Remove this request"
+                              className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                            >
+                              ×
+                            </button>
                             {inMonth ? (
                               <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{r.title}</div>
@@ -2442,7 +2475,7 @@ export function SchedulePlanner({
             </div>
           </div>
         </div>
-        {presentGroups.length > 0 || changeOrders.length > 0 || sovRequests.length > 0 ? (
+        {presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0 ? (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3">
             {presentGroups.map((group) => (
               <div key={group} className="flex items-center gap-1.5 text-[11px] text-gray-600">
@@ -2456,7 +2489,7 @@ export function SchedulePlanner({
                 {CHANGE_ORDER_LABEL}
               </div>
             ) : null}
-            {sovRequests.length > 0 ? (
+            {sovRequestRows.length > 0 ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
                 {SOV_REQUEST_LABEL}

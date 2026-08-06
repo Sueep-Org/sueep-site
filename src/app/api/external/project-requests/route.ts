@@ -73,36 +73,30 @@ export async function POST(req: Request) {
     changeOrderId = co.id;
   }
 
-  // Resolve SOV item description and persist a schedule request so it can
-  // show up on the ERP calendar (kept out of ProjectChangeOrder — see model comment)
+  // A "Schedule SOV Work" request always lands as a real ProjectDayAssignment
+  // (no supervisor/PM), the same row shape a Sueep staffer creates when
+  // scheduling manually via the "+" button, with the SOV item attached if
+  // one was picked. That's deliberate: it means this shows up on the
+  // calendar exactly like an internally-scheduled assignment (same chip,
+  // same click-to-open coverage editor, same delete button), not a separate
+  // lightweight "request" chip that only looks similar. Kept out of
+  // ProjectChangeOrder entirely, see that model's own comment for why.
   let sovDescription: string | undefined;
-  if (type === "sov-schedule" && body.sovItemId) {
-    const sovItem = await prisma.projectSOVItem.findFirst({
-      where: { id: body.sovItemId, sov: { projectId } },
-      select: { description: true },
-    });
-    if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
-    sovDescription = sovItem.description;
+  if (type === "sov-schedule") {
+    if (body.sovItemId) {
+      const sovItem = await prisma.projectSOVItem.findFirst({
+        where: { id: body.sovItemId, sov: { projectId } },
+        select: { description: true },
+      });
+      if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+      sovDescription = sovItem.description;
+    }
 
-    await prisma.projectSovScheduleRequest.create({
-      data: {
-        projectId,
-        sovItemId: body.sovItemId,
-        requestedBy: requesterName.trim(),
-        requestedEmail: requesterEmail.trim(),
-        requestedDate: new Date(`${body.desiredDate}T00:00:00Z`),
-        comments: body.comments?.trim() || null,
-      },
-    });
-  } else if (type === "sov-schedule" && !body.sovItemId) {
-    // No SOV line items exist on this project (or the requester didn't pick
-    // one). ProjectSovScheduleRequest.sovItemId is required, so that model
-    // can't represent this. Put it straight on the calendar as a bare
-    // ProjectDayAssignment instead: no supervisor/PM, just the date and a
-    // comment, which already renders as a real (yellow, "no supervisor
-    // assigned") planned chip. Merged into the day's existing comment rather
-    // than overwriting it, in case a supervisor already noted something.
     const date = new Date(`${body.desiredDate}T00:00:00Z`);
+    // Preserved here (not just in the notification email) so "who asked for
+    // this" stays visible on the calendar chip itself, not just in an inbox.
+    // Merged into the day's existing comment rather than overwriting it, in
+    // case a supervisor already noted something for that day.
     const requesterLine = `Requested by ${requesterName.trim()} via project portal${
       body.comments?.trim() ? `: ${body.comments.trim()}` : ""
     }`;
@@ -113,8 +107,16 @@ export async function POST(req: Request) {
     const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
     await prisma.projectDayAssignment.upsert({
       where: { projectId_date: { projectId, date } },
-      create: { projectId, date, comment: mergedComment },
-      update: { comment: mergedComment },
+      create: {
+        projectId,
+        date,
+        comment: mergedComment,
+        sovItems: body.sovItemId ? { connect: [{ id: body.sovItemId }] } : undefined,
+      },
+      update: {
+        comment: mergedComment,
+        sovItems: body.sovItemId ? { connect: [{ id: body.sovItemId }] } : undefined,
+      },
     });
   }
 
