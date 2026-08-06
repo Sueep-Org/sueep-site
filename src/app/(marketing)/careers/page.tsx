@@ -2,6 +2,7 @@ import Script from "next/script";
 import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
 import { CareersPixelEvents } from "./CareersPixelEvents";
+import { SubcontractorQuestionnaire } from "./SubcontractorQuestionnaire";
 
 
 export const metadata = {
@@ -224,6 +225,8 @@ export default async function CareersPage({
                 </label>
               </div>
             </div>
+
+            <SubcontractorQuestionnaire />
 
             <div>
               <label htmlFor="additionalNotes" className={labelClass}>

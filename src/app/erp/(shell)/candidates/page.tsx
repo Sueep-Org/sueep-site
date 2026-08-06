@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { CandidateStatusSelect } from "./CandidateStatusSelect";
 import { CandidatesFilters } from "./CandidatesFilters";
+import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   const search = typeof sp.search === "string" ? sp.search.trim() : "";
   const statusFilter = typeof sp.status === "string" ? sp.status.trim() : "";
   const positionFilter = typeof sp.position === "string" ? sp.position.trim() : "";
+  const typeFilter = typeof sp.type === "string" ? sp.type.trim() : "";
   const requestedPage = typeof sp.page === "string" ? parseInt(sp.page, 10) : 1;
 
   const where = {
@@ -23,15 +25,30 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     ...(positionFilter ? { positionInterest: positionFilter } : {}),
   };
 
-  // Lightweight pass over just id/status/createdAt to work out ordering and
-  // pagination — denied applicants are sorted to the end (and so land on the
-  // last page) when viewing the combined/unfiltered list. Full rows (which
-  // include paperwork/responses JSON blobs) are only fetched for the current
-  // page below, not the whole table, every load.
-  const sortRows = await prisma.candidateApplication.findMany({
+  // Lightweight pass over just id/status/createdAt/responses to work out
+  // ordering, the subcontractor/individual filter, and pagination. Denied
+  // applicants are sorted to the end when viewing the combined/unfiltered
+  // list. Full rows (paperwork, everything else) are only fetched for the
+  // current page below, not the whole table, every load.
+  //
+  // The subcontractor/individual split is filtered here in JS rather than
+  // pushed into the Prisma `where`. A SQL `NOT` over a JSON path filter
+  // silently excludes rows that have no `responses` at all (three-valued
+  // NULL logic: the underlying comparison is unknown, not false, for a
+  // missing path, so NOT of it is also unknown, matching neither side).
+  // That would've made "Individual" quietly hide every candidate who never
+  // touched the subcontractor question, arguably most of them.
+  let sortRows = await prisma.candidateApplication.findMany({
     where,
-    select: { id: true, status: true, createdAt: true },
+    select: { id: true, status: true, createdAt: true, responses: true },
   });
+
+  if (typeFilter === "subcontractor" || typeFilter === "individual") {
+    sortRows = sortRows.filter((r) => {
+      const isSubcontractor = (r.responses as Record<string, unknown> | null)?.[SUBCONTRACTOR_GATE_FIELD] === "Yes";
+      return typeFilter === "subcontractor" ? isSubcontractor : !isSubcontractor;
+    });
+  }
 
   sortRows.sort((a, b) => {
     if (!statusFilter) {
@@ -58,6 +75,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
     if (positionFilter) params.set("position", positionFilter);
+    if (typeFilter) params.set("type", typeFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/erp/candidates?${qs}` : "/erp/candidates";
@@ -69,7 +87,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
       </div>
 
-      <CandidatesFilters search={search} status={statusFilter} position={positionFilter} />
+      <CandidatesFilters search={search} status={statusFilter} position={positionFilter} type={typeFilter} />
 
       {candidates.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
@@ -84,6 +102,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                 <th className="px-4 py-2 font-semibold">Email</th>
                 <th className="px-4 py-2 font-semibold">Phone</th>
                 <th className="px-4 py-2 font-semibold">Position Interest</th>
+                <th className="px-4 py-2 font-semibold">Type</th>
                 <th className="px-4 py-2 font-semibold">Status</th>
                 <th className="px-4 py-2 font-semibold">Applied</th>
               </tr>
@@ -101,6 +120,15 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                   </td>
                   <td className="px-4 py-3 text-gray-700">{c.phone ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-700">{c.positionInterest ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {(c.responses as Record<string, unknown> | null)?.[SUBCONTRACTOR_GATE_FIELD] === "Yes" ? (
+                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Subcontractor
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">Individual</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <CandidateStatusSelect id={c.id} initialStatus={c.status} />
                   </td>

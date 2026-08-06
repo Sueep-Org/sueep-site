@@ -6,6 +6,8 @@ import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
+import { SubcontractorInfoSection } from "./SubcontractorInfoSection";
+import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +49,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   const experience = responses.experience ?? responses.cleaningExperience;
   const experienceYears = responses.experienceYears ?? responses.cleaningYears;
   const hasVehicle = responses.hasVehicle;
+  const isSubcontractor = responses[SUBCONTRACTOR_GATE_FIELD] === "Yes";
 
   const experienceLabel =
     experience === "yes"
@@ -153,6 +156,14 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             </>
           ),
         },
+        ...(isSubcontractor
+          ? [
+              {
+                label: "Subcontractor Info",
+                content: <SubcontractorInfoSection responses={responses} />,
+              },
+            ]
+          : []),
         {
           label: "Signing",
           content: (

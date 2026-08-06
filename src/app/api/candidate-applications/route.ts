@@ -74,6 +74,17 @@ export async function POST(req: NextRequest) {
       hasVehicle = String(form.get("hasVehicle") || "").trim();
       additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
+      // Same generic passthrough as the JSON branch below: any field the
+      // form sends that isn't one of the names above (e.g. every sub_*
+      // subcontractor-questionnaire field) lands in `responses` as-is,
+      // rather than being silently dropped. A checkbox group repeats the
+      // same name for each checked box, form.getAll collects all of them.
+      for (const key of new Set(form.keys())) {
+        if (KNOWN_BODY_KEYS.has(key)) continue;
+        const values = form.getAll(key).filter((v): v is string => typeof v === "string" && v.trim() !== "");
+        if (values.length === 0) continue;
+        extraResponses[key] = values.length > 1 ? values : values[0];
+      }
     } else {
       return NextResponse.json({ error: "Unsupported content type" }, { status: 415 });
     }
