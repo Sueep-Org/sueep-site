@@ -876,6 +876,54 @@ export default function EstimatorPage() {
                 <input type="hidden" id="cleanerRateInput" defaultValue="22" />
                 <input type="hidden" id="foremanRateInput" defaultValue="220" />
 
+                {/* Area per person per day */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">
+                    Area per person per day
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Rough Cleaning (SF/day)
+                      </label>
+                      <input
+                        type="number"
+                        id="roughAreaPerPersonInput"
+                        defaultValue={4000}
+                        min="0"
+                        step="1"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Final Cleaning (SF/day)
+                      </label>
+                      <input
+                        type="number"
+                        id="finalAreaPerPersonInput"
+                        defaultValue={4000}
+                        min="0"
+                        step="1"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Touch Up Cleaning (SF/day)
+                      </label>
+                      <input
+                        type="number"
+                        id="touchupAreaPerPersonInput"
+                        defaultValue={4000}
+                        min="0"
+                        step="1"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Phase table — rendered by JS */}
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1215,40 +1263,6 @@ export default function EstimatorPage() {
                     </button>
                   </div>
                 </div>
-                {/* Area per person per day */}
-                <div className="mb-4 pb-4 border-b border-gray-100">
-                  <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">
-                    Area per person per day
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Interior Painting Primer (SF/day)
-                      </label>
-                      <input
-                        type="number"
-                        id="paintingPrimerAreaPerPersonInput"
-                        defaultValue={2000}
-                        min="0"
-                        step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Interior Painting (SF/day)
-                      </label>
-                      <input
-                        type="number"
-                        id="paintingInteriorAreaPerPersonInput"
-                        defaultValue={1200}
-                        min="0"
-                        step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </div>
-                  </div>
-                </div>
                 {/* Start Address */}
                 <div className="mb-4">
                   <label className="block text-xs text-gray-500 mb-1">
@@ -1434,6 +1448,41 @@ export default function EstimatorPage() {
                   id="paintingForemanRateInput"
                   defaultValue="220"
                 />
+
+                {/* Area per person per day */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-2">
+                    Area per person per day
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Interior Painting Primer (SF/day)
+                      </label>
+                      <input
+                        type="number"
+                        id="paintingPrimerAreaPerPersonInput"
+                        defaultValue={2000}
+                        min="0"
+                        step="1"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Interior Painting (SF/day)
+                      </label>
+                      <input
+                        type="number"
+                        id="paintingInteriorAreaPerPersonInput"
+                        defaultValue={1200}
+                        min="0"
+                        step="1"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 {/* Phase table */}
                 <div className="flex justify-between items-center mb-2">
