@@ -55,8 +55,6 @@ const CHANGE_ORDER_CHIP_CLASS = "bg-blue-100 text-blue-800 hover:bg-blue-200";
 const CHANGE_ORDER_SWATCH_CLASS = "bg-blue-100";
 const CHANGE_ORDER_LABEL = "Change order (CO)";
 
-const SOV_REQUEST_CHIP_CLASS = "bg-teal-100 text-teal-800 hover:bg-teal-200";
-const SOV_REQUEST_SWATCH_CLASS = "bg-teal-100";
 const SOV_REQUEST_LABEL = "SOV schedule request";
 
 // Dashed border marks a chip as "planned" (a supervisor was assigned ahead
@@ -73,6 +71,14 @@ const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
 // segment color for which utility class wins.
 const NO_SUPERVISOR_PLANNED_CHIP_CLASS =
   "border-2 border-dashed border-amber-600 bg-amber-400 text-amber-950 hover:bg-amber-300";
+
+// A "Schedule SOV Work" portal request has no supervisorUserId field at
+// all, so it's always in a "needs a supervisor assigned" state, same as a
+// no-supervisor planned chip above (whole-chip amber rather than teal, which
+// used to make it look like its own unrelated category instead of exactly
+// what it is: a planned assignment nobody's been put on yet).
+const SOV_REQUEST_CHIP_CLASS = NO_SUPERVISOR_PLANNED_CHIP_CLASS;
+const SOV_REQUEST_SWATCH_CLASS = "border-2 border-amber-600 bg-amber-400";
 
 // A project with a future (or today's) start date that has never had a
 // supervisor assigned and has no logged work at all — solid, loud, and
@@ -157,9 +163,10 @@ function dayCellLabel(dateKey: string): string {
   });
 }
 
-// "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, teal)
-// aren't project segments — they're layered on top as their own filterable
-// types alongside the segment-based groups.
+// "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, amber,
+// same as any other no-supervisor-assigned chip) aren't project segments,
+// they're layered on top as their own filterable types alongside the
+// segment-based groups.
 type ProjectTypeFilter = CalendarSegmentGroup | "CO" | "SOV";
 
 const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; swatch: string }[] = [
@@ -2412,6 +2419,7 @@ export function SchedulePlanner({
                               href={`/erp/projects/${r.projectId}`}
                               className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${SOV_REQUEST_CHIP_CLASS}`}
                             >
+                              <span aria-hidden title="No supervisor assigned" className="shrink-0">⚠</span>
                               <span className="truncate">{r.title}</span>
                             </Link>
                             {inMonth ? (
@@ -2420,6 +2428,7 @@ export function SchedulePlanner({
                                 <div className="text-gray-300">{SOV_REQUEST_LABEL}</div>
                                 {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
                                 <div className="text-gray-300">Requested by: {r.requestedBy}</div>
+                                <div className="text-amber-400">No supervisor assigned yet</div>
                               </div>
                             ) : null}
                           </li>

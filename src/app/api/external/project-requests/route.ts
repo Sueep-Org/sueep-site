@@ -37,9 +37,6 @@ export async function POST(req: Request) {
   if (type === "change-order" && !body.coEstimatedStartDate) {
     return NextResponse.json({ error: "coEstimatedStartDate is required for change order requests" }, { status: 400 });
   }
-  if (type === "sov-schedule" && !body.sovItemId) {
-    return NextResponse.json({ error: "sovItemId is required for SOV scheduling" }, { status: 400 });
-  }
   if (type === "sov-schedule" && !body.desiredDate) {
     return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
   }
@@ -96,6 +93,28 @@ export async function POST(req: Request) {
         requestedDate: new Date(`${body.desiredDate}T00:00:00Z`),
         comments: body.comments?.trim() || null,
       },
+    });
+  } else if (type === "sov-schedule" && !body.sovItemId) {
+    // No SOV line items exist on this project (or the requester didn't pick
+    // one). ProjectSovScheduleRequest.sovItemId is required, so that model
+    // can't represent this. Put it straight on the calendar as a bare
+    // ProjectDayAssignment instead: no supervisor/PM, just the date and a
+    // comment, which already renders as a real (yellow, "no supervisor
+    // assigned") planned chip. Merged into the day's existing comment rather
+    // than overwriting it, in case a supervisor already noted something.
+    const date = new Date(`${body.desiredDate}T00:00:00Z`);
+    const requesterLine = `Requested by ${requesterName.trim()} via project portal${
+      body.comments?.trim() ? `: ${body.comments.trim()}` : ""
+    }`;
+    const existingAssignment = await prisma.projectDayAssignment.findUnique({
+      where: { projectId_date: { projectId, date } },
+      select: { comment: true },
+    });
+    const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
+    await prisma.projectDayAssignment.upsert({
+      where: { projectId_date: { projectId, date } },
+      create: { projectId, date, comment: mergedComment },
+      update: { comment: mergedComment },
     });
   }
 

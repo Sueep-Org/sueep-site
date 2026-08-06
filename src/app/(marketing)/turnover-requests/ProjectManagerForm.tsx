@@ -144,7 +144,7 @@ export function ProjectManagerForm({ onBack }: Props) {
       setError("Estimated start date is required.");
       return;
     }
-    if (requestType === "sov-schedule" && !selectedSovId) {
+    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovId) {
       setError("Please select an SOV item.");
       return;
     }
@@ -386,7 +386,10 @@ export function ProjectManagerForm({ onBack }: Props) {
             {sovLoading && <p className="text-sm text-gray-500">Loading SOV items…</p>}
 
             {!sovLoading && sovItems.length === 0 && (
-              <p className="text-sm text-gray-500">No SOV items found for this project. Please contact Sueep directly.</p>
+              <p className="text-sm text-gray-500">
+                This project doesn&apos;t have SOV line items set up yet, that&apos;s fine. Add a date and any comments
+                below and we&apos;ll get it on the calendar.
+              </p>
             )}
 
             {!sovLoading && sovItems.length > 0 && (
