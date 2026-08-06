@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
+import { getErpAuth, canOverridePto } from "@/lib/erpAuth";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
  * the right upsert shape (and compound-unique key) for whichever it is. */
@@ -157,6 +158,33 @@ export async function POST(req: Request) {
       data: { projectId, startDate: date, endDate: repeatUntil, repeatDays },
     });
     seriesId = series.id;
+  }
+
+  // An employee with time off logged over any of the day(s) being scheduled
+  // can't be assigned, same 409-and-explain shape as the background-check
+  // guard above, checked against every date in the batch (not just the
+  // anchor date), a repeat/duplicate range could still land on a PTO day
+  // even if the first day doesn't. PM/ADMIN/SALES can override, same role
+  // set as the quality-checklist/safety-check gates.
+  if (employeeId) {
+    const auth = await getErpAuth();
+    if (!auth || !canOverridePto(auth.role)) {
+      const datesToCheck = seriesDates ?? [date];
+      const conflictingPto = await prisma.employeeTimeOff.findFirst({
+        where: {
+          employeeId,
+          OR: datesToCheck.map((d) => ({ startDate: { lte: d }, endDate: { gte: d } })),
+        },
+      });
+      if (conflictingPto) {
+        return NextResponse.json(
+          {
+            error: `${employee!.firstName} ${employee!.lastName} has time off scheduled and can't be assigned. A PM or Admin can override.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   // No notification is sent here (unlike the supervisor day-assignment

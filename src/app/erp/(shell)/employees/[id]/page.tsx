@@ -9,6 +9,7 @@ import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
+import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { getErpAuth, canEditEmployeePayInfo, canViewEmployeeSsn } from "@/lib/erpAuth";
 
@@ -32,6 +33,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
       contracts: { orderBy: { createdAt: "asc" } },
       backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
+      timeOff: { orderBy: { startDate: "desc" } },
     },
   });
   if (!employee) notFound();
@@ -219,6 +221,21 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 />
               )}
             </div>
+          ),
+        },
+        {
+          label: "Time Off",
+          content: (
+            <EmployeeTimeOffSection
+              employeeId={employee.id}
+              initialTimeOff={employee.timeOff.map((t) => ({
+                id: t.id,
+                startDate: t.startDate.toISOString(),
+                endDate: t.endDate.toISOString(),
+                type: t.type as "VACATION" | "SICK" | "UNPAID" | "OTHER",
+                notes: t.notes,
+              }))}
+            />
           ),
         },
         {

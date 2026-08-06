@@ -36,6 +36,14 @@ function marginPctColorClass(pct: number): string {
   return "text-red-600";
 }
 
+const TIME_OFF_TYPE_LABEL: Record<string, string> = {
+  VACATION: "Vacation",
+  SICK: "Sick",
+  HALF_DAY: "Half Day",
+  UNPAID: "Unpaid",
+  OTHER: "Other",
+};
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -615,7 +623,7 @@ export default async function ErpDashboardPage() {
     const flagWindowStart = new Date(adminTodayStart);
     flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
 
-    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck] = await Promise.all([
+    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck, upcomingTimeOff] = await Promise.all([
       prisma.project.findMany({
         select: {
           id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
@@ -695,6 +703,21 @@ export default async function ErpDashboardPage() {
       prisma.laborEntry.findMany({
         where: { workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
         select: { projectId: true, workDate: true },
+      }),
+      // Currently-out or about-to-be-out employees, oldest start date first.
+      // endDate >= today catches PTO already in progress, not just what
+      // hasn't started yet. Capped short on purpose, see the widget below.
+      prisma.employeeTimeOff.findMany({
+        where: { endDate: { gte: adminTodayStart } },
+        orderBy: { startDate: "asc" },
+        take: 8,
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          type: true,
+          employee: { select: { id: true, firstName: true, lastName: true } },
+        },
       }),
     ]);
 
@@ -860,16 +883,17 @@ export default async function ErpDashboardPage() {
     const safetyPassed = safetyWorkers.filter((w) => w.passed).length;
     const safetyComplianceRate = safetyTotal > 0 ? Math.round((safetyPassed / safetyTotal) * 100) : null;
 
-    // "Needs labor logged" — company-wide, mirrors the calendar's red ⚠
-    // overdue-planned chip. Kept as a variable so it can be positioned high
-    // for PMs (who need to chase this) but pushed to the bottom for
-    // Admin/Sales (who see it, but it's not their day-to-day action item).
+    // "Needs labor logged", company-wide, mirrors the calendar's red ⚠
+    // overdue-planned chip. Rendered inside the "Needs attention" grid below,
+    // same spot for every role that reaches this dashboard now (previously
+    // moved between top and bottom depending on PM vs Admin, consolidated
+    // for a simpler, more consistent layout).
     const needsLaborLoggedWidget = (
       <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900" title="Scheduled on the calendar, day already passed, still no labor logged">
+          <h3 className="text-sm font-semibold text-gray-900" title="Scheduled on the calendar, day already passed, still no labor logged">
             <span aria-hidden className="mr-1 text-red-600">⚠</span>Needs labor logged
-          </h2>
+          </h3>
           {missingLaborProjects.length > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{missingLaborProjects.length}</span>
           )}
@@ -892,6 +916,11 @@ export default async function ErpDashboardPage() {
         )}
       </div>
     );
+
+    // Small uppercase group labels above each cluster of cards, so the page
+    // reads as a few organized zones (Today / Needs attention / Financials /
+    // Activity / Staffing) instead of one flat stack of same-looking tables.
+    const sectionLabelCls = "px-1 text-xs font-semibold uppercase tracking-wide text-gray-400";
 
     return (
       <div className="space-y-6">
@@ -950,11 +979,12 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
-        {/* Where we are / Labor red flags */}
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/* Today */}
+        <div className="space-y-3">
+          <h2 className={sectionLabelCls}>Today</h2>
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h2>
+              <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
             </div>
             {scheduledToday.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-gray-400">
@@ -996,76 +1026,87 @@ export default async function ErpDashboardPage() {
               </ul>
             )}
           </div>
+        </div>
 
-          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">Labor red flags</h2>
-              {laborFlags.length > 0 && (
-                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{laborFlags.length}</span>
+        {/* Needs attention: both alert-style widgets together, same spot for
+            every role now (previously needsLaborLoggedWidget alone moved
+            between top and bottom depending on PM vs Admin; grouping it with
+            Labor red flags here makes it consistently easy to find instead). */}
+        <div className="space-y-3">
+          <h2 className={sectionLabelCls}>Needs attention</h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">Labor red flags</h3>
+                {laborFlags.length > 0 && (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{laborFlags.length}</span>
+                )}
+              </div>
+              {laborFlags.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {laborFlags.map((f, i) => (
+                    <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`}>
+                      <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
+                          <p className="truncate text-xs text-gray-400" title={f.jobTitle}>{f.jobTitle}</p>
+                        </div>
+                        <div className="ml-2 shrink-0 text-right">
+                          <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
+                          <p className="text-[11px] text-gray-400">{f.label}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-            {laborFlags.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {laborFlags.map((f, i) => (
-                  <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`}>
-                    <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
-                        <p className="truncate text-xs text-gray-400" title={f.jobTitle}>{f.jobTitle}</p>
-                      </div>
-                      <div className="ml-2 shrink-0 text-right">
-                        <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
-                        <p className="text-[11px] text-gray-400">{f.label}</p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+
+            {needsLaborLoggedWidget}
           </div>
         </div>
 
-        {/* Needs labor logged — kept high for PMs (rendered right here), pushed
-            to the bottom for Admin/Sales (rendered after the activity feed
-            below), same widget either way. */}
-        {isProjectManager(role) && needsLaborLoggedWidget}
-
-        {/* Recently updated margins — financial data, so only shown to roles that can see it */}
+        {/* Financials: only shown to roles that can see them */}
         {showFinancials && (
-          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h2>
+          <div className="space-y-3">
+            <h2 className={sectionLabelCls}>Financials</h2>
+            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                <h3 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h3>
+              </div>
+              {recentMarginProjects.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-gray-400">No projects with a contract value yet.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {recentMarginProjects.map((p) => (
+                    <li key={p.id}>
+                      <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                        <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                        <div className="shrink-0 text-right">
+                          {p.marginPct != null && (
+                            <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
+                          )}
+                          <p className="text-[11px] text-gray-400">{signedDollarsShort(p.marginCents)}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            {recentMarginProjects.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">No projects with a contract value yet.</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {recentMarginProjects.map((p) => (
-                  <li key={p.id}>
-                    <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                      <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
-                      <div className="shrink-0 text-right">
-                        {p.marginPct != null && (
-                          <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
-                        )}
-                        <p className="text-[11px] text-gray-400">{signedDollarsShort(p.marginCents)}</p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         )}
 
-        {/* Activity feed */}
-        <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">Recent project activity</h2>
-            <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
-          </div>
+        {/* Activity */}
+        <div className="space-y-3">
+          <h2 className={sectionLabelCls}>Activity</h2>
+          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <h3 className="text-sm font-semibold text-gray-900">Recent project activity</h3>
+              <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
+            </div>
           <ul className="divide-y divide-gray-100">
             {recentProjects.map((p) => {
               const activity = describeProjectActivity(p);
@@ -1089,8 +1130,57 @@ export default async function ErpDashboardPage() {
             })}
           </ul>
         </div>
+        </div>
 
-        {!isProjectManager(role) && needsLaborLoggedWidget}
+        {/* Staffing: Admin/PM only, kept last on purpose so it doesn't
+            compete with anything actionable above it. */}
+        {(role === "ADMIN" || isProjectManager(role)) && (
+          <div className="space-y-3">
+            <h2 className={sectionLabelCls}>Staffing</h2>
+            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
+                {upcomingTimeOff.length > 0 && (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                    {upcomingTimeOff.length}
+                  </span>
+                )}
+              </div>
+              {upcomingTimeOff.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-gray-400">No upcoming time off logged.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {upcomingTimeOff.map((t) => {
+                    const start = t.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    const end = t.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    const isNow = t.startDate <= adminTodayStart && t.endDate >= adminTodayStart;
+                    return (
+                      <li key={t.id}>
+                        <Link
+                          href={`/erp/employees/${t.employee.id}`}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                        >
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {t.employee.firstName} {t.employee.lastName}
+                          </p>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                              {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
+                            </span>
+                            <span className={`text-xs ${isNow ? "font-semibold text-amber-600" : "text-gray-400"}`}>
+                              {isNow ? "Out now · " : ""}
+                              {start === end ? start : `${start}–${end}`}
+                            </span>
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   } catch (e: unknown) {

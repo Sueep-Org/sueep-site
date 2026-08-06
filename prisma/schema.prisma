@@ -1113,6 +1113,7 @@ model Employee {
   laborEntries                 LaborEntry[]
   documents                    EmployeeDocument[]
   backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
+  timeOff                      EmployeeTimeOff[]
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
   workerDayAssignments         ProjectWorkerDayAssignment[]
@@ -1154,6 +1155,32 @@ model EmployeeBackgroundCheckEvent {
   changedBy String?
 
   @@index([employeeId, createdAt])
+}
+
+/// A logged block of time off for an employee. No separate request/approval
+/// status for now (every row that exists is treated as approved, matching
+/// how loosely most things work in this ERP). Deleting a row is how it gets
+/// cancelled. Blocks scheduling that employee on the calendar for any day
+/// inside [startDate, endDate], overridable by a PM/Admin the same way the
+/// quality checklist and safety check gates are (see canOverridePto).
+model EmployeeTimeOff {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC, same convention as ProjectDayAssignment.date — inclusive
+  /// on both ends.
+  startDate DateTime
+  endDate   DateTime
+
+  /// VACATION | SICK | HALF_DAY | UNPAID | OTHER
+  type  String  @default("VACATION")
+  notes String?
+
+  @@index([employeeId, startDate, endDate])
 }
 
 /// Tracks whether an offshore employee's fixed monthly pay has been paid for

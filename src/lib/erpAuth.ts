@@ -57,6 +57,13 @@ export function canOverrideSafetyCheck(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES";
 }
 
+/** An employee with a logged EmployeeTimeOff row can't be scheduled for a day
+ * inside it; PM/ADMIN/SALES can override and schedule them anyway (same role
+ * set as the other override gates above). */
+export function canOverridePto(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES";
+}
+
 /** SUPERVISOR shouldn't see contract $ or cost $ on the Projects table (or any
  * other dollar figure that'd let contract value be derived), but should still
  * see margin as a percentage — a health signal without the dollar exposure. */
