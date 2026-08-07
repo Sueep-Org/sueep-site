@@ -29,7 +29,7 @@ export function AddingEmployees() {
             </Step>
 
             <Step n={3} title="Employee Details Page">
-                All employees have an employee details page that can be navigated to by clicking on their name in the employees table. It has 4 tabs.
+                All employees have an employee details page that can be navigated to by clicking on their name in the employees table. It has 5 tabs.
                 <br></br><br></br>
                 You will first land on the <strong>General Info</strong> tab where you can change their name, email, phone number, role, pay type and rate, default project, status, hire date, offshore status, and any notes.
                 <Img src="/help/employees/employee_3.png" alt="Employees details" />
@@ -44,6 +44,9 @@ export function AddingEmployees() {
                 You must name the <strong>Document type</strong> the same as the name you entered as the required document or the system will not recognize that the employee has that document.
                 <Img src="/help/employees/employee_6.png" alt="Employees details" />
                 As you can see above we added I-9 as a required document and uploaded it under the same type making I-9 show as complete under required documents.
+                <br></br><br></br>
+                Next is the <strong>Time Off</strong> tab. This is where vacation, sick days, half days, and other time off get logged for the employee. Any time off logged here blocks that employee from being scheduled on the calendar for those days.
+                <Callout type="info">A PM or Admin can override the time off block and schedule the employee anyway if needed. Logged entries can be edited or deleted from this tab too.</Callout>
                 <br></br><br></br>
                 Next is the <strong>Labor</strong> tab, showing this employee&apos;s own labor entries across every project they&apos;ve worked on. See <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A>.
                 <br></br><br></br>

@@ -1,7 +1,25 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { complianceBadgeClasses, complianceLabel, evaluateEmployeeCompliance } from "@/lib/erp/employees";
+import {
+  complianceBadgeClasses,
+  complianceLabel,
+  evaluateEmployeeCompliance,
+  backgroundCheckBadgeClasses,
+  backgroundCheckLabel,
+  type BackgroundCheckStatus,
+} from "@/lib/erp/employees";
 import { NewEmployeeForm } from "./NewEmployeeForm";
+
+const BACKGROUND_CHECK_ORDER: Record<BackgroundCheckStatus, number> = {
+  FAILED: 0,
+  PENDING: 1,
+  NOT_DONE: 2,
+  PASSED: 3,
+};
+
+function normalizeBackgroundCheckStatus(status: string | null): BackgroundCheckStatus {
+  return status === "PASSED" || status === "FAILED" || status === "PENDING" ? status : "NOT_DONE";
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,9 +47,13 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   const projectFilter = firstValue(qp.project).trim().toLowerCase();
   const nameFilter = firstValue(qp.name).trim().toLowerCase();
   const complianceFilter = firstValue(qp.compliance).trim().toUpperCase();
+  const backgroundCheckFilter = firstValue(qp.backgroundCheck).trim().toUpperCase();
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
-  const sortBy = sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" || sortByRaw === "compliance" ? sortByRaw : "name";
+  const sortBy =
+    sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" || sortByRaw === "compliance" || sortByRaw === "backgroundCheck"
+      ? sortByRaw
+      : "name";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
   const employees = await prisma.employee.findMany({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -44,9 +66,11 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     .map((e) => {
       const requiredDocs = parseRequiredDocuments(e.requiredDocuments);
       const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
-      return { ...e, compliance };
+      const backgroundCheck = normalizeBackgroundCheckStatus(e.backgroundCheckStatus);
+      return { ...e, compliance, backgroundCheck };
     })
-    .filter((e) => (complianceFilter ? e.compliance === complianceFilter : true));
+    .filter((e) => (complianceFilter ? e.compliance === complianceFilter : true))
+    .filter((e) => (backgroundCheckFilter ? e.backgroundCheck === backgroundCheckFilter : true));
 
   const complianceOrder = { NON_COMPLIANT: 0, NOT_CONFIGURED: 1, COMPLIANT: 2, INACTIVE: 3 };
 
@@ -63,6 +87,10 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     } else if (sortBy === "compliance") {
       const av = complianceOrder[a.compliance];
       const bv = complianceOrder[b.compliance];
+      if (av !== bv) return (av - bv) * dir;
+    } else if (sortBy === "backgroundCheck") {
+      const av = BACKGROUND_CHECK_ORDER[a.backgroundCheck];
+      const bv = BACKGROUND_CHECK_ORDER[b.backgroundCheck];
       if (av !== bv) return (av - bv) * dir;
     }
     const an = `${a.lastName} ${a.firstName}`.toLowerCase();
@@ -117,6 +145,23 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
               <option value="INACTIVE">Inactive</option>
             </select>
           </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="backgroundCheckFilter">
+              Background check
+            </label>
+            <select
+              id="backgroundCheckFilter"
+              name="backgroundCheck"
+              defaultValue={backgroundCheckFilter}
+              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+            >
+              <option value="">All</option>
+              <option value="PASSED">Passed</option>
+              <option value="FAILED">Failed</option>
+              <option value="PENDING">Pending</option>
+              <option value="NOT_DONE">Not done</option>
+            </select>
+          </div>
           <input type="hidden" name="sortBy" value={sortBy} />
           <input type="hidden" name="sortDir" value={sortDir} />
           <button type="submit" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 hover:bg-gray-50">
@@ -127,7 +172,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
           </Link>
         </form>
         <div className="mt-4 overflow-x-auto rounded-lg border border-gray-300">
-          <table className="w-full min-w-[1120px] text-left text-sm">
+          <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-100 text-xs font-semibold uppercase text-gray-500">
               <tr>
                 <th className="px-3 py-2 font-semibold">
@@ -146,13 +191,18 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     Compliance
                   </Link>
                 </th>
+                <th className="px-3 py-2 font-semibold">
+                  <Link href={`/erp/employees?sortBy=backgroundCheck&sortDir=${sortBy === "backgroundCheck" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
+                    Background Check
+                  </Link>
+                </th>
                 <th className="px-3 py-2 font-semibold">Contact</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -169,6 +219,11 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(r.compliance)}`}>
                         {complianceLabel(r.compliance)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${backgroundCheckBadgeClasses(r.backgroundCheck)}`}>
+                        {backgroundCheckLabel(r.backgroundCheck)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>

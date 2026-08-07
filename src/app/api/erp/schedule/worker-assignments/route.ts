@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
-import { getErpAuth, canOverridePto } from "@/lib/erpAuth";
+import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
  * the right upsert shape (and compound-unique key) for whichever it is. */
@@ -69,6 +69,11 @@ export async function POST(req: Request) {
     if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
   }
 
+  // Fetched once up front and reused by both the background-check gate below
+  // and the PTO gate further down, they share the same PM/ADMIN/SALES
+  // override role set.
+  const auth = await getErpAuth();
+
   const [project, employee, contractor] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
     employeeId
@@ -77,17 +82,27 @@ export async function POST(req: Request) {
           select: { id: true, firstName: true, lastName: true, backgroundCheckStatus: true },
         })
       : null,
-    contractorId ? prisma.contractor.findUnique({ where: { id: contractorId }, select: { id: true } }) : null,
+    contractorId
+      ? prisma.contractor.findUnique({
+          where: { id: contractorId },
+          select: { id: true, name: true, backgroundCheckStatus: true },
+        })
+      : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   const worker = employeeId ? employee : contractor;
   if (!worker) return NextResponse.json({ error: employeeId ? "Employee not found" : "Contractor not found" }, { status: 404 });
   // Only a FAILED result blocks scheduling. PENDING/NOT_DONE/PASSED (or no
   // check on file at all) shouldn't stop someone from being put on the
-  // calendar, only a confirmed failure should.
-  if (employee && employee.backgroundCheckStatus === "FAILED") {
+  // calendar, only a confirmed failure should. Applies to both employees and
+  // contractors, they're scheduled through this same endpoint. PM/ADMIN/SALES
+  // can override, same as the PTO gate below.
+  const workerName = employee ? `${employee.firstName} ${employee.lastName}` : contractor?.name;
+  if (worker.backgroundCheckStatus === "FAILED" && (!auth || !canOverrideBackgroundCheck(auth.role))) {
     return NextResponse.json(
-      { error: `${employee.firstName} ${employee.lastName} failed their background check and cannot be scheduled.` },
+      {
+        error: `${workerName} failed their background check and can't be assigned. A PM or Admin can override.`,
+      },
       { status: 409 }
     );
   }
@@ -160,30 +175,25 @@ export async function POST(req: Request) {
     seriesId = series.id;
   }
 
-  // An employee with time off logged over any of the day(s) being scheduled
+  // A worker with time off logged over any of the day(s) being scheduled
   // can't be assigned, same 409-and-explain shape as the background-check
   // guard above, checked against every date in the batch (not just the
   // anchor date), a repeat/duplicate range could still land on a PTO day
-  // even if the first day doesn't. PM/ADMIN/SALES can override, same role
-  // set as the quality-checklist/safety-check gates.
-  if (employeeId) {
-    const auth = await getErpAuth();
-    if (!auth || !canOverridePto(auth.role)) {
-      const datesToCheck = seriesDates ?? [date];
-      const conflictingPto = await prisma.employeeTimeOff.findFirst({
-        where: {
-          employeeId,
-          OR: datesToCheck.map((d) => ({ startDate: { lte: d }, endDate: { gte: d } })),
-        },
-      });
-      if (conflictingPto) {
-        return NextResponse.json(
-          {
-            error: `${employee!.firstName} ${employee!.lastName} has time off scheduled and can't be assigned. A PM or Admin can override.`,
-          },
-          { status: 409 }
-        );
-      }
+  // even if the first day doesn't. Applies to both employees and contractors
+  // (EmployeeTimeOff / ContractorTimeOff are separate tables, same shape).
+  // PM/ADMIN/SALES can override, same role set as the quality-checklist/
+  // safety-check gates.
+  if ((employeeId || contractorId) && (!auth || !canOverridePto(auth.role))) {
+    const datesToCheck = seriesDates ?? [date];
+    const overlapWhere = { OR: datesToCheck.map((d) => ({ startDate: { lte: d }, endDate: { gte: d } })) };
+    const conflictingPto = employeeId
+      ? await prisma.employeeTimeOff.findFirst({ where: { employeeId, ...overlapWhere } })
+      : await prisma.contractorTimeOff.findFirst({ where: { contractorId: contractorId!, ...overlapWhere } });
+    if (conflictingPto) {
+      return NextResponse.json(
+        { error: `${workerName} has time off scheduled and can't be assigned. A PM or Admin can override.` },
+        { status: 409 }
+      );
     }
   }
 

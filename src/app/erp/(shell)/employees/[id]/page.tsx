@@ -232,7 +232,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 id: t.id,
                 startDate: t.startDate.toISOString(),
                 endDate: t.endDate.toISOString(),
-                type: t.type as "VACATION" | "SICK" | "UNPAID" | "OTHER",
+                type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
                 notes: t.notes,
               }))}
             />

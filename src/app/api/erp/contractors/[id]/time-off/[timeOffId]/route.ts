@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
+import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingContractorTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
 
 type Ctx = { params: Promise<{ id: string; timeOffId: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, timeOffId } = await ctx.params;
-  const existing = await prisma.employeeTimeOff.findFirst({ where: { id: timeOffId, employeeId: id } });
+  const existing = await prisma.contractorTimeOff.findFirst({ where: { id: timeOffId, contractorId: id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: Record<string, unknown>;
@@ -31,12 +31,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   try {
-    const overlap = await findOverlappingTimeOff(id, startDate, endDate, timeOffId);
+    const overlap = await findOverlappingContractorTimeOff(id, startDate, endDate, timeOffId);
     if (overlap) {
       return NextResponse.json({ error: overlapErrorMessage(overlap) }, { status: 409 });
     }
 
-    const row = await prisma.employeeTimeOff.update({
+    const row = await prisma.contractorTimeOff.update({
       where: { id: timeOffId },
       data: {
         startDate,
@@ -47,7 +47,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     });
     return NextResponse.json(row);
   } catch (e) {
-    console.error("PATCH /api/erp/employees/[id]/time-off/[timeOffId]", e);
+    console.error("PATCH /api/erp/contractors/[id]/time-off/[timeOffId]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
@@ -55,7 +55,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(_req: Request, ctx: Ctx) {
   const { id, timeOffId } = await ctx.params;
   try {
-    const deleted = await prisma.employeeTimeOff.deleteMany({ where: { id: timeOffId, employeeId: id } });
+    const deleted = await prisma.contractorTimeOff.deleteMany({ where: { id: timeOffId, contractorId: id } });
     if (deleted.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch {

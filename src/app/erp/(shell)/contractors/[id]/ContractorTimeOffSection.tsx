@@ -64,11 +64,11 @@ function daysForEntry(entry: TimeOffRow): number {
   return entry.type === "HALF_DAY" ? days * 0.5 : days;
 }
 
-export function EmployeeTimeOffSection({
-  employeeId,
+export function ContractorTimeOffSection({
+  contractorId,
   initialTimeOff,
 }: {
-  employeeId: string;
+  contractorId: string;
   initialTimeOff: TimeOffRow[];
 }) {
   const [entries, setEntries] = useState<TimeOffRow[]>(initialTimeOff);
@@ -110,7 +110,7 @@ export function EmployeeTimeOffSection({
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/erp/employees/${employeeId}/time-off`, {
+      const res = await fetch(`/api/erp/contractors/${contractorId}/time-off`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ startDate, endDate, type, notes: notes.trim() || undefined }),
@@ -137,7 +137,7 @@ export function EmployeeTimeOffSection({
     const previous = entries;
     setEntries((prev) => prev.filter((e) => e.id !== id));
     try {
-      const res = await fetch(`/api/erp/employees/${employeeId}/time-off/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/erp/contractors/${contractorId}/time-off/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
     } catch {
       setEntries(previous);
@@ -172,7 +172,7 @@ export function EmployeeTimeOffSection({
     }
     setEditSaving(true);
     try {
-      const res = await fetch(`/api/erp/employees/${employeeId}/time-off/${id}`, {
+      const res = await fetch(`/api/erp/contractors/${contractorId}/time-off/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ startDate: editStart, endDate: editEnd, type: editType, notes: editNotes.trim() || null }),
@@ -202,16 +202,16 @@ export function EmployeeTimeOffSection({
             </button>
           </div>
         <p className="mt-1 text-xs text-gray-500">
-          Any time off logged here blocks scheduling this employee on the calendar for those days. A PM or Admin can
+          Any time off logged here blocks scheduling this contractor on the calendar for those days. A PM or Admin can
           override and schedule them anyway if needed.
         </p>
         <form onSubmit={addTimeOff} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label className={label} htmlFor="pto-start">
+            <label className={label} htmlFor="cpto-start">
               Start date
             </label>
             <input
-              id="pto-start"
+              id="cpto-start"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -219,11 +219,11 @@ export function EmployeeTimeOffSection({
             />
           </div>
           <div>
-            <label className={label} htmlFor="pto-end">
+            <label className={label} htmlFor="cpto-end">
               End date
             </label>
             <input
-              id="pto-end"
+              id="cpto-end"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
@@ -231,11 +231,11 @@ export function EmployeeTimeOffSection({
             />
           </div>
           <div>
-            <label className={label} htmlFor="pto-type">
+            <label className={label} htmlFor="cpto-type">
               Type
             </label>
             <select
-              id="pto-type"
+              id="cpto-type"
               value={type}
               onChange={(e) => setType(e.target.value as TimeOffRow["type"])}
               className={input}
@@ -248,10 +248,10 @@ export function EmployeeTimeOffSection({
             </select>
           </div>
           <div className="sm:col-span-2 lg:col-span-1">
-            <label className={label} htmlFor="pto-notes">
+            <label className={label} htmlFor="cpto-notes">
               Notes (optional)
             </label>
-            <input id="pto-notes" value={notes} onChange={(e) => setNotes(e.target.value)} className={input} />
+            <input id="cpto-notes" value={notes} onChange={(e) => setNotes(e.target.value)} className={input} />
           </div>
           <div className="sm:col-span-2 lg:col-span-4">
             {error ? <p className="mb-2 text-xs text-red-500">{error}</p> : null}
@@ -309,11 +309,11 @@ export function EmployeeTimeOffSection({
                         <td colSpan={6} className="px-3 py-3">
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
-                              <label className={label} htmlFor={`pto-edit-start-${entry.id}`}>
+                              <label className={label} htmlFor={`cpto-edit-start-${entry.id}`}>
                                 Start date
                               </label>
                               <input
-                                id={`pto-edit-start-${entry.id}`}
+                                id={`cpto-edit-start-${entry.id}`}
                                 type="date"
                                 value={editStart}
                                 onChange={(e) => setEditStart(e.target.value)}
@@ -321,11 +321,11 @@ export function EmployeeTimeOffSection({
                               />
                             </div>
                             <div>
-                              <label className={label} htmlFor={`pto-edit-end-${entry.id}`}>
+                              <label className={label} htmlFor={`cpto-edit-end-${entry.id}`}>
                                 End date
                               </label>
                               <input
-                                id={`pto-edit-end-${entry.id}`}
+                                id={`cpto-edit-end-${entry.id}`}
                                 type="date"
                                 value={editEnd}
                                 onChange={(e) => setEditEnd(e.target.value)}
@@ -333,11 +333,11 @@ export function EmployeeTimeOffSection({
                               />
                             </div>
                             <div>
-                              <label className={label} htmlFor={`pto-edit-type-${entry.id}`}>
+                              <label className={label} htmlFor={`cpto-edit-type-${entry.id}`}>
                                 Type
                               </label>
                               <select
-                                id={`pto-edit-type-${entry.id}`}
+                                id={`cpto-edit-type-${entry.id}`}
                                 value={editType}
                                 onChange={(e) => setEditType(e.target.value as TimeOffRow["type"])}
                                 className={input}
@@ -350,11 +350,11 @@ export function EmployeeTimeOffSection({
                               </select>
                             </div>
                             <div>
-                              <label className={label} htmlFor={`pto-edit-notes-${entry.id}`}>
+                              <label className={label} htmlFor={`cpto-edit-notes-${entry.id}`}>
                                 Notes
                               </label>
                               <input
-                                id={`pto-edit-notes-${entry.id}`}
+                                id={`cpto-edit-notes-${entry.id}`}
                                 value={editNotes}
                                 onChange={(e) => setEditNotes(e.target.value)}
                                 className={input}

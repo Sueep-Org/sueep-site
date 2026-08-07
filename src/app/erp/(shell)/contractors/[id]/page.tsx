@@ -7,6 +7,8 @@ import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoPanel } from "./ContractorInfoPanel";
 import { ContractorLaborSection } from "./ContractorLaborSection";
+import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
+import { ContractorTimeOffSection } from "./ContractorTimeOffSection";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,11 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const { id } = await params;
   const contractor = await prisma.contractor.findUnique({
     where: { id },
-    include: { contracts: { orderBy: { createdAt: "asc" } } },
+    include: {
+      contracts: { orderBy: { createdAt: "asc" } },
+      backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
+      timeOff: { orderBy: { startDate: "desc" } },
+    },
   });
   if (!contractor) notFound();
 
@@ -206,6 +212,42 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 phone: contractor.phone,
                 hasInsurance: contractor.hasInsurance,
               }}
+            />
+          ),
+        },
+        {
+          label: "Background Check",
+          content: (
+            <ContractorBackgroundCheckSection
+              contractorId={contractor.id}
+              initialBackgroundCheckStatus={(contractor.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+              initialBackgroundCheckedAt={contractor.backgroundCheckedAt ? contractor.backgroundCheckedAt.toISOString() : null}
+              initialBackgroundCheckExpiresAt={contractor.backgroundCheckExpiresAt ? contractor.backgroundCheckExpiresAt.toISOString() : null}
+              initialBackgroundCheckProvider={contractor.backgroundCheckProvider}
+              initialBackgroundCheckNotes={contractor.backgroundCheckNotes}
+              initialBackgroundCheckConsentAt={contractor.backgroundCheckConsentAt ? contractor.backgroundCheckConsentAt.toISOString() : null}
+              initialBackgroundCheckEvents={contractor.backgroundCheckEvents.map((e) => ({
+                id: e.id,
+                createdAt: e.createdAt.toISOString(),
+                previousStatus: e.previousStatus,
+                newStatus: e.newStatus,
+                changedBy: e.changedBy,
+              }))}
+            />
+          ),
+        },
+        {
+          label: "Time Off",
+          content: (
+            <ContractorTimeOffSection
+              contractorId={contractor.id}
+              initialTimeOff={contractor.timeOff.map((t) => ({
+                id: t.id,
+                startDate: t.startDate.toISOString(),
+                endDate: t.endDate.toISOString(),
+                type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
+                notes: t.notes,
+              }))}
             />
           ),
         },

@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { getErpAuth } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
+const BACKGROUND_CHECK_STATUSES = ["PASSED", "FAILED", "PENDING", "NOT_DONE"] as const;
+
+function parseDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -69,13 +78,61 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hasInsurance = typeof body.hasInsurance === "boolean" ? body.hasInsurance : null;
   }
 
+  if (body.backgroundCheckStatus !== undefined) {
+    const bcs = String(body.backgroundCheckStatus || "").toUpperCase();
+    if (!BACKGROUND_CHECK_STATUSES.includes(bcs as (typeof BACKGROUND_CHECK_STATUSES)[number])) {
+      return NextResponse.json({ error: "Invalid backgroundCheckStatus" }, { status: 400 });
+    }
+    data.backgroundCheckStatus = bcs;
+  }
+  if (body.backgroundCheckedAt !== undefined) {
+    const d = parseDate(body.backgroundCheckedAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckedAt" }, { status: 400 });
+    data.backgroundCheckedAt = d;
+  }
+  if (body.backgroundCheckExpiresAt !== undefined) {
+    const d = parseDate(body.backgroundCheckExpiresAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckExpiresAt" }, { status: 400 });
+    data.backgroundCheckExpiresAt = d;
+  }
+  if (body.backgroundCheckProvider !== undefined) {
+    data.backgroundCheckProvider = body.backgroundCheckProvider ? String(body.backgroundCheckProvider).trim() : null;
+  }
+  if (body.backgroundCheckNotes !== undefined) {
+    data.backgroundCheckNotes = body.backgroundCheckNotes ? String(body.backgroundCheckNotes).trim() : null;
+  }
+  if (body.backgroundCheckConsentAt !== undefined) {
+    const d = parseDate(body.backgroundCheckConsentAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckConsentAt" }, { status: 400 });
+    data.backgroundCheckConsentAt = d;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  // Record a history event whenever the background check status actually
+  // changes, same reasoning as EmployeeBackgroundCheckEvent.
+  const statusChanged =
+    typeof data.backgroundCheckStatus === "string" && data.backgroundCheckStatus !== existing.backgroundCheckStatus;
+
   try {
-    const updated = await prisma.contractor.update({ where: { id }, data });
-    return NextResponse.json(updated);
+    const auth = await getErpAuth();
+    const { contractor, backgroundCheckEvent } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.contractor.update({ where: { id }, data });
+      const event = statusChanged
+        ? await tx.contractorBackgroundCheckEvent.create({
+            data: {
+              contractorId: id,
+              previousStatus: existing.backgroundCheckStatus,
+              newStatus: data.backgroundCheckStatus as string,
+              changedBy: auth?.email ?? null,
+            },
+          })
+        : null;
+      return { contractor: updated, backgroundCheckEvent: event };
+    });
+    return NextResponse.json({ ...contractor, backgroundCheckEvent });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });

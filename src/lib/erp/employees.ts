@@ -31,3 +31,19 @@ export function complianceLabel(state: EmployeeComplianceState): string {
   if (state === "INACTIVE") return "Inactive";
   return state;
 }
+
+export type BackgroundCheckStatus = "PASSED" | "FAILED" | "PENDING" | "NOT_DONE";
+
+export function backgroundCheckLabel(status: string | null | undefined): string {
+  if (status === "PASSED") return "Passed";
+  if (status === "FAILED") return "Failed";
+  if (status === "PENDING") return "Pending";
+  return "Not done";
+}
+
+export function backgroundCheckBadgeClasses(status: string | null | undefined): string {
+  if (status === "PASSED") return "border-emerald-300 bg-emerald-50 text-emerald-700";
+  if (status === "FAILED") return "border-red-300 bg-red-50 text-red-700";
+  if (status === "PENDING") return "border-yellow-300 bg-yellow-50 text-yellow-700";
+  return "border-gray-300 bg-gray-50 text-gray-600";
+}

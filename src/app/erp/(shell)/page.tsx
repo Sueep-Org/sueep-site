@@ -649,6 +649,7 @@ export default async function ErpDashboardPage() {
         select: {
           id: true, firstName: true, lastName: true, status: true, requiredDocuments: true,
           documents: { select: { documentType: true, expiresAt: true } },
+          backgroundCheckStatus: true, backgroundCheckExpiresAt: true,
         },
       }),
       prisma.candidateApplication.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -754,6 +755,28 @@ export default async function ErpDashboardPage() {
       const req = parseRequiredDocuments(e.requiredDocuments);
       return evaluateEmployeeCompliance(e.status, req, e.documents) === "NON_COMPLIANT";
     });
+
+    // Background check alerts: a FAILED check on file, or one expiring within
+    // 30 days. Background check status isn't part of document compliance
+    // (see nonCompliant above), so it needs its own signal here, same
+    // "expiring soon" window the individual employee page already uses.
+    const bgCheckExpiryWindow = new Date(adminTodayStart);
+    bgCheckExpiryWindow.setUTCDate(bgCheckExpiryWindow.getUTCDate() + 30);
+    const bgCheckAlerts = activeEmployees
+      .filter(
+        (e) =>
+          e.backgroundCheckStatus === "FAILED" ||
+          (e.backgroundCheckExpiresAt != null && e.backgroundCheckExpiresAt <= bgCheckExpiryWindow)
+      )
+      .sort((a, b) => {
+        if (a.backgroundCheckStatus === "FAILED" && b.backgroundCheckStatus !== "FAILED") return -1;
+        if (b.backgroundCheckStatus === "FAILED" && a.backgroundCheckStatus !== "FAILED") return 1;
+        const at = a.backgroundCheckExpiresAt?.getTime() ?? Infinity;
+        const bt = b.backgroundCheckExpiresAt?.getTime() ?? Infinity;
+        return at - bt;
+      })
+      .slice(0, 8);
+    const bgCheckFailedCount = activeEmployees.filter((e) => e.backgroundCheckStatus === "FAILED").length;
 
     const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
@@ -942,13 +965,14 @@ export default async function ErpDashboardPage() {
 
         {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
         <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-          <div className="grid grid-cols-3 divide-x divide-y divide-gray-100 sm:grid-cols-6 sm:divide-y-0">
+          <div className="grid grid-cols-3 divide-x divide-y divide-gray-100 sm:grid-cols-7 sm:divide-y-0">
             {[
               { label: "WIP", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", dot: "bg-emerald-400", val: "text-emerald-700" },
               { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", dot: "bg-violet-400", val: "text-violet-700" },
               { label: "Employees", value: activeEmployees.length, sub: null, href: "/erp/employees", dot: "bg-blue-400", val: "text-blue-700" },
               { label: "Contractors", value: contractors, sub: null, href: "/erp/contractors", dot: "bg-sky-400", val: "text-sky-700" },
               { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
+              { label: "BG Failed", value: bgCheckFailedCount, sub: null, href: "/erp/employees?backgroundCheck=FAILED", dot: "bg-red-400", val: "text-gray-900", alert: bgCheckFailedCount > 0 },
               { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
             ].map((k) => (
               <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
@@ -1137,47 +1161,89 @@ export default async function ErpDashboardPage() {
         {(role === "ADMIN" || isProjectManager(role)) && (
           <div className="space-y-3">
             <h2 className={sectionLabelCls}>Staffing</h2>
-            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
-                {upcomingTimeOff.length > 0 && (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                    {upcomingTimeOff.length}
-                  </span>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
+                  {upcomingTimeOff.length > 0 && (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                      {upcomingTimeOff.length}
+                    </span>
+                  )}
+                </div>
+                {upcomingTimeOff.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">No upcoming time off logged.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {upcomingTimeOff.map((t) => {
+                      const start = t.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      const end = t.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      const isNow = t.startDate <= adminTodayStart && t.endDate >= adminTodayStart;
+                      return (
+                        <li key={t.id}>
+                          <Link
+                            href={`/erp/employees/${t.employee.id}`}
+                            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                          >
+                            <p className="truncate text-sm font-medium text-gray-900">
+                              {t.employee.firstName} {t.employee.lastName}
+                            </p>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
+                              </span>
+                              <span className={`text-xs ${isNow ? "font-semibold text-amber-600" : "text-gray-400"}`}>
+                                {isNow ? "Out now · " : ""}
+                                {start === end ? start : `${start}–${end}`}
+                              </span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </div>
-              {upcomingTimeOff.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-gray-400">No upcoming time off logged.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {upcomingTimeOff.map((t) => {
-                    const start = t.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                    const end = t.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                    const isNow = t.startDate <= adminTodayStart && t.endDate >= adminTodayStart;
-                    return (
-                      <li key={t.id}>
-                        <Link
-                          href={`/erp/employees/${t.employee.id}`}
-                          className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
-                        >
-                          <p className="truncate text-sm font-medium text-gray-900">
-                            {t.employee.firstName} {t.employee.lastName}
-                          </p>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                              {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
+
+              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Background check alerts</h3>
+                  {bgCheckAlerts.length > 0 && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                      {bgCheckAlerts.length}
+                    </span>
+                  )}
+                </div>
+                {bgCheckAlerts.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">No failed or expiring background checks.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {bgCheckAlerts.map((e) => {
+                      const failed = e.backgroundCheckStatus === "FAILED";
+                      const expires = e.backgroundCheckExpiresAt
+                        ? e.backgroundCheckExpiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : null;
+                      return (
+                        <li key={e.id}>
+                          <Link
+                            href={`/erp/employees/${e.id}`}
+                            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                          >
+                            <p className="truncate text-sm font-medium text-gray-900">
+                              {e.firstName} {e.lastName}
+                            </p>
+                            <span
+                              className={`shrink-0 text-xs font-semibold ${failed ? "text-red-600" : "text-orange-600"}`}
+                            >
+                              {failed ? "Failed" : expires ? `Expires ${expires}` : "Expiring soon"}
                             </span>
-                            <span className={`text-xs ${isNow ? "font-semibold text-amber-600" : "text-gray-400"}`}>
-                              {isNow ? "Out now · " : ""}
-                              {start === end ? start : `${start}–${end}`}
-                            </span>
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
         )}

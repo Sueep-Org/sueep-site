@@ -1332,14 +1332,69 @@ model Contractor {
   phone              String?
   hasInsurance       Boolean?
 
+  /// PASSED | FAILED | PENDING | NOT_DONE
+  backgroundCheckStatus    String?   @default("NOT_DONE")
+  /// Date the check was completed / result received
+  backgroundCheckedAt      DateTime?
+  /// When this check needs to be re-run (most providers are only good for 1-3 years)
+  backgroundCheckExpiresAt DateTime?
+  /// Vendor that ran the check (e.g. Checkr, Sterling)
+  backgroundCheckProvider  String?
+  backgroundCheckNotes     String?
+  /// Date the contractor signed the FCRA consent form authorizing the check
+  backgroundCheckConsentAt DateTime?
+
   documents              ContractorDocument[]
   assignments            ContractorAssignment[]
   contracts              ContractorContract[]
   changeOrderAssignments ChangeOrderContractorAssignment[]
   workerDayAssignments   ProjectWorkerDayAssignment[]
+  backgroundCheckEvents  ContractorBackgroundCheckEvent[]
+  timeOff                ContractorTimeOff[]
 
   @@index([status])
   @@index([name])
+}
+
+/// Audit trail of backgroundCheckStatus transitions on Contractor, same
+/// reasoning as EmployeeBackgroundCheckEvent.
+model ContractorBackgroundCheckEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// NULL for the first event recorded on a contractor
+  previousStatus String?
+  /// PASSED | FAILED | PENDING | NOT_DONE
+  newStatus String
+  /// Email of the ERP user who made the change
+  changedBy String?
+
+  @@index([contractorId, createdAt])
+}
+
+/// A logged block of time off for a contractor, same shape and scheduling-block
+/// behavior as EmployeeTimeOff (see canOverridePto).
+model ContractorTimeOff {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC, same convention as EmployeeTimeOff.startDate — inclusive
+  /// on both ends.
+  startDate DateTime
+  endDate   DateTime
+
+  /// VACATION | SICK | HALF_DAY | UNPAID | OTHER
+  type  String  @default("VACATION")
+  notes String?
+
+  @@index([contractorId, startDate, endDate])
 }
 
 model ContractorAssignment {

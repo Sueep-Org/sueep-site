@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
+import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingContractorTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const employee = await prisma.employee.findUnique({ where: { id }, select: { id: true } });
-  if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  const contractor = await prisma.contractor.findUnique({ where: { id }, select: { id: true } });
+  if (!contractor) return NextResponse.json({ error: "Contractor not found" }, { status: 404 });
 
   let body: Record<string, unknown>;
   try {
@@ -28,14 +28,14 @@ export async function POST(req: Request, ctx: Ctx) {
   const type = TIME_OFF_TYPES.includes(typeRaw as (typeof TIME_OFF_TYPES)[number]) ? typeRaw : "VACATION";
 
   try {
-    const overlap = await findOverlappingTimeOff(id, startDate, endDate);
+    const overlap = await findOverlappingContractorTimeOff(id, startDate, endDate);
     if (overlap) {
       return NextResponse.json({ error: overlapErrorMessage(overlap) }, { status: 409 });
     }
 
-    const row = await prisma.employeeTimeOff.create({
+    const row = await prisma.contractorTimeOff.create({
       data: {
-        employeeId: id,
+        contractorId: id,
         startDate,
         endDate,
         type,
@@ -44,7 +44,7 @@ export async function POST(req: Request, ctx: Ctx) {
     });
     return NextResponse.json(row, { status: 201 });
   } catch (e) {
-    console.error("POST /api/erp/employees/[id]/time-off", e);
+    console.error("POST /api/erp/contractors/[id]/time-off", e);
     return NextResponse.json({ error: "Create failed" }, { status: 500 });
   }
 }
