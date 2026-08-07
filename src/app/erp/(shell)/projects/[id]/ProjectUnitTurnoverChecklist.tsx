@@ -46,13 +46,15 @@ function PhotoUploadArea({
   label,
   photos,
   uploading,
+  uploadCount,
   onUpload,
   onDelete,
 }: {
   label: string;
   photos: string[];
   uploading: boolean;
-  onUpload: (file: File) => void;
+  uploadCount: number;
+  onUpload: (files: File[]) => void;
   onDelete: (url: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +75,7 @@ function PhotoUploadArea({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              Uploading…
+              {uploadCount > 1 ? `Uploading ${uploadCount}…` : "Uploading…"}
             </>
           ) : (
             <>
@@ -110,10 +112,11 @@ function PhotoUploadArea({
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onUpload(file);
+          const files = e.target.files ? Array.from(e.target.files) : [];
+          if (files.length > 0) onUpload(files);
           e.target.value = "";
         }}
       />
@@ -141,29 +144,54 @@ function ChecklistSectionBlock({
   const [open, setOpen] = useState(!allDone);
   const [uploadingBefore, setUploadingBefore] = useState(false);
   const [uploadingAfter, setUploadingAfter] = useState(false);
+  const [uploadCountBefore, setUploadCountBefore] = useState(0);
+  const [uploadCountAfter, setUploadCountAfter] = useState(0);
   const [uploadError, setUploadError] = useState("");
 
-  async function handleUpload(type: "before" | "after", file: File) {
+  async function uploadOne(type: "before" | "after", file: File): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("sectionId", section.id);
+    fd.append("photoType", type);
+    const res = await fetch(`/api/erp/projects/${projectId}/unit-checklist/photos`, {
+      method: "POST",
+      body: fd,
+    });
+    const data = (await res.json()) as { url?: string; error?: string };
+    if (!res.ok || !data.url) throw new Error(data.error ?? `${file.name} failed to upload`);
+    return data.url;
+  }
+
+  // Uploads every selected file in parallel so a supervisor can pick a
+  // whole batch of before/after shots at once instead of one at a time.
+  // Uses allSettled (not all) so one bad file doesn't drop the rest of an
+  // otherwise-successful batch on the floor.
+  async function handleUpload(type: "before" | "after", files: File[]) {
     const setter = type === "before" ? setUploadingBefore : setUploadingAfter;
+    const countSetter = type === "before" ? setUploadCountBefore : setUploadCountAfter;
     setUploadError("");
     setter(true);
+    countSetter(files.length);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("sectionId", section.id);
-      fd.append("photoType", type);
-      const res = await fetch(`/api/erp/projects/${projectId}/unit-checklist/photos`, {
-        method: "POST",
-        body: fd,
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
-      const updated = { ...photos, [type]: [...(photos[type] ?? []), data.url] };
-      onPhotosChange(section.id, updated);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
+      const results = await Promise.allSettled(files.map((file) => uploadOne(type, file)));
+      const uploaded = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+        .map((r) => r.value);
+      const failedCount = results.length - uploaded.length;
+      if (uploaded.length > 0) {
+        const updated = { ...photos, [type]: [...(photos[type] ?? []), ...uploaded] };
+        onPhotosChange(section.id, updated);
+      }
+      if (failedCount > 0) {
+        setUploadError(
+          failedCount === files.length
+            ? "Upload failed"
+            : `${failedCount} of ${files.length} photos failed to upload`
+        );
+      }
     } finally {
       setter(false);
+      countSetter(0);
     }
   }
 
@@ -237,14 +265,16 @@ function ChecklistSectionBlock({
                 label="Before"
                 photos={photos.before ?? []}
                 uploading={uploadingBefore}
-                onUpload={(f) => handleUpload("before", f)}
+                uploadCount={uploadCountBefore}
+                onUpload={(files) => handleUpload("before", files)}
                 onDelete={(url) => handleDelete("before", url)}
               />
               <PhotoUploadArea
                 label="After"
                 photos={photos.after ?? []}
                 uploading={uploadingAfter}
-                onUpload={(f) => handleUpload("after", f)}
+                uploadCount={uploadCountAfter}
+                onUpload={(files) => handleUpload("after", files)}
                 onDelete={(url) => handleDelete("after", url)}
               />
             </div>
