@@ -12,7 +12,10 @@ export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const check = await prisma.qualityCheck.findUnique({
     where: { id },
-    include: { turnoverRequest: { include: { building: true } } },
+    include: {
+      turnoverRequest: { include: { building: true } },
+      sovItems: { select: { id: true, description: true } },
+    },
   });
   if (!check) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(check);
@@ -57,6 +60,25 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.notes !== undefined) {
     data.notes = String(body.notes || "").trim() || null;
+  }
+  if (body.scopeDescription !== undefined) {
+    data.scopeDescription = String(body.scopeDescription || "").trim() || null;
+  }
+  if (body.sovItemIds !== undefined) {
+    const sovItemIds = parseStringArray(body.sovItemIds);
+    const effectiveProjectId = data.projectId !== undefined ? (data.projectId as string | null) : existing.projectId;
+    if (effectiveProjectId && sovItemIds.length > 0) {
+      const found = await prisma.projectSOVItem.findMany({
+        where: { id: { in: sovItemIds }, sov: { projectId: effectiveProjectId } },
+        select: { id: true },
+      });
+      if (found.length !== sovItemIds.length) {
+        return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+      }
+    }
+    // Full replace, not incremental — the picker always sends the complete
+    // desired set, same as sending an empty array to clear all tags.
+    data.sovItems = { set: effectiveProjectId ? sovItemIds.map((id) => ({ id })) : [] };
   }
 
   try {

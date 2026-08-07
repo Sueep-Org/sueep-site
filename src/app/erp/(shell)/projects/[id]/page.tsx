@@ -158,6 +158,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       include: {
         turnoverRequest: { include: { building: true } },
         project: { select: { id: true, jobTitle: true } },
+        sovItems: { select: { id: true, description: true } },
       },
     }),
     prisma.erpUser.findMany({ select: { email: true } }),
@@ -754,6 +755,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           pmApproval: check.pmApproval,
           evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
           notes: check.notes ?? null,
+          sovItemLabels: check.sovItems.map((s) => s.description),
+          scopeDescription: check.scopeDescription ?? null,
         }));
         return (
           <div className="space-y-4">

@@ -10,6 +10,8 @@ export type QualityCheckRow = {
   pmApproval: boolean;
   evidencePhotoCount: number;
   notes: string | null;
+  sovItemLabels: string[];
+  scopeDescription: string | null;
 };
 
 export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
@@ -17,7 +19,7 @@ export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
 
   const filtered = query.trim()
     ? checks.filter((c) =>
-        [c.label, c.supervisorName, c.notes ?? ""]
+        [c.label, c.supervisorName, c.notes ?? "", c.scopeDescription ?? "", ...c.sovItemLabels]
           .join(" ")
           .toLowerCase()
           .includes(query.toLowerCase())
@@ -62,10 +64,11 @@ export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="w-full min-w-[1120px] text-left text-sm">
           <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
             <tr>
               <th className="px-4 py-3">Project / Request</th>
+              <th className="px-4 py-3">Scope</th>
               <th className="px-4 py-3">Supervisor</th>
               <th className="px-4 py-3">PM approval</th>
               <th className="px-4 py-3">Evidence photos</th>
@@ -76,7 +79,7 @@ export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   {query ? "No results match your search." : "No quality checks yet."}
                 </td>
               </tr>
@@ -87,6 +90,21 @@ export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
                   className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} transition-colors hover:bg-gray-100`}
                 >
                   <td className="px-4 py-3 text-gray-900">{check.label}</td>
+                  <td className="px-4 py-3 text-gray-900">
+                    {check.sovItemLabels.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {check.sovItemLabels.map((label) => (
+                          <span key={label} className="rounded-full bg-pink-50 px-2 py-0.5 text-xs text-pink-700">
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : check.scopeDescription ? (
+                      <span className="text-gray-600">{check.scopeDescription.slice(0, 60)}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-900">{check.supervisorName}</td>
                   <td className="px-4 py-3 text-gray-900">{check.pmApproval ? "Yes" : "No"}</td>
                   <td className="px-4 py-3 text-gray-900">{check.evidencePhotoCount}</td>

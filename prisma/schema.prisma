@@ -382,6 +382,17 @@ model QualityCheck {
   evidencePhotos         Json?
   notes                  String?
 
+  /// SOV line item(s) this check documents completion of (Post-Construction
+  /// projects only — turnover requests have no SOV). Same multi-tag pattern
+  /// as ProjectDayAssignment.sovItems.
+  sovItems ProjectSOVItem[] @relation("QualityCheckSOVItems")
+
+  /// Free-text fallback for "what does this check cover" whenever sovItems
+  /// isn't an option — turnover requests (no SOV at all) or a Post-
+  /// Construction project with no SOV items configured yet. Same idea as
+  /// ProjectDayAssignment.comment's fallback for its SOV picker.
+  scopeDescription String?
+
   @@index([turnoverRequestId])
   @@index([projectId])
 }
@@ -1683,6 +1694,7 @@ model ProjectSOVItem {
   laborEntriesMulti     LaborEntry[]            @relation("LaborEntrySOVItems")
   contractorAssignments ContractorAssignment[]   @relation("ContractorAssignmentSOVItems")
   dayAssignments        ProjectDayAssignment[]   @relation("DayAssignmentSOVItems")
+  qualityChecks         QualityCheck[]           @relation("QualityCheckSOVItems")
   scheduleRequests      ProjectSovScheduleRequest[]
   hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]

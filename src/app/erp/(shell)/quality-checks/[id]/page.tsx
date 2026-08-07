@@ -20,6 +20,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
     include: {
       turnoverRequest: { include: { building: true } },
       project: { select: { id: true, jobTitle: true } },
+      sovItems: { select: { id: true, description: true } },
     },
   });
 
@@ -52,6 +53,8 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
               pmApproval: check.pmApproval,
               evidencePhotos: normalizeEvidencePhotos(check.evidencePhotos),
               notes: check.notes,
+              sovItemIds: check.sovItems.map((s) => s.id),
+              scopeDescription: check.scopeDescription,
             }}
           />
         </div>
@@ -69,6 +72,23 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
                   : (check.project?.jobTitle ?? "—")}
               </dd>
             </div>
+            {check.sovItems.length > 0 ? (
+              <div>
+                <dt className="font-semibold text-gray-600">SOV item(s)</dt>
+                <dd>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {check.sovItems.map((s) => (
+                      <li key={s.id}>{s.description}</li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            ) : check.scopeDescription ? (
+              <div>
+                <dt className="font-semibold text-gray-600">Scope</dt>
+                <dd className="whitespace-pre-wrap">{check.scopeDescription}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="font-semibold text-gray-600">Supervisor</dt>
               <dd>{check.supervisorName}</dd>

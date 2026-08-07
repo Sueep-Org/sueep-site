@@ -18,6 +18,7 @@ export default async function QualityChecksPage() {
       include: {
         turnoverRequest: { include: { building: true } },
         project: { select: { id: true, jobTitle: true } },
+        sovItems: { select: { id: true, description: true } },
       },
     });
 
@@ -30,6 +31,8 @@ export default async function QualityChecksPage() {
       pmApproval: check.pmApproval,
       evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
       notes: check.notes ?? null,
+      sovItemLabels: check.sovItems.map((s) => s.description),
+      scopeDescription: check.scopeDescription ?? null,
     }));
 
     return (
