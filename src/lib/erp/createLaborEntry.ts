@@ -223,30 +223,25 @@ export async function createLaborEntryForProject(
     if (!employee) return { ok: false, status: 404, error: "Employee not found" };
   }
 
-  // No labor can be logged on a project with no PM assigned, except by a
-  // SUPERVISOR-role ERP user logging their own hours, which auto-assigns them
-  // as the PM instead of blocking them, so the very first entry on a new
-  // project doesn't get stuck needing a PM that only labor logging can set.
+  // If a SUPERVISOR-role ERP user logs their own hours on a project with no
+  // PM assigned yet, auto-assign them as the PM. Purely a convenience so the
+  // project ends up with a supervisor of record; logging labor is never
+  // blocked on this.
   if (!project.supervisor || !project.supervisor.trim()) {
     // Covers both an employee picked from the roster (employeeId set) and a
     // free-typed "Other" worker name that happens to match a real employee
     // (findEmployeeEmailByName, same lookup used for PM-alert recipients).
     const candidateEmail = employee?.email ?? (await findEmployeeEmailByName(workerName));
     const candidateName = employee ? `${employee.firstName} ${employee.lastName}`.trim() : workerName;
-    let autoAssignName: string | null = null;
     if (candidateEmail) {
       const erpUser = await prisma.erpUser.findFirst({
         where: { email: { equals: candidateEmail, mode: "insensitive" } },
         select: { role: true },
       });
       if (erpUser?.role === "SUPERVISOR") {
-        autoAssignName = candidateName;
+        await prisma.project.update({ where: { id: projectId }, data: { supervisor: candidateName } });
       }
     }
-    if (!autoAssignName) {
-      return { ok: false, status: 400, error: "This project needs a supervisor (PM) assigned before labor can be logged." };
-    }
-    await prisma.project.update({ where: { id: projectId }, data: { supervisor: autoAssignName } });
   }
 
   // Location support
