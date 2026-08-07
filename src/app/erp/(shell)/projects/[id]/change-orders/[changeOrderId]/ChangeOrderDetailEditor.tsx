@@ -300,12 +300,6 @@ export function ChangeOrderDetailEditor({
   const [estLabor, setEstLabor] = useState(
     data.estLaborCents != null ? (data.estLaborCents / 100).toFixed(2) : "",
   );
-  const [actualLabor, setActualLabor] = useState(
-    data.actualLaborCents != null ? (data.actualLaborCents / 100).toFixed(2) : "",
-  );
-  const [actualMaterial, setActualMaterial] = useState(
-    data.actualMaterialCents != null ? (data.actualMaterialCents / 100).toFixed(2) : "",
-  );
   const [actualTravel, setActualTravel] = useState(
     data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
   );
@@ -345,8 +339,12 @@ export function ChangeOrderDetailEditor({
           estMaterial: estMaterial.trim() || null,
           estTravel: estTravel.trim() || null,
           estLabor: estLabor.trim() || null,
-          actualLabor: actualLabor.trim() || null,
-          actualMaterial: actualMaterial.trim() || null,
+          // Actual labor/material aren't hand-entered (see the read-only "from
+          // laborers/materials log" display below) — send the live computed
+          // totals, not a value captured once at mount, so a material entry
+          // added earlier in this session doesn't get silently reverted on save.
+          actualLabor: (data.computedLaborCents / 100).toFixed(2),
+          actualMaterial: (liveMaterialCents / 100).toFixed(2),
           actualTravel: actualTravel.trim() || null,
           estHours: estHours.trim() || null,
           actualHours: actualHours.trim() || null,
@@ -418,8 +416,6 @@ export function ChangeOrderDetailEditor({
           changeOrderId={data.id}
           initialLaborers={data.laborers}
           employees={employees}
-          initialStatus={data.status}
-          initialCompletedAt={data.completedAt}
           safetyPassedKeys={safetyPassedKeys}
           hasApprovedCheckToday={hasApprovedCheckToday}
         />
@@ -718,8 +714,6 @@ export function ChangeOrderDetailEditor({
               changeOrderId={data.id}
               initialLaborers={data.laborers}
               employees={employees}
-              initialStatus={data.status}
-              initialCompletedAt={data.completedAt}
               safetyPassedKeys={safetyPassedKeys}
               hasApprovedCheckToday={hasApprovedCheckToday}
             />

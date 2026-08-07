@@ -159,8 +159,6 @@ export function ChangeOrderLaborersSection({
   employees,
   canEdit = true,
   showFinancials = true,
-  initialStatus,
-  initialCompletedAt,
   safetyPassedKeys = [],
   hasApprovedCheckToday,
 }: {
@@ -170,20 +168,12 @@ export function ChangeOrderLaborersSection({
   employees: ChangeOrderLaborerEmployeeOption[];
   canEdit?: boolean;
   showFinancials?: boolean;
-  initialStatus?: string;
-  initialCompletedAt?: string | null;
   safetyPassedKeys?: string[];
   hasApprovedCheckToday?: boolean;
 }) {
   const router = useRouter();
   const passedKeySet = new Set(safetyPassedKeys);
   const [laborers, setLaborers] = useState(initialLaborers);
-  const [coStatus, setCoStatus] = useState(initialStatus ?? "");
-  const [completedAt, setCompletedAt] = useState(
-    initialCompletedAt ? initialCompletedAt.slice(0, 10) : "",
-  );
-  const [markingComplete, setMarkingComplete] = useState(false);
-  const [markCompleteError, setMarkCompleteError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [employeePick, setEmployeePick] = useState<string>("");
@@ -199,9 +189,6 @@ export function ChangeOrderLaborersSection({
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityNotes ?? ""]))
   );
-  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(initialLaborers.map((l) => [l.id, l.completed]))
-  );
   const [markCompleteOnAdd, setMarkCompleteOnAdd] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [qualityPopup, setQualityPopup] = useState<{ id: string; draft: string } | null>(null);
@@ -210,42 +197,7 @@ export function ChangeOrderLaborersSection({
     setLaborers(initialLaborers);
     setQualityMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityRating ?? ""])));
     setNotesMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityNotes ?? ""])));
-    setCompletedMap(Object.fromEntries(initialLaborers.map((l) => [l.id, l.completed])));
   }, [initialLaborers]);
-
-  function toggleCompleted(laborerId: string) {
-    const next = !completedMap[laborerId];
-    setCompletedMap((prev) => ({ ...prev, [laborerId]: next }));
-    fetch(`/api/erp/change-order-laborers/${laborerId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ completed: next }),
-    }).catch(() => {
-      setCompletedMap((prev) => ({ ...prev, [laborerId]: !next }));
-    });
-  }
-
-  async function handleMarkComplete() {
-    setMarkingComplete(true);
-    setMarkCompleteError("");
-    const date = completedAt || new Date().toISOString().slice(0, 10);
-    try {
-      const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${changeOrderId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: "BILLING", completedAt: date }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) { setMarkCompleteError(json.error || "Failed to mark complete"); return; }
-      setCoStatus("BILLING");
-      if (!completedAt) setCompletedAt(date);
-      router.refresh();
-    } catch {
-      setMarkCompleteError("Network error");
-    } finally {
-      setMarkingComplete(false);
-    }
-  }
 
   useEffect(() => {
     if (!employeePick || employeePick === OTHER_VALUE) {
@@ -340,7 +292,6 @@ export function ChangeOrderLaborersSection({
         completed: markCompleteOnAdd,
       };
       setLaborers((prev) => [row, ...prev]);
-      setCompletedMap((prev) => ({ ...prev, [data.id!]: markCompleteOnAdd }));
       form.reset();
       setEmployeePick("");
       setHourlyRateStr("");

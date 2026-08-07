@@ -45,7 +45,6 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     if (tab && TABS.some((t) => t.id === tab)) setActiveTab(tab);
     const status = params.get("status") as Lifecycle | null;
     if (status && LIFECYCLE_FILTERS.some((f) => f.id === status)) setActiveLifecycle(status);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateTab(tab: Tab) {
@@ -66,10 +65,6 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
       params.delete("status");
     }
     history.replaceState(null, "", `?${params.toString()}`);
-  }
-
-  function toggleLifecycle(lc: Lifecycle) {
-    updateLifecycle(activeLifecycle === lc ? null : lc);
   }
 
   function getTab(row: ProjectTableRow): Tab {

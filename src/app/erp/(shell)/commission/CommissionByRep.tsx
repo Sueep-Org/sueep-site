@@ -96,12 +96,6 @@ function recurringTierLabel(monthIndex: number): string {
   return `${yearLabel} · ${rate > 0 ? `${(rate * 100).toFixed(0)}%` : "$0"}`;
 }
 
-function sortValue(row: CommissionDealRow, key: SortKey): number {
-  if (key === "date") return new Date(row.completedAt).getTime();
-  if (key === "margin") return row.marginCents ?? -Infinity;
-  return row.commissionCents;
-}
-
 type CombinedRow =
   | { kind: "deal"; deal: CommissionDealRow }
   | { kind: "recurring"; recurring: RecurringCommissionRow };

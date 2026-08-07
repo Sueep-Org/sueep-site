@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { PAINTING_BLOG_POSTS } from "./posts";
+import { MarketingNav } from "../components/MarketingNav";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sueep.com";
 
@@ -55,6 +56,7 @@ export default function BlogIndexPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <main className="bg-white text-gray-900 min-h-screen">
+        <MarketingNav />
         <header className="border-b border-gray-200 bg-gray-50">
           <div className="max-w-3xl mx-auto px-5 py-10 md:py-14">
             <p className="text-sm font-medium text-[#E73C6E] uppercase tracking-wide">

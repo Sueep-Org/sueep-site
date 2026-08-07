@@ -1,4 +1,4 @@
-import { Callout, Steps, Step, H2, P, A, Img, ImgPlaceholder, SkipTo } from "@/app/erp/components/help/HelpComponents";
+import { Callout, Steps, Step, H2, P, A, Img, SkipTo } from "@/app/erp/components/help/HelpComponents";
 
 export function UploadingAContract() {
   return (

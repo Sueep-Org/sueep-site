@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { createTurnoverRequestsFromPayload } from "@/lib/erp/createTurnoverRequests";
-import { createHubSpotDeal } from "@/lib/hubspot/createDeal";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 
 function stringValue(value: unknown) {
@@ -20,15 +19,6 @@ function numberValue(value: unknown) {
 function percentValue(value: unknown) {
   const n = numberValue(value);
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : undefined;
-}
-
-function minDateValue(values: (Date | null | undefined)[]) {
-  return values.filter((value): value is Date => Boolean(value)).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
-}
-
-function maxDateValue(values: (Date | null | undefined)[]) {
-  const sorted = values.filter((value): value is Date => Boolean(value)).sort((a, b) => a.getTime() - b.getTime());
-  return sorted[sorted.length - 1] ?? null;
 }
 
 export async function createProjectFromPayload(

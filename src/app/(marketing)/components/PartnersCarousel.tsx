@@ -37,18 +37,6 @@ export default function PartnersCarousel({ partners, intervalMs = 4000 }: Partne
     el.scrollTo({ left: target.offsetLeft, behavior: "smooth" });
   }, [activeIndex]);
 
-  function goTo(index: number) {
-    setActiveIndex((index + safePartners.length) % safePartners.length);
-  }
-
-  function prev() {
-    goTo(activeIndex - 1);
-  }
-
-  function next() {
-    goTo(activeIndex + 1);
-  }
-
   return (
     <div className="relative">
       <div

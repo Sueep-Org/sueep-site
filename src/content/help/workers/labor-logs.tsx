@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI, Steps, Step, Img, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, Steps, Step, Img, A } from "@/app/erp/components/help/HelpComponents";
 
 export function InputtingLaborLogs() {
   return (

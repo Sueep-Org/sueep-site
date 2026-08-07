@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { MarketingNav } from "../components/MarketingNav";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Sueep",
@@ -12,12 +13,10 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="bg-white text-gray-900 min-h-screen">
+      <MarketingNav />
       <header className="border-b border-gray-200 bg-gray-50">
         <div className="max-w-3xl mx-auto px-5 py-10 md:py-14">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-[#E73C6E]">
-            ← Back to Sueep
-          </Link>
-          <h1 className="mt-6 text-3xl md:text-4xl font-bold tracking-tight">Privacy Policy</h1>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Privacy Policy</h1>
           <p className="mt-3 text-gray-600">Last updated: June 25, 2026</p>
         </div>
       </header>

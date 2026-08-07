@@ -164,7 +164,6 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
   const [signingLoading, setSigningLoading] = useState(false);
@@ -674,11 +673,11 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           ) : (
             <button
               type="button"
-              disabled={loading || signingLoading}
+              disabled={signingLoading}
               onClick={() => { void handleSubmit(); }}
               className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? "Submitting…" : signingLoading ? "Loading contract…" : "Review & Sign"}
+              {signingLoading ? "Loading contract…" : "Review & Sign"}
             </button>
           )}
         </div>

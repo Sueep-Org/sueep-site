@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI, Steps, Step, ImgPlaceholder, A , Img } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, Steps, Step, A, Img } from "@/app/erp/components/help/HelpComponents";
 
 export function CreatingATurnoverRequest() {
   return (

@@ -104,13 +104,6 @@ function mondayOf(d: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-const SEGMENT_DOT: Record<string, string> = {
-  JANITORIAL_TURNOVER_REQUESTS: "bg-teal-400",
-  COMMERCIAL_CLEANING: "bg-teal-400",
-  POST_CONSTRUCTION: "bg-amber-400",
-  COMMERCIAL: "bg-violet-400",
-};
-
 export default async function ErpDashboardPage() {
   try {
     const auth = await getErpAuth();

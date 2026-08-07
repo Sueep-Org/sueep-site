@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { ERP_ROLES, type ErpRole } from "@/lib/erpSession";
 
 async function requireAdmin(): Promise<NextResponse | null> {
   const h = await headers();

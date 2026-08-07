@@ -138,7 +138,7 @@ export default function Home() {
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">2 Bala Plaza, Suite 300<br />Bala Cynwyd, PA 19004</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">(267) 217-3596</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">contact@sueep.com</p>
-            <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • MD • NY</p>
+            <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • NY</p>
           </div>
         </div>
       </section>
@@ -173,7 +173,6 @@ export default function Home() {
               Blog
             </Link>
             <Link href="/privacy" className="hover:text-white">Privacy</Link>
-            <Link href="/terms" className="hover:text-white">Terms</Link>
             <a href="#contact" className="hover:text-white">Contact</a>
             </div>
           </div>
