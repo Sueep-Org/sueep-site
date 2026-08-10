@@ -9,6 +9,7 @@ import {
   type BackgroundCheckStatus,
 } from "@/lib/erp/employees";
 import { NewEmployeeForm } from "./NewEmployeeForm";
+import { EmployeesFilterBar } from "./EmployeesFilterBar";
 
 const BACKGROUND_CHECK_ORDER: Record<BackgroundCheckStatus, number> = {
   FAILED: 0,
@@ -42,16 +43,56 @@ function parseRequiredDocuments(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string");
 }
 
+type PayMode = "HOURLY" | "SALARY" | "OFFSHORE";
+
+// isOffshore is a separate boolean from payType (HOURLY/SALARY) in the
+// schema, but the ERP always presents/filters them as one combined
+// three-way choice — same derivation EmployeeProfileEditor/NewEmployeeForm
+// use for the pay-type toggle on the employee forms themselves.
+function payModeOf(e: { payType: string; isOffshore: boolean }): PayMode {
+  if (e.isOffshore) return "OFFSHORE";
+  return e.payType === "SALARY" ? "SALARY" : "HOURLY";
+}
+
+// Every filter/sort link on this page needs to preserve whichever of these
+// are currently active — centralized here so each link is one call instead
+// of a repeated pile of ternaries.
+function employeesHref(params: {
+  name?: string;
+  compliance?: string;
+  backgroundCheck?: string;
+  payType?: string;
+  sortBy?: string;
+  sortDir?: string;
+}): string {
+  const sp = new URLSearchParams();
+  if (params.name) sp.set("name", params.name);
+  if (params.compliance) sp.set("compliance", params.compliance);
+  if (params.backgroundCheck) sp.set("backgroundCheck", params.backgroundCheck);
+  if (params.payType) sp.set("payType", params.payType);
+  if (params.sortBy) sp.set("sortBy", params.sortBy);
+  if (params.sortDir) sp.set("sortDir", params.sortDir);
+  const qs = sp.toString();
+  return `/erp/employees${qs ? `?${qs}` : ""}`;
+}
+
+const PAY_MODE_OPTIONS: { value: PayMode; label: string }[] = [
+  { value: "HOURLY", label: "Hourly" },
+  { value: "SALARY", label: "Salary" },
+  { value: "OFFSHORE", label: "Offshore" },
+];
+
 export default async function EmployeesPage({ searchParams }: PageProps) {
   const qp = await searchParams;
-  const projectFilter = firstValue(qp.project).trim().toLowerCase();
   const nameFilter = firstValue(qp.name).trim().toLowerCase();
   const complianceFilter = firstValue(qp.compliance).trim().toUpperCase();
   const backgroundCheckFilter = firstValue(qp.backgroundCheck).trim().toUpperCase();
+  const payTypeRaw = firstValue(qp.payType).trim().toUpperCase();
+  const payTypeFilter = payTypeRaw === "HOURLY" || payTypeRaw === "SALARY" || payTypeRaw === "OFFSHORE" ? payTypeRaw : "";
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
   const sortBy =
-    sortByRaw === "hourlyPay" || sortByRaw === "defaultProject" || sortByRaw === "compliance" || sortByRaw === "backgroundCheck"
+    sortByRaw === "hourlyPay" || sortByRaw === "compliance" || sortByRaw === "backgroundCheck"
       ? sortByRaw
       : "name";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
@@ -61,16 +102,28 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   });
 
   const rows = employees
-    .filter((e) => (projectFilter ? (e.defaultProject || "").toLowerCase().includes(projectFilter) : true))
     .filter((e) => (nameFilter ? `${e.firstName} ${e.lastName}`.toLowerCase().includes(nameFilter) : true))
     .map((e) => {
       const requiredDocs = parseRequiredDocuments(e.requiredDocuments);
       const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
       const backgroundCheck = normalizeBackgroundCheckStatus(e.backgroundCheckStatus);
-      return { ...e, compliance, backgroundCheck };
+      const payMode = payModeOf(e);
+      return { ...e, compliance, backgroundCheck, payMode };
     })
     .filter((e) => (complianceFilter ? e.compliance === complianceFilter : true))
-    .filter((e) => (backgroundCheckFilter ? e.backgroundCheck === backgroundCheckFilter : true));
+    .filter((e) => (backgroundCheckFilter ? e.backgroundCheck === backgroundCheckFilter : true))
+    .filter((e) => (payTypeFilter ? e.payMode === payTypeFilter : true));
+
+  // Reused by every link below so clicking one filter/sort control never
+  // silently drops whatever else is currently applied.
+  const currentParams = {
+    name: nameFilter,
+    compliance: complianceFilter,
+    backgroundCheck: backgroundCheckFilter,
+    payType: payTypeFilter,
+    sortBy,
+    sortDir,
+  };
 
   const complianceOrder = { NON_COMPLIANT: 0, NOT_CONFIGURED: 1, COMPLIANT: 2, INACTIVE: 3 };
 
@@ -80,10 +133,6 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
       const av = a.hourlyPayCents ?? -1;
       const bv = b.hourlyPayCents ?? -1;
       if (av !== bv) return (av - bv) * dir;
-    } else if (sortBy === "defaultProject") {
-      const av = (a.defaultProject || "").toLowerCase();
-      const bv = (b.defaultProject || "").toLowerCase();
-      if (av !== bv) return av.localeCompare(bv) * dir;
     } else if (sortBy === "compliance") {
       const av = complianceOrder[a.compliance];
       const bv = complianceOrder[b.compliance];
@@ -98,101 +147,72 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     return an.localeCompare(bn);
   });
 
+  const payModeOptions = PAY_MODE_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    href: employeesHref({ ...currentParams, payType: payTypeFilter === opt.value ? "" : opt.value }),
+  }));
+
   return (
     <div className="space-y-6">
-      <NewEmployeeForm title={<h1 className="text-2xl font-bold text-pink-600">Employees</h1>} />
+      <div>
+        <h1 className="text-2xl font-bold text-pink-600">Employees</h1>
 
-      <section className="rounded-lg">
-        <form className="flex flex-wrap items-end gap-2">
-          <div>
-            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="nameFilter">
-              Search by name
-            </label>
+        <div className="mt-3 flex items-center justify-between gap-4">
+          <form>
             <input
-              id="nameFilter"
               name="name"
               defaultValue={nameFilter}
-              placeholder="e.g. John Smith"
-              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+              placeholder="Search by name…"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
             />
-          </div>
-          <div>
-            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="projectFilter">
-              Filter by project
-            </label>
-            <input
-              id="projectFilter"
-              name="project"
-              defaultValue={projectFilter}
-              placeholder="e.g. UDR"
-              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+            {/* Preserve every other active filter/sort when this form
+                submits on its own (e.g. pressing Enter), same reasoning as
+                the hidden fields inside EmployeesFilterBar's popover form. */}
+            <input type="hidden" name="compliance" value={complianceFilter} />
+            <input type="hidden" name="backgroundCheck" value={backgroundCheckFilter} />
+            <input type="hidden" name="payType" value={payTypeFilter} />
+            <input type="hidden" name="sortBy" value={sortBy} />
+            <input type="hidden" name="sortDir" value={sortDir} />
+          </form>
+          <div className="flex items-center gap-2">
+            <EmployeesFilterBar
+              nameFilter={nameFilter}
+              complianceFilter={complianceFilter}
+              backgroundCheckFilter={backgroundCheckFilter}
+              payTypeFilter={payTypeFilter}
+              payModeOptions={payModeOptions}
+              sortBy={sortBy}
+              sortDir={sortDir}
             />
+            <NewEmployeeForm />
           </div>
-          <div>
-            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="complianceFilter">
-              Compliance
-            </label>
-            <select
-              id="complianceFilter"
-              name="compliance"
-              defaultValue={complianceFilter}
-              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
-            >
-              <option value="">All</option>
-              <option value="COMPLIANT">Compliant</option>
-              <option value="NON_COMPLIANT">Non-compliant</option>
-              <option value="NOT_CONFIGURED">Not configured</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] uppercase tracking-wide text-gray-600" htmlFor="backgroundCheckFilter">
-              Background check
-            </label>
-            <select
-              id="backgroundCheckFilter"
-              name="backgroundCheck"
-              defaultValue={backgroundCheckFilter}
-              className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
-            >
-              <option value="">All</option>
-              <option value="PASSED">Passed</option>
-              <option value="FAILED">Failed</option>
-              <option value="PENDING">Pending</option>
-              <option value="NOT_DONE">Not done</option>
-            </select>
-          </div>
-          <input type="hidden" name="sortBy" value={sortBy} />
-          <input type="hidden" name="sortDir" value={sortDir} />
-          <button type="submit" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 hover:bg-gray-50">
-            Apply
-          </button>
-          <Link href="/erp/employees" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-900 hover:bg-gray-50">
-            Clear
-          </Link>
-        </form>
-        <div className="mt-4 overflow-x-auto rounded-lg border border-gray-300">
+        </div>
+      </div>
+
+      <section className="rounded-lg">
+        <div className="overflow-x-auto rounded-lg border border-gray-300">
           <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-100 text-xs font-semibold uppercase text-gray-500">
               <tr>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={`/erp/employees?sortBy=name&sortDir=${sortBy === "name" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
+                  <Link href={employeesHref({ ...currentParams, sortBy: "name", sortDir: sortBy === "name" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
                     Name
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">Role</th>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={`/erp/employees?sortBy=hourlyPay&sortDir=${sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
+                  <Link href={employeesHref({ ...currentParams, sortBy: "hourlyPay", sortDir: sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
                     Hourly pay
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={`/erp/employees?sortBy=compliance&sortDir=${sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
+                  <Link href={employeesHref({ ...currentParams, sortBy: "compliance", sortDir: sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
                     Compliance
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={`/erp/employees?sortBy=backgroundCheck&sortDir=${sortBy === "backgroundCheck" && sortDir === "asc" ? "desc" : "asc"}${projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : ""}${nameFilter ? `&name=${encodeURIComponent(nameFilter)}` : ""}`} className="hover:text-gray-500">
+                  <Link href={employeesHref({ ...currentParams, sortBy: "backgroundCheck", sortDir: sortBy === "backgroundCheck" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
                     Background Check
                   </Link>
                 </th>

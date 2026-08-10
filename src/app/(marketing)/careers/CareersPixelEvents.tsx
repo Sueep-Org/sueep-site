@@ -23,9 +23,14 @@ const PAINTER_PIXEL_ID = "248346263857750";
 export function CareersPixelEvents({
   submitted,
   role,
+  submittedRoles,
 }: {
   submitted: boolean;
   role: "cleaner" | "painter";
+  /** Which role(s) were actually checked on a successful submission — may
+   * differ from `role` (the landing/page-view role) now that applicants can
+   * select both. Only meaningful when `submitted` is true. */
+  submittedRoles?: { cleaner: boolean; painter: boolean };
 }) {
   const isPainter = role === "painter";
 
@@ -54,23 +59,28 @@ export function CareersPixelEvents({
   }, [isPainter]);
 
   useEffect(() => {
-    if (!submitted || !window.fbq) return;
+    if (!submitted || !window.fbq || !submittedRoles) return;
 
-    if (isPainter) {
+    // Both can fire now that an applicant may check both Cleaner and
+    // Painter — no longer mutually exclusive like the page-view effect
+    // above. `init` is called again here (not just relying on the
+    // page-view effect above) since a visitor who landed on the
+    // generic/cleaner URL but then also checked Painter would never
+    // otherwise have inited that pixel.
+    if (submittedRoles.painter) {
+      window.fbq("init", PAINTER_PIXEL_ID);
       window.fbq("trackSingle", PAINTER_PIXEL_ID, "Lead", {
         content_name: "Painter Application",
         content_category: "Careers",
       });
-      return;
     }
-
-    // Fired only when a non-painter application was submitted successfully.
-    // This is the conversion event Meta uses to optimise ad delivery.
-    window.fbq("trackSingle", SITEWIDE_PIXEL_ID, "Lead", {
-      content_name: "Job Application",
-      content_category: "Careers",
-    });
-  }, [submitted, isPainter]);
+    if (submittedRoles.cleaner) {
+      window.fbq("trackSingle", SITEWIDE_PIXEL_ID, "Lead", {
+        content_name: "Job Application",
+        content_category: "Careers",
+      });
+    }
+  }, [submitted, submittedRoles]);
 
   return null;
 }

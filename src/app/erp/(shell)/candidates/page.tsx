@@ -22,7 +22,9 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     ...(search ? { fullName: { contains: search, mode: "insensitive" as const } } : {}),
     // When no status filter is active, hide hired candidates (they are now employees)
     ...(statusFilter ? { status: statusFilter } : { status: { not: "HIRED" } }),
-    ...(positionFilter ? { positionInterest: positionFilter } : {}),
+    // Exact match would miss combined "Cleaner, Painter" applicants when
+    // filtering by just one position, since the field can now hold both.
+    ...(positionFilter ? { positionInterest: { contains: positionFilter } } : {}),
   };
 
   // Lightweight pass over just id/status/createdAt/responses to work out

@@ -44,21 +44,44 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
   const responses = (row.responses ?? {}) as Record<string, string>;
   const location = responses.location;
-  // "experience"/"experienceYears" are the current field names; older
-  // applications (submitted before the Cleaner/Painter role choice existed)
-  // stored these as "cleaningExperience"/"cleaningYears" — fall back to
-  // those so past candidates still display correctly.
-  const experience = responses.experience ?? responses.cleaningExperience;
-  const experienceYears = responses.experienceYears ?? responses.cleaningYears;
+  // Experience has been recorded three different ways over time:
+  //  - Newest (applicants can check Cleaner and/or Painter): separate
+  //    cleaningExperience/cleaningYears and paintingExperience/paintingYears,
+  //    one pair per role actually checked.
+  //  - Middle era (a single active-role toggle, no multi-select): generic
+  //    experience/experienceYears meaning whichever single role
+  //    positionInterest says was selected — has to be labeled using
+  //    positionInterest, or a historical Painter's answer would misleadingly
+  //    show up under "Cleaning experience".
+  //  - Oldest (pre-role-choice, cleaning only): cleaningExperience/
+  //    cleaningYears, already compatible with the newest shape's names.
+  const hasNewShapeExperience = responses.cleaningExperience != null || responses.paintingExperience != null;
+  let cleaningExperience: string | undefined;
+  let cleaningExperienceYears: string | undefined;
+  let paintingExperience: string | undefined;
+  let paintingExperienceYears: string | undefined;
+  if (hasNewShapeExperience) {
+    cleaningExperience = responses.cleaningExperience;
+    cleaningExperienceYears = responses.cleaningYears;
+    paintingExperience = responses.paintingExperience;
+    paintingExperienceYears = responses.paintingYears;
+  } else if (row.positionInterest === "Painter") {
+    paintingExperience = responses.experience;
+    paintingExperienceYears = responses.experienceYears;
+  } else {
+    cleaningExperience = responses.experience;
+    cleaningExperienceYears = responses.experienceYears;
+  }
   const hasVehicle = responses.hasVehicle;
   const isSubcontractor = responses[SUBCONTRACTOR_GATE_FIELD] === "Yes";
 
-  const experienceLabel =
-    experience === "yes"
-      ? `Yes${experienceYears ? ` — ${experienceYears} yr${Number(experienceYears) !== 1 ? "s" : ""}` : ""}`
-      : experience === "no"
+  function formatExperience(exp: string | undefined, years: string | undefined): string {
+    return exp === "yes"
+      ? `Yes${years ? ` — ${years} yr${Number(years) !== 1 ? "s" : ""}` : ""}`
+      : exp === "no"
       ? "No"
       : "—";
+  }
 
   return (
     <div className="space-y-6">
@@ -150,10 +173,28 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                     {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-pink-500">Experience</dt>
-                  <dd className="mt-0.5 text-zinc-500">{experienceLabel}</dd>
-                </div>
+                {cleaningExperience !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Cleaning experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {formatExperience(cleaningExperience, cleaningExperienceYears)}
+                    </dd>
+                  </div>
+                )}
+                {paintingExperience !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Painting experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {formatExperience(paintingExperience, paintingExperienceYears)}
+                    </dd>
+                  </div>
+                )}
+                {cleaningExperience === undefined && paintingExperience === undefined && (
+                  <div>
+                    <dt className="text-pink-500">Experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">—</dd>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <dt className="text-pink-500">Additional comments</dt>
                   <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>

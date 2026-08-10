@@ -1,17 +1,28 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const inputCls = "rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900";
 
-type Props = { title: ReactNode };
-
-export function NewEmployeeForm({ title }: Props) {
+export function NewEmployeeForm() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Same click-outside-to-close pattern as EmployeesFilterBar's popover,
+  // right next to this button — floats over the page instead of pushing
+  // the header/table around when it opens.
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
   // Offshore is presented as a 3rd Pay Type option (matching the employee
   // detail page), but stays the separate isOffshore flag underneath.
   const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">("HOURLY");
@@ -62,20 +73,31 @@ export function NewEmployeeForm({ title }: Props) {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4">
-        {title}
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-md bg-gray-200 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
-        >
-          {open ? "Close" : "Add employee"}
-        </button>
-      </div>
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={open ? "Close" : "Add employee"}
+        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+          open ? "bg-gray-200 text-gray-700 hover:bg-gray-300" : "bg-pink-600 text-white hover:bg-pink-500"
+        }`}
+      >
+        {open ? (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        )}
+      </button>
 
       {open ? (
-        <form onSubmit={onSubmit} className="mt-3 w-full max-w-2xl space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <form
+          onSubmit={onSubmit}
+          className="absolute right-0 z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 shadow-lg"
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <input name="firstName" required placeholder="First name *" className={inputCls} />
             <input name="lastName" required placeholder="Last name *" className={inputCls} />

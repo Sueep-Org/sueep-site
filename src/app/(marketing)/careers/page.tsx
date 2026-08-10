@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
 import { CareersPixelEvents } from "./CareersPixelEvents";
 import { SubcontractorQuestionnaire } from "./SubcontractorQuestionnaire";
+import { RoleAndExperienceFields } from "./RoleAndExperienceFields";
 
 
 export const metadata = {
@@ -16,16 +17,27 @@ export const metadata = {
 export default async function CareersPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ submitted?: string; role?: string }>;
+  searchParams?: Promise<{ submitted?: string; role?: string; roles?: string }>;
 }) {
   const sp = (searchParams ? await searchParams : undefined) ?? {};
   const submitted = sp.submitted;
   const showSuccess = submitted === "1";
   const showError = submitted === "0";
+  // `role` (singular) still drives the hero tab/pixel page-view tracking —
+  // ad campaigns already link to /careers?role=painter for the dedicated
+  // pixel, so that stays untouched. `roles` (plural, comma-separated) is the
+  // newer, more precise signal: the API route sends it back on both the
+  // validation-error redirect (to restore exact checkbox state) and the
+  // success redirect (to reflect what was actually submitted, for pixel
+  // Lead-tracking). When present it overrides the singular default below.
   const role = sp.role === "painter" ? "painter" : "cleaner";
   const isPainter = role === "painter";
   const roleWord = isPainter ? "painting" : "cleaning";
-  const roleLabel = isPainter ? "Painting" : "Cleaning";
+
+  const rolesList = sp.roles ? sp.roles.split(",").map((r) => r.trim().toLowerCase()) : null;
+  const defaultCleaner = rolesList ? rolesList.includes("cleaner") : !isPainter;
+  const defaultPainter = rolesList ? rolesList.includes("painter") : isPainter;
+  const submittedRoles = showSuccess ? { cleaner: defaultCleaner, painter: defaultPainter } : undefined;
 
   const inputClass =
     "w-full rounded-lg border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/40 focus:border-[#E73C6E]";
@@ -54,7 +66,7 @@ export default async function CareersPage({
         </div>
       )}
 
-      <CareersPixelEvents submitted={showSuccess} role={role} />
+      <CareersPixelEvents submitted={showSuccess} role={role} submittedRoles={submittedRoles} />
       {isPainter && (
         <noscript>
           <img
@@ -107,13 +119,7 @@ export default async function CareersPage({
 
       <section id="apply" className="flex-1 pb-20 bg-gray-50 scroll-mt-20 border-t border-gray-100">
         <div className="max-w-2xl mx-auto px-5 pt-14 md:pt-16">
-          <h2 className="text-2xl md:text-3xl font-bold text-center uppercase">{roleLabel} Application</h2>
-          <p className="mt-2 text-center text-gray-600 text-sm">
-            Applying as a <strong>{isPainter ? "Painter" : "Cleaner"}</strong>.{" "}
-            <a href={`/careers?role=${isPainter ? "cleaner" : "painter"}#apply`} className="text-[#E73C6E] hover:underline">
-              Switch to {isPainter ? "Cleaner" : "Painter"}
-            </a>
-          </p>
+          <h2 className="text-2xl md:text-3xl font-bold text-center uppercase">Application</h2>
           <p className="mt-2 text-center text-gray-600 text-sm">
             Fields marked <span className="text-red-500">*</span> are required. Your submission goes to Sueep&apos;s
             internal hiring system.
@@ -126,7 +132,6 @@ export default async function CareersPage({
             autoComplete="on"
           >
             <input type="text" name="_honey" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-            <input type="hidden" name="role" value={role} />
 
             <div>
               <label htmlFor="fullName" className={labelClass}>
@@ -179,36 +184,7 @@ export default async function CareersPage({
               />
             </div>
 
-            <div>
-              <label className={labelClass}>
-                Do you have {roleWord} experience? <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-6 mt-1">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="experience" value="yes" required className="accent-[#E73C6E]" />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="experience" value="no" required className="accent-[#E73C6E]" />
-                  No
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="experienceYears" className={labelClass}>
-                If yes, how many years of {roleWord} experience?
-              </label>
-              <input
-                id="experienceYears"
-                name="experienceYears"
-                type="number"
-                min="0"
-                max="99"
-                className={inputClass}
-                placeholder="e.g. 3"
-              />
-            </div>
+            <RoleAndExperienceFields defaultCleaner={defaultCleaner} defaultPainter={defaultPainter} />
 
             <div>
               <label className={labelClass}>

@@ -10,16 +10,32 @@ const KNOWN_BODY_KEYS = new Set([
   "email",
   "phone",
   "location",
-  "role",
-  "experience",
-  "experienceYears",
+  "roles",
+  "cleaningExperience",
+  "cleaningYears",
+  "paintingExperience",
+  "paintingYears",
   "hasVehicle",
   "additionalNotes",
   "_honey",
 ]);
 
-function positionInterestFromRole(role: string): "Painter" | "Cleaner" {
-  return role.trim().toLowerCase() === "painter" ? "Painter" : "Cleaner";
+function normalizeRoles(raw: string[]): { cleaner: boolean; painter: boolean } {
+  const lower = raw.map((r) => r.trim().toLowerCase());
+  return { cleaner: lower.includes("cleaner"), painter: lower.includes("painter") };
+}
+
+function positionInterestFromRoles(roles: { cleaner: boolean; painter: boolean }): string {
+  if (roles.cleaner && roles.painter) return "Cleaner, Painter";
+  if (roles.painter) return "Painter";
+  return "Cleaner";
+}
+
+function rolesParam(roles: { cleaner: boolean; painter: boolean }): string {
+  const list: string[] = [];
+  if (roles.cleaner) list.push("cleaner");
+  if (roles.painter) list.push("painter");
+  return list.join(",");
 }
 
 /**
@@ -37,9 +53,11 @@ export async function POST(req: NextRequest) {
     let email = "";
     let phone = "";
     let location = "";
-    let role = "";
-    let experience = "";
-    let experienceYears = "";
+    let rolesRaw: string[] = [];
+    let cleaningExperience = "";
+    let cleaningYears = "";
+    let paintingExperience = "";
+    let paintingYears = "";
     let hasVehicle = "";
     let additionalNotes = "";
     let honey = "";
@@ -51,9 +69,11 @@ export async function POST(req: NextRequest) {
       email = String(body.email || "").trim().toLowerCase();
       phone = String(body.phone || "").trim();
       location = String(body.location || "").trim();
-      role = String(body.role || "").trim();
-      experience = String(body.experience || "").trim();
-      experienceYears = String(body.experienceYears || "").trim();
+      rolesRaw = Array.isArray(body.roles) ? body.roles.map((r) => String(r)) : [];
+      cleaningExperience = String(body.cleaningExperience || "").trim();
+      cleaningYears = String(body.cleaningYears || "").trim();
+      paintingExperience = String(body.paintingExperience || "").trim();
+      paintingYears = String(body.paintingYears || "").trim();
       hasVehicle = String(body.hasVehicle || "").trim();
       additionalNotes = String(body.additionalNotes || "").trim();
       honey = String(body._honey || "");
@@ -68,9 +88,11 @@ export async function POST(req: NextRequest) {
       email = String(form.get("email") || "").trim().toLowerCase();
       phone = String(form.get("phone") || "").trim();
       location = String(form.get("location") || "").trim();
-      role = String(form.get("role") || "").trim();
-      experience = String(form.get("experience") || "").trim();
-      experienceYears = String(form.get("experienceYears") || "").trim();
+      rolesRaw = form.getAll("roles").filter((v): v is string => typeof v === "string");
+      cleaningExperience = String(form.get("cleaningExperience") || "").trim();
+      cleaningYears = String(form.get("cleaningYears") || "").trim();
+      paintingExperience = String(form.get("paintingExperience") || "").trim();
+      paintingYears = String(form.get("paintingYears") || "").trim();
       hasVehicle = String(form.get("hasVehicle") || "").trim();
       additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
@@ -96,21 +118,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    const positionInterest = positionInterestFromRole(role);
+    const roles = normalizeRoles(rolesRaw);
+    const positionInterest = positionInterestFromRoles(roles);
+    const rolesQs = rolesParam(roles);
 
-    if (!fullName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const isValid =
+      fullName && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (roles.cleaner || roles.painter);
+
+    if (!isValid) {
       if (isFormPost) {
         const url = new URL("/careers?submitted=0", req.url);
-        if (role) url.searchParams.set("role", role);
+        if (rolesQs) url.searchParams.set("roles", rolesQs);
         return NextResponse.redirect(url, { status: 303 });
       }
-      return NextResponse.json({ error: "fullName and a valid email are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "fullName, a valid email, and at least one role are required" },
+        { status: 400 }
+      );
     }
 
     const formResponses: Record<string, unknown> = {
       ...(location ? { location } : {}),
-      ...(experience ? { experience } : {}),
-      ...(experienceYears ? { experienceYears } : {}),
+      ...(cleaningExperience ? { cleaningExperience } : {}),
+      ...(cleaningYears ? { cleaningYears } : {}),
+      ...(paintingExperience ? { paintingExperience } : {}),
+      ...(paintingYears ? { paintingYears } : {}),
       ...(hasVehicle ? { hasVehicle } : {}),
       ...extraResponses,
     };
@@ -130,7 +162,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (isFormPost) {
-      return NextResponse.redirect(new URL("/careers?submitted=1", req.url), { status: 303 });
+      const url = new URL("/careers?submitted=1", req.url);
+      if (rolesQs) url.searchParams.set("roles", rolesQs);
+      return NextResponse.redirect(url, { status: 303 });
     }
     return NextResponse.json({ ok: true, id: row.id });
   } catch (e) {
