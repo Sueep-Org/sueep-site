@@ -633,7 +633,7 @@ model ProjectChangeOrder {
   /// Day assignments explicitly scheduling crew for this CO on a day between
   /// its start and end (or beyond) — same day-assignment mechanism used to
   /// plan regular project work, just tagged to this CO instead.
-  dayAssignments        ProjectDayAssignment[] @relation("DayAssignmentChangeOrders")
+  dayAssignments        ProjectDayAssignment[]            @relation("DayAssignmentChangeOrders")
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -1132,11 +1132,11 @@ model Employee {
   contracts                    EmployeeContract[]
   safetyCheckWorkers           SafetyCheckWorker[]
   safetyIncidents              SafetyIncident[]
-  commissionProjects           Project[]                    @relation("ProjectCommissionOwner")
-  createdProjects              Project[]                    @relation("ProjectCreatedBy")
+  commissionProjects           Project[]                      @relation("ProjectCommissionOwner")
+  createdProjects              Project[]                      @relation("ProjectCreatedBy")
   reimbursements               Reimbursement[]
   recurringContractCommissions RecurringContract[]
-  buildingCommissions          Building[]                   @relation("BuildingCommissionOwner")
+  buildingCommissions          Building[]                     @relation("BuildingCommissionOwner")
   offshorePayrollPayments      OffshorePayrollPayment[]
   bidBonusEntries              BidBonusEntry[]
   salesBidEntries              SalesBidEntry[]
@@ -1161,9 +1161,9 @@ model EmployeeBackgroundCheckEvent {
   /// NULL for the first event recorded on an employee
   previousStatus String?
   /// PASSED | FAILED | PENDING | NOT_DONE
-  newStatus String
+  newStatus      String
   /// Email of the ERP user who made the change
-  changedBy String?
+  changedBy      String?
 
   @@index([employeeId, createdAt])
 }
@@ -1328,6 +1328,9 @@ model Contractor {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
+  /// Manually-entered subset of the subcontractor questionnaire (Company Info, Insurance, Licensing sections — see CONTRACTOR_MANUAL_SECTIONS), used when no CandidateApplication is linked. Same `sub_<key>` shape as CandidateApplication.responses so it renders through the same SubcontractorInfoSection component.
+  manualApplicationInfo Json?
+
   /// Token for the contractor info form link
   infoToken       String?   @unique
   infoTokenExpiry DateTime?
@@ -1342,6 +1345,15 @@ model Contractor {
   bankRoutingNumber  String?
   phone              String?
   hasInsurance       Boolean?
+
+  /// Workers comp coverage, self-reported by the contractor via the info portal; staff can review/correct in the ERP.
+  workersCompCarrier      String?
+  workersCompPolicyNumber String?
+  workersCompExpiresAt    DateTime?
+
+  /// Links back to the subcontractor questionnaire this contractor originated from, if any (set via "Convert to Contractor" or the manual link picker on the profile).
+  candidateApplicationId String?               @unique
+  candidateApplication   CandidateApplication? @relation(fields: [candidateApplicationId], references: [id])
 
   /// PASSED | FAILED | PENDING | NOT_DONE
   backgroundCheckStatus    String?   @default("NOT_DONE")
@@ -1379,9 +1391,9 @@ model ContractorBackgroundCheckEvent {
   /// NULL for the first event recorded on a contractor
   previousStatus String?
   /// PASSED | FAILED | PENDING | NOT_DONE
-  newStatus String
+  newStatus      String
   /// Email of the ERP user who made the change
-  changedBy String?
+  changedBy      String?
 
   @@index([contractorId, createdAt])
 }
@@ -1519,8 +1531,10 @@ model CandidateApplication {
   paperworkUploadToken       String?   @unique
   paperworkUploadTokenExpiry DateTime?
 
-  documents CandidateDocument[]
-  contracts CandidateContract[]
+  documents  CandidateDocument[]
+  contracts  CandidateContract[]
+  /// Set once this application has been converted to (or linked with) a Contractor profile.
+  contractor Contractor?
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
   questionnaireToken       String?   @unique
@@ -1691,10 +1705,10 @@ model ProjectSOVItem {
 
   /// Deprecated reverse of LaborEntry.sovItemId; superseded by laborEntriesMulti.
   laborEntries          LaborEntry[]
-  laborEntriesMulti     LaborEntry[]            @relation("LaborEntrySOVItems")
-  contractorAssignments ContractorAssignment[]   @relation("ContractorAssignmentSOVItems")
-  dayAssignments        ProjectDayAssignment[]   @relation("DayAssignmentSOVItems")
-  qualityChecks         QualityCheck[]           @relation("QualityCheckSOVItems")
+  laborEntriesMulti     LaborEntry[]                  @relation("LaborEntrySOVItems")
+  contractorAssignments ContractorAssignment[]        @relation("ContractorAssignmentSOVItems")
+  dayAssignments        ProjectDayAssignment[]        @relation("DayAssignmentSOVItems")
+  qualityChecks         QualityCheck[]                @relation("QualityCheckSOVItems")
   scheduleRequests      ProjectSovScheduleRequest[]
   hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]

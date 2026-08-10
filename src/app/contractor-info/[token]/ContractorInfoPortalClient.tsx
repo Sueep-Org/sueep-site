@@ -15,6 +15,10 @@ type Props = {
     bankRoutingNumber: string | null;
     phone: string | null;
     hasInsurance: boolean | null;
+    workersCompCarrier: string | null;
+    workersCompPolicyNumber: string | null;
+    workersCompExpiresAt: string | null;
+    workersCompDocFilename: string | null;
   };
 };
 
@@ -32,10 +36,38 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
   const [bankRoutingNumber, setBankRoutingNumber] = useState(initial.bankRoutingNumber ?? "");
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(initial.hasInsurance ?? null);
+  const [workersCompCarrier, setWorkersCompCarrier] = useState(initial.workersCompCarrier ?? "");
+  const [workersCompPolicyNumber, setWorkersCompPolicyNumber] = useState(initial.workersCompPolicyNumber ?? "");
+  const [workersCompExpiresAt, setWorkersCompExpiresAt] = useState(
+    initial.workersCompExpiresAt ? initial.workersCompExpiresAt.slice(0, 10) : ""
+  );
+  const [workersCompDocFilename, setWorkersCompDocFilename] = useState(initial.workersCompDocFilename ?? "");
+  const [uploadingCoi, setUploadingCoi] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(Boolean(initial.contractorFullName));
   const [error, setError] = useState("");
+
+  async function onCoiFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCoi(true);
+    setUploadError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`/api/contractor-info/${token}/upload`, { method: "POST", body });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      setWorkersCompDocFilename(file.name);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingCoi(false);
+      e.target.value = "";
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +95,9 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
           bankRoutingNumber: bankRoutingNumber || null,
           phone: phone || null,
           hasInsurance,
+          workersCompCarrier: workersCompCarrier || null,
+          workersCompPolicyNumber: workersCompPolicyNumber || null,
+          workersCompExpiresAt: workersCompExpiresAt || null,
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
@@ -214,6 +249,57 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
               </label>
             </div>
           </div>
+
+          <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <legend className="text-sm font-semibold text-gray-800 px-1">Workers&rsquo; Compensation</legend>
+
+            <div>
+              <label className={labelCls}>Insurance carrier</label>
+              <input
+                type="text"
+                value={workersCompCarrier}
+                onChange={(e) => setWorkersCompCarrier(e.target.value)}
+                placeholder="e.g. Travelers"
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Policy number</label>
+              <input
+                type="text"
+                value={workersCompPolicyNumber}
+                onChange={(e) => setWorkersCompPolicyNumber(e.target.value)}
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Policy expiration date</label>
+              <input
+                type="date"
+                value={workersCompExpiresAt}
+                onChange={(e) => setWorkersCompExpiresAt(e.target.value)}
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Certificate of insurance (COI)</label>
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                onChange={(e) => void onCoiFileChange(e)}
+                disabled={uploadingCoi}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+              />
+              {uploadingCoi && <p className="mt-1 text-xs text-gray-400">Uploading…</p>}
+              {!uploadingCoi && workersCompDocFilename && (
+                <p className="mt-1 text-xs text-emerald-600">Uploaded: {workersCompDocFilename}</p>
+              )}
+              {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+            </div>
+          </fieldset>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 

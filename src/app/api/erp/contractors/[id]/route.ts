@@ -51,6 +51,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     data.paperwork = body.paperwork;
   }
+  if (body.manualApplicationInfo !== undefined) {
+    const v = body.manualApplicationInfo;
+    if (v !== null && (typeof v !== "object" || Array.isArray(v))) {
+      return NextResponse.json({ error: "manualApplicationInfo must be an object" }, { status: 400 });
+    }
+    data.manualApplicationInfo = v;
+  }
   if (body.status !== undefined) {
     const v = String(body.status).toUpperCase();
     if (!STATUSES.includes(v as (typeof STATUSES)[number])) {
@@ -76,6 +83,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.hasInsurance !== undefined) {
     data.hasInsurance = typeof body.hasInsurance === "boolean" ? body.hasInsurance : null;
+  }
+  if (body.workersCompCarrier !== undefined) {
+    data.workersCompCarrier = body.workersCompCarrier ? String(body.workersCompCarrier).trim() || null : null;
+  }
+  if (body.workersCompPolicyNumber !== undefined) {
+    data.workersCompPolicyNumber = body.workersCompPolicyNumber ? String(body.workersCompPolicyNumber).trim() || null : null;
+  }
+  if (body.workersCompExpiresAt !== undefined) {
+    const d = parseDate(body.workersCompExpiresAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid workersCompExpiresAt" }, { status: 400 });
+    data.workersCompExpiresAt = d;
   }
 
   if (body.backgroundCheckStatus !== undefined) {
@@ -107,6 +125,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.backgroundCheckConsentAt = d;
   }
 
+  if (body.candidateApplicationId !== undefined) {
+    const v = body.candidateApplicationId ? String(body.candidateApplicationId).trim() : null;
+    if (v) {
+      const application = await prisma.candidateApplication.findUnique({ where: { id: v }, select: { id: true } });
+      if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+    data.candidateApplicationId = v;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
@@ -135,7 +162,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ ...contractor, backgroundCheckEvent });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return NextResponse.json({ error: "Email already exists" }, { status: 409 });
+      const target = Array.isArray(e.meta?.target) ? (e.meta.target as string[]) : [];
+      const message = target.some((t) => t.toLowerCase().includes("candidateapplication"))
+        ? "This application is already linked to another contractor"
+        : "Email already exists";
+      return NextResponse.json({ error: message }, { status: 409 });
     }
     console.error("PATCH /api/erp/contractors/[id]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });

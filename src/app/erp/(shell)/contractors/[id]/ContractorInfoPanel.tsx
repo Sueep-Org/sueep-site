@@ -13,6 +13,9 @@ type CollectedInfo = {
   bankRoutingNumber: string | null;
   phone: string | null;
   hasInsurance: boolean | null;
+  workersCompCarrier: string | null;
+  workersCompPolicyNumber: string | null;
+  workersCompExpiresAt: string | null;
 };
 
 type Props = {
@@ -23,6 +26,7 @@ type Props = {
   resendConfigured: boolean;
   siteUrl: string;
   collectedInfo: CollectedInfo;
+  workersCompDoc: { id: string; filename: string } | null;
 };
 
 function formatDt(iso: string | null): string {
@@ -44,6 +48,12 @@ function maskAccount(num: string | null): string {
   return num.length > 4 ? `****${num.slice(-4)}` : "****";
 }
 
+// yyyy-mm-dd for <input type="date">
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
+
 export function ContractorInfoPanel({
   id,
   email,
@@ -52,6 +62,7 @@ export function ContractorInfoPanel({
   resendConfigured,
   siteUrl,
   collectedInfo,
+  workersCompDoc,
 }: Props) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
@@ -59,7 +70,10 @@ export function ContractorInfoPanel({
   const [sendError, setSendError] = useState("");
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<CollectedInfo>({ ...collectedInfo });
+  const [form, setForm] = useState<CollectedInfo>({
+    ...collectedInfo,
+    workersCompExpiresAt: toDateInputValue(collectedInfo.workersCompExpiresAt),
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -122,9 +136,7 @@ export function ContractorInfoPanel({
   return (
     <div className="space-y-5">
       <div className="space-y-3">
-        <p className="text-xs text-zinc-500">
-          Send the contractor a secure link to fill in their personal information, banking details, and insurance status. No account required — expires after 7 days. You can also enter the information directly below.
-        </p>
+        <p className="text-xs text-zinc-500">Send a secure info link, or enter it manually below.</p>
 
         {infoLink && !isExpired && (
           <div>
@@ -179,7 +191,11 @@ export function ContractorInfoPanel({
           {!editing && (
             <button
               type="button"
-              onClick={() => { setForm({ ...collectedInfo }); setEditing(true); setSaveError(""); }}
+              onClick={() => {
+                setForm({ ...collectedInfo, workersCompExpiresAt: toDateInputValue(collectedInfo.workersCompExpiresAt) });
+                setEditing(true);
+                setSaveError("");
+              }}
               className="text-xs text-[#E73C6E] hover:underline"
             >
               {hasInfo ? "Edit" : "Enter manually"}
@@ -282,6 +298,28 @@ export function ContractorInfoPanel({
                   ))}
                 </div>
               )}
+              {field("Workers comp carrier",
+                <input
+                  className={inputCls}
+                  value={form.workersCompCarrier ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, workersCompCarrier: e.target.value }))}
+                />
+              )}
+              {field("Workers comp policy number",
+                <input
+                  className={inputCls}
+                  value={form.workersCompPolicyNumber ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, workersCompPolicyNumber: e.target.value }))}
+                />
+              )}
+              {field("Workers comp expires",
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={form.workersCompExpiresAt ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, workersCompExpiresAt: e.target.value || null }))}
+                />
+              )}
             </div>
 
             {saveError && <p className="text-xs text-red-500">{saveError}</p>}
@@ -342,6 +380,50 @@ export function ContractorInfoPanel({
               <dt className="text-xs text-pink-500">Has insurance</dt>
               <dd className={collectedInfo.hasInsurance ? "text-emerald-600 font-medium" : "text-red-500 font-medium"}>
                 {collectedInfo.hasInsurance === null ? "—" : collectedInfo.hasInsurance ? "Yes" : "No"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-pink-500">Workers comp carrier</dt>
+              <dd className="text-gray-800">{collectedInfo.workersCompCarrier ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-pink-500">Workers comp policy #</dt>
+              <dd className="text-gray-800">{collectedInfo.workersCompPolicyNumber ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-pink-500">Workers comp expires</dt>
+              <dd>
+                {(() => {
+                  if (!collectedInfo.workersCompExpiresAt) {
+                    return <span className="font-medium text-red-500">Not on file</span>;
+                  }
+                  const days = (new Date(collectedInfo.workersCompExpiresAt).getTime() - Date.now()) / 86_400_000;
+                  const display = new Date(collectedInfo.workersCompExpiresAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  });
+                  const cls = days < 0 ? "text-red-500" : days <= 30 ? "text-amber-600" : "text-emerald-600";
+                  const suffix = days < 0 ? " (expired)" : days <= 30 ? " (expiring soon)" : "";
+                  return <span className={`font-medium ${cls}`}>{display}{suffix}</span>;
+                })()}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-pink-500">Certificate of insurance</dt>
+              <dd className="text-gray-800">
+                {workersCompDoc ? (
+                  <a
+                    href={`/api/erp/contractors/${id}/documents/${workersCompDoc.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#E73C6E] hover:underline"
+                  >
+                    {workersCompDoc.filename}
+                  </a>
+                ) : (
+                  "—"
+                )}
               </dd>
             </div>
           </dl>

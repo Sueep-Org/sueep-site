@@ -19,6 +19,9 @@ async function resolveContractor(token: string) {
       bankRoutingNumber: true,
       phone: true,
       hasInsurance: true,
+      workersCompCarrier: true,
+      workersCompPolicyNumber: true,
+      workersCompExpiresAt: true,
     },
   });
   if (!contractor) return null;
@@ -30,6 +33,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const { token } = await params;
   const contractor = await resolveContractor(token);
   if (!contractor) return NextResponse.json({ error: "Link not found or expired" }, { status: 404 });
+
+  const workersCompDoc = await prisma.contractorDocument.findFirst({
+    where: { contractorId: contractor.id, label: "Workers Comp COI" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, filename: true },
+  });
 
   return NextResponse.json({
     name: contractor.name,
@@ -43,7 +52,18 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     bankRoutingNumber: contractor.bankRoutingNumber,
     phone: contractor.phone,
     hasInsurance: contractor.hasInsurance,
+    workersCompCarrier: contractor.workersCompCarrier,
+    workersCompPolicyNumber: contractor.workersCompPolicyNumber,
+    workersCompExpiresAt: contractor.workersCompExpiresAt ? contractor.workersCompExpiresAt.toISOString() : null,
+    workersCompDocFilename: workersCompDoc?.filename ?? null,
   });
+}
+
+function parseDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
@@ -67,6 +87,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const bankRoutingNumber = typeof body.bankRoutingNumber === "string" ? body.bankRoutingNumber.trim() : null;
   const phone = typeof body.phone === "string" ? body.phone.trim() : null;
   const hasInsurance = typeof body.hasInsurance === "boolean" ? body.hasInsurance : null;
+  const workersCompCarrier = typeof body.workersCompCarrier === "string" ? body.workersCompCarrier.trim() || null : null;
+  const workersCompPolicyNumber =
+    typeof body.workersCompPolicyNumber === "string" ? body.workersCompPolicyNumber.trim() || null : null;
+  const workersCompExpiresAt = parseDate(body.workersCompExpiresAt);
+  if (workersCompExpiresAt === undefined) {
+    return NextResponse.json({ error: "Invalid workersCompExpiresAt" }, { status: 400 });
+  }
 
   if (!contractorFullName) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 });
@@ -84,6 +111,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       bankRoutingNumber,
       phone,
       hasInsurance,
+      workersCompCarrier,
+      workersCompPolicyNumber,
+      workersCompExpiresAt,
     },
   });
 

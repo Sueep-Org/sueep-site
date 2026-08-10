@@ -194,3 +194,11 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
     ],
   },
 ];
+
+/** The compliance-critical subset staff can manually enter on a Contractor
+ * profile when there's no linked CandidateApplication to pull this from —
+ * see ContractorManualApplicationInfoForm. All fields here are "text" /
+ * "number" / "select", which keeps that form's field renderer simple. */
+export const CONTRACTOR_MANUAL_SECTIONS: SubSection[] = SUBCONTRACTOR_QUESTIONNAIRE.filter((s) =>
+  ["company", "insurance", "licensing"].includes(s.id)
+);

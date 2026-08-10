@@ -7,6 +7,7 @@ import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
 import { SubcontractorInfoSection } from "./SubcontractorInfoSection";
+import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       paperworkUploadToken: true,
       paperworkUploadTokenExpiry: true,
       contracts: { orderBy: { createdAt: "asc" } },
+      contractor: { select: { id: true } },
     },
   });
   if (!row) notFound();
@@ -60,15 +62,20 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
-          ← Candidates
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Applied{" "}
-          {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
+            ← Candidates
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Applied{" "}
+            {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
+          </p>
+        </div>
+        {isSubcontractor && (
+          <ConvertToContractorButton applicationId={row.id} existingContractorId={row.contractor?.id ?? null} />
+        )}
       </div>
 
       <DetailTabs tabs={[

@@ -9,6 +9,7 @@ import { ContractorInfoPanel } from "./ContractorInfoPanel";
 import { ContractorLaborSection } from "./ContractorLaborSection";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
 import { ContractorTimeOffSection } from "./ContractorTimeOffSection";
+import { ContractorApplicationSection } from "./ContractorApplicationSection";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +25,31 @@ export default async function ContractorDetailPage({ params }: PageProps) {
       contracts: { orderBy: { createdAt: "asc" } },
       backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
       timeOff: { orderBy: { startDate: "desc" } },
+      documents: {
+        where: { label: "Workers Comp COI" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, filename: true },
+      },
+      candidateApplication: {
+        select: { id: true, fullName: true, email: true, phone: true, positionInterest: true, responses: true },
+      },
     },
   });
   if (!contractor) notFound();
+
+  // Only offered as link candidates if they're (a) a subcontractor
+  // application and (b) not already claimed by some other contractor —
+  // the DB-level unique constraint on Contractor.candidateApplicationId is
+  // the real guarantee, this just keeps the picker from offering dead ends.
+  const linkableApplications = await prisma.candidateApplication.findMany({
+    where: {
+      responses: { path: ["sub_isSubcontractor"], equals: "Yes" },
+      contractor: null,
+    },
+    select: { id: true, fullName: true, email: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
   const resendConfigured = Boolean(process.env.RESEND_API_KEY);
@@ -165,75 +188,102 @@ export default async function ContractorDetailPage({ params }: PageProps) {
         {
           label: "General Info",
           content: (
-            <ContractorProfileEditor
-              contractorId={contractor.id}
-              initial={{
-                name: contractor.name,
-                email: contractor.email,
-                status: contractor.status,
-              }}
-            />
+            <div className="space-y-6">
+              <ContractorProfileEditor
+                contractorId={contractor.id}
+                initial={{
+                  name: contractor.name,
+                  email: contractor.email,
+                  status: contractor.status,
+                }}
+              />
+
+              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h3 className="text-sm font-semibold text-gray-700">Application Info</h3>
+                <ContractorApplicationSection
+                  contractorId={contractor.id}
+                  linkedApplication={
+                    contractor.candidateApplication
+                      ? {
+                          id: contractor.candidateApplication.id,
+                          fullName: contractor.candidateApplication.fullName,
+                          email: contractor.candidateApplication.email,
+                          phone: contractor.candidateApplication.phone,
+                          positionInterest: contractor.candidateApplication.positionInterest,
+                          responses: (contractor.candidateApplication.responses ?? {}) as Record<string, unknown>,
+                        }
+                      : null
+                  }
+                  linkableApplications={linkableApplications}
+                  manualApplicationInfo={(contractor.manualApplicationInfo ?? null) as Record<string, unknown> | null}
+                />
+              </section>
+            </div>
           ),
         },
         {
-          label: "Documents",
+          label: "Personal & Documents",
           content: (
-            <ContractorPaperworkPanel
-              id={contractor.id}
-              email={contractor.email}
-              paperwork={paperwork}
-              paperworkUploadToken={contractor.paperworkUploadToken}
-              paperworkUploadTokenExpiry={
-                contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
-              }
-              resendConfigured={resendConfigured}
-              siteUrl={siteUrl}
-            />
-          ),
-        },
-        {
-          label: "Info Form",
-          content: (
-            <ContractorInfoPanel
-              id={contractor.id}
-              email={contractor.email}
-              infoToken={contractor.infoToken}
-              infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
-              resendConfigured={resendConfigured}
-              siteUrl={siteUrl}
-              collectedInfo={{
-                contractorFullName: contractor.contractorFullName,
-                address: contractor.address,
-                dateOfBirth: contractor.dateOfBirth,
-                ssn: contractor.ssn,
-                bankAccountType: contractor.bankAccountType,
-                bankAccountNumber: contractor.bankAccountNumber,
-                bankRoutingNumber: contractor.bankRoutingNumber,
-                phone: contractor.phone,
-                hasInsurance: contractor.hasInsurance,
-              }}
-            />
-          ),
-        },
-        {
-          label: "Background Check",
-          content: (
-            <ContractorBackgroundCheckSection
-              contractorId={contractor.id}
-              initialBackgroundCheckStatus={(contractor.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
-              initialBackgroundCheckedAt={contractor.backgroundCheckedAt ? contractor.backgroundCheckedAt.toISOString() : null}
-              initialBackgroundCheckExpiresAt={contractor.backgroundCheckExpiresAt ? contractor.backgroundCheckExpiresAt.toISOString() : null}
-              initialBackgroundCheckProvider={contractor.backgroundCheckProvider}
-              initialBackgroundCheckNotes={contractor.backgroundCheckNotes}
-              initialBackgroundCheckConsentAt={contractor.backgroundCheckConsentAt ? contractor.backgroundCheckConsentAt.toISOString() : null}
-              initialBackgroundCheckEvents={contractor.backgroundCheckEvents.map((e) => ({
-                id: e.id,
-                createdAt: e.createdAt.toISOString(),
-                previousStatus: e.previousStatus,
-                newStatus: e.newStatus,
-                changedBy: e.changedBy,
-              }))}
-            />
+            <div className="space-y-6">
+              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h3 className="text-sm font-semibold text-gray-700">Info Form</h3>
+                <ContractorInfoPanel
+                  id={contractor.id}
+                  email={contractor.email}
+                  infoToken={contractor.infoToken}
+                  infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
+                  resendConfigured={resendConfigured}
+                  siteUrl={siteUrl}
+                  collectedInfo={{
+                    contractorFullName: contractor.contractorFullName,
+                    address: contractor.address,
+                    dateOfBirth: contractor.dateOfBirth,
+                    ssn: contractor.ssn,
+                    bankAccountType: contractor.bankAccountType,
+                    bankAccountNumber: contractor.bankAccountNumber,
+                    bankRoutingNumber: contractor.bankRoutingNumber,
+                    phone: contractor.phone,
+                    hasInsurance: contractor.hasInsurance,
+                    workersCompCarrier: contractor.workersCompCarrier,
+                    workersCompPolicyNumber: contractor.workersCompPolicyNumber,
+                    workersCompExpiresAt: contractor.workersCompExpiresAt?.toISOString() ?? null,
+                  }}
+                  workersCompDoc={contractor.documents[0] ?? null}
+                />
+              </section>
+
+              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h3 className="text-sm font-semibold text-gray-700">Documents</h3>
+                <ContractorPaperworkPanel
+                  id={contractor.id}
+                  email={contractor.email}
+                  paperwork={paperwork}
+                  paperworkUploadToken={contractor.paperworkUploadToken}
+                  paperworkUploadTokenExpiry={
+                    contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
+                  }
+                  resendConfigured={resendConfigured}
+                  siteUrl={siteUrl}
+                />
+              </section>
+
+              <ContractorBackgroundCheckSection
+                contractorId={contractor.id}
+                initialBackgroundCheckStatus={(contractor.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+                initialBackgroundCheckedAt={contractor.backgroundCheckedAt ? contractor.backgroundCheckedAt.toISOString() : null}
+                initialBackgroundCheckExpiresAt={contractor.backgroundCheckExpiresAt ? contractor.backgroundCheckExpiresAt.toISOString() : null}
+                initialBackgroundCheckProvider={contractor.backgroundCheckProvider}
+                initialBackgroundCheckNotes={contractor.backgroundCheckNotes}
+                initialBackgroundCheckConsentAt={contractor.backgroundCheckConsentAt ? contractor.backgroundCheckConsentAt.toISOString() : null}
+                initialBackgroundCheckEvents={contractor.backgroundCheckEvents.map((e) => ({
+                  id: e.id,
+                  createdAt: e.createdAt.toISOString(),
+                  previousStatus: e.previousStatus,
+                  newStatus: e.newStatus,
+                  changedBy: e.changedBy,
+                }))}
+              />
+            </div>
           ),
         },
         {

@@ -24,12 +24,21 @@ export default async function ContractorInfoPage({ params }: PageProps) {
       bankRoutingNumber: true,
       phone: true,
       hasInsurance: true,
+      workersCompCarrier: true,
+      workersCompPolicyNumber: true,
+      workersCompExpiresAt: true,
     },
   });
 
   if (!contractor || !contractor.infoTokenExpiry || contractor.infoTokenExpiry < new Date()) {
     notFound();
   }
+
+  const workersCompDoc = await prisma.contractorDocument.findFirst({
+    where: { contractor: { infoToken: token }, label: "Workers Comp COI" },
+    orderBy: { createdAt: "desc" },
+    select: { filename: true },
+  });
 
   return (
     <ContractorInfoPortalClient
@@ -45,6 +54,10 @@ export default async function ContractorInfoPage({ params }: PageProps) {
         bankRoutingNumber: contractor.bankRoutingNumber,
         phone: contractor.phone,
         hasInsurance: contractor.hasInsurance,
+        workersCompCarrier: contractor.workersCompCarrier,
+        workersCompPolicyNumber: contractor.workersCompPolicyNumber,
+        workersCompExpiresAt: contractor.workersCompExpiresAt ? contractor.workersCompExpiresAt.toISOString() : null,
+        workersCompDocFilename: workersCompDoc?.filename ?? null,
       }}
     />
   );
