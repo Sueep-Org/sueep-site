@@ -8,10 +8,28 @@ function SignOutIcon({ className }: { className: string }) {
   );
 }
 
-export function ErpLogoutButton() {
+export function ErpLogoutButton({ compact = false }: { compact?: boolean }) {
   async function logout() {
     await fetch("/api/erp/auth/logout", { method: "POST" });
     window.location.href = "/erp/login";
+  }
+
+  if (compact) {
+    return (
+      <div className="group relative flex justify-center">
+        <button
+          type="button"
+          onClick={() => void logout()}
+          aria-label="Sign out"
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-900"
+        >
+          <SignOutIcon className="h-5 w-5 shrink-0" />
+        </button>
+        <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+          Sign out
+        </div>
+      </div>
+    );
   }
 
   return (

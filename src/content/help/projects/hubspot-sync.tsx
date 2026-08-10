@@ -18,7 +18,7 @@ export function HubSpotSync() {
         <LI>Start and end dates</LI>
         <LI>Contract value</LI>
         <LI>Deal owner (name and email, shown on the project page)</LI>
-        <LI>Supervisor, defaulted to &quot;UNASSIGNED PM&quot; until someone sets it</LI>
+        <LI>Supervisor, left unassigned until someone sets it</LI>
       </UL>
 
       <P>When a deal <strong>updates</strong> in HubSpot, the ERP overwrites:</P>

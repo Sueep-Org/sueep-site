@@ -157,7 +157,11 @@ export async function syncHubSpotDealsToProjects(): Promise<{
         await prisma.project.update({
           where: { id: existing.id },
           data: {
-            ...(existing.supervisor ? {} : { supervisor: "UNASSIGNED PM" }),
+            // No placeholder written when there's no supervisor yet — a
+            // fake "UNASSIGNED PM" name here used to leak as a real PM name
+            // anywhere Project.supervisor is displayed (pm-view, digest
+            // emails) and pass any "is a PM assigned" truthy check.
+            // Leaving it unset (null/absent) lets those checks work.
             segment: projectSegment,
             status,
             hubspotPipelineId: pipelineId,
@@ -189,7 +193,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             jobTitle: name,
-            supervisor: "UNASSIGNED PM",
+            supervisor: null,
             segment: projectSegment,
             status,
             contractValueCents: contractValueCents ?? null,

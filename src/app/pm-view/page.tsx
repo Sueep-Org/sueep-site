@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { getDescLine } from "@/lib/erp/descLine";
+import { deriveProjectLifecycle, hasActiveChangeOrder, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,33 +12,19 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const STATUS_LABEL: Record<string, string> = {
+const LIFECYCLE_LABEL: Record<ProjectLifecycle, string> = {
   ACTIVE: "In progress",
   UPCOMING: "Upcoming",
   ON_HOLD: "On hold",
-  COMPLETE: "Complete",
-  ARCHIVED: "Archived",
+  COMPLETED: "Complete",
 };
 
-const STATUS_COLOR: Record<string, string> = {
+const LIFECYCLE_COLOR: Record<ProjectLifecycle, string> = {
   ACTIVE: "bg-blue-50 text-blue-700 ring-blue-200",
   UPCOMING: "bg-amber-50 text-amber-700 ring-amber-200",
   ON_HOLD: "bg-gray-100 text-gray-600 ring-gray-200",
-  COMPLETE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  ARCHIVED: "bg-gray-100 text-gray-500 ring-gray-200",
+  COMPLETED: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 };
-
-function getDescLine(description: string | null, key: string): string {
-  if (!description) return "";
-  const prefix = `${key}:`;
-  return (
-    description
-      .split(/\r?\n/)
-      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
-      ?.replace(new RegExp(`^${key}:\\s*`, "i"), "")
-      .trim() ?? ""
-  );
-}
 
 function ServiceBadge({ label }: { label: string }) {
   return (
@@ -89,6 +77,7 @@ export default async function PmViewPage({ searchParams }: PageProps) {
           unitNumber: true,
         },
       },
+      changeOrders: { select: { status: true } },
     },
   });
 
@@ -161,9 +150,13 @@ export default async function PmViewPage({ searchParams }: PageProps) {
                 tr.ceilingPaint ? "Ceiling painting" : null,
               ].filter((s): s is string => Boolean(s)) : [];
 
-              const statusKey = project.status ?? "ACTIVE";
-              const statusLabel = STATUS_LABEL[statusKey] ?? statusKey;
-              const statusColor = STATUS_COLOR[statusKey] ?? "bg-gray-100 text-gray-600 ring-gray-200";
+              const lifecycle = deriveProjectLifecycle(
+                project.status ?? "ACTIVE",
+                project.projectDate ? project.projectDate.toISOString() : null,
+                hasActiveChangeOrder(project.changeOrders)
+              );
+              const statusLabel = LIFECYCLE_LABEL[lifecycle];
+              const statusColor = LIFECYCLE_COLOR[lifecycle];
 
               return (
                 <div key={project.id} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">

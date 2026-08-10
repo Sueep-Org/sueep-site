@@ -3,8 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// Exclude janitorial, real estate, and change-order-only projects
-const ELIGIBLE_SEGMENTS = ["COMMERCIAL_PAINTING", "COMMERCIAL_CLEANING", "OTHER"];
+// Exclude janitorial, real estate, and change-order-only projects. Includes
+// the legacy raw "COMMERCIAL" segment value (see LEGACY_SEGMENT_MAP in
+// projectSegments.ts) alongside its normalized form, "COMMERCIAL_CLEANING" —
+// this filter runs directly against the stored segment string, so it can't
+// go through normalizeProjectSegment() itself.
+const ELIGIBLE_SEGMENTS = ["COMMERCIAL_PAINTING", "COMMERCIAL_CLEANING", "COMMERCIAL", "OTHER"];
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

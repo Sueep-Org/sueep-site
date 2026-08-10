@@ -14,23 +14,10 @@ import { canOverrideQualityChecklist, canOverrideSafetyCheck, type ErpAuthContex
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
+import { getDescLine } from "@/lib/erp/descLine";
 import type { LaborEntry } from "@prisma/client";
 
-/** Same "Label: value" line format used to embed a Sueep PM name in the
- * description for older projects that predate the dedicated supervisor
- * field (duplicated from the same helper in pm-view/page.tsx, ProjectsExpandableTable.tsx,
- * and projects/[id]/page.tsx). */
-export function getDescLine(description: string | null, key: string): string {
-  if (!description) return "";
-  const prefix = `${key}:`;
-  return (
-    description
-      .split(/\r?\n/)
-      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
-      ?.replace(new RegExp(`^${key}:\\s*`, "i"), "")
-      .trim() ?? ""
-  );
-}
+export { getDescLine };
 
 /** Same rule projects/[id]/page.tsx uses to derive isPostConstruction for the
  * safety-checklist banner: absent a configured post-construction pipeline id,
@@ -44,7 +31,12 @@ export async function findEmployeeEmailByName(fullName: string): Promise<string 
   const [firstName, ...rest] = fullName.trim().split(" ");
   const lastName = rest.join(" ");
   const emp = await prisma.employee.findFirst({
-    where: { firstName: { equals: firstName, mode: "insensitive" }, lastName: { equals: lastName, mode: "insensitive" }, email: { not: null } },
+    where: {
+      firstName: { equals: firstName, mode: "insensitive" },
+      lastName: { equals: lastName, mode: "insensitive" },
+      email: { not: null },
+      status: { not: "INACTIVE" },
+    },
     select: { email: true },
   });
   return emp?.email ?? null;

@@ -13,9 +13,13 @@ export async function GET(_req: Request, ctx: Ctx) {
     include: { items: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
   });
 
-  // Verify project exists with an eligible segment
+  // Verify project exists with an eligible segment. Includes the legacy raw
+  // "COMMERCIAL" segment value (see LEGACY_SEGMENT_MAP in projectSegments.ts)
+  // alongside its normalized form, "COMMERCIAL_CLEANING" — this filter runs
+  // directly against the stored segment string, so it can't go through
+  // normalizeProjectSegment() itself.
   const project = await prisma.project.findFirst({
-    where: { id, segment: { in: ["COMMERCIAL_PAINTING", "COMMERCIAL_CLEANING", "OTHER"] } },
+    where: { id, segment: { in: ["COMMERCIAL_PAINTING", "COMMERCIAL_CLEANING", "COMMERCIAL", "OTHER"] } },
     select: { id: true },
   });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });

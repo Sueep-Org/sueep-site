@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
 import { centsToDollars } from "@/lib/erp/money";
+import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -220,6 +221,33 @@ export async function PATCH(req: Request, ctx: Ctx) {
         }
       } catch (emailErr) {
         console.error("approval notification email failed", emailErr);
+      }
+    }
+
+    // Notify the project's PM/supervisor when this change order's own
+    // schedule moves — same reschedule email a base-project date edit
+    // sends, previously missing entirely for change orders.
+    const oldStartTime = existing.startDate ? existing.startDate.getTime() : null;
+    const newStartTime = updated.startDate ? updated.startDate.getTime() : null;
+    if (data.startDate !== undefined && oldStartTime !== newStartTime && updated.startDate) {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id },
+          select: { jobTitle: true, supervisor: true, supervisorUserId: true, description: true },
+        });
+        if (project) {
+          await notifyProjectRescheduled({
+            projectId: id,
+            jobTitle: `${project.jobTitle} — ${updated.title}`,
+            oldDateKey: existing.startDate ? existing.startDate.toISOString().slice(0, 10) : null,
+            newDateKey: updated.startDate.toISOString().slice(0, 10),
+            supervisorUserId: project.supervisorUserId,
+            projectManagerName: project.supervisor,
+            projectDescription: project.description,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to notify change-order reschedule", e);
       }
     }
 

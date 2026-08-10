@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
+import { getDescLine as getDescriptionLine } from "@/lib/erp/descLine";
 
 type LaborRowBase = {
   id: string;
@@ -129,17 +130,6 @@ type LaborRow = LaborRowBase;
 function fmtDate(iso: string) {
   const d = new Date(iso);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${String(d.getUTCFullYear()).slice(-2)}`;
-}
-
-function getDescriptionLine(description: string | null, label: string) {
-  const prefix = `${label}:`;
-  return (
-    (description || "")
-      .split(/\r?\n/)
-      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
-      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
-      .trim() || null
-  );
 }
 
 export function EmptyValue() {

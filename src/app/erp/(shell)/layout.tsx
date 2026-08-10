@@ -10,10 +10,10 @@ export default async function ErpShellLayout({ children }: { children: React.Rea
   const role = auth?.role ?? "EMPLOYEE";
 
   return (
-    <div id="erp-shell" className="flex min-h-screen md:h-screen flex-col md:flex-row">
+    <div id="erp-shell" className="flex min-h-screen sm:h-screen flex-col sm:flex-row">
       <ErpNav role={role} />
       {isProjectManager(role) && <ScheduleNudgePopup />}
-      <main className="min-w-0 min-h-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
+      <main className="min-w-0 min-h-0 flex-1 overflow-auto p-4 sm:p-6">{children}</main>
     </div>
   );
 }

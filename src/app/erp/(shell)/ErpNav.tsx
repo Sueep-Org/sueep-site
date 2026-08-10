@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ErpBrandLogo } from "@/app/erp/components/ErpBrandLogo";
 import { ErpLogoutButton } from "./ErpLogoutButton";
@@ -177,9 +178,10 @@ const employmentGroupItems: NavItem[] = [
 
 const teamExtraItems: NavItem[] = [
   { href: "/erp/users", label: "User Management", roles: ["ADMIN"], icon: IdCardIcon },
-  { href: "/erp/estimator", label: "AI Estimator", roles: PM_EST, icon: SparklesIcon },
-  { href: "/erp/help", label: "Help Center", roles: ALL, icon: QuestionMarkCircleIcon },
 ];
+
+const aiEstimatorItem: NavItem = { href: "/erp/estimator", label: "AI Estimator", roles: PM_EST, icon: SparklesIcon };
+const helpCenterItem: NavItem = { href: "/erp/help", label: "Help Center", roles: ALL, icon: QuestionMarkCircleIcon };
 
 function allowed(item: NavItem, role: ErpRole): boolean {
   return (item.roles as string[]).includes(role);
@@ -212,6 +214,89 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return <p className="mt-4 mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 first:mt-0">{children}</p>;
+}
+
+// ── Icon-only desktop rail, expanding to a flyout panel on hover ──
+
+const railIconBtnCls =
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors";
+
+function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active =
+    pathname === item.href ||
+    (item.href !== "/erp" && pathname.startsWith(item.href + "/"));
+  const Icon = item.icon;
+  return (
+    <div className="group relative flex justify-center">
+      <Link
+        href={item.href}
+        aria-label={item.label}
+        className={[
+          railIconBtnCls,
+          active ? "bg-pink-50 text-pink-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-900",
+        ].join(" ")}
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+      </Link>
+      <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+        {item.label}
+      </div>
+    </div>
+  );
+}
+
+function RailGroup({
+  label,
+  icon: Icon,
+  items,
+  pathname,
+}: {
+  label: string;
+  icon: (props: IconProps) => ReactNode;
+  items: NavItem[];
+  pathname: string;
+}) {
+  const active = isGroupActive(pathname, items);
+  if (items.length === 0) return null;
+
+  return (
+    <div className="group relative flex justify-center">
+      <Link
+        href={items[0].href}
+        aria-label={label}
+        className={[
+          railIconBtnCls,
+          active ? "bg-pink-50 text-pink-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-900",
+        ].join(" ")}
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+      </Link>
+
+      {/* Flush hover bridge (no gap) so the pointer can travel from icon to panel. */}
+      <div className="invisible absolute left-full top-0 z-50 pl-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
+        <div className="w-56 rounded-xl border border-gray-100 bg-white py-2 shadow-xl">
+          <p className="px-3.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+          <div className="flex flex-col gap-0.5 px-2">
+            {items.map((item) => {
+              const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={[
+                    "rounded-lg px-2.5 py-2 text-sm transition-colors",
+                    itemActive ? "bg-pink-50 font-medium text-pink-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function NavGroup({
@@ -273,25 +358,28 @@ export function ErpNav({ role }: { role: ErpRole }) {
   useEffect(() => { setOpen(false); }, [pathname]);
 
   const showDashboard = allowed(dashboardItem, role);
-  const hasProjectsGroup = projectGroupItems.some((i) => allowed(i, role));
-  const hasBillingGroup = billingGroupItems.some((i) => allowed(i, role));
+  const visibleProjectItems = projectGroupItems.filter((i) => allowed(i, role));
+  const visibleBillingItems = billingGroupItems.filter((i) => allowed(i, role));
   const hasEmploymentGroup = employmentGroupItems.some((i) => allowed(i, role));
   const visibleTeamExtras = teamExtraItems.filter((i) => allowed(i, role));
   const hasTeamSection = hasEmploymentGroup || visibleTeamExtras.length > 0;
+  const visibleTeamItems = [...employmentGroupItems, ...teamExtraItems].filter((i) => allowed(i, role));
+  const showAiEstimator = allowed(aiEstimatorItem, role);
+  const showHelpCenter = allowed(helpCenterItem, role);
 
   function NavContent() {
     return (
       <>
         {showDashboard && <NavLink item={dashboardItem} pathname={pathname} />}
 
-        {hasProjectsGroup && (
+        {visibleProjectItems.length > 0 && (
           <>
             <SectionLabel>Projects</SectionLabel>
             <NavGroup label="Project Info" icon={BuildingIcon} items={projectGroupItems} pathname={pathname} role={role} />
           </>
         )}
 
-        {hasBillingGroup && (
+        {visibleBillingItems.length > 0 && (
           <>
             <SectionLabel>Finance</SectionLabel>
             <NavGroup label="Billing" icon={CreditCardIcon} items={billingGroupItems} pathname={pathname} role={role} />
@@ -309,29 +397,56 @@ export function ErpNav({ role }: { role: ErpRole }) {
             ))}
           </>
         )}
+
+        {showAiEstimator && <NavLink item={aiEstimatorItem} pathname={pathname} />}
+        {showHelpCenter && <NavLink item={helpCenterItem} pathname={pathname} />}
       </>
     );
   }
 
   return (
     <>
-      {/* ── Desktop sidebar ── */}
-      <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-gray-200 bg-white">
-        <div className="p-4">
-          <Link href="/erp" className="block">
-            <ErpBrandLogo className="h-9 w-auto" priority />
-          </Link>
-        </div>
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3 pt-0">
-          <NavContent />
+      {/* ── Desktop icon rail: icons only, hover to reveal each section's flyout ── */}
+      <aside className="hidden sm:flex w-[68px] shrink-0 flex-col items-center border-r border-gray-200 bg-white py-3">
+        <Link href="/erp" className="mb-3 block shrink-0" aria-label="Sueep dashboard">
+          <Image src="/sueepicon.jpeg" alt="Sueep" width={36} height={36} className="h-9 w-9 rounded-lg object-cover" priority />
+        </Link>
+
+        {/* No overflow-y here on purpose: overflow-y:auto forces overflow-x to
+            clip too, which would cut off the flyout panels below. The rail's
+            icon count is small and fixed, so it never needs to scroll. */}
+        <nav className="flex flex-1 flex-col items-center gap-1">
+          {showDashboard && <RailLink item={dashboardItem} pathname={pathname} />}
+
+          {(visibleProjectItems.length > 0 || visibleBillingItems.length > 0 || hasTeamSection) && (
+            <div className="my-1 h-px w-8 shrink-0 bg-gray-100" />
+          )}
+
+          {visibleProjectItems.length > 0 && (
+            <RailGroup label="Projects" icon={BuildingIcon} items={visibleProjectItems} pathname={pathname} />
+          )}
+          {visibleBillingItems.length > 0 && (
+            <RailGroup label="Finance" icon={CreditCardIcon} items={visibleBillingItems} pathname={pathname} />
+          )}
+          {hasTeamSection && (
+            <RailGroup label="Team" icon={UsersIcon} items={visibleTeamItems} pathname={pathname} />
+          )}
+          {showAiEstimator && <RailLink item={aiEstimatorItem} pathname={pathname} />}
         </nav>
-        <div className="border-t border-gray-100 p-3">
-          <ErpLogoutButton />
+
+        {showHelpCenter && (
+          <div className="shrink-0 border-t border-gray-100 pt-2">
+            <RailLink item={helpCenterItem} pathname={pathname} />
+          </div>
+        )}
+
+        <div className="mt-1 shrink-0 border-t border-gray-100 pt-3">
+          <ErpLogoutButton compact />
         </div>
       </aside>
 
       {/* ── Mobile top bar ── */}
-      <div className="md:hidden">
+      <div className="sm:hidden">
         <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
           <Link href="/erp">
             <ErpBrandLogo className="h-8 w-auto" priority />

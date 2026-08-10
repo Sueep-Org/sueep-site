@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
   if (!newDateKey) return NextResponse.json({ error: "newDateKey is required" }, { status: 400 });
 
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { jobTitle: true, supervisor: true } });
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { jobTitle: true, supervisor: true, description: true } });
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
   try {
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
       supervisorUserId,
       dayAssignmentPmUserId,
       projectManagerName: project.supervisor,
+      projectDescription: project.description,
     });
   } catch (e) {
     console.error("Failed to notify day-assignment reschedule", e);

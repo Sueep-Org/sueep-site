@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
-import { normalizeProjectSegment, type ProjectSegment } from "@/lib/erp/projectSegments";
+import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 
 export type CommissionDealRow = {
@@ -26,16 +26,9 @@ export type CommissionDealRow = {
 
 // Same calendar-style grouping the Schedule page uses — painting/cleaning
 // folded into one "Post-construction" bucket rather than shown separately.
-type ProjectTypeGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
-
-const SEGMENT_TO_TYPE_GROUP: Record<ProjectSegment, ProjectTypeGroup> = {
-  COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
-  COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
-  CHANGE_ORDER: "OTHER",
-  JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
-  REAL_ESTATE: "REAL_ESTATE",
-  OTHER: "OTHER",
-};
+// (Shared with the calendar's own grouping via calendarSegmentGroup, rather
+// than a locally duplicated copy of the same segment->group map.)
+type ProjectTypeGroup = CalendarSegmentGroup;
 
 const PROJECT_TYPE_OPTIONS: { value: ProjectTypeGroup; label: string }[] = [
   { value: "POST_CONSTRUCTION", label: "Post-construction" },
@@ -47,7 +40,7 @@ const PROJECT_TYPE_OPTIONS: { value: ProjectTypeGroup; label: string }[] = [
 const ALL_PROJECT_TYPES = PROJECT_TYPE_OPTIONS.map((o) => o.value);
 
 function projectTypeGroup(segment: string): ProjectTypeGroup {
-  return SEGMENT_TO_TYPE_GROUP[normalizeProjectSegment(segment)];
+  return calendarSegmentGroup(segment);
 }
 
 export type RecurringCommissionRow = {

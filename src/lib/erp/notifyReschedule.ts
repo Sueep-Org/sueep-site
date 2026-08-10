@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { getDescLine } from "@/lib/erp/descLine";
+import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 
 // David Rodriguez, Project Manager (david@sueep.com) — stopgap recipient when
 // a rescheduled project has no day-assignment-level PM and its freeform
@@ -26,9 +28,12 @@ function dateKeyLabel(dateKey: string): string {
  * PM explicitly (dayAssignmentPmUserId), but a plain project-level date move
  * (e.g. dragging the "needs supervisor" chip) has no day assignment to read
  * from. In that case, this falls back to matching Project.supervisor (a
- * freeform "Project Manager" name, not a foreign key) against an Employee
- * record, and finally to FALLBACK_PM_EMAIL if that doesn't resolve either —
- * a reschedule should always reach *someone* who can act on it.
+ * freeform "Project Manager" name, not a foreign key) — or, for older
+ * projects that predate that field, a "SUEEP PM:" line in the description —
+ * against an Employee record via the same findEmployeeEmailByName lookup
+ * every other PM-resolution chain uses (createLaborEntry.ts), and finally
+ * to FALLBACK_PM_EMAIL if that doesn't resolve either — a reschedule should
+ * always reach *someone* who can act on it.
  */
 export async function notifyProjectRescheduled(params: {
   projectId: string;
@@ -40,8 +45,20 @@ export async function notifyProjectRescheduled(params: {
   dayAssignmentPmUserId?: string | null;
   /** Project.supervisor — the freeform "Project Manager" name field. */
   projectManagerName?: string | null;
+  /** Project.description — read for a legacy "SUEEP PM:" line when
+   * projectManagerName isn't set. */
+  projectDescription?: string | null;
 }): Promise<void> {
-  const { projectId, jobTitle, oldDateKey, newDateKey, supervisorUserId, dayAssignmentPmUserId, projectManagerName } = params;
+  const {
+    projectId,
+    jobTitle,
+    oldDateKey,
+    newDateKey,
+    supervisorUserId,
+    dayAssignmentPmUserId,
+    projectManagerName,
+    projectDescription,
+  } = params;
 
   const recipients = new Map<string, string>();
 
@@ -54,16 +71,8 @@ export async function notifyProjectRescheduled(params: {
     const pm = await prisma.erpUser.findUnique({ where: { id: dayAssignmentPmUserId }, select: { email: true } });
     if (pm?.email) recipients.set(pm.email.toLowerCase(), pm.email);
   } else {
-    let resolvedPmEmail: string | null = null;
-    const nameLower = projectManagerName?.trim().toLowerCase();
-    if (nameLower) {
-      const employees = await prisma.employee.findMany({
-        where: { status: { not: "INACTIVE" }, email: { not: null } },
-        select: { firstName: true, lastName: true, email: true },
-      });
-      const match = employees.find((e) => `${e.firstName} ${e.lastName}`.trim().toLowerCase() === nameLower);
-      if (match?.email) resolvedPmEmail = match.email;
-    }
+    const pmName = projectManagerName?.trim() || getDescLine(projectDescription ?? null, "SUEEP PM");
+    const resolvedPmEmail = pmName ? await findEmployeeEmailByName(pmName) : null;
     const fallbackEmail = resolvedPmEmail ?? FALLBACK_PM_EMAIL;
     recipients.set(fallbackEmail.toLowerCase(), fallbackEmail);
   }

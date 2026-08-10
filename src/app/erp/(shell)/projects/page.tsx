@@ -5,6 +5,8 @@ import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectL
 import { getErpAuth, canSeeFinancials as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
+import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
+import { getDescLine as getProjectDetailLine } from "@/lib/erp/descLine";
 import { ProjectsTabs } from "./ProjectsTabs";
 
 // Sums labor cost the same OT-aware way the project/CO detail pages do
@@ -21,17 +23,6 @@ function otAwareLaborCents(
 }
 
 export const dynamic = "force-dynamic";
-
-function getProjectDetailLine(description: string | null, label: string) {
-  const prefix = `${label}:`;
-  return (
-    (description || "")
-      .split(/\r?\n/)
-      .find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()))
-      ?.replace(new RegExp(`^${label}:\\s*`, "i"), "")
-      .trim() || ""
-  );
-}
 
 function normalizeMatchValue(value: string | null | undefined) {
   return (value || "").trim().toLowerCase();
@@ -175,6 +166,31 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
     ...projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
   ]);
 
+  // Same shared cost/margin methodology used everywhere else that shows a
+  // project's actuals (dashboard's Bad margins widget, commission) — kept
+  // as one implementation so this table can't quietly drift from those.
+  const actualsMap = await computeProjectActualsWithChangeOrders(
+    projects.map((p) => ({
+      id: p.id,
+      contractValueCents: p.contractValueCents,
+      actualLaborCents: p.actualLaborCents,
+      actualMaterialCents: p.actualMaterialCents,
+      laborEntries: p.laborEntries,
+      materialEntries: p.materialEntries,
+      contractorAssignments: p.contractorAssignments,
+      changeOrders: p.changeOrders.map((co) => ({
+        status: co.status,
+        contractValueCents: co.contractValueCents,
+        estimatedCostCents: co.estimatedCostCents,
+        actualLaborCents: co.actualLaborCents,
+        actualMaterialCents: co.actualMaterialCents,
+        materialEntries: co.materialEntries,
+        laborers: co.laborers,
+        contractorAssignments: co.contractorAssignments,
+      })),
+    }))
+  );
+
   const lifecycleRank = (p: (typeof projects)[number]) => {
     const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null, hasActiveChangeOrder(p.changeOrders));
     if (lifecycle === "ACTIVE") return 0;
@@ -197,28 +213,18 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       .filter((e) => e.category === "CLEANING_PRODUCTS")
       .reduce((s, e) => s + e.costCents, 0);
     const miles = p.distanceEntries.reduce((s, e) => s + e.miles, 0);
-    const contractorCostCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
-    const actualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
-    const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
     const actualHours = totalHours > 0 ? totalHours : (p.actualHours ?? 0);
 
+    // Actual labor/material/contract-value cost, change orders rolled in —
+    // computed by the shared computeProjectActualsWithChangeOrders above.
+    const actuals = actualsMap.get(p.id)!;
+
+    // Estimated (not actual) change-order figures still computed inline —
+    // the shared function only covers actuals, not estimates.
     // Roll up qualifying change orders (exclude VOID and REJECTED).
-    // contractValueCents is only set once a CO's final value is confirmed;
-    // until then, fall back to its estimatedCostCents so a CO with just an
-    // estimate still counts instead of silently showing as $0.
     const qualifyingCOs = p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
-    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0), 0);
     const coEstMaterialCents = qualifyingCOs.reduce((s, co) => s + (co.estMaterialCents ?? 0), 0);
-    const coActualMaterialCents = qualifyingCOs.reduce((s, co) => {
-      const mat = co.materialEntries.reduce((ms, e) => ms + e.costCents, 0);
-      return s + (mat > 0 ? mat : (co.actualMaterialCents ?? 0));
-    }, 0);
     const coEstLaborCents = qualifyingCOs.reduce((s, co) => s + (co.estLaborCents ?? 0), 0);
-    const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
-      const lab = otAwareLaborCents(co.laborers, otSplits);
-      const contractorCost = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
-      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0)) + contractorCost;
-    }, 0);
     const coEstHours = qualifyingCOs.reduce((s, co) => s + (co.estHours ?? 0), 0);
     const coActualHours = qualifyingCOs.reduce((s, co) => {
       const laborerHours = co.laborers.reduce((ls, l) => ls + l.hours, 0);
@@ -262,9 +268,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       percentDone: p.percentDone,
       percentInvoiced: p.percentInvoiced,
       billingStatus: p.billingStatus ?? null,
-      contractValueCents: p.contractValueCents == null && coContractValueCents === 0
-        ? null
-        : (p.contractValueCents ?? 0) + coContractValueCents,
+      contractValueCents: actuals.contractValueCents,
       laborEntries,
       materialEntries,
       totalHours,
@@ -273,11 +277,11 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       estMaterialCents: p.estMaterialCents == null && coEstMaterialCents === 0
         ? null
         : (p.estMaterialCents ?? 0) + coEstMaterialCents,
-      actualMaterialCents: actualMaterialCents + coActualMaterialCents,
+      actualMaterialCents: actuals.actualMaterialCents,
       estLaborCents: p.estLaborCents == null && coEstLaborCents === 0
         ? null
         : (p.estLaborCents ?? 0) + coEstLaborCents,
-      actualLaborCents: actualLaborCents + coActualLaborCents,
+      actualLaborCents: actuals.actualLaborCents,
       estHours: p.estHours == null && coEstHours === 0
         ? null
         : (p.estHours ?? 0) + coEstHours,

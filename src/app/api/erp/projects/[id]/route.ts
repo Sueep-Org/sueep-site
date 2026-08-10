@@ -284,8 +284,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       // single-day case (no seriesId); a multi-day/repeat series has no one
       // unambiguous day to move, so those are left alone and should be
       // rescheduled from the Schedule page instead.
+      // Also drives whether the reschedule email below fires: with 2+ day
+      // assignments (or a fetch failure), which one "moved" is ambiguous
+      // and the calendar wasn't touched here — emailing "moved to X" in
+      // that case would say something the calendar doesn't show.
+      let dayAssignmentCount = 0;
       try {
         const dayAssignments = await prisma.projectDayAssignment.findMany({ where: { projectId: id } });
+        dayAssignmentCount = dayAssignments.length;
         const soleAssignment =
           dayAssignments.length === 1 && dayAssignments[0]!.seriesId == null ? dayAssignments[0]! : null;
         if (soleAssignment && soleAssignment.date.getTime() !== newProjectDate!.getTime()) {
@@ -301,20 +307,25 @@ export async function PATCH(req: Request, ctx: Ctx) {
         console.error("Failed to move day assignment alongside projectDate", e);
       }
 
-      const finalSupervisorUserId =
-        data.supervisorUserId !== undefined ? (data.supervisorUserId as string | null) : existing.supervisorUserId;
-      const finalSupervisorName = data.supervisor !== undefined ? (data.supervisor as string) : existing.supervisor;
-      try {
-        await notifyProjectRescheduled({
-          projectId: id,
-          jobTitle: project.jobTitle,
-          oldDateKey: existing.projectDate ? existing.projectDate.toISOString().slice(0, 10) : null,
-          newDateKey: newProjectDate!.toISOString().slice(0, 10),
-          supervisorUserId: finalSupervisorUserId,
-          projectManagerName: finalSupervisorName,
-        });
-      } catch (e) {
-        console.error("Failed to notify project reschedule", e);
+      if (dayAssignmentCount <= 1) {
+        const finalSupervisorUserId =
+          data.supervisorUserId !== undefined ? (data.supervisorUserId as string | null) : existing.supervisorUserId;
+        const finalSupervisorName = data.supervisor !== undefined ? (data.supervisor as string) : existing.supervisor;
+        try {
+          await notifyProjectRescheduled({
+            projectId: id,
+            jobTitle: project.jobTitle,
+            oldDateKey: existing.projectDate ? existing.projectDate.toISOString().slice(0, 10) : null,
+            newDateKey: newProjectDate!.toISOString().slice(0, 10),
+            supervisorUserId: finalSupervisorUserId,
+            projectManagerName: finalSupervisorName,
+            projectDescription: project.description,
+          });
+        } catch (e) {
+          console.error("Failed to notify project reschedule", e);
+        }
+      } else {
+        console.log(`Skipped reschedule notification for project ${id}: ${dayAssignmentCount} day assignments, ambiguous which moved`);
       }
     }
 

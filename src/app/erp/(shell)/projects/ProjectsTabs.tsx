@@ -20,6 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
 const LIFECYCLE_FILTERS: { id: Lifecycle; label: string }[] = [
   { id: "UPCOMING", label: "Upcoming" },
   { id: "ACTIVE", label: "WIP" },
+  { id: "ON_HOLD", label: "On Hold" },
   { id: "BILLING", label: "Billing" },
   { id: "COMPLETED", label: "Completed" },
 ];
