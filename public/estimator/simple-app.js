@@ -3721,6 +3721,142 @@ async function initApp(){
     { role: 'painter', rate: 25, hours: 8 },
   ];
 
+  const PAINTING_PAINT_COVERAGE_SF = 350;
+  const PAINTING_PRIMER_COVERAGE_SF = 250;
+  const PAINTING_SURFACE_MULTIPLIERS = {
+    smooth: 1.0,
+    good: 1.05,
+    average: 1.10,
+    rough: 1.20,
+    very_rough: 1.30,
+  };
+  const PAINTING_FINISH_MULTIPLIERS = {
+    flat: 1.0,
+    matte: 1.02,
+    eggshell: 1.05,
+    satin: 1.08,
+    semi_gloss: 1.12,
+    gloss: 1.15,
+  };
+  const PAINTING_COLOR_MULTIPLIERS = {
+    white_light: 1.0,
+    medium: 1.05,
+    dark: 1.10,
+    very_dark: 1.15,
+  };
+  const PAINTING_PRICE_PER_GALLON = {
+    economy: 32,
+    standard: 45,
+    premium: 60,
+    ultra: 75,
+  };
+  const PAINTING_PRIMER_PRICE_PER_GALLON = {
+    none: 0,
+    standard: 30,
+    premium: 45,
+    stain_blocking: 55,
+  };
+
+  function _getPaintingMaterialOptionKey(mapping, value, fallback) {
+    if (value == null) return fallback;
+    const found = Object.entries(mapping).find(([, mappedValue]) => Number(mappedValue) === Number(value));
+    return found ? found[0] : fallback;
+  }
+
+  function _getPaintingMaterialSettings() {
+    const getValue = id => document.getElementById(id)?.value ?? '';
+    const coats = parseInt(getValue('paintingCoatsSelect'), 10) || 2;
+    const surface = getValue('paintingSurfaceConditionSelect') || 'smooth';
+    const quality = getValue('paintingPaintQualitySelect') || 'standard';
+    const finish = getValue('paintingFinishTypeSelect') || 'flat';
+    const color = getValue('paintingColorDepthSelect') || 'white_light';
+    const primer = getValue('paintingPrimerTypeSelect') || 'none';
+
+    return {
+      coats,
+      surface,
+      quality,
+      finish,
+      color,
+      primer,
+      surfaceMultiplier: PAINTING_SURFACE_MULTIPLIERS[surface] ?? 1,
+      paintPrice: PAINTING_PRICE_PER_GALLON[quality] ?? 45,
+      finishMultiplier: PAINTING_FINISH_MULTIPLIERS[finish] ?? 1,
+      colorMultiplier: PAINTING_COLOR_MULTIPLIERS[color] ?? 1,
+      primerPrice: PAINTING_PRIMER_PRICE_PER_GALLON[primer] ?? 0,
+      hasPrimer: primer !== 'none',
+    };
+  }
+
+  function _calculatePaintingMaterialsCost() {
+    const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
+    const settings = _getPaintingMaterialSettings();
+    const paintGallons = area > 0
+      ? Math.ceil((area * settings.coats * settings.surfaceMultiplier) / PAINTING_PAINT_COVERAGE_SF)
+      : 0;
+    const basePaintCost = paintGallons * settings.paintPrice;
+    const paintCost = basePaintCost * settings.finishMultiplier * settings.colorMultiplier;
+
+    const primerGallons = area > 0 && settings.primerPrice > 0
+      ? Math.ceil(area / PAINTING_PRIMER_COVERAGE_SF)
+      : 0;
+    const primerCost = primerGallons * settings.primerPrice;
+
+    return {
+      paintGallons,
+      primerGallons,
+      paintCost,
+      primerCost,
+      totalCost: paintCost + primerCost,
+    };
+  }
+
+  function _updatePaintingMaterialsCostDisplays() {
+    const costs = _calculatePaintingMaterialsCost();
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = typeof value === 'number' ? `$${value.toFixed(2)}` : value;
+    };
+    document.getElementById('paintingPaintGallonsDisplay').textContent = costs.paintGallons || '0';
+    document.getElementById('paintingPrimerGallonsDisplay').textContent = costs.primerGallons || '0';
+    setText('paintingPaintCostDisplay', costs.paintCost);
+    setText('paintingPrimerCostDisplay', costs.primerCost);
+    document.getElementById('paintingTotalMaterialsCostDisplay').textContent = `$${costs.totalCost.toFixed(2)}`;
+
+    const materialsInput = document.getElementById('paintingMaterialsInput');
+    if (materialsInput && !_paintingMaterialsManual) {
+      materialsInput.value = costs.totalCost.toFixed(2);
+    }
+  }
+
+  function _attachPaintingMaterialsListeners() {
+    ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+          _updatePaintingMaterialsCostDisplays();
+          _updatePaintingCrewCalcs();
+        });
+      });
+
+    const materialsInput = document.getElementById('paintingMaterialsInput');
+    if (materialsInput) {
+      materialsInput.addEventListener('input', () => {
+        _paintingMaterialsManual = true;
+      });
+    }
+  }
+
+  function _ensurePaintingMaterialsListeners() {
+    if (_paintingMaterialsListenersAttached) return;
+    _attachPaintingMaterialsListeners();
+    _paintingMaterialsListenersAttached = true;
+  }
+
+  let _paintingMaterialsListenersAttached = false;
+
   function _getPaintingAreaDerivedValues(totalArea) {
     const area = parseFloat(totalArea) || 0;
     return {
@@ -5703,6 +5839,11 @@ async function initApp(){
     // Pre-fill form inputs from saved painting_breakdown
     const bd = _loadedProjectData?.painting_breakdown;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    const resolveMaterialOption = (savedKey, savedValue, mapping, fallback) => {
+      if (savedKey != null && savedKey !== '') return savedKey;
+      if (savedValue != null && savedValue !== '') return _getPaintingMaterialOptionKey(mapping, savedValue, fallback);
+      return fallback;
+    };
     _paintingPhaseCrews = { phase1: [], phase2: [] };
     _paintingPhaseMaterials = { phase1: 0, phase2: 0 };
     const editSavedMainMaterials = Number.isFinite(parseFloat(bd?.materials)) ? parseFloat(bd.materials) : 0;
@@ -5716,6 +5857,12 @@ async function initApp(){
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
+      setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
+      setVal('paintingSurfaceConditionSelect', resolveMaterialOption(bd.paint_surface_condition_key, bd.paint_surface_condition, PAINTING_SURFACE_MULTIPLIERS, 'smooth'));
+      setVal('paintingPaintQualitySelect', resolveMaterialOption(bd.paint_quality_key, bd.paint_quality, PAINTING_PRICE_PER_GALLON, 'standard'));
+      setVal('paintingFinishTypeSelect', resolveMaterialOption(bd.paint_finish_key, bd.paint_finish_multiplier, PAINTING_FINISH_MULTIPLIERS, 'flat'));
+      setVal('paintingColorDepthSelect', resolveMaterialOption(bd.paint_color_key, bd.paint_color_multiplier, PAINTING_COLOR_MULTIPLIERS, 'white_light'));
+      setVal('paintingPrimerTypeSelect', resolveMaterialOption(bd.primer_type_key, bd.primer_type, PAINTING_PRIMER_PRICE_PER_GALLON, 'none'));
       if (bd.phases) {
         for (const p of bd.phases) {
           const pid = PAINTING_PHASE_NAME_TO_ID[p.name] || PAINTING_PHASE_NAME_TO_ID[p.name?.trim()];
@@ -5743,7 +5890,7 @@ async function initApp(){
     const primerRateInput = document.getElementById('paintingPrimerAreaPerPersonInput');
     const interiorRateInput = document.getElementById('paintingInteriorAreaPerPersonInput');
     const openAreaDerived = _getPaintingAreaDerivedValues(areaInput?.value || 0);
-    _paintingMaterialsManual = bd?.materials != null;
+    _paintingMaterialsManual = bd?.materials_manual === true;
     const paintingAreaValue = _loadedProjectData?.total_area ?? bd?.total_area;
     if (areaInput) {
       if (paintingAreaValue != null && paintingAreaValue !== '') {
@@ -5767,6 +5914,8 @@ async function initApp(){
     if (primerRateInput) {
       primerRateInput.addEventListener('input', _refreshPaintingDays);
     }
+    _ensurePaintingMaterialsListeners();
+    _updatePaintingMaterialsCostDisplays();
     if (interiorRateInput) {
       interiorRateInput.addEventListener('input', _refreshPaintingDays);
     }
@@ -5978,7 +6127,45 @@ async function initApp(){
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
-    const painting_breakdown = { phases, overhead_pct: overhead, profit_pct: profit, tax_pct: tax, commission_pct: comm, margin, materials, gasoline, toll_cost: tollCost, mobilizations, driver_cost: driverCost, cost_per_mile: costPerMile, total_area: totalArea, expected_days: expectedDays, address, comments, primer_area_per_person: primerAreaPerPerson, interior_area_per_person: interiorAreaPerPerson, subtotal: paintSubtotal, overhead: paintOh, profit: paintPft, tax: paintTax, commission: paintComm, final_price: paintFinalPrice };
+    const materialSettings = _getPaintingMaterialSettings();
+    const painting_breakdown = {
+      phases,
+      overhead_pct: overhead,
+      profit_pct: profit,
+      tax_pct: tax,
+      commission_pct: comm,
+      margin,
+      materials,
+      gasoline,
+      toll_cost: tollCost,
+      mobilizations,
+      driver_cost: driverCost,
+      cost_per_mile: costPerMile,
+      total_area: totalArea,
+      expected_days: expectedDays,
+      address,
+      comments,
+      primer_area_per_person: primerAreaPerPerson,
+      interior_area_per_person: interiorAreaPerPerson,
+      paint_coats: materialSettings.coats,
+      paint_surface_condition: materialSettings.surfaceMultiplier,
+      paint_surface_condition_key: materialSettings.surface,
+      paint_quality: materialSettings.paintPrice,
+      paint_quality_key: materialSettings.quality,
+      paint_finish_multiplier: materialSettings.finishMultiplier,
+      paint_finish_key: materialSettings.finish,
+      paint_color_multiplier: materialSettings.colorMultiplier,
+      paint_color_key: materialSettings.color,
+      primer_type: materialSettings.primerPrice,
+      primer_type_key: materialSettings.primer,
+      materials_manual: _paintingMaterialsManual,
+      subtotal: paintSubtotal,
+      overhead: paintOh,
+      profit: paintPft,
+      tax: paintTax,
+      commission: paintComm,
+      final_price: paintFinalPrice,
+    };
 
     try {
       const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}`, {
