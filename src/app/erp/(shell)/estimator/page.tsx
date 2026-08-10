@@ -1263,6 +1263,161 @@ export default function EstimatorPage() {
                     </button>
                   </div>
                 </div>
+                {/* Paint & Primer Materials */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-3">
+                    Paint & Primer Materials
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Coats
+                      </label>
+                      <select
+                        id="paintingCoatsSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="1">1 coat</option>
+                        <option value="2">2 coats</option>
+                        <option value="3">3 coats</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Surface Condition
+                      </label>
+                      <select
+                        id="paintingSurfaceConditionSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="smooth">Smooth</option>
+                        <option value="good">Good</option>
+                        <option value="average">Average</option>
+                        <option value="rough">Rough</option>
+                        <option value="very_rough">Very Rough / Porous</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Paint Quality
+                      </label>
+                      <select
+                        id="paintingPaintQualitySelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="economy">Economy: $32/gal</option>
+                        <option value="standard">Standard: $45/gal</option>
+                        <option value="premium">Premium: $60/gal</option>
+                        <option value="ultra">Ultra Premium: $75/gal</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Finish Type
+                      </label>
+                      <select
+                        id="paintingFinishTypeSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="flat">Flat</option>
+                        <option value="matte">Matte</option>
+                        <option value="eggshell">Eggshell</option>
+                        <option value="satin">Satin</option>
+                        <option value="semi_gloss">Semi-Gloss</option>
+                        <option value="gloss">Gloss</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Color Depth
+                      </label>
+                      <select
+                        id="paintingColorDepthSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="white_light">White / Light</option>
+                        <option value="medium">Medium</option>
+                        <option value="dark">Dark</option>
+                        <option value="very_dark">Very Dark / Accent</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Primer Type
+                      </label>
+                      <select
+                        id="paintingPrimerTypeSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="none">None</option>
+                        <option value="standard">
+                          Standard Primer: $30/gal
+                        </option>
+                        <option value="premium">Premium Primer: $45/gal</option>
+                        <option value="stain_blocking">
+                          Stain-Blocking Primer: $55/gal
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Paint Gallons
+                      </div>
+                      <div
+                        id="paintingPaintGallonsDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Primer Gallons
+                      </div>
+                      <div
+                        id="paintingPrimerGallonsDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Paint Cost
+                      </div>
+                      <div
+                        id="paintingPaintCostDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Primer Cost
+                      </div>
+                      <div
+                        id="paintingPrimerCostDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-blue-50 p-3 xl:col-span-2">
+                      <div className="text-xs text-blue-700 uppercase tracking-wide mb-1">
+                        Total Materials Cost
+                      </div>
+                      <div
+                        id="paintingTotalMaterialsCostDisplay"
+                        className="text-blue-900 font-semibold text-lg"
+                      >
+                        —
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {/* Start Address */}
                 <div className="mb-4">
                   <label className="block text-xs text-gray-500 mb-1">
