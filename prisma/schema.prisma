@@ -48,7 +48,9 @@ model Project {
   /// completed today" the completion-digest cron queries, independent of
   /// whatever the client's PATCH body happened to include (unlike
   /// projectEndDate, which a specific UI action happens to also set).
-  completedAt DateTime?
+  /// Named distinctly from TurnoverRequest.completedAt/ChangeOrder.completedAt
+  /// (unrelated fields on other models) so a reader can't mix them up.
+  turnoverCompletedAt DateTime?
 
   /// BILLING | INACTIVE | INVOICE_PAID — manually set per project
   billingStatus String?

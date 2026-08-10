@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
+import {
+  TIME_OFF_TYPES,
+  parseTimeOffDate,
+  findOverlappingTimeOff,
+  overlapErrorMessage,
+  timeOffEntryDays,
+  paidTimeOffDaysUsed,
+  paidTimeOffLimitError,
+} from "@/lib/erp/timeOff";
 
 type Ctx = { params: Promise<{ id: string; timeOffId: string }> };
 
@@ -28,6 +36,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.type !== undefined) {
     const typeRaw = String(body.type || "VACATION").toUpperCase();
     type = TIME_OFF_TYPES.includes(typeRaw as (typeof TIME_OFF_TYPES)[number]) ? typeRaw : "VACATION";
+  }
+
+  // Same 15-paid-day-per-year cap enforced on create — an edit that grows
+  // the range or switches off Unpaid shouldn't be able to sneak past it.
+  if (type !== "UNPAID") {
+    const year = startDate.getUTCFullYear();
+    const used = await paidTimeOffDaysUsed(id, year, timeOffId);
+    const adding = timeOffEntryDays({ startDate, endDate, type });
+    const limitError = paidTimeOffLimitError(used, adding, year);
+    if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
   }
 
   try {

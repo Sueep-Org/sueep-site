@@ -80,7 +80,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (PROJECT_SEGMENTS.includes(normalized)) data.segment = normalized;
   }
   // Closes a gap where a project completed via the HubSpot sync path (which
-  // writes status directly and never stamps completedAt — see
+  // writes status directly and never stamps turnoverCompletedAt — see
   // syncDealsToProjects.ts) gets recategorized into
   // JANITORIAL_TURNOVER_REQUESTS after the fact. becomingComplete below
   // won't fire for it since existing.status is already COMPLETE, so
@@ -91,9 +91,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.segment === "JANITORIAL_TURNOVER_REQUESTS" &&
     existing.segment !== "JANITORIAL_TURNOVER_REQUESTS" &&
     existing.status === "COMPLETE" &&
-    existing.completedAt == null
+    existing.turnoverCompletedAt == null
   ) {
-    data.completedAt = existing.projectEndDate ?? existing.updatedAt;
+    data.turnoverCompletedAt = existing.projectEndDate ?? existing.updatedAt;
   }
   if (body.hubspotPipelineId !== undefined) {
     data.hubspotPipelineId = body.hubspotPipelineId ? String(body.hubspotPipelineId).trim() : null;
@@ -195,7 +195,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   // Computed once and reused below for both the quality-checklist gate and
-  // the completedAt/scope-stamping logic — previously recomputed
+  // the turnoverCompletedAt/scope-stamping logic — previously recomputed
   // independently in both places, which risked the two drifting apart.
   const becomingComplete =
     data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS";
@@ -237,7 +237,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // An end date is required to mark a turnover unit complete — not "now",
   // since the day someone gets around to checking the box (or backdating a
   // labor log) isn't necessarily the day the unit actually finished, and
-  // the completion-digest email groups by day. completedAt mirrors
+  // the completion-digest email groups by day. turnoverCompletedAt mirrors
   // whatever end date was supplied here rather than the server clock, and
   // — unlike projectEndDate — never gets touched again after this, so it
   // stays a stable record of what day this was marked complete as, even if
@@ -249,7 +249,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         { status: 400 },
       );
     }
-    data.completedAt = data.projectEndDate;
+    data.turnoverCompletedAt = data.projectEndDate;
   }
 
   try {

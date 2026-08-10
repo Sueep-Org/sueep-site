@@ -47,7 +47,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
     where: {
       segment: "JANITORIAL_TURNOVER_REQUESTS",
       status: "COMPLETE",
-      completedAt: { gte: start, lte: end },
+      turnoverCompletedAt: { gte: start, lte: end },
       buildingId: { not: null },
     },
     select: {

@@ -407,6 +407,40 @@ export function buildScheduleNudgeEmail(params: {
   `;
 }
 
+const TIME_OFF_TYPE_LABELS: Record<string, string> = {
+  VACATION: "Vacation",
+  SICK: "Sick",
+  HALF_DAY: "Half Day",
+  UNPAID: "Unpaid",
+  OTHER: "Other",
+};
+
+export function buildTimeOffLoggedEmail(params: {
+  personName: string;
+  personKind: "Employee" | "Contractor";
+  type: string;
+  startDate: Date;
+  endDate: Date;
+  days: number;
+  notes: string | null;
+}) {
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const range = params.startDate.getTime() === params.endDate.getTime() ? fmt(params.startDate) : `${fmt(params.startDate)} – ${fmt(params.endDate)}`;
+  const typeLabel = TIME_OFF_TYPE_LABELS[params.type] ?? params.type;
+  const dayLabel = `${params.days} day${params.days === 1 ? "" : "s"}`;
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Time off logged</h2>
+      <p><strong>${escapeHtml(params.personName)}</strong> (${params.personKind})</p>
+      <p><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(range)} (${dayLabel})</p>
+      ${params.notes ? `<p><strong>Notes:</strong> ${escapeHtml(params.notes)}</p>` : ""}
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
 export function buildTurnoverCompletionDigestEmail(params: {
   buildingName: string;
   buildingAddress: string;
