@@ -79,6 +79,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const normalized = normalizeProjectSegment(String(body.segment));
     if (PROJECT_SEGMENTS.includes(normalized)) data.segment = normalized;
   }
+  // Closes a gap where a project completed via the HubSpot sync path (which
+  // writes status directly and never stamps completedAt — see
+  // syncDealsToProjects.ts) gets recategorized into
+  // JANITORIAL_TURNOVER_REQUESTS after the fact. becomingComplete below
+  // won't fire for it since existing.status is already COMPLETE, so
+  // without this it would stay permanently invisible to the completion
+  // digest. Best-effort backfill, not a fresh completion — no end date to
+  // require here, same fallback as the one-time historical backfill.
+  if (
+    data.segment === "JANITORIAL_TURNOVER_REQUESTS" &&
+    existing.segment !== "JANITORIAL_TURNOVER_REQUESTS" &&
+    existing.status === "COMPLETE" &&
+    existing.completedAt == null
+  ) {
+    data.completedAt = existing.projectEndDate ?? existing.updatedAt;
+  }
   if (body.hubspotPipelineId !== undefined) {
     data.hubspotPipelineId = body.hubspotPipelineId ? String(body.hubspotPipelineId).trim() : null;
   }
@@ -178,9 +194,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.billingCompletedAt = new Date();
   }
 
+  // Computed once and reused below for both the quality-checklist gate and
+  // the completedAt/scope-stamping logic — previously recomputed
+  // independently in both places, which risked the two drifting apart.
+  const becomingComplete =
+    data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS";
+
   // A turnover unit can't be marked complete with an unfinished quality
   // checklist unless the acting user is a PM/ADMIN — SUPERVISOR must finish it.
-  if (data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS") {
+  if (becomingComplete) {
     const auth = await getErpAuth();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!canOverrideQualityChecklist(auth.role)) {
@@ -211,8 +233,24 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // this (rather than just assuming it at display time) keeps every reader
   // in sync, including the schedule's day-assignment scope picker, which
   // reads TurnoverRequest.completedScopeItems directly.
-  const becomingComplete =
-    data.status === "COMPLETE" && existing.status !== "COMPLETE" && existing.segment === "JANITORIAL_TURNOVER_REQUESTS";
+
+  // An end date is required to mark a turnover unit complete — not "now",
+  // since the day someone gets around to checking the box (or backdating a
+  // labor log) isn't necessarily the day the unit actually finished, and
+  // the completion-digest email groups by day. completedAt mirrors
+  // whatever end date was supplied here rather than the server clock, and
+  // — unlike projectEndDate — never gets touched again after this, so it
+  // stays a stable record of what day this was marked complete as, even if
+  // projectEndDate is later edited for unrelated scheduling reasons.
+  if (becomingComplete) {
+    if (!data.projectEndDate) {
+      return NextResponse.json(
+        { error: "An end date is required to mark this unit complete." },
+        { status: 400 },
+      );
+    }
+    data.completedAt = data.projectEndDate;
+  }
 
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });

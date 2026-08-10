@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
-import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -101,31 +100,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.pmSignedAt = signature ? existing.pmSignedAt ?? new Date() : null;
   }
 
+  // Note: this route no longer stamps completedAt/completedScopeItems on a
+  // "COMPLETED" status here — that used to duplicate (and could drift from)
+  // the real completion pathway, which is Project.status becoming COMPLETE
+  // via PATCH /api/erp/projects/[id] (see becomingComplete there). This
+  // route's TurnoverRequest.status is otherwise still used for the
+  // ASSIGNED/IN_PROGRESS/QUALITY_CHECK/APPROVED workflow (the latter two
+  // set by the quality-checks flow), just not as a second completion signal.
   if (body.status !== undefined) {
     const statusRaw = String(body.status || "").toUpperCase();
     if (STATUSES.includes(statusRaw as (typeof STATUSES)[number])) {
       data.status = statusRaw;
-      if (statusRaw === "COMPLETED" && existing.completedAt == null) {
-        data.completedAt = new Date();
-      }
-      // Completing the unit means every part of its contracted scope is
-      // done, whether or not each item was individually checked off along
-      // the way. Persisted (not just assumed at display time) so every
-      // reader stays in sync, including the schedule's day-assignment scope
-      // picker, which reads completedScopeItems directly. Uses this same
-      // request's own scope-flag edits (if any) rather than the pre-update
-      // values, so completing and editing scope in one request still works.
-      if (statusRaw === "COMPLETED" && existing.status !== "COMPLETED") {
-        data.completedScopeItems = contractedTurnoverScope({
-          fullClean: (data.fullClean as boolean | undefined) ?? existing.fullClean,
-          fullPaint: (data.fullPaint as boolean | undefined) ?? existing.fullPaint,
-          touchUpPaint: (data.touchUpPaint as number | undefined) ?? existing.touchUpPaint,
-          carpetCleaning: (data.carpetCleaning as boolean | undefined) ?? existing.carpetCleaning,
-          ceilingPaint: (data.ceilingPaint as boolean | undefined) ?? existing.ceilingPaint,
-          materialsAdditional: (data.materialsAdditional as boolean | undefined) ?? existing.materialsAdditional,
-          otherWork: (data.otherWork as boolean | undefined) ?? existing.otherWork,
-        });
-      }
     }
   }
 

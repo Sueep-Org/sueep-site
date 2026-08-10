@@ -43,6 +43,13 @@ model Project {
   /// than a payment-completion signal.
   billingCompletedAt DateTime?
 
+  /// Stamped server-side the moment status transitions to COMPLETE for a
+  /// JANITORIAL_TURNOVER_REQUESTS project — the source of truth for "what
+  /// completed today" the completion-digest cron queries, independent of
+  /// whatever the client's PATCH body happened to include (unlike
+  /// projectEndDate, which a specific UI action happens to also set).
+  completedAt DateTime?
+
   /// BILLING | INACTIVE | INVOICE_PAID — manually set per project
   billingStatus String?
 

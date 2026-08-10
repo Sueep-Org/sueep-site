@@ -61,9 +61,14 @@ export async function GET(req: Request) {
               ],
             }
           : {
+              // Same three-tier fallback as the displayed/exported date
+              // below (completedAt, then projectEndDate, then updatedAt) so
+              // this filter and that value can never disagree about which
+              // day a unit counts as completed on.
               OR: [
-                { projectEndDate: { gte: start!, lte: end! } },
-                { projectEndDate: null, updatedAt: { gte: start!, lte: end! } },
+                { completedAt: { gte: start!, lte: end! } },
+                { completedAt: null, projectEndDate: { gte: start!, lte: end! } },
+                { completedAt: null, projectEndDate: null, updatedAt: { gte: start!, lte: end! } },
               ],
             },
       ],
@@ -125,7 +130,7 @@ export async function GET(req: Request) {
       unitNumber: tr?.unitNumber ?? null,
       bedrooms: tr?.bedrooms ?? null,
       bathrooms: tr?.bathrooms ?? null,
-      completedAt: (project.projectEndDate ?? project.updatedAt).toISOString(),
+      completedAt: (project.completedAt ?? project.projectEndDate ?? project.updatedAt).toISOString(),
       contractCents,
       billingStatus: tr?.billingStatus ?? project.billingStatus ?? "NOT_BILLED",
     });

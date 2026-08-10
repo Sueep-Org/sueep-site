@@ -7,6 +7,7 @@ export async function sendEmail(options: {
   subject: string;
   html: string;
   replyTo?: string;
+  bcc?: string[];
   attachments?: Array<{ filename: string; content: Buffer }>;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -22,6 +23,7 @@ export async function sendEmail(options: {
     subject: options.subject,
     html: options.html,
     reply_to: options.replyTo,
+    bcc: options.bcc,
     attachments: options.attachments?.map((a) => ({
       filename: a.filename,
       content: a.content,
@@ -400,6 +402,45 @@ export function buildScheduleNudgeEmail(params: {
       <p>${intro}</p>
       <ul style="margin:12px 0 20px;padding-left:20px">${items}</ul>
       <p style="margin:20px 0"><a href="${escapeHtml(params.scheduleUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open Schedule</a></p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
+export function buildTurnoverCompletionDigestEmail(params: {
+  buildingName: string;
+  buildingAddress: string;
+  units: { jobTitle: string; unitNumber: string | null }[];
+  upcoming?: { jobTitle: string; unitNumber: string | null; projectDate: Date }[];
+}) {
+  const items = params.units
+    .map((u) => `<li>${escapeHtml(u.unitNumber ? `Unit ${u.unitNumber} — ${u.jobTitle}` : u.jobTitle)}</li>`)
+    .join("");
+  const plural = params.units.length === 1 ? "unit" : "units";
+
+  const upcoming = params.upcoming ?? [];
+  const upcomingSection =
+    upcoming.length > 0
+      ? `
+      <p style="margin-top:24px"><strong>Upcoming turns at this building:</strong></p>
+      <ul style="margin:12px 0 20px;padding-left:20px">
+        ${upcoming
+          .map((u) => {
+            const label = u.unitNumber ? `Unit ${u.unitNumber} — ${u.jobTitle}` : u.jobTitle;
+            const date = u.projectDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            return `<li>${escapeHtml(label)} — ${escapeHtml(date)}</li>`;
+          })
+          .join("")}
+      </ul>`
+      : "";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">${params.units.length} ${plural} completed today at ${escapeHtml(params.buildingName)}</h2>
+      <p>${escapeHtml(params.buildingAddress)}</p>
+      <p>The following ${plural} finished turnover today:</p>
+      <ul style="margin:12px 0 20px;padding-left:20px">${items}</ul>
+      ${upcomingSection}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
   `;

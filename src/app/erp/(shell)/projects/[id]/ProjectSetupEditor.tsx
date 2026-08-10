@@ -110,20 +110,36 @@ export function ProjectSetupEditor({
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    // The dropdown only ever offers Upcoming/WIP/Completed — it can't
+    // represent ON_HOLD or ARCHIVED (currentLifecycle can be either, since
+    // deriveProjectLifecycle reports them distinctly even though there's no
+    // matching <option>). So status is only ever included in the payload
+    // when the user actually changed the dropdown; left untouched, a save
+    // here can no longer silently flip an ON_HOLD or ARCHIVED project into
+    // ACTIVE/COMPLETE just because some other field on the form changed.
+    const lifecycleChanged = lifecycle !== currentLifecycle;
     const nextStatus = lifecycle === "COMPLETED" ? "COMPLETE" : "ACTIVE";
+    // An end date is required to mark a project complete — the day it was
+    // actually finished, not just whatever day someone happened to save
+    // this form (the completion-digest email groups by that date). The API
+    // enforces this too; checking here just avoids a round-trip.
+    if (lifecycleChanged && nextStatus === "COMPLETE" && !endDate) {
+      setError("End date is required to mark this project complete.");
+      return;
+    }
     let nextProjectDate: string | null = startDate || null;
     if (!nextProjectDate) {
       nextProjectDate = lifecycle === "UPCOMING" ? toIsoDate(tomorrow) : toIsoDate(today);
     }
 
     const payload: Record<string, unknown> = {
-      status: nextStatus,
       segment: nextSegment,
       projectDate: nextProjectDate,
       projectEndDate: endDate || null,
       supervisor: supervisorValue.trim(),
       supervisorUserId: selectedSupervisorUserId || null,
     };
+    if (lifecycleChanged) payload.status = nextStatus;
     if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
 
     setLoading(true);

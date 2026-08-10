@@ -535,13 +535,15 @@ export function ProjectLaborSection({
       }
       let unitCompleteError = "";
       if (unitCompleted) {
-        const today = new Date();
-        const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        // Use the labor entry's own work date, not today — logging Friday's
+        // work on Monday should mark the unit complete as of Friday, not
+        // Monday, so the completion-digest email groups it under the day it
+        // actually finished.
         try {
           const completeRes = await fetch(`/api/erp/projects/${projectId}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ status: "COMPLETE", projectEndDate: todayISO }),
+            body: JSON.stringify({ status: "COMPLETE", projectEndDate: workDate }),
           });
           if (!completeRes.ok) {
             const completeData = (await completeRes.json().catch(() => ({}))) as { error?: string };

@@ -20,7 +20,7 @@ import type { LaborEntry } from "@prisma/client";
  * description for older projects that predate the dedicated supervisor
  * field (duplicated from the same helper in pm-view/page.tsx, ProjectsExpandableTable.tsx,
  * and projects/[id]/page.tsx). */
-function getDescLine(description: string | null, key: string): string {
+export function getDescLine(description: string | null, key: string): string {
   if (!description) return "";
   const prefix = `${key}:`;
   return (
@@ -40,7 +40,7 @@ function isPostConstructionProject(hubspotPipelineId: string | null): boolean {
   return cfg?.postConstruction.pipelineId ? hubspotPipelineId === cfg.postConstruction.pipelineId : true;
 }
 
-async function findEmployeeEmailByName(fullName: string): Promise<string | null> {
+export async function findEmployeeEmailByName(fullName: string): Promise<string | null> {
   const [firstName, ...rest] = fullName.trim().split(" ");
   const lastName = rest.join(" ");
   const emp = await prisma.employee.findFirst({

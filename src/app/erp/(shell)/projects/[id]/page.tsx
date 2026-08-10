@@ -269,12 +269,13 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   // way, that's the whole point of the overall status. Otherwise, only what
   // was actually toggled complete counts.
   const contractedScopeItems = project.turnoverRequest ? contractedTurnoverScope(project.turnoverRequest) : [];
-  const completedScopeItems =
-    project.turnoverRequest?.status === "COMPLETED"
-      ? contractedScopeItems
-      : project.turnoverRequest
-      ? parseCompletedScopeItems(project.turnoverRequest.completedScopeItems)
-      : [];
+  // completedScopeItems is force-persisted to the full contracted scope the
+  // moment the unit actually completes (Project.status -> COMPLETE, see
+  // becomingComplete in /api/erp/projects/[id]), so it's already correct to
+  // read directly — no need to special-case turnoverRequest.status here.
+  const completedScopeItems = project.turnoverRequest
+    ? parseCompletedScopeItems(project.turnoverRequest.completedScopeItems)
+    : [];
   const checklistCompletedItems = (project.unitTurnoverChecklist?.completedItems ?? {}) as Record<string, boolean>;
   const qualityChecklistMeetsLaborThreshold = checklistCompletionPct(checklistCompletedItems) >= CHECKLIST_LABOR_THRESHOLD_PCT;
   const canOverrideChecklist = auth ? canOverrideQualityChecklist(auth.role) : false;
