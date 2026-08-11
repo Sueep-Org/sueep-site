@@ -55,12 +55,10 @@ export function ContractorQuestionnaireCard({ contractorId, title, fields, linke
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
-
+    <div>
       {linkedResponses ? (
         <>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="text-xs text-gray-400">
             From the linked subcontractor application — unlink it above to enter this manually instead.
           </p>
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
@@ -96,6 +94,6 @@ export function ContractorQuestionnaireCard({ contractorId, title, fields, linke
           </button>
         </div>
       )}
-    </section>
+    </div>
   );
 }

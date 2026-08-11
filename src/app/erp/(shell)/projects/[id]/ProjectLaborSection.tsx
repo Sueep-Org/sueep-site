@@ -1243,14 +1243,13 @@ export function ProjectLaborSection({
     </div>
 
     {pendingOverBudget ? (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        onClick={() => setPendingOverBudget(null)}
-      >
-        <div
-          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        {/* Backdrop click is intentionally not wired to dismiss: this modal
+            gates a real submit, and closing it discards the entry (it was
+            never sent to the server). A stray tap outside the card used to
+            silently drop it with no confirmation. Cancel is now the only
+            way out, so dismissal is always a deliberate choice. */}
+        <div className="w-80 rounded-xl bg-white p-5 shadow-2xl">
           <div className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
@@ -1291,7 +1290,10 @@ export function ProjectLaborSection({
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setPendingOverBudget(null)}
+              onClick={() => {
+                setPendingOverBudget(null);
+                setError("Entry not saved.");
+              }}
               className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
             >
               Cancel

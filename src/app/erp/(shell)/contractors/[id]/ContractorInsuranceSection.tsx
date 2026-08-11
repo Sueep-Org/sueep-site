@@ -101,9 +101,7 @@ export function ContractorInsuranceSection({
   })();
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Insurance & Workers Comp</h2>
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className={label}>Has insurance</label>
           <div className="mt-1 flex gap-4">
@@ -205,6 +203,5 @@ export function ContractorInsuranceSection({
           {loading ? "Saving…" : "Save insurance info"}
         </button>
       </form>
-    </section>
   );
 }

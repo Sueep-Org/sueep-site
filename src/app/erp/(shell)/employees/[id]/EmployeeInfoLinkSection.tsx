@@ -52,9 +52,8 @@ export function EmployeeInfoLinkSection({ id, email, infoToken, infoTokenExpiry,
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Info form link</h2>
-      <p className="mt-1 text-xs text-gray-500">
+    <div>
+      <p className="text-xs text-gray-500">
         Send a secure link so the employee can fill in their own address, date of birth, bank, and SSN info, or enter it manually in the sections below.
       </p>
 
@@ -95,6 +94,6 @@ export function EmployeeInfoLinkSection({ id, email, infoToken, infoTokenExpiry,
         {sendOk && <p className="text-xs text-emerald-600">Info form link sent to {email}</p>}
         {sendError && <p className="text-xs text-red-500">{sendError}</p>}
       </div>
-    </section>
+    </div>
   );
 }

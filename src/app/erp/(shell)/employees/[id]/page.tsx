@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { complianceBadgeClasses, complianceLabel, evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
+import { CollapsibleSection } from "@/app/erp/components/CollapsibleSection";
+import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeInfoLinkSection } from "./EmployeeInfoLinkSection";
@@ -44,6 +46,30 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
 
   const requiredDocuments = parseRequiredDocuments(employee.requiredDocuments);
   const compliance = evaluateEmployeeCompliance(employee.status, requiredDocuments, employee.documents);
+
+  // Collapsed-by-default status lines for the Personal & Documents cards —
+  // see CollapsibleSection. Anything empty/needing attention defaults open,
+  // everything else stays collapsed so the tab is scannable instead of a
+  // wall of always-expanded forms.
+  const hasAnySelfReportedInfo = Boolean(employee.address || employee.dateOfBirth || employee.ssn || employee.bankAccountNumber);
+  const infoLinkExpired = employee.infoTokenExpiry ? employee.infoTokenExpiry < new Date() : true;
+  const infoLinkStatus = hasAnySelfReportedInfo
+    ? "Info collected"
+    : employee.infoToken && !infoLinkExpired
+      ? "Link sent, not yet completed"
+      : "Not sent yet";
+  const infoLinkTone = hasAnySelfReportedInfo ? "complete" : employee.infoToken && !infoLinkExpired ? "neutral" : "empty";
+
+  const documentsStatus = `${complianceLabel(compliance)} · ${employee.documents.length} document${employee.documents.length === 1 ? "" : "s"}`;
+  const documentsTone = compliance === "COMPLIANT" ? "complete" : compliance === "NON_COMPLIANT" ? "warning" : "neutral";
+
+  const ssnStatus = employee.ssn ? "On file" : "Not set";
+  const ssnTone = employee.ssn ? "complete" : "empty";
+
+  const bankStatus = employee.bankAccountNumber
+    ? `${employee.bankAccountType === "savings" ? "Savings" : "Checking"} · ${maskAccountNumber(employee.bankAccountNumber)}`
+    : "Not set";
+  const bankTone = employee.bankAccountNumber ? "complete" : "empty";
 
   const [initialLaborEntries, initialChangeOrderEntries, laborProjectGroups, changeOrderProjectRows] =
     await Promise.all([
@@ -189,50 +215,62 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-4">
-              <EmployeeInfoLinkSection
-                id={employee.id}
-                email={employee.email}
-                infoToken={employee.infoToken}
-                infoTokenExpiry={employee.infoTokenExpiry?.toISOString() ?? null}
-                resendConfigured={resendConfigured}
-                siteUrl={siteUrl}
-              />
-              <EmployeeDocumentsSection
-                employeeId={employee.id}
-                initialRequiredDocuments={requiredDocuments}
-                initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
-                initialBackgroundCheckedAt={employee.backgroundCheckedAt ? employee.backgroundCheckedAt.toISOString() : null}
-                initialBackgroundCheckExpiresAt={employee.backgroundCheckExpiresAt ? employee.backgroundCheckExpiresAt.toISOString() : null}
-                initialBackgroundCheckProvider={employee.backgroundCheckProvider}
-                initialBackgroundCheckNotes={employee.backgroundCheckNotes}
-                initialBackgroundCheckConsentAt={employee.backgroundCheckConsentAt ? employee.backgroundCheckConsentAt.toISOString() : null}
-                initialBackgroundCheckEvents={employee.backgroundCheckEvents.map((e) => ({
-                  id: e.id,
-                  createdAt: e.createdAt.toISOString(),
-                  previousStatus: e.previousStatus,
-                  newStatus: e.newStatus,
-                  changedBy: e.changedBy,
-                }))}
-                initialDocuments={employee.documents.map((d) => ({
-                  id: d.id,
-                  documentType: d.documentType,
-                  title: d.title,
-                  issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
-                  expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
-                  fileUrl: d.fileUrl,
-                  notes: d.notes,
-                }))}
-              />
-              {canSeeSsn && <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />}
-              {canSeePay && (
-                <EmployeeBankAccountSection
-                  employeeId={employee.id}
-                  initial={{
-                    bankAccountType: employee.bankAccountType,
-                    bankAccountNumber: employee.bankAccountNumber,
-                    bankRoutingNumber: employee.bankRoutingNumber,
-                  }}
+              <CollapsibleSection title="Info form link" status={infoLinkStatus} tone={infoLinkTone} defaultOpen={infoLinkTone === "empty"}>
+                <EmployeeInfoLinkSection
+                  id={employee.id}
+                  email={employee.email}
+                  infoToken={employee.infoToken}
+                  infoTokenExpiry={employee.infoTokenExpiry?.toISOString() ?? null}
+                  resendConfigured={resendConfigured}
+                  siteUrl={siteUrl}
                 />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Documents & Background Check" status={documentsStatus} tone={documentsTone} defaultOpen={documentsTone === "warning"}>
+                <EmployeeDocumentsSection
+                  employeeId={employee.id}
+                  initialRequiredDocuments={requiredDocuments}
+                  initialBackgroundCheckStatus={(employee.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
+                  initialBackgroundCheckedAt={employee.backgroundCheckedAt ? employee.backgroundCheckedAt.toISOString() : null}
+                  initialBackgroundCheckExpiresAt={employee.backgroundCheckExpiresAt ? employee.backgroundCheckExpiresAt.toISOString() : null}
+                  initialBackgroundCheckProvider={employee.backgroundCheckProvider}
+                  initialBackgroundCheckNotes={employee.backgroundCheckNotes}
+                  initialBackgroundCheckConsentAt={employee.backgroundCheckConsentAt ? employee.backgroundCheckConsentAt.toISOString() : null}
+                  initialBackgroundCheckEvents={employee.backgroundCheckEvents.map((e) => ({
+                    id: e.id,
+                    createdAt: e.createdAt.toISOString(),
+                    previousStatus: e.previousStatus,
+                    newStatus: e.newStatus,
+                    changedBy: e.changedBy,
+                  }))}
+                  initialDocuments={employee.documents.map((d) => ({
+                    id: d.id,
+                    documentType: d.documentType,
+                    title: d.title,
+                    issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
+                    expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
+                    fileUrl: d.fileUrl,
+                    notes: d.notes,
+                  }))}
+                />
+              </CollapsibleSection>
+
+              {canSeeSsn && (
+                <CollapsibleSection title="Social Security Number" status={ssnStatus} tone={ssnTone} defaultOpen={ssnTone === "empty"}>
+                  <EmployeeSsnSection employeeId={employee.id} hasSsn={!!employee.ssn} />
+                </CollapsibleSection>
+              )}
+              {canSeePay && (
+                <CollapsibleSection title="Bank Account Info" status={bankStatus} tone={bankTone} defaultOpen={bankTone === "empty"}>
+                  <EmployeeBankAccountSection
+                    employeeId={employee.id}
+                    initial={{
+                      bankAccountType: employee.bankAccountType,
+                      bankAccountNumber: employee.bankAccountNumber,
+                      bankRoutingNumber: employee.bankRoutingNumber,
+                    }}
+                  />
+                </CollapsibleSection>
               )}
             </div>
           ),

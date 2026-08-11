@@ -74,9 +74,7 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">General information</h2>
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={label} htmlFor="name">
@@ -132,6 +130,5 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
           </button>
         </div>
       </form>
-    </section>
   );
 }

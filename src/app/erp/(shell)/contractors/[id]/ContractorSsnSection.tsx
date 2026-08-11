@@ -64,11 +64,8 @@ export function ContractorSsnSection({ contractorId, hasSsn }: { contractorId: s
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Social Security Number</h2>
-
-      <div className="mt-4">
-        <label className={label}>SSN</label>
+    <div>
+      <label className={label}>SSN</label>
         {editing ? (
           <div className="mt-1 flex items-center gap-2">
             <input
@@ -128,9 +125,8 @@ export function ContractorSsnSection({ contractorId, hasSsn }: { contractorId: s
             </button>
           </div>
         )}
-        {revealError ? <p className="mt-1.5 text-xs text-red-500">{revealError}</p> : null}
-        {saveError ? <p className="mt-1.5 text-xs text-red-500">{saveError}</p> : null}
-      </div>
-    </section>
+      {revealError ? <p className="mt-1.5 text-xs text-red-500">{revealError}</p> : null}
+      {saveError ? <p className="mt-1.5 text-xs text-red-500">{saveError}</p> : null}
+    </div>
   );
 }

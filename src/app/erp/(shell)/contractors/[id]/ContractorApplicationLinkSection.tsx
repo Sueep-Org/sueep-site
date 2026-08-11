@@ -58,9 +58,8 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Subcontractor application</h2>
-      <p className="mt-1 text-xs text-gray-500">
+    <div>
+      <p className="text-xs text-gray-500">
         Links a submitted /careers application so Company profile, Insurance, and Licensing read from it instead of manual entry.
       </p>
 
@@ -119,6 +118,6 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
           </div>
         </details>
       )}
-    </section>
+    </div>
   );
 }

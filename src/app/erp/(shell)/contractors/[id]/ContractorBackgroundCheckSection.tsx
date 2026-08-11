@@ -113,8 +113,7 @@ export function ContractorBackgroundCheckSection({
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h3 className="text-sm font-semibold text-gray-700">Background Check</h3>
+    <div className="space-y-4">
       <p className="text-xs text-gray-500">Track the status, dates, and provider for this contractor&apos;s background check.</p>
 
       <div className="flex flex-wrap gap-2">
@@ -235,6 +234,6 @@ export function ContractorBackgroundCheckSection({
           </ul>
         </div>
       )}
-    </section>
+    </div>
   );
 }
