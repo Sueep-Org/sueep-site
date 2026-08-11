@@ -85,7 +85,9 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
         return;
       }
 
-      const pmEmails = new Set<string>();
+      // contact@sueep.com always gets a copy of these, on top of whichever
+      // Sueep PM(s) resolve for the completed units below.
+      const pmEmails = new Set<string>(["contact@sueep.com"]);
       for (const p of projects) {
         pmEmails.add(await resolveSueepPmEmail(p));
       }

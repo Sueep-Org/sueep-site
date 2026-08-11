@@ -21,7 +21,9 @@ export function canSeeFinancials(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
 }
 
-export function canEditEmployeePayInfo(role: ErpRole): boolean {
+/** Gates pay-info fields (bank account, salary/rate, commission) for both
+ * Employee and Contractor, same pattern as canViewSsn. */
+export function canEditPayInfo(role: ErpRole): boolean {
   return role === "ADMIN" || role === "FINANCE" || role === "PROJECT_MANAGER" || role === "SALES";
 }
 
@@ -41,7 +43,10 @@ export function canFilterScheduleBySupervisor(role: ErpRole): boolean {
   return role !== "SUPERVISOR" && role !== "EMPLOYEE";
 }
 
-export function canViewEmployeeSsn(role: ErpRole): boolean {
+/** Gates the reveal-on-demand SSN endpoints for both Employee and Contractor
+ * (same role set as the override gates below) — the raw SSN is never shipped
+ * to the browser outside of those endpoints, regardless of which entity it's on. */
+export function canViewSsn(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES";
 }
 

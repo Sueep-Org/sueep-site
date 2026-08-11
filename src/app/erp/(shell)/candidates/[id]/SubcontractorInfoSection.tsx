@@ -1,19 +1,26 @@
 import { SUBCONTRACTOR_QUESTIONNAIRE, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
-
-function formatValue(v: unknown): string {
-  if (v == null || v === "") return "—";
-  if (Array.isArray(v)) return v.length > 0 ? v.join(", ") : "—";
-  return String(v);
-}
+import { formatSubValue } from "./subcontractorFieldUi";
 
 /** Read-only display of the subcontractor questionnaire answers, pulled
  * straight out of CandidateApplication.responses (sub_* keys) using the same
  * section/field config the public /careers form renders from, see
- * lib/erp/subcontractorQuestionnaire.ts. */
-export function SubcontractorInfoSection({ responses }: { responses: Record<string, unknown> }) {
+ * lib/erp/subcontractorQuestionnaire.ts.
+ *
+ * excludeSectionIds lets a caller that already shows some sections elsewhere
+ * (the Contractor profile's Company profile / Insurance / Licensing cards)
+ * skip re-showing those same answers here — the Candidate profile doesn't
+ * pass this, so it keeps showing the full questionnaire. */
+export function SubcontractorInfoSection({
+  responses,
+  excludeSectionIds = [],
+}: {
+  responses: Record<string, unknown>;
+  excludeSectionIds?: string[];
+}) {
+  const sections = SUBCONTRACTOR_QUESTIONNAIRE.filter((s) => !excludeSectionIds.includes(s.id));
   return (
     <div className="space-y-8">
-      {SUBCONTRACTOR_QUESTIONNAIRE.map((section) => (
+      {sections.map((section) => (
         <div key={section.id}>
           <h3 className="text-sm font-semibold text-gray-900 mb-3">{section.title}</h3>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -24,7 +31,7 @@ export function SubcontractorInfoSection({ responses }: { responses: Record<stri
               >
                 <dt className="text-pink-500">{field.label}</dt>
                 <dd className="mt-0.5 text-zinc-600 whitespace-pre-wrap">
-                  {formatValue(responses[subFieldName(field.key)])}
+                  {formatSubValue(responses[subFieldName(field.key)])}
                 </dd>
               </div>
             ))}

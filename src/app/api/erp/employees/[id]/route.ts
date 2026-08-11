@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canViewEmployeeSsn } from "@/lib/erpAuth";
+import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -63,6 +63,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.email !== undefined) data.email = body.email ? String(body.email).trim().toLowerCase() : null;
   if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+  if (body.address !== undefined) data.address = body.address ? String(body.address).trim() : null;
+  if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? String(body.dateOfBirth).trim() : null;
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() : null;
   if (body.payType !== undefined) {
     const pt = String(body.payType || "").toUpperCase();
@@ -103,7 +105,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;
   if (body.ssn !== undefined) {
-    if (!auth || !canViewEmployeeSsn(auth.role)) {
+    if (!auth || !canViewSsn(auth.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     data.ssn = body.ssn ? String(body.ssn).trim() : null;

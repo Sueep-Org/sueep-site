@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 
 export type ContractorRow = {
   id: string;
@@ -49,11 +50,23 @@ export function ProjectContractorSection({
   initialAssignments,
   contractors,
   sovItems = [],
+  isJanitorialUnit = false,
+  contractedScopeItems = [],
+  completedScopeItems = [],
 }: {
   projectId: string;
   initialAssignments: ContractorRow[];
   contractors: ContractorOption[];
   sovItems?: SOVItemOption[];
+  /** Whether this project is a janitorial/turnover unit, same flag ProjectLaborSection
+   * uses to swap the free-text task field for a scope-item picker. */
+  isJanitorialUnit?: boolean;
+  /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit. Empty for
+   * non-turnover projects. */
+  contractedScopeItems?: string[];
+  /** Subset of contractedScopeItems already marked done, same "assume complete
+   * until told otherwise" source ProjectLaborSection and UnitScopeChecklist read. */
+  completedScopeItems?: string[];
 }) {
   const router = useRouter();
   const [assignments, setAssignments] = useState(initialAssignments);
@@ -67,6 +80,11 @@ export function ProjectContractorSection({
   const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
   );
+  const [scopeCompletedItems, setScopeCompletedItems] = useState<string[]>(completedScopeItems);
+  const [scopeMarkCompleteIds, setScopeMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [editScopeMarkComplete, setEditScopeMarkComplete] = useState(false);
+  const [unitCompleted, setUnitCompleted] = useState(false);
+  const availableScopeItems = contractedScopeItems.filter((v) => !scopeCompletedItems.includes(v));
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialAssignments.map((a) => [a.id, a.notes ?? ""]))
   );
@@ -76,6 +94,30 @@ export function ProjectContractorSection({
     setAssignments(initialAssignments);
     setNotesMap(Object.fromEntries(initialAssignments.map((a) => [a.id, a.notes ?? ""])));
   }, [initialAssignments]);
+
+  useEffect(() => {
+    setScopeCompletedItems(completedScopeItems);
+  }, [completedScopeItems]);
+
+  async function markScopeItemsComplete(values: string[]) {
+    if (values.length === 0) return;
+    const next = [...new Set([...scopeCompletedItems, ...values])];
+    setScopeCompletedItems(next);
+    try {
+      await fetch(`/api/erp/projects/${projectId}/scope-items`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ completedScopeItems: next }),
+      });
+    } catch {
+      setScopeCompletedItems(scopeCompletedItems);
+    }
+  }
+
+  // Raw TURNOVER_SCOPE_OPTIONS value behind the edit row's Task select (which
+  // stores/displays the human label), so the "mark complete" checkbox and save
+  // handler can work with the same value markScopeItemsComplete expects.
+  const editScopeRawValue = contractedScopeItems.find((v) => turnoverScopeLabel(v) === editFields.taskDescription);
 
   function handleNotesSave() {
     if (!notesPopup) return;
@@ -114,6 +156,7 @@ export function ProjectContractorSection({
       taskDescription: row.taskDescription ?? "",
       sovItemIds: row.sovItemIds,
     });
+    setEditScopeMarkComplete(false);
   }
 
   async function onSaveEdit(rowId: string) {
@@ -142,6 +185,8 @@ export function ProjectContractorSection({
             : a
         )
       );
+      if (editScopeMarkComplete && editScopeRawValue) void markScopeItemsComplete([editScopeRawValue]);
+      setEditScopeMarkComplete(false);
       setEditingId(null);
       router.refresh();
     }
@@ -172,6 +217,9 @@ export function ProjectContractorSection({
     const costRaw = String(fd.get("costCents") || "").trim();
     const taskDescription = String(fd.get("taskDescription") || "").trim();
     const sovCompletedIds = sovPicks.filter((id) => sovMarkCompleteIds.has(id));
+    // Same idea as ProjectLaborSection's workDate: the day the work actually
+    // wrapped, not today, so the completion-digest email groups it correctly.
+    const completionDate = String(fd.get("endDate") || "") || String(fd.get("startDate") || "");
 
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/contractors`, {
@@ -228,10 +276,34 @@ export function ProjectContractorSection({
           return next;
         });
       }
+      if (scopeMarkCompleteIds.size > 0) void markScopeItemsComplete(Array.from(scopeMarkCompleteIds));
+      let unitCompleteError = "";
+      if (unitCompleted) {
+        if (!completionDate) {
+          unitCompleteError = "An end date (or start date) is required to mark the unit complete.";
+        } else {
+          try {
+            const completeRes = await fetch(`/api/erp/projects/${projectId}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ status: "COMPLETE", projectEndDate: completionDate }),
+            });
+            if (!completeRes.ok) {
+              const completeData = (await completeRes.json().catch(() => ({}))) as { error?: string };
+              unitCompleteError = completeData.error || "Failed to mark unit as completed.";
+            }
+          } catch {
+            unitCompleteError = "Network error marking unit as completed.";
+          }
+        }
+      }
       setAssignments((prev) => [row, ...prev]);
       form.reset();
       setSovPicks([]);
       setSovMarkCompleteIds(new Set());
+      setScopeMarkCompleteIds(new Set());
+      setUnitCompleted(false);
+      if (unitCompleteError) setAddError(unitCompleteError);
       router.refresh();
     } catch {
       setAddError("Network error");
@@ -326,10 +398,59 @@ export function ProjectContractorSection({
               <label className={label} htmlFor="c-task">
                 {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
               </label>
-              <input id="c-task" name="taskDescription" className={input} placeholder="Paint touch-up, unit 590…" />
+              {sovItems.length === 0 && isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                <select id="c-task" name="taskDescription" className={input} defaultValue="">
+                  <option value="" disabled>
+                    Select scope item
+                  </option>
+                  {contractedScopeItems.map((value) => (
+                    <option key={value} value={turnoverScopeLabel(value)}>
+                      {turnoverScopeLabel(value)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id="c-task" name="taskDescription" className={input} placeholder="Paint touch-up, unit 590…" />
+              )}
             </div>
+            {isJanitorialUnit && availableScopeItems.length > 0 && (
+              <div className="mt-3">
+                <label className={label}>Mark scope complete</label>
+                <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+                  {availableScopeItems.map((value) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={scopeMarkCompleteIds.has(value)}
+                        onChange={(e) => setScopeMarkCompleteIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(value); else next.delete(value);
+                          return next;
+                        })}
+                        className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      This contractor finishes &quot;{turnoverScopeLabel(value)}&quot;
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+        {isJanitorialUnit && (
+          <div className="mt-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={unitCompleted}
+                onChange={(e) => setUnitCompleted(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+              />
+              Mark unit as completed
+            </label>
+            <p className="mt-1 text-[11px] text-gray-400">Requires the quality checklist to be fully checked off (a PM can override).</p>
+          </div>
+        )}
         {addError ? <p className="mt-3 text-sm text-red-400" role="alert">{addError}</p> : null}
         <button
           type="submit"
@@ -417,6 +538,35 @@ export function ProjectContractorSection({
                               value={editFields.taskDescription}
                               onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))}
                             />
+                          </div>
+                        ) : isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                          <div className="space-y-1">
+                            <select
+                              className={editInput}
+                              value={editFields.taskDescription}
+                              onChange={(e) => {
+                                setEditFields((f) => ({ ...f, taskDescription: e.target.value }));
+                                setEditScopeMarkComplete(false);
+                              }}
+                            >
+                              <option value="">Select scope item</option>
+                              {contractedScopeItems.map((value) => (
+                                <option key={value} value={turnoverScopeLabel(value)}>
+                                  {turnoverScopeLabel(value)}
+                                </option>
+                              ))}
+                            </select>
+                            {editScopeRawValue && !scopeCompletedItems.includes(editScopeRawValue) && (
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={editScopeMarkComplete}
+                                  onChange={(e) => setEditScopeMarkComplete(e.target.checked)}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                                />
+                                Mark complete
+                              </label>
+                            )}
                           </div>
                         ) : (
                           <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />

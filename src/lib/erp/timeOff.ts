@@ -4,7 +4,7 @@ export const TIME_OFF_TYPES = ["VACATION", "SICK", "HALF_DAY", "UNPAID", "OTHER"
 export type TimeOffType = (typeof TIME_OFF_TYPES)[number];
 
 /** Change TIME_OFF_NOTIFICATION_EMAIL env var to update the recipient after testing. */
-export const TIME_OFF_NOTIFICATION_EMAIL = process.env.TIME_OFF_NOTIFICATION_EMAIL ?? "edwin@sueep.com";
+export const TIME_OFF_NOTIFICATION_EMAIL = process.env.TIME_OFF_NOTIFICATION_EMAIL ?? "contact@sueep.com";
 
 /** Employees only get 15 paid days off per calendar year (VACATION/SICK/
  * HALF_DAY/OTHER share one pool) — UNPAID doesn't count against it and has

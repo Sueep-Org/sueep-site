@@ -195,10 +195,28 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
   },
 ];
 
+/** Fields dropped from the Contractor profile's manual-entry form (but kept
+ * in the full questionnaire above) because they now have their own
+ * dedicated, editable home elsewhere on the profile — asking for them here
+ * too just gives staff two answers for the same thing that never sync.
+ * /careers applicants and linked CandidateApplication records still answer
+ * the real questionnaire in full; this only narrows the manual fallback. */
+const CONTRACTOR_MANUAL_EXCLUDED_FIELDS = new Set([
+  "primaryContact", // -> Contractor.contractorFullName (Personal information section)
+  "officePhone", // -> Contractor.phone (Personal information section)
+  "cellPhone", // -> Contractor.phone (Personal information section)
+  "companyEmail", // -> Contractor.email (General Info tab)
+  "businessAddress", // -> Contractor.address (Personal information section)
+  "mailingAddress", // -> Contractor.address (Personal information section)
+  "workersCompensation", // -> structured Insurance & Workers Comp section
+  "policyExpirationDates", // -> workersCompExpiresAt in the Insurance & Workers Comp section
+]);
+
 /** The compliance-critical subset staff can manually enter on a Contractor
  * profile when there's no linked CandidateApplication to pull this from —
- * see ContractorManualApplicationInfoForm. All fields here are "text" /
- * "number" / "select", which keeps that form's field renderer simple. */
+ * see ContractorQuestionnaireCard and the questionnaireFields prop on
+ * ContractorInsuranceSection. All fields here are "text" / "number" /
+ * "select", which keeps their field renderers simple. */
 export const CONTRACTOR_MANUAL_SECTIONS: SubSection[] = SUBCONTRACTOR_QUESTIONNAIRE.filter((s) =>
   ["company", "insurance", "licensing"].includes(s.id)
-);
+).map((s) => ({ ...s, fields: s.fields.filter((f) => !CONTRACTOR_MANUAL_EXCLUDED_FIELDS.has(f.key)) }));

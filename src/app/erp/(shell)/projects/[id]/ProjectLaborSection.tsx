@@ -857,8 +857,27 @@ export function ProjectLaborSection({
                 </div>
               </div>
             )}
+            <div className={sovItems.length > 0 ? "mt-3" : ""}>
+              <label className={label} htmlFor="l-task">
+                {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
+              </label>
+              {isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                <select id="l-task" name="taskDescription" className={input} defaultValue="">
+                  <option value="" disabled>
+                    Select scope item
+                  </option>
+                  {contractedScopeItems.map((value) => (
+                    <option key={value} value={turnoverScopeLabel(value)}>
+                      {turnoverScopeLabel(value)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+              )}
+            </div>
             {isJanitorialUnit && availableScopeItems.length > 0 && (
-              <div className={sovItems.length > 0 ? "mt-3" : ""}>
+              <div className="mt-3">
                 <label className={label}>Mark scope complete</label>
                 <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
                   {availableScopeItems.map((value) => (
@@ -879,25 +898,6 @@ export function ProjectLaborSection({
                 </div>
               </div>
             )}
-            <div className={sovItems.length > 0 || (isJanitorialUnit && availableScopeItems.length > 0) ? "mt-3" : ""}>
-              <label className={label} htmlFor="l-task">
-                {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
-              </label>
-              {isJanitorialUnit && contractedScopeItems.length > 0 ? (
-                <select id="l-task" name="taskDescription" className={input} defaultValue="">
-                  <option value="" disabled>
-                    Select scope item
-                  </option>
-                  {contractedScopeItems.map((value) => (
-                    <option key={value} value={turnoverScopeLabel(value)}>
-                      {turnoverScopeLabel(value)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
-              )}
-            </div>
           </div>
         </div>
         {isJanitorialUnit && (

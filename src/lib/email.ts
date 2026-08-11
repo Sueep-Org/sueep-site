@@ -194,6 +194,30 @@ export function buildContractorInfoEmail(params: {
   `;
 }
 
+export function buildEmployeeInfoEmail(params: {
+  name: string;
+  infoUrl: string;
+  expiryDays?: number;
+}) {
+  const days = params.expiryDays ?? 7;
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: complete your employee information</h2>
+      <p>Hi ${escapeHtml(params.name)},</p>
+      <p>Please complete the employee information form using the secure link below. You will be asked to provide your address, date of birth, banking information, and SSN.</p>
+      <p>No account required — the link expires in ${days} days.</p>
+      <p style="margin:20px 0">
+        <a href="${escapeHtml(params.infoUrl)}"
+           style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
+          Complete my information
+        </a>
+      </p>
+      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.infoUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
+    </div>
+  `;
+}
+
 export function buildChangeOrderNotificationEmail(params: {
   recipientName: string;
   projectTitle: string;

@@ -9,6 +9,10 @@ import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandabl
 type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
 
+/** sessionStorage key the project detail page's "← Projects" link reads to
+ * return to the tab/status filter the user was on, instead of resetting to "All". */
+export const PROJECTS_LIST_URL_STORAGE_KEY = "erp:lastProjectsListUrl";
+
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "post-construction", label: "Post-Const" },
@@ -46,7 +50,17 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     if (tab && TABS.some((t) => t.id === tab)) setActiveTab(tab);
     const status = params.get("status") as Lifecycle | null;
     if (status && LIFECYCLE_FILTERS.some((f) => f.id === status)) setActiveLifecycle(status);
+    persistListUrl();
   }, []);
+
+  // So the project detail page's "← Projects" link can return to the same
+  // tab/status filter instead of always resetting to "All".
+  function persistListUrl() {
+    sessionStorage.setItem(
+      PROJECTS_LIST_URL_STORAGE_KEY,
+      window.location.pathname + window.location.search
+    );
+  }
 
   function updateTab(tab: Tab) {
     setActiveTab(tab);
@@ -55,6 +69,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
     params.delete("status"); // reset lifecycle filter when switching tabs
     setActiveLifecycle(null);
     history.replaceState(null, "", `?${params.toString()}`);
+    persistListUrl();
   }
 
   function updateLifecycle(lc: Lifecycle | null) {
@@ -66,6 +81,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
       params.delete("status");
     }
     history.replaceState(null, "", `?${params.toString()}`);
+    persistListUrl();
   }
 
   function getTab(row: ProjectTableRow): Tab {

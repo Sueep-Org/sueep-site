@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth, canViewSsn, canEditPayInfo } from "@/lib/erpAuth";
+import { CONTRACTOR_MANUAL_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
-import { ContractorInfoPanel } from "./ContractorInfoPanel";
+import { ContractorInfoLinkSection } from "./ContractorInfoLinkSection";
+import { ContractorContactInfoSection } from "./ContractorContactInfoSection";
+import { ContractorBankAccountSection } from "./ContractorBankAccountSection";
+import { ContractorInsuranceSection } from "./ContractorInsuranceSection";
+import { ContractorSsnSection } from "./ContractorSsnSection";
 import { ContractorLaborSection } from "./ContractorLaborSection";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
 import { ContractorTimeOffSection } from "./ContractorTimeOffSection";
-import { ContractorApplicationSection } from "./ContractorApplicationSection";
+import { ContractorApplicationLinkSection } from "./ContractorApplicationLinkSection";
+import { ContractorQuestionnaireCard } from "./ContractorQuestionnaireCard";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +44,32 @@ export default async function ContractorDetailPage({ params }: PageProps) {
     },
   });
   if (!contractor) notFound();
+
+  const auth = await getErpAuth();
+  const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
+  const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
+
+  // Company profile / Insurance / Licensing each read from whichever of
+  // these is available: the linked application's answers (read-only, see
+  // ContractorApplicationLinkSection) or Contractor.manualApplicationInfo
+  // (editable) when nothing is linked — never both, so no section duplicates
+  // what another already shows.
+  const linkedResponses = contractor.candidateApplication
+    ? ((contractor.candidateApplication.responses ?? {}) as Record<string, unknown>)
+    : null;
+  const manualInfo = (contractor.manualApplicationInfo ?? {}) as Record<string, unknown>;
+  function manualValuesFor(sectionId: string): Record<string, string> {
+    const fields = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === sectionId)?.fields ?? [];
+    const out: Record<string, string> = {};
+    for (const field of fields) {
+      const v = manualInfo[subFieldName(field.key)];
+      out[subFieldName(field.key)] = typeof v === "string" ? v : "";
+    }
+    return out;
+  }
+  const companyFields = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "company")?.fields ?? [];
+  const insuranceQuestionnaireFields = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "insurance")?.fields ?? [];
+  const licensingFields = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "licensing")?.fields ?? [];
 
   // Only offered as link candidates if they're (a) a subcontractor
   // application and (b) not already claimed by some other contractor —
@@ -198,26 +231,30 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 }}
               />
 
-              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="text-sm font-semibold text-gray-700">Application Info</h3>
-                <ContractorApplicationSection
-                  contractorId={contractor.id}
-                  linkedApplication={
-                    contractor.candidateApplication
-                      ? {
-                          id: contractor.candidateApplication.id,
-                          fullName: contractor.candidateApplication.fullName,
-                          email: contractor.candidateApplication.email,
-                          phone: contractor.candidateApplication.phone,
-                          positionInterest: contractor.candidateApplication.positionInterest,
-                          responses: (contractor.candidateApplication.responses ?? {}) as Record<string, unknown>,
-                        }
-                      : null
-                  }
-                  linkableApplications={linkableApplications}
-                  manualApplicationInfo={(contractor.manualApplicationInfo ?? null) as Record<string, unknown> | null}
-                />
-              </section>
+              <ContractorApplicationLinkSection
+                contractorId={contractor.id}
+                linkedApplication={
+                  contractor.candidateApplication
+                    ? {
+                        id: contractor.candidateApplication.id,
+                        fullName: contractor.candidateApplication.fullName,
+                        email: contractor.candidateApplication.email,
+                        phone: contractor.candidateApplication.phone,
+                        positionInterest: contractor.candidateApplication.positionInterest,
+                        responses: linkedResponses ?? {},
+                      }
+                    : null
+                }
+                linkableApplications={linkableApplications}
+              />
+
+              <ContractorQuestionnaireCard
+                contractorId={contractor.id}
+                title="Company profile"
+                fields={companyFields}
+                linkedResponses={linkedResponses}
+                manualInitial={manualValuesFor("company")}
+              />
             </div>
           ),
         },
@@ -225,32 +262,59 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-6">
-              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h3 className="text-sm font-semibold text-gray-700">Info Form</h3>
-                <ContractorInfoPanel
-                  id={contractor.id}
-                  email={contractor.email}
-                  infoToken={contractor.infoToken}
-                  infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
-                  resendConfigured={resendConfigured}
-                  siteUrl={siteUrl}
-                  collectedInfo={{
-                    contractorFullName: contractor.contractorFullName,
-                    address: contractor.address,
-                    dateOfBirth: contractor.dateOfBirth,
-                    ssn: contractor.ssn,
+              <ContractorInfoLinkSection
+                id={contractor.id}
+                email={contractor.email}
+                infoToken={contractor.infoToken}
+                infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
+                resendConfigured={resendConfigured}
+                siteUrl={siteUrl}
+              />
+
+              <ContractorContactInfoSection
+                contractorId={contractor.id}
+                initial={{
+                  contractorFullName: contractor.contractorFullName,
+                  phone: contractor.phone,
+                  address: contractor.address,
+                  dateOfBirth: contractor.dateOfBirth,
+                }}
+              />
+
+              {canSeePay && (
+                <ContractorBankAccountSection
+                  contractorId={contractor.id}
+                  initial={{
                     bankAccountType: contractor.bankAccountType,
                     bankAccountNumber: contractor.bankAccountNumber,
                     bankRoutingNumber: contractor.bankRoutingNumber,
-                    phone: contractor.phone,
-                    hasInsurance: contractor.hasInsurance,
-                    workersCompCarrier: contractor.workersCompCarrier,
-                    workersCompPolicyNumber: contractor.workersCompPolicyNumber,
-                    workersCompExpiresAt: contractor.workersCompExpiresAt?.toISOString() ?? null,
                   }}
-                  workersCompDoc={contractor.documents[0] ?? null}
                 />
-              </section>
+              )}
+
+              {canSeeSsn && <ContractorSsnSection contractorId={contractor.id} hasSsn={!!contractor.ssn} />}
+
+              <ContractorInsuranceSection
+                contractorId={contractor.id}
+                initial={{
+                  hasInsurance: contractor.hasInsurance,
+                  workersCompCarrier: contractor.workersCompCarrier,
+                  workersCompPolicyNumber: contractor.workersCompPolicyNumber,
+                  workersCompExpiresAt: contractor.workersCompExpiresAt?.toISOString() ?? null,
+                }}
+                workersCompDoc={contractor.documents[0] ?? null}
+                questionnaireFields={insuranceQuestionnaireFields}
+                linkedResponses={linkedResponses}
+                manualInitial={manualValuesFor("insurance")}
+              />
+
+              <ContractorQuestionnaireCard
+                contractorId={contractor.id}
+                title="Licensing"
+                fields={licensingFields}
+                linkedResponses={linkedResponses}
+                manualInitial={manualValuesFor("licensing")}
+              />
 
               <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h3 className="text-sm font-semibold text-gray-700">Documents</h3>

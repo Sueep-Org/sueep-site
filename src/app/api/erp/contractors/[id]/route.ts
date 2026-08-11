@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,7 +19,10 @@ export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const contractor = await prisma.contractor.findUnique({ where: { id } });
   if (!contractor) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(contractor);
+  // ssn is only ever exposed via the dedicated, role-gated reveal endpoint —
+  // same pattern as Employee, see /api/erp/employees/[id]/route.ts.
+  const { ssn: _ssn, ...safeContractor } = contractor;
+  return NextResponse.json(safeContractor);
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -56,7 +59,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (v !== null && (typeof v !== "object" || Array.isArray(v))) {
       return NextResponse.json({ error: "manualApplicationInfo must be an object" }, { status: 400 });
     }
-    data.manualApplicationInfo = v;
+    // The profile now saves this from several independent cards (Company
+    // profile, Insurance, Licensing), each PATCHing only its own subset of
+    // sub_* keys — merge into the existing blob instead of replacing it
+    // wholesale, or saving one card would wipe out what the others already saved.
+    const existingInfo =
+      existing.manualApplicationInfo && typeof existing.manualApplicationInfo === "object" && !Array.isArray(existing.manualApplicationInfo)
+        ? (existing.manualApplicationInfo as Record<string, unknown>)
+        : {};
+    data.manualApplicationInfo = v === null ? null : { ...existingInfo, ...v };
   }
   if (body.status !== undefined) {
     const v = String(body.status).toUpperCase();
@@ -70,7 +81,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     "contractorFullName",
     "address",
     "dateOfBirth",
-    "ssn",
     "bankAccountType",
     "bankAccountNumber",
     "bankRoutingNumber",
@@ -80,6 +90,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body[field] !== undefined) {
       data[field] = typeof body[field] === "string" ? (body[field] as string).trim() || null : null;
     }
+  }
+  // Gated separately from the generic INFO_FIELDS loop above, same as Employee's
+  // ssn handling — only a role allowed to view SSNs can write one either.
+  if (body.ssn !== undefined) {
+    const ssnAuth = await getErpAuth();
+    if (!ssnAuth || !canViewSsn(ssnAuth.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    data.ssn = body.ssn ? String(body.ssn).trim() || null : null;
   }
   if (body.hasInsurance !== undefined) {
     data.hasInsurance = typeof body.hasInsurance === "boolean" ? body.hasInsurance : null;
@@ -159,7 +178,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
         : null;
       return { contractor: updated, backgroundCheckEvent: event };
     });
-    return NextResponse.json({ ...contractor, backgroundCheckEvent });
+    const { ssn: _ssn, ...safeContractor } = contractor;
+    return NextResponse.json({ ...safeContractor, backgroundCheckEvent });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const target = Array.isArray(e.meta?.target) ? (e.meta.target as string[]) : [];

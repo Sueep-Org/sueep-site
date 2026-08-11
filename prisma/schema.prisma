@@ -1107,6 +1107,11 @@ model Employee {
   hireDate       DateTime?
   notes          String?
 
+  /// Home address, same free-text convention as Contractor.address.
+  address String?
+  /// Free-text date of birth (not a DateTime), same convention as Contractor.dateOfBirth.
+  dateOfBirth String?
+
   bankAccountType   String?
   bankAccountNumber String?
   bankRoutingNumber String?
@@ -1114,6 +1119,12 @@ model Employee {
   /// Social Security Number. Masked by default in the UI; only revealed
   /// on-demand via a role-gated endpoint (never shipped in the initial page load).
   ssn String?
+
+  /// Token for the self-service "Employee Information" form, same
+  /// mechanism as Contractor.infoToken — lets an employee fill in their own
+  /// address/DOB/bank/SSN via a emailed link instead of staff typing it in.
+  infoToken       String?   @unique
+  infoTokenExpiry DateTime?
 
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")

@@ -6,12 +6,13 @@ import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
+import { EmployeeInfoLinkSection } from "./EmployeeInfoLinkSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
 import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
-import { getErpAuth, canEditEmployeePayInfo, canViewEmployeeSsn } from "@/lib/erpAuth";
+import { getErpAuth, canEditPayInfo, canViewSsn } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,8 @@ function parseRequiredDocuments(value: unknown): string[] {
 export default async function EmployeeDetailPage({ params }: PageProps) {
   const { id } = await params;
   const auth = await getErpAuth();
-  const canSeePay = canEditEmployeePayInfo(auth?.role ?? "EMPLOYEE");
-  const canSeeSsn = canViewEmployeeSsn(auth?.role ?? "EMPLOYEE");
+  const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
+  const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -37,6 +38,9 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     },
   });
   if (!employee) notFound();
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY);
 
   const requiredDocuments = parseRequiredDocuments(employee.requiredDocuments);
   const compliance = evaluateEmployeeCompliance(employee.status, requiredDocuments, employee.documents);
@@ -166,6 +170,8 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 lastName: employee.lastName,
                 email: employee.email,
                 phone: employee.phone,
+                address: employee.address,
+                dateOfBirth: employee.dateOfBirth,
                 role: employee.role,
                 payType: employee.payType,
                 hourlyPayCents: employee.hourlyPayCents,
@@ -183,6 +189,14 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-4">
+              <EmployeeInfoLinkSection
+                id={employee.id}
+                email={employee.email}
+                infoToken={employee.infoToken}
+                infoTokenExpiry={employee.infoTokenExpiry?.toISOString() ?? null}
+                resendConfigured={resendConfigured}
+                siteUrl={siteUrl}
+              />
               <EmployeeDocumentsSection
                 employeeId={employee.id}
                 initialRequiredDocuments={requiredDocuments}

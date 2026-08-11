@@ -15,6 +15,8 @@ type Props = {
     lastName: string;
     email: string | null;
     phone: string | null;
+    address: string | null;
+    dateOfBirth: string | null;
     role: string | null;
     payType: string;
     hourlyPayCents: number | null;
@@ -54,6 +56,8 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
       lastName: fd.get("lastName"),
       email: fd.get("email") || null,
       phone: fd.get("phone") || null,
+      address: fd.get("address") || null,
+      dateOfBirth: fd.get("dateOfBirth") || null,
       role: fd.get("role") || null,
       status: fd.get("status"),
       hireDate: fd.get("hireDate") || null,
@@ -143,6 +147,18 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
               Phone
             </label>
             <input id="phone" name="phone" defaultValue={initial.phone ?? ""} className={input} />
+          </div>
+          <div>
+            <label className={label} htmlFor="dateOfBirth">
+              Date of birth
+            </label>
+            <input id="dateOfBirth" name="dateOfBirth" type="date" defaultValue={initial.dateOfBirth ?? ""} className={input} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={label} htmlFor="address">
+              Address
+            </label>
+            <input id="address" name="address" defaultValue={initial.address ?? ""} placeholder="Street, City, State, ZIP" className={input} />
           </div>
           <div>
             <label className={label} htmlFor="role">

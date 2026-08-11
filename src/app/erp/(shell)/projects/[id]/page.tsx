@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canEditEmployeePayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canEditPayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
@@ -37,6 +36,7 @@ import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChec
 import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSigningSection";
 import { ProjectNotesSection } from "./ProjectNotesSection";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
+import { ProjectsBackLink } from "./ProjectsBackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "SALES" || auth?.role === "ESTIMATION";
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
-  const canSeeCommission = auth ? canEditEmployeePayInfo(auth.role) : false;
+  const canSeeCommission = auth ? canEditPayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
     prisma.project.findUnique({
@@ -583,6 +583,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           initialAssignments={contractorRows}
           contractors={contractors}
           sovItems={sovItems}
+          isJanitorialUnit={isTurnover}
+          contractedScopeItems={contractedScopeItems}
+          completedScopeItems={completedScopeItems}
         />
       ),
     },
@@ -782,9 +785,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">
-          ← Projects
-        </Link>
+        <ProjectsBackLink />
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
