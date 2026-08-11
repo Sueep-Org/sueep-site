@@ -5,6 +5,7 @@ import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getDescLine as getDescriptionLine } from "@/lib/erp/descLine";
+import { Modal, Button } from "@/app/erp/components/ui";
 
 type LaborRowBase = {
   id: string;
@@ -517,43 +518,25 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
         ) : null}
       </div>
 
-      {popup ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setPopup(null)}
-        >
-          <div
-            className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-            onClick={(ev) => ev.stopPropagation()}
-          >
-            <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
-            <textarea
-              autoFocus
-              rows={4}
-              value={popup.draft}
-              onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
-              placeholder="Add notes..."
-              className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
-            />
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPopup(null)}
-                className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleNotesSave}
-                className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
-              >
-                Save
-              </button>
-            </div>
-          </div>
+      <Modal open={!!popup} onClose={() => setPopup(null)}>
+        <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
+        <textarea
+          autoFocus
+          rows={4}
+          value={popup?.draft ?? ""}
+          onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
+          placeholder="Add notes..."
+          className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+        />
+        <div className="mt-3 flex justify-end gap-2">
+          <Button variant="ghost" size="xs" onClick={() => setPopup(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="xs" onClick={handleNotesSave}>
+            Save
+          </Button>
         </div>
-      ) : null}
+      </Modal>
     </>
   );
 }

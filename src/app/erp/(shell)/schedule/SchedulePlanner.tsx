@@ -63,7 +63,7 @@ const SOV_REQUEST_LABEL = "SOV schedule request";
 // once that day has passed with no log — it's a missed assignment, not just
 // an upcoming plan.
 const PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-gray-500";
-const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border border-dashed border-red-500";
+const OVERDUE_PLANNED_CHIP_EXTRA_CLASS = "border-2 border-dashed border-red-500";
 // Whole-chip yellow, same as NEEDS_SUPERVISOR_CHIP_CLASS below, just dashed
 // instead of solid-bordered since this is still a "planned, not logged"
 // chip. Replaces the project-type background entirely (rather than layering
@@ -2379,7 +2379,7 @@ export function SchedulePlanner({
                             } ${projectStatusChipClass(project.status)}`}
                           >
                             {isOverdue ? (
-                              <span aria-hidden className="shrink-0 text-red-600">⚠</span>
+                              <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
                             ) : noSupervisor ? (
                               <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                             ) : null}

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
 
 export type ChangeOrderLaborerRow = {
   id: string;
@@ -61,11 +62,9 @@ function hoursToClockOut(clockIn: string, hours: number): string {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
 
 function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
   if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
@@ -722,43 +721,25 @@ export function ChangeOrderLaborersSection({
       </div>
     </div>
 
-    {qualityPopup ? (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        onClick={() => setQualityPopup(null)}
-      >
-        <div
-          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
-          <textarea
-            autoFocus
-            rows={4}
-            value={qualityPopup.draft}
-            onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
-            placeholder="Add notes about work quality..."
-            className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
-          />
-          <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setQualityPopup(null)}
-              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleQualityNotesSave}
-              className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
-            >
-              Save
-            </button>
-          </div>
-        </div>
+    <Modal open={!!qualityPopup} onClose={() => setQualityPopup(null)}>
+      <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+      <textarea
+        autoFocus
+        rows={4}
+        value={qualityPopup?.draft ?? ""}
+        onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
+        placeholder="Add notes about work quality..."
+        className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+      />
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="ghost" size="xs" onClick={() => setQualityPopup(null)}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="xs" onClick={handleQualityNotesSave}>
+          Save
+        </Button>
       </div>
-    ) : null}
+    </Modal>
     </>
   );
 }

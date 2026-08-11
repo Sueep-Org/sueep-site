@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { inputClass } from "@/app/erp/components/ui";
 
 export type SOVItemOption = {
   id: string;
@@ -8,8 +9,7 @@ export type SOVItemOption = {
   completed: boolean;
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const input = inputClass.md;
 
 /** Multi-select SOV item picker: selected items show as removable chips above
  * a search box; each list row shows a checkbox for "selected here" plus a

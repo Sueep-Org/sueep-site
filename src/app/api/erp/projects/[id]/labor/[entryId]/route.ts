@@ -28,6 +28,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!name) return NextResponse.json({ error: "workerName is required" }, { status: 400 });
     data.workerName = name;
   }
+  if (body.employeeId !== undefined) {
+    const empId = body.employeeId ? String(body.employeeId).trim() : "";
+    if (empId) {
+      const emp = await prisma.employee.findUnique({ where: { id: empId }, select: { id: true } });
+      if (!emp) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      data.employeeId = empId;
+    } else {
+      data.employeeId = null;
+    }
+  }
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() || null : null;
   if (body.hours !== undefined) {
     const h = Number(body.hours);
@@ -85,7 +95,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   try {
-    const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object, include: { sovItems: { select: { id: true } } } });
+    const entry = await prisma.laborEntry.update({
+      where: { id: entryId },
+      data: data as object,
+      include: { sovItems: { select: { id: true } }, employee: { select: { firstName: true, lastName: true } } },
+    });
     if (sovItemIds !== undefined) {
       const sovCompletedIds = new Set(
         Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []

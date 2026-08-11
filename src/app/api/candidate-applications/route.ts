@@ -137,6 +137,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Block re-applying with an email that already has a candidate profile
+    // on file. The only way around this is deleting the existing profile in
+    // the ERP; short of that, direct them to contact us instead of letting
+    // duplicates pile up.
+    const existing = await prisma.candidateApplication.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      if (isFormPost) {
+        const url = new URL("/careers?submitted=duplicate", req.url);
+        if (rolesQs) url.searchParams.set("roles", rolesQs);
+        return NextResponse.redirect(url, { status: 303 });
+      }
+      return NextResponse.json(
+        {
+          error:
+            "An application with this email already exists. If there was an issue with your application, please contact us at contact@sueep.com.",
+        },
+        { status: 409 }
+      );
+    }
+
     const formResponses: Record<string, unknown> = {
       ...(location ? { location } : {}),
       ...(cleaningExperience ? { cleaningExperience } : {}),

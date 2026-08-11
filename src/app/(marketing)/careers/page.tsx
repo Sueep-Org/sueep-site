@@ -23,6 +23,7 @@ export default async function CareersPage({
   const submitted = sp.submitted;
   const showSuccess = submitted === "1";
   const showError = submitted === "0";
+  const showDuplicate = submitted === "duplicate";
   // `role` (singular) still drives the hero tab/pixel page-view tracking —
   // ad campaigns already link to /careers?role=painter for the dedicated
   // pixel, so that stays untouched. `roles` (plural, comma-separated) is the
@@ -59,6 +60,16 @@ export default async function CareersPage({
       {showError && (
         <div className="bg-red-50 border-b border-red-200 text-red-900 px-4 py-3 text-center text-sm font-medium">
           Something went wrong. Please check required fields and try again, or email{" "}
+          <a href="mailto:contact@sueep.com" className="underline font-medium">
+            contact@sueep.com
+          </a>
+          .
+        </div>
+      )}
+      {showDuplicate && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-3 text-center text-sm font-medium">
+          We already have an application on file for this email. If there was an issue with your application, please
+          contact us at{" "}
           <a href="mailto:contact@sueep.com" className="underline font-medium">
             contact@sueep.com
           </a>

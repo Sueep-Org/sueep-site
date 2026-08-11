@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 
 type Props = {
   projectId: string;

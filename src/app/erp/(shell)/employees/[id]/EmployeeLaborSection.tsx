@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type EmployeeLaborEntryRow = {
   id: string;
@@ -20,9 +21,8 @@ export type EmployeeLaborEntryRow = {
 
 export type LaborProjectOption = { id: string; jobTitle: string };
 
-const input =
-  "rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-[11px] font-medium text-gray-500";
+const input = inputClass.xs;
+const label = labelClass.compact;
 
 function formatCurrency(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;

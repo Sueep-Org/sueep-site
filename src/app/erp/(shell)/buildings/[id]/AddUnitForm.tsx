@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 type Props = {
   buildingId: string;
@@ -21,9 +22,8 @@ const LAYOUT_LABELS: Record<string, string> = {
 
 const checkboxRow = "flex items-center gap-2 text-sm text-gray-700";
 const checkboxInput = "h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+const label = labelClass.default;
+const input = inputClass.md;
 
 /**
  * Deliberately minimal next to UnitScopeEditor (the PM-facing Layout tab

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TRANSPORTATION_METHOD_OPTIONS } from "@/lib/erp/transportationMethods";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type LaborEmployeeOption = {
   id: string;
@@ -34,9 +35,8 @@ type SplitResult = { projectId: string; unitNumber: string | null; workerName: s
 
 const OTHER_VALUE = "__other__";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 const checkboxRow = "flex items-center gap-2 text-sm text-gray-700";
 const checkboxInput = "h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500";
 

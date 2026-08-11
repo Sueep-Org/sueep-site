@@ -14,6 +14,7 @@ import { CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTe
 import { UnitScopeCard } from "./UnitScopeCard";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { Button, Modal, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type LaborRow = {
   id: string;
@@ -45,11 +46,12 @@ export type LaborEmployeeOption = {
 
 const OTHER_VALUE = "__other__";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+// Sourced from the shared ui/styles module (see its header comment) instead
+// of being redefined locally, which is how this file and dozens of others
+// used to carry their own copy of the same three strings.
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
 
 function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
   if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
@@ -75,14 +77,38 @@ function employeeLabel(e: LaborEmployeeOption): string {
   return e.status === "INACTIVE" ? `${name} (inactive)` : name;
 }
 
+/**
+ * Conservative "did you mean" check for when someone picks "Other" and types
+ * a name instead of picking from the roster. The roster search above is a
+ * plain substring match on "First Last", so a shorthand like "Maria V" won't
+ * find "Maria Karelly Veloza Velandia" even though she's right there — and
+ * once an entry is saved as "Other" it's permanently unlinked from that
+ * employee (no employeeId), so it won't show on their profile or merge into
+ * their payroll total. This requires every word the user typed to line up
+ * with a word in some employee's name, to keep false positives rare.
+ */
+function suggestEmployeeMatch(typedName: string, employees: LaborEmployeeOption[]): LaborEmployeeOption | null {
+  const typedWords = typedName.toLowerCase().split(/\s+/).filter(Boolean);
+  if (typedWords.length === 0) return null;
+  let best: { emp: LaborEmployeeOption; score: number } | null = null;
+  for (const emp of employees) {
+    const empWords = `${emp.firstName} ${emp.lastName}`.toLowerCase().split(/\s+/).filter(Boolean);
+    const score = typedWords.filter((w) => empWords.some((ew) => ew === w || ew.startsWith(w) || w.startsWith(ew))).length;
+    if (score >= typedWords.length && (!best || score > best.score)) best = { emp, score };
+  }
+  return best?.emp ?? null;
+}
+
 function EmployeeCombobox({
   employees,
   value,
   onChange,
+  className,
 }: {
   employees: LaborEmployeeOption[];
   value: string;
   onChange: (id: string) => void;
+  className?: string;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -123,7 +149,7 @@ function EmployeeCombobox({
       <input
         type="text"
         autoComplete="off"
-        className={input}
+        className={className ?? input}
         placeholder={displayName || "Type to search…"}
         value={open ? query : displayName}
         onFocus={() => { setQuery(""); setOpen(true); }}
@@ -238,6 +264,17 @@ export function ProjectLaborSection({
     projectedHours: number;
     projectedMarginPct: number;
     severity: TurnoverMarginSeverity;
+    employeeOverrideId?: string;
+  } | null>(null);
+  // Shown when "Other" is picked and the typed name looks like it could be an
+  // existing roster employee (see suggestEmployeeMatch) — logging as "Other"
+  // permanently unlinks the entry from that person's profile and payroll, so
+  // this is a last chance to link it correctly instead.
+  const [pendingNameMatch, setPendingNameMatch] = useState<{
+    form: HTMLFormElement;
+    hours: number;
+    typedName: string;
+    match: LaborEmployeeOption;
   } | null>(null);
   const [blockedModal, setBlockedModal] = useState<"quality" | "safety" | null>(null);
   const [employeePick, setEmployeePick] = useState<string>("");
@@ -250,7 +287,7 @@ export function ProjectLaborSection({
   const [commuteMinutesStr, setCommuteMinutesStr] = useState("");
   const [transportationMethodStr, setTransportationMethodStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemIds: string[] }>({ workDate: "", workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemIds: [] });
+  const [editFields, setEditFields] = useState<{ workDate: string; employeeId: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemIds: string[] }>({ workDate: "", employeeId: OTHER_VALUE, workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemIds: [] });
   const [sovPicks, setSovPicks] = useState<string[]>([]);
   const [sovMarkCompleteIds, setSovMarkCompleteIds] = useState<Set<string>>(new Set());
   const [scopeMarkCompleteIds, setScopeMarkCompleteIds] = useState<Set<string>>(new Set());
@@ -341,6 +378,7 @@ export function ProjectLaborSection({
     const defaultIn = r.clockIn || "08:00";
     setEditFields({
       workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+      employeeId: r.employeeId || OTHER_VALUE,
       workerName: r.workerName,
       role: r.role ?? "",
       clockIn: defaultIn,
@@ -354,6 +392,18 @@ export function ProjectLaborSection({
     setEditScopeMarkComplete(false);
   }
 
+  // Keeps the free-text workerName in sync when a real employee is picked
+  // during edit, same as the add-entry form; only left directly editable
+  // when "Other" is selected.
+  function handleEditEmployeeChange(id: string) {
+    if (id === OTHER_VALUE) {
+      setEditFields((f) => ({ ...f, employeeId: OTHER_VALUE }));
+      return;
+    }
+    const emp = employees.find((e) => e.id === id);
+    setEditFields((f) => ({ ...f, employeeId: id, workerName: emp ? `${emp.firstName} ${emp.lastName}`.trim() : f.workerName }));
+  }
+
   // Raw TURNOVER_SCOPE_OPTIONS value behind the edit row's Task select
   // (which stores/displays the human label), so the "mark complete" checkbox
   // and save handler can work with the same value markScopeItemsComplete
@@ -365,11 +415,16 @@ export function ProjectLaborSection({
       setError("Transportation is required.");
       return;
     }
+    if (!editFields.workerName.trim()) {
+      setError("Worker name is required.");
+      return;
+    }
     const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         workDate: editFields.workDate,
+        employeeId: editFields.employeeId !== OTHER_VALUE ? editFields.employeeId : null,
         workerName: editFields.workerName,
         role: editFields.role || null,
         hours: calcHours(editFields.clockIn, editFields.clockOut),
@@ -382,11 +437,38 @@ export function ProjectLaborSection({
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; clockIn: string | null; commuteHours: number | null; transportationMethod: string | null; hourlyRateCents: number; taskDescription: string | null; sovItems: { id: string }[] };
+      const updated = (await res.json()) as {
+        employeeId: string | null;
+        employee: { firstName: string; lastName: string } | null;
+        workDate: string;
+        workerName: string;
+        role: string | null;
+        hours: unknown;
+        clockIn: string | null;
+        commuteHours: number | null;
+        transportationMethod: string | null;
+        hourlyRateCents: number;
+        taskDescription: string | null;
+        sovItems: { id: string }[];
+      };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), clockIn: updated.clockIn ?? null, commuteHours: updated.commuteHours ?? null, transportationMethod: updated.transportationMethod ?? null, hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null, sovItemIds: updated.sovItems.map((s) => s.id) }
+            ? {
+                ...e,
+                employeeId: updated.employeeId,
+                employeeName: updated.employee ? `${updated.employee.firstName} ${updated.employee.lastName}`.trim() : null,
+                workDate: updated.workDate,
+                workerName: updated.workerName,
+                role: updated.role ?? null,
+                hours: String(updated.hours),
+                clockIn: updated.clockIn ?? null,
+                commuteHours: updated.commuteHours ?? null,
+                transportationMethod: updated.transportationMethod ?? null,
+                hourlyRateCents: updated.hourlyRateCents,
+                taskDescription: updated.taskDescription ?? null,
+                sovItemIds: updated.sovItems.map((s) => s.id),
+              }
             : e,
         ),
       );
@@ -429,29 +511,46 @@ export function ProjectLaborSection({
       setError("Commute time can't exceed total hours.");
       return;
     }
+    if (employeePick === OTHER_VALUE) {
+      const fd = new FormData(form);
+      const typedName = String(fd.get("workerName") || "").trim();
+      const match = suggestEmployeeMatch(typedName, employees);
+      if (match) {
+        setPendingNameMatch({ form, hours, typedName, match });
+        return;
+      }
+    }
+    proceedAfterNameCheck(form, hours);
+  }
+
+  // Split out so both the normal submit path and the "did you mean" modal's
+  // "use this person" action land here with the right employeeId, without
+  // relying on employeePick state that hasn't re-rendered yet.
+  function proceedAfterNameCheck(form: HTMLFormElement, hours: number, employeeOverrideId?: string) {
     if (hoursBudget != null && contractValueCents) {
       const projectedHours = totalHoursLogged + hours;
       const projectedMarginPct = turnoverImpliedMarginPct(contractValueCents, projectedHours);
       const severity = turnoverMarginSeverity(projectedMarginPct);
       if (severity !== "on-track") {
-        setPendingOverBudget({ form, hours, projectedHours, projectedMarginPct, severity });
+        setPendingOverBudget({ form, hours, projectedHours, projectedMarginPct, severity, employeeOverrideId });
         return;
       }
     }
-    await submitLaborEntry(form, hours);
+    void submitLaborEntry(form, hours, employeeOverrideId);
   }
 
-  async function submitLaborEntry(form: HTMLFormElement, hours: number) {
+  async function submitLaborEntry(form: HTMLFormElement, hours: number, employeeOverrideId?: string) {
     setLoading(true);
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const taskDescription = String(fd.get("taskDescription") || "").trim();
+    const effectiveEmployeePick = employeeOverrideId ?? employeePick;
 
-    const picked = employees.find((x) => x.id === employeePick);
+    const picked = employees.find((x) => x.id === effectiveEmployeePick);
     const workerName =
-      employeePick === OTHER_VALUE
+      effectiveEmployeePick === OTHER_VALUE
         ? String(fd.get("workerName") || "").trim()
         : picked
           ? `${picked.firstName} ${picked.lastName}`.trim()
@@ -470,7 +569,7 @@ export function ProjectLaborSection({
         body: JSON.stringify({
           workDate: workDate || "",
           workerName,
-          employeeId: employeePick !== OTHER_VALUE ? employeePick : undefined,
+          employeeId: effectiveEmployeePick !== OTHER_VALUE ? effectiveEmployeePick : undefined,
           role: role || undefined,
           hours,
           clockIn: clockInStr || undefined,
@@ -1033,7 +1132,16 @@ export function ProjectLaborSection({
                         <input type="date" className={editInput} value={editFields.workDate} onChange={(e) => setEditFields((f) => ({ ...f, workDate: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} value={editFields.workerName} onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))} />
+                        <EmployeeCombobox employees={employees} value={editFields.employeeId} onChange={handleEditEmployeeChange} className={editInput} />
+                        {editFields.employeeId === OTHER_VALUE && (
+                          <input
+                            type="text"
+                            className={`${editInput} mt-1`}
+                            placeholder="Worker name"
+                            value={editFields.workerName}
+                            onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))}
+                          />
+                        )}
                       </td>
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
@@ -1242,14 +1350,13 @@ export function ProjectLaborSection({
       </div>
     </div>
 
-    {pendingOverBudget ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-        {/* Backdrop click is intentionally not wired to dismiss: this modal
-            gates a real submit, and closing it discards the entry (it was
-            never sent to the server). A stray tap outside the card used to
-            silently drop it with no confirmation. Cancel is now the only
-            way out, so dismissal is always a deliberate choice. */}
-        <div className="w-80 rounded-xl bg-white p-5 shadow-2xl">
+    {/* Not dismissible: this modal gates a real submit, and closing it
+        discards the entry (it was never sent to the server). A stray tap
+        outside the card used to silently drop it with no confirmation.
+        Cancel is now the only way out, and it says so. */}
+    <Modal open={!!pendingOverBudget} onClose={() => {}} dismissible={false}>
+      {pendingOverBudget && (
+        <>
           <div className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
@@ -1288,24 +1395,24 @@ export function ProjectLaborSection({
             ~{pendingOverBudget.projectedMarginPct.toFixed(0)}% margin (target: 50%)
           </p>
           <div className="mt-4 flex justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => {
                 setPendingOverBudget(null);
                 setError("Entry not saved.");
               }}
-              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
             >
               Cancel
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => {
                 const p = pendingOverBudget;
                 setPendingOverBudget(null);
-                submitLaborEntry(p.form, p.hours);
+                submitLaborEntry(p.form, p.hours, p.employeeOverrideId);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold text-white ${
                 pendingOverBudget.severity === "bad"
                   ? "bg-red-600 hover:bg-red-700"
                   : pendingOverBudget.severity === "critical"
@@ -1316,19 +1423,56 @@ export function ProjectLaborSection({
               Add anyway
             </button>
           </div>
-        </div>
-      </div>
-    ) : null}
+        </>
+      )}
+    </Modal>
 
-    {blockedModal ? (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        onClick={() => setBlockedModal(null)}
-      >
-        <div
-          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
+    {/* Also not dismissible via backdrop, same reasoning as above — picking
+        "No, log as typed" is the explicit way out. */}
+    <Modal open={!!pendingNameMatch} onClose={() => {}} dismissible={false}>
+      {pendingNameMatch && (
+        <>
+          <h3 className="text-sm font-semibold text-gray-800">Did you mean an existing employee?</h3>
+          <p className="mt-2 text-sm text-gray-600">
+            You typed &quot;{pendingNameMatch.typedName}&quot;, which looks like it could be{" "}
+            <span className="font-medium text-gray-800">{employeeLabel(pendingNameMatch.match)}</span>, already in
+            the roster. Picking them keeps these hours linked to their profile and payroll — logging as a new name
+            won&apos;t.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                const p = pendingNameMatch;
+                setPendingNameMatch(null);
+                proceedAfterNameCheck(p.form, p.hours);
+              }}
+            >
+              No, log as typed
+            </Button>
+            <Button
+              variant="primary"
+              size="xs"
+              onClick={() => {
+                const p = pendingNameMatch;
+                setPendingNameMatch(null);
+                setEmployeePick(p.match.id);
+                proceedAfterNameCheck(p.form, p.hours, p.match.id);
+              }}
+            >
+              Use {employeeLabel(pendingNameMatch.match)}
+            </Button>
+          </div>
+        </>
+      )}
+    </Modal>
+
+    {/* Purely informational (doesn't gate an unsaved submit the way the two
+        above do), so a backdrop click closing it is fine. */}
+    <Modal open={!!blockedModal} onClose={() => setBlockedModal(null)}>
+      {blockedModal && (
+        <>
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">!</span>
             <h3 className="text-sm font-semibold text-gray-800">
@@ -1342,17 +1486,13 @@ export function ProjectLaborSection({
           </p>
           <p className="mt-2 text-xs text-gray-400">A PM can override this if needed.</p>
           <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setBlockedModal(null)}
-              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-            >
+            <Button variant="danger" size="xs" onClick={() => setBlockedModal(null)}>
               Got it
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    ) : null}
+        </>
+      )}
+    </Modal>
 
     {qualityPopup ? (
       <div

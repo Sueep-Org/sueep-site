@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type DistanceRow = {
   id: string;
@@ -11,9 +12,12 @@ export type DistanceRow = {
   notes: string | null;
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+// Was a stray dark (zinc-950) theme, inconsistent with every other form in
+// the ERP — no dark mode exists elsewhere here, so this looks like a
+// copy-paste from somewhere else rather than an intentional choice. Aligned
+// to the shared light styles like the rest of the app.
+const input = inputClass.md;
+const label = labelClass.default;
 
 export function ProjectDistanceSection({
   projectId,

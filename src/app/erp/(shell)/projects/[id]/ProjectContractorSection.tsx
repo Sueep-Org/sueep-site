@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
 
 export type ContractorRow = {
   id: string;
@@ -25,11 +26,9 @@ export type ContractorOption = {
   status: string;
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
 
 function fmt(cents: number): string {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -646,43 +645,25 @@ export function ProjectContractorSection({
       </div>
     </div>
 
-    {notesPopup ? (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        onClick={() => setNotesPopup(null)}
-      >
-        <div
-          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
-          <textarea
-            autoFocus
-            rows={4}
-            value={notesPopup.draft}
-            onChange={(e) => setNotesPopup((p) => p ? { ...p, draft: e.target.value } : null)}
-            placeholder="Add notes..."
-            className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
-          />
-          <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setNotesPopup(null)}
-              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleNotesSave}
-              className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
-            >
-              Save
-            </button>
-          </div>
-        </div>
+    <Modal open={!!notesPopup} onClose={() => setNotesPopup(null)}>
+      <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
+      <textarea
+        autoFocus
+        rows={4}
+        value={notesPopup?.draft ?? ""}
+        onChange={(e) => setNotesPopup((p) => p ? { ...p, draft: e.target.value } : null)}
+        placeholder="Add notes..."
+        className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+      />
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="ghost" size="xs" onClick={() => setNotesPopup(null)}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="xs" onClick={handleNotesSave}>
+          Save
+        </Button>
       </div>
-    ) : null}
+    </Modal>
     </>
   );
 }

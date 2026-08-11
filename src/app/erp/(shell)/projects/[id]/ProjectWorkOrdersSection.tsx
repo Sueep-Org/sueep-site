@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type WorkOrderRow = {
   id: string;
@@ -17,9 +18,10 @@ export type WorkOrderRow = {
   photoUrls: string[];
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-zinc-400";
+// See ProjectDistanceSection.tsx — same stray dark theme, aligned to the
+// shared light styles.
+const input = inputClass.md;
+const label = labelClass.default;
 
 function normalizePhotoUrls(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
