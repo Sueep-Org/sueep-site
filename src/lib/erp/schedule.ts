@@ -130,6 +130,43 @@ export type ScheduleChangeOrder = {
    * scheduledDateKey — also draggable (moves endDate). Null if unset or
    * equal to the start day (no separate occurrence in that case). */
   scheduledEndDateKey: string | null;
+  /** The CO's own current supervisor (ProjectChangeOrder.supervisorUserId),
+   * mirroring ScheduleProject.supervisorUserId — drives the "needs a
+   * supervisor" warning the same way. */
+  supervisorUserId: string | null;
+};
+
+/** A planned supervisor and/or PM coverage of a ProjectChangeOrder on a
+ * specific day (before any labor has actually been logged for it) — same
+ * idea as ScheduleDayAssignment, scoped to the CO directly instead of the
+ * parent project. No seriesId/sovItemIds/scopeItems, unlike the project
+ * version — repeat-scheduling and SOV/scope tagging aren't offered for COs
+ * yet. */
+export type ScheduleCoDayAssignment = {
+  id: string;
+  changeOrderId: string;
+  /** Day key (YYYY-MM-DD) this assignment is for. */
+  dateKey: string;
+  supervisorUserId: string | null;
+  /** Set when only the PM covers this day, no supervisor. */
+  projectManagerUserId: string | null;
+  /** Optional "HH:MM" (24h) local times — all-day on the calendar invite if either is unset. */
+  startTime: string | null;
+  endTime: string | null;
+  /** Free-text note about this day's coverage. */
+  comment: string | null;
+};
+
+/** A worker (Employee or Contractor) planned onto a change order's work on a
+ * future day, same idea as ScheduleWorkerAssignment but scoped to the CO
+ * directly. Exactly one of employeeId/contractorId is set. */
+export type ScheduleCoWorkerAssignment = {
+  id: string;
+  changeOrderId: string;
+  employeeId: string | null;
+  contractorId: string | null;
+  /** Day key (YYYY-MM-DD) this assignment is for. */
+  dateKey: string;
 };
 
 /** A "Schedule SOV Work" request (ProjectSovScheduleRequest) submitted via

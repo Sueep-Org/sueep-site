@@ -7,6 +7,7 @@ export async function sendEmail(options: {
   subject: string;
   html: string;
   replyTo?: string;
+  cc?: string[];
   bcc?: string[];
   attachments?: Array<{ filename: string; content: Buffer }>;
 }) {
@@ -23,6 +24,7 @@ export async function sendEmail(options: {
     subject: options.subject,
     html: options.html,
     reply_to: options.replyTo,
+    cc: options.cc,
     bcc: options.bcc,
     attachments: options.attachments?.map((a) => ({
       filename: a.filename,

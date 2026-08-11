@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -257,44 +257,75 @@ function RailGroup({
   pathname: string;
 }) {
   const active = isGroupActive(pathname, items);
+  // Tap-driven, not hover-only: on a touchscreen (iPad et al.) there's no
+  // hover, so the old hover-to-reveal flyout was unreachable and tapping the
+  // icon just followed the Link straight to items[0], hiding the rest of the
+  // group. A click/tap now toggles the panel open, same as it would on
+  // desktop; onMouseEnter/onMouseLeave below keep the old hover-to-preview
+  // behavior for mouse users on top of that, and a click outside closes it
+  // for touch since there's no "mouse left the area" event to rely on.
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
   if (items.length === 0) return null;
 
   return (
-    <div className="group relative flex justify-center">
-      <Link
-        href={items[0].href}
+    <div
+      ref={wrapperRef}
+      className="relative flex justify-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
         aria-label={label}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
         className={[
           railIconBtnCls,
           active ? "bg-pink-50 text-pink-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-900",
         ].join(" ")}
       >
         <Icon className="h-5 w-5 shrink-0" />
-      </Link>
+      </button>
 
-      {/* Flush hover bridge (no gap) so the pointer can travel from icon to panel. */}
-      <div className="invisible absolute left-full top-0 z-50 pl-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
-        <div className="w-56 rounded-xl border border-gray-100 bg-white py-2 shadow-xl">
-          <p className="px-3.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
-          <div className="flex flex-col gap-0.5 px-2">
-            {items.map((item) => {
-              const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={[
-                    "rounded-lg px-2.5 py-2 text-sm transition-colors",
-                    itemActive ? "bg-pink-50 font-medium text-pink-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+      {open && (
+        <div className="absolute left-full top-0 z-50 pl-2">
+          <div className="w-56 rounded-xl border border-gray-100 bg-white py-2 shadow-xl">
+            <p className="px-3.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+            <div className="flex flex-col gap-0.5 px-2">
+              {items.map((item) => {
+                const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className={[
+                      "rounded-lg px-2.5 py-2 text-sm transition-colors",
+                      itemActive ? "bg-pink-50 font-medium text-pink-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

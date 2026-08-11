@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import {
   dayKey,
   type ScheduleChangeOrder,
+  type ScheduleCoDayAssignment,
+  type ScheduleCoWorkerAssignment,
   type ScheduleDayAssignment,
   type ScheduleProject,
   type ScheduleSovRequest,
@@ -38,6 +40,8 @@ export default async function SchedulePage() {
     workerAssignmentRows,
     employeeRows,
     contractorRows,
+    coDayAssignmentRows,
+    coWorkerAssignmentRows,
   ] = await Promise.all([
     prisma.project.findMany({
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
@@ -81,7 +85,16 @@ export default async function SchedulePage() {
     prisma.laborEntry.findMany({ select: { projectId: true, workDate: true, workerName: true, hours: true, employeeId: true, clockIn: true } }),
     prisma.projectChangeOrder.findMany({
       where: { status: { notIn: CO_STATUS_EXCLUDED } },
-      select: { id: true, projectId: true, title: true, status: true, startDate: true, endDate: true, requestedDate: true },
+      select: {
+        id: true,
+        projectId: true,
+        title: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        requestedDate: true,
+        supervisorUserId: true,
+      },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
     prisma.projectSovScheduleRequest.findMany({
@@ -115,6 +128,21 @@ export default async function SchedulePage() {
       where: { status: { not: "INACTIVE" } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.changeOrderDayAssignment.findMany({
+      select: {
+        id: true,
+        changeOrderId: true,
+        date: true,
+        supervisorUserId: true,
+        projectManagerUserId: true,
+        startTime: true,
+        endTime: true,
+        comment: true,
+      },
+    }),
+    prisma.changeOrderWorkerDayAssignment.findMany({
+      select: { id: true, changeOrderId: true, employeeId: true, contractorId: true, date: true },
     }),
   ]);
 
@@ -226,6 +254,18 @@ export default async function SchedulePage() {
     }
   }
 
+  // Days explicitly planned for a CO via its own ChangeOrderDayAssignment
+  // (a supervisor/PM assigned directly to the CO, not just tagged onto a
+  // project day) — same idea as plannedDaysByChangeOrder above, different
+  // source table.
+  const ownPlannedDaysByChangeOrder = new Map<string, Set<string>>();
+  for (const a of coDayAssignmentRows) {
+    const k = dayKey(a.date);
+    const set = ownPlannedDaysByChangeOrder.get(a.changeOrderId) ?? new Set<string>();
+    set.add(k);
+    ownPlannedDaysByChangeOrder.set(a.changeOrderId, set);
+  }
+
   // Open COs per project, for the day-assignment modal's CO picker.
   const changeOrdersByProject = new Map<string, { id: string; title: string }[]>();
   for (const co of changeOrderRows) {
@@ -245,6 +285,7 @@ export default async function SchedulePage() {
       const scheduledEndDateKey = co.endDate ? dayKey(co.endDate) : null;
       if (co.endDate) days.add(dayKey(co.endDate));
       for (const k of plannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
+      for (const k of ownPlannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
       const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
       for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
         laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
@@ -258,9 +299,29 @@ export default async function SchedulePage() {
         laborByDay,
         scheduledDateKey,
         scheduledEndDateKey: scheduledEndDateKey !== scheduledDateKey ? scheduledEndDateKey : null,
+        supervisorUserId: co.supervisorUserId,
       };
     })
     .filter((co) => co.workDayKeys.length > 0);
+
+  const coDayAssignments: ScheduleCoDayAssignment[] = coDayAssignmentRows.map((a) => ({
+    id: a.id,
+    changeOrderId: a.changeOrderId,
+    dateKey: dayKey(a.date),
+    supervisorUserId: a.supervisorUserId,
+    projectManagerUserId: a.projectManagerUserId,
+    startTime: a.startTime,
+    endTime: a.endTime,
+    comment: a.comment,
+  }));
+
+  const coWorkerAssignments: ScheduleCoWorkerAssignment[] = coWorkerAssignmentRows.map((a) => ({
+    id: a.id,
+    changeOrderId: a.changeOrderId,
+    employeeId: a.employeeId,
+    contractorId: a.contractorId,
+    dateKey: dayKey(a.date),
+  }));
 
   const sovRequests: ScheduleSovRequest[] = sovRequestRows.map((r) => ({
     id: r.id,
@@ -333,6 +394,8 @@ export default async function SchedulePage() {
   let visibleSovRequests = sovRequests;
   let visibleDayAssignments = dayAssignments;
   let visibleWorkerAssignments = workerAssignments;
+  let visibleCoDayAssignments = coDayAssignments;
+  let visibleCoWorkerAssignments = coWorkerAssignments;
   if (auth?.role === "SUPERVISOR") {
     // auth.uid is the Firebase UID (from the session token), not the
     // ErpUser.id that Project.supervisorUserId / ProjectDayAssignment.supervisorUserId
@@ -356,6 +419,15 @@ export default async function SchedulePage() {
       for (const a of dayAssignments) {
         if (a.supervisorUserId === supervisorErpUser.id) allowedProjectIds.add(a.projectId);
       }
+      // Same rule for a CO's own day assignment — being assigned to just
+      // the CO (not the parent project) still surfaces that project on the
+      // supervisor's calendar.
+      const projectIdByChangeOrderId = new Map(changeOrders.map((co) => [co.id, co.projectId]));
+      for (const a of coDayAssignments) {
+        if (a.supervisorUserId !== supervisorErpUser.id) continue;
+        const pid = projectIdByChangeOrderId.get(a.changeOrderId);
+        if (pid) allowedProjectIds.add(pid);
+      }
     }
     for (const le of laborEntryRows) {
       const matchesEmployee = supervisorEmployee != null && le.employeeId === supervisorEmployee.id;
@@ -368,6 +440,9 @@ export default async function SchedulePage() {
     visibleSovRequests = sovRequests.filter((r) => allowedProjectIds.has(r.projectId));
     visibleDayAssignments = dayAssignments.filter((a) => allowedProjectIds.has(a.projectId));
     visibleWorkerAssignments = workerAssignments.filter((a) => allowedProjectIds.has(a.projectId));
+    const visibleChangeOrderIds = new Set(visibleChangeOrders.map((co) => co.id));
+    visibleCoDayAssignments = coDayAssignments.filter((a) => visibleChangeOrderIds.has(a.changeOrderId));
+    visibleCoWorkerAssignments = coWorkerAssignments.filter((a) => visibleChangeOrderIds.has(a.changeOrderId));
   }
 
   return (
@@ -390,6 +465,8 @@ export default async function SchedulePage() {
         employees={employees}
         contractors={contractors}
         initialWorkerAssignments={visibleWorkerAssignments}
+        initialCoDayAssignments={visibleCoDayAssignments}
+        initialCoWorkerAssignments={visibleCoWorkerAssignments}
       />
     </div>
   );

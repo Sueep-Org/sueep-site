@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { CoDayPopover } from "./CoDayPopover";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import {
@@ -16,6 +17,8 @@ import {
   startOfDay,
   startOfMonth,
   type ScheduleChangeOrder,
+  type ScheduleCoDayAssignment,
+  type ScheduleCoWorkerAssignment,
   type ScheduleDayAssignment,
   type ScheduleProject,
   type ScheduleSovRequest,
@@ -414,6 +417,8 @@ export function SchedulePlanner({
   employees,
   contractors,
   initialWorkerAssignments,
+  initialCoDayAssignments,
+  initialCoWorkerAssignments,
 }: {
   projects: ScheduleProject[];
   supervisors: Person[];
@@ -425,6 +430,8 @@ export function SchedulePlanner({
   employees: Person[];
   contractors: Person[];
   initialWorkerAssignments: ScheduleWorkerAssignment[];
+  initialCoDayAssignments: ScheduleCoDayAssignment[];
+  initialCoWorkerAssignments: ScheduleCoWorkerAssignment[];
 }) {
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
   // not the viewer's own device timezone — otherwise a viewer far enough
@@ -467,6 +474,20 @@ export function SchedulePlanner({
   const [clearingSpanDateKey, setClearingSpanDateKey] = useState<string | null>(null);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
+  // Flattened CO list for the "+" day-assignment modal's change-order picker
+  // — title plus its parent project's name, since two COs on different jobs
+  // can easily share a title like "Change order 1".
+  const changeOrderOptions = useMemo(
+    () =>
+      changeOrders.map((co) => ({
+        id: co.id,
+        title: co.title,
+        projectId: co.projectId,
+        projectTitle: projectById.get(co.projectId)?.jobTitle ?? "",
+      })),
+    [changeOrders, projectById],
+  );
+
   // Deep link from elsewhere (e.g. the schedule-nudge popup's "Schedule it"
   // link) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
   // pre-filled with that project, instead of landing on the bare calendar.
@@ -484,6 +505,13 @@ export function SchedulePlanner({
   // Planned worker (crew) assignments — same local-state pattern as supervisor
   // day assignments, but no invite email is sent for these.
   const [workerAssignments, setWorkerAssignments] = useState(initialWorkerAssignments);
+
+  // Same two local-state pairs as above, but scoped directly to change
+  // orders (ChangeOrderDayAssignment / ChangeOrderWorkerDayAssignment)
+  // instead of the parent project — lets a CO be planned and staffed on its
+  // own, see CoDayPopover.
+  const [coDayAssignments, setCoDayAssignments] = useState(initialCoDayAssignments);
+  const [coWorkerAssignments, setCoWorkerAssignments] = useState(initialCoWorkerAssignments);
 
   // Legacy ProjectSovScheduleRequest chips. The portal's "Schedule SOV Work"
   // flow now creates a real ProjectDayAssignment instead (see the API route),
@@ -757,6 +785,80 @@ export function SchedulePlanner({
     }
   }
 
+  // Same idea as movePlannedAssignment above, but for a CO's own planned
+  // day (ChangeOrderDayAssignment) — drag-and-drop on a mid-span day that
+  // isn't the CO's start/end date (those move ProjectChangeOrder.startDate/
+  // endDate instead, see handleDropOnDay's "changeOrder" branch).
+  async function moveCoPlannedAssignment(
+    changeOrderId: string,
+    assignmentId: string,
+    fromK: string,
+    toK: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const existingAssignment = coDayAssignments.find((a) => a.id === assignmentId);
+    if (!existingAssignment) return { ok: false, error: "Assignment not found" };
+    try {
+      const dayRes = await fetch("/api/erp/schedule/co-day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          changeOrderId,
+          date: toK,
+          supervisorUserId: existingAssignment.supervisorUserId || undefined,
+          projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
+          startTime: existingAssignment.startTime || undefined,
+          endTime: existingAssignment.endTime || undefined,
+          comment: existingAssignment.comment || undefined,
+        }),
+      });
+      const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!dayRes.ok || !dayData.id) return { ok: false, error: dayData.error || "Failed to save" };
+
+      // Carry any planned workers on the old day over to the new one, same
+      // migrate-then-delete-old-row dance movePlannedAssignment does.
+      const oldWorkers = coWorkerAssignments.filter((w) => w.dateKey === fromK && w.changeOrderId === changeOrderId);
+      const newWorkers: ScheduleCoWorkerAssignment[] = [];
+      for (const w of oldWorkers) {
+        const wRes = await fetch("/api/erp/schedule/co-worker-assignments", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            changeOrderId,
+            employeeId: w.employeeId || undefined,
+            contractorId: w.contractorId || undefined,
+            date: toK,
+          }),
+        });
+        const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
+        if (wRes.ok && wData.id) {
+          newWorkers.push({ id: wData.id, changeOrderId, employeeId: w.employeeId, contractorId: w.contractorId, dateKey: toK });
+        }
+      }
+      await fetch(`/api/erp/schedule/co-day-assignments/${assignmentId}`, { method: "DELETE" });
+
+      setCoDayAssignments((prev) => [
+        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id),
+        {
+          id: dayData.id!,
+          changeOrderId,
+          dateKey: toK,
+          supervisorUserId: existingAssignment.supervisorUserId,
+          projectManagerUserId: existingAssignment.projectManagerUserId,
+          startTime: existingAssignment.startTime,
+          endTime: existingAssignment.endTime,
+          comment: existingAssignment.comment,
+        },
+      ]);
+      setCoWorkerAssignments((prev) => [
+        ...prev.filter((w) => !(w.dateKey === fromK && w.changeOrderId === changeOrderId)),
+        ...newWorkers,
+      ]);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Failed to save" };
+    }
+  }
+
   async function handleEventPlannedDateSave(oldK: string, projectId: string, assignmentId: string) {
     setEventError("");
     const newK = eventPlannedDate;
@@ -807,6 +909,7 @@ export function SchedulePlanner({
     | { kind: "needsSupervisor"; projectId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
     | { kind: "planned"; projectId: string; assignmentId: string; fromKey: string; jobTitle: string }
     | { kind: "changeOrder"; projectId: string; changeOrderId: string; fromKey: string; jobTitle: string; role: "start" | "end" }
+    | { kind: "coPlanned"; changeOrderId: string; assignmentId: string; fromKey: string; jobTitle: string }
     | null
   >(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
@@ -844,6 +947,11 @@ export function SchedulePlanner({
       } catch {
         setDragError(`Couldn't move "${chip.jobTitle}" — try again`);
       }
+      return;
+    }
+    if (chip.kind === "coPlanned") {
+      const result = await moveCoPlannedAssignment(chip.changeOrderId, chip.assignmentId, chip.fromKey, toKey);
+      if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
       return;
     }
     const existingAssignment = dayAssignments.find((a) => a.id === chip.assignmentId);
@@ -967,9 +1075,10 @@ export function SchedulePlanner({
     );
   }
 
-  // Read-only change-order detail card, same idea as the labor card above —
-  // a CO's own scope/pricing lives on its own page, this is just a calendar
-  // preview of which day it's shown on and what got logged against it.
+  // Change-order detail card — like the read-only labor card above, but
+  // editable: a CO can be planned (supervisor/PM/time/comment + crew)
+  // directly against itself here, same capability the project event
+  // popover has. See CoDayPopover.
   const [coPopoverKey, setCoPopoverKey] = useState<string | null>(null);
 
   function openCoPopover(k: string, co: ScheduleChangeOrder) {
@@ -978,66 +1087,32 @@ export function SchedulePlanner({
 
   function renderCoPopover(k: string, co: ScheduleChangeOrder) {
     if (coPopoverKey !== `${k}:${co.id}`) return null;
-    const summary = co.laborByDay[k];
     const parentProject = projectById.get(co.projectId);
-
-    return createPortal(
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        onClick={() => setCoPopoverKey(null)}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 text-left shadow-xl"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold text-gray-800">{co.title}</p>
-            <button
-              type="button"
-              onClick={() => setCoPopoverKey(null)}
-              aria-label="Close"
-              className="shrink-0 text-gray-400 hover:text-gray-600"
-            >
-              ×
-            </button>
-          </div>
-          <p className="mt-0.5 text-[10px] text-gray-400">
-            {CHANGE_ORDER_LABEL} · {dayCellLabel(k)}
-          </p>
-          {parentProject ? (
-            <p className="mt-0.5 text-[10px] text-gray-400">Project: {parentProject.jobTitle}</p>
-          ) : null}
-          <p className="mt-0.5 text-[10px] text-gray-400">Status: {co.status}</p>
-
-          <div className="mt-3 border-t border-gray-100 pt-2.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-[10px] font-medium text-gray-500">Logged labor this day</label>
-              <span className="text-[10px] font-semibold text-gray-700">{summary ? formatHours(summary.hours) : "0 hrs"}</span>
-            </div>
-            {summary && summary.workers.length > 0 ? (
-              <p className="mt-1.5 text-[11px] text-gray-600">Workers: {summary.workers.join(", ")}</p>
-            ) : (
-              <p className="mt-1.5 text-[10px] text-gray-400">No labor logged for this day.</p>
-            )}
-          </div>
-
-          <div className="mt-2.5 flex items-center gap-1.5">
-            <Link
-              href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
-              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
-            >
-              View change order
-            </Link>
-            <Link
-              href={`/erp/projects/${co.projectId}`}
-              className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
-            >
-              View project
-            </Link>
-          </div>
-        </div>
-      </div>,
-      document.body,
+    const assignment = coDayAssignments.find((a) => a.dateKey === k && a.changeOrderId === co.id);
+    const workersForDay = coWorkerAssignments.filter((w) => w.dateKey === k && w.changeOrderId === co.id);
+    return (
+      <CoDayPopover
+        co={co}
+        dateKey={k}
+        parentProjectTitle={parentProject?.jobTitle}
+        assignment={assignment}
+        workersForDay={workersForDay}
+        supervisors={supervisors}
+        projectManagers={projectManagers}
+        employees={employees}
+        contractors={contractors}
+        onClose={() => setCoPopoverKey(null)}
+        onAssignmentSaved={(a) => {
+          setCoDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
+          if (a.supervisorUserId) setCoSupervisorOverrides((o) => ({ ...o, [a.changeOrderId]: a.supervisorUserId }));
+        }}
+        onAssignmentDeleted={(id) => {
+          setCoDayAssignments((prev) => prev.filter((a) => a.id !== id));
+          setCoSupervisorOverrides((o) => ({ ...o, [co.id]: null }));
+        }}
+        onWorkerCreated={(w) => setCoWorkerAssignments((prev) => [...prev.filter((x) => x.id !== w.id), w])}
+        onWorkerDeleted={(id) => setCoWorkerAssignments((prev) => prev.filter((w) => w.id !== id))}
+      />
     );
   }
 
@@ -1619,6 +1694,15 @@ export function SchedulePlanner({
     return (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
   }
 
+  // Same override pattern as supervisorOverrides above, scoped to change
+  // orders — lets CoDayPopover's "needs a supervisor" alert disappear the
+  // moment coverage is saved, instead of waiting on a full page refresh.
+  const [coSupervisorOverrides, setCoSupervisorOverrides] = useState<Record<string, string | null>>({});
+
+  function currentCoSupervisorId(co: ScheduleChangeOrder): string {
+    return (co.id in coSupervisorOverrides ? coSupervisorOverrides[co.id] : co.supervisorUserId) ?? "";
+  }
+
   async function handleSupervisorChange(p: ScheduleProject, nextId: string) {
     const previous = currentSupervisorId(p);
     const value = nextId || null;
@@ -1809,6 +1893,37 @@ export function SchedulePlanner({
     }
     return map;
   }, [projects, dayAssignments, supervisorOverrides, todayDate]);
+
+  // Same alert as needsSupervisorByDay above, but for change orders — a CO
+  // with a start (or end) date today or later, no logged labor, and no
+  // supervisor of its own (ChangeOrderDayAssignment / supervisorUserId)
+  // yet. Anchored to the CO's own scheduledDateKey/scheduledEndDateKey since
+  // there's no other marker to place it by until one's assigned.
+  const coNeedsSupervisorByDay = useMemo(() => {
+    const plannedDayPairs = new Set(coDayAssignments.map((a) => `${a.changeOrderId}:${a.dateKey}`));
+    const map = new Map<string, { co: ScheduleChangeOrder; role: "start" | "end" }[]>();
+    const todayK = dayKey(todayDate);
+    for (const co of changeOrders) {
+      const supervisorId = currentCoSupervisorId(co);
+      if (supervisorId) continue;
+      if (Object.keys(co.laborByDay).length > 0) continue;
+      if (co.status === "COMPLETED") continue;
+      if (!co.scheduledDateKey) continue;
+      const occurrences: { k: string; role: "start" | "end" }[] =
+        co.scheduledEndDateKey
+          ? [{ k: co.scheduledDateKey, role: "start" }, { k: co.scheduledEndDateKey, role: "end" }]
+          : [{ k: co.scheduledDateKey, role: "start" }];
+      for (const { k, role } of occurrences) {
+        if (k < todayK) continue;
+        if (plannedDayPairs.has(`${co.id}:${k}`)) continue;
+        const list = map.get(k) ?? [];
+        list.push({ co, role });
+        map.set(k, list);
+      }
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [changeOrders, coDayAssignments, coSupervisorOverrides, todayDate]);
 
   // A project's declared start/end date (projectDate/projectEndDate) with no
   // other marker on the calendar that day — no logged labor, no planned
@@ -2073,6 +2188,7 @@ export function SchedulePlanner({
                 // Unassigned by definition, so a supervisor filter can never
                 // match one — hide rather than show under the wrong supervisor.
                 let dayNeedsSupervisor = selectedSupervisorId ? [] : needsSupervisorByDay.get(k) ?? [];
+                let dayCoNeedsSupervisor = selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? [];
                 let dayProjectSpanEndpoints = projectSpanEndpointsByDay.get(k) ?? [];
 
                 if (selectedSupervisorId) {
@@ -2099,6 +2215,16 @@ export function SchedulePlanner({
                   return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
                 });
                 dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
+                dayCoNeedsSupervisor = selectedTypes.has("CO") ? dayCoNeedsSupervisor : [];
+                // A CO already flagged as "needs a supervisor" for this exact
+                // day would otherwise also render as its normal blue chip
+                // below (unlike a project, a CO's start/end day always shows
+                // up regardless of supervisor status) — drop it from the
+                // plain list so it shows up once, as the amber warning.
+                if (dayCoNeedsSupervisor.length > 0) {
+                  const flagged = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
+                  dayChangeOrders = dayChangeOrders.filter((co) => !flagged.has(co.id));
+                }
                 dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
 
                 const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
@@ -2134,6 +2260,28 @@ export function SchedulePlanner({
                   const parentProject = projectById.get(co.projectId);
                   const role: "start" | "end" | null =
                     k === co.scheduledDateKey ? "start" : k === co.scheduledEndDateKey ? "end" : null;
+                  // A day covered by the CO's own ChangeOrderDayAssignment
+                  // (a supervisor/PM was actually assigned) with no logged
+                  // labor yet is a plan, not a fact — dashed border, same
+                  // "planned" treatment a project's own dashed chip gets.
+                  // Applies whether or not this is also the CO's start/end
+                  // day (isPlannedOnly is a misnomer carried over from before
+                  // this covered start/end days too — kept the name to avoid
+                  // a churn-y rename).
+                  const coAssignment = coDayAssignments.find((a) => a.dateKey === k && a.changeOrderId === co.id);
+                  const isPlannedOnly = !summary && !!coAssignment;
+                  // Same rule as a project's own dayPlanned chip: a planned
+                  // day whose date has already passed with nothing logged is
+                  // a missed assignment, not just an upcoming plan — flagged
+                  // red instead of gray.
+                  const isOverdue = isPlannedOnly && !isFutureOrToday;
+                  const draggableHere = role !== null || (isPlannedOnly && role === null);
+                  const coSupervisor = coAssignment?.supervisorUserId
+                    ? supervisors.find((s) => s.id === coAssignment.supervisorUserId)
+                    : null;
+                  const coPm = !coSupervisor && coAssignment?.projectManagerUserId
+                    ? projectManagers.find((p) => p.id === coAssignment.projectManagerUserId)
+                    : null;
                   return (
                     <li
                       key={`co-${co.id}`}
@@ -2141,19 +2289,24 @@ export function SchedulePlanner({
                     >
                       <button
                         type="button"
-                        draggable={role !== null}
-                        onDragStart={role !== null ? (e) => {
+                        draggable={draggableHere}
+                        onDragStart={draggableHere ? (e) => {
                           e.dataTransfer.setData("text/plain", co.id);
                           e.dataTransfer.effectAllowed = "move";
-                          setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
+                          setDraggingChip(
+                            role !== null
+                              ? { kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role }
+                              : { kind: "coPlanned", changeOrderId: co.id, assignmentId: coAssignment!.id, fromKey: k, jobTitle: co.title },
+                          );
                         } : undefined}
-                        onDragEnd={role !== null ? () => {
+                        onDragEnd={draggableHere ? () => {
                           setDraggingChip(null);
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${role !== null ? "cursor-grab active:cursor-grabbing" : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
                       >
+                        {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                         <span className="truncate">{co.title}</span>
                       </button>
                       {renderCoPopover(k, co)}
@@ -2169,13 +2322,20 @@ export function SchedulePlanner({
                                 <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
                               ) : null}
                             </>
+                          ) : coSupervisor ? (
+                            <div className="mt-1 text-gray-300">Supervisor: {coSupervisor.displayName}</div>
+                          ) : coPm ? (
+                            <div className="mt-1 text-gray-300">PM: {coPm.displayName}</div>
                           ) : null}
+                          {isOverdue ? <div className="mt-1 text-red-400">Scheduled but never logged</div> : null}
                           {role === "start" ? (
                             <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
                           ) : role === "end" ? (
                             <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
+                          ) : isPlannedOnly ? (
+                            <div className="mt-1 text-gray-300">Planned, not yet logged — drag to reschedule</div>
                           ) : (
-                            <div className="mt-1 text-gray-300">Planned or logged for this day, not draggable</div>
+                            <div className="mt-1 text-gray-300">Logged for this day, not draggable</div>
                           )}
                         </div>
                       ) : null}
@@ -2263,6 +2423,45 @@ export function SchedulePlanner({
                           </li>
                           {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                           </Fragment>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {dayCoNeedsSupervisor.length > 0 ? (
+                      <ul className="mt-1 space-y-1">
+                        {dayCoNeedsSupervisor.map(({ co, role }) => (
+                          <li key={`co-needs-${co.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", co.id);
+                                e.dataTransfer.effectAllowed = "move";
+                                setDraggingChip({ kind: "changeOrder", projectId: co.projectId, changeOrderId: co.id, fromKey: k, jobTitle: co.title, role });
+                              }}
+                              onDragEnd={() => {
+                                setDraggingChip(null);
+                                setDragOverDayKey(null);
+                              }}
+                              onClick={() => openCoPopover(k, co)}
+                              className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS}`}
+                            >
+                              <span aria-hidden>⚠</span>
+                              <span className="truncate" title={co.title}>{co.title}</span>
+                            </button>
+                            {inMonth ? (
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                <div className="font-semibold">{co.title}</div>
+                                <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
+                                <div className="text-amber-300">
+                                  {role === "end"
+                                    ? isToday ? "Ends today" : "Ends this day"
+                                    : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                                </div>
+                                <div className="mt-1 text-gray-300">Click to view or assign one</div>
+                              </div>
+                            ) : null}
+                            {renderCoPopover(k, co)}
+                          </li>
                         ))}
                       </ul>
                     ) : null}
@@ -2507,13 +2706,13 @@ export function SchedulePlanner({
                 Dashed = planned, not yet logged
               </div>
             ) : null}
-            {dayAssignments.some((a) => a.dateKey < todayKey) ? (
+            {dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey) ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`} />
                 <span aria-hidden className="text-red-600">⚠</span> = scheduled but never logged
               </div>
             ) : null}
-            {needsSupervisorByDay.size > 0 ? (
+            {needsSupervisorByDay.size > 0 || coNeedsSupervisorByDay.size > 0 ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
                 ⚠ = starting soon, needs a supervisor
@@ -2650,11 +2849,13 @@ export function SchedulePlanner({
         <DayAssignmentModal
           dateKey={openDayKey}
           projects={projects}
+          changeOrderOptions={changeOrderOptions}
           supervisors={supervisors}
           projectManagers={projectManagers}
           employees={employees}
           contractors={contractors}
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
+          existingCoWorkers={coWorkerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
           onClose={() => {
             setOpenDayKey(null);
@@ -2682,6 +2883,12 @@ export function SchedulePlanner({
             setWorkerAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created])
           }
           onWorkerDeleted={(id) => setWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
+          onCoCreated={(a) => {
+            setCoDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
+            if (a.supervisorUserId) setCoSupervisorOverrides((o) => ({ ...o, [a.changeOrderId]: a.supervisorUserId }));
+          }}
+          onCoWorkerCreated={(a) => setCoWorkerAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a])}
+          onCoWorkerDeleted={(id) => setCoWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
         />
       ) : null}
     </div>

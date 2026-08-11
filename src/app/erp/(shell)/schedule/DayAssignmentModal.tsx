@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { matchesSearchQuery, type ScheduleDayAssignment, type ScheduleWorkerAssignment } from "@/lib/erp/schedule";
+import {
+  matchesSearchQuery,
+  type ScheduleCoDayAssignment,
+  type ScheduleCoWorkerAssignment,
+  type ScheduleDayAssignment,
+  type ScheduleWorkerAssignment,
+} from "@/lib/erp/schedule";
 import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
@@ -16,6 +22,10 @@ type ProjectOption = {
   completedScopeItems: string[];
   changeOrders: { id: string; title: string }[];
 };
+/** A flattened change order, for the "Change order" target mode's search —
+ * carries its parent project's title too since two COs on different jobs
+ * can share a title (e.g. "Change order 1"). */
+type ChangeOrderOption = { id: string; title: string; projectId: string; projectTitle: string };
 type Person = { id: string; displayName: string };
 
 function dateLabel(dateKey: string): string {
@@ -31,11 +41,13 @@ function dateLabel(dateKey: string): string {
 export function DayAssignmentModal({
   dateKey,
   projects,
+  changeOrderOptions,
   supervisors,
   projectManagers,
   employees,
   contractors,
   existingWorkers,
+  existingCoWorkers,
   initialProjectId,
   onClose,
   onCreated,
@@ -44,14 +56,19 @@ export function DayAssignmentModal({
   onWorkerCreated,
   onWorkerSeriesCreated,
   onWorkerDeleted,
+  onCoCreated,
+  onCoWorkerCreated,
+  onCoWorkerDeleted,
 }: {
   dateKey: string;
   projects: ProjectOption[];
+  changeOrderOptions: ChangeOrderOption[];
   supervisors: Person[];
   projectManagers: Person[];
   employees: Person[];
   contractors: Person[];
   existingWorkers: ScheduleWorkerAssignment[];
+  existingCoWorkers: ScheduleCoWorkerAssignment[];
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
   initialProjectId?: string;
   onClose: () => void;
@@ -64,11 +81,23 @@ export function DayAssignmentModal({
   /** Fired instead of onWorkerCreated when a repeat/range is active, one row per generated day. */
   onWorkerSeriesCreated: (assignments: ScheduleWorkerAssignment[]) => void;
   onWorkerDeleted: (id: string) => void;
+  /** Fired when a change order (rather than a project) gets its coverage saved. */
+  onCoCreated: (assignment: ScheduleCoDayAssignment) => void;
+  onCoWorkerCreated: (assignment: ScheduleCoWorkerAssignment) => void;
+  onCoWorkerDeleted: (id: string) => void;
 }) {
+  // Which kind of thing this modal is scheduling — a project (the original,
+  // full-featured flow: SOV/scope pickers, repeat/duplicate, project-level
+  // series) or a change order directly (supervisor/PM/time/comment + crew
+  // only, no repeat yet, see ChangeOrderDayAssignment).
+  const [targetMode, setTargetMode] = useState<"project" | "co">("project");
+
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [projectQuery, setProjectQuery] = useState(
     () => projects.find((p) => p.id === initialProjectId)?.jobTitle ?? ""
   );
+  const [coId, setCoId] = useState("");
+  const [coQuery, setCoQuery] = useState("");
   const [supervisorUserId, setSupervisorUserId] = useState("");
   // Rare case: only the PM is on site that day, no supervisor. At least one
   // of supervisorUserId/projectManagerUserId is required to submit.
@@ -116,6 +145,14 @@ export function DayAssignmentModal({
   const filteredProjects = projectQuery.trim()
     ? projects.filter((p) => matchesSearchQuery(p.jobTitle, projectQuery))
     : projects;
+
+  // Matches on the CO's own title or its parent project's, so searching
+  // "Brightview" finds every open CO on that job even if their titles don't
+  // mention it.
+  const filteredCos = coQuery.trim()
+    ? changeOrderOptions.filter((co) => matchesSearchQuery(`${co.title} ${co.projectTitle}`, coQuery))
+    : changeOrderOptions;
+  const selectedCo = changeOrderOptions.find((co) => co.id === coId) ?? null;
 
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
   const selectedGroup = selectedProject ? calendarSegmentGroup(selectedProject.segment) : null;
@@ -245,6 +282,65 @@ export function DayAssignmentModal({
     }
   }
 
+  // Same idea as handleAssign above, but posts a ChangeOrderDayAssignment
+  // instead — no repeat/duplicate or SOV/scope pickers, COs are assigned one
+  // day at a time for now (see co-day-assignments route).
+  async function handleAssignCo(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!coId) {
+      setError("Pick a change order");
+      return;
+    }
+    if ((startTime && !endTime) || (endTime && !startTime)) {
+      setError("Set both a start and end time, or leave both blank for an all-day event");
+      return;
+    }
+    if (startTime && endTime && endTime <= startTime) {
+      setError("End time must be after start time");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/erp/schedule/co-day-assignments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          changeOrderId: coId,
+          supervisorUserId: supervisorUserId || undefined,
+          projectManagerUserId: projectManagerUserId || undefined,
+          date: dateKey,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
+          comment: comment.trim() || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!res.ok || !data.id) throw new Error(data.error || "Failed to assign");
+      onCoCreated({
+        id: data.id,
+        changeOrderId: coId,
+        dateKey,
+        supervisorUserId: supervisorUserId || null,
+        projectManagerUserId: projectManagerUserId || null,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        comment: comment.trim() || null,
+      });
+      setCoId("");
+      setCoQuery("");
+      setSupervisorUserId("");
+      setProjectManagerUserId("");
+      setStartTime("");
+      setComment("");
+      setEndTime("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDeleteSeries(seriesId: string) {
     setDeletingSeriesId(seriesId);
     try {
@@ -261,13 +357,53 @@ export function DayAssignmentModal({
 
   async function handleAddWorker(force = false) {
     setWorkerError("");
-    if (!projectId) {
-      setWorkerError("Pick a project above first");
-      return;
-    }
     const workerId = workerType === "employee" ? employeeId : contractorId;
     if (!workerId) {
       setWorkerError(workerType === "employee" ? "Pick a worker" : "Pick a contractor");
+      return;
+    }
+
+    if (targetMode === "co") {
+      if (!coId) {
+        setWorkerError("Pick a change order above first");
+        return;
+      }
+      setWorkerWarning(null);
+      setAddingWorker(true);
+      try {
+        const res = await fetch("/api/erp/schedule/co-worker-assignments", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            changeOrderId: coId,
+            employeeId: workerType === "employee" ? workerId : undefined,
+            contractorId: workerType === "contractor" ? workerId : undefined,
+            date: dateKey,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+        if (!res.ok || !data.id) throw new Error(data.error || "Failed to assign worker");
+        onCoWorkerCreated({
+          id: data.id,
+          changeOrderId: coId,
+          employeeId: workerType === "employee" ? workerId : null,
+          contractorId: workerType === "contractor" ? workerId : null,
+          dateKey,
+        });
+        setEmployeeId("");
+        setEmployeeQuery("");
+        setContractorId("");
+        setContractorQuery("");
+      } catch (err) {
+        setWorkerError(err instanceof Error ? err.message : "Failed to assign worker");
+      } finally {
+        setAddingWorker(false);
+      }
+      return;
+    }
+
+    if (!projectId) {
+      setWorkerError("Pick a project above first");
       return;
     }
     if (!force) {
@@ -355,6 +491,19 @@ export function DayAssignmentModal({
     }
   }
 
+  async function handleDeleteCoWorker(id: string) {
+    setDeletingWorkerId(id);
+    try {
+      const res = await fetch(`/api/erp/schedule/co-worker-assignments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove");
+      onCoWorkerDeleted(id);
+    } catch {
+      // leave it in place; user can retry
+    } finally {
+      setDeletingWorkerId(null);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
@@ -366,7 +515,86 @@ export function DayAssignmentModal({
           <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
         </div>
         <div className="min-h-0 overflow-y-auto p-6 pt-4">
-        <form onSubmit={handleAssign} className="space-y-3">
+        <div className="flex gap-1 rounded border border-gray-200 bg-gray-50 p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setTargetMode("project");
+              setError("");
+              setSupervisorUserId("");
+              setProjectManagerUserId("");
+              setStartTime("");
+              setEndTime("");
+              setComment("");
+            }}
+            className={`flex-1 rounded px-2 py-1 text-xs font-medium ${
+              targetMode === "project" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Project
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTargetMode("co");
+              setError("");
+              setProjectId("");
+              setProjectQuery("");
+              setSovPicks([]);
+              setScopePicks([]);
+              setCoPicks([]);
+              setSupervisorUserId("");
+              setProjectManagerUserId("");
+              setStartTime("");
+              setEndTime("");
+              setComment("");
+            }}
+            className={`flex-1 rounded px-2 py-1 text-xs font-medium ${
+              targetMode === "co" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Change order
+          </button>
+        </div>
+        <form onSubmit={targetMode === "co" ? handleAssignCo : handleAssign} className="mt-3 space-y-3">
+          {targetMode === "co" ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Change order</label>
+              <input
+                type="text"
+                value={coId ? `${selectedCo?.title ?? ""} (${selectedCo?.projectTitle ?? ""})` : coQuery}
+                onChange={(e) => {
+                  setCoQuery(e.target.value);
+                  setCoId("");
+                }}
+                placeholder="Search change orders..."
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+              />
+              {coQuery && !coId ? (
+                <div className="mt-1 max-h-40 overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                  {filteredCos.slice(0, 8).map((co) => (
+                    <button
+                      key={co.id}
+                      type="button"
+                      onClick={() => {
+                        setCoId(co.id);
+                        setCoQuery(co.title);
+                        setComment("");
+                      }}
+                      className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
+                      title={`${co.title} — ${co.projectTitle}`}
+                    >
+                      <span className="font-medium">{co.title}</span>
+                      <span className="text-gray-400"> — {co.projectTitle}</span>
+                    </button>
+                  ))}
+                  {filteredCos.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-gray-400">No matching change orders</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : (
           <div>
             <label className="block text-xs font-medium text-gray-600">Project</label>
             <input
@@ -405,8 +633,9 @@ export function DayAssignmentModal({
               </div>
             ) : null}
           </div>
+          )}
 
-          {selectedProject && selectedGroup === "POST_CONSTRUCTION" ? (
+          {targetMode === "project" && selectedProject && selectedGroup === "POST_CONSTRUCTION" ? (
             <div>
               <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
               <div className="mt-1">
@@ -428,7 +657,7 @@ export function DayAssignmentModal({
             </div>
           ) : null}
 
-          {selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0 ? (
+          {targetMode === "project" && selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0 ? (
             <div>
               <label className="block text-xs font-medium text-gray-600">Scope covered this day</label>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -455,7 +684,7 @@ export function DayAssignmentModal({
             </div>
           ) : null}
 
-          {selectedProject && selectedProject.changeOrders.length > 0 ? (
+          {targetMode === "project" && selectedProject && selectedProject.changeOrders.length > 0 ? (
             <div>
               <label className="block text-xs font-medium text-gray-600">Change order(s) covered this day</label>
               <p className="mt-0.5 text-[11px] text-gray-400">
@@ -537,6 +766,7 @@ export function DayAssignmentModal({
             </div>
           </div>
 
+          {targetMode === "project" ? (
           <div className="rounded border border-gray-200 p-2">
             <button
               type="button"
@@ -562,6 +792,11 @@ export function DayAssignmentModal({
               </div>
             ) : null}
           </div>
+          ) : (
+            <p className="text-[11px] text-gray-400">
+              Change orders are assigned one day at a time for now — repeat scheduling isn&apos;t available here yet.
+            </p>
+          )}
 
           {error ? (
             <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{error}</div>
@@ -587,7 +822,43 @@ export function DayAssignmentModal({
 
         <div className="mt-4 border-t border-gray-100 pt-4">
           <label className="block text-xs font-medium text-gray-600">Workers scheduled</label>
-          {existingWorkers.length > 0 ? (
+          {targetMode === "co" ? (
+            existingCoWorkers.length > 0 ? (
+              <ul className="mt-1.5 space-y-1.5">
+                {existingCoWorkers.map((w) => {
+                  const co = changeOrderOptions.find((c) => c.id === w.changeOrderId);
+                  const employee = w.employeeId ? employees.find((e) => e.id === w.employeeId) : null;
+                  const contractor = w.contractorId ? contractors.find((c) => c.id === w.contractorId) : null;
+                  const workerLabel = employee
+                    ? employee.displayName
+                    : contractor
+                    ? `${contractor.displayName} (contractor)`
+                    : "Unknown worker";
+                  return (
+                    <li
+                      key={w.id}
+                      className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs"
+                    >
+                      <span className="truncate" title={co?.title}>
+                        <span className="font-medium text-gray-800">{co?.title ?? "Unknown change order"}</span>
+                        <span className="text-gray-500"> — {workerLabel}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCoWorker(w.id)}
+                        disabled={deletingWorkerId === w.id}
+                        className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-50"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-1.5 text-xs text-gray-400">No workers scheduled yet for this day.</p>
+            )
+          ) : existingWorkers.length > 0 ? (
             <ul className="mt-1.5 space-y-1.5">
               {existingWorkers.map((w) => {
                 const project = projects.find((p) => p.id === w.projectId);
@@ -638,7 +909,7 @@ export function DayAssignmentModal({
           )}
 
           <p className="mt-3 text-[11px] text-gray-400">
-            Uses the project selected above. Not emailed — for planning only.
+            Uses the {targetMode === "co" ? "change order" : "project"} selected above. Not emailed — for planning only.
           </p>
 
           <div className="mt-1.5 flex gap-1">

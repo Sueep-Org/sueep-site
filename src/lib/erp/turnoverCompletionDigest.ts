@@ -36,10 +36,10 @@ export type TurnoverCompletionDigestResult = {
 };
 
 /** Emails each building's property manager one digest listing every
- * turnover unit that finished today, bcc'ing every Sueep PM involved in
- * that building's completions today — never sent per-unit, and never sent
- * at all when nothing completed (same "no empty digest" rule
- * sendScheduleNudgeEmails already follows). */
+ * turnover unit that finished today, cc'ing contact@sueep.com and bcc'ing
+ * every Sueep PM involved in that building's completions today — never sent
+ * per-unit, and never sent at all when nothing completed (same "no empty
+ * digest" rule sendScheduleNudgeEmails already follows). */
 export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletionDigestResult> {
   const { start, end } = todayWindow();
 
@@ -85,9 +85,10 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
         return;
       }
 
-      // contact@sueep.com always gets a copy of these, on top of whichever
-      // Sueep PM(s) resolve for the completed units below.
-      const pmEmails = new Set<string>(["contact@sueep.com"]);
+      // Sueep PM(s) resolved for the completed units below go on bcc, so the
+      // property manager doesn't see who else got a copy; contact@sueep.com
+      // goes on cc instead (see sendEmail call below) so it's visible.
+      const pmEmails = new Set<string>();
       for (const p of projects) {
         pmEmails.add(await resolveSueepPmEmail(p));
       }
@@ -121,6 +122,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
       try {
         await sendEmail({
           to: building.pmEmail,
+          cc: ["contact@sueep.com"],
           bcc: Array.from(pmEmails),
           subject: `${projects.length} ${plural} completed today at ${building.name}`,
           html,

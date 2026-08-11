@@ -601,6 +601,14 @@ model ProjectChangeOrder {
   description         String?
   requestedBy         String?
   supervisor          String?
+  /// The CO's own current supervisor, mirroring Project.supervisorUserId —
+  /// kept in sync the same way, written whenever a ChangeOrderDayAssignment
+  /// sets a supervisor. Distinct from the free-text `supervisor` field above
+  /// (a name string, not a real ErpUser link). Drives the "needs a
+  /// supervisor" calendar warning for COs the same way Project.supervisorUserId
+  /// drives it for projects.
+  supervisorUserId    String?
+  supervisorUser      ErpUser?  @relation("ChangeOrderSupervisor", fields: [supervisorUserId], references: [id], onDelete: SetNull)
   status              String    @default("DRAFT")
   requestedDate       DateTime? @default(now())
   startDate           DateTime?
@@ -643,9 +651,86 @@ model ProjectChangeOrder {
   /// its start and end (or beyond) — same day-assignment mechanism used to
   /// plan regular project work, just tagged to this CO instead.
   dayAssignments        ProjectDayAssignment[]            @relation("DayAssignmentChangeOrders")
+  /// This CO's own supervisor/PM day assignments — same concept as
+  /// ProjectDayAssignment but scoped to the CO directly (see
+  /// ChangeOrderDayAssignment), not just tagged onto a project's day.
+  coDayAssignments      ChangeOrderDayAssignment[]
+  /// This CO's own planned crew, same concept as ProjectWorkerDayAssignment
+  /// but scoped to the CO directly (see ChangeOrderWorkerDayAssignment).
+  coWorkerAssignments   ChangeOrderWorkerDayAssignment[]
 
   @@index([projectId, createdAt])
   @@index([status])
+}
+
+/// A planned supervisor/PM coverage of a ProjectChangeOrder on a specific
+/// day — same idea as ProjectDayAssignment, but scoped to a CO directly
+/// instead of the parent project, so a CO can be scheduled (and show a
+/// "needs a supervisor" warning) independently of the project's own day
+/// assignments. No seriesId/sovItems/scopeItems — repeat-scheduling and
+/// SOV/scope tagging aren't supported for COs yet, unlike projects.
+model ChangeOrderDayAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  changeOrderId String
+  changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  /// The calendar date this assignment is for (stored as midnight UTC)
+  date DateTime
+
+  /// Optional "HH:MM" (24h) local time, e.g. "08:00". All-day event on the
+  /// calendar invite if either time is unset.
+  startTime String?
+  endTime   String?
+
+  /// Nullable so a day can be covered by a PM only, see
+  /// ProjectDayAssignment.projectManagerUserId for the same rare case.
+  supervisorUserId String?
+  supervisorUser   ErpUser? @relation("ChangeOrderDayAssignmentSupervisor", fields: [supervisorUserId], references: [id], onDelete: Cascade)
+
+  /// Set when only the PM is at the CO's work that day, no supervisor. Not
+  /// synced onto ProjectChangeOrder (unlike supervisorUserId), calendar/
+  /// day-assignment concept only, no calendar-invite email for it.
+  projectManagerUserId String?
+  projectManager       ErpUser? @relation("ChangeOrderDayAssignmentPM", fields: [projectManagerUserId], references: [id], onDelete: SetNull)
+
+  /// Free-text note about what's happening this day.
+  comment String?
+
+  @@unique([changeOrderId, date])
+  @@index([date])
+  @@index([supervisorUserId])
+  @@index([projectManagerUserId])
+}
+
+/// A worker planned to be on a change order's work on a future day, before
+/// any labor is logged — same idea as ProjectWorkerDayAssignment but scoped
+/// to a CO instead of the parent project, and multiple per CO/day since a
+/// crew has more than one person.
+model ChangeOrderWorkerDayAssignment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  changeOrderId String
+  changeOrder   ProjectChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  /// Exactly one of employeeId/contractorId is set per row.
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  contractorId String?
+  contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// The calendar date this assignment is for (stored as midnight UTC)
+  date DateTime
+
+  @@unique([changeOrderId, employeeId, date])
+  @@unique([changeOrderId, contractorId, date])
+  @@index([date])
+  @@index([employeeId])
+  @@index([contractorId])
 }
 
 /// A contractor logged on a change order — same idea as ContractorAssignment
@@ -866,6 +951,9 @@ model ErpUser {
   supervisorProjects            Project[]
   dayAssignments                ProjectDayAssignment[]          @relation("ProjectDayAssignmentSupervisor")
   dayAssignmentsAsPM            ProjectDayAssignment[]          @relation("ProjectDayAssignmentPM")
+  supervisorChangeOrders        ProjectChangeOrder[]             @relation("ChangeOrderSupervisor")
+  coDayAssignments               ChangeOrderDayAssignment[]      @relation("ChangeOrderDayAssignmentSupervisor")
+  coDayAssignmentsAsPM           ChangeOrderDayAssignment[]      @relation("ChangeOrderDayAssignmentPM")
   projectNotes                  ProjectNote[]
   buildingNotes                 BuildingNote[]
   hubspotSovAliasesCreated      HubSpotSovAlias[]
@@ -1148,6 +1236,7 @@ model Employee {
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
   workerDayAssignments         ProjectWorkerDayAssignment[]
+  coWorkerDayAssignments       ChangeOrderWorkerDayAssignment[]
   changeOrderAssignments       ProjectChangeOrderLaborer[]
   contracts                    EmployeeContract[]
   safetyCheckWorkers           SafetyCheckWorker[]
@@ -1392,6 +1481,7 @@ model Contractor {
   contracts              ContractorContract[]
   changeOrderAssignments ChangeOrderContractorAssignment[]
   workerDayAssignments   ProjectWorkerDayAssignment[]
+  coWorkerDayAssignments ChangeOrderWorkerDayAssignment[]
   backgroundCheckEvents  ContractorBackgroundCheckEvent[]
   timeOff                ContractorTimeOff[]
 
