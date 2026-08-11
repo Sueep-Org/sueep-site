@@ -29,6 +29,35 @@ function showAppError(msg){
   console.error(msg);
 }
 
+let globalLoadingCount = 0;
+
+function showGlobalLoading(text = 'Loading…'){
+  const bar = document.getElementById('globalLoadingBar');
+  const textNode = document.getElementById('globalLoadingBarText');
+  if (!bar) return;
+  globalLoadingCount += 1;
+  bar.classList.remove('hidden');
+  bar.style.display = 'flex';
+  if (textNode) textNode.textContent = String(text);
+}
+
+function hideGlobalLoading(){
+  globalLoadingCount = Math.max(0, globalLoadingCount - 1);
+  if (globalLoadingCount > 0) return;
+  const bar = document.getElementById('globalLoadingBar');
+  if (!bar) return;
+  bar.classList.add('hidden');
+  bar.style.display = 'none';
+}
+
+function forceHideGlobalLoading(){
+  globalLoadingCount = 0;
+  const bar = document.getElementById('globalLoadingBar');
+  if (!bar) return;
+  bar.classList.add('hidden');
+  bar.style.display = 'none';
+}
+
 window.addEventListener('unhandledrejection', (e)=>{
   console.warn('Unhandled promise (suppressed):', e.reason);
 });
@@ -97,6 +126,7 @@ async function refreshDrawer(){
 
       if (blueprint) {
         nameBtn.onclick = async () => {
+          showGlobalLoading('Opening project…');
           try {
             const resp = await fetch(`${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`, { redirect: 'follow' });
             if (!resp.ok) throw new Error('Download failed');
@@ -112,6 +142,8 @@ async function refreshDrawer(){
             closeSidebar();
           } catch(e) {
             toast(e.message, 'error');
+          } finally {
+            hideGlobalLoading();
           }
         };
       }
@@ -3202,6 +3234,7 @@ async function initApp(){
     highlightsStore.clearAll();
     _pdfMetadataSummary = null;
 
+    showGlobalLoading('Loading file…');
     try{
 
       const isImage = file.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(file.name);
@@ -3284,6 +3317,8 @@ async function initApp(){
     }catch(e){
 
       showAppError(e);
+    } finally {
+      hideGlobalLoading();
     }
   }
 
@@ -3296,8 +3331,27 @@ async function initApp(){
   function updateProjectDetails(project) {
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
     const di = project.driving_info || {};
-    setText('detailDistance', di.distance);
+    setText('detailDistance', _convertDistanceToMiles(di.distance));
     setText('detailDuration', di.duration);
+  }
+
+  function _convertDistanceToMiles(distanceText) {
+    if (!distanceText && distanceText !== 0) return distanceText || '';
+    const s = String(distanceText).trim();
+    const lower = s.toLowerCase();
+    const num = parseFloat(s.replace(/[^0-9.\-]/g, ''));
+    if (!Number.isFinite(num)) return s;
+    // If already in miles, return normalized miles string
+    if (lower.includes('mi') || lower.includes('mile')) {
+      return `${Number(num).toFixed(2)} mi`;
+    }
+    // If in kilometers, convert to miles
+    if (lower.includes('km') || lower.includes('kilometer') || lower.includes('kilometre')) {
+      const miles = num * 0.621371;
+      return `${miles.toFixed(2)} mi`;
+    }
+    // Unknown unit: don't assume conversion — return as-is
+    return s;
   }
 
   // ======================================================
@@ -3308,6 +3362,12 @@ async function initApp(){
 
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
+    // Normalize stored driving distance to miles for consistent display/calculation
+    try {
+      if (_loadedProjectData?.driving_info?.distance) {
+        _loadedProjectData.driving_info.distance = _convertDistanceToMiles(_loadedProjectData.driving_info.distance);
+      }
+    } catch (e) { /* ignore */ }
     if (projData?.id) {
       sessionStorage.setItem('estimator_last_project_id', projData.id);
       activeProjectId = projData.id;
@@ -3585,13 +3645,47 @@ async function initApp(){
         });
         if (!r.ok) throw new Error('Failed to refresh');
         const data = await r.json();
+        if (data.error) throw new Error(data.error);
         const di = data.driving_info || {};
+        if (!di.distance || !di.duration) throw new Error('Driving information missing');
+        // convert distance to miles for display and downstream calculations
+        const convertedDistance = _convertDistanceToMiles(di.distance);
+        di.distance = convertedDistance;
         const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-        setText('detailDistance', di.distance);
+        setText('detailDistance', convertedDistance);
         setText('detailDuration', di.duration);
-        setText('editDriveDistance', di.distance);
+        setText('editDriveDistance', convertedDistance);
         setText('editDriveTime', di.duration);
-        if (_loadedProjectData) _loadedProjectData.driving_info = di;
+        if (_loadedProjectData) {
+          _loadedProjectData.driving_info = di;
+        }
+        // If edit form is open, ensure mobilizations and gasoline inputs are populated (when not manual)
+        try {
+          if (document.getElementById('analysisEditForm')?.style.display !== 'none') {
+            const mobilizationsInput = document.getElementById('mobilizationsInput');
+            if (mobilizationsInput && mobilizationsInput.dataset.manual !== 'true') {
+              let derivedMobil = null;
+              if (_loadedProjectData?.mobilizations != null && _loadedProjectData.mobilizations !== '') {
+                derivedMobil = parseFloat(_loadedProjectData.mobilizations);
+              } else {
+                const daysEl = document.getElementById('expectedDaysInput');
+                const daysVal = parseFloat(daysEl?.value) || (Number.isFinite(parseFloat(_loadedProjectData?.expected_days)) ? parseFloat(_loadedProjectData.expected_days) : 0);
+                if (daysVal > 0) derivedMobil = daysVal * 2;
+              }
+              mobilizationsInput.value = derivedMobil != null ? derivedMobil.toFixed(0) : '';
+            }
+            const gasolineInput = document.getElementById('gasolineInput');
+            if (gasolineInput && gasolineInput.dataset.manual !== 'true') {
+              const mobilVal = parseFloat(document.getElementById('mobilizationsInput')?.value) || 0;
+              const convDist = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
+              const derivedGas = _getDistanceDerivedGasoline(convDist || '', mobilVal);
+              gasolineInput.value = derivedGas > 0 ? derivedGas.toFixed(2) : '';
+            }
+          }
+        } catch (e) { /* ignore */ }
+        // Recompute crew/phase-derived expected days and materials so mobilizations can be derived
+        try { _updateCrewCalcs(); } catch (e) { /* ignore */ }
+        _updateTransportCosts();
         toast('Distance updated', 'info');
       } catch (e) {
         toast(e.message, 'error');
@@ -3625,13 +3719,43 @@ async function initApp(){
         });
         if (!r.ok) throw new Error('Failed to refresh');
         const data = await r.json();
+        if (data.error) throw new Error(data.error);
         const di = data.driving_info || {};
+        if (!di.distance || !di.duration) throw new Error('Driving information missing');
+        const convertedDistance = _convertDistanceToMiles(di.distance);
+        di.distance = convertedDistance;
         const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-        setText('paintingDetailDistance', di.distance);
+        setText('paintingDetailDistance', convertedDistance);
         setText('paintingDetailDuration', di.duration);
-        setText('paintingEditDriveDistance', di.distance);
+        setText('paintingEditDriveDistance', convertedDistance);
         setText('paintingEditDriveTime', di.duration);
         if (_loadedProjectData) _loadedProjectData.driving_info = di;
+        // If painting edit form is open, ensure painting mobilizations and gasoline inputs are populated (when not manual)
+        try {
+          if (document.getElementById('paintingEditForm')?.style.display !== 'none') {
+            const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
+            if (mobilizationsInput && mobilizationsInput.dataset.manual !== 'true') {
+              let derivedMobil = null;
+              if (_loadedProjectData?.mobilizations != null && _loadedProjectData.mobilizations !== '') {
+                derivedMobil = parseFloat(_loadedProjectData.mobilizations);
+              } else {
+                const daysEl = document.getElementById('paintingExpectedDaysInput');
+                const daysVal = parseFloat(daysEl?.value) || (Number.isFinite(parseFloat(_loadedProjectData?.expected_days)) ? parseFloat(_loadedProjectData.expected_days) : 0);
+                if (daysVal > 0) derivedMobil = daysVal * 2;
+              }
+              mobilizationsInput.value = derivedMobil != null ? derivedMobil.toFixed(0) : '';
+            }
+            const gasolineInput = document.getElementById('paintingGasolineInput');
+            if (gasolineInput && gasolineInput.dataset.manual !== 'true') {
+              const mobilVal = parseFloat(document.getElementById('paintingMobilizationsInput')?.value) || 0;
+              const convDist = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
+              const derivedGas = _getDistanceDerivedGasoline(convDist || '', mobilVal);
+              gasolineInput.value = derivedGas > 0 ? derivedGas.toFixed(2) : '';
+            }
+          }
+        } catch (e) { /* ignore */ }
+        // Ensure painting phases/days are refreshed so mobilizations derive correctly
+        try { _updatePaintingCrewCalcs(); } catch (e) { /* ignore */ }
         _updatePaintingTransportCosts();
         toast('Distance updated', 'info');
       } catch (e) {
@@ -3893,6 +4017,7 @@ async function initApp(){
       crew.forEach(member => { member.days = days; });
     });
     _updatePaintingCrewCalcs();
+    _updatePaintingTransportCosts();
   }
 
   function _generatePaintingCrewForPhase(pid, totalArea) {
@@ -3981,6 +4106,23 @@ async function initApp(){
       { role: 'foreman', rate: 28, hours: 8, days: touchupDays, _uid: uid() },
     ];
     _deletedPhaseIds = new Set();
+  }
+
+  function _refreshCleaningDays() {
+    const area = parseFloat(document.getElementById('analysisTotalAreaInput')?.value) || 0;
+    if (area <= 0) return;
+    const roughRate = parseFloat(document.getElementById('roughAreaPerPersonInput')?.value) || 4000;
+    const finalRate = parseFloat(document.getElementById('finalAreaPerPersonInput')?.value) || 4000;
+    const touchupRate = parseFloat(document.getElementById('touchupAreaPerPersonInput')?.value) || 4000;
+    const updatePhaseDays = (pid, rate) => {
+      const crew = _phaseCrews[pid] || [];
+      const cleaners = crew.filter(m => m.role === 'cleaner').length || 1;
+      const days = Math.max(1, Math.ceil(area / (cleaners * rate)));
+      crew.forEach(member => { member.days = days; });
+    };
+    updatePhaseDays('rough', roughRate);
+    updatePhaseDays('final', finalRate);
+    updatePhaseDays('touchup', touchupRate);
   }
 
   function _calcProfitAmount(subtotal, materials, profitRate) {
@@ -4091,9 +4233,14 @@ async function initApp(){
       const totOhSummary = markUpBase * (overheadPct / 100);
       const totCommSummary = markUpBase * (commPct / 100);
       const gasInput = document.getElementById('gasolineInput');
+      // Ensure mobilizations are in-sync before deriving gasoline
+      try { _syncAnalysisMobilizations(); } catch (e) { /* ignore */ }
+      const mobilizationsInputEl = document.getElementById('mobilizationsInput');
+      const mobilizationsVal = parseFloat(mobilizationsInputEl?.value) || 0;
+      const convertedDistance = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
       const gasCost = gasInput && gasInput.dataset.manual === 'true'
         ? (parseFloat(gasInput.value) || 0)
-        : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+        : _getDistanceDerivedGasoline(convertedDistance || '', mobilizationsVal);
       const taxBase = totSubtotal + materialsForSummary + gasCost + totOhSummary + totPftSummary + totCommSummary;
       const totTax = taxBase * (taxPct / 100);
       const totFinal = taxBase + totTax;
@@ -4172,6 +4319,7 @@ async function initApp(){
   }
 
   function _updateTransportCosts() {
+    _syncAnalysisMobilizations();
     const durationText = _loadedProjectData?.driving_info?.duration || '';
     const hours = _parseDurationToHours(durationText);
     const foremanRate = _getForemanRate();
@@ -4181,18 +4329,19 @@ async function initApp(){
     const manualDriverCost = driverCostInput && driverCostInput.dataset.manual === 'true'
       ? (parseFloat(driverCostInput.value) || 0)
       : null;
-    const autoDriverCost = hours > 0 ? (mobilizations * 2 * hours * foremanRate) : 0;
+    const autoDriverCost = hours > 0 ? (mobilizations * hours * foremanRate) : 0;
     const driverCost = manualDriverCost != null ? manualDriverCost : autoDriverCost;
     const gasInput = document.getElementById('gasolineInput');
+    const convertedDistance = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
     const gasoline = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
-      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizations);
+      : _getDistanceDerivedGasoline(convertedDistance || '', mobilizations);
     if (gasInput && gasInput.dataset.manual !== 'true') {
       gasInput.value = gasoline > 0 ? gasoline.toFixed(2) : '';
     }
     const tollCost = parseFloat(document.getElementById('tollCostInput')?.value) || 0;
     const costPerMileInput = document.getElementById('costPerMileInput');
-    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const distance = parseFloat(String(convertedDistance || '').replace(/[^0-9.\-]/g, '')) || 0;
     const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
     if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
       costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
@@ -4206,6 +4355,7 @@ async function initApp(){
   }
 
   function _updatePaintingTransportCosts() {
+    _syncPaintingMobilizations();
     const durationText = _loadedProjectData?.driving_info?.duration || '';
     const hours = _parseDurationToHours(durationText);
     const foremanRate = (() => {
@@ -4221,18 +4371,19 @@ async function initApp(){
     const manualDriverCost = driverCostInput && driverCostInput.dataset.manual === 'true'
       ? (parseFloat(driverCostInput.value) || 0)
       : null;
-    const autoDriverCost = hours > 0 ? (mobilizations * 2 * hours * foremanRate) : 0;
+    const autoDriverCost = hours > 0 ? (mobilizations * hours * foremanRate) : 0;
     const driverCost = manualDriverCost != null ? manualDriverCost : autoDriverCost;
     const gasInput = document.getElementById('paintingGasolineInput');
+    const convertedDistance = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
     const gasoline = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
-      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizations);
+      : _getDistanceDerivedGasoline(convertedDistance || '', mobilizations);
     if (gasInput && gasInput.dataset.manual !== 'true') {
       gasInput.value = gasoline > 0 ? gasoline.toFixed(2) : '';
     }
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const costPerMileInput = document.getElementById('paintingCostPerMileInput');
-    const distance = parseFloat(String(_loadedProjectData?.driving_info?.distance || '').replace(/[^0-9.\-]/g, '')) || 0;
+    const distance = parseFloat(String(convertedDistance || '').replace(/[^0-9.\-]/g, '')) || 0;
     const autoCostPerMile = distance > 0 ? (driverCost + gasoline + tollCost) / distance : 0;
     if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
       costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
@@ -4796,9 +4947,14 @@ async function initApp(){
     });
 
     const gasInput = document.getElementById('paintingGasolineInput');
+    // Ensure painting mobilizations are in-sync before deriving gasoline
+    try { _syncPaintingMobilizations(); } catch (e) { /* ignore */ }
+    const pMobilizationsInputEl = document.getElementById('paintingMobilizationsInput');
+    const pMobilizationsVal = parseFloat(pMobilizationsInputEl?.value) || 0;
+    const convertedDistance = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
     const gasCost = gasInput && gasInput.dataset.manual === 'true'
       ? (parseFloat(gasInput.value) || 0)
-      : _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '');
+      : _getDistanceDerivedGasoline(convertedDistance || '', pMobilizationsVal);
     const taxBase = totSubtotal + materialsForPricing + gasCost + totOh + totPft + totComm;
     const totTax = taxBase * (taxPct / 100);
     const totFinalActual = taxBase + totTax;
@@ -5159,10 +5315,11 @@ async function initApp(){
 
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
     const mobilizationsView = (projData.mobilizations != null && projData.mobilizations !== '' ? parseFloat(projData.mobilizations) : (projData.expected_days != null && projData.expected_days !== '' ? parseFloat(projData.expected_days) * 2 : 0)) || 0;
+    const convertedDistanceView = _convertDistanceToMiles(projData?.driving_info?.distance || '');
     const gasCost = (() => {
       const savedGas = projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null;
       if (savedGas != null) return savedGas;
-      return _getDistanceDerivedGasoline(projData?.driving_info?.distance || '', mobilizationsView);
+      return _getDistanceDerivedGasoline(convertedDistanceView || '', mobilizationsView);
     })();
     const driveHoursView = _parseDurationToHours(projData?.driving_info?.duration || '');
     const foremanRateView = (() => {
@@ -5333,12 +5490,13 @@ async function initApp(){
       : ((projData.mobilizations != null && projData.mobilizations !== '')
         ? parseFloat(projData.mobilizations)
         : (expectedDaysView > 0 ? expectedDaysView * 2 : 0));
+    const convertedDistance = _convertDistanceToMiles(projData?.driving_info?.distance || '');
     const gasCost = (() => {
       const savedGas = (bd?.gasoline != null && bd?.gasoline !== '')
         ? parseFloat(bd.gasoline)
         : (projData.gasoline != null && projData.gasoline !== '' ? parseFloat(projData.gasoline) : null);
       if (savedGas != null) return savedGas;
-      return _getDistanceDerivedGasoline(projData?.driving_info?.distance || '', mobilizationsView);
+      return _getDistanceDerivedGasoline(convertedDistance || '', mobilizationsView);
     })();
     const driveHoursView = _parseDurationToHours(projData?.driving_info?.duration || '');
     const foremanRateView = (() => {
@@ -5469,7 +5627,7 @@ async function initApp(){
     setText('paintingViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
 
     const di = projData.driving_info;
-    setText('paintingDetailDistance', di?.distance || '—');
+    setText('paintingDetailDistance', _convertDistanceToMiles(di?.distance || '—'));
     setText('paintingDetailDuration', di?.duration || '—');
     setText('paintingDetailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
     setText('paintingViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
@@ -5672,6 +5830,20 @@ async function initApp(){
         _updateCrewCalcs();
       };
     }
+    ['roughAreaPerPersonInput', 'finalAreaPerPersonInput', 'touchupAreaPerPersonInput'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const update = () => {
+        // allow auto expected-days to recompute when area-per-person rates change
+        _expectedDaysManual = false;
+        _refreshCleaningDays();
+        _renderPhaseTable();
+        _updateCrewCalcs();
+        _updateTransportCosts();
+      };
+      el.addEventListener('input', update);
+      el.addEventListener('change', update);
+    });
     const mobilizationsInput = document.getElementById('mobilizationsInput');
     if (mobilizationsInput) {
       const expectedDays = parseFloat(document.getElementById('expectedDaysInput')?.value) || 0;
@@ -5704,7 +5876,8 @@ async function initApp(){
     const gasolineInput = document.getElementById('gasolineInput');
     if (gasolineInput) {
       const savedGasoline = _loadedProjectData?.gasoline;
-      const derivedGasoline = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizationsInput?.value || 0);
+      const convertedDistance2 = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
+      const derivedGasoline = _getDistanceDerivedGasoline(convertedDistance2 || '', mobilizationsInput?.value || 0);
       if (savedGasoline != null && savedGasoline !== '') {
         gasolineInput.dataset.manual = 'true';
         gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
@@ -5784,7 +5957,7 @@ async function initApp(){
 
     const di = _loadedProjectData.driving_info || {};
     const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-    setEditText('editDriveDistance', di.distance);
+    setEditText('editDriveDistance', _convertDistanceToMiles(di.distance));
     setEditText('editDriveTime', di.duration);
 
     // Start address dropdown
@@ -5912,12 +6085,16 @@ async function initApp(){
       };
     }
     if (primerRateInput) {
-      primerRateInput.addEventListener('input', _refreshPaintingDays);
+      const _primerChanged = () => { _paintingExpectedDaysManual = false; _refreshPaintingDays(); };
+      primerRateInput.addEventListener('input', _primerChanged);
+      primerRateInput.addEventListener('change', _primerChanged);
     }
     _ensurePaintingMaterialsListeners();
     _updatePaintingMaterialsCostDisplays();
     if (interiorRateInput) {
-      interiorRateInput.addEventListener('input', _refreshPaintingDays);
+      const _interiorChanged = () => { _paintingExpectedDaysManual = false; _refreshPaintingDays(); };
+      interiorRateInput.addEventListener('input', _interiorChanged);
+      interiorRateInput.addEventListener('change', _interiorChanged);
     }
     const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
     if (mobilizationsInput) {
@@ -5970,7 +6147,8 @@ async function initApp(){
     const gasolineInput = document.getElementById('paintingGasolineInput');
     if (gasolineInput) {
       const savedGasoline = bd?.gasoline;
-      const derivedGasoline = _getDistanceDerivedGasoline(_loadedProjectData?.driving_info?.distance || '', mobilizationsInput?.value || 0);
+      const convertedDistance2 = _convertDistanceToMiles(_loadedProjectData?.driving_info?.distance || '');
+      const derivedGasoline = _getDistanceDerivedGasoline(convertedDistance2 || '', mobilizationsInput?.value || 0);
       if (savedGasoline != null && savedGasoline !== '') {
         gasolineInput.dataset.manual = 'true';
         gasolineInput.value = parseFloat(savedGasoline).toFixed(2);
@@ -6020,7 +6198,7 @@ async function initApp(){
     // Drive info display
     const di = _loadedProjectData?.driving_info || {};
     const setEditText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
-    setEditText('paintingEditDriveDistance', di.distance);
+    setEditText('paintingEditDriveDistance', _convertDistanceToMiles(di.distance));
     setEditText('paintingEditDriveTime', di.duration);
     _paintingPhasesLocked = true;
     _renderPaintingPhaseTable();
@@ -6657,9 +6835,9 @@ async function initApp(){
 
     if (!window.confirm(`Are you sure you want to upload "${file.name}"?`)) return;
 
-    await handleFile(file);
-
+    showGlobalLoading('Uploading file…');
     try {
+      await handleFile(file);
 
       const fallbackProjectName = file.name.replace(/\.pdf$/i, '').trim() || file.name;
       const extractedProjectName = fallbackProjectName;
@@ -6792,6 +6970,8 @@ async function initApp(){
         'Backend upload failed',
         'error'
       );
+    } finally {
+      hideGlobalLoading();
     }
   }
 
@@ -6987,6 +7167,8 @@ async function initApp(){
     const lastId = sessionStorage.getItem('estimator_last_project_id');
     if (!lastId) { _restoring = false; return; }
 
+    showGlobalLoading('Restoring project…');
+
     // After Next.js soft navigation, DOM elements are recreated but the JS closure
     // still holds stale references. Reload the page — sessionStorage flag ensures
     // the restore runs correctly after the fresh initApp.
@@ -7023,6 +7205,7 @@ async function initApp(){
       console.warn('Failed to restore last project', e);
     } finally {
       _restoring = false;
+      hideGlobalLoading();
     }
   }
 

@@ -100,6 +100,41 @@ export default function EstimatorPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
+      <div
+        id="globalLoadingBar"
+        className="hidden"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 2147483647,
+          display: "none",
+          alignItems: "center",
+          gap: "0.75rem",
+          height: "40px",
+          padding: "0 1rem",
+          background: "rgba(15, 23, 42, 0.98)",
+          color: "white",
+          fontSize: "13px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div
+          id="globalLoadingBarIndicator"
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            width: "100%",
+            height: "3px",
+            background: "linear-gradient(90deg, #60a5fa, #a78bfa, #60a5fa)",
+            animation: "globalLoadingBar 1.5s linear infinite",
+          }}
+        ></div>
+        <span id="globalLoadingBarText">Loading…</span>
+      </div>
+      <style>{`@keyframes globalLoadingBar {0% { transform: translateX(-100%);}50% { transform: translateX(0);}100% { transform: translateX(100%);}}`}</style>
       {/* SIDEBAR TOGGLE */}
       <button className="sidebar-toggle" data-open-sidebar>
         ☰
@@ -1263,6 +1298,131 @@ export default function EstimatorPage() {
                     </button>
                   </div>
                 </div>
+                {/* Start Address */}
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Start Address
+                  </label>
+                  <select
+                    id="paintingStartAddressSelect"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                  >
+                    <option value="default">
+                      Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
+                    </option>
+                    <option value="custom">Custom address…</option>
+                  </select>
+                  <input
+                    type="text"
+                    id="paintingStartAddressInput"
+                    placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
+                    style={{ display: "none" }}
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Project Address */}
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Project Address
+                  </label>
+                  <input
+                    type="text"
+                    id="paintingAddressInput"
+                    placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+                {/* Drive info */}
+                <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Distance
+                    </label>
+                    <div
+                      id="paintingEditDriveDistance"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Drive Time
+                    </label>
+                    <div
+                      id="paintingEditDriveTime"
+                      className="text-sm text-gray-600 font-medium mt-0.5"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+                {/* Transportation */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Gasoline ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingGasolineInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Toll Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingTollCostInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Driver Cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingDriverCostDisplay"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Total Transportation ($)
+                    </label>
+                    <div
+                      id="paintingTotalTransportDisplay"
+                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                    >
+                      —
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Cost/Mile
+                    </label>
+                    <input
+                      type="number"
+                      id="paintingCostPerMileInput"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
                 {/* Paint & Primer Materials */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-3">
@@ -1416,131 +1576,6 @@ export default function EstimatorPage() {
                         —
                       </div>
                     </div>
-                  </div>
-                </div>
-                {/* Start Address */}
-                <div className="mb-4">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Start Address
-                  </label>
-                  <select
-                    id="paintingStartAddressSelect"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
-                  >
-                    <option value="default">
-                      Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
-                    </option>
-                    <option value="custom">Custom address…</option>
-                  </select>
-                  <input
-                    type="text"
-                    id="paintingStartAddressInput"
-                    placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
-                    style={{ display: "none" }}
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                {/* Project Address */}
-                <div className="mb-3">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Project Address
-                  </label>
-                  <input
-                    type="text"
-                    id="paintingAddressInput"
-                    placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                {/* Drive info */}
-                <div className="flex gap-6 mb-4 pb-4 border-b border-gray-100">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Drive Distance
-                    </label>
-                    <div
-                      id="paintingEditDriveDistance"
-                      className="text-sm text-gray-600 font-medium mt-0.5"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Drive Time
-                    </label>
-                    <div
-                      id="paintingEditDriveTime"
-                      className="text-sm text-gray-600 font-medium mt-0.5"
-                    >
-                      —
-                    </div>
-                  </div>
-                </div>
-                {/* Transportation */}
-                <div className="flex flex-wrap gap-4 mb-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Gasoline ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingGasolineInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Toll Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingTollCostInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Driver Cost ($)
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingDriverCostDisplay"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Total Transportation ($)
-                    </label>
-                    <div
-                      id="paintingTotalTransportDisplay"
-                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Cost/Mile
-                    </label>
-                    <input
-                      type="number"
-                      id="paintingCostPerMileInput"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
                   </div>
                 </div>
                 {/* Expected Days */}
