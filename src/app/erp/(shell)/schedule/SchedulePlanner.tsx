@@ -1771,7 +1771,12 @@ export function SchedulePlanner({
   // and end day when they differ (any day in between needs an explicit day
   // assignment to appear) — a project with matching start/end dates (or no
   // end date) only ever gets the one "start" occurrence, never doubled up.
+  // Skips a day that already has a planned (ProjectDayAssignment) entry for
+  // this project — otherwise a project scheduled without a supervisor shows
+  // up twice on that day: once here and once as the "planned, no supervisor"
+  // dashed chip below. Same dedup projectSpanEndpointsByDay already does.
   const needsSupervisorByDay = useMemo(() => {
+    const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
     const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
     const todayK = dayKey(todayDate);
     for (const p of projects) {
@@ -1796,13 +1801,14 @@ export function SchedulePlanner({
         endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
       for (const { k, role } of occurrences) {
         if (k < todayK) continue;
+        if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
         const list = map.get(k) ?? [];
         list.push({ project: p, role });
         map.set(k, list);
       }
     }
     return map;
-  }, [projects, supervisorOverrides, todayDate]);
+  }, [projects, dayAssignments, supervisorOverrides, todayDate]);
 
   // A project's declared start/end date (projectDate/projectEndDate) with no
   // other marker on the calendar that day — no logged labor, no planned
