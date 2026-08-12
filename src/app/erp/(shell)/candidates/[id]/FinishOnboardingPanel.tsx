@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConfirm, useToast } from "@/app/erp/components/ui";
 
 type PaperworkItem = { label: string; url: string };
 
@@ -14,17 +15,17 @@ type Props = {
 
 export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [existingEmployeeId, setExistingEmployeeId] = useState<string | null>(null);
 
   const isOnboarding = status === "ONBOARDING";
   const pendingDocs = paperwork.filter((p) => !p.url);
 
   async function finish() {
-    if (!window.confirm(`Create an employee profile for ${fullName}?`)) return;
+    if (!(await confirm({ message: `Create an employee profile for ${fullName}?`, danger: false, confirmLabel: "Create" }))) return;
     setLoading(true);
-    setError(null);
 
     const res = await fetch(`/api/erp/candidates/${id}/finish-onboarding`, { method: "POST" });
     const json = (await res.json().catch(() => ({}))) as {
@@ -38,7 +39,7 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
       return;
     }
     if (!res.ok) {
-      setError(json.error ?? "Something went wrong");
+      toast(json.error ?? "Something went wrong", "error");
       return;
     }
 
@@ -82,7 +83,6 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
           >
             {loading ? "Creating…" : "Finish onboarding → Add as employee"}
           </button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       )}
     </div>

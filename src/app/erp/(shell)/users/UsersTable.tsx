@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm, useToast } from "@/app/erp/components/ui";
 
 const ROLES = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 type ErpRole = (typeof ROLES)[number];
@@ -49,6 +50,8 @@ type User = {
 };
 
 export function UsersTable({ users: initialUsers, currentUserId }: { users: User[]; currentUserId: string }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [users, setUsers] = useState(initialUsers);
   const [updating, setUpdating] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -76,16 +79,16 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
   }
 
   async function deleteUser(userId: string, email: string) {
-    if (!window.confirm(`Remove ${email} from the ERP? They will be re-added as Employee on next login.`)) return;
+    if (!(await confirm({ message: `Remove ${email} from the ERP? They will be re-added as Employee on next login.` }))) return;
     setDeleting(userId);
-    setError("");
     try {
       const res = await fetch(`/api/erp/users/${userId}`, { method: "DELETE" });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) { setError(data.error ?? "Delete failed"); setDeleting(null); return; }
+      if (!res.ok) { toast(data.error ?? "Delete failed", "error"); setDeleting(null); return; }
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+      toast(`${email} removed.`);
     } catch {
-      setError("Network error");
+      toast("Network error", "error");
     } finally {
       setDeleting(null);
     }

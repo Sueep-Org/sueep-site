@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 type EmployeeOption = { id: string; firstName: string; lastName: string };
 
@@ -19,8 +20,7 @@ export function ProjectCommissionOwnerEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const next = e.target.value;
+  async function handleChange(next: string) {
     setValue(next);
     setSaving(true);
     setError("");
@@ -42,23 +42,15 @@ export function ProjectCommissionOwnerEditor({
   return (
     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
       Commission owner:
-      <select
+      <SearchableSelect
         value={value}
         onChange={handleChange}
         disabled={saving}
-        className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs text-gray-700 disabled:opacity-50"
-      >
-        <option value="">
-          {autoMatchedEmployee
-            ? `Auto (${autoMatchedEmployee.firstName} ${autoMatchedEmployee.lastName})`
-            : "Auto (no HubSpot match)"}
-        </option>
-        {employees.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.firstName} {e.lastName}
-          </option>
-        ))}
-      </select>
+        options={employees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))}
+        placeholder="Search employees…"
+        allLabel={autoMatchedEmployee ? `Auto (${autoMatchedEmployee.firstName} ${autoMatchedEmployee.lastName})` : "Auto (no HubSpot match)"}
+        className="w-48"
+      />
       {error && <span className="text-red-500">{error}</span>}
     </p>
   );

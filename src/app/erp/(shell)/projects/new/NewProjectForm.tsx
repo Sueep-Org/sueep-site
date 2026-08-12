@@ -12,6 +12,7 @@ import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnover
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -1357,26 +1358,19 @@ export function NewProjectForm({
                 <label className={label} htmlFor="buildingProjectId">
                   Building
                 </label>
-                <select
+                <SearchableSelect
                   id="buildingProjectId"
-                  name="buildingProjectId"
-                  required
-                  className={input}
                   value={buildingProjectId}
+                  onChange={applySelectedBuilding}
                   disabled={buildingsLoading}
-                  onChange={(e) => applySelectedBuilding(e.target.value)}
-                >
-                  <option value="">{buildingsLoading ? "Loading buildings..." : "Select a building..."}</option>
-                  {!buildingsLoading && buildings.length === 0 ? (
-                    <option value="" disabled>No buildings found</option>
-                  ) : null}
-                  {buildings.map((building) => (
-                    <option key={building.id} value={building.id}>
-                      {building.name}
-                    </option>
-                  ))}
-                  {!disableNewBuilding && <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>}
-                </select>
+                  placeholder="Search buildings…"
+                  allLabel={buildingsLoading ? "Loading buildings..." : !buildingsLoading && buildings.length === 0 ? "No buildings found" : "Select a building..."}
+                  options={[
+                    ...buildings.map((building) => ({ value: building.id, label: building.name })),
+                    ...(!disableNewBuilding ? [{ value: ADD_NEW_BUILDING_VALUE, label: "Add new building..." }] : []),
+                  ]}
+                  className="mt-1"
+                />
                 {isAddingBuilding ? (
                   <div className="mt-2 space-y-2">
                     <div>

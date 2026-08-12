@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "../../components/SearchableSelect";
+import { useConfirm, useToast } from "../../components/ui";
 
 type DealCandidate = { id: string; name: string };
 
@@ -24,6 +25,8 @@ interface BuildingProfileEditorProps {
 
 export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeId = null, employees = [], canEditCommissionOwner = false }: BuildingProfileEditorProps) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [name, setName] = useState(initial.name);
   const [builder, setBuilder] = useState(initial.builder ?? "");
   const [address, setAddress] = useState(initial.address);
@@ -145,7 +148,7 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
   }
 
   async function onDelete() {
-    if (!window.confirm("Delete this building? This action cannot be undone.")) {
+    if (!(await confirm({ message: "Delete this building? This action cannot be undone." }))) {
       return;
     }
     setLoading(true);
@@ -155,13 +158,13 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed to delete building");
+        toast(data.error || "Failed to delete building", "error");
         setLoading(false);
         return;
       }
       router.push("/erp/buildings");
     } catch {
-      setError("Network error");
+      toast("Network error", "error");
       setLoading(false);
     }
   }

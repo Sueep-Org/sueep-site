@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -18,6 +18,8 @@ type Props = {
 
 export function ContractorProfileEditor({ contractorId, initial }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -55,20 +57,19 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Permanently delete this contractor? This cannot be undone.")) return;
+    if (!(await confirm({ message: "Permanently delete this contractor? This cannot be undone." }))) return;
     setDeleting(true);
-    setError("");
     try {
       const res = await fetch(`/api/erp/contractors/${contractorId}`, { method: "DELETE" });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Delete failed");
+        toast(data.error ?? "Delete failed", "error");
         setDeleting(false);
         return;
       }
       router.push("/erp/contractors");
     } catch {
-      setError("Network error");
+      toast("Network error", "error");
       setDeleting(false);
     }
   }

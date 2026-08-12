@@ -310,8 +310,11 @@ export function ChangeOrderContractorsSection({
                     <tr key={a.id}>
                       <td className="py-2 pr-2 font-medium text-gray-900">{a.contractorName}</td>
                       <td className="py-2 pr-2 text-gray-500">{a.role || "—"}</td>
-                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString() : "—"}</td>
-                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString() : "—"}</td>
+                      {/* startDate/endDate are stored as UTC midnight for the intended calendar day — formatting without
+                          timeZone: "UTC" re-interprets it in the viewer's local timezone, rolling it back a day for
+                          anyone west of UTC (e.g. a contractor's 8/11 assignment showing as 8/10 here in Eastern). */}
+                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
+                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
                       <td className="py-2 pr-2 tabular-nums text-gray-700">{a.costCents != null ? fmt(a.costCents) : "—"}</td>
                       <td className="py-2 pr-2 text-gray-500">{a.notes || "—"}</td>
                       <td className="py-2 text-right whitespace-nowrap">

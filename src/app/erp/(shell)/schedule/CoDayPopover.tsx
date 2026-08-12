@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { matchesSearchQuery, type ScheduleChangeOrder, type ScheduleCoDayAssignment, type ScheduleCoWorkerAssignment } from "@/lib/erp/schedule";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -229,30 +230,20 @@ export function CoDayPopover({
         <div className="mt-3 border-t border-gray-100 pt-2.5">
           <label className="block text-[10px] font-medium text-gray-500">Plan supervisor / PM for this day</label>
           <div className="mt-1 grid grid-cols-2 gap-1.5">
-            <select
+            <SearchableSelect
               value={supervisorUserId}
-              onChange={(e) => setSupervisorUserId(e.target.value)}
-              className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 focus:border-pink-400 focus:outline-none"
-            >
-              <option value="">Supervisor...</option>
-              {supervisors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setSupervisorUserId}
+              options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+              placeholder="Search…"
+              allLabel="Supervisor..."
+            />
+            <SearchableSelect
               value={projectManagerUserId}
-              onChange={(e) => setProjectManagerUserId(e.target.value)}
-              className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 focus:border-pink-400 focus:outline-none"
-            >
-              <option value="">PM (if no supervisor)</option>
-              {projectManagers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.displayName}
-                </option>
-              ))}
-            </select>
+              onChange={setProjectManagerUserId}
+              options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
+              placeholder="Search…"
+              allLabel="PM (if no supervisor)"
+            />
           </div>
           <div className="mt-1.5 flex items-center gap-1.5">
             <input
@@ -407,12 +398,6 @@ export function CoDayPopover({
             className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
           >
             View change order
-          </Link>
-          <Link
-            href={`/erp/projects/${co.projectId}`}
-            className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
-          >
-            View project
           </Link>
         </div>
       </div>

@@ -17,6 +17,7 @@ export function SearchableSelect({
   placeholder = "Search…",
   allLabel = "All",
   className = "",
+  disabled = false,
 }: {
   id?: string;
   value: string;
@@ -25,6 +26,7 @@ export function SearchableSelect({
   placeholder?: string;
   allLabel?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -86,6 +88,7 @@ export function SearchableSelect({
           type="text"
           value={displayValue}
           placeholder={placeholder}
+          disabled={disabled}
           onFocus={(e) => {
             setOpen(true);
             setQuery("");
@@ -98,9 +101,9 @@ export function SearchableSelect({
             if (!open) setOpen(true);
           }}
           onKeyDown={onKeyDown}
-          className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 pr-7 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 pr-7 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:cursor-not-allowed disabled:opacity-50"
         />
-        {value ? (
+        {value && !disabled ? (
           <button
             type="button"
             aria-label="Clear"

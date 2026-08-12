@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -24,13 +25,15 @@ export function ProjectManagerEditor({ projectId, supervisor, employees }: Props
   const effectiveSupervisor = supervisor || "";
   const isKnown = employeeNames.includes(effectiveSupervisor);
 
-  const [selected, setSelected] = useState(isKnown ? effectiveSupervisor : "__other__");
+  // "" (SearchableSelect's built-in "clear" slot) doubles as the "Other…" case
+  // here — a PM not in the employee list gets typed into the custom field.
+  const [selected, setSelected] = useState(isKnown ? effectiveSupervisor : "");
   const [custom, setCustom] = useState(isKnown ? "" : effectiveSupervisor);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    const value = selected === "__other__" ? custom.trim() : selected;
+    const value = selected === "" ? custom.trim() : selected;
     if (!value) {
       setError("Project Manager name is required");
       return;
@@ -63,21 +66,16 @@ export function ProjectManagerEditor({ projectId, supervisor, employees }: Props
           <label className={labelCls} htmlFor="pm-select">
             Assign PM
           </label>
-          <select
+          <SearchableSelect
             id="pm-select"
-            className={inputCls}
             value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            {employeeNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-            <option value="__other__">Other…</option>
-          </select>
+            onChange={setSelected}
+            options={employeeNames.map((name) => ({ value: name, label: name }))}
+            placeholder="Search employees…"
+            allLabel="Other…"
+          />
         </div>
-        {selected === "__other__" && (
+        {selected === "" && (
           <div>
             <label className={labelCls} htmlFor="pm-custom">
               Name

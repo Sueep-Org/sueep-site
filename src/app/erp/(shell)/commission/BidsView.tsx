@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 export type BidRow = {
   id: string;
@@ -37,7 +38,7 @@ function sortByDateDesc(rows: BidRow[]): BidRow[] {
 
 export function BidsView({ employees, rows: initialRows }: { employees: EmployeeOption[]; rows: BidRow[] }) {
   const [rows, setRows] = useState(() => sortByDateDesc(initialRows));
-  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [savingSentId, setSavingSentId] = useState<string | null>(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -52,7 +53,7 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const visibleRows = rows.filter((r) => employeeFilter === "all" || r.employeeId === employeeFilter);
+  const visibleRows = rows.filter((r) => employeeFilter === "" || r.employeeId === employeeFilter);
 
   async function toggleSent(row: BidRow) {
     const nextSent = !row.sent;
@@ -146,16 +147,14 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <select
+        <SearchableSelect
           value={employeeFilter}
-          onChange={(e) => setEmployeeFilter(e.target.value)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-        >
-          <option value="all">All employees</option>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>{e.name}</option>
-          ))}
-        </select>
+          onChange={setEmployeeFilter}
+          options={employees.map((e) => ({ value: e.id, label: e.name }))}
+          placeholder="Search employees…"
+          allLabel="All employees"
+          className="w-56"
+        />
         <button
           type="button"
           onClick={() => setShowAddForm((v) => !v)}

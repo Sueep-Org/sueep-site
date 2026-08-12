@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { bidBonusRowKey, type BidBonusRow } from "@/lib/erp/bidBonus";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 type PaidFilter = "all" | "paid" | "unpaid";
 
@@ -17,14 +18,14 @@ function sortByWeekDesc(rows: BidBonusRow[]): BidBonusRow[] {
 /** verifiedBids is derived server-side from sent bids on the Bids tab — this page only tracks paid status. */
 export function BidCommissionView({ rows: initialRows }: { rows: BidBonusRow[] }) {
   const [rows, setRows] = useState(() => sortByWeekDesc(initialRows));
-  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const employeeOptions = [...new Map(initialRows.map((r) => [r.employeeId, r.employeeName])).entries()];
 
   const visibleRows = rows
-    .filter((r) => employeeFilter === "all" || r.employeeId === employeeFilter)
+    .filter((r) => employeeFilter === "" || r.employeeId === employeeFilter)
     .filter((r) => paidFilter === "all" || (paidFilter === "paid" ? !!r.paidAt : !r.paidAt));
 
   const totalBonus = rows.reduce((s, r) => s + r.bonusCents, 0);
@@ -59,16 +60,14 @@ export function BidCommissionView({ rows: initialRows }: { rows: BidBonusRow[] }
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <select
+        <SearchableSelect
           value={employeeFilter}
-          onChange={(e) => setEmployeeFilter(e.target.value)}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-        >
-          <option value="all">All employees</option>
-          {employeeOptions.map(([id, name]) => (
-            <option key={id} value={id}>{name}</option>
-          ))}
-        </select>
+          onChange={setEmployeeFilter}
+          options={employeeOptions.map(([id, name]) => ({ value: id, label: name }))}
+          placeholder="Search employees…"
+          allLabel="All employees"
+          className="w-56"
+        />
         <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
           {([["all", "All"], ["unpaid", "Unpaid"], ["paid", "Paid"]] as [PaidFilter, string][]).map(([f, label]) => (
             <button

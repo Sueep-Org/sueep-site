@@ -11,6 +11,7 @@ import {
 import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
 
 type ProjectOption = {
@@ -36,6 +37,44 @@ function dateLabel(dateKey: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+/**
+ * Closed-by-default section for everything in this modal that isn't the
+ * core "who's covering this day" ask — task details and crew, same idea as
+ * the "Duplicate to more days" section this pattern was lifted from. Always
+ * shows a one-line summary of what's already set even while closed, so
+ * closed doesn't mean "you have to open this to know what's there."
+ */
+function CollapsibleField({
+  label,
+  summary,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded border border-gray-200 p-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-2 text-xs font-medium text-gray-600"
+      >
+        <span>{label}</span>
+        <span className="flex items-center gap-1.5 text-gray-400">
+          {!open && summary ? <span className="truncate">{summary}</span> : null}
+          <span className="shrink-0">{open ? "Hide" : "Show"}</span>
+        </span>
+      </button>
+      {open ? <div className="mt-2 space-y-2">{children}</div> : null}
+    </div>
+  );
 }
 
 export function DayAssignmentModal({
@@ -142,6 +181,13 @@ export function DayAssignmentModal({
   const [pickedKeys, setPickedKeys] = useState<Set<string>>(new Set());
   const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
 
+  // Task details (SOV/scope/CO tags) and crew are both closed by default —
+  // only "who's covering this day" (project/CO, supervisor, PM, time) shows
+  // right away. Each section's toggle button shows a summary of what's
+  // already set even while closed, see CollapsibleField above.
+  const [taskDetailsOpen, setTaskDetailsOpen] = useState(false);
+  const [crewOpen, setCrewOpen] = useState(false);
+
   const filteredProjects = projectQuery.trim()
     ? projects.filter((p) => matchesSearchQuery(p.jobTitle, projectQuery))
     : projects;
@@ -175,6 +221,34 @@ export function DayAssignmentModal({
     : contractors;
 
   const allDateKeys = pickedKeys.size > 0 ? [...new Set([dateKey, ...pickedKeys])].sort() : null;
+
+  // Whether there's anything to show under "Task details" at all for the
+  // current project — same three cases (SOV items, turnover scope, tagged
+  // change orders) the section's contents branch on below.
+  const showTaskDetails =
+    targetMode === "project" &&
+    !!selectedProject &&
+    (selectedGroup === "POST_CONSTRUCTION" ||
+      (selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0) ||
+      selectedProject.changeOrders.length > 0);
+
+  const taskDetailsSummary = !selectedProject
+    ? ""
+    : (() => {
+        const parts: string[] = [];
+        if (selectedGroup === "POST_CONSTRUCTION") {
+          if (sovPicks.length > 0) parts.push(`${sovPicks.length} SOV item${sovPicks.length === 1 ? "" : "s"} picked`);
+          else if (comment.trim()) parts.push("note added");
+        }
+        if (selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && scopePicks.length > 0) {
+          parts.push(`${scopePicks.length} task${scopePicks.length === 1 ? "" : "s"} picked`);
+        }
+        if (coPicks.length > 0) parts.push(`${coPicks.length} change order${coPicks.length === 1 ? "" : "s"} tagged`);
+        return parts.length > 0 ? parts.join(", ") : "not set yet";
+      })();
+
+  const crewCount = targetMode === "co" ? existingCoWorkers.length : existingWorkers.length;
+  const crewSummary = crewCount > 0 ? `${crewCount} worker${crewCount === 1 ? "" : "s"} scheduled` : "none yet";
 
   function toggleDuplicateDay(k: string) {
     if (k === dateKey) return; // the anchor day is always included, not toggleable
@@ -635,115 +709,116 @@ export function DayAssignmentModal({
           </div>
           )}
 
-          {targetMode === "project" && selectedProject && selectedGroup === "POST_CONSTRUCTION" ? (
-            <div>
-              <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
-              <div className="mt-1">
-                {selectedProject.sovItems.length > 0 ? (
-                  <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
-                ) : (
-                  <div>
-                    <p className="text-xs text-gray-400">No SOV items on this project yet.</p>
-                    <textarea
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Describe what's being worked on this day..."
-                      rows={2}
-                      className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
-                    />
+          {showTaskDetails && selectedProject ? (
+            <CollapsibleField
+              label="Task details"
+              summary={taskDetailsSummary}
+              open={taskDetailsOpen}
+              onToggle={() => setTaskDetailsOpen((v) => !v)}
+            >
+              {selectedGroup === "POST_CONSTRUCTION" ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
+                  <div className="mt-1">
+                    {selectedProject.sovItems.length > 0 ? (
+                      <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                    ) : (
+                      <div>
+                        <p className="text-xs text-gray-400">No SOV items on this project yet.</p>
+                        <textarea
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          placeholder="Describe what's being worked on this day..."
+                          rows={2}
+                          className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : null}
+                </div>
+              ) : null}
 
-          {targetMode === "project" && selectedProject && selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0 ? (
-            <div>
-              <label className="block text-xs font-medium text-gray-600">Scope covered this day</label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {availableScopeOptions.map((opt) => {
-                  const active = scopePicks.includes(opt.value);
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() =>
-                        setScopePicks((prev) =>
-                          prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
-                        )
-                      }
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        active ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-600 hover:border-pink-400"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+              {selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0 ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600">Scope covered this day</label>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {availableScopeOptions.map((opt) => {
+                      const active = scopePicks.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setScopePicks((prev) =>
+                              prev.includes(opt.value) ? prev.filter((v) => v !== opt.value) : [...prev, opt.value]
+                            )
+                          }
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            active ? "bg-pink-600 text-white" : "border border-gray-300 text-gray-600 hover:border-pink-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
-          {targetMode === "project" && selectedProject && selectedProject.changeOrders.length > 0 ? (
-            <div>
-              <label className="block text-xs font-medium text-gray-600">Change order(s) covered this day</label>
-              <p className="mt-0.5 text-[11px] text-gray-400">
-                Leave unchecked for plain project-scope work.
-              </p>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {selectedProject.changeOrders.map((co) => {
-                  const active = coPicks.includes(co.id);
-                  return (
-                    <button
-                      key={co.id}
-                      type="button"
-                      onClick={() =>
-                        setCoPicks((prev) =>
-                          prev.includes(co.id) ? prev.filter((v) => v !== co.id) : [...prev, co.id]
-                        )
-                      }
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        active ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-600 hover:border-blue-400"
-                      }`}
-                    >
-                      {co.title}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {selectedProject.changeOrders.length > 0 ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600">Change order(s) covered this day</label>
+                  <p className="mt-0.5 text-[11px] text-gray-400">
+                    Leave unchecked for plain project-scope work.
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {selectedProject.changeOrders.map((co) => {
+                      const active = coPicks.includes(co.id);
+                      return (
+                        <button
+                          key={co.id}
+                          type="button"
+                          onClick={() =>
+                            setCoPicks((prev) =>
+                              prev.includes(co.id) ? prev.filter((v) => v !== co.id) : [...prev, co.id]
+                            )
+                          }
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            active ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-600 hover:border-blue-400"
+                          }`}
+                        >
+                          {co.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </CollapsibleField>
           ) : null}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600">Supervisor</label>
-              <select
+              <SearchableSelect
                 value={supervisorUserId}
-                onChange={(e) => setSupervisorUserId(e.target.value)}
-                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
-              >
-                <option value="">Select a supervisor...</option>
-                {supervisors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))}
-              </select>
+                onChange={setSupervisorUserId}
+                options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+                placeholder="Search supervisors…"
+                allLabel="Select a supervisor..."
+                className="mt-1"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600">PM (if no supervisor)</label>
-              <select
+              <SearchableSelect
                 value={projectManagerUserId}
-                onChange={(e) => setProjectManagerUserId(e.target.value)}
-                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
-              >
-                <option value="">None</option>
-                {projectManagers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.displayName}
-                  </option>
-                ))}
-              </select>
+                onChange={setProjectManagerUserId}
+                options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
+                placeholder="Search PMs…"
+                allLabel="None"
+                className="mt-1"
+              />
             </div>
           </div>
 
@@ -767,31 +842,24 @@ export function DayAssignmentModal({
           </div>
 
           {targetMode === "project" ? (
-          <div className="rounded border border-gray-200 p-2">
-            <button
-              type="button"
-              onClick={() => setRepeatOpen((v) => !v)}
-              className="flex w-full items-center justify-between text-xs font-medium text-gray-600"
+            <CollapsibleField
+              label="Duplicate to more days"
+              summary={pickedKeys.size === 0 ? "not set" : `${allDateKeys!.length} days`}
+              open={repeatOpen}
+              onToggle={() => setRepeatOpen((v) => !v)}
             >
-              <span>Duplicate to more days</span>
-              <span className="text-gray-400">{repeatOpen ? "Hide" : "Set up"}</span>
-            </button>
-            {repeatOpen ? (
-              <div className="mt-2 space-y-2">
-                <MiniCalendarPicker
-                  selectedKeys={new Set([dateKey, ...pickedKeys])}
-                  onToggle={toggleDuplicateDay}
-                  minDateKey={dateKey}
-                  initialMonthAnchor={dateKey}
-                />
-                <p className="text-xs text-gray-500">
-                  {pickedKeys.size === 0
-                    ? "This day is always included — tap more days to also duplicate onto, they don't need to be in a row."
-                    : `Duplicates to ${allDateKeys!.length} days: ${allDateKeys!.join(", ")}`}
-                </p>
-              </div>
-            ) : null}
-          </div>
+              <MiniCalendarPicker
+                selectedKeys={new Set([dateKey, ...pickedKeys])}
+                onToggle={toggleDuplicateDay}
+                minDateKey={dateKey}
+                initialMonthAnchor={dateKey}
+              />
+              <p className="text-xs text-gray-500">
+                {pickedKeys.size === 0
+                  ? "This day is always included — tap more days to also duplicate onto, they don't need to be in a row."
+                  : `Duplicates to ${allDateKeys!.length} days: ${allDateKeys!.join(", ")}`}
+              </p>
+            </CollapsibleField>
           ) : (
             <p className="text-[11px] text-gray-400">
               Change orders are assigned one day at a time for now — repeat scheduling isn&apos;t available here yet.
@@ -821,10 +889,15 @@ export function DayAssignmentModal({
         </form>
 
         <div className="mt-4 border-t border-gray-100 pt-4">
-          <label className="block text-xs font-medium text-gray-600">Workers scheduled</label>
+        <CollapsibleField
+          label="Crew for this day"
+          summary={crewSummary}
+          open={crewOpen}
+          onToggle={() => setCrewOpen((v) => !v)}
+        >
           {targetMode === "co" ? (
             existingCoWorkers.length > 0 ? (
-              <ul className="mt-1.5 space-y-1.5">
+              <ul className="space-y-1.5">
                 {existingCoWorkers.map((w) => {
                   const co = changeOrderOptions.find((c) => c.id === w.changeOrderId);
                   const employee = w.employeeId ? employees.find((e) => e.id === w.employeeId) : null;
@@ -856,10 +929,10 @@ export function DayAssignmentModal({
                 })}
               </ul>
             ) : (
-              <p className="mt-1.5 text-xs text-gray-400">No workers scheduled yet for this day.</p>
+              <p className="text-xs text-gray-400">No workers scheduled yet for this day.</p>
             )
           ) : existingWorkers.length > 0 ? (
-            <ul className="mt-1.5 space-y-1.5">
+            <ul className="space-y-1.5">
               {existingWorkers.map((w) => {
                 const project = projects.find((p) => p.id === w.projectId);
                 const employee = w.employeeId ? employees.find((e) => e.id === w.employeeId) : null;
@@ -905,14 +978,14 @@ export function DayAssignmentModal({
               })}
             </ul>
           ) : (
-            <p className="mt-1.5 text-xs text-gray-400">No workers scheduled yet for this day.</p>
+            <p className="text-xs text-gray-400">No workers scheduled yet for this day.</p>
           )}
 
-          <p className="mt-3 text-[11px] text-gray-400">
+          <p className="text-[11px] text-gray-400">
             Uses the {targetMode === "co" ? "change order" : "project"} selected above. Not emailed — for planning only.
           </p>
 
-          <div className="mt-1.5 flex gap-1">
+          <div className="flex gap-1">
             <button
               type="button"
               onClick={() => {
@@ -1033,6 +1106,7 @@ export function DayAssignmentModal({
           {workerError ? (
             <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-xs text-red-600">{workerError}</div>
           ) : null}
+        </CollapsibleField>
         </div>
         </div>
       </div>

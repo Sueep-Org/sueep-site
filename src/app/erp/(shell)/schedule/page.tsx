@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
+  contractorAssignmentDayKeys,
   dayKey,
   type ScheduleChangeOrder,
   type ScheduleCoDayAssignment,
@@ -42,6 +43,8 @@ export default async function SchedulePage() {
     contractorRows,
     coDayAssignmentRows,
     coWorkerAssignmentRows,
+    contractorAssignmentRows,
+    coContractorAssignmentRows,
   ] = await Promise.all([
     prisma.project.findMany({
       // Excludes a recurring contract's own billing placeholder — it has
@@ -153,6 +156,17 @@ export default async function SchedulePage() {
     prisma.changeOrderWorkerDayAssignment.findMany({
       select: { id: true, changeOrderId: true, employeeId: true, contractorId: true, date: true },
     }),
+    // Contractor engagements count toward "confirmed" work on the calendar
+    // the same way LaborEntry does for employees — see
+    // contractorAssignmentDayKeys's doc comment for why. Building-only rows
+    // (projectId null) aren't schedulable here, hence the filter.
+    prisma.contractorAssignment.findMany({
+      where: { projectId: { not: null } },
+      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
+    }),
+    prisma.changeOrderContractorAssignment.findMany({
+      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
+    }),
   ]);
 
   const workerAssignments: ScheduleWorkerAssignment[] = workerAssignmentRows.map((a) => ({
@@ -232,6 +246,29 @@ export default async function SchedulePage() {
     laborEntriesByProject.set(le.projectId, entriesByDay);
   }
 
+  // Contractor engagements confirm a day the same way LaborEntry does for
+  // employees, just without per-day hours to add — see
+  // contractorAssignmentDayKeys's doc comment. Not added to
+  // laborEntriesByProject: that list is specifically shift-level LaborEntry
+  // rows (clock-in, exact hours) for the read-only detail card, which a
+  // contractor engagement record isn't.
+  for (const ca of contractorAssignmentRows) {
+    if (!ca.projectId) continue;
+    const contractorName = contractorNameById.get(ca.contractorId);
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+      const set = workDayKeysByProject.get(ca.projectId) ?? new Set<string>();
+      set.add(k);
+      workDayKeysByProject.set(ca.projectId, set);
+
+      if (!contractorName) continue;
+      const byDay = laborSummaryByProject.get(ca.projectId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+      const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+      entry.workers.add(contractorName);
+      byDay.set(k, entry);
+      laborSummaryByProject.set(ca.projectId, byDay);
+    }
+  }
+
   const workDayKeysByChangeOrder = new Map<string, Set<string>>();
   // Per-change-order, per-day breakdown of hours/workers — same tooltip data
   // as projects, sourced from ProjectChangeOrderLaborer instead of LaborEntry.
@@ -248,6 +285,24 @@ export default async function SchedulePage() {
     if (cl.name) entry.workers.add(cl.name);
     byDay.set(k, entry);
     laborSummaryByChangeOrder.set(cl.changeOrderId, byDay);
+  }
+
+  // Same as the project-level contractorAssignmentRows merge above, for a
+  // contractor engaged directly on a change order.
+  for (const ca of coContractorAssignmentRows) {
+    const contractorName = contractorNameById.get(ca.contractorId);
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+      const set = workDayKeysByChangeOrder.get(ca.changeOrderId) ?? new Set<string>();
+      set.add(k);
+      workDayKeysByChangeOrder.set(ca.changeOrderId, set);
+
+      if (!contractorName) continue;
+      const byDay = laborSummaryByChangeOrder.get(ca.changeOrderId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+      const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+      entry.workers.add(contractorName);
+      byDay.set(k, entry);
+      laborSummaryByChangeOrder.set(ca.changeOrderId, byDay);
+    }
   }
 
   // Days explicitly planned for a CO via a ProjectDayAssignment (see

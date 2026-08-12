@@ -261,3 +261,127 @@ export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {
 export function dayKey(d: Date): string {
   return startOfDay(d).toISOString().slice(0, 10);
 }
+
+const MAX_CONTRACTOR_ASSIGNMENT_SPAN_DAYS = 180;
+
+/**
+ * Day keys a single ContractorAssignment / ChangeOrderContractorAssignment
+ * row counts as confirmed work for. These tables record a contractor's
+ * engagement (role/cost/date range), not hour-by-hour logged time the way
+ * LaborEntry does for employees — but it's still a real, already-happened
+ * engagement, not a future plan (ScheduleWorkerAssignment /
+ * ScheduleDayAssignment already cover "planned"), which is why the calendar
+ * should treat it the same as a logged day, not leave contractor-only work
+ * invisible or stuck looking like it "needs a supervisor".
+ *
+ * `assignedDate`, when set, is treated as one specific day. Otherwise
+ * startDate..endDate (inclusive) is used, capped at
+ * MAX_CONTRACTOR_ASSIGNMENT_SPAN_DAYS so a row with a missing or
+ * far-future endDate can't flood the calendar with months of markers. A
+ * startDate with no endDate counts as just that one day, not an
+ * open-ended range.
+ */
+export function contractorAssignmentDayKeys(assignedDate: Date | null, startDate: Date | null, endDate: Date | null): string[] {
+  if (assignedDate) return [dayKey(assignedDate)];
+  if (!startDate) return [];
+  const start = startOfDay(startDate);
+  const end = endDate ? startOfDay(endDate) : start;
+  if (end < start) return [dayKey(start)];
+  const keys: string[] = [];
+  let cursor = start;
+  for (let i = 0; i <= MAX_CONTRACTOR_ASSIGNMENT_SPAN_DAYS && cursor <= end; i++) {
+    keys.push(dayKey(cursor));
+    cursor = addDays(cursor, 1);
+  }
+  return keys;
+}
+
+export type ProjectSpanMarkerKind = "needsSupervisor" | "spanEndpoint";
+
+/** One occurrence of a project's declared start or end date claiming a
+ * calendar day, on a day that isn't otherwise represented by logged work or
+ * an explicit ScheduleDayAssignment. `kind` is already resolved — the
+ * caller doesn't need to re-derive "is this the loud warning or the quiet
+ * marker" itself. */
+export type ProjectSpanMarker = { project: ScheduleProject; role: "start" | "end"; kind: ProjectSpanMarkerKind };
+
+/**
+ * The month calendar has exactly two ways a project's own declared
+ * projectDate/projectEndDate can end up needing a marker on that day: as a
+ * loud "starting soon, needs a supervisor" alert, or as a quiet "starts/ends
+ * here, not otherwise scheduled" note. Both cases only apply when the day
+ * isn't already covered by logged labor or a planned day-assignment — this
+ * function is the single place that decides that, for both cases at once,
+ * from one shared read of `dayAssignments`.
+ *
+ * Before this, the two cases were computed by two entirely separate passes
+ * over `projects`, each rebuilding its own "is this day already covered"
+ * check by hand. Keeping those in sync across every future addition (change
+ * orders, SOV requests, building-grouping) was easy to get subtly wrong —
+ * concretely, this shared check is what a project rendering twice on the
+ * same day (once as the alert, once as the plain marker) turned out to be
+ * missing. Any future state that also needs to claim a project's
+ * span-endpoint day should be added as a branch in here, not as a third
+ * parallel pass over `projects`.
+ *
+ * Classification:
+ *  - "needsSupervisor": the project has no supervisor at all (checking
+ *    `supervisorOverrides` first, so an assignment made earlier in this same
+ *    session clears the alert without a page refresh) and no logged work on
+ *    any day, and isn't complete/archived.
+ *  - "spanEndpoint": everything else not already excluded above — has a
+ *    supervisor, or has logged work on some other day — so the date doesn't
+ *    just silently not exist on the calendar.
+ *
+ * Deliberately not limited to today-or-later: a project whose date already
+ * passed with nobody ever assigned and nothing ever logged used to just
+ * vanish from the calendar the moment "today" passed it, instead of turning
+ * into an overdue warning the way a missed ScheduleDayAssignment already
+ * does. The caller renders past occurrences with the same chip, just
+ * "missed" copy instead of "starting soon".
+ */
+export function computeProjectSpanMarkersByDay(
+  projects: ScheduleProject[],
+  dayAssignments: ScheduleDayAssignment[],
+  supervisorOverrides: Record<string, string | null>
+): Map<string, ProjectSpanMarker[]> {
+  const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
+  const map = new Map<string, ProjectSpanMarker[]>();
+
+  for (const p of projects) {
+    if (p.status === "ARCHIVED") continue;
+    if (!p.projectDate) continue;
+
+    const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
+    const hasLoggedWork = p.workDayKeys.length > 0;
+    const isUnsupervisedAndUnworked = !supervisorId && !hasLoggedWork;
+    // A complete project with no supervisor ever assigned and no work ever
+    // logged has no actionable state left to flag — not a warning (it's
+    // done), not a "not otherwise scheduled" note either (nothing to
+    // schedule anymore).
+    if (isUnsupervisedAndUnworked && p.status === "COMPLETE") continue;
+    const kind: ProjectSpanMarkerKind = isUnsupervisedAndUnworked ? "needsSupervisor" : "spanEndpoint";
+
+    // projectDate/projectEndDate are stored as UTC midnight for the intended
+    // calendar day (e.g. "2026-07-27T00:00:00.000Z" means July 27, full
+    // stop) — slicing the ISO string directly reads that day back out.
+    // Routing it through `new Date(...)` + dayKey() instead would
+    // re-interpret it in the browser's local timezone, shifting it a day
+    // earlier for anyone west of UTC.
+    const startK = p.projectDate.slice(0, 10);
+    const endK = p.projectEndDate ? p.projectEndDate.slice(0, 10) : null;
+    const occurrences: { k: string; role: "start" | "end" }[] =
+      endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
+
+    const workDayKeySet = new Set(p.workDayKeys);
+    for (const { k, role } of occurrences) {
+      if (workDayKeySet.has(k)) continue; // logged work already represents this day
+      if (plannedDayPairs.has(`${p.id}:${k}`)) continue; // a planned day-assignment already represents this day
+      const list = map.get(k) ?? [];
+      list.push({ project: p, role, kind });
+      map.set(k, list);
+    }
+  }
+
+  return map;
+}

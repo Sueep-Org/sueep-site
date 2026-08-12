@@ -8,8 +8,10 @@ import { CollapsibleSection } from "./CollapsibleSection";
 import { CoDayPopover } from "./CoDayPopover";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import {
   addDays,
+  computeProjectSpanMarkersByDay,
   dayKey,
   matchesSearchQuery,
   monthMatrix,
@@ -77,11 +79,15 @@ const NO_SUPERVISOR_PLANNED_CHIP_CLASS =
 
 // A "Schedule SOV Work" portal request has no supervisorUserId field at
 // all, so it's always in a "needs a supervisor assigned" state, same as a
-// no-supervisor planned chip above (whole-chip amber rather than teal, which
-// used to make it look like its own unrelated category instead of exactly
-// what it is: a planned assignment nobody's been put on yet).
-const SOV_REQUEST_CHIP_CLASS = NO_SUPERVISOR_PLANNED_CHIP_CLASS;
-const SOV_REQUEST_SWATCH_CLASS = "border-2 border-amber-600 bg-amber-400";
+// no-supervisor planned chip above — but it used to share that chip's exact
+// amber color too, which made an unassigned portal request look identical
+// to an unassigned planned project on the calendar (both amber, both
+// dashed). Cyan instead of amber keeps the same "planned, not logged" dashed
+// border, but makes it unmistakable at a glance which one you're looking
+// at, without having to open it.
+const SOV_REQUEST_CHIP_CLASS =
+  "border-2 border-dashed border-cyan-600 bg-cyan-200 text-cyan-950 hover:bg-cyan-300";
+const SOV_REQUEST_SWATCH_CLASS = "border-2 border-cyan-600 bg-cyan-200";
 
 // A project with a future (or today's) start date that has never had a
 // supervisor assigned and has no logged work at all — solid, loud, and
@@ -409,21 +415,17 @@ function DuplicateToMoreDaysSection({
               : `${sortedKeys.length} day${sortedKeys.length === 1 ? "" : "s"} picked: ${sortedKeys.join(", ")}`}
           </p>
           {!hasCoverage ? (
-            <label className="block text-[9px] text-gray-400">
+            <div className="text-[9px] text-gray-400">
               Supervisor (needed to duplicate)
-              <select
+              <SearchableSelect
                 value={fallbackSupervisorId}
-                onChange={(e) => setFallbackSupervisorId(e.target.value)}
-                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-              >
-                <option value="">— None —</option>
-                {supervisors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setFallbackSupervisorId}
+                options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+                placeholder="Search…"
+                allLabel="— None —"
+                className="mt-0.5"
+              />
+            </div>
           ) : null}
           {error ? <p className="text-[10px] text-red-500">{error}</p> : null}
           <button
@@ -588,7 +590,8 @@ export function SchedulePlanner({
 
   // Clears a project's own start or end date straight from its calendar
   // marker's × — the marker isn't backed by its own row (see
-  // projectSpanEndpointsByDay below), it's just projectDate/projectEndDate
+  // computeProjectSpanMarkersByDay in lib/erp/schedule.ts), it's just
+  // projectDate/projectEndDate
   // itself, so "deleting" it means nulling out that field, same field the
   // marker's drag-to-reschedule already writes to. Dates are re-derived
   // server-side, so router.refresh() picks up the change the same way
@@ -1489,33 +1492,25 @@ export function SchedulePlanner({
           <div className="mt-0.5 grid grid-cols-2 gap-1.5">
             <div>
               <label className="block text-[9px] text-gray-400">Supervisor</label>
-              <select
+              <SearchableSelect
                 value={eventDaySupervisorId}
-                onChange={(e) => setEventDaySupervisorId(e.target.value)}
-                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-              >
-                <option value="">— None —</option>
-                {supervisors.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))}
-              </select>
+                onChange={setEventDaySupervisorId}
+                options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+                placeholder="Search…"
+                allLabel="— None —"
+                className="mt-0.5"
+              />
             </div>
             <div>
               <label className="block text-[9px] text-gray-400">PM (if no supervisor)</label>
-              <select
+              <SearchableSelect
                 value={eventDayPmId}
-                onChange={(e) => setEventDayPmId(e.target.value)}
-                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-              >
-                <option value="">— None —</option>
-                {projectManagers.map((pm) => (
-                  <option key={pm.id} value={pm.id}>
-                    {pm.displayName}
-                  </option>
-                ))}
-              </select>
+                onChange={setEventDayPmId}
+                options={projectManagers.map((pm) => ({ value: pm.id, label: pm.displayName }))}
+                placeholder="Search…"
+                allLabel="— None —"
+                className="mt-0.5"
+              />
             </div>
           </div>
 
@@ -1895,59 +1890,23 @@ export function SchedulePlanner({
     return map;
   }, [sovRequestRows]);
 
-  // Projects that have never had a supervisor assigned and have no logged
-  // work yet — otherwise these are invisible on the calendar until someone
-  // happens to notice and assign a supervisor. Anchored to the project's own
-  // start/end dates since there's no day assignment or labor log to place
-  // them by. Shown on both the start and end day when they differ (any day
-  // in between needs an explicit day assignment to appear) — a project with
-  // matching start/end dates (or no end date) only ever gets the one "start"
-  // occurrence, never doubled up. Deliberately not limited to today-or-later
-  // — a project whose date has already passed with nobody ever assigned and
-  // nothing ever logged used to just vanish from the calendar the moment
-  // "today" passed it (confirmed: 31 real projects sitting in exactly that
-  // state), instead of turning into an overdue warning the way a real
-  // ProjectDayAssignment already does. Past occurrences render the same
-  // amber chip, just with "missed" copy instead of "starting soon" — see
-  // the isFutureOrToday branch in the chip's own tooltip. Skips a day that
-  // already has a planned (ProjectDayAssignment) entry for this project —
-  // otherwise a project scheduled without a supervisor shows up twice on
-  // that day: once here and once as the "planned, no supervisor" dashed
-  // chip below. Same dedup projectSpanEndpointsByDay already does.
-  const needsSupervisorByDay = useMemo(() => {
-    const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
-    const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
-    for (const p of projects) {
-      // Reads through supervisorOverrides (not just p.supervisorUserId) so
-      // the alert disappears the moment a supervisor is assigned, instead of
-      // waiting on a full page refresh.
-      const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
-      if (supervisorId) continue;
-      if (p.workDayKeys.length > 0) continue;
-      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
-      if (!p.projectDate) continue;
-      // projectDate/projectEndDate are stored as UTC midnight for the
-      // intended calendar day (e.g. "2026-07-27T00:00:00.000Z" means July
-      // 27, full stop) — slicing the ISO string directly reads that day back
-      // out. Routing it through `new Date(...)` + dayKey() instead would
-      // re-interpret it in the browser's local timezone, shifting it a day
-      // earlier for anyone west of UTC (confirmed: shifted 7/27 to 7/26 in
-      // America/New_York).
-      const startK = p.projectDate.slice(0, 10);
-      const endK = p.projectEndDate ? p.projectEndDate.slice(0, 10) : null;
-      const occurrences: { k: string; role: "start" | "end" }[] =
-        endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
-      for (const { k, role } of occurrences) {
-        if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
-        const list = map.get(k) ?? [];
-        list.push({ project: p, role });
-        map.set(k, list);
-      }
-    }
-    return map;
-  }, [projects, dayAssignments, supervisorOverrides]);
+  // A project's declared start/end date, on a day not otherwise covered by
+  // logged work or a planned day-assignment, resolved to either a loud
+  // "needs a supervisor" alert or a quiet "not otherwise scheduled" marker —
+  // see computeProjectSpanMarkersByDay's own doc comment for why this is one
+  // computation instead of two. Split into the two chip types below by
+  // `kind`, purely so the render code and legend conditions below don't need
+  // to change shape.
+  const projectSpanMarkersByDay = useMemo(
+    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides),
+    [projects, dayAssignments, supervisorOverrides]
+  );
+  const hasNeedsSupervisorMarkers = useMemo(
+    () => Array.from(projectSpanMarkersByDay.values()).some((list) => list.some((e) => e.kind === "needsSupervisor")),
+    [projectSpanMarkersByDay]
+  );
 
-  // Same alert as needsSupervisorByDay above, but for change orders — a CO
+  // Same alert as projectSpanMarkersByDay's "needsSupervisor" kind above, but for change orders — a CO
   // with a start (or end) date, no logged labor, and no supervisor of its
   // own (ChangeOrderDayAssignment / supervisorUserId) yet, past or future.
   // Anchored to the CO's own scheduledDateKey/scheduledEndDateKey since
@@ -1975,45 +1934,6 @@ export function SchedulePlanner({
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changeOrders, coDayAssignments, coSupervisorOverrides]);
-
-  // A project's declared start/end date (projectDate/projectEndDate) with no
-  // other marker on the calendar that day — no logged labor, no planned
-  // day-assignment — so the date would otherwise look like it doesn't exist
-  // even though the project record says it does (e.g. a project logged as
-  // ending 8/4 with the last actual day-assignment on 8/3 never gets an 8/4
-  // marker unless someone explicitly schedules that day). Unlike
-  // needsSupervisorByDay above — a deliberately narrow actionable alert for
-  // unsupervised jobs — this applies regardless of supervisor status, so it
-  // skips exactly the population the alert above already marks (unsupervised
-  // with zero logged work) to avoid stacking two markers on the same day.
-  // Also deliberately not limited to today-or-later, same reasoning as
-  // needsSupervisorByDay above — a past occurrence escalates to the same
-  // red "overdue" treatment a missed ProjectDayAssignment already gets
-  // (see renderSpanEndpointChip's isFutureOrToday branch) instead of
-  // silently disappearing once its date passes.
-  const projectSpanEndpointsByDay = useMemo(() => {
-    const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
-    const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
-    for (const p of projects) {
-      if (p.status === "ARCHIVED") continue;
-      if (!p.projectDate) continue;
-      const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
-      if (!supervisorId && p.workDayKeys.length === 0) continue;
-      const workDayKeySet = new Set(p.workDayKeys);
-      const startK = p.projectDate.slice(0, 10);
-      const endK = p.projectEndDate ? p.projectEndDate.slice(0, 10) : null;
-      const occurrences: { k: string; role: "start" | "end" }[] =
-        endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
-      for (const { k, role } of occurrences) {
-        if (workDayKeySet.has(k)) continue;
-        if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
-        const list = map.get(k) ?? [];
-        list.push({ project: p, role });
-        map.set(k, list);
-      }
-    }
-    return map;
-  }, [projects, dayAssignments, supervisorOverrides]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -2239,11 +2159,12 @@ export function SchedulePlanner({
                 let dayPlannedRaw = plannedByDay.get(k) ?? [];
                 let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
                 let daySovRequests = sovRequestsByDay.get(k) ?? [];
+                const daySpanMarkers = projectSpanMarkersByDay.get(k) ?? [];
                 // Unassigned by definition, so a supervisor filter can never
                 // match one — hide rather than show under the wrong supervisor.
-                let dayNeedsSupervisor = selectedSupervisorId ? [] : needsSupervisorByDay.get(k) ?? [];
+                let dayNeedsSupervisor = selectedSupervisorId ? [] : daySpanMarkers.filter((e) => e.kind === "needsSupervisor");
                 let dayCoNeedsSupervisor = selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? [];
-                let dayProjectSpanEndpoints = projectSpanEndpointsByDay.get(k) ?? [];
+                let dayProjectSpanEndpoints = daySpanMarkers.filter((e) => e.kind === "spanEndpoint");
 
                 if (selectedSupervisorId) {
                   dayProjects = dayProjects.filter(
@@ -2329,7 +2250,15 @@ export function SchedulePlanner({
                   // a missed assignment, not just an upcoming plan — flagged
                   // red instead of gray.
                   const isOverdue = isPlannedOnly && !isFutureOrToday;
-                  const draggableHere = role !== null || (isPlannedOnly && role === null);
+                  // A day with logged work never gets dragged, even when
+                  // it's also the CO's own scheduled start/end day — real
+                  // work already happened there, same rule a project's own
+                  // confirmed chip already follows (never draggable at
+                  // all). Previously this only checked `role`, so a CO
+                  // whose logged labor happened to fall on its scheduled
+                  // start/end day stayed draggable and could get its date
+                  // dragged out from under already-logged work.
+                  const draggableHere = !summary && (role !== null || (isPlannedOnly && role === null));
                   const coSupervisor = coAssignment?.supervisorUserId
                     ? supervisors.find((s) => s.id === coAssignment.supervisorUserId)
                     : null;
@@ -2382,7 +2311,9 @@ export function SchedulePlanner({
                             <div className="mt-1 text-gray-300">PM: {coPm.displayName}</div>
                           ) : null}
                           {isOverdue ? <div className="mt-1 text-red-400">Scheduled but never logged</div> : null}
-                          {role === "start" ? (
+                          {summary ? (
+                            <div className="mt-1 text-gray-300">Logged for this day, not draggable</div>
+                          ) : role === "start" ? (
                             <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
                           ) : role === "end" ? (
                             <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
@@ -2444,8 +2375,9 @@ export function SchedulePlanner({
                   // this chip covers the case where there wasn't even an
                   // assignment to escalate, so without this it just kept
                   // rendering as a calm "planned" dash forever (or, before
-                  // the todayK filter was removed from projectSpanEndpointsByDay,
-                  // didn't render at all past its own date).
+                  // the todayK filter was removed from
+                  // computeProjectSpanMarkersByDay, didn't render at all past
+                  // its own date).
                   const isOverdue = !isFutureOrToday;
                   return (
                     <Fragment key={`span-${p.id}-${role}`}>
@@ -2908,6 +2840,12 @@ export function SchedulePlanner({
         </div>
         {presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0 ? (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3">
+            {presentGroups.length > 0 ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-slate-300" />
+                Solid = work actually logged that day
+              </div>
+            ) : null}
             {presentGroups.map((group) => (
               <div key={group} className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[group]}`} />
@@ -2938,7 +2876,7 @@ export function SchedulePlanner({
                 <span aria-hidden className="text-red-600">⚠</span> = scheduled but never logged
               </div>
             ) : null}
-            {needsSupervisorByDay.size > 0 || coNeedsSupervisorByDay.size > 0 ? (
+            {hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0 ? (
               <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
                 ⚠ = starting soon, needs a supervisor
@@ -2967,11 +2905,7 @@ export function SchedulePlanner({
         ) : null}
       </CollapsibleSection>
 
-      <CollapsibleSection
-        title="Gantt"
-        description="Bars use start / end dates; without an end date a 20-day window is assumed."
-        headerExtra={allGanttWindows.length > 0 ? ganttNav : undefined}
-      >
+      <CollapsibleSection title="Project timeline" headerExtra={allGanttWindows.length > 0 ? ganttNav : undefined}>
         {allGanttWindows.length === 0 ? (
           <p className="text-sm text-gray-500">No projects yet. Create one in Projects → New project.</p>
         ) : windows.length === 0 ? (

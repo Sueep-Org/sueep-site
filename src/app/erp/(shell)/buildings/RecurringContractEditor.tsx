@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 type Unit = {
   id: string;
@@ -295,12 +296,15 @@ export function RecurringContractEditor({
         </div>
         <div>
           <label className={labelClass} htmlFor="rc-salesperson">Salesperson (for commission)</label>
-          <select id="rc-salesperson" value={salespersonInput} onChange={(e) => setSalespersonInput(e.target.value)} className={inputClass}>
-            <option value="">Unassigned</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            id="rc-salesperson"
+            value={salespersonInput}
+            onChange={setSalespersonInput}
+            options={employees.map((e) => ({ value: e.id, label: e.name }))}
+            placeholder="Search employees…"
+            allLabel="Unassigned"
+            className="mt-1"
+          />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
         <button type="submit" disabled={creating} className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
@@ -358,16 +362,14 @@ export function RecurringContractEditor({
               {canEdit ? (
                 <label className="flex items-center gap-1.5">
                   Salesperson:
-                  <select
+                  <SearchableSelect
                     value={contract.commissionEmployeeId ?? ""}
-                    onChange={(e) => updateSalesperson(e.target.value)}
-                    className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-                  >
-                    <option value="">Unassigned</option>
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>{e.name}</option>
-                    ))}
-                  </select>
+                    onChange={updateSalesperson}
+                    options={employees.map((e) => ({ value: e.id, label: e.name }))}
+                    placeholder="Search employees…"
+                    allLabel="Unassigned"
+                    className="w-40"
+                  />
                 </label>
               ) : (
                 <p>
