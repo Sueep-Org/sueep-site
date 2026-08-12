@@ -1423,10 +1423,10 @@ export default function EstimatorPage() {
                     />
                   </div>
                 </div>
-                {/* Paint & Primer Materials */}
+                {/* Paint Materials */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-3">
-                    Paint & Primer Materials
+                    Paint Materials
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     <div>
@@ -1444,17 +1444,15 @@ export default function EstimatorPage() {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">
-                        Surface Condition
+                        Application Method
                       </label>
                       <select
-                        id="paintingSurfaceConditionSelect"
+                        id="paintingApplicationMethodSelect"
                         className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                       >
-                        <option value="smooth">Smooth</option>
-                        <option value="good">Good</option>
-                        <option value="average">Average</option>
-                        <option value="rough">Rough</option>
-                        <option value="very_rough">Very Rough / Porous</option>
+                        <option value="roller">Roller</option>
+                        <option value="brush">Brush</option>
+                        <option value="airless">Airless Spray</option>
                       </select>
                     </div>
                     <div>
@@ -1501,24 +1499,6 @@ export default function EstimatorPage() {
                         <option value="very_dark">Very Dark / Accent</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">
-                        Primer Type
-                      </label>
-                      <select
-                        id="paintingPrimerTypeSelect"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                      >
-                        <option value="none">None</option>
-                        <option value="standard">
-                          Standard Primer: $30/gal
-                        </option>
-                        <option value="premium">Premium Primer: $45/gal</option>
-                        <option value="stain_blocking">
-                          Stain-Blocking Primer: $55/gal
-                        </option>
-                      </select>
-                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
                     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -1527,17 +1507,6 @@ export default function EstimatorPage() {
                       </div>
                       <div
                         id="paintingPaintGallonsDisplay"
-                        className="text-gray-900 font-semibold"
-                      >
-                        —
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-                        Primer Gallons
-                      </div>
-                      <div
-                        id="paintingPrimerGallonsDisplay"
                         className="text-gray-900 font-semibold"
                       >
                         —
@@ -1554,12 +1523,104 @@ export default function EstimatorPage() {
                         —
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Primer Materials */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-3">
+                    Primer Materials
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Primer Required
+                      </label>
+                      <select
+                        id="paintingPrimerRequiredSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Primer Type
+                      </label>
+                      <select
+                        id="paintingPrimerTypeSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="none">None</option>
+                        <option value="standard_commercial">
+                          Standard Commercial: $30/gal
+                        </option>
+                        <option value="commercial_acrylic">
+                          Commercial Acrylic: $40/gal
+                        </option>
+                        <option value="high_build">High-Build: $50/gal</option>
+                        <option value="stain_blocking">
+                          Stain-Blocking: $55/gal
+                        </option>
+                        <option value="metal_corrosion">
+                          Metal/Corrosion: $60/gal
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Primer Coats
+                      </label>
+                      <select
+                        id="paintingPrimerCoatsSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="1">1 coat</option>
+                        <option value="2">2 coats</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Primer Application
+                      </label>
+                      <select
+                        id="paintingPrimerApplicationMethodSelect"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="roller">Roller</option>
+                        <option value="brush">Brush</option>
+                        <option value="airless">Airless Spray</option>
+                      </select>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Primer Gallons
+                      </div>
+                      <div
+                        id="paintingPrimerGallonsDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
                     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                       <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
                         Primer Cost
                       </div>
                       <div
                         id="paintingPrimerCostDisplay"
+                        className="text-gray-900 font-semibold"
+                      >
+                        —
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 xl:col-span-2">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                        Consumables & PPE Cost
+                      </div>
+                      <div
+                        id="paintingConsumablesCostDisplay"
                         className="text-gray-900 font-semibold"
                       >
                         —
