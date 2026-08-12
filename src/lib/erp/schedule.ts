@@ -105,6 +105,14 @@ export type ScheduleProject = {
    * modal offer a CO picker so a scheduled day can be tagged as covering
    * one or more of them. Excludes REJECTED/VOID COs. */
   changeOrders: { id: string; title: string }[];
+  /** TurnoverRequest.buildingId, when this project is a turnover unit — lets
+   * the month calendar collapse same-building units on a shared day into one
+   * expandable chip. Null for anything else (including turnover-segment
+   * projects with no linked TurnoverRequest, e.g. a monthly-contract row). */
+  buildingId: string | null;
+  /** Building.name, denormalized alongside buildingId purely so the calendar
+   * doesn't need a separate building lookup to label the grouped chip. */
+  buildingName: string | null;
 };
 
 /** A ProjectChangeOrder (CO), shown on the month calendar separately from

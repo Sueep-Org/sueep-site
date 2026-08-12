@@ -66,6 +66,8 @@ export default async function SchedulePage() {
             materialsAdditional: true,
             otherWork: true,
             completedScopeItems: true,
+            buildingId: true,
+            building: { select: { name: true } },
           },
         },
       },
@@ -383,6 +385,8 @@ export default async function SchedulePage() {
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
+      buildingId: r.turnoverRequest?.buildingId ?? null,
+      buildingName: r.turnoverRequest?.building?.name ?? null,
     };
   });
 

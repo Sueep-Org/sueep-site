@@ -150,6 +150,28 @@ function availableScopeOptionsFor(p: ScheduleProject) {
   ).filter((opt) => !p.completedScopeItems.includes(opt.value));
 }
 
+// Same-building turnover units sharing a calendar day collapse into one
+// expandable chip (see the building-group rendering in SchedulePlanner)
+// instead of stacking one chip per unit. Only turnover-segment projects with
+// a linked TurnoverRequest (and therefore a buildingId) are ever groupable —
+// legacy turnover rows with no TurnoverRequest (e.g. a monthly-contract
+// project) always render as their own ungrouped chip.
+function isGroupableTurnoverProject(p: ScheduleProject): boolean {
+  return p.segment === "JANITORIAL_TURNOVER_REQUESTS" && !!p.buildingId;
+}
+
+/** One turnover unit's chip state for a single calendar day, tagged with
+ * whichever of the four existing chip "buckets" it belongs to (plus that
+ * bucket's own extras, e.g. role/assignment) — used only to group same-
+ * building units together; actual rendering still goes through the same
+ * render*Chip functions used for ungrouped chips, so a unit looks and
+ * behaves identically whether or not its building happens to collapse. */
+type TurnoverEntry =
+  | { kind: "needsSupervisor"; project: ScheduleProject; role: "start" | "end" }
+  | { kind: "spanEndpoint"; project: ScheduleProject; role: "start" | "end" }
+  | { kind: "confirmed"; project: ScheduleProject }
+  | { kind: "planned"; assignment: ScheduleDayAssignment; project: ScheduleProject };
+
 function formatClockTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
   const period = h! >= 12 ? "PM" : "AM";
@@ -914,6 +936,20 @@ export function SchedulePlanner({
   >(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
   const [dragError, setDragError] = useState<string | null>(null);
+
+  // Same-building turnover units sharing a day collapse into one expandable
+  // chip (see building-group rendering below) — keyed `${dayKey}:${buildingId}`
+  // so each day/building's expand state is independent and resets on
+  // navigation/reload like every other calendar interaction here.
+  const [expandedBuildingGroups, setExpandedBuildingGroups] = useState<Set<string>>(new Set());
+  function toggleBuildingGroup(groupKey: string) {
+    setExpandedBuildingGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
 
   async function handleDropOnDay(toKey: string) {
     const chip = draggingChip;
@@ -2343,6 +2379,366 @@ export function SchedulePlanner({
                   );
                 }
 
+                function renderNeedsSupervisorChip(p: ScheduleProject, role: "start" | "end") {
+                  return (
+                    <Fragment key={`needs-${p.id}-${role}`}>
+                    <li className={inMonth ? "group relative" : "relative"}>
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", p.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
+                        }}
+                        onDragEnd={() => {
+                          setDraggingChip(null);
+                          setDragOverDayKey(null);
+                        }}
+                        onClick={() => openEventPopover(k, p, undefined, role)}
+                        className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${projectStatusChipClass(p.status)}`}
+                      >
+                        <span aria-hidden>⚠</span>
+                        <ProjectStatusIcon status={p.status} />
+                        <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
+                      </button>
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{p.jobTitle}</div>
+                          <div className="text-amber-300">
+                            {role === "end"
+                              ? isToday ? "Ends today" : "Ends this day"
+                              : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                          </div>
+                          <div className="mt-1 text-gray-300">Click to view or assign one</div>
+                        </div>
+                      ) : null}
+                      {renderEventPopover(k, p)}
+                    </li>
+                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    </Fragment>
+                  );
+                }
+
+                function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end") {
+                  return (
+                    <Fragment key={`span-${p.id}-${role}`}>
+                    <li className={inMonth ? "group relative" : "relative"}>
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", p.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
+                        }}
+                        onDragEnd={() => {
+                          setDraggingChip(null);
+                          setDragOverDayKey(null);
+                        }}
+                        onClick={() => openEventPopover(k, p, undefined, role)}
+                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
+                      >
+                        <ProjectStatusIcon status={p.status} />
+                        <span className="truncate">{p.jobTitle}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleClearProjectSpanDate(p.id, role);
+                        }}
+                        disabled={clearingSpanDateKey === `${p.id}:${role}`}
+                        title={role === "end" ? "Clear this project's end date" : "Clear this project's start date"}
+                        className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                      >
+                        ×
+                      </button>
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{p.jobTitle}</div>
+                          <div className="text-gray-300">
+                            {role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled
+                          </div>
+                          <div className="mt-1 text-gray-300">Click to view or schedule it</div>
+                        </div>
+                      ) : null}
+                      {renderEventPopover(k, p)}
+                    </li>
+                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    </Fragment>
+                  );
+                }
+
+                function renderConfirmedChip(p: ScheduleProject) {
+                  const summary = p.laborByDay[k];
+                  const loggedWorkers = new Set(summary?.workers ?? []);
+                  const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
+                  return (
+                    <Fragment key={`p-${p.id}`}>
+                    <li className={inMonth ? "group relative" : "relative"}>
+                      <button
+                        type="button"
+                        onClick={() => openLaborPopover(k, p)}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${projectStatusChipClass(p.status)}`}
+                      >
+                        <ProjectStatusIcon status={p.status} />
+                        <span className="truncate">{p.jobTitle}</span>
+                      </button>
+                      {renderLaborPopover(k, p)}
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{p.jobTitle}</div>
+                          <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
+                          {summary ? (
+                            <>
+                              <div className="mt-1">{formatHours(summary.hours)} logged</div>
+                              {summary.workers.length > 0 ? (
+                                <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
+                              ) : null}
+                            </>
+                          ) : null}
+                          {plannedWorkers.length > 0 ? (
+                            <div className="mt-1 text-gray-300">Planned: {plannedWorkers.join(", ")}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </li>
+                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    </Fragment>
+                  );
+                }
+
+                function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject) {
+                  const isOverdue = !isFutureOrToday;
+                  const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
+                  const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
+                  const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
+                  const assignmentSovDescriptions = assignment.sovItemIds
+                    .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
+                    .filter((d): d is string => !!d);
+                  const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
+                  const noSupervisor = !isOverdue && !supervisor && !pm;
+                  return (
+                  <Fragment key={`plan-${assignment.id}`}>
+                  <li className={inMonth ? "group relative" : "relative"}>
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", assignment.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDraggingChip({ kind: "planned", projectId: project.id, assignmentId: assignment.id, fromKey: k, jobTitle: project.jobTitle });
+                      }}
+                      onDragEnd={() => {
+                        setDraggingChip(null);
+                        setDragOverDayKey(null);
+                      }}
+                      onClick={() => openEventPopover(k, project, assignment)}
+                      className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${
+                        noSupervisor
+                          ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
+                          : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
+                      } ${projectStatusChipClass(project.status)}`}
+                    >
+                      {isOverdue ? (
+                        <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
+                      ) : noSupervisor ? (
+                        <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
+                      ) : null}
+                      <ProjectStatusIcon status={project.status} />
+                      <span className="truncate">{project.jobTitle}</span>
+                    </button>
+                    {renderEventPopover(k, project)}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteAssignment(assignment.id);
+                      }}
+                      disabled={deletingAssignmentId === assignment.id}
+                      title="Remove this scheduled assignment"
+                      className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                    >
+                      ×
+                    </button>
+                    {inMonth ? (
+                      <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className="font-semibold">{project.jobTitle}</div>
+                        <div className="text-gray-300">
+                          {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
+                        </div>
+                        {supervisor ? (
+                          <div className="text-gray-300">Supervisor: {supervisor.displayName}</div>
+                        ) : pm ? (
+                          <div className="text-gray-300">PM: {pm.displayName}</div>
+                        ) : (
+                          <div className="text-amber-400">No supervisor assigned yet</div>
+                        )}
+                        {plannedWorkers.length > 0 ? (
+                          <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
+                        ) : null}
+                        {assignmentSovDescriptions.length > 0 ? (
+                          <div className="mt-1 text-gray-300">SOV: {assignmentSovDescriptions.join(", ")}</div>
+                        ) : null}
+                        {assignmentScopeLabels.length > 0 ? (
+                          <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>
+                        ) : null}
+                        {assignment.comment ? (
+                          <div className="mt-1 text-gray-300">Note: {assignment.comment}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </li>
+                  {(janitorialCoByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
+                  </Fragment>
+                  );
+                }
+
+                // Same-building turnover units sharing this day, pulled out
+                // of the four buckets above (not duplicated — each entry
+                // still remembers which bucket/extras it came from) so they
+                // can collapse into one expandable chip. Grouping happens
+                // purely at render time; it doesn't change what's "planned"
+                // vs. "confirmed" for any other logic on this day.
+                const turnoverEntries: TurnoverEntry[] = [
+                  ...dayNeedsSupervisor
+                    .filter(({ project }) => isGroupableTurnoverProject(project))
+                    .map(({ project, role }) => ({ kind: "needsSupervisor" as const, project, role })),
+                  ...dayProjectSpanEndpoints
+                    .filter(({ project }) => isGroupableTurnoverProject(project))
+                    .map(({ project, role }) => ({ kind: "spanEndpoint" as const, project, role })),
+                  ...dayProjects
+                    .filter(isGroupableTurnoverProject)
+                    .map((project) => ({ kind: "confirmed" as const, project })),
+                  ...dayPlanned
+                    .filter(({ project }) => isGroupableTurnoverProject(project))
+                    .map(({ assignment, project }) => ({ kind: "planned" as const, assignment, project })),
+                ];
+                const turnoverEntriesByBuilding = new Map<string, TurnoverEntry[]>();
+                for (const entry of turnoverEntries) {
+                  const buildingId = entry.project.buildingId!;
+                  const list = turnoverEntriesByBuilding.get(buildingId) ?? [];
+                  list.push(entry);
+                  turnoverEntriesByBuilding.set(buildingId, list);
+                }
+                // Collapsing one unit into "1 unit, click to expand" saves
+                // nothing over just showing it, so only buildings with 2+
+                // turnover entries this day actually group.
+                const buildingGroups = Array.from(turnoverEntriesByBuilding.entries())
+                  .filter(([, entries]) => entries.length >= 2)
+                  .map(([buildingId, entries]) => ({
+                    buildingId,
+                    buildingName: entries[0]!.project.buildingName ?? "Building",
+                    entries,
+                  }))
+                  .sort((a, b) => a.buildingName.localeCompare(b.buildingName));
+                const groupedBuildingIds = new Set(buildingGroups.map((g) => g.buildingId));
+                const isGroupedOut = (p: ScheduleProject) => !!p.buildingId && groupedBuildingIds.has(p.buildingId);
+                const dayNeedsSupervisorUngrouped = dayNeedsSupervisor.filter(({ project }) => !isGroupedOut(project));
+                const dayProjectSpanEndpointsUngrouped = dayProjectSpanEndpoints.filter(({ project }) => !isGroupedOut(project));
+                const dayProjectsUngrouped = dayProjects.filter((p) => !isGroupedOut(p));
+                const dayPlannedUngrouped = dayPlanned.filter(({ project }) => !isGroupedOut(project));
+
+                // Worst-state-wins, using the exact same severity levels the
+                // ungrouped chips already use — a group is only as "healthy"
+                // as its least-done unit, so nothing bad hides behind the
+                // collapse.
+                function buildingGroupSeverity(entries: TurnoverEntry[]): "needsSupervisor" | "overdue" | "planned" | "confirmed" {
+                  const dayIsOverdue = !isFutureOrToday;
+                  const needsSupervisor = entries.some(
+                    (e) =>
+                      e.kind === "needsSupervisor" ||
+                      (e.kind === "planned" && !dayIsOverdue && !e.assignment.supervisorUserId && !e.assignment.projectManagerUserId),
+                  );
+                  if (needsSupervisor) return "needsSupervisor";
+                  if (dayIsOverdue && entries.some((e) => e.kind === "planned")) return "overdue";
+                  if (entries.some((e) => e.kind === "planned" || e.kind === "spanEndpoint")) return "planned";
+                  return "confirmed";
+                }
+
+                function renderBuildingGroupChip(group: { buildingId: string; buildingName: string; entries: TurnoverEntry[] }) {
+                  const { buildingId, buildingName, entries } = group;
+                  const severity = buildingGroupSeverity(entries);
+                  const groupKey = `${k}:${buildingId}`;
+                  const isExpanded = expandedBuildingGroups.has(groupKey);
+                  const severityClass =
+                    severity === "needsSupervisor"
+                      ? NEEDS_SUPERVISOR_CHIP_CLASS
+                      : severity === "overdue"
+                      ? `${CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS} ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`
+                      : severity === "planned"
+                      ? `${CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS} ${PLANNED_CHIP_EXTRA_CLASS}`
+                      : CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS;
+                  return (
+                    <Fragment key={`bldg-${buildingId}`}>
+                    <li className={inMonth ? "group relative" : "relative"}>
+                      <button
+                        type="button"
+                        onClick={() => toggleBuildingGroup(groupKey)}
+                        title={buildingName}
+                        // The unit count + chevron used to sit in this same
+                        // flex row as the name (ml-auto pushing them right),
+                        // which in a ~100px-wide day-cell chip left almost no
+                        // room for the name itself — often just 1-2 visible
+                        // characters. They're pulled out to an absolutely
+                        // positioned badge below instead, reserving a fixed
+                        // pr-8 gutter so the name gets the rest of the width.
+                        className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${severityClass}`}
+                      >
+                        {severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : null}
+                        {severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                        <span className="truncate">{buildingName}</span>
+                        <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap text-[9px] font-normal opacity-80">
+                          {entries.length}
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className={`h-3 w-3 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2.5}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </span>
+                      </button>
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{buildingName}</div>
+                          <div className="text-gray-300">{entries.length} turnover units this day</div>
+                          <ul className="mt-1 space-y-0.5">
+                            {entries.map((e) => (
+                              <li key={e.project.id} className="flex items-center gap-1 text-gray-300">
+                                <span aria-hidden>{e.kind === "confirmed" ? "✓" : e.kind === "needsSupervisor" ? "⚠" : "⋯"}</span>
+                                <span className="truncate">{e.project.jobTitle}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="mt-1 text-gray-300">Click to {isExpanded ? "collapse" : "expand"}</div>
+                        </div>
+                      ) : null}
+                    </li>
+                    {isExpanded ? (
+                      <ul className="ml-3 space-y-1 border-l-2 border-gray-200 pl-1.5">
+                        {entries.map((e) => {
+                          switch (e.kind) {
+                            case "needsSupervisor":
+                              return renderNeedsSupervisorChip(e.project, e.role);
+                            case "spanEndpoint":
+                              return renderSpanEndpointChip(e.project, e.role);
+                            case "confirmed":
+                              return renderConfirmedChip(e.project);
+                            case "planned":
+                              return renderPlannedChip(e.assignment, e.project);
+                          }
+                        })}
+                      </ul>
+                    ) : null}
+                    </Fragment>
+                  );
+                }
+
                 return (
                   <div
                     key={`${k}-${i}`}
@@ -2384,46 +2780,9 @@ export function SchedulePlanner({
                         </button>
                       ) : null}
                     </div>
-                    {dayNeedsSupervisor.length > 0 ? (
+                    {dayNeedsSupervisorUngrouped.length > 0 ? (
                       <ul className="mt-1 space-y-1">
-                        {dayNeedsSupervisor.map(({ project: p, role }) => (
-                          <Fragment key={`needs-${p.id}-${role}`}>
-                          <li className={inMonth ? "group relative" : "relative"}>
-                            <button
-                              type="button"
-                              draggable
-                              onDragStart={(e) => {
-                                e.dataTransfer.setData("text/plain", p.id);
-                                e.dataTransfer.effectAllowed = "move";
-                                setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
-                              }}
-                              onDragEnd={() => {
-                                setDraggingChip(null);
-                                setDragOverDayKey(null);
-                              }}
-                              onClick={() => openEventPopover(k, p, undefined, role)}
-                              className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${projectStatusChipClass(p.status)}`}
-                            >
-                              <span aria-hidden>⚠</span>
-                              <ProjectStatusIcon status={p.status} />
-                              <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
-                            </button>
-                            {inMonth ? (
-                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                                <div className="font-semibold">{p.jobTitle}</div>
-                                <div className="text-amber-300">
-                                  {role === "end"
-                                    ? isToday ? "Ends today" : "Ends this day"
-                                    : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
-                                </div>
-                                <div className="mt-1 text-gray-300">Click to view or assign one</div>
-                              </div>
-                            ) : null}
-                            {renderEventPopover(k, p)}
-                          </li>
-                          {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
-                          </Fragment>
-                        ))}
+                        {dayNeedsSupervisorUngrouped.map(({ project: p, role }) => renderNeedsSupervisorChip(p, role))}
                       </ul>
                     ) : null}
                     {dayCoNeedsSupervisor.length > 0 ? (
@@ -2465,177 +2824,15 @@ export function SchedulePlanner({
                         ))}
                       </ul>
                     ) : null}
+                    {buildingGroups.length > 0 ? (
+                      <ul className="mt-1 space-y-1">
+                        {buildingGroups.map((group) => renderBuildingGroupChip(group))}
+                      </ul>
+                    ) : null}
                     <ul className="mt-1 space-y-1">
-                      {dayProjectSpanEndpoints.map(({ project: p, role }) => (
-                        <Fragment key={`span-${p.id}-${role}`}>
-                        <li className={inMonth ? "group relative" : "relative"}>
-                          <button
-                            type="button"
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData("text/plain", p.id);
-                              e.dataTransfer.effectAllowed = "move";
-                              setDraggingChip({ kind: "needsSupervisor", projectId: p.id, fromKey: k, jobTitle: p.jobTitle, role });
-                            }}
-                            onDragEnd={() => {
-                              setDraggingChip(null);
-                              setDragOverDayKey(null);
-                            }}
-                            onClick={() => openEventPopover(k, p, undefined, role)}
-                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
-                          >
-                            <ProjectStatusIcon status={p.status} />
-                            <span className="truncate">{p.jobTitle}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleClearProjectSpanDate(p.id, role);
-                            }}
-                            disabled={clearingSpanDateKey === `${p.id}:${role}`}
-                            title={role === "end" ? "Clear this project's end date" : "Clear this project's start date"}
-                            className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
-                          >
-                            ×
-                          </button>
-                          {inMonth ? (
-                            <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                              <div className="font-semibold">{p.jobTitle}</div>
-                              <div className="text-gray-300">
-                                {role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled
-                              </div>
-                              <div className="mt-1 text-gray-300">Click to view or schedule it</div>
-                            </div>
-                          ) : null}
-                          {renderEventPopover(k, p)}
-                        </li>
-                        {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
-                        </Fragment>
-                      ))}
-                      {dayProjects.map((p) => {
-                        const summary = p.laborByDay[k];
-                        const loggedWorkers = new Set(summary?.workers ?? []);
-                        const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
-                        return (
-                          <Fragment key={`p-${p.id}`}>
-                          <li className={inMonth ? "group relative" : "relative"}>
-                            <button
-                              type="button"
-                              onClick={() => openLaborPopover(k, p)}
-                              className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${projectStatusChipClass(p.status)}`}
-                            >
-                              <ProjectStatusIcon status={p.status} />
-                              <span className="truncate">{p.jobTitle}</span>
-                            </button>
-                            {renderLaborPopover(k, p)}
-                            {inMonth ? (
-                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                                <div className="font-semibold">{p.jobTitle}</div>
-                                <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
-                                {summary ? (
-                                  <>
-                                    <div className="mt-1">{formatHours(summary.hours)} logged</div>
-                                    {summary.workers.length > 0 ? (
-                                      <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                                {plannedWorkers.length > 0 ? (
-                                  <div className="mt-1 text-gray-300">Planned: {plannedWorkers.join(", ")}</div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </li>
-                          {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
-                          </Fragment>
-                        );
-                      })}
-                      {dayPlanned.map(({ assignment, project }) => {
-                        const isOverdue = !isFutureOrToday;
-                        const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
-                        const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
-                        const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
-                        const assignmentSovDescriptions = assignment.sovItemIds
-                          .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
-                          .filter((d): d is string => !!d);
-                        const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
-                        const noSupervisor = !isOverdue && !supervisor && !pm;
-                        return (
-                        <Fragment key={`plan-${assignment.id}`}>
-                        <li className={inMonth ? "group relative" : "relative"}>
-                          <button
-                            type="button"
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData("text/plain", assignment.id);
-                              e.dataTransfer.effectAllowed = "move";
-                              setDraggingChip({ kind: "planned", projectId: project.id, assignmentId: assignment.id, fromKey: k, jobTitle: project.jobTitle });
-                            }}
-                            onDragEnd={() => {
-                              setDraggingChip(null);
-                              setDragOverDayKey(null);
-                            }}
-                            onClick={() => openEventPopover(k, project, assignment)}
-                            className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${
-                              noSupervisor
-                                ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
-                                : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
-                            } ${projectStatusChipClass(project.status)}`}
-                          >
-                            {isOverdue ? (
-                              <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
-                            ) : noSupervisor ? (
-                              <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
-                            ) : null}
-                            <ProjectStatusIcon status={project.status} />
-                            <span className="truncate">{project.jobTitle}</span>
-                          </button>
-                          {renderEventPopover(k, project)}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleDeleteAssignment(assignment.id);
-                            }}
-                            disabled={deletingAssignmentId === assignment.id}
-                            title="Remove this scheduled assignment"
-                            className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
-                          >
-                            ×
-                          </button>
-                          {inMonth ? (
-                            <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                              <div className="font-semibold">{project.jobTitle}</div>
-                              <div className="text-gray-300">
-                                {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
-                              </div>
-                              {supervisor ? (
-                                <div className="text-gray-300">Supervisor: {supervisor.displayName}</div>
-                              ) : pm ? (
-                                <div className="text-gray-300">PM: {pm.displayName}</div>
-                              ) : (
-                                <div className="text-amber-400">No supervisor assigned yet</div>
-                              )}
-                              {plannedWorkers.length > 0 ? (
-                                <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
-                              ) : null}
-                              {assignmentSovDescriptions.length > 0 ? (
-                                <div className="mt-1 text-gray-300">SOV: {assignmentSovDescriptions.join(", ")}</div>
-                              ) : null}
-                              {assignmentScopeLabels.length > 0 ? (
-                                <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>
-                              ) : null}
-                              {assignment.comment ? (
-                                <div className="mt-1 text-gray-300">Note: {assignment.comment}</div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </li>
-                        {(janitorialCoByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
-                        </Fragment>
-                        );
-                      })}
+                      {dayProjectSpanEndpointsUngrouped.map(({ project: p, role }) => renderSpanEndpointChip(p, role))}
+                      {dayProjectsUngrouped.map((p) => renderConfirmedChip(p))}
+                      {dayPlannedUngrouped.map(({ assignment, project }) => renderPlannedChip(assignment, project))}
                       {looseChangeOrders.map((co) => renderCoChip(co, false))}
                       {daySovRequests.map((r) => {
                         const parentProject = projectById.get(r.projectId);
@@ -2729,6 +2926,12 @@ export function SchedulePlanner({
                 <span aria-hidden>⚙</span>
                 <span aria-hidden className="text-emerald-700">✓</span>
                 = in progress vs. complete (faded)
+              </div>
+            ) : null}
+            {presentGroups.includes("JANITORIAL_TURNOVER_REQUESTS") ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS}`} />
+                Same-building turnover units on a shared day group into one chip, click to expand
               </div>
             ) : null}
           </div>
