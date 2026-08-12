@@ -66,6 +66,7 @@ type UnitScope = {
   paintDate: string;
   cleanDate: string;
   moveOutDate: string;
+  moveInDate: string;
   bedrooms: BedroomValue;
   bathrooms: BathroomValue;
   isCommonArea: boolean;
@@ -95,6 +96,7 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     paintDate: "",
     cleanDate: "",
     moveOutDate: "",
+    moveInDate: "",
     bedrooms: "1",
     bathrooms: "1",
     isCommonArea: false,
@@ -171,6 +173,7 @@ function unitScopeSummary(unit: UnitScope) {
       : "";
   const scheduledDates = [
     unit.moveOutDate ? `move-out: ${unit.moveOutDate}` : null,
+    unit.moveInDate ? `move-in: ${unit.moveInDate}` : null,
     unit.paintDate ? `paint: ${unit.paintDate}` : null,
     unit.cleanDate ? `clean: ${unit.cleanDate}` : null,
   ].filter(Boolean);
@@ -1055,6 +1058,7 @@ export function NewProjectForm({
       unit.startDate,
       unit.endDate,
       unit.moveOutDate,
+      unit.moveInDate,
       unit.paintDate,
       unit.cleanDate,
     ]);
@@ -1115,6 +1119,7 @@ export function NewProjectForm({
       unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`)).join(", ") || undefined,
       unitQuality: unitScopes.map((unit) => (unit.unitQuality ? UNIT_QUALITY_LABELS[unit.unitQuality] ?? unit.unitQuality : "")).filter(Boolean).join("; ") || undefined,
       moveOutDates: unitScopes.map((unit) => unit.moveOutDate).filter(Boolean).join(", ") || undefined,
+      moveInDates: unitScopes.map((unit) => unit.moveInDate).filter(Boolean).join(", ") || undefined,
       paintDates: unitScopes.map((unit) => unit.paintDate).filter(Boolean).join(", ") || undefined,
       cleanDates: unitScopes.map((unit) => unit.cleanDate).filter(Boolean).join(", ") || undefined,
       bedrooms: normalizedBeds || undefined,
@@ -1729,6 +1734,18 @@ export function NewProjectForm({
                         className={input}
                         value={unit.moveOutDate}
                         onChange={(e) => updateUnitScope(unit.id, { moveOutDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`move-in-date-${unit.id}`}>
+                        Move-in date (optional)
+                      </label>
+                      <input
+                        id={`move-in-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.moveInDate}
+                        onChange={(e) => updateUnitScope(unit.id, { moveInDate: e.target.value })}
                       />
                     </div>
                     <div className="min-w-0">

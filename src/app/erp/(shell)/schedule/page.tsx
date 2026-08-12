@@ -44,6 +44,13 @@ export default async function SchedulePage() {
     coWorkerAssignmentRows,
   ] = await Promise.all([
     prisma.project.findMany({
+      // Excludes a recurring contract's own billing placeholder — it has
+      // recurringContractPeriodId set with turnoverRequestId null (see the
+      // doc comment on Project.recurringContractPeriodId), spans the whole
+      // month, and never legitimately gets a supervisor or logged labor, so
+      // it has no business on a day-by-day calendar. Its per-unit child
+      // projects (both fields set) are real schedulable work and stay.
+      where: { NOT: { recurringContractPeriodId: { not: null }, turnoverRequestId: null } },
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,

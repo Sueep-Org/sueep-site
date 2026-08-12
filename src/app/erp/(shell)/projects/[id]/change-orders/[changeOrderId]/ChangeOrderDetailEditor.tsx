@@ -273,11 +273,13 @@ export function ChangeOrderDetailEditor({
   const [startDate, setStartDate] = useState(
     data.startDate ? data.startDate.slice(0, 10) : "",
   );
+  // endDate doubles as the CO's completed date — the two aren't a
+  // meaningfully distinct concept for a CO, so there's only one field on
+  // screen (see the merged "End date" block below and the server-side
+  // sync in the PATCH route). Falls back to data.completedAt so a CO
+  // completed before this merge still shows its date here.
   const [endDate, setEndDate] = useState(
-    data.endDate ? data.endDate.slice(0, 10) : "",
-  );
-  const [completedAt, setCompletedAt] = useState(
-    data.completedAt ? data.completedAt.slice(0, 10) : "",
+    (data.endDate ?? data.completedAt) ? (data.endDate ?? data.completedAt)!.slice(0, 10) : "",
   );
   const [requestedBy, setRequestedBy] = useState(data.requestedBy || "");
   const [supervisor, setSupervisor] = useState(data.supervisor || "");
@@ -329,7 +331,6 @@ export function ChangeOrderDetailEditor({
           requestedDate: requestedDate || null,
           startDate: startDate || null,
           endDate: endDate || null,
-          completedAt: completedAt || null,
           requestedBy: requestedBy.trim() || null,
           supervisor: supervisor.trim() || null,
           description: comments.trim() || null,
@@ -458,7 +459,6 @@ export function ChangeOrderDetailEditor({
                 <div>
                   <label className={label} htmlFor="co-start-date">
                     Start date
-                    <span className="ml-1 text-gray-400 font-normal">(auto-set on first labor log)</span>
                   </label>
                   <input
                     id="co-start-date"
@@ -468,47 +468,33 @@ export function ChangeOrderDetailEditor({
                     onChange={(e) => setStartDate(e.target.value)}
                   />
                 </div>
-                <div>
+                <div className="flex flex-col gap-2">
                   <label className={label} htmlFor="co-end-date">
                     End date
-                    <span className="ml-1 text-gray-400 font-normal">(for multi-day COs)</span>
-                  </label>
-                  <input
-                    id="co-end-date"
-                    type="date"
-                    className={input}
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className={label} htmlFor="co-completed-at">
-                    Completed date
-                    <span className="ml-1 text-gray-400 font-normal">(auto-set on mark complete)</span>
                   </label>
                   <div className="flex items-center gap-2">
                     <input
-                      id="co-completed-at"
+                      id="co-end-date"
                       type="date"
                       className={`${input} mt-0`}
-                      value={completedAt}
-                      onChange={(e) => setCompletedAt(e.target.value)}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
                     />
                     {status !== "COMPLETED" && status !== "BILLING" && (
                       <button
                         type="button"
                         disabled={saving}
                         onClick={async () => {
-                          const date = completedAt || new Date().toISOString().slice(0, 10);
+                          const date = endDate || new Date().toISOString().slice(0, 10);
                           setStatus("COMPLETED");
-                          setCompletedAt(date);
+                          setEndDate(date);
                           setSaving(true);
                           setError("");
                           try {
                             const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${data.id}`, {
                               method: "PATCH",
                               headers: { "content-type": "application/json" },
-                              body: JSON.stringify({ status: "COMPLETED", completedAt: date }),
+                              body: JSON.stringify({ status: "COMPLETED", endDate: date }),
                             });
                             const json = (await res.json()) as { error?: string };
                             if (!res.ok) { setError(json.error || "Failed to save"); setStatus(data.status); return; }

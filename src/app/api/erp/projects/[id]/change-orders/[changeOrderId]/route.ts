@@ -45,11 +45,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
-    // Auto-set completedAt when marking as complete for the first time
+    // Auto-set completedAt when marking as complete for the first time —
+    // skipped when this same request already supplies endDate too (the
+    // editor's "Mark complete" button sends one explicitly; the sync block
+    // below mirrors it onto completedAt), so a caller-chosen date doesn't
+    // get silently overwritten with "now". endDate and completedAt are
+    // treated as the same concept for a CO (see that sync block) — this
+    // only needs to guard against being clobbered by that mirroring, not
+    // duplicate its logic.
     if (
       (statusRaw === "BILLING" || statusRaw === "COMPLETED") &&
       !(existing as Record<string, unknown>).completedAt &&
-      (body.completedAt === undefined || body.completedAt === null || body.completedAt === "")
+      (body.completedAt === undefined || body.completedAt === null || body.completedAt === "") &&
+      (body.endDate === undefined || body.endDate === null || body.endDate === "")
     ) {
       data.completedAt = new Date();
     }
@@ -145,6 +153,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.commissionPaid !== undefined) {
     data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+  }
+
+  // endDate and completedAt are the same concept for a CO — there's no
+  // meaningfully distinct "target end" vs. "when it actually got done" — so
+  // whichever one this request actually touched (the editor's End date
+  // field, the Mark complete button, or the billingStatus=PAID auto-complete
+  // branch above) gets mirrored onto the other, regardless of which code
+  // path set it. Only fires when exactly one of the two was set this
+  // request — if a caller ever sends both explicitly, that's respected as-is.
+  if (data.endDate !== undefined && data.completedAt === undefined) {
+    data.completedAt = data.endDate;
+  } else if (data.completedAt !== undefined && data.endDate === undefined) {
+    data.endDate = data.completedAt;
   }
 
   const laborersRaw = Array.isArray(body.laborers)

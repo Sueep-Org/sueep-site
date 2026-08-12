@@ -45,7 +45,7 @@ export async function createProjectFromPayload(
 
     // One project per unit so each unit has its own checklist, labor, and materials
     const projects = await Promise.all(
-      result.requests.map((request) => {
+      result.requests.map(async (request) => {
         const unitTotal = request.priceCents != null && request.priceCents > 0
           ? `Estimated Unit Total: $${(request.priceCents / 100).toFixed(0)}`
           : null;
@@ -57,7 +57,7 @@ export async function createProjectFromPayload(
           commentsLine,
         ].filter(Boolean);
 
-        return prisma.project.create({
+        const project = await prisma.project.create({
           data: {
             segment,
             jobTitle: `${result.building.name} - ${formatUnitDisplay(request.unitNumber)}`,
@@ -75,6 +75,32 @@ export async function createProjectFromPayload(
             commissionEmployeeId: result.building.commissionEmployeeId,
           },
         });
+
+        // Paint/clean dates given on the creation form actually put those
+        // days on the calendar now, instead of only folding into the
+        // project's overall start/end span (see unitDateRange in
+        // createTurnoverRequestsFromPayload) with no day-level marker of
+        // their own. Same ProjectDayAssignment + scopeItems vocabulary the
+        // calendar's own day-assignment modal writes (see
+        // /api/erp/schedule/day-assignments) — no supervisor yet, that's
+        // assigned later from the calendar same as any other planned day.
+        // Same day for both collapses into one row (the model only allows
+        // one ProjectDayAssignment per project per day).
+        const paintCleanSameDay =
+          request.paintDate && request.cleanDate && request.paintDate.getTime() === request.cleanDate.getTime();
+        const scopeDayAssignments: { date: Date; scopeItems: string[] }[] = paintCleanSameDay
+          ? [{ date: request.paintDate!, scopeItems: ["PAINT", "CLEAN"] }]
+          : [
+              ...(request.paintDate ? [{ date: request.paintDate, scopeItems: ["PAINT"] }] : []),
+              ...(request.cleanDate ? [{ date: request.cleanDate, scopeItems: ["CLEAN"] }] : []),
+            ];
+        if (scopeDayAssignments.length > 0) {
+          await prisma.projectDayAssignment.createMany({
+            data: scopeDayAssignments.map((a) => ({ projectId: project.id, date: a.date, scopeItems: a.scopeItems })),
+          });
+        }
+
+        return project;
       })
     );
 

@@ -89,6 +89,8 @@ export async function POST(req: Request) {
   const otherCents = otherCentsRaw ?? (otherWork && body.otherPrice ? Math.round((Number(String(body.otherPrice).replace(/[$,\s]/g, "")) || 0) * 100) : 0);
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
+  const moveOutDate = parseDate(body.moveOutDate);
+  const moveInDate = parseDate(body.moveInDate);
   const createdBy = body.createdBy != null ? String(body.createdBy).trim() : null;
   const sueepPmName = stringValue(body.sueepPmName);
   const sueepPmEmail = stringValue(body.sueepPmEmail);
@@ -134,6 +136,8 @@ export async function POST(req: Request) {
         otherCents: otherWork ? otherCents : null,
         startDate,
         endDate,
+        moveOutDate,
+        moveInDate,
         priceCents: totalPriceCents || null,
         approvedPriceCents: null,
         createdBy: createdBy || null,

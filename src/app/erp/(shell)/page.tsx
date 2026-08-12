@@ -621,13 +621,15 @@ export default async function ErpDashboardPage() {
         select: {
           id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
           contractValueCents: true, segment: true,
+          recurringContractPeriodId: true, turnoverRequestId: true,
           actualLaborCents: true, actualMaterialCents: true,
           laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
           materialEntries: { select: { costCents: true } },
           contractorAssignments: { select: { costCents: true } },
           changeOrders: {
             select: {
-              status: true, contractValueCents: true, estimatedCostCents: true,
+              id: true, title: true, status: true, supervisorUserId: true, startDate: true,
+              contractValueCents: true, estimatedCostCents: true,
               actualLaborCents: true, actualMaterialCents: true,
               materialEntries: { select: { costCents: true } },
               laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
@@ -954,6 +956,77 @@ export default async function ErpDashboardPage() {
       </div>
     );
 
+    // "No supervisor assigned", company-wide — a project or change order
+    // that never had anyone put on it AND never got any labor logged, i.e.
+    // it would otherwise just sit invisible until someone happens to notice
+    // (this is what the Schedule calendar's own amber ⚠ chip flags per day;
+    // this is the same population, just month-independent). Distinct from
+    // needsLaborLoggedWidget above — that one requires a day-assignment to
+    // have existed and then been missed; this is about ones that never got
+    // that far in the first place.
+    //
+    // Floored at Aug 1, 2026 on purpose — this card shipped this week, and
+    // there's no value in dredging up months of pre-existing backlog on
+    // first load; only what's happened since it started being tracked.
+    const NEEDS_ATTENTION_SINCE = new Date(Date.UTC(2026, 7, 1));
+    type NoSupervisorItem = { key: string; projectId: string; title: string; dateKey: string; overdue: boolean };
+    const noSupervisorItems: NoSupervisorItem[] = [];
+    for (const p of allProjects) {
+      // A recurring contract's own billing placeholder (see the same
+      // exclusion on the Schedule calendar query) never legitimately gets a
+      // supervisor or logged labor — it's not real field work, so it would
+      // otherwise sit here as a permanent false positive every month.
+      if (p.recurringContractPeriodId && !p.turnoverRequestId) continue;
+      if (p.supervisorUserId) continue;
+      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
+      if (!p.projectDate || p.projectDate < NEEDS_ATTENTION_SINCE) continue;
+      if (p.laborEntries.length > 0) continue;
+      noSupervisorItems.push({
+        key: `proj-${p.id}`, projectId: p.id, title: p.jobTitle,
+        dateKey: utcDateKey(p.projectDate), overdue: p.projectDate < adminTodayStart,
+      });
+      for (const co of p.changeOrders) {
+        if (co.supervisorUserId) continue;
+        if (co.status === "COMPLETED" || co.status === "REJECTED" || co.status === "VOID") continue;
+        if (!co.startDate || co.startDate < NEEDS_ATTENTION_SINCE) continue;
+        if (co.laborers.length > 0) continue;
+        noSupervisorItems.push({
+          key: `co-${co.id}`, projectId: p.id, title: co.title,
+          dateKey: utcDateKey(co.startDate), overdue: co.startDate < adminTodayStart,
+        });
+      }
+    }
+    noSupervisorItems.sort((a, b) => (a.overdue !== b.overdue ? (a.overdue ? -1 : 1) : a.dateKey.localeCompare(b.dateKey)));
+
+    const noSupervisorWidget = (
+      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+          <h3 className="text-sm font-semibold text-gray-900" title="Never had a supervisor assigned, nothing ever logged — since Aug 1, 2026">
+            <span aria-hidden className="mr-1 text-red-600">⚠</span>No supervisor assigned
+          </h3>
+          {noSupervisorItems.length > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{noSupervisorItems.length}</span>
+          )}
+        </div>
+        {noSupervisorItems.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing unassigned since Aug 1.</p>
+        ) : (
+          <ul className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
+            {noSupervisorItems.map((item) => (
+              <li key={item.key}>
+                <Link href={`/erp/projects/${item.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                  <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={item.title}>{item.title}</p>
+                  <p className={`shrink-0 text-xs font-semibold ${item.overdue ? "text-red-600" : "text-amber-600"}`}>
+                    {new Date(`${item.dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+
     // Small uppercase group labels above each cluster of cards, so the page
     // reads as a few organized zones (Today / Needs attention / Financials /
     // Activity / Staffing) instead of one flat stack of same-looking tables.
@@ -1067,13 +1140,15 @@ export default async function ErpDashboardPage() {
           </div>
         </div>
 
-        {/* Needs attention: both alert-style widgets together, same spot for
+        {/* Needs attention: alert-style widgets together, same spot for
             every role now (previously needsLaborLoggedWidget alone moved
             between top and bottom depending on PM vs Admin; grouping it with
             Labor red flags here makes it consistently easy to find instead). */}
         <div className="space-y-3">
           <h2 className={sectionLabelCls}>Needs attention</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
+            {noSupervisorWidget}
+
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
                 <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">Labor red flags</h3>

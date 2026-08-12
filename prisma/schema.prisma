@@ -241,6 +241,14 @@ model TurnoverRequest {
 
   startDate          DateTime?
   endDate            DateTime?
+  /// Tenant's actual move-out day, captured on the unit-creation form —
+  /// distinct from startDate/endDate above, which drive scheduling/pricing
+  /// and are computed from a min/max across several optional per-unit dates
+  /// (see unitDateRange in createTurnoverRequests.ts). Purely informational,
+  /// previously captured on the form but never actually persisted anywhere.
+  moveOutDate        DateTime?
+  /// Tenant's actual move-in day — same informational role as moveOutDate.
+  moveInDate         DateTime?
   priceCents         Int?
   approvedPriceCents Int?
   pmSignatureUrl     String?

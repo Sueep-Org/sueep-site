@@ -28,6 +28,9 @@ type Props = {
   otherWork: boolean;
   otherDescription: string | null;
   otherCents: number | null;
+  /** YYYY-MM-DD, or null — tenant move dates, informational only (don't drive scheduling/pricing). */
+  moveOutDate: string | null;
+  moveInDate: string | null;
 };
 
 export function UnitScopeEditor({
@@ -52,6 +55,8 @@ export function UnitScopeEditor({
   otherWork,
   otherDescription,
   otherCents,
+  moveOutDate,
+  moveInDate,
 }: Props) {
   const router = useRouter();
   const [turnoverRequestId, setTurnoverRequestId] = useState(initialTurnoverRequestId);
@@ -72,6 +77,8 @@ export function UnitScopeEditor({
   const [otherWorkVal, setOtherWork] = useState(otherWork);
   const [otherDescriptionVal, setOtherDescription] = useState(otherDescription ?? "");
   const [otherPriceVal, setOtherPrice] = useState(otherCents != null ? (otherCents / 100).toFixed(2) : "");
+  const [moveOutDateVal, setMoveOutDate] = useState(moveOutDate ?? "");
+  const [moveInDateVal, setMoveInDate] = useState(moveInDate ?? "");
   const [commonAreaRates, setCommonAreaRates] = useState(() => {
     const pkg = getTurnoverPricingPackage(buildingName, pricingPackage);
     const d = (v: number | undefined) => String(v ?? 0);
@@ -128,6 +135,8 @@ export function UnitScopeEditor({
         bathrooms: isCommonArea ? null : (bathroomsStr !== "" ? Number(bathroomsStr) : null),
         sqft: sqftStr !== "" ? Number(sqftStr) : null,
         unitQuality: unitQualityVal || null,
+        moveOutDate: moveOutDateVal || null,
+        moveInDate: moveInDateVal || null,
         fullClean: fullCleanVal,
         fullPaint: fullPaintVal,
         touchUpPaint: touchUpPaintStr !== "" ? Number(touchUpPaintStr) : 0,
@@ -246,6 +255,33 @@ export function UnitScopeEditor({
             <option value="FAIR">Fair</option>
             <option value="POOR">Poor</option>
           </select>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-600" htmlFor="use-move-out-date">
+            Move-out date (optional)
+          </label>
+          <input
+            id="use-move-out-date"
+            type="date"
+            value={moveOutDateVal}
+            onChange={(e) => setMoveOutDate(e.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600" htmlFor="use-move-in-date">
+            Move-in date (optional)
+          </label>
+          <input
+            id="use-move-in-date"
+            type="date"
+            value={moveInDateVal}
+            onChange={(e) => setMoveInDate(e.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
         </div>
       </div>
 

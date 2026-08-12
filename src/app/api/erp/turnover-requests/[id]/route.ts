@@ -93,6 +93,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
+  if (body.moveOutDate !== undefined) data.moveOutDate = parseDate(body.moveOutDate);
+  if (body.moveInDate !== undefined) data.moveInDate = parseDate(body.moveInDate);
   if (body.createdBy !== undefined) data.createdBy = String(body.createdBy || "").trim() || null;
   if (body.pmSignatureUrl !== undefined) {
     const signature = String(body.pmSignatureUrl || "").trim();

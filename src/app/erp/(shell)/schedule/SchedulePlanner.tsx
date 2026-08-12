@@ -188,6 +188,18 @@ function dayCellLabel(dateKey: string): string {
   });
 }
 
+// Compact "Jul 21" form — dayCellLabel above is deliberately verbose (full
+// weekday + month) for a single day-cell tooltip; this is for the overdue-
+// chip copy (see renderNeedsSupervisorChip / renderSpanEndpointChip) where a
+// whole sentence per row doesn't fit.
+function formatShortDate(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 // "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, amber,
 // same as any other no-supervisor-assigned chip) aren't project segments,
 // they're layered on top as their own filterable types alongside the
@@ -1883,22 +1895,28 @@ export function SchedulePlanner({
     return map;
   }, [sovRequestRows]);
 
-  // Projects starting (or ending) today or later that have never had a
-  // supervisor assigned and have no logged work yet — otherwise these are
-  // invisible on the calendar until someone happens to notice and assign a
-  // supervisor. Anchored to the project's own start/end dates since there's
-  // no day assignment or labor log to place them by. Shown on both the start
-  // and end day when they differ (any day in between needs an explicit day
-  // assignment to appear) — a project with matching start/end dates (or no
-  // end date) only ever gets the one "start" occurrence, never doubled up.
-  // Skips a day that already has a planned (ProjectDayAssignment) entry for
-  // this project — otherwise a project scheduled without a supervisor shows
-  // up twice on that day: once here and once as the "planned, no supervisor"
-  // dashed chip below. Same dedup projectSpanEndpointsByDay already does.
+  // Projects that have never had a supervisor assigned and have no logged
+  // work yet — otherwise these are invisible on the calendar until someone
+  // happens to notice and assign a supervisor. Anchored to the project's own
+  // start/end dates since there's no day assignment or labor log to place
+  // them by. Shown on both the start and end day when they differ (any day
+  // in between needs an explicit day assignment to appear) — a project with
+  // matching start/end dates (or no end date) only ever gets the one "start"
+  // occurrence, never doubled up. Deliberately not limited to today-or-later
+  // — a project whose date has already passed with nobody ever assigned and
+  // nothing ever logged used to just vanish from the calendar the moment
+  // "today" passed it (confirmed: 31 real projects sitting in exactly that
+  // state), instead of turning into an overdue warning the way a real
+  // ProjectDayAssignment already does. Past occurrences render the same
+  // amber chip, just with "missed" copy instead of "starting soon" — see
+  // the isFutureOrToday branch in the chip's own tooltip. Skips a day that
+  // already has a planned (ProjectDayAssignment) entry for this project —
+  // otherwise a project scheduled without a supervisor shows up twice on
+  // that day: once here and once as the "planned, no supervisor" dashed
+  // chip below. Same dedup projectSpanEndpointsByDay already does.
   const needsSupervisorByDay = useMemo(() => {
     const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
     const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
-    const todayK = dayKey(todayDate);
     for (const p of projects) {
       // Reads through supervisorOverrides (not just p.supervisorUserId) so
       // the alert disappears the moment a supervisor is assigned, instead of
@@ -1920,7 +1938,6 @@ export function SchedulePlanner({
       const occurrences: { k: string; role: "start" | "end" }[] =
         endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
       for (const { k, role } of occurrences) {
-        if (k < todayK) continue;
         if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
         const list = map.get(k) ?? [];
         list.push({ project: p, role });
@@ -1928,17 +1945,16 @@ export function SchedulePlanner({
       }
     }
     return map;
-  }, [projects, dayAssignments, supervisorOverrides, todayDate]);
+  }, [projects, dayAssignments, supervisorOverrides]);
 
   // Same alert as needsSupervisorByDay above, but for change orders — a CO
-  // with a start (or end) date today or later, no logged labor, and no
-  // supervisor of its own (ChangeOrderDayAssignment / supervisorUserId)
-  // yet. Anchored to the CO's own scheduledDateKey/scheduledEndDateKey since
+  // with a start (or end) date, no logged labor, and no supervisor of its
+  // own (ChangeOrderDayAssignment / supervisorUserId) yet, past or future.
+  // Anchored to the CO's own scheduledDateKey/scheduledEndDateKey since
   // there's no other marker to place it by until one's assigned.
   const coNeedsSupervisorByDay = useMemo(() => {
     const plannedDayPairs = new Set(coDayAssignments.map((a) => `${a.changeOrderId}:${a.dateKey}`));
     const map = new Map<string, { co: ScheduleChangeOrder; role: "start" | "end" }[]>();
-    const todayK = dayKey(todayDate);
     for (const co of changeOrders) {
       const supervisorId = currentCoSupervisorId(co);
       if (supervisorId) continue;
@@ -1950,7 +1966,6 @@ export function SchedulePlanner({
           ? [{ k: co.scheduledDateKey, role: "start" }, { k: co.scheduledEndDateKey, role: "end" }]
           : [{ k: co.scheduledDateKey, role: "start" }];
       for (const { k, role } of occurrences) {
-        if (k < todayK) continue;
         if (plannedDayPairs.has(`${co.id}:${k}`)) continue;
         const list = map.get(k) ?? [];
         list.push({ co, role });
@@ -1959,7 +1974,7 @@ export function SchedulePlanner({
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeOrders, coDayAssignments, coSupervisorOverrides, todayDate]);
+  }, [changeOrders, coDayAssignments, coSupervisorOverrides]);
 
   // A project's declared start/end date (projectDate/projectEndDate) with no
   // other marker on the calendar that day — no logged labor, no planned
@@ -1971,10 +1986,14 @@ export function SchedulePlanner({
   // unsupervised jobs — this applies regardless of supervisor status, so it
   // skips exactly the population the alert above already marks (unsupervised
   // with zero logged work) to avoid stacking two markers on the same day.
+  // Also deliberately not limited to today-or-later, same reasoning as
+  // needsSupervisorByDay above — a past occurrence escalates to the same
+  // red "overdue" treatment a missed ProjectDayAssignment already gets
+  // (see renderSpanEndpointChip's isFutureOrToday branch) instead of
+  // silently disappearing once its date passes.
   const projectSpanEndpointsByDay = useMemo(() => {
     const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
     const map = new Map<string, { project: ScheduleProject; role: "start" | "end" }[]>();
-    const todayK = dayKey(todayDate);
     for (const p of projects) {
       if (p.status === "ARCHIVED") continue;
       if (!p.projectDate) continue;
@@ -1986,7 +2005,6 @@ export function SchedulePlanner({
       const occurrences: { k: string; role: "start" | "end" }[] =
         endK && endK !== startK ? [{ k: startK, role: "start" }, { k: endK, role: "end" }] : [{ k: startK, role: "start" }];
       for (const { k, role } of occurrences) {
-        if (k < todayK) continue;
         if (workDayKeySet.has(k)) continue;
         if (plannedDayPairs.has(`${p.id}:${k}`)) continue;
         const list = map.get(k) ?? [];
@@ -1995,7 +2013,7 @@ export function SchedulePlanner({
       }
     }
     return map;
-  }, [projects, dayAssignments, supervisorOverrides, todayDate]);
+  }, [projects, dayAssignments, supervisorOverrides]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -2406,9 +2424,9 @@ export function SchedulePlanner({
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className="text-amber-300">
-                            {role === "end"
-                              ? isToday ? "Ends today" : "Ends this day"
-                              : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                            {isFutureOrToday
+                              ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet`
+                              : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — never logged, no supervisor assigned`}
                           </div>
                           <div className="mt-1 text-gray-300">Click to view or assign one</div>
                         </div>
@@ -2421,6 +2439,14 @@ export function SchedulePlanner({
                 }
 
                 function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end") {
+                  // Same escalation renderPlannedChip already applies to a
+                  // real ProjectDayAssignment once its day passes unlogged —
+                  // this chip covers the case where there wasn't even an
+                  // assignment to escalate, so without this it just kept
+                  // rendering as a calm "planned" dash forever (or, before
+                  // the todayK filter was removed from projectSpanEndpointsByDay,
+                  // didn't render at all past its own date).
+                  const isOverdue = !isFutureOrToday;
                   return (
                     <Fragment key={`span-${p.id}-${role}`}>
                     <li className={inMonth ? "group relative" : "relative"}>
@@ -2437,8 +2463,9 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
+                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
                       >
+                        {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                         <ProjectStatusIcon status={p.status} />
                         <span className="truncate">{p.jobTitle}</span>
                       </button>
@@ -2457,8 +2484,10 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
-                          <div className="text-gray-300">
-                            {role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled
+                          <div className={isOverdue ? "text-red-400" : "text-gray-300"}>
+                            {isOverdue
+                              ? `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — nothing ever logged`
+                              : `${role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled`}
                           </div>
                           <div className="mt-1 text-gray-300">Click to view or schedule it</div>
                         </div>
@@ -2812,9 +2841,9 @@ export function SchedulePlanner({
                                 <div className="font-semibold">{co.title}</div>
                                 <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
                                 <div className="text-amber-300">
-                                  {role === "end"
-                                    ? isToday ? "Ends today" : "Ends this day"
-                                    : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet
+                                  {isFutureOrToday
+                                    ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet`
+                                    : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — never logged, no supervisor assigned`}
                                 </div>
                                 <div className="mt-1 text-gray-300">Click to view or assign one</div>
                               </div>

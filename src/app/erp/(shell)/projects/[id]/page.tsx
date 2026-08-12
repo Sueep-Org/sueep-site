@@ -91,6 +91,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             priceCents: true,
             status: true,
             completedScopeItems: true,
+            moveOutDate: true,
+            moveInDate: true,
           },
         },
         notes: {
@@ -516,6 +518,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 otherWork={project.turnoverRequest?.otherWork ?? false}
                 otherDescription={project.turnoverRequest?.otherDescription ?? null}
                 otherCents={project.turnoverRequest?.otherCents ?? null}
+                moveOutDate={project.turnoverRequest?.moveOutDate?.toISOString().slice(0, 10) ?? null}
+                moveInDate={project.turnoverRequest?.moveInDate?.toISOString().slice(0, 10) ?? null}
               />
             ),
           },

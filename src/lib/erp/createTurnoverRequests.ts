@@ -15,6 +15,7 @@ type UnitScopePayload = {
   paintDate?: unknown;
   cleanDate?: unknown;
   moveOutDate?: unknown;
+  moveInDate?: unknown;
   bedrooms?: unknown;
   bathrooms?: unknown;
   isCommonArea?: unknown;
@@ -153,7 +154,7 @@ async function resolveBuilding(body: Record<string, unknown>) {
 }
 
 function unitDateRange(unit: UnitScopePayload) {
-  const dates = [unit.startDate, unit.endDate, unit.moveOutDate, unit.paintDate, unit.cleanDate]
+  const dates = [unit.startDate, unit.endDate, unit.moveOutDate, unit.moveInDate, unit.paintDate, unit.cleanDate]
     .map(dateValue)
     .filter((date): date is Date => Boolean(date))
     .sort((a, b) => a.getTime() - b.getTime());
@@ -234,7 +235,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
         });
       }
 
-      return prisma.turnoverRequest.create({
+      const created = await prisma.turnoverRequest.create({
         data: {
           buildingId: building.id,
           requestType: "TURNOVER",
@@ -256,10 +257,19 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           otherCents: otherWork ? otherCents : null,
           startDate,
           endDate,
+          moveOutDate: dateValue(unit.moveOutDate),
+          moveInDate: dateValue(unit.moveInDate),
           priceCents,
           createdBy: stringValue(body.sueepPmEmail) || stringValue(body.pmEmail) || null,
         },
       });
+
+      // Not persisted as their own TurnoverRequest columns (unlike
+      // moveOutDate/moveInDate above) — paintDate/cleanDate exist only to
+      // schedule the corresponding ProjectDayAssignment once this unit's
+      // Project is created (see createProjectFromPayload), same as they
+      // already fold into startDate/endDate above via unitDateRange.
+      return { ...created, paintDate: dateValue(unit.paintDate), cleanDate: dateValue(unit.cleanDate) };
     })
   );
 
