@@ -2115,6 +2115,22 @@ export function SchedulePlanner({
     </div>
   );
 
+  // Which rows of the "How to read this" key below have anything to show —
+  // each row only appears once its own state actually exists somewhere on
+  // the visible calendar, same rule every individual legend entry already
+  // followed; grouped here so the three rows (Type / Status / Icons) and
+  // the overall show/hide can share one source of truth instead of each
+  // re-deriving its own condition inline.
+  const legendShowsOverdue = dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey);
+  const legendShowsNeedsSupervisor = hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0;
+  const legendShowsNoSupervisorPlanned = dayAssignments.some((a) => !a.supervisorUserId && !a.projectManagerUserId);
+  const legendShowsType = presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0;
+  const legendShowsStatus =
+    presentGroups.length > 0 || dayAssignments.length > 0 || legendShowsOverdue || legendShowsNeedsSupervisor || legendShowsNoSupervisorPlanned;
+  const legendShowsIcons = presentGroups.length > 0;
+  const legendShowsGroupingTip = presentGroups.includes("JANITORIAL_TURNOVER_REQUESTS");
+  const showLegend = legendShowsType || legendShowsStatus || legendShowsIcons || legendShowsGroupingTip;
+
   return (
     <div className="space-y-6">
       <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
@@ -2838,68 +2854,90 @@ export function SchedulePlanner({
             </div>
           </div>
         </div>
-        {presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0 ? (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3">
-            {presentGroups.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-slate-300" />
-                Solid = work actually logged that day
+        {showLegend ? (
+          <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+            {legendShowsType ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Type</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  {presentGroups.map((group) => (
+                    <div key={group} className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[group]}`} />
+                      {CALENDAR_GROUP_LABEL[group]}
+                    </div>
+                  ))}
+                  {changeOrders.length > 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
+                      {CHANGE_ORDER_LABEL}
+                    </div>
+                  ) : null}
+                  {sovRequestRows.length > 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
+                      {SOV_REQUEST_LABEL}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
-            {presentGroups.map((group) => (
-              <div key={group} className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS[group]}`} />
-                {CALENDAR_GROUP_LABEL[group]}
-              </div>
-            ))}
-            {changeOrders.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CHANGE_ORDER_SWATCH_CLASS}`} />
-                {CHANGE_ORDER_LABEL}
-              </div>
-            ) : null}
-            {sovRequestRows.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${SOV_REQUEST_SWATCH_CLASS}`} />
-                {SOV_REQUEST_LABEL}
-              </div>
-            ) : null}
-            {dayAssignments.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${PLANNED_CHIP_EXTRA_CLASS}`} />
-                Dashed = planned, not yet logged
-              </div>
-            ) : null}
-            {dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey) ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`} />
-                <span aria-hidden className="text-red-600">⚠</span> = scheduled but never logged
-              </div>
-            ) : null}
-            {hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
-                ⚠ = starting soon, needs a supervisor
-              </div>
-            ) : null}
-            {dayAssignments.some((a) => !a.supervisorUserId && !a.projectManagerUserId) ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${NO_SUPERVISOR_PLANNED_CHIP_CLASS}`} />
-                <span aria-hidden className="text-amber-950">⚠</span> = planned, no supervisor assigned yet
+
+            {legendShowsStatus ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  {presentGroups.length > 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-slate-300" />
+                      Solid = work actually logged that day
+                    </div>
+                  ) : null}
+                  {dayAssignments.length > 0 ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${PLANNED_CHIP_EXTRA_CLASS}`} />
+                      Dashed = planned, not yet logged
+                    </div>
+                  ) : null}
+                  {legendShowsOverdue ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm bg-white ${OVERDUE_PLANNED_CHIP_EXTRA_CLASS}`} />
+                      <span aria-hidden className="text-red-600">⚠</span> = scheduled but never logged
+                    </div>
+                  ) : null}
+                  {legendShowsNeedsSupervisor ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-amber-600 bg-amber-400" />
+                      ⚠ = starting soon, needs a supervisor
+                    </div>
+                  ) : null}
+                  {legendShowsNoSupervisorPlanned ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${NO_SUPERVISOR_PLANNED_CHIP_CLASS}`} />
+                      <span aria-hidden className="text-amber-950">⚠</span> = planned, no supervisor assigned yet
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
-            {presentGroups.length > 0 ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                <span aria-hidden>⚙</span>
-                <span aria-hidden className="text-emerald-700">✓</span>
-                = in progress vs. complete (faded)
+
+            {legendShowsIcons ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Icons</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                    <span aria-hidden>⚙</span>
+                    <span aria-hidden className="text-emerald-700">✓</span>
+                    = in progress vs. complete (faded)
+                  </div>
+                </div>
               </div>
             ) : null}
-            {presentGroups.includes("JANITORIAL_TURNOVER_REQUESTS") ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+
+            {legendShowsGroupingTip ? (
+              <p className="flex items-center gap-1.5 text-[11px] text-gray-400">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS}`} />
-                Same-building turnover units on a shared day group into one chip, click to expand
-              </div>
+                Tip: same-building turnover units on a shared day group into one chip — click to expand.
+              </p>
             ) : null}
           </div>
         ) : null}

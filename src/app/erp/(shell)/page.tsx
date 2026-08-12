@@ -1030,7 +1030,13 @@ export default async function ErpDashboardPage() {
     // Small uppercase group labels above each cluster of cards, so the page
     // reads as a few organized zones (Today / Needs attention / Financials /
     // Activity / Staffing) instead of one flat stack of same-looking tables.
-    const sectionLabelCls = "px-1 text-xs font-semibold uppercase tracking-wide text-gray-400";
+    // Each one carries a colored dot (flex layout lives here so every call
+    // site only has to add the dot + text) — the same dot-and-label language
+    // the stat strip and activity feed already use, so that color-coding
+    // carries all the way up to the section level instead of stopping at
+    // the card boundary.
+    const sectionLabelCls = "flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400";
+    const sectionDotCls = "h-1.5 w-1.5 shrink-0 rounded-full";
 
     return (
       <div className="space-y-6">
@@ -1100,7 +1106,7 @@ export default async function ErpDashboardPage() {
 
         {/* Today */}
         <div className="space-y-3">
-          <h2 className={sectionLabelCls}>Today</h2>
+          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-emerald-400`} />Today</h2>
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
@@ -1152,15 +1158,20 @@ export default async function ErpDashboardPage() {
             between top and bottom depending on PM vs Admin; grouping it with
             Labor red flags here makes it consistently easy to find instead). */}
         <div className="space-y-3">
-          <h2 className={sectionLabelCls}>Needs attention</h2>
+          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-red-400`} />Needs attention</h2>
           <div className="grid gap-4 lg:grid-cols-3">
             {noSupervisorWidget}
 
-            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">Labor red flags</h3>
+            {/* Same red-tinted chrome as its two neighbors above (noSupervisorWidget,
+                needsLaborLoggedWidget) — all three are alerts in the same grid, so they
+                should read as one consistent set instead of two loud cards and one plain one. */}
+            <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+                <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">
+                  <span aria-hidden className="mr-1 text-red-600">⚠</span>Labor red flags
+                </h3>
                 {laborFlags.length > 0 && (
-                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600">{laborFlags.length}</span>
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
                 )}
               </div>
               {laborFlags.length === 0 ? (
@@ -1192,7 +1203,7 @@ export default async function ErpDashboardPage() {
         {/* Financials: only shown to roles that can see them */}
         {showFinancials && (
           <div className="space-y-3">
-            <h2 className={sectionLabelCls}>Financials</h2>
+            <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-blue-400`} />Financials</h2>
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
                 <h3 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h3>
@@ -1222,7 +1233,7 @@ export default async function ErpDashboardPage() {
 
         {/* Activity */}
         <div className="space-y-3">
-          <h2 className={sectionLabelCls}>Activity</h2>
+          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-violet-400`} />Activity</h2>
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900">Recent project activity</h3>
@@ -1257,13 +1268,16 @@ export default async function ErpDashboardPage() {
             compete with anything actionable above it. */}
         {(role === "ADMIN" || isProjectManager(role)) && (
           <div className="space-y-3">
-            <h2 className={sectionLabelCls}>Staffing</h2>
+            <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-sky-400`} />Staffing</h2>
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
                   <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
+                  {/* Neutral gray, not blue — this is a plain count, not an alert
+                      like its Staffing siblings below, and shouldn't borrow color
+                      that reads as "needs attention" for something that doesn't. */}
                   {upcomingTimeOff.length > 0 && (
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
                       {upcomingTimeOff.length}
                     </span>
                   )}
