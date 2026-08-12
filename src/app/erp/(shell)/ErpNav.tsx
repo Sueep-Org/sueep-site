@@ -120,10 +120,11 @@ function IdCardIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
-function SparklesIcon({ className = iconCls }: IconProps) {
+function RulerIcon({ className = iconCls }: IconProps) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.25 3l1.2 3.3L13.75 7.5l-3.3 1.2L9.25 12 8.05 8.7 4.75 7.5l3.3-1.2L9.25 3zM17.5 13.5l.75 2 2 .75-2 .75-.75 2-.75-2-2-.75 2-.75.75-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.3 15.3a2.4 2.4 0 010 3.4l-2.6 2.6a2.4 2.4 0 01-3.4 0L2.7 8.7a2.4 2.4 0 010-3.4l2.6-2.6a2.4 2.4 0 013.4 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.5 12.5l2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2" />
     </svg>
   );
 }
@@ -180,7 +181,7 @@ const teamExtraItems: NavItem[] = [
   { href: "/erp/users", label: "User Management", roles: ["ADMIN"], icon: IdCardIcon },
 ];
 
-const aiEstimatorItem: NavItem = { href: "/erp/estimator", label: "AI Estimator", roles: PM_EST, icon: SparklesIcon };
+const estimatorItem: NavItem = { href: "/erp/estimator", label: "Estimator", roles: PM_EST, icon: RulerIcon };
 const helpCenterItem: NavItem = { href: "/erp/help", label: "Help Center", roles: ALL, icon: QuestionMarkCircleIcon };
 
 function allowed(item: NavItem, role: ErpRole): boolean {
@@ -395,7 +396,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
   const visibleTeamExtras = teamExtraItems.filter((i) => allowed(i, role));
   const hasTeamSection = hasEmploymentGroup || visibleTeamExtras.length > 0;
   const visibleTeamItems = [...employmentGroupItems, ...teamExtraItems].filter((i) => allowed(i, role));
-  const showAiEstimator = allowed(aiEstimatorItem, role);
+  const showEstimator = allowed(estimatorItem, role);
   const showHelpCenter = allowed(helpCenterItem, role);
 
   function NavContent() {
@@ -429,7 +430,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
           </>
         )}
 
-        {showAiEstimator && <NavLink item={aiEstimatorItem} pathname={pathname} />}
+        {showEstimator && <NavLink item={estimatorItem} pathname={pathname} />}
         {showHelpCenter && <NavLink item={helpCenterItem} pathname={pathname} />}
       </>
     );
@@ -462,7 +463,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
           {hasTeamSection && (
             <RailGroup label="Team" icon={UsersIcon} items={visibleTeamItems} pathname={pathname} />
           )}
-          {showAiEstimator && <RailLink item={aiEstimatorItem} pathname={pathname} />}
+          {showEstimator && <RailLink item={estimatorItem} pathname={pathname} />}
         </nav>
 
         {showHelpCenter && (

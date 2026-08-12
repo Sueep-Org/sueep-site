@@ -1052,7 +1052,14 @@ export default async function ErpDashboardPage() {
 
         {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
         <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-          <div className="grid grid-cols-3 divide-x divide-y divide-gray-100 sm:grid-cols-7 sm:divide-y-0">
+          {/* grid-cols steps at 2/4/8 — exact factors of the 8 tiles below, so
+              a row never wraps an odd tile out with a stray divider border
+              from the sibling before it (divide-x/divide-y apply by DOM
+              order, not row position). Also gives a real 4-col step between
+              mobile and the full 8-col row instead of jumping straight from
+              2 to 8 right past the sm breakpoint, which was crushing every
+              label/value into ~80px columns before it had room to reflow. */}
+          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-8 lg:divide-y-0">
             {[
               { label: "WIP", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", dot: "bg-emerald-400", val: "text-emerald-700" },
               { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", dot: "bg-violet-400", val: "text-violet-700" },
