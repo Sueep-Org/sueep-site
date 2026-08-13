@@ -3082,8 +3082,11 @@ export function SchedulePlanner({
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                     <span aria-hidden>⚙</span>
+                    = in progress
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                     <span aria-hidden className="text-emerald-700">✓</span>
-                    = in progress vs. complete (faded)
+                    = complete (faded)
                   </div>
                 </div>
               </div>
