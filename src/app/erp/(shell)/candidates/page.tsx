@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { CandidateStatusSelect } from "./CandidateStatusSelect";
-import { CandidatesFilters } from "./CandidatesFilters";
+import { CandidatesFilterBar } from "./CandidatesFilterBar";
+import { NewCandidateForm } from "./NewCandidateForm";
 import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
 
 export const dynamic = "force-dynamic";
@@ -87,9 +88,28 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
-      </div>
 
-      <CandidatesFilters search={search} status={statusFilter} position={positionFilter} type={typeFilter} />
+        <div className="mt-3 flex items-center justify-between gap-4">
+          <form>
+            <input
+              name="search"
+              defaultValue={search}
+              placeholder="Search by name…"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+            />
+            {/* Preserve every active filter when this form submits on its own
+                (e.g. pressing Enter), same reasoning as the hidden fields
+                inside CandidatesFilterBar's popover form. */}
+            <input type="hidden" name="status" value={statusFilter} />
+            <input type="hidden" name="position" value={positionFilter} />
+            <input type="hidden" name="type" value={typeFilter} />
+          </form>
+          <div className="flex items-center gap-2">
+            <CandidatesFilterBar search={search} status={statusFilter} position={positionFilter} type={typeFilter} />
+            <NewCandidateForm />
+          </div>
+        </div>
+      </div>
 
       {candidates.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
