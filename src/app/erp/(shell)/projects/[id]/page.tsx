@@ -36,7 +36,7 @@ import { QualityChecksTable } from "@/app/erp/(shell)/quality-checks/QualityChec
 import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSigningSection";
 import { ProjectNotesSection } from "./ProjectNotesSection";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
-import { ProjectsBackLink } from "./ProjectsBackLink";
+import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 
 export const dynamic = "force-dynamic";
 

@@ -3,15 +3,12 @@
 import { useEffect, useState } from "react";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
+import { PROJECTS_LIST_URL_STORAGE_KEY } from "@/lib/erp/projectsListUrl";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
 type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
-
-/** sessionStorage key the project detail page's "← Projects" link reads to
- * return to the tab/status filter the user was on, instead of resetting to "All". */
-export const PROJECTS_LIST_URL_STORAGE_KEY = "erp:lastProjectsListUrl";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },

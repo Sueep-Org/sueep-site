@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
+import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
 
 export const dynamic = "force-dynamic";
@@ -86,15 +87,20 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       otherDescription: p.turnoverRequest!.otherDescription,
     }));
 
-  const backHref = from === "projects" ? "/erp/projects" : "/erp/buildings";
-  const backLabel = from === "projects" ? "Back to projects" : "Back to buildings";
-
   return (
     <div className="space-y-6">
       <div>
-        <Link href={backHref} className="text-xs text-pink-600 hover:underline">
-          {backLabel}
-        </Link>
+        {from === "projects" ? (
+          // Reads the tab/status filter ProjectsTabs last persisted, so this
+          // lands back on whatever the user had selected instead of always
+          // resetting to "All" — same mechanism the project detail page's
+          // "← Projects" link uses.
+          <ProjectsBackLink label="Back to projects" />
+        ) : (
+          <Link href="/erp/buildings" className="text-xs text-pink-600 hover:underline">
+            Back to buildings
+          </Link>
+        )}
         <div className="mt-2">
           <h1 className="text-2xl font-semibold text-gray-900">{building.name}</h1>
         </div>
