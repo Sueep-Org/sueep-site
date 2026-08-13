@@ -25,6 +25,7 @@ type Props = {
   carpetCleaning: boolean;
   materialsAdditional: boolean;
   ceilingPaint: boolean;
+  compounding: number | null;
   otherWork: boolean;
   otherDescription: string | null;
   otherCents: number | null;
@@ -52,6 +53,7 @@ export function UnitScopeEditor({
   carpetCleaning,
   materialsAdditional,
   ceilingPaint,
+  compounding,
   otherWork,
   otherDescription,
   otherCents,
@@ -74,6 +76,7 @@ export function UnitScopeEditor({
   const [carpetCleaningVal, setCarpetCleaning] = useState(carpetCleaning);
   const [materialsAdditionalVal, setMaterialsAdditional] = useState(materialsAdditional);
   const [ceilingPaintVal, setCeilingPaint] = useState(ceilingPaint);
+  const [compoundingStr, setCompounding] = useState(compounding?.toString() ?? "0");
   const [otherWorkVal, setOtherWork] = useState(otherWork);
   const [otherDescriptionVal, setOtherDescription] = useState(otherDescription ?? "");
   const [otherPriceVal, setOtherPrice] = useState(otherCents != null ? (otherCents / 100).toFixed(2) : "");
@@ -89,6 +92,7 @@ export function UnitScopeEditor({
       carpetCleaning: d(pkg.carpetCleaningLayoutRates?.["common-area"]),
       additionalMaterials: d(pkg.additionalMaterialsLayoutRates?.["common-area"]),
       ceilingPaint: d(pkg.ceilingPaintLayoutRates?.["common-area"]),
+      compounding: d(pkg.compoundingLayoutRates?.["common-area"]),
     };
   });
   const [saving, setSaving] = useState(false);
@@ -106,6 +110,7 @@ export function UnitScopeEditor({
       carpetCleaningLayoutRates: { ...pkg.carpetCleaningLayoutRates, "common-area": n(commonAreaRates.carpetCleaning) },
       additionalMaterialsLayoutRates: { ...pkg.additionalMaterialsLayoutRates, "common-area": n(commonAreaRates.additionalMaterials) },
       ceilingPaintLayoutRates: { ...pkg.ceilingPaintLayoutRates, "common-area": n(commonAreaRates.ceilingPaint) },
+      compoundingLayoutRates: { ...pkg.compoundingLayoutRates, "common-area": n(commonAreaRates.compounding) },
     };
   }
 
@@ -143,6 +148,7 @@ export function UnitScopeEditor({
         carpetCleaning: carpetCleaningVal,
         materialsAdditional: materialsAdditionalVal,
         ceilingPaint: ceilingPaintVal,
+        compounding: compoundingStr !== "" ? Number(compoundingStr) : 0,
         otherWork: otherWorkVal,
         otherDescription: otherWorkVal ? otherDescriptionVal.trim() || null : null,
         otherCents: otherWorkVal ? otherCentsVal : null,
@@ -299,6 +305,7 @@ export function UnitScopeEditor({
         carpetCleaning={carpetCleaningVal}
         materialsAdditional={materialsAdditionalVal}
         ceilingPaint={ceilingPaintVal}
+        compounding={compoundingStr}
         otherWork={otherWorkVal}
         otherDescription={otherDescriptionVal}
         otherPrice={otherPriceVal}
@@ -314,6 +321,7 @@ export function UnitScopeEditor({
         setCarpetCleaning={setCarpetCleaning}
         setMaterialsAdditional={setMaterialsAdditional}
         setCeilingPaint={setCeilingPaint}
+        setCompounding={setCompounding}
         setOtherWork={setOtherWork}
         setOtherDescription={setOtherDescription}
         setOtherPrice={setOtherPrice}

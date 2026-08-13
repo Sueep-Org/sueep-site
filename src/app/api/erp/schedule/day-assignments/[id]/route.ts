@@ -1,14 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
-
-function extractEmailAddress(raw: string | undefined): string {
-  if (!raw) return "noreply@sueep.com";
-  const match = raw.match(/<([^>]+)>/);
-  return match ? match[1]! : raw.trim();
-}
+import { notifyProjectCrew, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -32,9 +25,23 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
 
-  // Removing the planned supervisor event also clears any planned workers
-  // for that same project/day — they were only ever assigned in the context
-  // of this event, not the project as a whole.
+  // Crew cancellations need the still-live rows (fetched before the
+  // transaction below wipes them) — removing the planned supervisor event
+  // also clears any planned workers for that same project/day, they were
+  // only ever assigned in the context of this event, not the project as a
+  // whole.
+  await notifyProjectCrew({
+    projectId: existing.projectId,
+    dates: [existing.date],
+    projectTitle: existing.project.jobTitle,
+    location,
+    startTime: existing.startTime,
+    endTime: existing.endTime,
+    daySovDescriptions: [],
+    dayScopeLabels: [],
+    cancelled: true,
+  });
+
   await prisma.$transaction([
     prisma.projectDayAssignment.delete({ where: { id } }),
     prisma.projectWorkerDayAssignment.deleteMany({ where: { projectId: existing.projectId, date: existing.date } }),
@@ -45,28 +52,17 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   // No invite (so no cancellation) went out for a PM-only assignment, see
   // the POST route's projectManagerUserId handling.
   if (existing.supervisorUser) {
-    try {
-      const ics = buildDayAssignmentInvite({
-        uid: `day-assignment-${id}@sueep.com`,
-        dateKey: dayKey(existing.date),
-        startTime: existing.startTime,
-        endTime: existing.endTime,
-        summary: `Supervising: ${existing.project.jobTitle}`,
-        location,
-        organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-        organizerName: "Sueep Schedule",
-        attendeeEmail: existing.supervisorUser.email,
-        cancelled: true,
-      });
-      await sendEmail({
-        to: existing.supervisorUser.email,
-        subject: `Cancelled: ${existing.project.jobTitle} on ${dayKey(existing.date)}`,
-        html: `<p>Your assignment to <strong>${existing.project.jobTitle}</strong> on ${dayKey(existing.date)} has been removed.</p>`,
-        attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-      });
-    } catch (e) {
-      console.error("Failed to send day-assignment cancellation invite", e);
-    }
+    await sendDayInvite({
+      uid: `day-assignment-${id}@sueep.com`,
+      to: existing.supervisorUser.email,
+      role: "Supervising",
+      title: existing.project.jobTitle,
+      dateKey: dayKey(existing.date),
+      startTime: existing.startTime,
+      endTime: existing.endTime,
+      location,
+      cancelled: true,
+    });
   }
 
   return NextResponse.json({ ok: true });

@@ -226,6 +226,10 @@ model TurnoverRequest {
   carpetCleaning      Boolean @default(false)
   materialsAdditional Boolean @default(false)
   ceilingPaint        Boolean @default(false)
+  /// Drywall/wall-repair compounding — same "count" shape as touchUpPaint
+  /// (e.g. number of spots/walls), priced off compoundingLayoutRates on the
+  /// building's pricing package (defaults to $0, see turnoverPricingPackages.ts).
+  compounding         Int?    @default(0)
 
   /// Only part of the unit's real bedrooms/bathrooms are being turned (e.g.
   /// 2 of a 3BR/3BA). bedrooms/bathrooms above still record the unit's real

@@ -87,6 +87,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.carpetCleaning !== undefined) data.carpetCleaning = Boolean(body.carpetCleaning);
   if (body.materialsAdditional !== undefined) data.materialsAdditional = Boolean(body.materialsAdditional);
   if (body.ceilingPaint !== undefined) data.ceilingPaint = Boolean(body.ceilingPaint);
+  if (body.compounding !== undefined) data.compounding = parseIntValue(body.compounding) ?? 0;
   if (body.otherWork !== undefined) data.otherWork = Boolean(body.otherWork);
   if (body.otherDescription !== undefined) data.otherDescription = body.otherDescription ? String(body.otherDescription).trim() || null : null;
   if (body.otherCents !== undefined) data.otherCents = typeof body.otherCents === "number" ? body.otherCents : null;
@@ -157,6 +158,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     materialsAdditional:
       data.materialsAdditional !== undefined ? Boolean(data.materialsAdditional) : existing.materialsAdditional,
     ceilingPaint: data.ceilingPaint !== undefined ? Boolean(data.ceilingPaint) : existing.ceilingPaint,
+    compounding:
+      body.compounding !== undefined ? parseIntValue(body.compounding) ?? 0 : existing.compounding ?? 0,
     isPartialTurn: effectiveIsPartialTurn,
     partialTurnLayout: effectivePartialTurnLayout,
   };

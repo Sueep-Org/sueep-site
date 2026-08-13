@@ -21,6 +21,7 @@ type CommonAreaRates = {
   carpetCleaning: string;
   additionalMaterials: string;
   ceilingPaint: string;
+  compounding: string;
 };
 
 type TurnoverPricingPackageQuestionsProps = {
@@ -41,6 +42,7 @@ type TurnoverPricingPackageQuestionsProps = {
   carpetCleaning: boolean;
   materialsAdditional: boolean;
   ceilingPaint: boolean;
+  compounding: string;
   otherWork?: boolean;
   otherDescription?: string;
   otherPrice?: string;
@@ -53,6 +55,7 @@ type TurnoverPricingPackageQuestionsProps = {
   setCarpetCleaning: (value: boolean) => void;
   setMaterialsAdditional: (value: boolean) => void;
   setCeilingPaint: (value: boolean) => void;
+  setCompounding: (value: string) => void;
   setOtherWork?: (value: boolean) => void;
   setOtherDescription?: (value: string) => void;
   setOtherPrice?: (value: string) => void;
@@ -88,6 +91,7 @@ export function TurnoverPricingPackageQuestions({
   carpetCleaning,
   materialsAdditional,
   ceilingPaint,
+  compounding,
   otherWork = false,
   otherDescription = "",
   otherPrice = "",
@@ -100,6 +104,7 @@ export function TurnoverPricingPackageQuestions({
   setCarpetCleaning,
   setMaterialsAdditional,
   setCeilingPaint,
+  setCompounding,
   setOtherWork = () => {},
   setOtherDescription = () => {},
   setOtherPrice = () => {},
@@ -115,6 +120,7 @@ export function TurnoverPricingPackageQuestions({
         carpetCleaningLayoutRates: { "common-area": n(commonAreaRates.carpetCleaning) },
         additionalMaterialsLayoutRates: { "common-area": n(commonAreaRates.additionalMaterials) },
         ceilingPaintLayoutRates: { "common-area": n(commonAreaRates.ceilingPaint) },
+        compoundingLayoutRates: { "common-area": n(commonAreaRates.compounding) },
       }
     : storedPricingPackage;
   const basePricing = computeTurnoverPricing({
@@ -130,6 +136,7 @@ export function TurnoverPricingPackageQuestions({
     carpetCleaning,
     materialsAdditional,
     ceilingPaint,
+    compounding: parseNullableNumber(compounding) ?? 0,
     isPartialTurn,
     partialTurnLayout,
   });
@@ -244,6 +251,7 @@ export function TurnoverPricingPackageQuestions({
               { key: "carpetCleaning", label: "Carpet cleaning" },
               { key: "additionalMaterials", label: "Add. materials" },
               { key: "ceilingPaint", label: "Ceiling painting" },
+              { key: "compounding", label: "Compounding" },
             ] as const).map(({ key, label }) => (
               <label key={key} className="block text-[11px] font-medium text-blue-700">
                 {label}
@@ -372,6 +380,19 @@ export function TurnoverPricingPackageQuestions({
           disabled={fullPaint}
           placeholder={fullPaint ? "Included in full paint" : "0"}
           className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100 disabled:text-gray-400"
+        />
+      </label>
+
+      <label className="mt-4 block text-xs font-medium text-gray-600">
+        Compounding quantity
+        <input
+          name="compounding"
+          value={compounding}
+          onChange={(event) => setCompounding(event.target.value)}
+          type="number"
+          min="0"
+          placeholder="0"
+          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
         />
       </label>
 

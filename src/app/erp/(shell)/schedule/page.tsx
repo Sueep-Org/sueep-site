@@ -74,6 +74,7 @@ export default async function SchedulePage() {
             carpetCleaning: true,
             ceilingPaint: true,
             materialsAdditional: true,
+            compounding: true,
             otherWork: true,
             completedScopeItems: true,
             buildingId: true,
@@ -153,12 +154,12 @@ export default async function SchedulePage() {
     }),
     prisma.employee.findMany({
       where: { status: { not: "INACTIVE" } },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, email: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
     prisma.contractor.findMany({
       where: { status: { not: "INACTIVE" } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
     prisma.changeOrderDayAssignment.findMany({
@@ -203,10 +204,11 @@ export default async function SchedulePage() {
   const employees = employeeRows.map((e) => ({
     id: e.id,
     displayName: `${e.firstName} ${e.lastName}`.trim(),
+    email: e.email,
   }));
   const employeeNameById = new Map(employees.map((e) => [e.id, e.displayName]));
 
-  const contractors = contractorRows.map((c) => ({ id: c.id, displayName: c.name }));
+  const contractors = contractorRows.map((c) => ({ id: c.id, displayName: c.name, email: c.email }));
   const contractorNameById = new Map(contractors.map((c) => [c.id, c.displayName]));
 
   // Planned (not-yet-logged) worker names per project/day — surfaced in the

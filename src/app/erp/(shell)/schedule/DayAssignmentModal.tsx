@@ -52,6 +52,11 @@ type ProjectOption = {
  * can share a title (e.g. "Change order 1"). */
 type ChangeOrderOption = { id: string; title: string; projectId: string; projectTitle: string };
 type Person = { id: string; displayName: string };
+/** Employees/contractors specifically — unlike a supervisor/PM (always an
+ * ErpUser, always has an email), a crew member's email is optional, and
+ * that's the one thing that gates whether they get a schedule invite at
+ * all. Null surfaces a "no email on file" note wherever they're picked. */
+type WorkerPerson = Person & { email: string | null };
 
 function dateLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
@@ -129,8 +134,8 @@ export function DayAssignmentModal({
   changeOrderOptions: ChangeOrderOption[];
   supervisors: Person[];
   projectManagers: Person[];
-  employees: Person[];
-  contractors: Person[];
+  employees: WorkerPerson[];
+  contractors: WorkerPerson[];
   existingWorkers: ScheduleWorkerAssignment[];
   existingCoWorkers: ScheduleCoWorkerAssignment[];
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
@@ -988,11 +993,13 @@ export function DayAssignmentModal({
                   const co = changeOrderOptions.find((c) => c.id === w.changeOrderId);
                   const employee = w.employeeId ? employees.find((e) => e.id === w.employeeId) : null;
                   const contractor = w.contractorId ? contractors.find((c) => c.id === w.contractorId) : null;
+                  const worker = employee ?? contractor;
                   const workerLabel = employee
                     ? employee.displayName
                     : contractor
                     ? `${contractor.displayName} (contractor)`
                     : "Unknown worker";
+                  const noEmail = !!worker && !worker.email;
                   return (
                     <li
                       key={w.id}
@@ -1001,6 +1008,12 @@ export function DayAssignmentModal({
                       <span className="truncate" title={co?.title}>
                         <span className="font-medium text-gray-800">{co?.title ?? "Unknown change order"}</span>
                         <span className="text-gray-500"> — {workerLabel}</span>
+                        {noEmail ? (
+                          <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                            {" "}
+                            (no email)
+                          </span>
+                        ) : null}
                       </span>
                       <button
                         type="button"
@@ -1028,6 +1041,7 @@ export function DayAssignmentModal({
                   : contractor
                   ? `${contractor.displayName} (contractor)`
                   : "Unknown worker";
+                const noEmail = !!(employee ?? contractor) && !(employee ?? contractor)?.email;
                 // Scope reassignment is only offered for the project
                 // currently selected above (splitOptions reflects live
                 // Task details picks for that one project) — other rows
@@ -1049,6 +1063,12 @@ export function DayAssignmentModal({
                     <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                       <span className="text-gray-500"> — {workerLabel}</span>
+                      {noEmail ? (
+                        <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                          {" "}
+                          (no email)
+                        </span>
+                      ) : null}
                       {w.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
@@ -1176,6 +1196,7 @@ export function DayAssignmentModal({
                         className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                       >
                         {e.displayName}
+                        {!e.email ? <span className="text-gray-400"> (no email)</span> : null}
                       </button>
                     ))}
                     {filteredEmployees.length === 0 ? (
@@ -1210,6 +1231,7 @@ export function DayAssignmentModal({
                         className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                       >
                         {c.displayName}
+                        {!c.email ? <span className="text-gray-400"> (no email)</span> : null}
                       </button>
                     ))}
                     {filteredContractors.length === 0 ? (

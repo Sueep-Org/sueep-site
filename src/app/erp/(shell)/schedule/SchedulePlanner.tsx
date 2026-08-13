@@ -253,6 +253,11 @@ function monthLabel(d: Date): string {
 }
 
 type Person = { id: string; displayName: string };
+/** Employees/contractors specifically — unlike a supervisor/PM (always an
+ * ErpUser, always has an email), a crew member's email is optional, and
+ * that's the one thing that gates whether they get a schedule invite at
+ * all. Null surfaces a "no email on file" note wherever they're picked. */
+type WorkerPerson = Person & { email: string | null };
 
 /** Duplicates a calendar card (or a logged-labor day) onto whichever other
  * days get picked on the mini calendar — they don't need to be consecutive
@@ -488,8 +493,8 @@ export function SchedulePlanner({
   sovRequests: ScheduleSovRequest[];
   initialDayAssignments: ScheduleDayAssignment[];
   canFilterBySupervisor: boolean;
-  employees: Person[];
-  contractors: Person[];
+  employees: WorkerPerson[];
+  contractors: WorkerPerson[];
   initialWorkerAssignments: ScheduleWorkerAssignment[];
   initialCoDayAssignments: ScheduleCoDayAssignment[];
   initialCoWorkerAssignments: ScheduleCoWorkerAssignment[];
@@ -1736,9 +1741,9 @@ export function SchedulePlanner({
           {dayWorkers.length > 0 ? (
             <ul className="mt-1 space-y-1">
               {dayWorkers.map((w) => {
-                const name = w.employeeId
-                  ? employees.find((e) => e.id === w.employeeId)?.displayName
-                  : contractors.find((c) => c.id === w.contractorId)?.displayName;
+                const worker = w.employeeId
+                  ? employees.find((e) => e.id === w.employeeId)
+                  : contractors.find((c) => c.id === w.contractorId);
                 const assignedId =
                   eventSplitGroup === "POST_CONSTRUCTION"
                     ? w.assignedSovItemId
@@ -1751,7 +1756,15 @@ export function SchedulePlanner({
                     key={w.id}
                     className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
                   >
-                    <span className="truncate">{name ?? "Unknown worker"}</span>
+                    <span className="truncate">
+                      {worker?.displayName ?? "Unknown worker"}
+                      {worker && !worker.email ? (
+                        <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                          {" "}
+                          (no email)
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="flex shrink-0 items-center gap-1">
                       {eventSplitOptions.length > 1 ? (
                         <select
@@ -1874,6 +1887,7 @@ export function SchedulePlanner({
                     className="block w-full truncate px-1.5 py-1 text-left text-[11px] text-gray-700 hover:bg-pink-50"
                   >
                     {w.displayName}
+                    {!w.email ? <span className="text-gray-400"> (no email)</span> : null}
                   </button>
                 ))}
                 {filteredWorkerOptions.length === 0 ? (

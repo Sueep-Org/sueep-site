@@ -85,6 +85,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             carpetCleaning: true,
             materialsAdditional: true,
             ceilingPaint: true,
+            compounding: true,
             otherWork: true,
             otherDescription: true,
             otherCents: true,
@@ -432,6 +433,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 carpetCleaning={project.turnoverRequest.carpetCleaning}
                 materialsAdditional={project.turnoverRequest.materialsAdditional}
                 ceilingPaint={project.turnoverRequest.ceilingPaint}
+                compounding={project.turnoverRequest.compounding}
                 otherWork={project.turnoverRequest.otherWork}
                 otherDescription={project.turnoverRequest.otherDescription}
                 contractValueCents={project.contractValueCents}
@@ -515,6 +517,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 carpetCleaning={project.turnoverRequest?.carpetCleaning ?? false}
                 materialsAdditional={project.turnoverRequest?.materialsAdditional ?? false}
                 ceilingPaint={project.turnoverRequest?.ceilingPaint ?? false}
+                compounding={project.turnoverRequest?.compounding ?? null}
                 otherWork={project.turnoverRequest?.otherWork ?? false}
                 otherDescription={project.turnoverRequest?.otherDescription ?? null}
                 otherCents={project.turnoverRequest?.otherCents ?? null}
@@ -575,6 +578,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         carpetCleaning: project.turnoverRequest.carpetCleaning,
         materialsAdditional: project.turnoverRequest.materialsAdditional,
         ceilingPaint: project.turnoverRequest.ceilingPaint,
+        compounding: project.turnoverRequest.compounding,
         otherWork: project.turnoverRequest.otherWork,
         otherDescription: project.turnoverRequest.otherDescription,
       } : null} contractedScopeItems={contractedScopeItems} completedScopeItems={completedScopeItems} />,

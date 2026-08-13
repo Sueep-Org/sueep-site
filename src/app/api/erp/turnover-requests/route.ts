@@ -83,6 +83,7 @@ export async function POST(req: Request) {
   const carpetCleaning = Boolean(body.carpetCleaning);
   const materialsAdditional = Boolean(body.materialsAdditional);
   const ceilingPaint = Boolean(body.ceilingPaint);
+  const compounding = parseIntValue(body.compounding) ?? 0;
   const otherWork = Boolean(body.otherWork);
   const otherDescription = otherWork && body.otherDescription ? String(body.otherDescription).trim() : null;
   const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
@@ -108,6 +109,7 @@ export async function POST(req: Request) {
     carpetCleaning,
     materialsAdditional,
     ceilingPaint,
+    compounding,
     isPartialTurn,
     partialTurnLayout,
   });
@@ -131,6 +133,7 @@ export async function POST(req: Request) {
         carpetCleaning,
         materialsAdditional,
         ceilingPaint,
+        compounding,
         otherWork,
         otherDescription,
         otherCents: otherWork ? otherCents : null,

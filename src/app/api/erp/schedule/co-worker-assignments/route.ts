@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { dayKey } from "@/lib/erp/schedule";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
+import { appUrl, resolveWorkerContact, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
 
@@ -60,7 +62,22 @@ export async function POST(req: Request) {
   const auth = await getErpAuth();
 
   const [changeOrder, employee, contractor] = await Promise.all([
-    prisma.projectChangeOrder.findUnique({ where: { id: changeOrderId }, select: { id: true, status: true } }),
+    prisma.projectChangeOrder.findUnique({
+      where: { id: changeOrderId },
+      select: {
+        id: true,
+        status: true,
+        title: true,
+        projectId: true,
+        project: {
+          select: {
+            jobTitle: true,
+            building: { select: { address: true } },
+            workOrderRecord: { select: { siteAddress: true } },
+          },
+        },
+      },
+    }),
     employeeId
       ? prisma.employee.findUnique({
           where: { id: employeeId },
@@ -107,6 +124,27 @@ export async function POST(req: Request) {
   const assignment = await prisma.changeOrderWorkerDayAssignment.upsert(
     workerUpsertArgs(changeOrderId, date, employeeId, contractorId)
   );
+
+  const contact = await resolveWorkerContact(employeeId, contractorId);
+  if (contact) {
+    const location = changeOrder.project.building?.address || changeOrder.project.workOrderRecord?.siteAddress || undefined;
+    const dayAssignment = await prisma.changeOrderDayAssignment.findUnique({
+      where: { changeOrderId_date: { changeOrderId, date } },
+      select: { startTime: true, endTime: true },
+    });
+    await sendDayInvite({
+      uid: `co-worker-assignment-${assignment.id}@sueep.com`,
+      to: contact.email,
+      attendeeName: contact.name,
+      role: "Working",
+      title: `${changeOrder.title} (${changeOrder.project.jobTitle})`,
+      dateKey: dayKey(assignment.date),
+      startTime: dayAssignment?.startTime ?? null,
+      endTime: dayAssignment?.endTime ?? null,
+      location,
+      url: appUrl() ? `${appUrl()}/erp/projects/${changeOrder.projectId}/change-orders/${changeOrderId}` : undefined,
+    });
+  }
 
   return NextResponse.json(assignment, { status: 201 });
 }

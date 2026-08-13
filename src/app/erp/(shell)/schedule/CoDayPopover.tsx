@@ -9,6 +9,11 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 type Person = { id: string; displayName: string };
+/** Employees/contractors specifically — unlike a supervisor/PM (always an
+ * ErpUser, always has an email), a crew member's email is optional, and
+ * that's the one thing that gates whether they get a schedule invite at
+ * all. Null surfaces a "no email on file" note wherever they're picked. */
+type WorkerPerson = Person & { email: string | null };
 
 function dayCellLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
@@ -55,8 +60,8 @@ export function CoDayPopover({
   workersForDay: ScheduleCoWorkerAssignment[];
   supervisors: Person[];
   projectManagers: Person[];
-  employees: Person[];
-  contractors: Person[];
+  employees: WorkerPerson[];
+  contractors: WorkerPerson[];
   onClose: () => void;
   onAssignmentSaved: (a: ScheduleCoDayAssignment) => void;
   onAssignmentDeleted: (id: string) => void;
@@ -295,15 +300,23 @@ export function CoDayPopover({
           {workersForDay.length > 0 ? (
             <ul className="mt-1 space-y-1">
               {workersForDay.map((w) => {
-                const name = w.employeeId
-                  ? employees.find((e) => e.id === w.employeeId)?.displayName
-                  : contractors.find((c) => c.id === w.contractorId)?.displayName;
+                const worker = w.employeeId
+                  ? employees.find((e) => e.id === w.employeeId)
+                  : contractors.find((c) => c.id === w.contractorId);
                 return (
                   <li
                     key={w.id}
                     className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
                   >
-                    <span className="truncate">{name ?? "Unknown worker"}</span>
+                    <span className="truncate">
+                      {worker?.displayName ?? "Unknown worker"}
+                      {worker && !worker.email ? (
+                        <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                          {" "}
+                          (no email)
+                        </span>
+                      ) : null}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleDeleteWorker(w.id)}
@@ -383,6 +396,7 @@ export function CoDayPopover({
                     className="block w-full truncate px-1.5 py-1 text-left text-[11px] text-gray-700 hover:bg-pink-50"
                   >
                     {w.displayName}
+                    {!w.email ? <span className="text-gray-400"> (no email)</span> : null}
                   </button>
                 ))}
                 {filteredWorkerOptions.length === 0 ? <div className="px-1.5 py-1 text-[11px] text-gray-400">No matches</div> : null}

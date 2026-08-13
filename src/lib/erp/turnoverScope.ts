@@ -9,6 +9,7 @@ export const TURNOVER_SCOPE_OPTIONS = [
   { value: "CARPET", label: "Carpet cleaning" },
   { value: "CEILING_PAINT", label: "Ceiling painting" },
   { value: "MATERIALS", label: "Materials" },
+  { value: "COMPOUNDING", label: "Compounding" },
   { value: "OTHER", label: "Other" },
 ] as const;
 
@@ -44,6 +45,7 @@ export function contractedTurnoverScope(flags: {
   carpetCleaning: boolean;
   ceilingPaint: boolean;
   materialsAdditional: boolean;
+  compounding?: number | null;
   otherWork: boolean;
 }): TurnoverScopeValue[] {
   const values: TurnoverScopeValue[] = [];
@@ -53,6 +55,7 @@ export function contractedTurnoverScope(flags: {
   if (flags.carpetCleaning) values.push("CARPET");
   if (flags.ceilingPaint) values.push("CEILING_PAINT");
   if (flags.materialsAdditional) values.push("MATERIALS");
+  if (flags.compounding) values.push("COMPOUNDING");
   if (flags.otherWork) values.push("OTHER");
   return values;
 }

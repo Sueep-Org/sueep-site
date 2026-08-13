@@ -265,6 +265,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
           carpetCleaning: true,
           ceilingPaint: true,
           materialsAdditional: true,
+          compounding: true,
           otherWork: true,
         },
       });

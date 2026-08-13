@@ -241,6 +241,10 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
       carpetCleaning: form.carpetCleaning,
       materialsAdditional: false,
       ceilingPaint: false,
+      // Not offered as an option on this public form yet, same tier as
+      // ceilingPaint above — only settable internally via the ERP's Layout
+      // tab (UnitScopeEditor) once the request comes in.
+      compounding: 0,
     });
     const otherCents = form.otherWork ? dollarsToCents(form.otherPrice) : 0;
     const totalPriceCents = pricing.priceCents + otherCents;

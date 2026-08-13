@@ -240,6 +240,7 @@ export function ProjectLaborSection({
     carpetCleaning: boolean;
     materialsAdditional: boolean;
     ceilingPaint: boolean;
+    compounding: number | null;
     otherWork: boolean;
     otherDescription: string | null;
   } | null;
@@ -714,6 +715,7 @@ export function ProjectLaborSection({
           carpetCleaning={unitScope.carpetCleaning}
           materialsAdditional={unitScope.materialsAdditional}
           ceilingPaint={unitScope.ceilingPaint}
+          compounding={unitScope.compounding}
           otherWork={unitScope.otherWork}
           otherDescription={unitScope.otherDescription}
           contractValueCents={contractValueCents}

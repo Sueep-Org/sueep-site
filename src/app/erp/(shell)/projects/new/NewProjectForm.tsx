@@ -81,6 +81,7 @@ type UnitScope = {
   materialsAdditional: boolean;
   fullClean: boolean;
   carpetCleaning: boolean;
+  compounding: boolean;
   otherWork: boolean;
   otherDescription: string;
   otherPrice: string;
@@ -111,6 +112,7 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     materialsAdditional: false,
     fullClean: false,
     carpetCleaning: false,
+    compounding: false,
     otherWork: false,
     otherDescription: "",
     otherPrice: "",
@@ -185,6 +187,7 @@ function unitScopeSummary(unit: UnitScope) {
     unit.lightWallTouchUps ? "light wall touch-ups" : null,
     unit.materialsAdditional ? "additional materials" : null,
     unit.carpetCleaning ? "carpet cleaning" : null,
+    unit.compounding ? "compounding" : null,
     unit.otherWork ? `other: ${unit.otherDescription.trim() || "unspecified"}` : null,
   ].filter(Boolean);
 
@@ -944,7 +947,7 @@ export function NewProjectForm({
       if (unit.recurringContractUnit) {
         lines.push("covered by recurring contract — no charge");
       } else {
-        const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning;
+        const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning || unit.compounding;
         if (hasPricedService) {
           const unitPricing = computeTurnoverPricing({
             requestType: "TURNOVER",
@@ -961,6 +964,7 @@ export function NewProjectForm({
             carpetCleaning: unit.carpetCleaning,
             materialsAdditional: unit.materialsAdditional,
             ceilingPaint: false,
+            compounding: unit.compounding ? 1 : 0,
           });
           lines.push(...unitPricing.breakdown);
           unitTotal += unitPricing.priceCents;
@@ -1774,6 +1778,7 @@ export function NewProjectForm({
                       { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
                       { key: "materialsAdditional", text: "Additional materials" },
                       { key: "carpetCleaning", text: "Carpet cleaning" },
+                      { key: "compounding", text: "Compounding" },
                       { key: "otherWork", text: "Other" },
                     ].map(({ key, text, disabled }) => (
                       <label key={key} className={`flex min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>

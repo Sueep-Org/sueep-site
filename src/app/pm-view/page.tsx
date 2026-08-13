@@ -72,6 +72,7 @@ export default async function PmViewPage({ searchParams }: PageProps) {
           carpetCleaning: true,
           materialsAdditional: true,
           ceilingPaint: true,
+          compounding: true,
           bedrooms: true,
           bathrooms: true,
           unitNumber: true,
@@ -148,6 +149,7 @@ export default async function PmViewPage({ searchParams }: PageProps) {
                 tr.carpetCleaning ? "Carpet cleaning" : null,
                 tr.materialsAdditional ? "Additional materials" : null,
                 tr.ceilingPaint ? "Ceiling painting" : null,
+                tr.compounding ? "Compounding" : null,
               ].filter((s): s is string => Boolean(s)) : [];
 
               const lifecycle = deriveProjectLifecycle(
