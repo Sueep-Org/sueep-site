@@ -73,6 +73,11 @@ export default async function CandidateDetailPage({ params }: PageProps) {
     cleaningExperienceYears = responses.experienceYears;
   }
   const hasVehicle = responses.hasVehicle;
+  // Only asked of Supervisor applicants (they oversee both cleaning and
+  // painting crews), so these are undefined for Cleaner/Painter rows.
+  const supervisingYears = responses.supervisingYears;
+  const speaksEnglish = responses.speaksEnglish;
+  const speaksSpanish = responses.speaksSpanish;
   const isSubcontractor = responses[SUBCONTRACTOR_GATE_FIELD] === "Yes";
 
   function formatExperience(exp: string | undefined, years: string | undefined): string {
@@ -81,6 +86,10 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       : exp === "no"
       ? "No"
       : "—";
+  }
+
+  function formatYesNo(val: string | undefined): string {
+    return val === "yes" ? "Yes" : val === "no" ? "No" : "—";
   }
 
   return (
@@ -193,6 +202,28 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                   <div>
                     <dt className="text-pink-500">Experience</dt>
                     <dd className="mt-0.5 text-zinc-500">—</dd>
+                  </div>
+                )}
+                {supervisingYears !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Supervising experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {supervisingYears
+                        ? `${supervisingYears} yr${Number(supervisingYears) !== 1 ? "s" : ""}`
+                        : "—"}
+                    </dd>
+                  </div>
+                )}
+                {speaksEnglish !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Speaks English</dt>
+                    <dd className="mt-0.5 text-zinc-500">{formatYesNo(speaksEnglish)}</dd>
+                  </div>
+                )}
+                {speaksSpanish !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Speaks Spanish</dt>
+                    <dd className="mt-0.5 text-zinc-500">{formatYesNo(speaksSpanish)}</dd>
                   </div>
                 )}
                 <div className="sm:col-span-2">

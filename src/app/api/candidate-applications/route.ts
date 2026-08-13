@@ -15,26 +15,38 @@ const KNOWN_BODY_KEYS = new Set([
   "cleaningYears",
   "paintingExperience",
   "paintingYears",
+  "supervisingYears",
+  "speaksEnglish",
+  "speaksSpanish",
   "hasVehicle",
   "additionalNotes",
   "_honey",
 ]);
 
-function normalizeRoles(raw: string[]): { cleaner: boolean; painter: boolean } {
+type Roles = { cleaner: boolean; painter: boolean; supervisor: boolean };
+
+function normalizeRoles(raw: string[]): Roles {
   const lower = raw.map((r) => r.trim().toLowerCase());
-  return { cleaner: lower.includes("cleaner"), painter: lower.includes("painter") };
+  return {
+    cleaner: lower.includes("cleaner"),
+    painter: lower.includes("painter"),
+    supervisor: lower.includes("supervisor"),
+  };
 }
 
-function positionInterestFromRoles(roles: { cleaner: boolean; painter: boolean }): string {
-  if (roles.cleaner && roles.painter) return "Cleaner, Painter";
-  if (roles.painter) return "Painter";
-  return "Cleaner";
+function positionInterestFromRoles(roles: Roles): string {
+  const parts: string[] = [];
+  if (roles.cleaner) parts.push("Cleaner");
+  if (roles.painter) parts.push("Painter");
+  if (roles.supervisor) parts.push("Supervisor");
+  return parts.length > 0 ? parts.join(", ") : "Cleaner";
 }
 
-function rolesParam(roles: { cleaner: boolean; painter: boolean }): string {
+function rolesParam(roles: Roles): string {
   const list: string[] = [];
   if (roles.cleaner) list.push("cleaner");
   if (roles.painter) list.push("painter");
+  if (roles.supervisor) list.push("supervisor");
   return list.join(",");
 }
 
@@ -58,6 +70,9 @@ export async function POST(req: NextRequest) {
     let cleaningYears = "";
     let paintingExperience = "";
     let paintingYears = "";
+    let supervisingYears = "";
+    let speaksEnglish = "";
+    let speaksSpanish = "";
     let hasVehicle = "";
     let additionalNotes = "";
     let honey = "";
@@ -74,6 +89,9 @@ export async function POST(req: NextRequest) {
       cleaningYears = String(body.cleaningYears || "").trim();
       paintingExperience = String(body.paintingExperience || "").trim();
       paintingYears = String(body.paintingYears || "").trim();
+      supervisingYears = String(body.supervisingYears || "").trim();
+      speaksEnglish = String(body.speaksEnglish || "").trim();
+      speaksSpanish = String(body.speaksSpanish || "").trim();
       hasVehicle = String(body.hasVehicle || "").trim();
       additionalNotes = String(body.additionalNotes || "").trim();
       honey = String(body._honey || "");
@@ -93,6 +111,9 @@ export async function POST(req: NextRequest) {
       cleaningYears = String(form.get("cleaningYears") || "").trim();
       paintingExperience = String(form.get("paintingExperience") || "").trim();
       paintingYears = String(form.get("paintingYears") || "").trim();
+      supervisingYears = String(form.get("supervisingYears") || "").trim();
+      speaksEnglish = String(form.get("speaksEnglish") || "").trim();
+      speaksSpanish = String(form.get("speaksSpanish") || "").trim();
       hasVehicle = String(form.get("hasVehicle") || "").trim();
       additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
@@ -123,7 +144,10 @@ export async function POST(req: NextRequest) {
     const rolesQs = rolesParam(roles);
 
     const isValid =
-      fullName && email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && (roles.cleaner || roles.painter);
+      fullName &&
+      email &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
+      (roles.cleaner || roles.painter || roles.supervisor);
 
     if (!isValid) {
       if (isFormPost) {
@@ -167,6 +191,9 @@ export async function POST(req: NextRequest) {
       ...(cleaningYears ? { cleaningYears } : {}),
       ...(paintingExperience ? { paintingExperience } : {}),
       ...(paintingYears ? { paintingYears } : {}),
+      ...(supervisingYears ? { supervisingYears } : {}),
+      ...(speaksEnglish ? { speaksEnglish } : {}),
+      ...(speaksSpanish ? { speaksSpanish } : {}),
       ...(hasVehicle ? { hasVehicle } : {}),
       ...extraResponses,
     };

@@ -31,14 +31,18 @@ export default async function CareersPage({
   // validation-error redirect (to restore exact checkbox state) and the
   // success redirect (to reflect what was actually submitted, for pixel
   // Lead-tracking). When present it overrides the singular default below.
-  const role = sp.role === "painter" ? "painter" : "cleaner";
+  const role = sp.role === "painter" ? "painter" : sp.role === "supervisor" ? "supervisor" : "cleaner";
   const isPainter = role === "painter";
-  const roleWord = isPainter ? "painting" : "cleaning";
+  const isSupervisor = role === "supervisor";
+  const roleWord = isPainter ? "painting" : isSupervisor ? "supervisor" : "cleaning";
 
   const rolesList = sp.roles ? sp.roles.split(",").map((r) => r.trim().toLowerCase()) : null;
-  const defaultCleaner = rolesList ? rolesList.includes("cleaner") : !isPainter;
+  const defaultCleaner = rolesList ? rolesList.includes("cleaner") : role === "cleaner";
   const defaultPainter = rolesList ? rolesList.includes("painter") : isPainter;
-  const submittedRoles = showSuccess ? { cleaner: defaultCleaner, painter: defaultPainter } : undefined;
+  const defaultSupervisor = rolesList ? rolesList.includes("supervisor") : isSupervisor;
+  const submittedRoles = showSuccess
+    ? { cleaner: defaultCleaner, painter: defaultPainter, supervisor: defaultSupervisor }
+    : undefined;
 
   const inputClass =
     "w-full rounded-lg border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/40 focus:border-[#E73C6E]";
@@ -100,14 +104,17 @@ export default async function CareersPage({
           </h1>
           <p className="mt-4 text-gray-600 text-base md:text-lg leading-relaxed">
             Submit this short application so we have your contact details and interests on file. If we move forward with
-            you, our hiring team will email you. Please note this application is for {roleWord} and janitorial positions.
+            you, our hiring team will email you.{" "}
+            {isSupervisor
+              ? "Please note this application is for supervisor positions overseeing our cleaning and painting crews."
+              : `Please note this application is for ${roleWord} and janitorial positions.`}
           </p>
           <div className="mt-8 flex flex-col items-center gap-4">
             <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
               <a
                 href="/careers?role=cleaner#apply"
                 className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-                  !isPainter ? "bg-[#E73C6E] text-white" : "text-gray-600 hover:text-gray-900"
+                  role === "cleaner" ? "bg-[#E73C6E] text-white" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 Cleaner
@@ -119,6 +126,14 @@ export default async function CareersPage({
                 }`}
               >
                 Painter
+              </a>
+              <a
+                href="/careers?role=supervisor#apply"
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                  isSupervisor ? "bg-[#E73C6E] text-white" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Supervisor
               </a>
             </div>
             <a href="#apply" className={primaryCtaClass}>
@@ -195,7 +210,11 @@ export default async function CareersPage({
               />
             </div>
 
-            <RoleAndExperienceFields defaultCleaner={defaultCleaner} defaultPainter={defaultPainter} />
+            <RoleAndExperienceFields
+              defaultCleaner={defaultCleaner}
+              defaultPainter={defaultPainter}
+              defaultSupervisor={defaultSupervisor}
+            />
 
             <div>
               <label className={labelClass}>

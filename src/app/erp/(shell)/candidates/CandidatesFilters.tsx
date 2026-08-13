@@ -4,7 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
 
 const STATUSES = ["APPLIED", "INTERVIEWING", "ONBOARDING", "DENIED"];
-const POSITIONS = ["Cleaner", "Painter"];
+const POSITIONS = ["Cleaner", "Painter", "Supervisor"];
 
 export function CandidatesFilters({
   search,

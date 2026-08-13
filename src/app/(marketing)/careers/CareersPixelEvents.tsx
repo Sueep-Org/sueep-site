@@ -26,11 +26,11 @@ export function CareersPixelEvents({
   submittedRoles,
 }: {
   submitted: boolean;
-  role: "cleaner" | "painter";
+  role: "cleaner" | "painter" | "supervisor";
   /** Which role(s) were actually checked on a successful submission — may
    * differ from `role` (the landing/page-view role) now that applicants can
-   * select both. Only meaningful when `submitted` is true. */
-  submittedRoles?: { cleaner: boolean; painter: boolean };
+   * select more than one. Only meaningful when `submitted` is true. */
+  submittedRoles?: { cleaner: boolean; painter: boolean; supervisor: boolean };
 }) {
   const isPainter = role === "painter";
 
@@ -61,12 +61,11 @@ export function CareersPixelEvents({
   useEffect(() => {
     if (!submitted || !window.fbq || !submittedRoles) return;
 
-    // Both can fire now that an applicant may check both Cleaner and
-    // Painter — no longer mutually exclusive like the page-view effect
-    // above. `init` is called again here (not just relying on the
-    // page-view effect above) since a visitor who landed on the
-    // generic/cleaner URL but then also checked Painter would never
-    // otherwise have inited that pixel.
+    // Both can fire now that an applicant may check more than one box —
+    // no longer mutually exclusive like the page-view effect above. `init`
+    // is called again here (not just relying on the page-view effect above)
+    // since a visitor who landed on the generic/cleaner URL but then also
+    // checked Painter would never otherwise have inited that pixel.
     if (submittedRoles.painter) {
       window.fbq("init", PAINTER_PIXEL_ID);
       window.fbq("trackSingle", PAINTER_PIXEL_ID, "Lead", {
@@ -74,7 +73,9 @@ export function CareersPixelEvents({
         content_category: "Careers",
       });
     }
-    if (submittedRoles.cleaner) {
+    // Supervisor has no dedicated ad pixel yet, so it's folded into the
+    // sitewide Lead alongside Cleaner.
+    if (submittedRoles.cleaner || submittedRoles.supervisor) {
       window.fbq("trackSingle", SITEWIDE_PIXEL_ID, "Lead", {
         content_name: "Job Application",
         content_category: "Careers",
