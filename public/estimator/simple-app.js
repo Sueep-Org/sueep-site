@@ -4080,16 +4080,28 @@ async function initApp(){
   function _updatePaintingMaterialsCostDisplays() {
     const costs = _calculatePaintingMaterialsCost();
     const setText = (id, value) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = typeof value === 'number' ? `$${value.toFixed(2)}` : value;
+      const matches = document.querySelectorAll(`#${CSS.escape(id)}`);
+      matches.forEach(el => {
+        el.textContent = typeof value === 'number' ? `$${value.toFixed(2)}` : value;
+      });
     };
-    document.getElementById('paintingPaintGallonsDisplay').textContent = costs.paintGallons || '0';
-    document.getElementById('paintingPrimerGallonsDisplay').textContent = costs.primerGallons || '0';
+    const setNumericText = (id, value) => {
+      const matches = document.querySelectorAll(`#${CSS.escape(id)}`);
+      matches.forEach(el => {
+        el.textContent = value ?? '0';
+      });
+    };
+
+    setNumericText('paintingPaintGallonsDisplay', costs.paintGallons || '0');
+    setNumericText('paintingPrimerGallonsDisplay', costs.primerGallons || '0');
+    setNumericText('paintingPaintGallonsDetailDisplay', costs.paintGallons || '0');
+    setNumericText('paintingPrimerGallonsDetailDisplay', costs.primerGallons || '0');
     setText('paintingPaintCostDisplay', costs.paintCost);
     setText('paintingPrimerCostDisplay', costs.primerCost);
+    setText('paintingPaintCostDetailDisplay', costs.paintCost);
+    setText('paintingPrimerCostDetailDisplay', costs.primerCost);
     setText('paintingConsumablesCostDisplay', costs.consumablesCost || 0);
-    document.getElementById('paintingTotalMaterialsCostDisplay').textContent = `$${costs.totalCost.toFixed(2)}`;
+    setNumericText('paintingTotalMaterialsCostDisplay', `$${costs.totalCost.toFixed(2)}`);
 
     const materialsInput = document.getElementById('paintingMaterialsInput');
     if (materialsInput && !_paintingMaterialsManual) {
@@ -5156,6 +5168,151 @@ async function initApp(){
 
     const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
 
+    const appendMaterialSubsection = (section, phaseIndex) => {
+      const isPrimer = phaseIndex === 0;
+      const title = isPrimer ? 'Primer Materials' : 'Paint Materials';
+      const gallonsId = isPrimer ? 'paintingPrimerGallonsDisplay' : 'paintingPaintGallonsDisplay';
+      const costId = isPrimer ? 'paintingPrimerCostDisplay' : 'paintingPaintCostDisplay';
+      const detailMarkup = isPrimer ? `
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Primer Required</label>
+            <select id="paintingPrimerRequiredSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Primer Type</label>
+            <select id="paintingPrimerTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="none">None</option>
+              <option value="standard_commercial">Standard Commercial: $30/gal</option>
+              <option value="commercial_acrylic">Commercial Acrylic: $40/gal</option>
+              <option value="high_build">High-Build: $50/gal</option>
+              <option value="stain_blocking">Stain-Blocking: $55/gal</option>
+              <option value="metal_corrosion">Metal/Corrosion: $60/gal</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Primer Coats</label>
+            <select id="paintingPrimerCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="1">1 coat</option>
+              <option value="2">2 coats</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Primer Application</label>
+            <select id="paintingPrimerApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="roller">Roller</option>
+              <option value="brush">Brush</option>
+              <option value="airless">Airless Spray</option>
+            </select>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Primer Gallons</div>
+            <div id="paintingPrimerGallonsDetailDisplay" class="text-gray-900 font-semibold">—</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Primer Cost</div>
+            <div id="paintingPrimerCostDetailDisplay" class="text-gray-900 font-semibold">—</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 xl:col-span-2">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Consumables & PPE Cost</div>
+            <div id="paintingConsumablesCostDisplay" class="text-gray-900 font-semibold">—</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-blue-50 p-3 xl:col-span-2">
+            <div class="text-xs text-blue-700 uppercase tracking-wide mb-1">Total Materials Cost</div>
+            <div id="paintingTotalMaterialsCostDisplay" class="text-blue-900 font-semibold text-lg">—</div>
+          </div>
+        </div>` : `
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Coats</label>
+            <select id="paintingCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="1">1 coat</option>
+              <option value="2">2 coats</option>
+              <option value="3">3 coats</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Application Method</label>
+            <select id="paintingApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="roller">Roller</option>
+              <option value="brush">Brush</option>
+              <option value="airless">Airless Spray</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Paint Quality</label>
+            <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="economy">Economy: $32/gal</option>
+              <option value="standard">Standard: $45/gal</option>
+              <option value="premium">Premium: $60/gal</option>
+              <option value="ultra">Ultra Premium: $75/gal</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Surface Condition</label>
+            <select id="paintingSurfaceConditionSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="smooth">Smooth</option>
+              <option value="normal">Normal</option>
+              <option value="rough">Rough</option>
+              <option value="very_rough">Very Rough</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Finish Type</label>
+            <select id="paintingFinishTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="flat">Flat</option>
+              <option value="matte">Matte</option>
+              <option value="eggshell">Eggshell</option>
+              <option value="satin">Satin</option>
+              <option value="semi_gloss">Semi-Gloss</option>
+              <option value="gloss">Gloss</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Color Depth</label>
+            <select id="paintingColorDepthSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <option value="white_light">White / Light</option>
+              <option value="medium">Medium</option>
+              <option value="dark">Dark</option>
+              <option value="very_dark">Very Dark / Accent</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-4 text-sm">
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Paint Gallons</div>
+            <div id="paintingPaintGallonsDetailDisplay" class="text-gray-900 font-semibold">—</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Paint Cost</div>
+            <div id="paintingPaintCostDetailDisplay" class="text-gray-900 font-semibold">—</div>
+          </div>
+        </div>`;
+
+      const details = document.createElement('details');
+      details.style.cssText = 'margin:8px 12px 12px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;';
+      details.innerHTML = `
+        <summary style="list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:#f9fafb;cursor:pointer;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#374151;">
+          <span>${title}</span>
+          <div style="display:flex;align-items:center;gap:8px;font-size:10px;color:#4b5563;font-weight:500;">
+            <span style="display:inline-flex;align-items:center;gap:4px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:2px 6px;">
+              Gallons: <span id="${gallonsId}" style="color:#111827;font-weight:700;">—</span>
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:2px 6px;">
+              Cost: <span id="${costId}" style="color:#111827;font-weight:700;">—</span>
+            </span>
+          </div>
+        </summary>
+        <div style="border-top:1px solid #e5e7eb;padding:12px;">
+          ${detailMarkup}
+        </div>
+      `;
+      section.appendChild(details);
+    };
+
     if (_paintingPhasesLocked) {
       const bar = document.createElement('div');
       bar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
@@ -5193,6 +5350,7 @@ async function initApp(){
         summary.style.cssText = 'font-size:12px;color:#6b7280;';
         header.appendChild(nameEl); header.appendChild(summary);
         section.appendChild(header);
+        appendMaterialSubsection(section, i);
         container.appendChild(section);
       });
       _updatePaintingCrewCalcs();
