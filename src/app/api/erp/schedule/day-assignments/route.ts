@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSeriesInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function extractEmailAddress(raw: string | undefined): string {
-  if (!raw) return "noreply@sueep.com";
-  const match = raw.match(/<([^>]+)>/);
-  return match ? match[1]! : raw.trim();
-}
 
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -143,9 +136,17 @@ export async function POST(req: Request) {
   if (supervisorUserId && !supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
   if (projectManagerUserId && !projectManager) return NextResponse.json({ error: "PM not found" }, { status: 404 });
 
+  // Also doubles as the source for the SOV item descriptions used in the
+  // invite's "Scope:" line below, so this fetches the full rows rather than
+  // just a count.
+  let sovDescriptions: string[] = [];
   if (sovItemIds.length > 0) {
-    const found = await prisma.projectSOVItem.count({ where: { id: { in: sovItemIds }, sov: { projectId } } });
-    if (found !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    const found = await prisma.projectSOVItem.findMany({
+      where: { id: { in: sovItemIds }, sov: { projectId } },
+      select: { description: true },
+    });
+    if (found.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    sovDescriptions = found.map((s) => s.description);
   }
   if (changeOrderIds.length > 0) {
     const found = await prisma.projectChangeOrder.count({ where: { id: { in: changeOrderIds }, projectId } });
@@ -168,6 +169,11 @@ export async function POST(req: Request) {
   // Building.address has far broader coverage than the work-order siteAddress
   // (most projects are linked to a Building), so prefer it and fall back.
   const location = project.building?.address || project.workOrderRecord?.siteAddress || undefined;
+  // What this day's work actually is, shown as visible text (not just
+  // buried in the .ics) on both the supervisor's invite and every crew
+  // member's — see notifyProjectCrew for how a worker's own SOV/scope
+  // split overrides this when they're individually tagged.
+  const dayScopeText = scopeText(sovDescriptions, scopeItems.map(turnoverScopeLabel));
 
   // Turnovers only, for now. The crew-hours budget assumes the turnover
   // pricing model (contractValueCents ~= 2x target labor cost). Non-turnover
@@ -181,7 +187,7 @@ export async function POST(req: Request) {
     return formatTurnoverHoursBudgetText(project!.contractValueCents, scheduledCrewSize);
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+  const url = appUrl() ? `${appUrl()}/erp/projects/${projectId}` : undefined;
 
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
@@ -217,39 +223,38 @@ export async function POST(req: Request) {
 
     // No calendar invite for a PM-only series, see the field comment above.
     if (supervisorUserId && supervisor) {
-      try {
-        const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
-        const descriptionLines = [
-          `Project: ${project.jobTitle}`,
-          ...(hoursBudgetText ? ["", hoursBudgetText] : []),
-          ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
-        ];
-        const ics = buildScheduleSeriesInvite({
-          uid: `day-assignment-series-${series.id}@sueep.com`,
-          firstDateKey: dayKey(seriesDates[0]!),
-          lastDateKey: dayKey(repeatUntil),
-          repeatDays,
-          startTime,
-          endTime,
-          summary: `Supervising: ${project.jobTitle}`,
-          description: descriptionLines.join("\n"),
-          location,
-          url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
-          organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-          organizerName: "Sueep Schedule",
-          attendeeEmail: supervisor.email,
-        });
-        const budgetHtml = hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : "";
-        await sendEmail({
-          to: supervisor.email,
-          subject: `You're assigned: ${project.jobTitle}, ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}`,
-          html: `<p>You've been assigned to <strong>${project.jobTitle}</strong>, repeating from ${dayKey(seriesDates[0]!)} through ${dayKey(repeatUntil)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
-          attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-        });
-      } catch (e) {
-        console.error("Failed to send schedule-series calendar invite", e);
-      }
+      const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
+      await sendSeriesInvite({
+        uid: `day-assignment-series-${series.id}@sueep.com`,
+        to: supervisor.email,
+        role: "Supervising",
+        title: project.jobTitle,
+        firstDateKey: dayKey(seriesDates[0]!),
+        lastDateKey: dayKey(repeatUntil),
+        repeatDays,
+        startTime,
+        endTime,
+        location,
+        scopeText: dayScopeText,
+        url,
+        extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
+      });
     }
+
+    // Refreshes the invite for every crew member already on one of these
+    // days — their own time/scope may have just changed even though their
+    // ProjectWorkerDayAssignment row wasn't touched by this request.
+    await notifyProjectCrew({
+      projectId,
+      dates: seriesDates,
+      projectTitle: project.jobTitle,
+      location,
+      startTime,
+      endTime,
+      daySovDescriptions: sovDescriptions,
+      dayScopeLabels: scopeItems.map(turnoverScopeLabel),
+      url,
+    });
 
     return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
   }
@@ -276,43 +281,38 @@ export async function POST(req: Request) {
 
   // Send a calendar invite (.ics) for the assignment. Reuses the same UID on
   // every send for this assignment, so re-running this (e.g. reassigning the
-  // same project/day) updates the existing calendar event instead of adding
-  // a duplicate. Email delivery failures shouldn't block the assignment. No
-  // invite for a PM-only day, see the projectManagerUserId comment above.
+  // same project/day, or just editing its scope/time) updates the existing
+  // calendar event instead of adding a duplicate. No invite for a PM-only
+  // day, see the projectManagerUserId comment above.
   if (supervisorUserId && supervisor) {
-    try {
-      const hoursBudgetText = await hoursBudgetTextFor(date);
-      const descriptionLines = [
-        `Project: ${project.jobTitle}`,
-        ...(hoursBudgetText ? ["", hoursBudgetText] : []),
-        ...(appUrl ? ["", `${appUrl}/erp/projects/${projectId}`] : []),
-      ];
-      const ics = buildDayAssignmentInvite({
-        uid: `day-assignment-${assignment.id}@sueep.com`,
-        dateKey: dayKey(assignment.date),
-        startTime: assignment.startTime,
-        endTime: assignment.endTime,
-        summary: `Supervising: ${project.jobTitle}`,
-        description: descriptionLines.join("\n"),
-        location,
-        url: appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined,
-        organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-        organizerName: "Sueep Schedule",
-        attendeeEmail: supervisor.email,
-      });
-      const budgetHtml = hoursBudgetText
-        ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>`
-        : "";
-      await sendEmail({
-        to: supervisor.email,
-        subject: `You're assigned: ${project.jobTitle} on ${dayKey(assignment.date)}`,
-        html: `<p>You've been assigned to <strong>${project.jobTitle}</strong> on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>${budgetHtml}`,
-        attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-      });
-    } catch (e) {
-      console.error("Failed to send day-assignment calendar invite", e);
-    }
+    const hoursBudgetText = await hoursBudgetTextFor(date);
+    await sendDayInvite({
+      uid: `day-assignment-${assignment.id}@sueep.com`,
+      to: supervisor.email,
+      role: "Supervising",
+      title: project.jobTitle,
+      dateKey: dayKey(assignment.date),
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
+      location,
+      scopeText: dayScopeText,
+      url,
+      extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
+    });
   }
+
+  // Same refresh as the series branch above, just for this one day.
+  await notifyProjectCrew({
+    projectId,
+    dates: [date],
+    projectTitle: project.jobTitle,
+    location,
+    startTime: assignment.startTime,
+    endTime: assignment.endTime,
+    daySovDescriptions: sovDescriptions,
+    dayScopeLabels: scopeItems.map(turnoverScopeLabel),
+    url,
+  });
 
   return NextResponse.json(assignment, { status: 201 });
 }

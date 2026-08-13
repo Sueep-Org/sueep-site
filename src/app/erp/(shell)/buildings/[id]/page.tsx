@@ -51,6 +51,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
             carpetCleaning: true,
             materialsAdditional: true,
             ceilingPaint: true,
+            compounding: true,
             otherWork: true,
             otherDescription: true,
           },
@@ -80,6 +81,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       carpetCleaning: p.turnoverRequest!.carpetCleaning,
       materialsAdditional: p.turnoverRequest!.materialsAdditional,
       ceilingPaint: p.turnoverRequest!.ceilingPaint,
+      compounding: p.turnoverRequest!.compounding,
       otherWork: p.turnoverRequest!.otherWork,
       otherDescription: p.turnoverRequest!.otherDescription,
     }));

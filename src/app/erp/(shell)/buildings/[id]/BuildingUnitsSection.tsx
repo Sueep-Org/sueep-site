@@ -18,6 +18,7 @@ export type BuildingUnit = {
   carpetCleaning: boolean;
   materialsAdditional: boolean;
   ceilingPaint: boolean;
+  compounding: number | null;
   otherWork: boolean;
   otherDescription: string | null;
 };
@@ -53,6 +54,7 @@ export function BuildingUnitsSection({ buildingId, units, canAdd }: Props) {
                 carpetCleaning={unit.carpetCleaning}
                 materialsAdditional={unit.materialsAdditional}
                 ceilingPaint={unit.ceilingPaint}
+                compounding={unit.compounding}
                 otherWork={unit.otherWork}
                 otherDescription={unit.otherDescription}
                 contractValueCents={null}

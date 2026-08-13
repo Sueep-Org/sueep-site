@@ -7,6 +7,11 @@ export type TurnoverPricingPackage = {
   carpetCleaningLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   additionalMaterialsLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   ceilingPaintLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  /// Drywall/wall-repair compounding — same per-layout $ shape as the other
+  /// line items, but defaults to $0 everywhere (no historical rate to seed
+  /// it with, unlike e.g. touch-up paint's $125), see
+  /// getTurnoverCompoundingRate.
+  compoundingLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
   label: string;
 };
 
@@ -188,6 +193,7 @@ export function sanitizeTurnoverPricingPackage(
   const carpetCleaningLayoutRates = { ...fallback.carpetCleaningLayoutRates, ...readLayoutRates(raw.carpetCleaningLayoutRates) };
   const additionalMaterialsLayoutRates = { ...fallback.additionalMaterialsLayoutRates, ...readLayoutRates(raw.additionalMaterialsLayoutRates) };
   const ceilingPaintLayoutRates = { ...fallback.ceilingPaintLayoutRates, ...readLayoutRates(raw.ceilingPaintLayoutRates) };
+  const compoundingLayoutRates = { ...fallback.compoundingLayoutRates, ...readLayoutRates(raw.compoundingLayoutRates) };
 
   return {
     label: String(raw.label || fallback.label).trim() || fallback.label,
@@ -207,6 +213,7 @@ export function sanitizeTurnoverPricingPackage(
     carpetCleaningLayoutRates,
     additionalMaterialsLayoutRates,
     ceilingPaintLayoutRates,
+    compoundingLayoutRates,
   };
 }
 
@@ -320,6 +327,24 @@ export function getTurnoverCeilingPaintRate(
   return {
     layout,
     dollars: pricingPackage.ceilingPaintLayoutRates?.[layout] ?? (isCommonArea ? 0 : 75),
+  };
+}
+
+/** Unlike the other per-layout rates (which fall back to a historical flat
+ * rate when a building has no package saved yet), compounding has no
+ * historical price to seed from — it defaults to $0 until someone sets it
+ * on the building's pricing package. */
+export function getTurnoverCompoundingRate(
+  pricingPackage: TurnoverPricingPackage,
+  bedrooms?: number | null,
+  bathrooms?: number | null,
+  isCommonArea?: boolean,
+  layoutOverride?: TurnoverUnitLayout | null
+) {
+  const layout = getTurnoverUnitLayout(bedrooms, bathrooms, isCommonArea, layoutOverride);
+  return {
+    layout,
+    dollars: pricingPackage.compoundingLayoutRates?.[layout] ?? 0,
   };
 }
 

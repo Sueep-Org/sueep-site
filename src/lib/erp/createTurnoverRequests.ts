@@ -29,6 +29,7 @@ type UnitScopePayload = {
   fullClean?: unknown;
   carpetCleaning?: unknown;
   ceilingPaint?: unknown;
+  compounding?: unknown;
   otherWork?: unknown;
   otherDescription?: unknown;
   otherPrice?: unknown;
@@ -194,6 +195,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const carpetCleaning = Boolean(unit.carpetCleaning);
       const materialsAdditional = Boolean(unit.materialsAdditional);
       const ceilingPaint = Boolean(unit.ceilingPaint);
+      const compounding = Boolean(unit.compounding) ? 1 : 0;
       const otherWork = Boolean(unit.otherWork);
       const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
       const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
@@ -221,6 +223,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
               carpetCleaning,
               materialsAdditional,
               ceilingPaint,
+              compounding,
               isPartialTurn,
               partialTurnLayout,
             });
@@ -252,6 +255,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           carpetCleaning,
           materialsAdditional,
           ceilingPaint,
+          compounding,
           otherWork,
           otherDescription: otherDescription || null,
           otherCents: otherWork ? otherCents : null,

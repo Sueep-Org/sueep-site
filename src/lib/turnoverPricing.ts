@@ -5,6 +5,7 @@ import {
   getTurnoverCarpetCleaningRate,
   getTurnoverAdditionalMaterialsRate,
   getTurnoverCeilingPaintRate,
+  getTurnoverCompoundingRate,
   getTurnoverPricingPackage,
   type TurnoverUnitLayout,
 } from "@/lib/turnoverPricingPackages";
@@ -22,6 +23,9 @@ export type TurnoverPricingInput = {
   carpetCleaning: boolean;
   materialsAdditional: boolean;
   ceilingPaint: boolean;
+  /** Count of spots/walls needing drywall compounding, same shape as
+   * touchUpPaint above — 0 means not priced. */
+  compounding: number;
   /** Unit's real bedrooms/bathrooms above are unchanged; when set with
    * partialTurnLayout, every priced service uses that smaller layout's rate
    * instead (e.g. a 3/3 priced as a 2/2 because only 2 bed/baths are in
@@ -98,6 +102,15 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Ceiling painting");
     priceCents += ceilingPaintPrice;
     breakdown.push(`Ceiling painting${partialTurnSuffix}: ${formatUsd(ceilingPaintPrice)}`);
+  }
+
+  // Independent of fullPaint/touchUpPaint — drywall repair, not painting.
+  if (input.compounding > 0) {
+    const compoundingRate = getTurnoverCompoundingRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea, layoutOverride);
+    const compoundingPrice = input.compounding * compoundingRate.dollars * 100;
+    services.push(`${input.compounding} compounding item${input.compounding === 1 ? "" : "s"}`);
+    priceCents += compoundingPrice;
+    breakdown.push(`Compounding${partialTurnSuffix} (${input.compounding}x ${formatUsd(compoundingRate.dollars * 100)}): ${formatUsd(compoundingPrice)}`);
   }
 
   if (services.length === 0) {

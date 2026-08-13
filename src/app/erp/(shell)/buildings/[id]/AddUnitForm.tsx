@@ -48,6 +48,7 @@ export function AddUnitForm({ buildingId }: Props) {
   const [carpetCleaning, setCarpetCleaning] = useState(false);
   const [materialsAdditional, setMaterialsAdditional] = useState(false);
   const [ceilingPaint, setCeilingPaint] = useState(false);
+  const [compounding, setCompounding] = useState(false);
   const [otherWork, setOtherWork] = useState(false);
   const [otherDescription, setOtherDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -69,6 +70,7 @@ export function AddUnitForm({ buildingId }: Props) {
     setCarpetCleaning(false);
     setMaterialsAdditional(false);
     setCeilingPaint(false);
+    setCompounding(false);
     setOtherWork(false);
     setOtherDescription("");
     setStartDate("");
@@ -106,6 +108,7 @@ export function AddUnitForm({ buildingId }: Props) {
               carpetCleaning,
               materialsAdditional,
               ceilingPaint,
+              compounding,
               otherWork,
               otherDescription: otherWork ? otherDescription.trim() || null : null,
               startDate,
@@ -307,6 +310,10 @@ export function AddUnitForm({ buildingId }: Props) {
           <label className={checkboxRow}>
             <input type="checkbox" checked={ceilingPaint} onChange={(e) => setCeilingPaint(e.target.checked)} className={checkboxInput} />
             Ceiling paint
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={compounding} onChange={(e) => setCompounding(e.target.checked)} className={checkboxInput} />
+            Compounding
           </label>
           <label className={checkboxRow}>
             <input type="checkbox" checked={otherWork} onChange={(e) => setOtherWork(e.target.checked)} className={checkboxInput} />

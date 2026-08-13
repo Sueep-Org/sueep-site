@@ -1,14 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
-
-function extractEmailAddress(raw: string | undefined): string {
-  if (!raw) return "noreply@sueep.com";
-  const match = raw.match(/<([^>]+)>/);
-  return match ? match[1]! : raw.trim();
-}
+import { resolveWorkerContact, sendSeriesInvite, workerSeriesUid } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +18,10 @@ export async function DELETE(_req: Request, ctx: Ctx) {
           workOrderRecord: { select: { siteAddress: true } },
         },
       },
+      // Every crew row this series generated — read before the cascade
+      // delete below removes them, so each worker can get a cancellation
+      // for the same series-scoped invite they were originally sent.
+      workerAssignments: { select: { employeeId: true, contractorId: true } },
     },
   });
   if (!series) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -38,37 +35,54 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   await prisma.projectScheduleSeries.delete({ where: { id } });
 
   if (series.supervisorUserId) {
-    try {
-      const supervisor = await prisma.erpUser.findUnique({
-        where: { id: series.supervisorUserId },
-        select: { email: true },
+    const supervisor = await prisma.erpUser.findUnique({
+      where: { id: series.supervisorUserId },
+      select: { email: true },
+    });
+    if (supervisor) {
+      await sendSeriesInvite({
+        uid: `day-assignment-series-${id}@sueep.com`,
+        to: supervisor.email,
+        role: "Supervising",
+        title: series.project.jobTitle,
+        firstDateKey: dayKey(series.startDate),
+        lastDateKey: dayKey(series.endDate),
+        repeatDays: series.repeatDays,
+        startTime: series.startTime,
+        endTime: series.endTime,
+        location,
+        cancelled: true,
       });
-      if (supervisor) {
-        const ics = buildScheduleSeriesInvite({
-          uid: `day-assignment-series-${id}@sueep.com`,
-          firstDateKey: dayKey(series.startDate),
-          lastDateKey: dayKey(series.endDate),
-          repeatDays: series.repeatDays,
-          startTime: series.startTime,
-          endTime: series.endTime,
-          summary: `Supervising: ${series.project.jobTitle}`,
-          location,
-          organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-          organizerName: "Sueep Schedule",
-          attendeeEmail: supervisor.email,
-          cancelled: true,
-        });
-        await sendEmail({
-          to: supervisor.email,
-          subject: `Cancelled: ${series.project.jobTitle}, ${dayKey(series.startDate)} through ${dayKey(series.endDate)}`,
-          html: `<p>Your repeating assignment to <strong>${series.project.jobTitle}</strong> has been removed.</p>`,
-          attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-        });
-      }
-    } catch (e) {
-      console.error("Failed to send schedule-series cancellation invite", e);
     }
   }
+
+  // One cancellation per unique crew member the series had, not per row —
+  // they were only ever sent one combined series invite to begin with, see
+  // worker-assignments' POST route.
+  const uniqueWorkers = new Map<string, { employeeId: string | null; contractorId: string | null }>();
+  for (const w of series.workerAssignments) {
+    uniqueWorkers.set(w.employeeId ?? `c-${w.contractorId}`, w);
+  }
+  await Promise.all(
+    [...uniqueWorkers.values()].map(async (w) => {
+      const contact = await resolveWorkerContact(w.employeeId, w.contractorId);
+      if (!contact) return;
+      await sendSeriesInvite({
+        uid: workerSeriesUid(id, w.employeeId, w.contractorId),
+        to: contact.email,
+        attendeeName: contact.name,
+        role: "Working",
+        title: series.project.jobTitle,
+        firstDateKey: dayKey(series.startDate),
+        lastDateKey: dayKey(series.endDate),
+        repeatDays: series.repeatDays,
+        startTime: series.startTime,
+        endTime: series.endTime,
+        location,
+        cancelled: true,
+      });
+    })
+  );
 
   return NextResponse.json({ ok: true });
 }

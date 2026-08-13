@@ -26,6 +26,7 @@ type Props = {
   carpetCleaning: boolean;
   materialsAdditional: boolean;
   ceilingPaint: boolean;
+  compounding: number | null;
   otherWork: boolean;
   otherDescription: string | null;
   contractValueCents: number | null;
@@ -58,6 +59,7 @@ export function UnitScopeCard({
   carpetCleaning,
   materialsAdditional,
   ceilingPaint,
+  compounding,
   otherWork,
   otherDescription,
   contractValueCents,
@@ -70,6 +72,7 @@ export function UnitScopeCard({
     carpetCleaning ? { label: "Carpet Cleaning", scopeValue: "CARPET" as const } : null,
     materialsAdditional ? { label: "Materials", scopeValue: "MATERIALS" as const } : null,
     ceilingPaint ? { label: "Ceiling Painting", scopeValue: "CEILING_PAINT" as const } : null,
+    compounding ? { label: `Compounding (${compounding})`, scopeValue: "COMPOUNDING" as const } : null,
     otherWork ? { label: otherDescription?.trim() || "Other", scopeValue: "OTHER" as const } : null,
   ].filter((v): v is { label: string; scopeValue: TurnoverScopeValue } => v !== null);
 

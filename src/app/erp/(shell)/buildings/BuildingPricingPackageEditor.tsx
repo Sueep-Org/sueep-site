@@ -46,6 +46,9 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
   const [ceilingPaint, setCeilingPaint] = useState<Record<string, string>>(() =>
     Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.ceilingPaintLayoutRates?.[layout])]))
   );
+  const [compounding, setCompounding] = useState<Record<string, string>>(() =>
+    Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.compoundingLayoutRates?.[layout])]))
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -69,6 +72,9 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     const ceilingPaintLayoutRates = Object.fromEntries(
       TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(ceilingPaint[layout]) || 0))])
     );
+    const compoundingLayoutRates = Object.fromEntries(
+      TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(compounding[layout]) || 0))])
+    );
 
     return sanitizeTurnoverPricingPackage({
       label,
@@ -78,6 +84,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       carpetCleaningLayoutRates,
       additionalMaterialsLayoutRates,
       ceilingPaintLayoutRates,
+      compoundingLayoutRates,
     });
   }
 
@@ -128,7 +135,7 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       </label>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[820px] text-left text-sm">
+        <table className="w-full min-w-[940px] text-left text-sm">
           <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
             <tr>
               <th className="py-2 pr-3">Unit</th>
@@ -137,7 +144,8 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
               <th className="py-2 pr-3">Touch-up Paint</th>
               <th className="py-2 pr-3">Carpet Cleaning</th>
               <th className="py-2 pr-3">Add. Materials</th>
-              <th className="py-2">Ceiling Paint</th>
+              <th className="py-2 pr-3">Ceiling Paint</th>
+              <th className="py-2">Compounding</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -194,10 +202,20 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
                   />
                 </td>
-                <td className="py-2">
+                <td className="py-2 pr-3">
                   <input
                     value={ceilingPaint[layout]}
                     onChange={(event) => setCeilingPaint((current) => ({ ...current, [layout]: event.target.value }))}
+                    disabled={!canEdit || loading}
+                    type="number"
+                    min="0"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                  />
+                </td>
+                <td className="py-2">
+                  <input
+                    value={compounding[layout]}
+                    onChange={(event) => setCompounding((current) => ({ ...current, [layout]: event.target.value }))}
                     disabled={!canEdit || loading}
                     type="number"
                     min="0"

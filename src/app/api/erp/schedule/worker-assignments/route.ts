@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
-import { isTurnoverScopeValue } from "@/lib/erp/turnoverScope";
+import { isTurnoverScopeValue, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { appUrl, resolveWorkerContact, scopeText, sendDayInvite, sendSeriesInvite, workerSeriesUid } from "@/lib/erp/scheduleInvites";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
  * the right upsert shape (and compound-unique key) for whichever it is.
@@ -99,7 +101,15 @@ export async function POST(req: Request) {
   const auth = await getErpAuth();
 
   const [project, employee, contractor] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        jobTitle: true,
+        building: { select: { address: true } },
+        workOrderRecord: { select: { siteAddress: true } },
+      },
+    }),
     employeeId
       ? prisma.employee.findUnique({
           where: { id: employeeId },
@@ -114,9 +124,16 @@ export async function POST(req: Request) {
       : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  // Also doubles as the source for the assigned SOV item's description,
+  // used in the invite's "Scope:" line below.
+  let assignedSovDescription: string | null = null;
   if (assignedSovItemId) {
-    const sovItem = await prisma.projectSOVItem.count({ where: { id: assignedSovItemId, sov: { projectId } } });
+    const sovItem = await prisma.projectSOVItem.findFirst({
+      where: { id: assignedSovItemId, sov: { projectId } },
+      select: { description: true },
+    });
     if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    assignedSovDescription = sovItem.description;
   }
   const worker = employeeId ? employee : contractor;
   if (!worker) return NextResponse.json({ error: employeeId ? "Employee not found" : "Contractor not found" }, { status: 404 });
@@ -145,6 +162,12 @@ export async function POST(req: Request) {
 
   let seriesId: string | null = null;
   let seriesDates: Date[] | null = null;
+  // Only ever non-null via the seriesIdRaw branch below — a fresh series
+  // created straight from this route (the other two branches) never has a
+  // time set, this endpoint doesn't accept one, so the crew invite is
+  // all-day in that case, same as everywhere else time is optional.
+  let seriesStartTime: string | null = null;
+  let seriesEndTime: string | null = null;
 
   if (seriesIdRaw) {
     const series = await prisma.projectScheduleSeries.findUnique({ where: { id: seriesIdRaw } });
@@ -152,6 +175,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Series not found" }, { status: 404 });
     }
     seriesId = series.id;
+    seriesStartTime = series.startTime;
+    seriesEndTime = series.endTime;
     // The series' startDate/endDate/repeatDays no longer necessarily describe
     // a clean weekly pattern — an explicit (possibly non-consecutive) date
     // list collapses to the same shape (see day-assignments/route.ts), so
@@ -225,8 +250,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // No notification is sent here (unlike the supervisor day-assignment
-  // route, which emails a calendar invite) — may be added later.
+  const location = project.building?.address || project.workOrderRecord?.siteAddress || undefined;
+  const url = appUrl() ? `${appUrl()}/erp/projects/${projectId}` : undefined;
+  // The worker's own split wins; a day-level fallback (looked up per date
+  // below, single-day path only) covers everyone else.
+  const ownScope = assignedSovDescription ?? (assignedScopeItem ? turnoverScopeLabel(assignedScopeItem) : null);
+  const contact = await resolveWorkerContact(employeeId, contractorId);
+
   if (seriesDates && seriesId) {
     const assignments = await prisma.$transaction(
       seriesDates.map((d) =>
@@ -235,12 +265,59 @@ export async function POST(req: Request) {
         )
       )
     );
+
+    // One combined recurring invite covering the whole range, same as the
+    // supervisor's series invite — not one email per day.
+    if (contact) {
+      await sendSeriesInvite({
+        uid: workerSeriesUid(seriesId, employeeId, contractorId),
+        to: contact.email,
+        attendeeName: contact.name,
+        role: "Working",
+        title: project.jobTitle,
+        firstDateKey: dayKey(seriesDates[0]!),
+        lastDateKey: dayKey(seriesDates[seriesDates.length - 1]!),
+        repeatDays: [...new Set(seriesDates.map((d) => d.getUTCDay()))],
+        startTime: seriesStartTime,
+        endTime: seriesEndTime,
+        location,
+        scopeText: ownScope,
+        url,
+      });
+    }
+
     return NextResponse.json({ seriesId, assignments }, { status: 201 });
   }
 
   const assignment = await prisma.projectWorkerDayAssignment.upsert(
     workerUpsertArgs(projectId, date, employeeId, contractorId, null, assignedSovItemId, assignedScopeItem)
   );
+
+  if (contact) {
+    // Day-level scope/time, for when this worker isn't individually split
+    // onto their own SOV item / turnover scope — same source the
+    // day-assignment modal's "Task details" section reads from.
+    const dayAssignment = await prisma.projectDayAssignment.findUnique({
+      where: { projectId_date: { projectId, date } },
+      select: { startTime: true, endTime: true, scopeItems: true, sovItems: { select: { description: true } } },
+    });
+    const dayScope = dayAssignment
+      ? scopeText(dayAssignment.sovItems.map((s) => s.description), dayAssignment.scopeItems.map(turnoverScopeLabel))
+      : null;
+    await sendDayInvite({
+      uid: `worker-assignment-${assignment.id}@sueep.com`,
+      to: contact.email,
+      attendeeName: contact.name,
+      role: "Working",
+      title: project.jobTitle,
+      dateKey: dayKey(assignment.date),
+      startTime: dayAssignment?.startTime ?? null,
+      endTime: dayAssignment?.endTime ?? null,
+      location,
+      scopeText: ownScope ?? dayScope,
+      url,
+    });
+  }
 
   return NextResponse.json(assignment, { status: 201 });
 }

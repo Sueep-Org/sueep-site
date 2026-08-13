@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
+import { appUrl, notifyChangeOrderCrew, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 // Change orders in these statuses never happened (or won't) — same list the
 // schedule page itself uses to keep them off the calendar entirely.
 const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
-
-function extractEmailAddress(raw: string | undefined): string {
-  if (!raw) return "noreply@sueep.com";
-  const match = raw.match(/<([^>]+)>/);
-  return match ? match[1]! : raw.trim();
-}
 
 // Plans (or updates) a supervisor/PM/time/comment for a change order on one
 // specific day — same idea as /api/erp/schedule/day-assignments but scoped
@@ -103,42 +96,38 @@ export async function POST(req: Request) {
       )[0]
     : await writeAssignment;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+  const title = `${changeOrder.title} (${changeOrder.project.jobTitle})`;
+  const url = appUrl() ? `${appUrl()}/erp/projects/${changeOrder.projectId}/change-orders/${changeOrderId}` : undefined;
 
   // Send a calendar invite (.ics) for the assignment, same UID-reuse
-  // behavior as the project route so a reassign updates rather than
-  // duplicates the calendar event. Email failures shouldn't block the
-  // assignment. No invite for a PM-only day, see projectManagerUserId above.
+  // behavior as the project route so a reassign (or just an edited time)
+  // updates rather than duplicates the calendar event. No invite for a
+  // PM-only day, see projectManagerUserId above.
   if (supervisorUserId && supervisor) {
-    try {
-      const descriptionLines = [
-        `Change order: ${changeOrder.title}`,
-        `Project: ${changeOrder.project.jobTitle}`,
-        ...(appUrl ? ["", `${appUrl}/erp/projects/${changeOrder.projectId}/change-orders/${changeOrderId}`] : []),
-      ];
-      const ics = buildDayAssignmentInvite({
-        uid: `co-day-assignment-${assignment.id}@sueep.com`,
-        dateKey: dayKey(assignment.date),
-        startTime: assignment.startTime,
-        endTime: assignment.endTime,
-        summary: `Supervising: ${changeOrder.title} (${changeOrder.project.jobTitle})`,
-        description: descriptionLines.join("\n"),
-        location,
-        url: appUrl ? `${appUrl}/erp/projects/${changeOrder.projectId}/change-orders/${changeOrderId}` : undefined,
-        organizerEmail: extractEmailAddress(process.env.RESEND_FROM),
-        organizerName: "Sueep Schedule",
-        attendeeEmail: supervisor.email,
-      });
-      await sendEmail({
-        to: supervisor.email,
-        subject: `You're assigned: ${changeOrder.title} on ${dayKey(assignment.date)}`,
-        html: `<p>You've been assigned to <strong>${changeOrder.title}</strong> (${changeOrder.project.jobTitle}) on ${dayKey(assignment.date)}. Add the attached invite to your calendar.</p>`,
-        attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-      });
-    } catch (e) {
-      console.error("Failed to send CO day-assignment calendar invite", e);
-    }
+    await sendDayInvite({
+      uid: `co-day-assignment-${assignment.id}@sueep.com`,
+      to: supervisor.email,
+      role: "Supervising",
+      title,
+      dateKey: dayKey(assignment.date),
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
+      location,
+      url,
+    });
   }
+
+  // Refreshes every crew member already planned on this CO/day too — their
+  // time may have just changed even though their own row wasn't touched.
+  await notifyChangeOrderCrew({
+    changeOrderId,
+    dates: [date],
+    title,
+    location,
+    startTime: assignment.startTime,
+    endTime: assignment.endTime,
+    url,
+  });
 
   return NextResponse.json(assignment, { status: 201 });
 }
