@@ -3931,6 +3931,7 @@ async function initApp(){
   };
   const PAINTING_SURFACE_MULTIPLIERS = {
     smooth: 1.00,
+    normal: 1.05,
     good: 1.05,
     average: 1.05,
     rough: 1.15,
