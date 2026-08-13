@@ -413,6 +413,7 @@ async function initApp(){
   }
   let _sovStateProjectId = null;
   let _activeExtractedMeasurementQuery = '';
+  let _showExtractedMeasurements = false;
   let _extractedMeasurementHighlightCanvas = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
@@ -1511,73 +1512,97 @@ async function initApp(){
     restoreWallMeasurementSectionValues();
 
     const rows = Array.isArray(meta?.extractedMeasurements) ? meta.extractedMeasurements : [];
+    const toggleButton = () => {
+      _showExtractedMeasurements = !_showExtractedMeasurements;
+      renderExtractedMeasurements(meta);
+    };
 
-    if (!container.querySelector('[data-extracted-search-input]')) {
-      container.innerHTML = `
-        <div class="mb-3">
-          <div class="mb-2">
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Extracted measurements</div>
-            <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
-          </div>
-          <div class="mb-2" data-extracted-empty-state></div>
-          <div class="mb-2">
-            <input
-              type="search"
-              data-extracted-search-input
-              value="${escapeHtml(_activeExtractedMeasurementQuery)}"
-              placeholder="Search extracted measurements or PDF"
-              class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-            />
-          </div>
-          <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
-        </div>
-        <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Wall measurements</div>
-          <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
-          <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
-            No wall measurements detected yet.
-          </div>
-          <div class="mt-2 space-y-2">
-            <div class="grid gap-2">
-              ${[
-                ['rooms', 'Rooms'],
-                ['hallways', 'Hallways'],
-                ['storage', 'Storage'],
-                ['amenities', 'Amenities']
-              ].map(([key, label]) => `
-                <div>
-                  <div class="mb-1">
-                    <button
-                      type="button"
-                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
-                      data-wall-measurement-button="${key}"
-                      data-wall-measurement-label="${key}"
-                    >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-                      data-wall-measurement-section="${key}"
-                      data-wall-measurement-unit="ft"
-                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
-                    />
-                    <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
-                    <input
-                      type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-                      data-wall-measurement-section="${key}"
-                      data-wall-measurement-unit="in"
-                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
-                    />
-                    <span class="text-[10px] uppercase tracking-wide text-gray-400">in</span>
-                  </div>
-                </div>
-              `).join('')}
+    container.innerHTML = `
+      <div class="mb-3">
+        <button
+          type="button"
+          data-extracted-toggle
+          aria-expanded="${_showExtractedMeasurements ? 'true' : 'false'}"
+          class="w-full rounded border border-blue-200 bg-blue-50 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-300 hover:bg-blue-100 focus:outline-none"
+        >
+          Extracted measurements
+        </button>
+        ${_showExtractedMeasurements ? `
+          <div class="mt-2">
+            <div class="mb-2">
+              <div class="text-xs text-gray-500 mt-1">Detected from the uploaded PDF.</div>
             </div>
+            <div class="mb-2" data-extracted-empty-state></div>
+            <div class="mb-2">
+              <input
+                type="search"
+                data-extracted-search-input
+                value="${escapeHtml(_activeExtractedMeasurementQuery)}"
+                placeholder="Search extracted measurements or PDF"
+                class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+              />
+            </div>
+            <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Wall measurements</div>
+        <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
+        <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
+          No wall measurements detected yet.
+        </div>
+        <div class="mt-2 space-y-2">
+          <div class="grid gap-2">
+            ${[
+              ['rooms', 'Rooms'],
+              ['hallways', 'Hallways'],
+              ['storage', 'Storage'],
+              ['amenities', 'Amenities']
+            ].map(([key, label]) => `
+              <div>
+                <div class="mb-1">
+                  <button
+                    type="button"
+                    class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
+                    data-wall-measurement-button="${key}"
+                    data-wall-measurement-label="${key}"
+                  >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                    data-wall-measurement-section="${key}"
+                    data-wall-measurement-unit="ft"
+                    value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
+                  />
+                  <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
+                  <input
+                    type="text"
+                    class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                    data-wall-measurement-section="${key}"
+                    data-wall-measurement-unit="in"
+                    value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
+                  />
+                  <span class="text-[10px] uppercase tracking-wide text-gray-400">in</span>
+                </div>
+              </div>
+            `).join('')}
           </div>
         </div>
-      `;
+      </div>
+    `;
+
+    const toggleBtn = container.querySelector('[data-extracted-toggle]');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', toggleButton);
+    }
+
+    if (!_showExtractedMeasurements) {
+      container.style.display = 'block';
+      return;
     }
 
     container.style.display = 'block';
@@ -3847,15 +3872,73 @@ async function initApp(){
 
   const PAINTING_PAINT_COVERAGE_SF = 350;
   const PAINTING_PRIMER_COVERAGE_SF = 250;
+  const PAINTING_APPLICATION_FACTORS = {
+    roller: 1.00,
+    brush: 1.05,
+    airless: 1.15,
+  };
+
+  // Primer coverage (sq ft per gallon) by application method — lower means more gallons
+  const PAINTING_PRIMER_COVERAGE_BY_METHOD = {
+    roller: 275,
+    brush: 250,
+    airless: 225,
+  };
+
+  // Consumables and PPE defaults (configurable prices)
+  const PAINTING_CONSUMABLE_PRICES = {
+    // airless spray
+    spray_tip: 25,
+    spray_filter: 10,
+    masking_plastic_per_1000sf: 20,
+    tape_roll: 6,
+    respirator: 80,
+    respirator_cartridge: 12,
+    gloves_box: 8,
+    protective_coveralls: 12,
+    // roller
+    roller_cover: 3,
+    roller_tray: 6,
+    brush_small: 5,
+    // generic
+    drop_cloth: 10,
+  };
+
+  const PAINTING_CONSUMABLES_BY_METHOD = {
+    airless: [
+      { key: 'spray_tip', qtyPerJob: 2 },
+      { key: 'spray_filter', qtyPerJob: 2 },
+      { key: 'masking_plastic_per_1000sf', qtyPerJobPer1000sf: 1 },
+      { key: 'tape_roll', qtyPerJob: 4 },
+      { key: 'respirator', qtyPerJob: 1 },
+      { key: 'respirator_cartridge', qtyPerJob: 2 },
+      { key: 'gloves_box', qtyPerJob: 2 },
+      { key: 'protective_coveralls', qtyPerJob: 2 },
+    ],
+    roller: [
+      { key: 'roller_cover', qtyPerJobPer1000sf: 6 },
+      { key: 'roller_tray', qtyPerJob: 2 },
+      { key: 'brush_small', qtyPerJob: 2 },
+      { key: 'tape_roll', qtyPerJob: 3 },
+      { key: 'gloves_box', qtyPerJob: 1 },
+    ],
+    brush: [
+      { key: 'brush_small', qtyPerJob: 4 },
+      { key: 'tape_roll', qtyPerJob: 3 },
+      { key: 'drop_cloth', qtyPerJob: 2 },
+      { key: 'gloves_box', qtyPerJob: 1 },
+    ],
+  };
   const PAINTING_SURFACE_MULTIPLIERS = {
-    smooth: 1.0,
+    smooth: 1.00,
+    normal: 1.05,
     good: 1.05,
-    average: 1.10,
-    rough: 1.20,
-    very_rough: 1.30,
+    average: 1.05,
+    rough: 1.15,
+    very_rough: 1.25,
   };
   const PAINTING_FINISH_MULTIPLIERS = {
-    flat: 1.0,
+    flat: 1.00,
     matte: 1.02,
     eggshell: 1.05,
     satin: 1.08,
@@ -3876,9 +3959,11 @@ async function initApp(){
   };
   const PAINTING_PRIMER_PRICE_PER_GALLON = {
     none: 0,
-    standard: 30,
-    premium: 45,
+    standard_commercial: 30,
+    commercial_acrylic: 40,
+    high_build: 50,
     stain_blocking: 55,
+    metal_corrosion: 60,
   };
 
   function _getPaintingMaterialOptionKey(mapping, value, fallback) {
@@ -3895,6 +3980,12 @@ async function initApp(){
     const finish = getValue('paintingFinishTypeSelect') || 'flat';
     const color = getValue('paintingColorDepthSelect') || 'white_light';
     const primer = getValue('paintingPrimerTypeSelect') || 'none';
+    const primerRequired = (getValue('paintingPrimerRequiredSelect') || 'yes') === 'yes';
+    // application method for paint (roller|brush|airless)
+    const application = getValue('paintingApplicationMethodSelect') || getValue('paintingApplicationSelect') || 'roller';
+    // primer-specific settings: coats and application method
+    const primerCoats = parseInt(getValue('paintingPrimerCoatsSelect') || getValue('paintingPrimerCoats') || '1', 10) || 1;
+    const primerApplication = getValue('paintingPrimerApplicationMethodSelect') || application || 'roller';
 
     return {
       coats,
@@ -3903,35 +3994,82 @@ async function initApp(){
       finish,
       color,
       primer,
+      application: application || 'roller',
+      primerCoats,
+      primerApplication,
       surfaceMultiplier: PAINTING_SURFACE_MULTIPLIERS[surface] ?? 1,
+      applicationFactor: PAINTING_APPLICATION_FACTORS[application] ?? 1.0,
       paintPrice: PAINTING_PRICE_PER_GALLON[quality] ?? 45,
       finishMultiplier: PAINTING_FINISH_MULTIPLIERS[finish] ?? 1,
       colorMultiplier: PAINTING_COLOR_MULTIPLIERS[color] ?? 1,
-      primerPrice: PAINTING_PRIMER_PRICE_PER_GALLON[primer] ?? 0,
-      hasPrimer: primer !== 'none',
+      primerPrice: primerRequired ? (PAINTING_PRIMER_PRICE_PER_GALLON[primer] ?? 0) : 0,
+      hasPrimer: primerRequired && primer !== 'none',
     };
   }
 
   function _calculatePaintingMaterialsCost() {
     const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
     const settings = _getPaintingMaterialSettings();
+    // Paint gallons based on application factor and coverage
     const paintGallons = area > 0
-      ? Math.ceil((area * settings.coats * settings.surfaceMultiplier) / PAINTING_PAINT_COVERAGE_SF)
+      ? Math.ceil((area * settings.coats * settings.applicationFactor * settings.surfaceMultiplier) / PAINTING_PAINT_COVERAGE_SF)
       : 0;
     const basePaintCost = paintGallons * settings.paintPrice;
     const paintCost = basePaintCost * settings.finishMultiplier * settings.colorMultiplier;
 
-    const primerGallons = area > 0 && settings.primerPrice > 0
-      ? Math.ceil(area / PAINTING_PRIMER_COVERAGE_SF)
-      : 0;
-    const primerCost = primerGallons * settings.primerPrice;
+    // Primer calculation: only if primer selected
+    let primerGallons = 0;
+    let primerCost = 0;
+    if (area > 0 && settings.hasPrimer && settings.primerPrice > 0) {
+      const primerCoverage = PAINTING_PRIMER_COVERAGE_BY_METHOD[settings.primerApplication] || PAINTING_PRIMER_COVERAGE_SF;
+      primerGallons = Math.ceil((area * settings.primerCoats) / primerCoverage);
+      primerCost = primerGallons * settings.primerPrice;
+    }
+
+    // Consumables / PPE based on application method
+    const appMethod = settings.application || 'roller';
+    const consumablesList = PAINTING_CONSUMABLES_BY_METHOD[appMethod] || [];
+    let consumablesCost = 0;
+    const consumablesDetailed = [];
+    for (const item of consumablesList) {
+      let qty = 0;
+      if (item.qtyPerJob) qty = item.qtyPerJob;
+      else if (item.qtyPerJobPer1000sf && area > 0) qty = Math.ceil((area / 1000) * item.qtyPerJobPer1000sf);
+      else if (item.qtyPerJobPer1000sf === undefined && item.qtyPerJob === undefined && item.key.endsWith('_per_1000sf')) {
+        // handle special per-1000sf keys
+        const keyBase = item.key.replace('_per_1000sf', '');
+        qty = Math.ceil(area / 1000);
+      }
+      // For masking_plastic_per_1000sf we treat qty as number of 1000sf units
+      if (item.key === 'masking_plastic_per_1000sf') {
+        const units = Math.ceil(area / 1000) || 0;
+        const price = PAINTING_CONSUMABLE_PRICES['masking_plastic_per_1000sf'] || 0;
+        const c = units * price;
+        if (c > 0) {
+          consumablesDetailed.push({ key: item.key, qty: units, unitPrice: price, cost: c });
+          consumablesCost += c;
+        }
+        continue;
+      }
+
+      const unitPrice = PAINTING_CONSUMABLE_PRICES[item.key] || 0;
+      const cost = qty * unitPrice;
+      if (qty > 0 && unitPrice > 0) {
+        consumablesDetailed.push({ key: item.key, qty, unitPrice, cost });
+        consumablesCost += cost;
+      }
+    }
+
+    const totalCost = paintCost + primerCost + consumablesCost;
 
     return {
       paintGallons,
       primerGallons,
       paintCost,
       primerCost,
-      totalCost: paintCost + primerCost,
+      consumablesCost,
+      consumablesDetailed,
+      totalCost,
     };
   }
 
@@ -3946,6 +4084,7 @@ async function initApp(){
     document.getElementById('paintingPrimerGallonsDisplay').textContent = costs.primerGallons || '0';
     setText('paintingPaintCostDisplay', costs.paintCost);
     setText('paintingPrimerCostDisplay', costs.primerCost);
+    setText('paintingConsumablesCostDisplay', costs.consumablesCost || 0);
     document.getElementById('paintingTotalMaterialsCostDisplay').textContent = `$${costs.totalCost.toFixed(2)}`;
 
     const materialsInput = document.getElementById('paintingMaterialsInput');
@@ -3955,14 +4094,16 @@ async function initApp(){
   }
 
   function _attachPaintingMaterialsListeners() {
-    ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect']
+    ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect']
       .forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', () => {
-          _updatePaintingMaterialsCostDisplays();
-          _updatePaintingCrewCalcs();
-        });
+          const el = document.getElementById(id);
+          if (!el) return;
+          const handler = () => {
+            _updatePaintingMaterialsCostDisplays();
+            _updatePaintingCrewCalcs();
+          };
+          el.addEventListener('input', handler);
+          el.addEventListener('change', handler);
       });
 
     const materialsInput = document.getElementById('paintingMaterialsInput');
@@ -6091,6 +6232,16 @@ async function initApp(){
     }
     _ensurePaintingMaterialsListeners();
     _updatePaintingMaterialsCostDisplays();
+
+    // Ensure primer-specific selects always trigger recalculation (catch late-mounted elements)
+    ['paintingPrimerRequiredSelect', 'paintingPrimerTypeSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const h = () => { _updatePaintingMaterialsCostDisplays(); _updatePaintingCrewCalcs(); };
+        el.addEventListener('input', h);
+        el.addEventListener('change', h);
+      });
     if (interiorRateInput) {
       const _interiorChanged = () => { _paintingExpectedDaysManual = false; _refreshPaintingDays(); };
       interiorRateInput.addEventListener('input', _interiorChanged);
