@@ -3986,6 +3986,7 @@ async function initApp(){
     // primer-specific settings: coats and application method
     const primerCoats = parseInt(getValue('paintingPrimerCoatsSelect') || getValue('paintingPrimerCoats') || '1', 10) || 1;
     const primerApplication = getValue('paintingPrimerApplicationMethodSelect') || application || 'roller';
+    const activeApplicationMethod = application || primerApplication || 'roller';
 
     return {
       coats,
@@ -3997,6 +3998,7 @@ async function initApp(){
       application: application || 'roller',
       primerCoats,
       primerApplication,
+      activeApplicationMethod,
       surfaceMultiplier: PAINTING_SURFACE_MULTIPLIERS[surface] ?? 1,
       applicationFactor: PAINTING_APPLICATION_FACTORS[application] ?? 1.0,
       paintPrice: PAINTING_PRICE_PER_GALLON[quality] ?? 45,
@@ -4030,8 +4032,8 @@ async function initApp(){
       primerCost = primerGallons * settings.primerPrice;
     }
 
-    // Consumables / PPE based on application method
-    const appMethod = settings.application || 'roller';
+    // Consumables / PPE based on the current active application method
+    const appMethod = settings.activeApplicationMethod || settings.application || settings.primerApplication || 'roller';
     const consumablesList = PAINTING_CONSUMABLES_BY_METHOD[appMethod] || [];
     let consumablesCost = 0;
     const consumablesDetailed = [];
@@ -4110,17 +4112,34 @@ async function initApp(){
   }
 
   function _attachPaintingMaterialsListeners() {
-    ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect']
-      .forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const handler = () => {
-            _updatePaintingMaterialsCostDisplays();
-            _updatePaintingCrewCalcs();
-          };
-          el.addEventListener('input', handler);
-          el.addEventListener('change', handler);
+    const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
+    const handleMaterialChange = () => {
+      _updatePaintingMaterialsCostDisplays();
+      _updatePaintingCrewCalcs();
+    };
+
+    materialIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', handleMaterialChange);
+      el.addEventListener('change', handleMaterialChange);
+    });
+
+    const phaseContainer = document.getElementById('paintingPhaseTableContainer');
+    if (phaseContainer) {
+      phaseContainer.addEventListener('input', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (!materialIds.includes(target.id)) return;
+        handleMaterialChange();
       });
+      phaseContainer.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (!materialIds.includes(target.id)) return;
+        handleMaterialChange();
+      });
+    }
 
     const materialsInput = document.getElementById('paintingMaterialsInput');
     if (materialsInput) {
@@ -4380,13 +4399,15 @@ async function initApp(){
     const materialsForSummary = matInput && matInput.value !== ''
       ? (parseFloat(matInput.value) || 0)
       : totalPhaseMaterials;
+    const driverCostInSubtotal = parseFloat(document.getElementById('driverCostDisplay')?.value) || 0;
+    const subtotalWithDriver = totSubtotal + driverCostInSubtotal;
     if (matInput && !_analysisMaterialsManual) matInput.value = totalPhaseMaterials;
 
     const summaryContainer = document.getElementById('calcSummaryContainer');
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
-      const markUpBase = totSubtotal + materialsForSummary;
-      const totPftSummary = _calcProfitAmount(totSubtotal, materialsForSummary, profitPct / 100);
+      const markUpBase = subtotalWithDriver + materialsForSummary;
+      const totPftSummary = _calcProfitAmount(subtotalWithDriver, materialsForSummary, profitPct / 100);
       const totOhSummary = markUpBase * (overheadPct / 100);
       const totCommSummary = markUpBase * (commPct / 100);
       const gasInput = document.getElementById('gasolineInput');
@@ -4398,7 +4419,7 @@ async function initApp(){
       const gasCost = gasInput && gasInput.dataset.manual === 'true'
         ? (parseFloat(gasInput.value) || 0)
         : _getDistanceDerivedGasoline(convertedDistance || '', mobilizationsVal);
-      const taxBase = totSubtotal + materialsForSummary + gasCost + totOhSummary + totPftSummary + totCommSummary;
+      const taxBase = subtotalWithDriver + materialsForSummary + gasCost + totOhSummary + totPftSummary + totCommSummary;
       const totTax = taxBase * (taxPct / 100);
       const totFinal = taxBase + totTax;
       const grid = document.createElement('div');
@@ -4503,12 +4524,12 @@ async function initApp(){
     if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
       costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
     }
-    const total = driverCost + gasoline + tollCost;
+    const total = gasoline + tollCost;
 
     const driverEl = document.getElementById('driverCostDisplay');
     const totalEl  = document.getElementById('totalTransportDisplay');
     if (driverEl) driverEl.value = driverCost > 0 ? driverCost.toFixed(2) : '';
-    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0 || driverCost > 0) ? fmt$(total) : '—';
+    if (totalEl)  totalEl.textContent  = (gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
   }
 
   function _updatePaintingTransportCosts() {
@@ -4545,11 +4566,11 @@ async function initApp(){
     if (costPerMileInput && costPerMileInput.dataset.manual !== 'true') {
       costPerMileInput.value = autoCostPerMile > 0 ? autoCostPerMile.toFixed(2) : '';
     }
-    const total = driverCost + gasoline + tollCost;
+    const total = gasoline + tollCost;
     const driverEl = document.getElementById('paintingDriverCostDisplay');
     const totalEl  = document.getElementById('paintingTotalTransportDisplay');
     if (driverEl) driverEl.value = driverCost > 0 ? driverCost.toFixed(2) : '';
-    if (totalEl)  totalEl.textContent  = (hours > 0 || gasoline > 0 || tollCost > 0 || driverCost > 0) ? fmt$(total) : '—';
+    if (totalEl)  totalEl.textContent  = (gasoline > 0 || tollCost > 0) ? fmt$(total) : '—';
   }
 
   let _changeOrders = [];
@@ -5617,6 +5638,7 @@ async function initApp(){
     const resolvedName = _pdfMetadataSummary?.projectName || projData.name || '';
 
     const breakdownDiv = document.getElementById('analysisViewBreakdown');
+    let displayLaborTotal = 0;
     const mobilizationsView = (projData.mobilizations != null && projData.mobilizations !== '' ? parseFloat(projData.mobilizations) : (projData.expected_days != null && projData.expected_days !== '' ? parseFloat(projData.expected_days) * 2 : 0)) || 0;
     const convertedDistanceView = _convertDistanceToMiles(projData?.driving_info?.distance || '');
     const gasCost = (() => {
@@ -5637,7 +5659,7 @@ async function initApp(){
     })();
     const driverCostView = driveHoursView > 0 ? (mobilizationsView * 2 * driveHoursView * foremanRateView) : 0;
     const tollCostView = (projData.toll_cost != null && projData.toll_cost !== '' ? parseFloat(projData.toll_cost) : 0) || 0;
-    const totalTransport = driverCostView + gasCost + tollCostView;
+    const totalTransport = gasCost + tollCostView;
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
       const bd = projData.labor_breakdown;
@@ -5665,7 +5687,7 @@ async function initApp(){
         let totLaborCost = 0, totSubtotal = 0, totOh = 0, totPft = 0, totComm = 0;
         for (const p of bd.phases) {
           const c = _calcPhase(p, rates);
-          totLaborCost += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
+          totLaborCost += c.laborCost; displayLaborTotal += c.laborCost; totSubtotal += c.subtotal; totOh += c.oh;
           totPft += c.pft; totComm += c.comm;
           const tr = tbody.insertRow();
           tr.style.cssText = 'border-top:1px solid #f3f4f6;';
@@ -5683,17 +5705,18 @@ async function initApp(){
 
         const totalPhaseMaterials = bd.phases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
         const savedMaterials = Number.isFinite(parseFloat(bd.materials)) ? parseFloat(bd.materials) : totalPhaseMaterials;
-        const markupBase = totSubtotal + savedMaterials;
-        const totPftSummary = _calcProfitAmount(totSubtotal, savedMaterials, (bd.profit_pct || 0) / 100);
+        const subtotalWithDriver = totSubtotal + driverCostView;
+        const markupBase = subtotalWithDriver + savedMaterials;
+        const totPftSummary = _calcProfitAmount(subtotalWithDriver, savedMaterials, (bd.profit_pct || 0) / 100);
         const totOhSummary = markupBase * ((bd.overhead_pct || 0) / 100);
         const totCommSummary = markupBase * ((bd.commission_pct || 0) / 100);
-        const taxBase = totSubtotal + savedMaterials + totalTransport + totOhSummary + totPftSummary + totCommSummary;
+        const taxBase = subtotalWithDriver + savedMaterials + totalTransport + totOhSummary + totPftSummary + totCommSummary;
         const totTax = taxBase * ((bd.tax_pct || 0) / 100);
         const totFinal = taxBase + totTax;
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
-          [`Subtotal`, totSubtotal],
+          [`Subtotal`, subtotalWithDriver],
           [`Materials`, savedMaterials],
           [`Overhead (${bd.overhead_pct || 0}%)`, totOhSummary],
           [`Profit (${bd.profit_pct || 0}%)`, totPftSummary],
@@ -5713,8 +5736,9 @@ async function initApp(){
     setText('analysisViewAddress', resolvedAddress || '');
     const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
     setText('analysisViewStartAddress', projData.start_address || DEFAULT_OFFICE);
-    const lps = (projData.labor != null && resolvedArea) ? (projData.labor / resolvedArea) : null;
-    setText('analysisViewLabor', fmt$(projData.labor));
+    const laborTotal = displayLaborTotal + driverCostView;
+    const lps = (laborTotal > 0 && resolvedArea) ? (laborTotal / resolvedArea) : null;
+    setText('analysisViewLabor', fmt$(laborTotal));
     setText('analysisViewTotalArea', fmtSF(resolvedArea));
     setText('analysisViewQuote', fmt$(projData.quote));
     setText('analysisViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
@@ -5819,7 +5843,7 @@ async function initApp(){
     const tollCostView = (bd?.toll_cost != null && bd?.toll_cost !== '')
       ? parseFloat(bd.toll_cost)
       : ((projData.toll_cost != null && projData.toll_cost !== '') ? parseFloat(projData.toll_cost) : 0) || 0;
-    const totalTransport = driverCostView + gasCost + tollCostView;
+    const totalTransport = gasCost + tollCostView;
     if (breakdownDiv) {
       breakdownDiv.innerHTML = '';
       if (effectivePhases && effectivePhases.length > 0) {
@@ -5867,11 +5891,12 @@ async function initApp(){
         const savedMaterials = Number.isFinite(parseFloat(bd?.materials))
           ? parseFloat(bd.materials)
           : (phaseMaterials > 0 ? phaseMaterials : (areaDerived?.materials ?? 0));
+        const subtotalWithDriver = totSubtotal + driverCostView;
         const overheadPct = bd?.overhead_pct || 0;
         const profitPct   = bd?.profit_pct   || 30;
         const taxPct      = bd?.tax_pct      || 6;
         const commPct     = bd?.commission_pct || 5;
-        const taxBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
+        const taxBase = subtotalWithDriver + savedMaterials + totalTransport + totOh + totPft + totComm;
         const totTax = taxBase * (taxPct / 100);
         const totFinal = bd?.final_price != null
           ? parseFloat(bd.final_price)
@@ -5879,7 +5904,7 @@ async function initApp(){
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
-          [`Subtotal`, totSubtotal],
+          [`Subtotal`, subtotalWithDriver],
           [`Materials`, savedMaterials],
           [`Overhead (${overheadPct}%)`, totOh],
           [`Profit (${profitPct}%)`, totPft],
@@ -5917,16 +5942,21 @@ async function initApp(){
     const phaseMaterialSum = effectivePhases
       ? effectivePhases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0)
       : 0;
+    const paintingLaborTotal = effectivePhases
+      ? effectivePhases.reduce((sum, p) => sum + _calcPhase(p, zeroRates).laborCost, 0) + driverCostView
+      : null;
     const savedMaterials = fallbackSavedMaterials != null
       ? fallbackSavedMaterials
       : (phaseMaterialSum > 0 ? phaseMaterialSum : (areaDerived?.materials ?? 0));
-    const quoteBase = totSubtotal + savedMaterials + totalTransport + totOh + totPft + totComm;
+    const subtotalWithDriver = totSubtotal + driverCostView;
+    const quoteBase = subtotalWithDriver + savedMaterials + totalTransport + totOh + totPft + totComm;
     const quote = bd?.final_price != null
       ? parseFloat(bd.final_price)
       : (bd?.phases ? quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100)) : areaDerived?.finalSubtotal ?? (quoteBase + (quoteBase * ((bd?.tax_pct || 0) / 100))));
     setText('paintingViewQuote', fmt$(quote));
 
-    const lps = (labor != null && resolvedArea) ? (labor / resolvedArea) : null;
+    const lps = (paintingLaborTotal != null && resolvedArea) ? (paintingLaborTotal / resolvedArea) : null;
+    setText('paintingViewLabor', paintingLaborTotal != null ? fmt$(paintingLaborTotal) : '—');
     setText('paintingViewLaborPerSF', lps != null ? `$${lps.toFixed(4)}/SF` : '—');
 
     const di = projData.driving_info;
@@ -6378,6 +6408,7 @@ async function initApp(){
       areaInput.oninput = () => {
         const derived = _getPaintingAreaDerivedValues(areaInput.value);
         if (materialsInput && !_paintingMaterialsManual) materialsInput.value = derived.materials.toFixed(2);
+        _updatePaintingMaterialsCostDisplays();
         _updatePaintingCrewCalcs();
       };
     }
@@ -6613,8 +6644,8 @@ async function initApp(){
       paintPft += c.pft;
       paintComm += c.comm;
     }
-    const transportCost = driverCost + gasoline + tollCost;
-    const paintTaxBase = paintSubtotal + materials + transportCost + paintOh + paintPft + paintComm;
+    const transportCost = gasoline + tollCost;
+    const paintTaxBase = paintSubtotal + driverCost + materials + transportCost + paintOh + paintPft + paintComm;
     const paintTax = paintTaxBase * ((tax || 0) / 100);
     const paintFinalPrice = paintTaxBase + paintTax;
 
@@ -6729,12 +6760,13 @@ async function initApp(){
       const driverCostSave = driverCostInputValue !== '' && driverCostInputValue !== undefined ? parseFloat(driverCostInputValue) || 0 : 0;
       const costPerMileInputValue = document.getElementById('costPerMileInput')?.value;
       const costPerMileSave = costPerMileInputValue !== '' && costPerMileInputValue !== undefined ? parseFloat(costPerMileInputValue) || 0 : 0;
-      const markupBaseSave = totSubtotalSave + materialsSave;
+      const subtotalWithDriverSave = totSubtotalSave + driverCostSave;
+      const markupBaseSave = subtotalWithDriverSave + materialsSave;
       const ohSave = markupBaseSave * (overheadPct / 100);
       const commSave = markupBaseSave * (commPct / 100);
-      const totPftSave = _calcProfitAmount(totSubtotalSave, materialsSave, profitPct / 100);
-      const transportCostSave = gasolineSave + driverCostSave + (parseFloat(document.getElementById('tollCostInput')?.value) || 0);
-      const taxBaseSave = totSubtotalSave + materialsSave + transportCostSave + ohSave + totPftSave + commSave;
+      const totPftSave = _calcProfitAmount(subtotalWithDriverSave, materialsSave, profitPct / 100);
+      const transportCostSave = gasolineSave + (parseFloat(document.getElementById('tollCostInput')?.value) || 0);
+      const taxBaseSave = subtotalWithDriverSave + materialsSave + transportCostSave + ohSave + totPftSave + commSave;
       const totTaxSave = taxBaseSave * (taxPct / 100);
       const totFinalPrice = taxBaseSave + totTaxSave;
 
@@ -6765,8 +6797,9 @@ async function initApp(){
       const startSel = document.getElementById('startAddressSelect');
       const startCustom = document.getElementById('startAddressInput');
       const startAddrVal = (startSel?.value === 'custom' ? startCustom?.value?.trim() : '') || '';
+      const laborTotalSave = totLabor + driverCostSave;
       const body = {
-        labor: totLabor > 0 ? totLabor : null,
+        labor: laborTotalSave > 0 ? laborTotalSave : null,
         labor_breakdown: laborBreakdown,
         quote: totFinalPrice > 0 ? totFinalPrice : null,
         address: addrVal,
@@ -6794,7 +6827,7 @@ async function initApp(){
         const updated = await r.json();
         _loadedProjectData = { ..._loadedProjectData, ...updated };
         _loadedProjectData.labor_breakdown = { ...(_loadedProjectData.labor_breakdown || {}), ...laborBreakdown };
-        _loadedProjectData.labor = totLabor;
+        _loadedProjectData.labor = laborTotalSave;
         _loadedProjectData.quote = totFinalPrice;
         _loadedProjectData.cost_per_mile = costPerMileSave;
         _loadedProjectData.gasoline = gasolineSave;
