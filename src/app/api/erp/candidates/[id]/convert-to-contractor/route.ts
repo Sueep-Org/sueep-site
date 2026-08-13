@@ -12,6 +12,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     select: {
       fullName: true,
       email: true,
+      positionInterest: true,
       contractor: { select: { id: true } },
     },
   });
@@ -31,6 +32,9 @@ export async function POST(_req: Request, ctx: Ctx) {
       data: {
         name: application.fullName,
         email,
+        // Carries the Cleaner/Painter/Supervisor classification over from
+        // the application, same free-text convention as Employee.role.
+        role: application.positionInterest,
         status: "ACTIVE",
         candidateApplicationId: id,
       },

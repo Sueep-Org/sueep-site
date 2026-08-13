@@ -1223,6 +1223,15 @@ model Employee {
   hireDate       DateTime?
   notes          String?
 
+  /// Links back to the CandidateApplication this profile was created from
+  /// (via "Finish onboarding") or merged into (via the merge option shown
+  /// when that email already has an Employee profile).
+  sourceCandidateApplicationId String?               @unique
+  sourceCandidateApplication   CandidateApplication? @relation(fields: [sourceCandidateApplicationId], references: [id], onDelete: SetNull)
+  /// Set once this employee has been converted to a Contractor profile
+  /// (see "Convert to Contractor" on the employee page).
+  contractor                   Contractor?
+
   /// Home address, same free-text convention as Contractor.address.
   address String?
   /// Free-text date of birth (not a DateTime), same convention as Contractor.dateOfBirth.
@@ -1457,6 +1466,10 @@ model Contractor {
   name  String
   email String? @unique
 
+  /// Free-text work type (e.g. "Cleaner", "Painter", "Supervisor") — same
+  /// convention as Employee.role, not a fixed enum.
+  role String?
+
   /// ACTIVE | INACTIVE
   status String @default("ACTIVE")
 
@@ -1491,6 +1504,10 @@ model Contractor {
   /// Links back to the subcontractor questionnaire this contractor originated from, if any (set via "Convert to Contractor" or the manual link picker on the profile).
   candidateApplicationId String?               @unique
   candidateApplication   CandidateApplication? @relation(fields: [candidateApplicationId], references: [id])
+
+  /// Links back to the Employee profile this contractor was converted from, if any (set via "Convert to Contractor" on the employee page).
+  employeeId String?   @unique
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   /// PASSED | FAILED | PENDING | NOT_DONE
   backgroundCheckStatus    String?   @default("NOT_DONE")
@@ -1673,6 +1690,8 @@ model CandidateApplication {
   contracts  CandidateContract[]
   /// Set once this application has been converted to (or linked with) a Contractor profile.
   contractor Contractor?
+  /// Set once "Finish onboarding" has created (or merged into) an Employee profile.
+  employee   Employee?
 
   /// Stable code emailed to the applicant; optional Google Form prefill or Apps Script matches this to mark completion.
   questionnaireToken       String?   @unique

@@ -46,6 +46,34 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
     router.push(`/erp/employees/${json.employeeId}`);
   }
 
+  async function merge() {
+    if (!existingEmployeeId) return;
+    if (
+      !(await confirm({
+        message: `Merge this application into the existing employee profile for ${fullName}? Missing details (phone, bank info) will be filled in from this application, and its documents will be added to that profile. Nothing already on the employee profile will be overwritten.`,
+        danger: false,
+        confirmLabel: "Merge",
+      }))
+    )
+      return;
+    setLoading(true);
+
+    const res = await fetch(`/api/erp/candidates/${id}/finish-onboarding`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mergeIntoEmployeeId: existingEmployeeId }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { employeeId?: string; error?: string };
+    setLoading(false);
+
+    if (!res.ok) {
+      toast(json.error ?? "Something went wrong", "error");
+      return;
+    }
+
+    router.push(`/erp/employees/${json.employeeId}`);
+  }
+
   if (!isOnboarding) return null;
 
   return (
@@ -66,12 +94,22 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
           <p className="text-sm text-amber-700">
             An employee profile already exists for this email.
           </p>
-          <a
-            href={`/erp/employees/${existingEmployeeId}`}
-            className="inline-block rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            View employee profile →
-          </a>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href={`/erp/employees/${existingEmployeeId}`}
+              className="inline-block rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              View employee profile →
+            </a>
+            <button
+              type="button"
+              onClick={() => void merge()}
+              disabled={loading}
+              className="inline-block rounded-md border border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {loading ? "Merging…" : "Merge into that profile"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-4">

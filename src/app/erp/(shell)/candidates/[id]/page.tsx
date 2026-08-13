@@ -105,9 +105,9 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
           </p>
         </div>
-        {isSubcontractor && (
-          <ConvertToContractorButton applicationId={row.id} existingContractorId={row.contractor?.id ?? null} />
-        )}
+        {/* Available regardless of how they answered the subcontractor
+            questionnaire gate question — staff can override manually. */}
+        <ConvertToContractorButton applicationId={row.id} existingContractorId={row.contractor?.id ?? null} />
       </div>
 
       <DetailTabs tabs={[

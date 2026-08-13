@@ -290,6 +290,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   initial={{
                     name: contractor.name,
                     email: contractor.email,
+                    role: contractor.role,
                     status: contractor.status,
                   }}
                 />

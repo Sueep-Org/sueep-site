@@ -48,6 +48,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.email !== undefined) {
     data.email = body.email ? String(body.email).trim().toLowerCase() : null;
   }
+  if (body.role !== undefined) {
+    data.role = body.role ? String(body.role).trim() || null : null;
+  }
   if (body.paperwork !== undefined) {
     if (!Array.isArray(body.paperwork)) {
       return NextResponse.json({ error: "paperwork must be an array" }, { status: 400 });

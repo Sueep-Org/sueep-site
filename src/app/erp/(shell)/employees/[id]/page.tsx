@@ -13,6 +13,7 @@ import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
 import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
+import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { getErpAuth, canEditPayInfo, canViewSsn } from "@/lib/erpAuth";
 
@@ -37,6 +38,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       contracts: { orderBy: { createdAt: "asc" } },
       backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
       timeOff: { orderBy: { startDate: "desc" } },
+      contractor: { select: { id: true } },
     },
   });
   if (!employee) notFound();
@@ -169,19 +171,26 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <Link href="/erp/employees" className="text-xs text-pink-600 hover:underline">
-          ← Employees
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">
-          {employee.firstName} {employee.lastName}
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">General employee profile, compliance status, and documentation.</p>
-        <div className="mt-3">
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(compliance)}`}>
-            {complianceLabel(compliance)}
-          </span>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/erp/employees" className="text-xs text-pink-600 hover:underline">
+            ← Employees
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-gray-900">
+            {employee.firstName} {employee.lastName}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">General employee profile, compliance status, and documentation.</p>
+          <div className="mt-3">
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(compliance)}`}>
+              {complianceLabel(compliance)}
+            </span>
+          </div>
         </div>
+        <ConvertToContractorButton
+          employeeId={employee.id}
+          fullName={`${employee.firstName} ${employee.lastName}`.trim()}
+          existingContractorId={employee.contractor?.id ?? null}
+        />
       </div>
 
       <DetailTabs tabs={[
