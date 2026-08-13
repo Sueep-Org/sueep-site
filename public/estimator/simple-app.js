@@ -414,6 +414,7 @@ async function initApp(){
   let _sovStateProjectId = null;
   let _activeExtractedMeasurementQuery = '';
   let _showExtractedMeasurements = false;
+  let _showWallMeasurements = false;
   let _extractedMeasurementHighlightCanvas = null;
   console.log('ZOOM BUTTON CHECK:', {
     zoomInBtn,
@@ -1516,6 +1517,10 @@ async function initApp(){
       _showExtractedMeasurements = !_showExtractedMeasurements;
       renderExtractedMeasurements(meta);
     };
+    const toggleWallButton = () => {
+      _showWallMeasurements = !_showWallMeasurements;
+      renderExtractedMeasurements(meta);
+    };
 
     container.innerHTML = `
       <div class="mb-3">
@@ -1548,56 +1553,70 @@ async function initApp(){
       </div>
 
       <div class="rounded-md border border-gray-100 bg-gray-50 px-2.5 py-2">
-        <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-600">Wall measurements</div>
+        <button
+          type="button"
+          data-wall-measurements-toggle
+          aria-expanded="${_showWallMeasurements ? 'true' : 'false'}"
+          class="w-full rounded border border-transparent px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none"
+        >
+          Wall measurements
+        </button>
         <div class="mt-1 text-xs text-gray-500">Wall dimensions detected from the uploaded PDF.</div>
-        <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
-          No wall measurements detected yet.
-        </div>
-        <div class="mt-2 space-y-2">
-          <div class="grid gap-2">
-            ${[
-              ['rooms', 'Rooms'],
-              ['hallways', 'Hallways'],
-              ['storage', 'Storage'],
-              ['amenities', 'Amenities']
-            ].map(([key, label]) => `
-              <div>
-                <div class="mb-1">
-                  <button
-                    type="button"
-                    class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
-                    data-wall-measurement-button="${key}"
-                    data-wall-measurement-label="${key}"
-                  >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
-                </div>
-                <div class="flex items-center gap-2">
-                  <input
-                    type="text"
-                    class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-                    data-wall-measurement-section="${key}"
-                    data-wall-measurement-unit="ft"
-                    value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
-                  />
-                  <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
-                  <input
-                    type="text"
-                    class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
-                    data-wall-measurement-section="${key}"
-                    data-wall-measurement-unit="in"
-                    value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
-                  />
-                  <span class="text-[10px] uppercase tracking-wide text-gray-400">in</span>
-                </div>
-              </div>
-            `).join('')}
+        ${_showWallMeasurements ? `
+          <div class="mt-2 rounded-md border border-dashed border-gray-200 px-2 py-2 text-[11px] text-gray-500" data-extracted-wall-measurements>
+            No wall measurements detected yet.
           </div>
-        </div>
+          <div class="mt-2 space-y-2">
+            <div class="grid gap-2">
+              ${[
+                ['rooms', 'Rooms'],
+                ['hallways', 'Hallways'],
+                ['storage', 'Storage'],
+                ['amenities', 'Amenities']
+              ].map(([key, label]) => `
+                <div>
+                  <div class="mb-1">
+                    <button
+                      type="button"
+                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
+                      data-wall-measurement-button="${key}"
+                      data-wall-measurement-label="${key}"
+                    >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="text"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      data-wall-measurement-section="${key}"
+                      data-wall-measurement-unit="ft"
+                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
+                    />
+                    <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
+                    <input
+                      type="text"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      data-wall-measurement-section="${key}"
+                      data-wall-measurement-unit="in"
+                      value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
+                    />
+                    <span class="text-[10px] uppercase tracking-wide text-gray-400">in</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
 
     const toggleBtn = container.querySelector('[data-extracted-toggle]');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', toggleButton);
+    }
+
+    const wallToggleBtn = container.querySelector('[data-wall-measurements-toggle]');
+    if (wallToggleBtn) {
+      wallToggleBtn.addEventListener('click', toggleWallButton);
     }
 
     if (!_showExtractedMeasurements) {
