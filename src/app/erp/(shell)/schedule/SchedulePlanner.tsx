@@ -156,6 +156,31 @@ function availableScopeOptionsFor(p: ScheduleProject) {
   ).filter((opt) => !p.completedScopeItems.includes(opt.value));
 }
 
+/** The specific things a single crew member on this day could be split
+ * onto — an SOV item for Post-Construction, a turnover scope category for
+ * Janitorial — mirroring whichever picks are currently set for the day
+ * itself (eventSovPicks/eventScopePicks). Empty when the day has zero or
+ * one thing picked: nothing to split a crew across yet, so callers use
+ * this to decide whether a per-worker picker is worth showing at all —
+ * with only one scope on the day, everyone added is on it by default. */
+function dayScopeSplitOptions(
+  p: ScheduleProject,
+  sovPicks: string[],
+  scopePicks: string[]
+): { id: string; label: string }[] {
+  const group = calendarSegmentGroup(p.segment);
+  if (group === "POST_CONSTRUCTION") {
+    return sovPicks
+      .map((id) => p.sovItems.find((s) => s.id === id))
+      .filter((s): s is ScheduleProject["sovItems"][number] => !!s)
+      .map((s) => ({ id: s.id, label: s.description }));
+  }
+  if (group === "JANITORIAL_TURNOVER_REQUESTS") {
+    return scopePicks.map((v) => ({ id: v, label: turnoverScopeLabel(v) }));
+  }
+  return [];
+}
+
 // Same-building turnover units sharing a calendar day collapse into one
 // expandable chip (see the building-group rendering in SchedulePlanner)
 // instead of stacking one chip per unit. Only turnover-segment projects with
@@ -666,12 +691,19 @@ export function SchedulePlanner({
   const [eventWorkerType, setEventWorkerType] = useState<"employee" | "contractor">("employee");
   const [eventWorkerQuery, setEventWorkerQuery] = useState("");
   const [eventWorkerId, setEventWorkerId] = useState("");
+  // Which scope this next worker covers, when the day has more than one
+  // (see dayScopeSplitOptions) — a required pick in that case, ignored
+  // otherwise (everyone's on the day's one-and-only scope by default).
+  const [eventWorkerScopePick, setEventWorkerScopePick] = useState("");
   const [eventAddingWorker, setEventAddingWorker] = useState(false);
   const [eventWorkerError, setEventWorkerError] = useState("");
   // A worker legitimately can split a day across two jobs, so this is a
   // soft warning shown before the request fires, not a hard block.
   const [eventWorkerWarning, setEventWorkerWarning] = useState<string | null>(null);
   const [deletingEventWorkerId, setDeletingEventWorkerId] = useState<string | null>(null);
+  // A worker's scope reassignment (via the dropdown next to their name in
+  // the crew list) in flight, so its own row can show a "saving" state.
+  const [reassigningWorkerId, setReassigningWorkerId] = useState<string | null>(null);
 
   function openEventPopover(k: string, p: ScheduleProject, assignment?: ScheduleDayAssignment, role?: "start" | "end") {
     setEventPopoverKey(`${k}:${p.id}`);
@@ -703,6 +735,7 @@ export function SchedulePlanner({
     setEventWorkerType("employee");
     setEventWorkerQuery("");
     setEventWorkerId("");
+    setEventWorkerScopePick("");
     setEventWorkerError("");
     setEventWorkerWarning(null);
   }
@@ -765,11 +798,22 @@ export function SchedulePlanner({
               employeeId: w.employeeId || undefined,
               contractorId: w.contractorId || undefined,
               date: toK,
+              assignedSovItemId: w.assignedSovItemId,
+              assignedScopeItem: w.assignedScopeItem,
             }),
           });
           const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
           if (wRes.ok && wData.id) {
-            newWorkers.push({ id: wData.id, projectId, employeeId: w.employeeId, contractorId: w.contractorId, dateKey: toK, seriesId: null });
+            newWorkers.push({
+              id: wData.id,
+              projectId,
+              employeeId: w.employeeId,
+              contractorId: w.contractorId,
+              dateKey: toK,
+              seriesId: null,
+              assignedSovItemId: w.assignedSovItemId,
+              assignedScopeItem: w.assignedScopeItem,
+            });
           }
         }
 
@@ -1251,6 +1295,19 @@ export function SchedulePlanner({
       setEventWorkerError(eventWorkerType === "employee" ? "Pick a worker" : "Pick a contractor");
       return;
     }
+    // With 2+ scopes on the day (e.g. painting and cleaning both scheduled),
+    // each worker needs to be tagged with which one they're covering — with
+    // only one (or none), everyone added lands on it automatically, no pick
+    // needed. See dayScopeSplitOptions.
+    const p = projectById.get(projectId);
+    const splitOptions = p ? dayScopeSplitOptions(p, eventSovPicks, eventScopePicks) : [];
+    if (splitOptions.length > 1 && !eventWorkerScopePick) {
+      setEventWorkerError("Pick which of today's scopes this worker is covering");
+      return;
+    }
+    const soleOption = splitOptions.length === 1 ? splitOptions[0]!.id : null;
+    const scopePick = splitOptions.length > 1 ? eventWorkerScopePick : soleOption;
+    const group = p ? calendarSegmentGroup(p.segment) : null;
     if (!force) {
       const conflicts = findWorkerConflicts(k, projectId, eventWorkerType, eventWorkerId);
       if (conflicts.length > 0) {
@@ -1270,6 +1327,8 @@ export function SchedulePlanner({
           employeeId: eventWorkerType === "employee" ? eventWorkerId : undefined,
           contractorId: eventWorkerType === "contractor" ? eventWorkerId : undefined,
           date: k,
+          assignedSovItemId: group === "POST_CONSTRUCTION" ? scopePick : null,
+          assignedScopeItem: group === "JANITORIAL_TURNOVER_REQUESTS" ? scopePick : null,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1284,15 +1343,56 @@ export function SchedulePlanner({
             contractorId: eventWorkerType === "contractor" ? eventWorkerId : null,
             dateKey: k,
             seriesId: null,
+            assignedSovItemId: group === "POST_CONSTRUCTION" ? scopePick : null,
+            assignedScopeItem: group === "JANITORIAL_TURNOVER_REQUESTS" ? scopePick : null,
           },
         ]);
       }
       setEventWorkerQuery("");
       setEventWorkerId("");
+      setEventWorkerScopePick("");
     } catch (err) {
       setEventWorkerError(err instanceof Error ? err.message : "Failed to add worker");
     } finally {
       setEventAddingWorker(false);
+    }
+  }
+
+  // Reassigns which scope an already-added worker covers, via the dropdown
+  // next to their name in the crew list — e.g. the day's scope was split
+  // after the crew was already added.
+  async function handleEventReassignWorkerScope(
+    id: string,
+    group: CalendarSegmentGroup | null,
+    scopeId: string | null
+  ) {
+    setReassigningWorkerId(id);
+    const previous = workerAssignments;
+    setWorkerAssignments((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              assignedSovItemId: group === "POST_CONSTRUCTION" ? scopeId : a.assignedSovItemId,
+              assignedScopeItem: group === "JANITORIAL_TURNOVER_REQUESTS" ? scopeId : a.assignedScopeItem,
+            }
+          : a
+      )
+    );
+    try {
+      const res = await fetch(`/api/erp/schedule/worker-assignments/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(group === "POST_CONSTRUCTION" ? { assignedSovItemId: scopeId } : {}),
+          ...(group === "JANITORIAL_TURNOVER_REQUESTS" ? { assignedScopeItem: scopeId } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to reassign");
+    } catch {
+      setWorkerAssignments(previous);
+    } finally {
+      setReassigningWorkerId(null);
     }
   }
 
@@ -1344,6 +1444,11 @@ export function SchedulePlanner({
     const filteredWorkerOptions = eventWorkerQuery.trim()
       ? workerOptions.filter((w) => matchesSearchQuery(w.displayName, eventWorkerQuery))
       : workerOptions;
+    // What each crew member on this day can be split onto (SOV item or
+    // turnover scope) — only meaningful once 2+ are picked for the day
+    // itself, see dayScopeSplitOptions.
+    const eventSplitGroup = calendarSegmentGroup(p.segment);
+    const eventSplitOptions = dayScopeSplitOptions(p, eventSovPicks, eventScopePicks);
 
     return createPortal(
       <div
@@ -1603,26 +1708,62 @@ export function SchedulePlanner({
 
         <div className="mt-3 border-t border-gray-100 pt-2.5">
           <label className="block text-[10px] font-medium text-gray-500">Workers scheduled this day</label>
+          {eventSplitOptions.length > 1 ? (
+            <p className="mt-0.5 text-[9px] text-gray-400">
+              {eventSplitOptions.length} scopes on this day — tag each worker with which one they&apos;re covering.
+            </p>
+          ) : null}
           {dayWorkers.length > 0 ? (
             <ul className="mt-1 space-y-1">
               {dayWorkers.map((w) => {
                 const name = w.employeeId
                   ? employees.find((e) => e.id === w.employeeId)?.displayName
                   : contractors.find((c) => c.id === w.contractorId)?.displayName;
+                const assignedId =
+                  eventSplitGroup === "POST_CONSTRUCTION"
+                    ? w.assignedSovItemId
+                    : eventSplitGroup === "JANITORIAL_TURNOVER_REQUESTS"
+                    ? w.assignedScopeItem
+                    : null;
+                const assignedLabel = eventSplitOptions.find((o) => o.id === assignedId)?.label ?? null;
                 return (
                   <li
                     key={w.id}
                     className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
                   >
                     <span className="truncate">{name ?? "Unknown worker"}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleEventDeleteWorker(w.id)}
-                      disabled={deletingEventWorkerId === w.id}
-                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
-                    >
-                      ×
-                    </button>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {eventSplitOptions.length > 1 ? (
+                        <select
+                          value={assignedId ?? ""}
+                          onChange={(e) =>
+                            handleEventReassignWorkerScope(w.id, eventSplitGroup, e.target.value || null)
+                          }
+                          disabled={reassigningWorkerId === w.id}
+                          title="Which scope this worker is covering"
+                          className="max-w-[100px] rounded border border-gray-300 bg-white px-1 py-0.5 text-[9px] text-gray-700 focus:border-pink-400 focus:outline-none"
+                        >
+                          <option value="">— unassigned —</option>
+                          {eventSplitOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : assignedLabel ? (
+                        <span className="truncate rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-medium text-pink-700">
+                          {assignedLabel}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleEventDeleteWorker(w.id)}
+                        disabled={deletingEventWorkerId === w.id}
+                        className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                      >
+                        ×
+                      </button>
+                    </span>
                   </li>
                 );
               })}
@@ -1661,6 +1802,21 @@ export function SchedulePlanner({
               Contractor
             </button>
           </div>
+
+          {eventSplitOptions.length > 1 ? (
+            <select
+              value={eventWorkerScopePick}
+              onChange={(e) => setEventWorkerScopePick(e.target.value)}
+              className="mt-1.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 focus:border-pink-400 focus:outline-none"
+            >
+              <option value="">Covering which scope?</option>
+              {eventSplitOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
 
           <div className="relative mt-1.5">
             <div className="flex gap-1.5">
@@ -3087,6 +3243,7 @@ export function SchedulePlanner({
             setWorkerAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created])
           }
           onWorkerDeleted={(id) => setWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
+          onWorkerUpdated={(a) => setWorkerAssignments((prev) => prev.map((x) => (x.id === a.id ? a : x)))}
           onCoCreated={(a) => {
             setCoDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
             if (a.supervisorUserId) setCoSupervisorOverrides((o) => ({ ...o, [a.changeOrderId]: a.supervisorUserId }));

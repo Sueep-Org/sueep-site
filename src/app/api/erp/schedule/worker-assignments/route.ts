@@ -3,27 +3,40 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
+import { isTurnoverScopeValue } from "@/lib/erp/turnoverScope";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
- * the right upsert shape (and compound-unique key) for whichever it is. */
+ * the right upsert shape (and compound-unique key) for whichever it is.
+ * `undefined` for assignedSovItemId/assignedScopeItem means "not sent in
+ * this request, leave whatever's already there alone" (e.g. the
+ * date-change/series-duplicate carry-over paths, which don't know about a
+ * scope split yet) — only `null` or a real value actually touches the
+ * column on an update. Always set (to `null` if unset) on create, since
+ * there's nothing to preserve yet. */
 function workerUpsertArgs(
   projectId: string,
   date: Date,
   employeeId: string | null,
   contractorId: string | null,
-  seriesId: string | null
+  seriesId: string | null,
+  assignedSovItemId: string | null | undefined,
+  assignedScopeItem: string | null | undefined
 ): Prisma.ProjectWorkerDayAssignmentUpsertArgs {
+  const scopeUpdateFields = {
+    ...(assignedSovItemId !== undefined ? { assignedSovItemId } : {}),
+    ...(assignedScopeItem !== undefined ? { assignedScopeItem } : {}),
+  };
   if (employeeId) {
     return {
       where: { projectId_employeeId_date: { projectId, employeeId, date } },
-      create: { projectId, employeeId, date, seriesId },
-      update: { seriesId },
+      create: { projectId, employeeId, date, seriesId, assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null },
+      update: { seriesId, ...scopeUpdateFields },
     };
   }
   return {
     where: { projectId_contractorId_date: { projectId, contractorId: contractorId!, date } },
-    create: { projectId, contractorId, date, seriesId },
-    update: { seriesId },
+    create: { projectId, contractorId, date, seriesId, assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null },
+    update: { seriesId, ...scopeUpdateFields },
   };
 }
 
@@ -39,12 +52,23 @@ export async function POST(req: Request) {
   const employeeId = String(body.employeeId || "").trim() || null;
   const contractorId = String(body.contractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
+  // Which SOV item / turnover scope this worker covers this day, when the
+  // day itself has more than one picked (see ProjectDayAssignment.sovItems /
+  // .scopeItems) — undefined (key not sent at all) leaves whatever's
+  // already on the row alone, see workerUpsertArgs above.
+  const assignedSovItemId =
+    "assignedSovItemId" in body ? String(body.assignedSovItemId || "").trim() || null : undefined;
+  const assignedScopeItem =
+    "assignedScopeItem" in body ? String(body.assignedScopeItem || "").trim() || null : undefined;
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
   if (!employeeId && !contractorId) {
     return NextResponse.json({ error: "employeeId or contractorId is required" }, { status: 400 });
   }
   if (employeeId && contractorId) {
     return NextResponse.json({ error: "Only one of employeeId or contractorId may be set" }, { status: 400 });
+  }
+  if (assignedScopeItem && !isTurnoverScopeValue(assignedScopeItem)) {
+    return NextResponse.json({ error: "Invalid assignedScopeItem" }, { status: 400 });
   }
   // An explicit, possibly non-consecutive list of dates (the calendar's
   // "duplicate to more days" picker) takes priority over date/repeatUntil/
@@ -90,6 +114,10 @@ export async function POST(req: Request) {
       : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (assignedSovItemId) {
+    const sovItem = await prisma.projectSOVItem.count({ where: { id: assignedSovItemId, sov: { projectId } } });
+    if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+  }
   const worker = employeeId ? employee : contractor;
   if (!worker) return NextResponse.json({ error: employeeId ? "Employee not found" : "Contractor not found" }, { status: 404 });
   // Only a FAILED result blocks scheduling. PENDING/NOT_DONE/PASSED (or no
@@ -201,12 +229,18 @@ export async function POST(req: Request) {
   // route, which emails a calendar invite) — may be added later.
   if (seriesDates && seriesId) {
     const assignments = await prisma.$transaction(
-      seriesDates.map((d) => prisma.projectWorkerDayAssignment.upsert(workerUpsertArgs(projectId, d, employeeId, contractorId, seriesId)))
+      seriesDates.map((d) =>
+        prisma.projectWorkerDayAssignment.upsert(
+          workerUpsertArgs(projectId, d, employeeId, contractorId, seriesId, assignedSovItemId, assignedScopeItem)
+        )
+      )
     );
     return NextResponse.json({ seriesId, assignments }, { status: 201 });
   }
 
-  const assignment = await prisma.projectWorkerDayAssignment.upsert(workerUpsertArgs(projectId, date, employeeId, contractorId, null));
+  const assignment = await prisma.projectWorkerDayAssignment.upsert(
+    workerUpsertArgs(projectId, date, employeeId, contractorId, null, assignedSovItemId, assignedScopeItem)
+  );
 
   return NextResponse.json(assignment, { status: 201 });
 }

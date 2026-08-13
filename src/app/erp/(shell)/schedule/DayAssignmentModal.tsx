@@ -8,11 +8,35 @@ import {
   type ScheduleDayAssignment,
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
-import { calendarSegmentGroup } from "@/lib/erp/projectSegments";
-import { TURNOVER_SCOPE_OPTIONS } from "@/lib/erp/turnoverScope";
+import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
+import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
+
+/** The specific things a single crew member on a day could be split onto —
+ * an SOV item for Post-Construction, a turnover scope category for
+ * Janitorial — mirroring whichever picks are currently set in "Task
+ * details" for that project. Empty when there's zero or one thing picked:
+ * nothing to split a crew across, so callers use this to decide whether a
+ * per-worker picker is worth showing at all. */
+function scopeSplitOptions(
+  group: CalendarSegmentGroup | null,
+  project: ProjectOption | null,
+  sovPicks: string[],
+  scopePicks: string[]
+): { id: string; label: string }[] {
+  if (group === "POST_CONSTRUCTION" && project) {
+    return sovPicks
+      .map((id) => project.sovItems.find((s) => s.id === id))
+      .filter((s): s is SOVItemOption => !!s)
+      .map((s) => ({ id: s.id, label: s.description }));
+  }
+  if (group === "JANITORIAL_TURNOVER_REQUESTS") {
+    return scopePicks.map((v) => ({ id: v, label: turnoverScopeLabel(v) }));
+  }
+  return [];
+}
 
 type ProjectOption = {
   id: string;
@@ -95,6 +119,7 @@ export function DayAssignmentModal({
   onWorkerCreated,
   onWorkerSeriesCreated,
   onWorkerDeleted,
+  onWorkerUpdated,
   onCoCreated,
   onCoWorkerCreated,
   onCoWorkerDeleted,
@@ -120,6 +145,8 @@ export function DayAssignmentModal({
   /** Fired instead of onWorkerCreated when a repeat/range is active, one row per generated day. */
   onWorkerSeriesCreated: (assignments: ScheduleWorkerAssignment[]) => void;
   onWorkerDeleted: (id: string) => void;
+  /** Fired when an already-scheduled worker's scope split is reassigned. */
+  onWorkerUpdated: (assignment: ScheduleWorkerAssignment) => void;
   /** Fired when a change order (rather than a project) gets its coverage saved. */
   onCoCreated: (assignment: ScheduleCoDayAssignment) => void;
   onCoWorkerCreated: (assignment: ScheduleCoWorkerAssignment) => void;
@@ -164,12 +191,17 @@ export function DayAssignmentModal({
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [contractorId, setContractorId] = useState("");
   const [contractorQuery, setContractorQuery] = useState("");
+  // Which scope the next worker covers, when the project's day has more
+  // than one (see scopeSplitOptions) — required in that case, ignored
+  // otherwise (everyone's on the day's one-and-only scope by default).
+  const [workerScopePick, setWorkerScopePick] = useState("");
   const [addingWorker, setAddingWorker] = useState(false);
   const [workerError, setWorkerError] = useState("");
   // A worker legitimately can split a day across two jobs, so this is a soft
   // warning shown before the request fires, not a hard block.
   const [workerWarning, setWorkerWarning] = useState<string | null>(null);
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
+  const [reassigningWorkerId, setReassigningWorkerId] = useState<string | null>(null);
 
   // Duplicates this same day's assignment onto whichever other days get
   // picked on the mini calendar below — not necessarily consecutive or a
@@ -212,6 +244,11 @@ export function DayAssignmentModal({
       ? TURNOVER_SCOPE_OPTIONS.filter((opt) => selectedProject.contractedScopeItems!.includes(opt.value))
       : TURNOVER_SCOPE_OPTIONS
   ).filter((opt) => !selectedProject?.completedScopeItems.includes(opt.value));
+
+  // What a single crew member being added to the *selected* project could
+  // be split onto — only meaningful once 2+ things are picked in Task
+  // details, see scopeSplitOptions.
+  const splitOptions = scopeSplitOptions(selectedGroup, selectedProject, sovPicks, scopePicks);
 
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => matchesSearchQuery(e.displayName, employeeQuery))
@@ -480,6 +517,18 @@ export function DayAssignmentModal({
       setWorkerError("Pick a project above first");
       return;
     }
+    // With 2+ scopes picked for this project's day (e.g. painting and
+    // cleaning both scheduled), each worker needs to be tagged with which
+    // one they're covering — with only one (or none), everyone added lands
+    // on it automatically, no pick needed. See scopeSplitOptions.
+    if (splitOptions.length > 1 && !workerScopePick) {
+      setWorkerError("Pick which of today's scopes this worker is covering");
+      return;
+    }
+    const soleOption = splitOptions.length === 1 ? splitOptions[0]!.id : null;
+    const scopePick = splitOptions.length > 1 ? workerScopePick : soleOption;
+    const assignedSovItemId = selectedGroup === "POST_CONSTRUCTION" ? scopePick : null;
+    const assignedScopeItem = selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" ? scopePick : null;
     if (!force) {
       const conflicts = existingWorkers.filter((w) => {
         if (w.projectId === projectId) return false;
@@ -505,6 +554,8 @@ export function DayAssignmentModal({
           employeeId: workerType === "employee" ? workerId : undefined,
           contractorId: workerType === "contractor" ? workerId : undefined,
           date: dateKey,
+          assignedSovItemId,
+          assignedScopeItem,
           ...(usingSeries
             ? activeSeriesId
               ? { seriesId: activeSeriesId }
@@ -529,6 +580,8 @@ export function DayAssignmentModal({
             contractorId: workerType === "contractor" ? workerId : null,
             dateKey: allDateKeys[i]!,
             seriesId: data.seriesId!,
+            assignedSovItemId,
+            assignedScopeItem,
           }))
         );
       } else if (data.id) {
@@ -539,16 +592,47 @@ export function DayAssignmentModal({
           contractorId: workerType === "contractor" ? workerId : null,
           dateKey,
           seriesId: null,
+          assignedSovItemId,
+          assignedScopeItem,
         });
       }
       setEmployeeId("");
       setEmployeeQuery("");
       setContractorId("");
       setContractorQuery("");
+      setWorkerScopePick("");
     } catch (err) {
       setWorkerError(err instanceof Error ? err.message : "Failed to assign worker");
     } finally {
       setAddingWorker(false);
+    }
+  }
+
+  // Reassigns which scope an already-added worker covers, via the dropdown
+  // next to their name in the crew list — e.g. the day's scope was split
+  // after the crew was already added. Only offered for workers on the
+  // currently selected project, see the crew list render below.
+  async function handleReassignWorker(w: ScheduleWorkerAssignment, group: CalendarSegmentGroup | null, scopeId: string | null) {
+    setReassigningWorkerId(w.id);
+    try {
+      const res = await fetch(`/api/erp/schedule/worker-assignments/${w.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(group === "POST_CONSTRUCTION" ? { assignedSovItemId: scopeId } : {}),
+          ...(group === "JANITORIAL_TURNOVER_REQUESTS" ? { assignedScopeItem: scopeId } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to reassign");
+      onWorkerUpdated({
+        ...w,
+        assignedSovItemId: group === "POST_CONSTRUCTION" ? scopeId : w.assignedSovItemId,
+        assignedScopeItem: group === "JANITORIAL_TURNOVER_REQUESTS" ? scopeId : w.assignedScopeItem,
+      });
+    } catch {
+      // leave it in place; user can retry
+    } finally {
+      setReassigningWorkerId(null);
     }
   }
 
@@ -617,6 +701,7 @@ export function DayAssignmentModal({
               setSovPicks([]);
               setScopePicks([]);
               setCoPicks([]);
+              setWorkerScopePick("");
               setSupervisorUserId("");
               setProjectManagerUserId("");
               setStartTime("");
@@ -693,6 +778,7 @@ export function DayAssignmentModal({
                       setSovPicks([]);
                       setScopePicks([]);
                       setCoPicks([]);
+                      setWorkerScopePick("");
                       setComment("");
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
@@ -942,6 +1028,19 @@ export function DayAssignmentModal({
                   : contractor
                   ? `${contractor.displayName} (contractor)`
                   : "Unknown worker";
+                // Scope reassignment is only offered for the project
+                // currently selected above (splitOptions reflects live
+                // Task details picks for that one project) — other rows
+                // just show a best-effort label from their own project.
+                const isSelectedProject = w.projectId === projectId;
+                const rowGroup = project ? calendarSegmentGroup(project.segment) : null;
+                const assignedId = rowGroup === "POST_CONSTRUCTION" ? w.assignedSovItemId : w.assignedScopeItem;
+                const assignedLabel =
+                  rowGroup === "POST_CONSTRUCTION"
+                    ? project?.sovItems.find((s) => s.id === assignedId)?.description ?? null
+                    : assignedId
+                    ? turnoverScopeLabel(assignedId)
+                    : null;
                 return (
                   <li
                     key={w.id}
@@ -953,6 +1052,26 @@ export function DayAssignmentModal({
                       {w.seriesId ? <span className="text-gray-400"> · repeating</span> : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
+                      {isSelectedProject && splitOptions.length > 1 ? (
+                        <select
+                          value={assignedId ?? ""}
+                          onChange={(e) => handleReassignWorker(w, rowGroup, e.target.value || null)}
+                          disabled={reassigningWorkerId === w.id}
+                          title="Which scope this worker is covering"
+                          className="max-w-[90px] rounded border border-gray-300 bg-white px-1 py-0.5 text-[10px] text-gray-700"
+                        >
+                          <option value="">— unassigned —</option>
+                          {splitOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : assignedLabel ? (
+                        <span className="truncate rounded-full bg-pink-100 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">
+                          {assignedLabel}
+                        </span>
+                      ) : null}
                       {w.seriesId ? (
                         <button
                           type="button"
@@ -984,6 +1103,24 @@ export function DayAssignmentModal({
           <p className="text-[11px] text-gray-400">
             Uses the {targetMode === "co" ? "change order" : "project"} selected above. Not emailed — for planning only.
           </p>
+
+          {targetMode === "project" && splitOptions.length > 1 ? (
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600">Next worker covers</label>
+              <select
+                value={workerScopePick}
+                onChange={(e) => setWorkerScopePick(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900"
+              >
+                <option value="">Covering which scope?</option>
+                {splitOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="flex gap-1">
             <button

@@ -129,7 +129,16 @@ export default async function SchedulePage() {
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
-      select: { id: true, projectId: true, employeeId: true, contractorId: true, date: true, seriesId: true },
+      select: {
+        id: true,
+        projectId: true,
+        employeeId: true,
+        contractorId: true,
+        date: true,
+        seriesId: true,
+        assignedSovItemId: true,
+        assignedScopeItem: true,
+      },
     }),
     prisma.employee.findMany({
       where: { status: { not: "INACTIVE" } },
@@ -176,6 +185,8 @@ export default async function SchedulePage() {
     contractorId: a.contractorId,
     dateKey: dayKey(a.date),
     seriesId: a.seriesId,
+    assignedSovItemId: a.assignedSovItemId,
+    assignedScopeItem: a.assignedScopeItem,
   }));
 
   const employees = employeeRows.map((e) => ({
