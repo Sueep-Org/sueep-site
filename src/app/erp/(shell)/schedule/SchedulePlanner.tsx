@@ -96,14 +96,17 @@ const SOV_REQUEST_SWATCH_CLASS = "border-2 border-cyan-600 bg-cyan-200";
 const NEEDS_SUPERVISOR_CHIP_CLASS =
   "flex items-center gap-1 truncate rounded border-2 border-amber-600 bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-950 shadow transition-colors hover:bg-amber-300";
 
-// WIP-vs-complete marker shown on every calendar chip for a project,
-// regardless of which day/occurrence it's rendered on — a project scheduled
-// both Monday and Wednesday reads Project.status off the same live record
-// either day, so marking it COMPLETE updates every chip for it at once, not
-// just the day it was completed on. Complete chips also fade slightly (a
-// glance at a busy day tells done from still-in-progress at a glance).
-function ProjectStatusIcon({ status }: { status: string }) {
-  return status === "COMPLETE" ? (
+// WIP-vs-complete marker shown on every calendar chip for a project or change
+// order, regardless of which day/occurrence it's rendered on — a project (or
+// CO) scheduled both Monday and Wednesday reads its status off the same live
+// record either day, so marking it complete updates every chip for it at
+// once, not just the day it was completed on. Complete chips also fade
+// slightly (a glance at a busy day tells done from still-in-progress at a
+// glance). Takes a plain boolean rather than the raw status string since
+// Project uses "COMPLETE" and ProjectChangeOrder uses "COMPLETED" — callers
+// normalize their own enum before passing this down.
+function CompletionStatusIcon({ complete }: { complete: boolean }) {
+  return complete ? (
     <span aria-hidden title="Complete" className="shrink-0 text-emerald-700">
       ✓
     </span>
@@ -117,8 +120,8 @@ function ProjectStatusIcon({ status }: { status: string }) {
   );
 }
 
-function projectStatusChipClass(status: string): string {
-  return status === "COMPLETE" ? "opacity-60" : "";
+function completionChipClass(complete: boolean): string {
+  return complete ? "opacity-60" : "";
 }
 
 // Muted, pastel-ish colors keyed by calendar group — used for the
@@ -2493,9 +2496,10 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${CHANGE_ORDER_CHIP_CLASS}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(co.status === "COMPLETED")}`}
                       >
                         {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                        <CompletionStatusIcon complete={co.status === "COMPLETED"} />
                         <span className="truncate">{co.title}</span>
                       </button>
                       {renderCoPopover(k, co)}
@@ -2551,10 +2555,10 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${projectStatusChipClass(p.status)}`}
+                        className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
                       >
                         <span aria-hidden>⚠</span>
-                        <ProjectStatusIcon status={p.status} />
+                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
                         <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
                       </button>
                       {inMonth ? (
@@ -2601,10 +2605,10 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${projectStatusChipClass(p.status)}`}
+                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
                       >
                         {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                        <ProjectStatusIcon status={p.status} />
+                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
                         <span className="truncate">{p.jobTitle}</span>
                       </button>
                       <button
@@ -2655,9 +2659,9 @@ export function SchedulePlanner({
                       <button
                         type="button"
                         onClick={() => openLaborPopover(k, p)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${projectStatusChipClass(p.status)}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE")}`}
                       >
-                        <ProjectStatusIcon status={p.status} />
+                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
                         <span className="truncate">{p.jobTitle}</span>
                       </button>
                       {renderLaborPopover(k, p)}
@@ -2717,14 +2721,14 @@ export function SchedulePlanner({
                         noSupervisor
                           ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
                           : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
-                      } ${projectStatusChipClass(project.status)}`}
+                      } ${completionChipClass(project.status === "COMPLETE")}`}
                     >
                       {isOverdue ? (
                         <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
                       ) : noSupervisor ? (
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
-                      <ProjectStatusIcon status={project.status} />
+                      <CompletionStatusIcon complete={project.status === "COMPLETE"} />
                       <span className="truncate">{project.jobTitle}</span>
                     </button>
                     {renderEventPopover(k, project)}
