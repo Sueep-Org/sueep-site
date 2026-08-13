@@ -51,7 +51,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   const canSeeCommission = auth ? canEditPayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser, changeOrderPricingPackages] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -67,7 +67,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
           select: { id: true, fullName: true, role: true, email: true, phone: true },
         },
-        building: { select: { id: true, name: true, pricingPackage: true } },
+        building: { select: { id: true, name: true, address: true, pricingPackage: true } },
         contracts: { orderBy: { createdAt: "asc" } },
         turnoverRequest: {
           select: {
@@ -167,6 +167,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     prisma.erpUser.findMany({ select: { email: true } }),
     // auth.uid is the Firebase UID (from the session token), not the ErpUser.id — resolve the actual row.
     auth?.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : Promise.resolve(null),
+    prisma.changeOrderPricingPackage.findMany({ orderBy: { name: "asc" } }),
   ]);
   if (!project) notFound();
 
@@ -463,6 +464,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             segment={project.segment}
             jobTitle={project.jobTitle}
             description={project.description}
+            buildingAddress={project.building?.address ?? null}
             projectDateIso={project.projectDate ? project.projectDate.toISOString() : null}
             contacts={project.contacts}
             employees={laborEmployees}
@@ -713,16 +715,26 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 }))}
               />
             ) : (
-              <ProjectChangeOrdersSection
-                projectId={project.id}
-                initialEntries={changeOrderRows}
-                employees={laborEmployees.map((e) => ({
-                  id: e.id,
-                  firstName: e.firstName,
-                  lastName: e.lastName,
-                  email: e.email ?? null,
-                }))}
-              />
+              <div className="space-y-6">
+                <ProjectChangeOrdersSection
+                  projectId={project.id}
+                  initialEntries={changeOrderRows}
+                  employees={laborEmployees.map((e) => ({
+                    id: e.id,
+                    firstName: e.firstName,
+                    lastName: e.lastName,
+                    email: e.email ?? null,
+                  }))}
+                  laborRateCard={project.laborRateCard}
+                  isEmployee={isEmployee}
+                  pricingPackages={changeOrderPricingPackages.map((p) => ({
+                    ...p,
+                    createdAt: p.createdAt.toISOString(),
+                    updatedAt: p.updatedAt.toISOString(),
+                  }))}
+                  canEditPricing={canEditPricingForRole}
+                />
+              </div>
             ),
           },
         ]

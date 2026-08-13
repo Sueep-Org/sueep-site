@@ -49,6 +49,7 @@ export type ProjectTableRow = {
   description: string | null;
   buildingId?: string | null;
   buildingName?: string | null;
+  buildingAddress?: string | null;
   segment: string;
   status: string;
   projectDate: string | null;
@@ -237,7 +238,11 @@ function getJanitorialBuildingName(project: ProjectTableRow) {
 
 function JanitorialProjectDropdownDetail({ project, showFinancials = true }: { project: ProjectTableRow; showFinancials?: boolean }) {
   const building = getJanitorialBuildingName(project);
-  const address = getDetailLine(project.description, "Address");
+  // Building.address is the real source of truth; description only ever
+  // has an "Address:" line for old HubSpot-import projects, never for
+  // units created through the current turnover flow (see
+  // ProjectWorkOrderNotifier.tsx for the same fix on the unit detail page).
+  const address = project.buildingAddress || getDetailLine(project.description, "Address");
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
   const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}?from=projects` : null;
 

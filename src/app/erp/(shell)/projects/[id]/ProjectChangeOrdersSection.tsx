@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
+import { ChangeOrderPackagesTable, type ChangeOrderPackageRow } from "./ChangeOrderPackagesTable";
+import { LaborRateCardEditor } from "./LaborRateCardEditor";
 
 const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
 
@@ -218,12 +222,25 @@ export function ProjectChangeOrdersSection({
   projectId,
   initialEntries,
   employees = [],
+  laborRateCard,
+  isEmployee = false,
+  pricingPackages = [],
+  canEditPricing = false,
 }: {
   projectId: string;
   initialEntries: ProjectChangeOrderRow[];
   employees?: EmployeeNotifyOption[];
+  /** This project's Labor rates override (see Project.laborRateCard) — falls
+   * back to DEFAULT_CHANGE_ORDER_LABOR_RATES via getChangeOrderLaborRates. */
+  laborRateCard?: unknown;
+  /** Hides the Labor rates editor — same restriction as everywhere else
+   * financials are gated from Employee. */
+  isEmployee?: boolean;
+  pricingPackages?: ChangeOrderPackageRow[];
+  canEditPricing?: boolean;
 }) {
   const router = useRouter();
+  const laborRates = getChangeOrderLaborRates(laborRateCard);
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -231,6 +248,13 @@ export function ProjectChangeOrdersSection({
 
   const notifiableEmployees = employees.filter((e) => e.email);
   const [pmSupervisor, setPmSupervisor] = useState("");
+
+  // "Pricing" block on the create form — see ChangeOrderLaborEstimator.
+  const [estCleanerCount, setEstCleanerCount] = useState("");
+  const [estSupervisorCount, setEstSupervisorCount] = useState("");
+  const [estHoursInput, setEstHoursInput] = useState("");
+  const [contractValue, setContractValue] = useState("");
+  const [estLabor, setEstLabor] = useState("");
 
   const defaultNotifyIds = useState(() => {
     const ids: string[] = [];
@@ -399,6 +423,11 @@ export function ProjectChangeOrdersSection({
           supervisor: pmSupervisor.trim() || undefined,
           status: String(fd.get("status") || "DRAFT"),
           description: String(fd.get("description") || "").trim() || undefined,
+          estLaborers: estCleanerCount.trim() || undefined,
+          estSupervisors: estSupervisorCount.trim() || undefined,
+          estHours: estHoursInput.trim() || undefined,
+          contractValue: contractValue.trim() || undefined,
+          estLabor: estLabor.trim() || undefined,
         }),
       });
       const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
@@ -410,6 +439,11 @@ export function ProjectChangeOrdersSection({
       setEntries((prev) => [data, ...prev]);
       form.reset();
       setPmSupervisor("");
+      setEstCleanerCount("");
+      setEstSupervisorCount("");
+      setEstHoursInput("");
+      setContractValue("");
+      setEstLabor("");
 
       // Send notifications to selected employees
       if (notifyEmployeeIds.length > 0) {
@@ -650,6 +684,22 @@ export function ProjectChangeOrdersSection({
             <textarea id="co-description" name="description" rows={3} className={input} />
           </div>
         </div>
+        <div className="mt-4">
+          <ChangeOrderLaborEstimator
+            pricingRates={laborRates}
+            cleanerCount={estCleanerCount}
+            onCleanerCountChange={setEstCleanerCount}
+            supervisorCount={estSupervisorCount}
+            onSupervisorCountChange={setEstSupervisorCount}
+            hours={estHoursInput}
+            onHoursChange={setEstHoursInput}
+            contractValue={contractValue}
+            onContractValueChange={setContractValue}
+            estLabor={estLabor}
+            onEstLaborChange={setEstLabor}
+            disabled={loading}
+          />
+        </div>
         {notifiableEmployees.length > 0 && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <label className="block text-xs font-medium text-gray-600">Notify employees</label>
@@ -678,6 +728,22 @@ export function ProjectChangeOrdersSection({
           {loading ? "Saving..." : "Create change order"}
         </button>
       </form>
+
+      {!isEmployee ? (
+        <div className="max-w-xl">
+          <LaborRateCardEditor projectId={projectId} initialRateCard={laborRateCard} canEdit={canEditPricing} />
+        </div>
+      ) : null}
+
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">CO pricing packages</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Reusable labor formulas for common change orders — priced against this project&apos;s Labor rates above.
+        </p>
+        <div className="mt-3">
+          <ChangeOrderPackagesTable initialPackages={pricingPackages} canEdit={canEditPricing} />
+        </div>
+      </div>
     </div>
   );
 }

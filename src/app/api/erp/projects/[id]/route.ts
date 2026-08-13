@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
-import { getErpAuth, canOverrideQualityChecklist } from "@/lib/erpAuth";
+import { getErpAuth, canOverrideQualityChecklist, canEditPricing } from "@/lib/erpAuth";
 import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
+import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
+import type { ErpRole } from "@/lib/erpSession";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
@@ -116,6 +118,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
   if (body.pricingPackage !== undefined) data.pricingPackage = body.pricingPackage ?? null;
+
+  if (body.laborRateCard !== undefined) {
+    const role = (req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE";
+    if (!canEditPricing(role)) {
+      return NextResponse.json(
+        { error: "Only Admin, Project Manager, Sales, or Estimation roles can edit labor rates" },
+        { status: 403 },
+      );
+    }
+    data.laborRateCard = body.laborRateCard == null ? null : sanitizeChangeOrderLaborRateCard(body.laborRateCard);
+  }
   if (body.contractValue !== undefined) {
     data.contractValueCents = cents(body.contractValue);
 

@@ -60,6 +60,17 @@ export async function POST(req: Request, ctx: Ctx) {
   const estLaborCents = inputToCents(body.estLabor) ?? null;
   const estMaterialCents = inputToCents(body.estMaterial) ?? null;
 
+  // # cleaners / # supervisors / estimated hours — the crew a ChangeOrderLaborEstimator
+  // price was calculated from (or just a standalone estimate even without using it).
+  const numOrNull = (v: unknown) => {
+    if (v === undefined || v === null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const estHours = numOrNull(body.estHours);
+  const estLaborers = numOrNull(body.estLaborers);
+  const estSupervisors = numOrNull(body.estSupervisors);
+
   // A project's own contractValueCents is the base deal's value only — it's
   // what margin and the base commission line read from, so it must never be
   // mutated by a CO. Change orders are surfaced additively wherever a "total
@@ -78,6 +89,9 @@ export async function POST(req: Request, ctx: Ctx) {
         contractValueCents: contractValueCents ?? undefined,
         estLaborCents: estLaborCents ?? undefined,
         estMaterialCents: estMaterialCents ?? undefined,
+        estHours: estHours ?? undefined,
+        estLaborers: estLaborers == null ? undefined : Math.round(estLaborers),
+        estSupervisors: estSupervisors == null ? undefined : Math.round(estSupervisors),
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,

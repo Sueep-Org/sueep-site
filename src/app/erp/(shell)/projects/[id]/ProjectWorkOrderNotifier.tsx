@@ -40,6 +40,13 @@ type Props = {
   // Fallback defaults (used only if no saved record exists)
   jobTitle: string;
   description: string | null;
+  // The linked Building's address (Project.building.address) — the real
+  // source of truth for a turnover unit's site address. Description text
+  // only ever gets an "Address:" line from the legacy/HubSpot-import
+  // format, never from the current in-app turnover creation flow, so
+  // parsing description alone left this field blank for every unit created
+  // through the normal "New Turnover" form.
+  buildingAddress: string | null;
   projectDateIso: string | null;
   contacts: ContactRow[];
   employees: EmployeeRow[];
@@ -187,6 +194,7 @@ export function ProjectWorkOrderNotifier({
   segment,
   jobTitle,
   description,
+  buildingAddress,
   projectDateIso,
   contacts,
   employees,
@@ -197,8 +205,11 @@ export function ProjectWorkOrderNotifier({
   // Derive fallback values from project fields (used when no saved record exists)
   const fallbackAddress = useMemo(() => {
     if (isRealEstate) return getDetailLine(description, "Property");
-    return getDetailLine(description, "Address");
-  }, [description, isRealEstate]);
+    // Building.address is the real source of truth for a turnover unit;
+    // only fall back to parsing description (old HubSpot-import format) if
+    // the unit somehow has no linked building.
+    return buildingAddress || getDetailLine(description, "Address");
+  }, [description, isRealEstate, buildingAddress]);
 
   const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
 

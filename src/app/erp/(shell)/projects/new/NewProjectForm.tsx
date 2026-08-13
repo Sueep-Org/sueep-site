@@ -13,6 +13,8 @@ import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -235,6 +237,9 @@ interface ProjectOption {
   jobTitle: string;
   segment?: string | null;
   hubspotPipelineId?: string | null;
+  /** This project's Labor rates override (see Project.laborRateCard) — used
+   * to price a change order being created for it here. */
+  laborRateCard?: unknown;
 }
 
 interface EmployeeOption {
@@ -620,6 +625,15 @@ export function NewProjectForm({
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
+  // "Pricing" block — see ChangeOrderLaborEstimator.
+  const [coEstCleanerCount, setCoEstCleanerCount] = useState("");
+  const [coEstSupervisorCount, setCoEstSupervisorCount] = useState("");
+  const [coEstHours, setCoEstHours] = useState("");
+  const [coContractValue, setCoContractValue] = useState("");
+  const [coEstLabor, setCoEstLabor] = useState("");
+  const coLaborRates = coProjectId
+    ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
+    : null;
 
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {
@@ -1018,6 +1032,11 @@ export function NewProjectForm({
           status: coStatus,
           requestedBy: coRequestedBy.trim() || undefined,
           description: coComments.trim() || undefined,
+          estLaborers: coEstCleanerCount.trim() || undefined,
+          estSupervisors: coEstSupervisorCount.trim() || undefined,
+          estHours: coEstHours.trim() || undefined,
+          contractValue: coContractValue.trim() || undefined,
+          estLabor: coEstLabor.trim() || undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -1238,6 +1257,21 @@ export function NewProjectForm({
             <textarea id="co-comments" rows={3} className={input} value={coComments} onChange={(e) => setCoComments(e.target.value)} />
           </div>
         </div>
+
+        <ChangeOrderLaborEstimator
+          pricingRates={coLaborRates}
+          cleanerCount={coEstCleanerCount}
+          onCleanerCountChange={setCoEstCleanerCount}
+          supervisorCount={coEstSupervisorCount}
+          onSupervisorCountChange={setCoEstSupervisorCount}
+          hours={coEstHours}
+          onHoursChange={setCoEstHours}
+          contractValue={coContractValue}
+          onContractValueChange={setCoContractValue}
+          estLabor={coEstLabor}
+          onEstLaborChange={setCoEstLabor}
+          disabled={loading}
+        />
 
         {notifiableEmployees.length > 0 && (
           <div>

@@ -11,6 +11,7 @@ import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { computeChangeOrderLaborEstimate, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES } from "@/lib/changeOrderLaborRates";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -235,6 +236,7 @@ function PmCombobox({
 export function ChangeOrderDetailEditor({
   projectId,
   projectTitle,
+  laborRateCard,
   data,
   employees,
   signingContent,
@@ -248,6 +250,9 @@ export function ChangeOrderDetailEditor({
 }: {
   projectId: string;
   projectTitle: string;
+  /** This project's Labor rates override (see Project.laborRateCard) — falls
+   * back to DEFAULT_CHANGE_ORDER_LABOR_RATES via getChangeOrderLaborRates. */
+  laborRateCard?: unknown;
   data: ChangeOrderDetailData;
   employees: EmployeeOption[];
   signingContent?: React.ReactNode;
@@ -311,6 +316,19 @@ export function ChangeOrderDetailEditor({
   const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
   const actualLaborers = data.laborers.filter((l) => !l.role?.toLowerCase().includes("supervisor")).length;
   const actualSupervisors = data.laborers.filter((l) => l.role?.toLowerCase().includes("supervisor")).length;
+
+  // Two calculated numbers from the crew/hours estimate above — see
+  // ChangeOrderLaborEstimator for the same math on the create forms. Price
+  // uses this project's Labor rates (billing rate, has margin); labor cost
+  // uses the fixed actual pay rate. Purely a suggestion: "Use this price" is
+  // the only thing that writes into contractValue/estLabor below.
+  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: Number(estHours) || 0 };
+  const priceEstimate = computeChangeOrderLaborEstimate(crewCounts, getChangeOrderLaborRates(laborRateCard));
+  const costEstimate = computeChangeOrderLaborEstimate(crewCounts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+  function useCalculatedPrice() {
+    setContractValue((priceEstimate.totalCents / 100).toFixed(2));
+    setEstLabor((costEstimate.totalCents / 100).toFixed(2));
+  }
   const [liveMaterialCents, setLiveMaterialCents] = useState(data.computedMaterialCents);
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
@@ -630,6 +648,21 @@ export function ChangeOrderDetailEditor({
                     <div>
                       <label className={label} htmlFor="co-est-supervisors"># of supervisors</label>
                       <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} onChange={(e) => setEstSupervisors(e.target.value)} />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2 text-xs">
+                      <span className="text-gray-700">
+                        Price: <span className="font-semibold text-gray-900">{centsToDollars(priceEstimate.totalCents)}</span>
+                        {" · "}
+                        Labor cost: <span className="font-semibold text-gray-900">{centsToDollars(costEstimate.totalCents)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={priceEstimate.totalCents === 0 && costEstimate.totalCents === 0}
+                        onClick={useCalculatedPrice}
+                        className="rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs font-semibold text-pink-700 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Use this price
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -52,7 +52,7 @@ export default async function NewProjectPage() {
     prisma.project.findMany({
       where: changeOrderProjectFilter,
       orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-      select: { id: true, jobTitle: true, segment: true, hubspotPipelineId: true },
+      select: { id: true, jobTitle: true, segment: true, hubspotPipelineId: true, laborRateCard: true },
     }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },

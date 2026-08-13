@@ -29,7 +29,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     }),
     prisma.project.findUnique({
       where: { id },
-      select: { id: true, jobTitle: true },
+      select: { id: true, jobTitle: true, laborRateCard: true },
     }),
     prisma.employee.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -227,6 +227,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
       <ChangeOrderDetailEditor
         projectId={id}
         projectTitle={project.jobTitle}
+        laborRateCard={project.laborRateCard}
         data={data}
         employees={employees}
         isSupervisor={isSupervisor}

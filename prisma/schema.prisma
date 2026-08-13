@@ -72,6 +72,13 @@ model Project {
   /// logs (distinct dates with a LaborEntry), not stored.
   estimatedDays Int?
 
+  /// Per-project Cleaner/Foreman hourly rate override for change order
+  /// pricing packages (see src/lib/changeOrderLaborRates.ts), e.g.
+  /// { cleanerHourlyRateCents: 4200, foremanHourlyRateCents: 4700 }. Null or
+  /// a missing role falls back to DEFAULT_CHANGE_ORDER_LABOR_RATES. Distinct
+  /// from `pricingPackage` below (REAL_ESTATE-only, unrelated concept).
+  laborRateCard Json?
+
   /// Optional link to a Building (set for janitorial turnover projects)
   buildingId String?
   building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
@@ -796,6 +803,40 @@ model ProjectChangeOrderLaborer {
   @@index([changeOrderId])
 }
 
+/// A reusable, named labor formula for a common change order (e.g. "Extra
+/// prep coat" = 3 cleaner-hrs + 1.5 foreman-hrs per unit) — see
+/// src/lib/changeOrderPricingPackages.ts. Priced against a project's own
+/// Cleaner/Foreman $/hr (Project.laborRateCard, falling back to
+/// DEFAULT_CHANGE_ORDER_LABOR_RATES) at the moment it's applied, never
+/// stored as a fixed dollar amount, so a later rate-card change is always
+/// reflected. Global (not per-project) — the whole point is one reusable
+/// list instead of re-deriving the same math on every project.
+model ChangeOrderPricingPackage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name String
+
+  /// What one "unit" of this package means on the change order, e.g.
+  /// "unit", "day", "coat" — purely a display label, not used in the math.
+  unitLabel String @default("unit")
+
+  /// Cleaner/foreman hours consumed per unit — the actual formula.
+  cleanerHours Float @default(0)
+  foremanHours Float @default(0)
+
+  /// Soft-disable instead of delete, so a package already referenced on a
+  /// past change order (once Phase 3 wires that up) still resolves; it just
+  /// stops showing up as a choice for new ones.
+  active Boolean @default(true)
+
+  createdByUserId String?
+  createdByUser   ErpUser? @relation("ChangeOrderPricingPackageCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([active])
+}
+
 model ProjectContract {
   id                   String    @id @default(cuid())
   createdAt            DateTime  @default(now())
@@ -972,6 +1013,7 @@ model ErpUser {
   hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
   scheduleNudgeDismissalsMade   ProjectScheduleNudgeDismissal[]
+  createdChangeOrderPricingPackages ChangeOrderPricingPackage[] @relation("ChangeOrderPricingPackageCreatedBy")
 
   @@index([firebaseUid])
 }

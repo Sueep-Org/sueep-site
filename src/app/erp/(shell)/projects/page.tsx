@@ -94,7 +94,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           sovItems: { select: { id: true, description: true, scheduledValueCents: true } },
         },
       },
-      building: { select: { id: true, name: true } },
+      building: { select: { id: true, name: true, address: true } },
       changeOrders: {
         select: {
           id: true,
@@ -151,10 +151,11 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
     },
   });
   const buildings = await prisma.building.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, address: true },
   });
   const buildingIdByName = new Map(buildings.map((building) => [normalizeMatchValue(building.name), building.id]));
   const buildingNameById = new Map(buildings.map((building) => [building.id, building.name]));
+  const buildingAddressById = new Map(buildings.map((building) => [building.id, building.address]));
 
   // One batched OT-splits call for every labor entry across every project/CO
   // on this page, instead of one call per project — calcOtSplits queries the
@@ -255,12 +256,14 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       normalizeMatchValue(getProjectDetailLine(p.description, "Property") || p.jobTitle.split(" - ")[0]?.trim())
     ) ?? null;
     const resolvedBuildingName = p.building?.name ?? (resolvedBuildingId ? buildingNameById.get(resolvedBuildingId) ?? null : null);
+    const resolvedBuildingAddress = p.building?.address ?? (resolvedBuildingId ? buildingAddressById.get(resolvedBuildingId) ?? null : null);
     return {
       id: p.id,
       jobTitle: p.jobTitle,
       description: p.description,
       buildingId: resolvedBuildingId,
       buildingName: resolvedBuildingName,
+      buildingAddress: resolvedBuildingAddress,
       segment: p.segment,
       status: p.status,
       projectDate: p.projectDate ? p.projectDate.toISOString() : null,
