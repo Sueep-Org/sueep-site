@@ -4008,7 +4008,11 @@ async function initApp(){
   }
 
   function _calculatePaintingMaterialsCost() {
-    const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
+    // Prefer explicit painting total area input; fall back to loaded project total area
+    const rawAreaValue = document.getElementById('paintingTotalAreaInput')?.value;
+    const area = (rawAreaValue !== null && rawAreaValue !== undefined && rawAreaValue !== '' && Number.isFinite(parseFloat(rawAreaValue)))
+      ? parseFloat(rawAreaValue)
+      : (parseFloat(_loadedProjectData?.total_area) || 0);
     const settings = _getPaintingMaterialSettings();
     // Paint gallons based on application factor and coverage
     const paintGallons = area > 0
