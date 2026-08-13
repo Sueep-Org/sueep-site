@@ -83,8 +83,16 @@ export type ScheduleProject = {
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, keyed by the same day keys as workDayKeys — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
-  /** Per-day individual LaborEntry rows (worker, hours, clock-in) — powers the read-only labor detail card on the calendar. Editing happens on the project's Labor log, not here. */
-  laborEntriesByDay: Record<string, { workerName: string; hours: number; clockIn: string | null }[]>;
+  /** Per-day individual LaborEntry rows (worker, hours, clock-in, and what
+   * scope of work they logged) — powers the read-only labor detail card on
+   * the calendar. Editing happens on the project's Labor log, not here.
+   * sovItemDescriptions is the SOV item(s) that entry's work covers
+   * (Post-Construction); taskDescription is the free-text/turnover-scope
+   * task otherwise — see ProjectLaborSection for how each gets set. */
+  laborEntriesByDay: Record<
+    string,
+    { workerName: string; hours: number; clockIn: string | null; taskDescription: string | null; sovItemDescriptions: string[] }[]
+  >;
   /** Planned (not-yet-logged) worker names per day, from ProjectWorkerDayAssignment. */
   plannedWorkersByDay: Record<string, string[]>;
   /** This project's SOV line items (id/description/completed) — lets the

@@ -1076,6 +1076,11 @@ export function SchedulePlanner({
     if (laborPopoverKey !== `${k}:${p.id}`) return null;
     const entries = p.laborEntriesByDay[k] ?? [];
     const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+    // What was actually worked on this day, straight off the labor log
+    // itself rather than what was planned — the union of every entry's SOV
+    // items (Post-Construction) and/or task description (everything else,
+    // including turnover scope categories, see ProjectLaborSection).
+    const loggedScopes = [...new Set(entries.flatMap((e) => [...e.sovItemDescriptions, ...(e.taskDescription ? [e.taskDescription] : [])]))];
     // Coverage to carry forward when repeating this day — from an explicit
     // day-assignment recorded alongside the logged labor if one exists,
     // otherwise just the project's current supervisor.
@@ -1105,6 +1110,19 @@ export function SchedulePlanner({
             {CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]} · {dayCellLabel(k)}
           </p>
 
+          {loggedScopes.length > 0 ? (
+            <div className="mt-3 border-t border-gray-100 pt-2.5">
+              <label className="block text-[10px] font-medium text-gray-500">Scope worked (from the labor log)</label>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {loggedScopes.map((s) => (
+                  <span key={s} className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-medium text-pink-700">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-3 border-t border-gray-100 pt-2.5">
             <div className="flex items-center justify-between">
               <label className="block text-[10px] font-medium text-gray-500">Logged labor</label>
@@ -1112,27 +1130,29 @@ export function SchedulePlanner({
             </div>
             {entries.length > 0 ? (
               <ul className="mt-1.5 space-y-1">
-                {entries.map((e, i) => (
-                  <li
-                    key={`${e.workerName}-${i}`}
-                    className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700"
-                  >
-                    <span className="truncate font-medium">{e.workerName}</span>
-                    <span className="shrink-0 text-gray-500">
-                      {formatHours(e.hours)}
-                      {e.clockIn ? <span className="text-gray-400"> · started {formatClockTime(e.clockIn)}</span> : null}
-                    </span>
-                  </li>
-                ))}
+                {entries.map((e, i) => {
+                  const scopeLabel = e.sovItemDescriptions.length > 0 ? e.sovItemDescriptions.join(", ") : e.taskDescription;
+                  return (
+                    <li
+                      key={`${e.workerName}-${i}`}
+                      className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-medium">{e.workerName}</span>
+                        <span className="shrink-0 text-gray-500">
+                          {formatHours(e.hours)}
+                          {e.clockIn ? <span className="text-gray-400"> · started {formatClockTime(e.clockIn)}</span> : null}
+                        </span>
+                      </div>
+                      {scopeLabel ? <div className="mt-0.5 truncate text-gray-500">{scopeLabel}</div> : null}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="mt-1.5 text-[10px] text-gray-400">No labor entries found for this day.</p>
             )}
           </div>
-
-          <p className="mt-3 text-[10px] text-gray-400">
-            This is logged, historical labor — it can only be corrected from the project&apos;s Labor log, not from the calendar.
-          </p>
 
           <DuplicateToMoreDaysSection
             projectId={p.id}
@@ -2607,6 +2627,14 @@ export function SchedulePlanner({
                   const summary = p.laborByDay[k];
                   const loggedWorkers = new Set(summary?.workers ?? []);
                   const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
+                  // What was actually worked on, straight off the labor log —
+                  // same union renderLaborPopover shows, just surfaced in the
+                  // hover tooltip too so it's visible without opening it.
+                  const loggedScopes = [
+                    ...new Set(
+                      (p.laborEntriesByDay[k] ?? []).flatMap((e) => [...e.sovItemDescriptions, ...(e.taskDescription ? [e.taskDescription] : [])])
+                    ),
+                  ];
                   return (
                     <Fragment key={`p-${p.id}`}>
                     <li className={inMonth ? "group relative" : "relative"}>
@@ -2630,6 +2658,9 @@ export function SchedulePlanner({
                                 <div className="text-gray-300">Workers: {summary.workers.join(", ")}</div>
                               ) : null}
                             </>
+                          ) : null}
+                          {loggedScopes.length > 0 ? (
+                            <div className="text-gray-300">Scope: {loggedScopes.join(", ")}</div>
                           ) : null}
                           {plannedWorkers.length > 0 ? (
                             <div className="mt-1 text-gray-300">Planned: {plannedWorkers.join(", ")}</div>
