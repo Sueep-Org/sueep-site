@@ -1063,21 +1063,6 @@ export default function EstimatorPage() {
                   </div>
                 </div>
 
-                {/* Margin — single row */}
-                <div className="mb-3 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Margin ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="marginInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-
                 <div id="calcSummaryContainer" className="mb-4"></div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
@@ -1620,21 +1605,6 @@ export default function EstimatorPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
-                </div>
-
-                {/* Margin */}
-                <div className="mb-3 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Margin ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingMarginInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
                 </div>
 
                 <div id="paintingCalcSummaryContainer" className="mb-4"></div>

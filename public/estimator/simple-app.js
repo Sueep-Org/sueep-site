@@ -4444,7 +4444,7 @@ async function initApp(){
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
-        [`Subtotal`, totSubtotal],
+        [`Labor`, totSubtotal],
         [`Materials`, materialsForSummary],
         [`Overhead (${overheadPct}%)`, totOhSummary],
         [`Profit (${profitPct}%)`, totPftSummary],
@@ -4628,7 +4628,7 @@ async function initApp(){
     if (summaryEl) {
       summaryEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr auto;gap:3px 24px;max-width:380px;font-size:12px;">
         <span style="color:#6b7280;">Labor Change Order</span><span style="font-weight:600;text-align:right;">${fmt$(laborChangeOrder)}</span>
-        <span style="color:#6b7280;">Labor Costs</span><span style="font-weight:600;text-align:right;">${fmt$(laborCosts)}</span>
+        <span style="color:#6b7280;">Labor</span><span style="font-weight:600;text-align:right;">${fmt$(laborCosts)}</span>
         <span style="color:#6b7280;">Materials</span><span style="font-weight:600;text-align:right;">${fmt$(materials)}</span>
         <span style="color:#6b7280;">Materials GC</span><span style="font-weight:600;text-align:right;">${fmt$(materialsGC)}</span>
         <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#2563eb;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
@@ -4805,15 +4805,6 @@ async function initApp(){
     container.innerHTML = '';
 
     if (_phasesLocked) {
-      const bar = document.createElement('div');
-      bar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button'; editBtn.textContent = 'Edit Phases';
-      editBtn.style.cssText = 'padding:4px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;color:#374151;font-size:12px;cursor:pointer;';
-      editBtn.onclick = () => { _phasesLocked = false; _renderPhaseTable(); };
-      bar.appendChild(editBtn);
-      container.appendChild(bar);
-
       const rates = _getRates();
       PHASE_IDS.filter(pid => !_deletedPhaseIds.has(pid)).forEach((pid, i) => {
         const actualIdx = PHASE_IDS.indexOf(pid);
@@ -4825,30 +4816,162 @@ async function initApp(){
         const foremen = crew.filter(m => m.role === 'foreman').length;
         const pms = crew.filter(m => m.role === 'project_manager').length;
 
-        const section = document.createElement('div');
-        section.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
-        const header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;';
+        const details = document.createElement('details');
+        details.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;';
+        details.open = true;
+        const summary = document.createElement('summary');
+        summary.style.cssText = 'list-style:none;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;cursor:pointer;font-size:13px;font-weight:600;color:#374151;';
         const nameEl = document.createElement('span');
         nameEl.textContent = PHASES[actualIdx];
         nameEl.style.cssText = 'font-weight:600;font-size:13px;color:#374151;';
-        const summary = document.createElement('span');
+        const summaryMeta = document.createElement('span');
         const parts = [];
         if (cleaners) parts.push(`${cleaners} Cleaner${cleaners > 1 ? 's' : ''}`);
         if (foremen) parts.push(`${foremen} Foreman`);
         if (pms) parts.push(`${pms} PM`);
-        summary.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
-        summary.style.cssText = 'font-size:12px;color:#6b7280;';
-        header.appendChild(nameEl); header.appendChild(summary);
-        section.appendChild(header);
+        summaryMeta.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
+        summaryMeta.style.cssText = 'font-size:12px;color:#6b7280;';
+        summary.appendChild(nameEl); summary.appendChild(summaryMeta);
+        details.appendChild(summary);
 
-        // Materials row in locked mode
+        const body = document.createElement('div');
+        body.style.cssText = 'border-top:1px solid #e5e7eb;';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb;';
+        const leftGroup = document.createElement('div');
+        leftGroup.style.cssText = 'display:flex;align-items:center;';
+        const addBtns = document.createElement('div');
+        addBtns.style.cssText = 'display:flex;gap:6px;';
+        const mkAddBtn = (label, role, color, bg, border, defaultRate) => {
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.textContent = label;
+          btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
+          btn.onclick = () => {
+            const newMember = { role, rate: defaultRate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) };
+            _phaseCrews[pid].push(newMember);
+            _renderPhaseTable();
+          };
+          return btn;
+        };
+        addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
+        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
+        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
+        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
+        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
+        const delPhaseBtn = document.createElement('button');
+        delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
+        delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
+        delPhaseBtn.onclick = () => {
+          _deletedPhaseIds.add(pid);
+          _renderPhaseTable();
+          _updateCrewCalcs();
+          renderSovCard();
+        };
+        leftGroup.appendChild(delPhaseBtn);
+        header.appendChild(leftGroup); header.appendChild(addBtns);
+        body.appendChild(header);
+
+        const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
+        if (crew.length === 0) {
+          const empty = document.createElement('div');
+          empty.textContent = 'No crew — add a cleaner or foreman above';
+          empty.style.cssText = 'padding:12px;text-align:center;color:#9ca3af;font-size:12px;';
+          body.appendChild(empty);
+        } else {
+          const table = document.createElement('table');
+          table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+          const thead = table.createTHead();
+          const hrow = thead.insertRow();
+          ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+            hrow.appendChild(th);
+          });
+          const roleOrder = { cleaner: 0, foreman: 1, assistant: 2, painter: 3, project_manager: 4 };
+          const sortedCrew = [...crew].sort((a, b) => (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1));
+          const tbody = table.createTBody();
+          sortedCrew.forEach((member, idx) => {
+            const tr = tbody.insertRow();
+            tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+            const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
+            const badge = document.createElement('span');
+            const roleLabels = { cleaner: 'Cleaner', foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'Project Manager' };
+            const roleColors = {
+              cleaner: 'background:#eff6ff;color:#2563eb;', foreman: 'background:#f0fdf4;color:#16a34a;',
+              assistant: 'background:#fffbeb;color:#d97706;', painter: 'background:#fef2f2;color:#dc2626;',
+              project_manager: 'background:#f5f3ff;color:#7c3aed;',
+            };
+            badge.textContent = roleLabels[member.role] || member.role;
+            badge.style.cssText = `padding:2px 7px;border-radius:10px;${roleColors[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
+            roleTd.appendChild(badge);
+            const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text'; nameInput.placeholder = 'Name'; nameInput.value = member.name || '';
+            nameInput.style.cssText = iStyle + 'width:100px;';
+            nameInput.addEventListener('input', () => { member.name = nameInput.value.trim(); });
+            nameTd.appendChild(nameInput);
+            const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
+            const rateWrap = document.createElement('div'); rateWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const rateInput = document.createElement('input');
+            rateInput.type = 'number'; rateInput.min = '0'; rateInput.step = '0.01'; rateInput.value = member.rate;
+            rateInput.style.cssText = iStyle + 'width:64px;';
+            rateInput.addEventListener('input', () => { member.rate = parseFloat(rateInput.value) || 0; _updateCrewCalcs(); });
+            const rateLabel = document.createElement('span');
+            rateLabel.textContent = '$/hr'; rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
+            rateWrap.appendChild(rateInput); rateWrap.appendChild(rateLabel);
+            rateTd.appendChild(rateWrap);
+            const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+            const hoursWrap = document.createElement('div'); hoursWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const hoursInput = document.createElement('input');
+            hoursInput.type = 'number'; hoursInput.min = '0'; hoursInput.max = '24'; hoursInput.step = '0.5'; hoursInput.value = member.hours ?? 8;
+            hoursInput.style.cssText = iStyle + 'width:44px;';
+            hoursInput.addEventListener('input', () => { member.hours = parseFloat(hoursInput.value) || 0; _updateCrewCalcs(); });
+            const hoursLabel = document.createElement('span');
+            hoursLabel.textContent = 'hrs'; hoursLabel.style.cssText = 'font-size:11px;color:#6b7280;';
+            hoursWrap.appendChild(hoursInput); hoursWrap.appendChild(hoursLabel); hoursTd.appendChild(hoursWrap);
+            const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
+            const daysInput = document.createElement('input');
+            daysInput.type = 'number'; daysInput.min = '0'; daysInput.step = '0.5'; daysInput.value = member.days;
+            daysInput.style.cssText = iStyle + 'width:56px;';
+            daysInput.addEventListener('input', () => { member.days = parseFloat(daysInput.value) || 0; _updateCrewCalcs(); });
+            daysTd.appendChild(daysInput);
+            const payTd = tr.insertCell();
+            payTd.id = `crew_pay_${member._uid || idx}`;
+            payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
+            const pay = (member.rate||0)*(member.hours??8)*(member.days||0); payTd.textContent = fmt$(pay);
+            const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button'; delBtn.textContent = '×';
+            delBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;line-height:1;';
+            delBtn.onclick = () => { const realIdx = _phaseCrews[pid].indexOf(member); if (realIdx !== -1) _phaseCrews[pid].splice(realIdx, 1); _renderPhaseTable(); };
+            delTd.appendChild(delBtn);
+          });
+          table.appendChild(tbody); body.appendChild(table);
+        }
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
+        [
+          ['Cleaners Pay', `phase_cleaners_${pid}`],
+          ['Foreman Pay', `phase_foreman_${pid}`],
+          ['Assistant Pay', `phase_assistant_${pid}`],
+          ['Painter Pay', `phase_painter_${pid}`],
+          ['PM Pay', `phase_pm_${pid}`],
+          ['Labor', `phase_labor_${pid}`],
+          ['Labor', `phase_subtotal_${pid}`],
+        ].forEach(([label, id]) => {
+          const span = document.createElement('span');
+          span.innerHTML = `${label}: <strong id="${id}" style="color:#374151;">$0.00</strong>`;
+          footer.appendChild(span);
+        });
+        body.appendChild(footer);
         const matRow = document.createElement('div');
-        matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;color:#6b7280;';
-        matRow.innerHTML = `<span>Materials ($):</span><span style="color:#374151;font-weight:600;">${fmt$(phaseMat)}</span>`;
-        section.appendChild(matRow);
-
-        container.appendChild(section);
+        matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;';
+        matRow.innerHTML = `<span style="color:#6b7280;">Materials ($):</span><span style="color:#374151;font-weight:600;">${fmt$(phaseMat)}</span>`;
+        body.appendChild(matRow);
+        details.appendChild(body);
+        container.appendChild(details);
       });
       _updateCrewCalcs();
       return;
@@ -5037,7 +5160,7 @@ async function initApp(){
         ['Painter Pay', `phase_painter_${pid}`],
         ['PM Pay', `phase_pm_${pid}`],
         ['Labor', `phase_labor_${pid}`],
-        ['Subtotal', `phase_subtotal_${pid}`],
+        ['Labor', `phase_subtotal_${pid}`],
       ].forEach(([label, id]) => {
         const span = document.createElement('span');
         span.innerHTML = `${label}: <strong id="${id}" style="color:#374151;">$0.00</strong>`;
@@ -5162,7 +5285,7 @@ async function initApp(){
       const grid = document.createElement('div');
       grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
-        [`Subtotal`, totSubtotal],
+        [`Labor`, totSubtotal],
         [`Materials`, materialsForPricing],
         [`Overhead (${overheadPct}%)`, totOh],
         [`Profit (${profitPct}%)`, totPft],
@@ -5354,15 +5477,6 @@ async function initApp(){
     };
 
     if (_paintingPhasesLocked) {
-      const bar = document.createElement('div');
-      bar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button'; editBtn.textContent = 'Edit Phases';
-      editBtn.style.cssText = 'padding:4px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;color:#374151;font-size:12px;cursor:pointer;';
-      editBtn.onclick = () => { _paintingPhasesLocked = false; _renderPaintingPhaseTable(); };
-      bar.appendChild(editBtn);
-      container.appendChild(bar);
-
       const rates = _getPaintingRates();
       PAINTING_PHASE_IDS.filter(pid => !_deletedPaintingPhaseIds.has(pid)).forEach((pid, i) => {
         const crew = _paintingPhaseCrews[pid] || [];
@@ -5373,10 +5487,11 @@ async function initApp(){
         const assistants = crew.filter(m => m.role === 'assistant').length;
         const pms = crew.filter(m => m.role === 'project_manager').length;
 
-        const section = document.createElement('div');
-        section.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
-        const header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;';
+        const details = document.createElement('details');
+        details.style.cssText = 'margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;';
+        details.open = true;
+        const summary = document.createElement('summary');
+        summary.style.cssText = 'list-style:none;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;cursor:pointer;font-size:13px;font-weight:600;color:#374151;';
         const nameEl = document.createElement('span');
         nameEl.textContent = PAINTING_PHASES[PAINTING_PHASE_IDS.indexOf(pid)];
         nameEl.style.cssText = 'font-weight:600;font-size:13px;color:#374151;';
@@ -5385,13 +5500,137 @@ async function initApp(){
         if (foremen) parts.push(`${foremen} Foreman`);
         if (assistants) parts.push(`${assistants} Assistant${assistants > 1 ? 's' : ''}`);
         if (pms) parts.push(`${pms} PM${pms > 1 ? 's' : ''}`);
-        const summary = document.createElement('span');
-        summary.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
-        summary.style.cssText = 'font-size:12px;color:#6b7280;';
-        header.appendChild(nameEl); header.appendChild(summary);
-        section.appendChild(header);
-        appendMaterialSubsection(section, i);
-        container.appendChild(section);
+        const summaryMeta = document.createElement('span');
+        summaryMeta.textContent = `${parts.join(', ')} · ${days} day${days !== 1 ? 's' : ''} · Labor: ${fmt$(c.laborCost)}`;
+        summaryMeta.style.cssText = 'font-size:12px;color:#6b7280;';
+        summary.appendChild(nameEl); summary.appendChild(summaryMeta);
+        details.appendChild(summary);
+
+        const body = document.createElement('div');
+        body.style.cssText = 'border-top:1px solid #e5e7eb;';
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb;';
+        const leftGroup = document.createElement('div');
+        leftGroup.style.cssText = 'display:flex;align-items:center;';
+        const addBtns = document.createElement('div');
+        addBtns.style.cssText = 'display:flex;gap:6px;';
+        const mkAddBtn = (label, role, color, bg, border, defaultRate) => {
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.textContent = label;
+          btn.style.cssText = `padding:3px 8px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
+          btn.onclick = () => {
+            _paintingPhaseCrews[pid].push({ role, rate: defaultRate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) });
+            if (!_paintingExpectedDaysManual) _refreshPaintingDays();
+            _renderPaintingPhaseTable();
+            _updatePaintingCrewCalcs();
+          };
+          return btn;
+        };
+        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', 28));
+        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
+        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 25));
+        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 28.84));
+        const delPhaseBtn = document.createElement('button');
+        delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
+        delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
+        delPhaseBtn.onclick = () => { _deletedPaintingPhaseIds.add(pid); _renderPaintingPhaseTable(); _updatePaintingCrewCalcs(); };
+        leftGroup.appendChild(delPhaseBtn);
+        header.appendChild(leftGroup); header.appendChild(addBtns);
+        body.appendChild(header);
+
+        if (crew.length === 0) {
+          const empty = document.createElement('div');
+          empty.textContent = 'No crew — add a role above';
+          empty.style.cssText = 'padding:12px;text-align:center;color:#9ca3af;font-size:12px;';
+          body.appendChild(empty);
+        } else {
+          const table = document.createElement('table');
+          table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+          const thead = table.createTHead();
+          const hrow = thead.insertRow();
+          ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+            hrow.appendChild(th);
+          });
+          const roleOrder = { foreman: 0, assistant: 1, painter: 2, project_manager: 3 };
+          const sortedCrew = [...crew].sort((a, b) => (roleOrder[a.role] ?? 1) - (roleOrder[b.role] ?? 1));
+          const tbody = table.createTBody();
+          const roleLabels = { foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'Project Manager' };
+          const roleColors = {
+            foreman:   'background:#f0fdf4;color:#16a34a;', assistant: 'background:#fffbeb;color:#d97706;',
+            painter:   'background:#fef2f2;color:#dc2626;', project_manager: 'background:#f5f3ff;color:#7c3aed;',
+          };
+          sortedCrew.forEach((member, idx) => {
+            const tr = tbody.insertRow();
+            tr.style.cssText = 'border-top:1px solid #f3f4f6;';
+            const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
+            const badge = document.createElement('span');
+            badge.textContent = roleLabels[member.role] || member.role;
+            badge.style.cssText = `padding:2px 7px;border-radius:10px;${roleColors[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
+            roleTd.appendChild(badge);
+            const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text'; nameInput.placeholder = 'Name'; nameInput.value = member.name || '';
+            nameInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;width:100px;';
+            nameInput.addEventListener('input', () => { member.name = nameInput.value.trim(); });
+            nameTd.appendChild(nameInput);
+            const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
+            const rateWrap = document.createElement('div'); rateWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const rateInput = document.createElement('input');
+            rateInput.type = 'number'; rateInput.min = '0'; rateInput.step = '0.01'; rateInput.value = member.rate;
+            rateInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;width:64px;';
+            rateInput.addEventListener('input', () => { member.rate = parseFloat(rateInput.value) || 0; _updatePaintingCrewCalcs(); });
+            const rateLabel = document.createElement('span');
+            rateLabel.textContent = '$/hr'; rateLabel.style.cssText = 'font-size:11px;color:#6b7280;white-space:nowrap;';
+            rateWrap.appendChild(rateInput); rateWrap.appendChild(rateLabel); rateTd.appendChild(rateWrap);
+            const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+            const hoursWrap = document.createElement('div'); hoursWrap.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            const hoursInput = document.createElement('input');
+            hoursInput.type = 'number'; hoursInput.min = '0'; hoursInput.max = '24'; hoursInput.step = '0.5'; hoursInput.value = member.hours ?? 8;
+            hoursInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;width:44px;';
+            hoursInput.addEventListener('input', () => { member.hours = parseFloat(hoursInput.value) || 0; _updatePaintingCrewCalcs(); });
+            const hoursLabel = document.createElement('span');
+            hoursLabel.textContent = 'hrs'; hoursLabel.style.cssText = 'font-size:11px;color:#6b7280;';
+            hoursWrap.appendChild(hoursInput); hoursWrap.appendChild(hoursLabel); hoursTd.appendChild(hoursWrap);
+            const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
+            const daysInput = document.createElement('input');
+            daysInput.type = 'number'; daysInput.min = '0'; daysInput.step = '0.5'; daysInput.value = member.days;
+            daysInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;width:56px;';
+            daysInput.addEventListener('input', () => { member.days = parseFloat(daysInput.value) || 0; _updatePaintingCrewCalcs(); });
+            daysTd.appendChild(daysInput);
+            const payTd = tr.insertCell();
+            payTd.id = `pcrew_pay_${member._uid || idx}`;
+            payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
+            const pay = (member.rate||0)*(member.hours??8)*(member.days||0); payTd.textContent = fmt$(pay);
+            const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button'; delBtn.textContent = '×';
+            delBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;line-height:1;';
+            delBtn.onclick = () => { const realIdx = _paintingPhaseCrews[pid].indexOf(member); if (realIdx !== -1) _paintingPhaseCrews[pid].splice(realIdx, 1); _renderPaintingPhaseTable(); };
+            delTd.appendChild(delBtn);
+          });
+          table.appendChild(tbody); body.appendChild(table);
+        }
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
+        [
+          ['Foreman Pay', `pphase_foreman_${pid}`],
+          ['Assistant Pay', `pphase_assistant_${pid}`],
+          ['Painter Pay', `pphase_painter_${pid}`],
+          ['PM Pay', `pphase_pm_${pid}`],
+          ['Labor', `pphase_labor_${pid}`],
+          ['Labor', `pphase_subtotal_${pid}`],
+        ].forEach(([label, id]) => {
+          const span = document.createElement('span');
+          span.innerHTML = `${label}: <strong id="${id}" style="color:#374151;">$0.00</strong>`;
+          footer.appendChild(span);
+        });
+        body.appendChild(footer);
+        appendMaterialSubsection(body, i);
+        details.appendChild(body);
+        container.appendChild(details);
       });
       _updatePaintingCrewCalcs();
       return;
@@ -5696,7 +5935,7 @@ async function initApp(){
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor Cost', 'Materials', 'Subtotal'].forEach((h, i) => {
+        ['Phase', 'Persons', 'Days', 'Cleaners Pay', 'Foreman Pay', 'Labor', 'Materials', 'Labor'].forEach((h, i) => {
           const th = document.createElement('th');
           th.textContent = h;
           th.style.cssText = `text-align:${i <= 2 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
@@ -5877,7 +6116,7 @@ async function initApp(){
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead();
         const hrow = thead.insertRow();
-        ['Phase', 'Days', 'Foreman Pay', 'Assistant Pay', 'Painter Pay', 'Labor Cost', 'Subtotal'].forEach((h, i) => {
+        ['Phase', 'Days', 'Foreman Pay', 'Assistant Pay', 'Painter Pay', 'Labor', 'Labor'].forEach((h, i) => {
           const th = document.createElement('th');
           th.textContent = h;
           th.style.cssText = `text-align:${i <= 1 ? 'left' : 'right'};padding:4px 8px;color:#6b7280;font-weight:500;background:#f9fafb;font-size:11px;white-space:nowrap;`;
@@ -5923,7 +6162,7 @@ async function initApp(){
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
-          [`Subtotal`, subtotalWithDriver],
+          [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
           [`Overhead (${overheadPct}%)`, totOh],
           [`Profit (${profitPct}%)`, totPft],
