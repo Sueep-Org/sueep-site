@@ -5974,7 +5974,7 @@ async function initApp(){
         const pricingDiv = document.createElement('div');
         pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
-          [`Subtotal`, subtotalWithDriver],
+          [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
           [`Overhead (${bd.overhead_pct || 0}%)`, totOhSummary],
           [`Profit (${bd.profit_pct || 0}%)`, totPftSummary],
@@ -6003,7 +6003,6 @@ async function initApp(){
     setText('analysisViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
     const di = projData.driving_info;
     setText('detailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
-    setText('analysisViewMargin', projData.margin != null ? fmt$(projData.margin) : '—');
     setText('analysisViewExpectedDays', projData.expected_days != null ? `${projData.expected_days} days` : '—');
 
     const totalAreaInput = document.getElementById('analysisTotalAreaInput');
@@ -6222,7 +6221,6 @@ async function initApp(){
     setText('paintingDetailDuration', di?.duration || '—');
     setText('paintingDetailTollCost', totalTransport > 0 ? fmt$(totalTransport) : '—');
     setText('paintingViewGasoline', gasCost != null ? fmt$(gasCost) : '—');
-    setText('paintingViewMargin', bd?.margin != null ? fmt$(bd.margin) : (projData.margin != null ? fmt$(projData.margin) : '—'));
 
     // Initialize edit state from saved painting_breakdown
     _paintingPhaseCrews = { phase1: [], phase2: [] };
