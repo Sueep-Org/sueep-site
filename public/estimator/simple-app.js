@@ -3995,7 +3995,12 @@ async function initApp(){
     const getValue = id => document.getElementById(id)?.value ?? '';
     const coats = parseInt(getValue('paintingCoatsSelect'), 10) || 2;
     const surface = getValue('paintingSurfaceConditionSelect') || 'smooth';
-    const quality = getValue('paintingPaintQualitySelect') || 'standard';
+    const qualitySelectValue = getValue('paintingPaintQualitySelect') || 'standard';
+    const customQualityField = document.getElementById('paintingPaintQualityCustomInput');
+    const customQuality = customQualityField ? parseFloat(customQualityField.value) : NaN;
+    const quality = qualitySelectValue === 'custom'
+      ? (Number.isFinite(customQuality) && customQuality >= 0 ? 'custom' : 'standard')
+      : qualitySelectValue;
     const finish = getValue('paintingFinishTypeSelect') || 'flat';
     const color = getValue('paintingColorDepthSelect') || 'white_light';
     const primer = getValue('paintingPrimerTypeSelect') || 'none';
@@ -4006,6 +4011,9 @@ async function initApp(){
     const primerCoats = parseInt(getValue('paintingPrimerCoatsSelect') || getValue('paintingPrimerCoats') || '1', 10) || 1;
     const primerApplication = getValue('paintingPrimerApplicationMethodSelect') || application || 'roller';
     const activeApplicationMethod = application || primerApplication || 'roller';
+    const paintPrice = quality === 'custom'
+      ? (Number.isFinite(customQuality) && customQuality >= 0 ? customQuality : (PAINTING_PRICE_PER_GALLON.standard ?? 45))
+      : (PAINTING_PRICE_PER_GALLON[quality] ?? 45);
 
     return {
       coats,
@@ -4020,7 +4028,7 @@ async function initApp(){
       activeApplicationMethod,
       surfaceMultiplier: PAINTING_SURFACE_MULTIPLIERS[surface] ?? 1,
       applicationFactor: PAINTING_APPLICATION_FACTORS[application] ?? 1.0,
-      paintPrice: PAINTING_PRICE_PER_GALLON[quality] ?? 45,
+      paintPrice,
       finishMultiplier: PAINTING_FINISH_MULTIPLIERS[finish] ?? 1,
       colorMultiplier: PAINTING_COLOR_MULTIPLIERS[color] ?? 1,
       primerPrice: primerRequired ? (PAINTING_PRIMER_PRICE_PER_GALLON[primer] ?? 0) : 0,
@@ -4131,11 +4139,26 @@ async function initApp(){
   }
 
   function _attachPaintingMaterialsListeners() {
-    const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
+    const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingPaintQualityCustomInput', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
     const handleMaterialChange = () => {
       _updatePaintingMaterialsCostDisplays();
       _updatePaintingCrewCalcs();
     };
+
+    const qualitySelect = document.getElementById('paintingPaintQualitySelect');
+    const qualityCustomInput = document.getElementById('paintingPaintQualityCustomInput');
+    const syncCustomPaintQualityInput = () => {
+      if (!qualitySelect || !qualityCustomInput) return;
+      const isCustom = qualitySelect.value === 'custom';
+      qualityCustomInput.disabled = !isCustom;
+      qualityCustomInput.style.opacity = isCustom ? '1' : '0.6';
+      if (!isCustom) qualityCustomInput.value = '';
+    };
+    if (qualitySelect && qualityCustomInput) {
+      qualitySelect.addEventListener('input', syncCustomPaintQualityInput);
+      qualitySelect.addEventListener('change', syncCustomPaintQualityInput);
+      syncCustomPaintQualityInput();
+    }
 
     materialIds.forEach(id => {
       const el = document.getElementById(id);
@@ -5407,12 +5430,16 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Paint Quality</label>
-            <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
-              <option value="economy">Economy: $32/gal</option>
-              <option value="standard">Standard: $45/gal</option>
-              <option value="premium">Premium: $60/gal</option>
-              <option value="ultra">Ultra Premium: $75/gal</option>
-            </select>
+            <div class="flex gap-2 items-end">
+              <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+                <option value="economy">Economy: $32/gal</option>
+                <option value="standard">Standard: $45/gal</option>
+                <option value="premium">Premium: $60/gal</option>
+                <option value="ultra">Ultra Premium: $75/gal</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input id="paintingPaintQualityCustomInput" type="number" min="0" step="0.01" placeholder="$/gal" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400" style="opacity:0.6;" />
+            </div>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Surface Condition</label>
