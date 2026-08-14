@@ -629,7 +629,7 @@ export default function EstimatorPage() {
                 {/* Labor breakdown table — rendered by JS */}
                 <div id="analysisViewBreakdown" className="mb-4"></div>
                 {/* Summary row */}
-                <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Total Labor
@@ -680,17 +680,6 @@ export default function EstimatorPage() {
                     </span>
                     <div
                       id="analysisViewGasoline"
-                      className="text-gray-800 font-semibold mt-0.5"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 text-xs uppercase tracking-wide">
-                      Margin
-                    </span>
-                    <div
-                      id="analysisViewMargin"
                       className="text-gray-800 font-semibold mt-0.5"
                     >
                       —
@@ -1063,21 +1052,6 @@ export default function EstimatorPage() {
                   </div>
                 </div>
 
-                {/* Margin — single row */}
-                <div className="mb-3 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Margin ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="marginInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-
                 <div id="calcSummaryContainer" className="mb-4"></div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
@@ -1194,7 +1168,7 @@ export default function EstimatorPage() {
                   </div>
                 </div>
                 <div id="paintingViewBreakdown" className="mb-4"></div>
-                <div className="grid grid-cols-6 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Total Labor
@@ -1245,17 +1219,6 @@ export default function EstimatorPage() {
                     </span>
                     <div
                       id="paintingViewGasoline"
-                      className="text-gray-800 font-semibold mt-0.5"
-                    >
-                      —
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-400 text-xs uppercase tracking-wide">
-                      Margin
-                    </span>
-                    <div
-                      id="paintingViewMargin"
                       className="text-gray-800 font-semibold mt-0.5"
                     >
                       —
@@ -1620,21 +1583,6 @@ export default function EstimatorPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
-                </div>
-
-                {/* Margin */}
-                <div className="mb-3 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Margin ($)
-                  </label>
-                  <input
-                    type="number"
-                    id="paintingMarginInput"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
                 </div>
 
                 <div id="paintingCalcSummaryContainer" className="mb-4"></div>
