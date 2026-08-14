@@ -22,6 +22,10 @@ type Props = {
     hourlyPayCents: number | null;
     annualSalaryCents: number | null;
     status: string;
+    /// MANUAL | AUTO — whether the cron auto-flagged Inactive (see
+    /// employeeInactivity.ts) or a person set the current status.
+    statusSource: string;
+    statusChangedAt: string | null;
     hireDate: string | null;
     notes: string | null;
     isOffshore: boolean;
@@ -234,6 +238,13 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
             </select>
+            {initial.status === "INACTIVE" && initial.statusSource === "AUTO" && (
+              <p className="mt-1 text-[11px] text-amber-600">
+                Auto-flagged inactive{initial.statusChangedAt ? ` on ${new Date(initial.statusChangedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}
+                {" "}(no logged work in 6+ months). Will switch back to Active automatically once they log labor
+                again, or change it here yourself.
+              </p>
+            )}
           </div>
           <div>
             <label className={label} htmlFor="hireDate">

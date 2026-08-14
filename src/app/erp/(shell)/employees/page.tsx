@@ -1,22 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
-  complianceBadgeClasses,
-  complianceLabel,
   evaluateEmployeeCompliance,
-  backgroundCheckBadgeClasses,
-  backgroundCheckLabel,
+  activityStatusBadgeClasses,
+  activityStatusLabel,
   type BackgroundCheckStatus,
 } from "@/lib/erp/employees";
 import { NewEmployeeForm } from "./NewEmployeeForm";
 import { EmployeesFilterBar } from "./EmployeesFilterBar";
-
-const BACKGROUND_CHECK_ORDER: Record<BackgroundCheckStatus, number> = {
-  FAILED: 0,
-  PENDING: 1,
-  NOT_DONE: 2,
-  PASSED: 3,
-};
 
 function normalizeBackgroundCheckStatus(status: string | null): BackgroundCheckStatus {
   return status === "PASSED" || status === "FAILED" || status === "PENDING" ? status : "NOT_DONE";
@@ -91,10 +82,12 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   const payTypeFilter = payTypeRaw === "HOURLY" || payTypeRaw === "SALARY" || payTypeRaw === "OFFSHORE" ? payTypeRaw : "";
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
+  // Defaults to grouping Active before Inactive (each group alphabetical,
+  // see the sort comparator below) rather than a flat alphabetical list.
   const sortBy =
-    sortByRaw === "hourlyPay" || sortByRaw === "compliance" || sortByRaw === "backgroundCheck"
+    sortByRaw === "hourlyPay" || sortByRaw === "name"
       ? sortByRaw
-      : "name";
+      : "activityStatus";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
   const employees = await prisma.employee.findMany({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -125,7 +118,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     sortDir,
   };
 
-  const complianceOrder = { NON_COMPLIANT: 0, NOT_CONFIGURED: 1, COMPLIANT: 2, INACTIVE: 3 };
+  const activityStatusOrder: Record<string, number> = { ACTIVE: 0, INACTIVE: 1 };
 
   rows.sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -133,13 +126,9 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
       const av = a.hourlyPayCents ?? -1;
       const bv = b.hourlyPayCents ?? -1;
       if (av !== bv) return (av - bv) * dir;
-    } else if (sortBy === "compliance") {
-      const av = complianceOrder[a.compliance];
-      const bv = complianceOrder[b.compliance];
-      if (av !== bv) return (av - bv) * dir;
-    } else if (sortBy === "backgroundCheck") {
-      const av = BACKGROUND_CHECK_ORDER[a.backgroundCheck];
-      const bv = BACKGROUND_CHECK_ORDER[b.backgroundCheck];
+    } else if (sortBy === "activityStatus") {
+      const av = activityStatusOrder[a.status] ?? 0;
+      const bv = activityStatusOrder[b.status] ?? 0;
       if (av !== bv) return (av - bv) * dir;
     }
     const an = `${a.lastName} ${a.firstName}`.toLowerCase();
@@ -207,13 +196,8 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">
-                  <Link href={employeesHref({ ...currentParams, sortBy: "compliance", sortDir: sortBy === "compliance" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
-                    Compliance
-                  </Link>
-                </th>
-                <th className="px-3 py-2 font-semibold">
-                  <Link href={employeesHref({ ...currentParams, sortBy: "backgroundCheck", sortDir: sortBy === "backgroundCheck" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
-                    Background Check
+                  <Link href={employeesHref({ ...currentParams, sortBy: "activityStatus", sortDir: sortBy === "activityStatus" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
+                    Activity status
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">Contact</th>
@@ -222,7 +206,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -237,13 +221,8 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                     <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
                     <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${complianceBadgeClasses(r.compliance)}`}>
-                        {complianceLabel(r.compliance)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${backgroundCheckBadgeClasses(r.backgroundCheck)}`}>
-                        {backgroundCheckLabel(r.backgroundCheck)}
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${activityStatusBadgeClasses(r.status)}`}>
+                        {activityStatusLabel(r.status, r.statusSource)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>

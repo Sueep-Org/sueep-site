@@ -1236,6 +1236,16 @@ model Employee {
   defaultProject String?
   /// ACTIVE | INACTIVE
   status         String    @default("ACTIVE")
+  /// MANUAL | AUTO — whether the current `status` was set by a person (via
+  /// the profile editor) or by the inactivity-check cron (see
+  /// src/lib/erp/employeeInactivity.ts: no logged labor in 6+ months).
+  /// Only an AUTO-sourced Inactive status gets auto-reactivated the moment
+  /// this employee logs labor again (see createLaborEntryForProject) — a
+  /// person's manual decision always holds until a person changes it back.
+  statusSource    String    @default("MANUAL")
+  /// When status/statusSource last changed — drives the "auto-flagged
+  /// inactive on [date]" note shown next to the Status field.
+  statusChangedAt DateTime?
   hireDate       DateTime?
   notes          String?
 

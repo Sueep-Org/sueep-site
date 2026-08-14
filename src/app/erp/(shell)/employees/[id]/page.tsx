@@ -212,6 +212,8 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 hourlyPayCents: employee.hourlyPayCents,
                 annualSalaryCents: employee.annualSalaryCents,
                 status: employee.status,
+                statusSource: employee.statusSource,
+                statusChangedAt: employee.statusChangedAt ? employee.statusChangedAt.toISOString() : null,
                 hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
                 notes: employee.notes,
                 isOffshore: employee.isOffshore,

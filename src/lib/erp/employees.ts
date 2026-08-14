@@ -47,3 +47,17 @@ export function backgroundCheckBadgeClasses(status: string | null | undefined): 
   if (status === "PENDING") return "border-yellow-300 bg-yellow-50 text-yellow-700";
   return "border-gray-300 bg-gray-50 text-gray-600";
 }
+
+/** status: ACTIVE | INACTIVE. statusSource: MANUAL | AUTO — see
+ * employeeInactivity.ts. An auto-flagged Inactive (no logged work in 6+
+ * months) reads distinctly from a manually-set one, same distinction shown
+ * on the employee's own profile page. */
+export function activityStatusLabel(status: string, statusSource: string): string {
+  if (status !== "INACTIVE") return "Active";
+  return statusSource === "AUTO" ? "Inactive (auto)" : "Inactive";
+}
+
+export function activityStatusBadgeClasses(status: string): string {
+  if (status === "INACTIVE") return "border-red-300 bg-red-50 text-red-700";
+  return "border-emerald-300 bg-emerald-50 text-emerald-700";
+}

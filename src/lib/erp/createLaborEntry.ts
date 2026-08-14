@@ -206,11 +206,18 @@ export async function createLaborEntryForProject(
   if (hourlyRateCents < 0) return { ok: false, status: 400, error: "Invalid rate" };
 
   const employeeId = body.employeeId != null ? String(body.employeeId).trim() : "";
-  let employee: { id: string; firstName: string; lastName: string; email: string | null } | null = null;
+  let employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    status: string;
+    statusSource: string;
+  } | null = null;
   if (employeeId) {
     employee = await prisma.employee.findUnique({
       where: { id: employeeId },
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, status: true, statusSource: true },
     });
     if (!employee) return { ok: false, status: 404, error: "Employee not found" };
   }
@@ -288,6 +295,22 @@ export async function createLaborEntryForProject(
       await notifyPmIfMarginWorsened(projectId, priorHours, priorHours + hours);
     } catch (e) {
       console.error("Turnover margin PM alert failed", e);
+    }
+    // Auto-reactivate an employee the inactivity cron flagged Inactive (see
+    // src/lib/erp/employeeInactivity.ts) — they just logged real labor, so
+    // the condition that flagged them no longer holds. Never touches an
+    // employee a person manually marked Inactive (statusSource "MANUAL"),
+    // that decision only a person can undo. statusSource stays "AUTO" so a
+    // future dry spell can flag them again without anyone re-touching this.
+    if (employee?.status === "INACTIVE" && employee.statusSource === "AUTO") {
+      try {
+        await prisma.employee.update({
+          where: { id: employee.id },
+          data: { status: "ACTIVE", statusChangedAt: new Date() },
+        });
+      } catch (e) {
+        console.error("Employee auto-reactivation failed", e);
+      }
     }
     return { ok: true, entry };
   } catch (e) {

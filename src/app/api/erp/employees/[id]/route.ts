@@ -88,6 +88,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
+    // A person editing this field via the profile form always counts as a
+    // manual decision — even if they're just re-setting the same value the
+    // inactivity cron already set (see employeeInactivity.ts) — so it stops
+    // being eligible for auto-reactivation until a person changes it again.
+    if (statusRaw !== existing.status || existing.statusSource !== "MANUAL") {
+      data.statusSource = "MANUAL";
+      data.statusChangedAt = new Date();
+    }
   }
   if (body.hireDate !== undefined) {
     const d = parseDate(body.hireDate);
