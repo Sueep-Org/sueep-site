@@ -32,7 +32,12 @@ type Props = {
 export function BuildingUnitsSection({ buildingId, units, canAdd }: Props) {
   return (
     <div className="space-y-4">
-      {canAdd && <AddUnitForm buildingId={buildingId} />}
+      {canAdd && (
+        <AddUnitForm
+          buildingId={buildingId}
+          existingUnitNumbers={units.map((u) => u.unitNumber).filter((n): n is string => Boolean(n))}
+        />
+      )}
 
       {units.length === 0 ? (
         <p className="text-sm text-gray-400">No units added yet.</p>

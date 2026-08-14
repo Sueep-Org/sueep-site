@@ -11,9 +11,18 @@ export async function GET() {
       recurringContract: {
         select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
       },
+      turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
     },
   });
-  return NextResponse.json(buildings);
+  // Flatten to just the unit numbers already used on each building, so the
+  // "new project" form can warn on a duplicate unit identifier client-side.
+  const shaped = buildings.map(({ turnoverRequests, ...building }) => ({
+    ...building,
+    existingUnitNumbers: Array.from(
+      new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
+    ),
+  }));
+  return NextResponse.json(shaped);
 }
 
 export async function POST(req: Request) {

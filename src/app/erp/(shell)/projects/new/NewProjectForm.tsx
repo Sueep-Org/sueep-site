@@ -223,6 +223,7 @@ interface BuildingOption {
     status: string;
     units: { id: string; unitNumber: string }[];
   } | null;
+  existingUnitNumbers?: string[];
 }
 
 interface ScheduleBuildingOption {
@@ -827,6 +828,20 @@ export function NewProjectForm({
     () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
     [selectedBuilding]
   );
+  const existingBuildingUnitNumbers = useMemo(
+    () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase())),
+    [selectedBuilding]
+  );
+  const [confirmedDuplicateUnitIds, setConfirmedDuplicateUnitIds] = useState<Set<string>>(new Set());
+
+  /** True if this unit's identifier already exists on the selected building,
+   * or collides with another unit being added in this same submission. */
+  function isDuplicateUnitNumber(unitId: string, value: string): boolean {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return false;
+    if (existingBuildingUnitNumbers.has(trimmed)) return true;
+    return unitScopes.some((u) => u.id !== unitId && u.unitNumber.trim().toLowerCase() === trimmed);
+  }
   const addressOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -843,6 +858,14 @@ export function NewProjectForm({
   }, [buildings, scheduleBuildings, buildingAddress]);
 
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
+    if ("unitNumber" in patch) {
+      setConfirmedDuplicateUnitIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
     setUnitScopes((prev) =>
       prev.map((unit) => {
         if (unit.id !== id) return unit;
@@ -871,6 +894,16 @@ export function NewProjectForm({
 
   function removeUnitScope(id: string) {
     setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
+    setConfirmedDuplicateUnitIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function confirmDuplicateUnit(id: string) {
+    setConfirmedDuplicateUnitIds((prev) => new Set(prev).add(id));
   }
 
   function applySelectedBuilding(id: string) {
@@ -939,6 +972,10 @@ export function NewProjectForm({
     }
     if (step === 2) {
       if (unitScopes.some((unit) => !unit.startDate)) return "Start date is required for every unit.";
+      const unresolvedDuplicate = unitScopes.some(
+        (unit) => isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id)
+      );
+      if (unresolvedDuplicate) return "Confirm the duplicate unit number warning above before continuing.";
     }
     if (step === 3) {
       if (!sueepPmName.trim()) return "SUEEP PM name is required.";
@@ -1069,6 +1106,13 @@ export function NewProjectForm({
     if (isMultiStep) {
       const stepError = validateStep(currentStep);
       if (stepError) { setError(stepError); return; }
+    }
+    const unresolvedDuplicate = unitScopes.some(
+      (unit) => isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id)
+    );
+    if (unresolvedDuplicate) {
+      setError("One or more unit numbers already exist on this building. Confirm each duplicate warning above to continue.");
+      return;
     }
     setLoading(true);
     const fd = new FormData(e.currentTarget);
@@ -1602,6 +1646,18 @@ export function NewProjectForm({
                         onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
                         placeholder={unit.isCommonArea ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
                       />
+                      {isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id) ? (
+                        <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                          <p>This unit number already exists on this building. Continue anyway?</p>
+                          <button
+                            type="button"
+                            onClick={() => confirmDuplicateUnit(unit.id)}
+                            className="mt-1 rounded border border-amber-300 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"
+                          >
+                            Continue anyway
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`start-date-${unit.id}`}>

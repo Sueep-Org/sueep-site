@@ -33,7 +33,7 @@ export default async function NewProjectPage() {
       }
     : {};
 
-  const [buildings, allProjects, employees] = await Promise.all([
+  const [rawBuildings, allProjects, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
       select: {
@@ -47,6 +47,7 @@ export default async function NewProjectPage() {
         recurringContract: {
           select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
         },
+        turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
       },
     }),
     prisma.project.findMany({
@@ -76,6 +77,14 @@ export default async function NewProjectPage() {
       supervisor: true,
     },
   });
+  // Flatten to just the unit numbers already used on each building, so the
+  // form can warn on a duplicate unit identifier client-side.
+  const buildings = rawBuildings.map(({ turnoverRequests, ...building }) => ({
+    ...building,
+    existingUnitNumbers: Array.from(
+      new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
+    ),
+  }));
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-0">

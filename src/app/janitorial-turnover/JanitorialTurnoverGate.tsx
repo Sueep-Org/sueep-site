@@ -12,6 +12,7 @@ interface BuildingOption {
   pmName?: string | null;
   pmEmail?: string | null;
   pmPhone?: string | null;
+  existingUnitNumbers?: string[];
 }
 
 interface ScheduleBuildingOption {

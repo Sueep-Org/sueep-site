@@ -194,6 +194,19 @@ function isGroupableTurnoverProject(p: ScheduleProject): boolean {
   return p.segment === "JANITORIAL_TURNOVER_REQUESTS" && !!p.buildingId;
 }
 
+/** "Building Name - Unit 204" → "Unit 204" — every turnover unit's jobTitle
+ * follows that "{building} - {unit}" convention (see createProject.ts /
+ * recurringContracts.ts), so once a building-group chip already headlines
+ * the building name, repeating it on every nested unit chip is redundant.
+ * Falls back to the full jobTitle for anything that doesn't match (legacy
+ * rows, a building name that's since changed, etc.) rather than mangling it. */
+function unitLabelForGroupedChip(p: ScheduleProject): string {
+  if (p.buildingName && p.jobTitle.startsWith(`${p.buildingName} - `)) {
+    return p.jobTitle.slice(p.buildingName.length + 3);
+  }
+  return p.jobTitle;
+}
+
 /** One turnover unit's chip state for a single calendar day, tagged with
  * whichever of the four existing chip "buckets" it belongs to (plus that
  * bucket's own extras, e.g. role/assignment) — used only to group same-
@@ -204,7 +217,12 @@ type TurnoverEntry =
   | { kind: "needsSupervisor"; project: ScheduleProject; role: "start" | "end" }
   | { kind: "spanEndpoint"; project: ScheduleProject; role: "start" | "end" }
   | { kind: "confirmed"; project: ScheduleProject }
-  | { kind: "planned"; assignment: ScheduleDayAssignment; project: ScheduleProject };
+  | { kind: "planned"; assignment: ScheduleDayAssignment; project: ScheduleProject }
+  /// A unit with no chip of its own today (see orphanedJanitorialUnits),
+  /// only a change order scheduled this day — still counts toward its
+  /// building's group so the CO shows up under the building dropdown even
+  /// when the unit itself isn't otherwise on the schedule.
+  | { kind: "coOnly"; project: ScheduleProject };
 
 function formatClockTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
@@ -2400,11 +2418,21 @@ export function SchedulePlanner({
                 });
                 dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
                 dayCoNeedsSupervisor = selectedTypes.has("CO") ? dayCoNeedsSupervisor : [];
-                // A CO already flagged as "needs a supervisor" for this exact
-                // day would otherwise also render as its normal blue chip
-                // below (unlike a project, a CO's start/end day always shows
-                // up regardless of supervisor status) — drop it from the
-                // plain list so it shows up once, as the amber warning.
+                // Full set (turnover + everything else) — renderCoChip uses
+                // this to still show the amber "needs a supervisor" warning
+                // on a turnover CO even though it's nested under its unit
+                // now, not floating separately (see the split below).
+                const coNeedsSupervisorIds = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
+                // A turnover unit's CO stays nested under its unit (and that
+                // unit's building dropdown) even while it needs a supervisor
+                // — same as every other CO on a turnover unit — rather than
+                // popping out to float separately just because it isn't
+                // staffed yet. Only a non-turnover CO (post-construction
+                // etc., not grouped onto the calendar the same way yet)
+                // keeps the standalone amber chip.
+                dayCoNeedsSupervisor = dayCoNeedsSupervisor.filter(
+                  (x) => projectById.get(x.co.projectId)?.segment !== "JANITORIAL_TURNOVER_REQUESTS",
+                );
                 if (dayCoNeedsSupervisor.length > 0) {
                   const flagged = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
                   dayChangeOrders = dayChangeOrders.filter((co) => !flagged.has(co.id));
@@ -2438,6 +2466,25 @@ export function SchedulePlanner({
                     looseChangeOrders.push(co);
                   }
                 }
+                // A unit's own chip today comes from one of the four buckets
+                // below — but a CO's scheduled day doesn't have to land on a
+                // day its unit is otherwise on the calendar (e.g. extra work
+                // scheduled well after the unit's own turn already finished).
+                // Without this, that CO would never get a home to nest under
+                // and would just silently not render at all. Any orphaned
+                // unit gets a minimal chip of its own instead, purely so the
+                // CO always renders "under" its unit and the two stay
+                // visually linked, same as everywhere else.
+                const projectIdsWithOwnChipToday = new Set<string>([
+                  ...dayNeedsSupervisor.map(({ project }) => project.id),
+                  ...dayProjectSpanEndpoints.map(({ project }) => project.id),
+                  ...dayProjects.map((p) => p.id),
+                  ...dayPlanned.map(({ project }) => project.id),
+                ]);
+                const orphanedJanitorialUnits = Array.from(janitorialCoByProjectId.keys())
+                  .filter((id) => !projectIdsWithOwnChipToday.has(id))
+                  .map((id) => projectById.get(id))
+                  .filter((p): p is ScheduleProject => !!p);
 
                 function renderCoChip(co: ScheduleChangeOrder, nested: boolean) {
                   const summary = co.laborByDay[k];
@@ -2474,6 +2521,10 @@ export function SchedulePlanner({
                   const coPm = !coSupervisor && coAssignment?.projectManagerUserId
                     ? projectManagers.find((p) => p.id === coAssignment.projectManagerUserId)
                     : null;
+                  // Still flagged even though it's nested under its unit now
+                  // instead of floating separately — see the
+                  // coNeedsSupervisorIds split above.
+                  const needsSupervisor = coNeedsSupervisorIds.has(co.id);
                   return (
                     <li
                       key={`co-${co.id}`}
@@ -2496,8 +2547,9 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(co.status === "COMPLETED")}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(co.status === "COMPLETED")}`}
                       >
+                        {needsSupervisor ? <span aria-hidden>⚠</span> : null}
                         {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                         <CompletionStatusIcon complete={co.status === "COMPLETED"} />
                         <span className="truncate">{co.title}</span>
@@ -2519,6 +2571,8 @@ export function SchedulePlanner({
                             <div className="mt-1 text-gray-300">Supervisor: {coSupervisor.displayName}</div>
                           ) : coPm ? (
                             <div className="mt-1 text-gray-300">PM: {coPm.displayName}</div>
+                          ) : needsSupervisor ? (
+                            <div className="mt-1 text-amber-300">No supervisor assigned yet — click to assign one</div>
                           ) : null}
                           {isOverdue ? <div className="mt-1 text-red-400">Scheduled but never logged</div> : null}
                           {summary ? (
@@ -2538,7 +2592,34 @@ export function SchedulePlanner({
                   );
                 }
 
-                function renderNeedsSupervisorChip(p: ScheduleProject, role: "start" | "end") {
+                // A unit with no chip of its own today (see
+                // orphanedJanitorialUnits) but with a change order scheduled
+                // this day — a minimal, non-draggable label just so the
+                // CO(s) below still nest under something identifying their
+                // unit, instead of never rendering at all.
+                function renderOrphanedUnitChip(p: ScheduleProject, compactLabel?: string) {
+                  return (
+                    <Fragment key={`co-only-${p.id}`}>
+                    <li className={inMonth ? "group relative" : "relative"}>
+                      <Link
+                        href={`/erp/projects/${p.id}`}
+                        className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
+                      >
+                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                      </Link>
+                      {inMonth ? (
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                          <div className="font-semibold">{p.jobTitle}</div>
+                          <div className="text-gray-300">Not otherwise scheduled this day — shown for its change order below</div>
+                        </div>
+                      ) : null}
+                    </li>
+                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    </Fragment>
+                  );
+                }
+
+                function renderNeedsSupervisorChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string) {
                   return (
                     <Fragment key={`needs-${p.id}-${role}`}>
                     <li className={inMonth ? "group relative" : "relative"}>
@@ -2559,7 +2640,7 @@ export function SchedulePlanner({
                       >
                         <span aria-hidden>⚠</span>
                         <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate" title={p.jobTitle}>{p.jobTitle}</span>
+                        <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
                       </button>
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -2579,7 +2660,7 @@ export function SchedulePlanner({
                   );
                 }
 
-                function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end") {
+                function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string) {
                   // Same escalation renderPlannedChip already applies to a
                   // real ProjectDayAssignment once its day passes unlogged —
                   // this chip covers the case where there wasn't even an
@@ -2609,7 +2690,7 @@ export function SchedulePlanner({
                       >
                         {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                         <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate">{p.jobTitle}</span>
+                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                       </button>
                       <button
                         type="button"
@@ -2641,7 +2722,7 @@ export function SchedulePlanner({
                   );
                 }
 
-                function renderConfirmedChip(p: ScheduleProject) {
+                function renderConfirmedChip(p: ScheduleProject, compactLabel?: string) {
                   const summary = p.laborByDay[k];
                   const loggedWorkers = new Set(summary?.workers ?? []);
                   const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
@@ -2662,7 +2743,7 @@ export function SchedulePlanner({
                         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE")}`}
                       >
                         <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate">{p.jobTitle}</span>
+                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                       </button>
                       {renderLaborPopover(k, p)}
                       {inMonth ? (
@@ -2691,7 +2772,7 @@ export function SchedulePlanner({
                   );
                 }
 
-                function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject) {
+                function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject, compactLabel?: string) {
                   const isOverdue = !isFutureOrToday;
                   const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                   const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
@@ -2729,7 +2810,7 @@ export function SchedulePlanner({
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
                       <CompletionStatusIcon complete={project.status === "COMPLETE"} />
-                      <span className="truncate">{project.jobTitle}</span>
+                      <span className="truncate">{compactLabel ?? project.jobTitle}</span>
                     </button>
                     {renderEventPopover(k, project)}
                     <button
@@ -2796,6 +2877,11 @@ export function SchedulePlanner({
                   ...dayPlanned
                     .filter(({ project }) => isGroupableTurnoverProject(project))
                     .map(({ assignment, project }) => ({ kind: "planned" as const, assignment, project })),
+                  // Counts toward its building's group even though it has no
+                  // chip of its own today — see orphanedJanitorialUnits.
+                  ...orphanedJanitorialUnits
+                    .filter(isGroupableTurnoverProject)
+                    .map((project) => ({ kind: "coOnly" as const, project })),
                 ];
                 const turnoverEntriesByBuilding = new Map<string, TurnoverEntry[]>();
                 for (const entry of turnoverEntries) {
@@ -2821,6 +2907,7 @@ export function SchedulePlanner({
                 const dayProjectSpanEndpointsUngrouped = dayProjectSpanEndpoints.filter(({ project }) => !isGroupedOut(project));
                 const dayProjectsUngrouped = dayProjects.filter((p) => !isGroupedOut(p));
                 const dayPlannedUngrouped = dayPlanned.filter(({ project }) => !isGroupedOut(project));
+                const orphanedJanitorialUnitsUngrouped = orphanedJanitorialUnits.filter((p) => !isGroupedOut(p));
 
                 // Worst-state-wins, using the exact same severity levels the
                 // ungrouped chips already use — a group is only as "healthy"
@@ -2844,6 +2931,10 @@ export function SchedulePlanner({
                   const severity = buildingGroupSeverity(entries);
                   const groupKey = `${k}:${buildingId}`;
                   const isExpanded = expandedBuildingGroups.has(groupKey);
+                  // Same "worst/least-done unit wins" rule severity already
+                  // follows, just inverted: the heading only reads complete
+                  // once every single unit in the group does.
+                  const allComplete = entries.every((e) => e.project.status === "COMPLETE");
                   const severityClass =
                     severity === "needsSupervisor"
                       ? NEEDS_SUPERVISOR_CHIP_CLASS
@@ -2866,10 +2957,11 @@ export function SchedulePlanner({
                         // characters. They're pulled out to an absolutely
                         // positioned badge below instead, reserving a fixed
                         // pr-8 gutter so the name gets the rest of the width.
-                        className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${severityClass}`}
+                        className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${severityClass} ${completionChipClass(allComplete)}`}
                       >
                         {severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : null}
                         {severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                        <CompletionStatusIcon complete={allComplete} />
                         <span className="truncate">{buildingName}</span>
                         <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap text-[9px] font-normal opacity-80">
                           {entries.length}
@@ -2888,12 +2980,16 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{buildingName}</div>
-                          <div className="text-gray-300">{entries.length} turnover units this day</div>
+                          <div className="text-gray-300">
+                            {entries.length} turnover units this day{allComplete ? " — all complete" : ""}
+                          </div>
                           <ul className="mt-1 space-y-0.5">
                             {entries.map((e) => (
                               <li key={e.project.id} className="flex items-center gap-1 text-gray-300">
-                                <span aria-hidden>{e.kind === "confirmed" ? "✓" : e.kind === "needsSupervisor" ? "⚠" : "⋯"}</span>
-                                <span className="truncate">{e.project.jobTitle}</span>
+                                <span aria-hidden>
+                                  {e.project.status === "COMPLETE" ? "✓" : e.kind === "needsSupervisor" ? "⚠" : "⋯"}
+                                </span>
+                                <span className="truncate">{unitLabelForGroupedChip(e.project)}</span>
                               </li>
                             ))}
                           </ul>
@@ -2904,15 +3000,18 @@ export function SchedulePlanner({
                     {isExpanded ? (
                       <ul className="ml-3 space-y-1 border-l-2 border-gray-200 pl-1.5">
                         {entries.map((e) => {
+                          const compactLabel = unitLabelForGroupedChip(e.project);
                           switch (e.kind) {
                             case "needsSupervisor":
-                              return renderNeedsSupervisorChip(e.project, e.role);
+                              return renderNeedsSupervisorChip(e.project, e.role, compactLabel);
                             case "spanEndpoint":
-                              return renderSpanEndpointChip(e.project, e.role);
+                              return renderSpanEndpointChip(e.project, e.role, compactLabel);
                             case "confirmed":
-                              return renderConfirmedChip(e.project);
+                              return renderConfirmedChip(e.project, compactLabel);
                             case "planned":
-                              return renderPlannedChip(e.assignment, e.project);
+                              return renderPlannedChip(e.assignment, e.project, compactLabel);
+                            case "coOnly":
+                              return renderOrphanedUnitChip(e.project, compactLabel);
                           }
                         })}
                       </ul>
@@ -3015,6 +3114,7 @@ export function SchedulePlanner({
                       {dayProjectSpanEndpointsUngrouped.map(({ project: p, role }) => renderSpanEndpointChip(p, role))}
                       {dayProjectsUngrouped.map((p) => renderConfirmedChip(p))}
                       {dayPlannedUngrouped.map(({ assignment, project }) => renderPlannedChip(assignment, project))}
+                      {orphanedJanitorialUnitsUngrouped.map((p) => renderOrphanedUnitChip(p))}
                       {looseChangeOrders.map((co) => renderCoChip(co, false))}
                       {daySovRequests.map((r) => {
                         const parentProject = projectById.get(r.projectId);

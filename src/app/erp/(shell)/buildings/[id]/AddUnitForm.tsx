@@ -7,6 +7,7 @@ import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 type Props = {
   buildingId: string;
+  existingUnitNumbers?: string[];
 };
 
 const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
@@ -31,10 +32,11 @@ const input = inputClass.md;
  * dollar amount. Scope answers alone are enough — the building's existing
  * pricing package prices the unit automatically once created.
  */
-export function AddUnitForm({ buildingId }: Props) {
+export function AddUnitForm({ buildingId, existingUnitNumbers = [] }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [unitNumber, setUnitNumber] = useState("");
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [isCommonArea, setIsCommonArea] = useState(false);
   const [isPartialTurn, setIsPartialTurn] = useState(false);
   const [partialTurnLayout, setPartialTurnLayout] = useState("");
@@ -75,6 +77,13 @@ export function AddUnitForm({ buildingId }: Props) {
     setOtherDescription("");
     setStartDate("");
     setError("");
+    setDuplicateWarning(false);
+  }
+
+  function isDuplicateUnitNumber(value: string) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return false;
+    return existingUnitNumbers.some((n) => n.trim().toLowerCase() === trimmed);
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -82,6 +91,10 @@ export function AddUnitForm({ buildingId }: Props) {
     setError("");
     if (!startDate) {
       setError("Start date is required.");
+      return;
+    }
+    if (!duplicateWarning && isDuplicateUnitNumber(unitNumber)) {
+      setDuplicateWarning(true);
       return;
     }
     setSaving(true);
@@ -165,11 +178,35 @@ export function AddUnitForm({ buildingId }: Props) {
           id="au-unit-number"
           type="text"
           value={unitNumber}
-          onChange={(e) => setUnitNumber(e.target.value)}
+          onChange={(e) => {
+            setUnitNumber(e.target.value);
+            setDuplicateWarning(false);
+          }}
           placeholder="e.g. 4B"
           className={input}
         />
       </div>
+
+      {duplicateWarning ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <p>Unit &quot;{unitNumber.trim()}&quot; already exists on this building. Continue anyway?</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDuplicateWarning(false)}
+              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+            >
+              Continue anyway
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <label className={checkboxRow}>
         <input

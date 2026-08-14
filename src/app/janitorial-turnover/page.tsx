@@ -19,10 +19,18 @@ export default async function JanitorialTurnoverPage() {
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
-  const [buildings, scheduleBuildings, employees] = await Promise.all([
+  const [rawBuildings, scheduleBuildings, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        pmName: true,
+        pmEmail: true,
+        pmPhone: true,
+        turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
+      },
     }),
     prisma.project.findMany({
       where: {
@@ -46,6 +54,14 @@ export default async function JanitorialTurnoverPage() {
       select: { id: true, firstName: true, lastName: true, email: true },
     }),
   ]);
+  // Flatten to just the unit numbers already used on each building, so the
+  // form can warn on a duplicate unit identifier client-side.
+  const buildings = rawBuildings.map(({ turnoverRequests, ...building }) => ({
+    ...building,
+    existingUnitNumbers: Array.from(
+      new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
+    ),
+  }));
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 text-gray-900">
