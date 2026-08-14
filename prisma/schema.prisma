@@ -250,6 +250,15 @@ model TurnoverRequest {
   /// Manually entered price for the "Other" line item, in cents.
   otherCents       Int?
 
+  /// IDs selected from the building's pricingPackage.customLineItems (see
+  /// turnoverPricingPackages.ts) — e.g. ["den-surcharge", "occupied-fee"].
+  /// Each building defines its own custom items (or none); this just records
+  /// which of that building's items apply to this unit. Priced automatically
+  /// off the referenced item's type/amount, unlike the free-text Other line
+  /// above. Stored as Json (string[]) rather than a join table since the
+  /// items themselves aren't a normalized model, just entries in a JSON blob.
+  selectedCustomLineItemIds Json?
+
   startDate          DateTime?
   endDate            DateTime?
   /// Tenant's actual move-out day, captured on the unit-creation form —
@@ -803,40 +812,6 @@ model ProjectChangeOrderLaborer {
   @@index([changeOrderId])
 }
 
-/// A reusable, named labor formula for a common change order (e.g. "Extra
-/// prep coat" = 3 cleaner-hrs + 1.5 foreman-hrs per unit) — see
-/// src/lib/changeOrderPricingPackages.ts. Priced against a project's own
-/// Cleaner/Foreman $/hr (Project.laborRateCard, falling back to
-/// DEFAULT_CHANGE_ORDER_LABOR_RATES) at the moment it's applied, never
-/// stored as a fixed dollar amount, so a later rate-card change is always
-/// reflected. Global (not per-project) — the whole point is one reusable
-/// list instead of re-deriving the same math on every project.
-model ChangeOrderPricingPackage {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  name String
-
-  /// What one "unit" of this package means on the change order, e.g.
-  /// "unit", "day", "coat" — purely a display label, not used in the math.
-  unitLabel String @default("unit")
-
-  /// Cleaner/foreman hours consumed per unit — the actual formula.
-  cleanerHours Float @default(0)
-  foremanHours Float @default(0)
-
-  /// Soft-disable instead of delete, so a package already referenced on a
-  /// past change order (once Phase 3 wires that up) still resolves; it just
-  /// stops showing up as a choice for new ones.
-  active Boolean @default(true)
-
-  createdByUserId String?
-  createdByUser   ErpUser? @relation("ChangeOrderPricingPackageCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-
-  @@index([active])
-}
-
 model ProjectContract {
   id                   String    @id @default(cuid())
   createdAt            DateTime  @default(now())
@@ -1013,7 +988,6 @@ model ErpUser {
   hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
   scheduleNudgeDismissalsMade   ProjectScheduleNudgeDismissal[]
-  createdChangeOrderPricingPackages ChangeOrderPricingPackage[] @relation("ChangeOrderPricingPackageCreatedBy")
 
   @@index([firebaseUid])
 }

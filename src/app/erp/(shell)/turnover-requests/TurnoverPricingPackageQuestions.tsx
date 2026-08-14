@@ -1,7 +1,7 @@
 "use client";
 
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
-import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { CUSTOM_LINE_ITEMS_ENABLED, getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 
 const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
 const LAYOUT_LABELS: Record<string, string> = {
@@ -46,6 +46,8 @@ type TurnoverPricingPackageQuestionsProps = {
   otherWork?: boolean;
   otherDescription?: string;
   otherPrice?: string;
+  selectedCustomLineItemIds?: string[];
+  setSelectedCustomLineItemIds?: (value: string[]) => void;
   setBedrooms: (value: string) => void;
   setBathrooms: (value: string) => void;
   setIsCommonArea?: (value: boolean) => void;
@@ -95,6 +97,8 @@ export function TurnoverPricingPackageQuestions({
   otherWork = false,
   otherDescription = "",
   otherPrice = "",
+  selectedCustomLineItemIds = [],
+  setSelectedCustomLineItemIds = () => {},
   setBedrooms,
   setBathrooms,
   setIsCommonArea = () => {},
@@ -139,6 +143,7 @@ export function TurnoverPricingPackageQuestions({
     compounding: parseNullableNumber(compounding) ?? 0,
     isPartialTurn,
     partialTurnLayout,
+    selectedCustomLineItemIds,
   });
   const otherCents = otherWork ? dollarsToCents(otherPrice) : 0;
   const pricing = { ...basePricing, priceCents: basePricing.priceCents + otherCents };
@@ -152,6 +157,12 @@ export function TurnoverPricingPackageQuestions({
       setIsPartialTurn(false);
       setPartialTurnLayout("");
     }
+  }
+
+  function toggleCustomLineItem(id: string, checked: boolean) {
+    setSelectedCustomLineItemIds(
+      checked ? [...selectedCustomLineItemIds, id] : selectedCustomLineItemIds.filter((v) => v !== id)
+    );
   }
 
   function togglePartialTurn(checked: boolean) {
@@ -395,6 +406,31 @@ export function TurnoverPricingPackageQuestions({
           className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
         />
       </label>
+
+      {CUSTOM_LINE_ITEMS_ENABLED && (["charge", "workItem"] as const).map((kind) => {
+        const items = pricingPackage.customLineItems?.filter((item) => item.kind === kind) ?? [];
+        if (items.length === 0) return null;
+        return (
+          <div key={kind} className="mt-4">
+            <p className="text-xs font-semibold text-gray-700">
+              {kind === "charge" ? "Extra charges" : "Additional work"}
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {items.map((item) => (
+                <label key={item.id} className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  <input
+                    checked={selectedCustomLineItemIds.includes(item.id)}
+                    onChange={(event) => toggleCustomLineItem(item.id, event.target.checked)}
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-pink-600"
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
 
       <div className="mt-4 rounded-md bg-gray-50 px-3 py-2">
         <p className="text-xs font-semibold text-gray-700">Pricing breakdown</p>

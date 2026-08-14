@@ -17,6 +17,12 @@
  * concepts, despite the similar name).
  */
 
+/** We don't ask anyone to type an hours estimate for a change order — crews
+ * are assumed to work a flat 8-hour day per person, full stop. Used by
+ * ChangeOrderLaborEstimator (and its hand-rolled equivalent on the CO detail
+ * page) as the fixed `hours` input to computeChangeOrderLaborEstimate. */
+export const CHANGE_ORDER_ESTIMATE_DAY_HOURS = 8;
+
 export type ChangeOrderLaborRole = "CLEANER" | "FOREMAN";
 
 export type ChangeOrderLaborRateCard = {
@@ -71,6 +77,17 @@ export function getChangeOrderLaborRates(rateCard: unknown): ResolvedChangeOrder
     cleanerHourlyRateCents: sanitized.cleanerHourlyRateCents ?? DEFAULT_CHANGE_ORDER_LABOR_RATES.cleanerHourlyRateCents,
     foremanHourlyRateCents: sanitized.foremanHourlyRateCents ?? DEFAULT_CHANGE_ORDER_LABOR_RATES.foremanHourlyRateCents,
   };
+}
+
+/** True once someone has explicitly set at least one of this project's
+ * Cleaner/Foreman rates (via LaborRateCardEditor) — as opposed to silently
+ * running on DEFAULT_CHANGE_ORDER_LABOR_RATES. Used to decide whether the
+ * public change-order request form is allowed to show a price at all: a
+ * project nobody has priced yet shouldn't surface the internal default rate
+ * as if it were a real, reviewed number. */
+export function hasCustomChangeOrderLaborRate(rateCard: unknown): boolean {
+  const sanitized = sanitizeChangeOrderLaborRateCard(rateCard);
+  return sanitized.cleanerHourlyRateCents !== undefined || sanitized.foremanHourlyRateCents !== undefined;
 }
 
 export type ChangeOrderLaborEstimateInput = {

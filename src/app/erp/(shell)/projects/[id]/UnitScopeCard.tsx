@@ -1,5 +1,6 @@
 import { turnoverHoursBudget } from "@/lib/erp/turnoverHoursBudget";
 import type { TurnoverScopeValue } from "@/lib/erp/turnoverScope";
+import { CUSTOM_LINE_ITEMS_ENABLED, sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
 const PARTIAL_TURN_LAYOUT_LABELS: Record<string, string> = {
@@ -29,6 +30,11 @@ type Props = {
   compounding: number | null;
   otherWork: boolean;
   otherDescription: string | null;
+  /** Building's stored pricing package (unsanitized, straight from
+   * Building.pricingPackage) — read here just for its customLineItems, to
+   * surface any selected "work item" (not "charge") entries below. */
+  pricingPackage?: unknown;
+  selectedCustomLineItemIds?: string[] | null;
   contractValueCents: number | null;
   /** Which contracted scope items are actually finished (already resolved to
    * "everything" when the unit's overall status is COMPLETED). Omit to fall
@@ -62,10 +68,21 @@ export function UnitScopeCard({
   compounding,
   otherWork,
   otherDescription,
+  pricingPackage,
+  selectedCustomLineItemIds,
   contractValueCents,
   completedScopeItems,
 }: Props) {
-  const workItems: { label: string; scopeValue: TurnoverScopeValue }[] = [
+  // Custom "work item" line items (e.g. second coat, primer/sealer) belong
+  // in this list too — they're real work, just not tracked with photo
+  // evidence like the built-in items are (scopeValue: null skips that).
+  const customWorkItems = CUSTOM_LINE_ITEMS_ENABLED
+    ? sanitizeTurnoverPricingPackage(pricingPackage).customLineItems?.filter(
+        (item) => item.kind === "workItem" && (selectedCustomLineItemIds ?? []).includes(item.id)
+      ) ?? []
+    : [];
+
+  const workItems: { label: string; scopeValue: TurnoverScopeValue | null }[] = [
     fullClean ? { label: "Full Clean", scopeValue: "CLEAN" as const } : null,
     fullPaint ? { label: "Full Paint", scopeValue: "PAINT" as const } : null,
     touchUpPaint ? { label: `Touch-Up Paint (${touchUpPaint} rooms)`, scopeValue: "TOUCH_UP_PAINT" as const } : null,
@@ -74,7 +91,8 @@ export function UnitScopeCard({
     ceilingPaint ? { label: "Ceiling Painting", scopeValue: "CEILING_PAINT" as const } : null,
     compounding ? { label: `Compounding (${compounding})`, scopeValue: "COMPOUNDING" as const } : null,
     otherWork ? { label: otherDescription?.trim() || "Other", scopeValue: "OTHER" as const } : null,
-  ].filter((v): v is { label: string; scopeValue: TurnoverScopeValue } => v !== null);
+    ...customWorkItems.map((item) => ({ label: item.label, scopeValue: null })),
+  ].filter((v): v is { label: string; scopeValue: TurnoverScopeValue | null } => v !== null);
 
   const isCommonArea = bedrooms === null && bathrooms === null;
 
@@ -128,13 +146,13 @@ export function UnitScopeCard({
         <div className="px-4 py-3">
           <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-2">Work scope</p>
           <ul className="space-y-1.5">
-            {workItems.map((item) => {
-              const isDone = completedScopeItems?.includes(item.scopeValue);
+            {workItems.map((item, index) => {
+              const isDone = item.scopeValue != null && completedScopeItems?.includes(item.scopeValue);
               return (
-                <li key={item.scopeValue} className="flex items-center gap-2 text-sm text-gray-700">
+                <li key={`${item.scopeValue ?? "custom"}-${index}`} className="flex items-center gap-2 text-sm text-gray-700">
                   <Check />
                   <span className={isDone ? "text-gray-400 line-through" : undefined}>{item.label}</span>
-                  {completedScopeItems ? (
+                  {completedScopeItems && item.scopeValue != null ? (
                     <span className={`ml-auto text-xs font-medium ${isDone ? "text-emerald-600" : "text-amber-600"}`}>
                       {isDone ? "Done" : "Pending"}
                     </span>

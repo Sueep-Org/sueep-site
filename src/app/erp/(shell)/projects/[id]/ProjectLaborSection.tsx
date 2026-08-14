@@ -243,6 +243,8 @@ export function ProjectLaborSection({
     compounding: number | null;
     otherWork: boolean;
     otherDescription: string | null;
+    pricingPackage?: unknown;
+    selectedCustomLineItemIds?: string[] | null;
   } | null;
   /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit, lets
    * a labor entry be tagged with which part of the scope it covers, same
@@ -718,6 +720,8 @@ export function ProjectLaborSection({
           compounding={unitScope.compounding}
           otherWork={unitScope.otherWork}
           otherDescription={unitScope.otherDescription}
+          pricingPackage={unitScope.pricingPackage}
+          selectedCustomLineItemIds={unitScope.selectedCustomLineItemIds}
           contractValueCents={contractValueCents}
           completedScopeItems={scopeCompletedItems}
         />

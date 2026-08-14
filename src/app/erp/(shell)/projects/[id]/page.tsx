@@ -51,7 +51,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   const canSeeCommission = auth ? canEditPayInfo(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser, changeOrderPricingPackages] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -89,6 +89,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             otherWork: true,
             otherDescription: true,
             otherCents: true,
+            selectedCustomLineItemIds: true,
             priceCents: true,
             status: true,
             completedScopeItems: true,
@@ -167,7 +168,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     prisma.erpUser.findMany({ select: { email: true } }),
     // auth.uid is the Firebase UID (from the session token), not the ErpUser.id — resolve the actual row.
     auth?.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : Promise.resolve(null),
-    prisma.changeOrderPricingPackage.findMany({ orderBy: { name: "asc" } }),
   ]);
   if (!project) notFound();
 
@@ -437,6 +437,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 compounding={project.turnoverRequest.compounding}
                 otherWork={project.turnoverRequest.otherWork}
                 otherDescription={project.turnoverRequest.otherDescription}
+                pricingPackage={project.building?.pricingPackage ?? null}
+                selectedCustomLineItemIds={
+                  Array.isArray(project.turnoverRequest.selectedCustomLineItemIds)
+                    ? (project.turnoverRequest.selectedCustomLineItemIds as string[])
+                    : null
+                }
                 contractValueCents={project.contractValueCents}
                 completedScopeItems={completedScopeItems}
               />
@@ -523,6 +529,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 otherWork={project.turnoverRequest?.otherWork ?? false}
                 otherDescription={project.turnoverRequest?.otherDescription ?? null}
                 otherCents={project.turnoverRequest?.otherCents ?? null}
+                selectedCustomLineItemIds={
+                  Array.isArray(project.turnoverRequest?.selectedCustomLineItemIds)
+                    ? (project.turnoverRequest.selectedCustomLineItemIds as string[])
+                    : null
+                }
                 moveOutDate={project.turnoverRequest?.moveOutDate?.toISOString().slice(0, 10) ?? null}
                 moveInDate={project.turnoverRequest?.moveInDate?.toISOString().slice(0, 10) ?? null}
               />
@@ -583,6 +594,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         compounding: project.turnoverRequest.compounding,
         otherWork: project.turnoverRequest.otherWork,
         otherDescription: project.turnoverRequest.otherDescription,
+        pricingPackage: project.building?.pricingPackage ?? null,
+        selectedCustomLineItemIds: Array.isArray(project.turnoverRequest.selectedCustomLineItemIds)
+          ? (project.turnoverRequest.selectedCustomLineItemIds as string[])
+          : null,
       } : null} contractedScopeItems={contractedScopeItems} completedScopeItems={completedScopeItems} />,
     },
     {
@@ -727,11 +742,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                   }))}
                   laborRateCard={project.laborRateCard}
                   isEmployee={isEmployee}
-                  pricingPackages={changeOrderPricingPackages.map((p) => ({
-                    ...p,
-                    createdAt: p.createdAt.toISOString(),
-                    updatedAt: p.updatedAt.toISOString(),
-                  }))}
                   canEditPricing={canEditPricingForRole}
                 />
               </div>

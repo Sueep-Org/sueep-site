@@ -6,6 +6,7 @@ import {
   getTurnoverAdditionalMaterialsRate,
   getTurnoverCeilingPaintRate,
   getTurnoverCompoundingRate,
+  getTurnoverCustomLineItem,
   getTurnoverPricingPackage,
   type TurnoverUnitLayout,
 } from "@/lib/turnoverPricingPackages";
@@ -32,6 +33,10 @@ export type TurnoverPricingInput = {
    * scope), instead of the layout bedrooms/bathrooms would normally derive. */
   isPartialTurn?: boolean;
   partialTurnLayout?: string | null;
+  /** IDs into the building's pricingPackage.customLineItems — see
+   * turnoverPricingPackages.ts. Unlike the flags above, these reference
+   * items that only exist on buildings that defined them. */
+  selectedCustomLineItemIds?: string[];
 };
 
 export type TurnoverPricingResult = {
@@ -56,17 +61,21 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   const breakdown: string[] = [];
   let priceCents = 0;
 
+  // Computed unconditionally (not just when fullClean/fullPaint are checked)
+  // since percentOfCleaning/percentOfPainting custom line items below need a
+  // reference price to take their percentage of either way.
+  const cleaningPrice = getTurnoverCleaningRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea, layoutOverride).dollars * 100;
+  const paintingRate = getTurnoverPaintingRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea, layoutOverride);
+  const paintingPrice = paintingRate.dollars * 100;
+
   if (input.fullClean) {
     const cleaningRate = getTurnoverCleaningRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea, layoutOverride);
-    const cleaningPrice = cleaningRate.dollars * 100;
     services.push("Full cleaning");
     priceCents += cleaningPrice;
     breakdown.push(`Cleaning price for ${cleaningRate.layout}${partialTurnSuffix}: ${formatUsd(cleaningPrice)}`);
   }
 
   if (input.fullPaint) {
-    const paintingRate = getTurnoverPaintingRate(pricingPackage, input.bedrooms, input.bathrooms, input.isCommonArea, layoutOverride);
-    const paintingPrice = paintingRate.dollars * 100;
     services.push("Full painting");
     priceCents += paintingPrice;
     breakdown.push(`Painting price for ${paintingRate.layout}${partialTurnSuffix}: ${formatUsd(paintingPrice)}`);
@@ -111,6 +120,23 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push(`${input.compounding} compounding item${input.compounding === 1 ? "" : "s"}`);
     priceCents += compoundingPrice;
     breakdown.push(`Compounding${partialTurnSuffix} (${input.compounding}x ${formatUsd(compoundingRate.dollars * 100)}): ${formatUsd(compoundingPrice)}`);
+  }
+
+  // Building-specific extras (den surcharge, occupied-unit fee, etc.) — see
+  // CustomLineItem. Silently skips any id the building no longer defines
+  // (e.g. removed from the package after this unit selected it).
+  for (const id of input.selectedCustomLineItemIds ?? []) {
+    const item = getTurnoverCustomLineItem(pricingPackage, id);
+    if (!item) continue;
+    const itemPrice =
+      item.type === "flat"
+        ? item.amount * 100
+        : item.type === "percentOfPainting"
+          ? Math.round((paintingPrice * item.amount) / 100)
+          : Math.round((cleaningPrice * item.amount) / 100);
+    services.push(item.label);
+    priceCents += itemPrice;
+    breakdown.push(`${item.label}: ${formatUsd(itemPrice)}`);
   }
 
   if (services.length === 0) {

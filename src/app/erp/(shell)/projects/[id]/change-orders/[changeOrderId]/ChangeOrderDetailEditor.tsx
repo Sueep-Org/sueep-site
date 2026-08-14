@@ -11,7 +11,7 @@ import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
-import { computeChangeOrderLaborEstimate, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES } from "@/lib/changeOrderLaborRates";
+import { computeChangeOrderLaborEstimate, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -310,19 +310,24 @@ export function ChangeOrderDetailEditor({
   const [actualTravel, setActualTravel] = useState(
     data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
   );
-  const [estHours, setEstHours] = useState(data.estHours != null ? String(data.estHours) : "");
+  // No longer editable (see CHANGE_ORDER_ESTIMATE_DAY_HOURS) — kept as a
+  // plain value, not state, so saving this CO round-trips whatever was
+  // already stored instead of silently resetting older records to 8.
+  const estHours = data.estHours != null ? String(data.estHours) : "";
   const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
   const [estLaborers, setEstLaborers] = useState(data.estLaborers != null ? String(data.estLaborers) : "");
   const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
   const actualLaborers = data.laborers.filter((l) => !l.role?.toLowerCase().includes("supervisor")).length;
   const actualSupervisors = data.laborers.filter((l) => l.role?.toLowerCase().includes("supervisor")).length;
 
-  // Two calculated numbers from the crew/hours estimate above — see
-  // ChangeOrderLaborEstimator for the same math on the create forms. Price
-  // uses this project's Labor rates (billing rate, has margin); labor cost
-  // uses the fixed actual pay rate. Purely a suggestion: "Use this price" is
-  // the only thing that writes into contractValue/estLabor below.
-  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: Number(estHours) || 0 };
+  // Two calculated numbers from the crew estimate above — see
+  // ChangeOrderLaborEstimator for the same math on the create forms. No
+  // hours input here either — a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour
+  // day per person is always assumed. Price uses this project's Labor rates
+  // (billing rate, has margin); labor cost uses the fixed actual pay rate.
+  // Purely a suggestion: "Use this price" is the only thing that writes into
+  // contractValue/estLabor below.
+  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS };
   const priceEstimate = computeChangeOrderLaborEstimate(crewCounts, getChangeOrderLaborRates(laborRateCard));
   const costEstimate = computeChangeOrderLaborEstimate(crewCounts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
   function useCalculatedPrice() {
@@ -636,10 +641,6 @@ export function ChangeOrderDetailEditor({
                     <div>
                       <label className={label} htmlFor="co-est-travel">Travel ($)</label>
                       <input id="co-est-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estTravel} onChange={(e) => setEstTravel(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className={label} htmlFor="co-est-hours">Hours</label>
-                      <input id="co-est-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={estHours} onChange={(e) => setEstHours(e.target.value)} />
                     </div>
                     <div>
                       <label className={label} htmlFor="co-est-laborers"># of laborers</label>

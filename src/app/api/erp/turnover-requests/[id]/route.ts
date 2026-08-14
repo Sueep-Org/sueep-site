@@ -27,6 +27,11 @@ function parseIntValue(value: unknown): number | null | undefined {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
 const STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "QUALITY_CHECK", "APPROVED"] as const;
 const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
@@ -91,6 +96,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.otherWork !== undefined) data.otherWork = Boolean(body.otherWork);
   if (body.otherDescription !== undefined) data.otherDescription = body.otherDescription ? String(body.otherDescription).trim() || null : null;
   if (body.otherCents !== undefined) data.otherCents = typeof body.otherCents === "number" ? body.otherCents : null;
+  if (body.selectedCustomLineItemIds !== undefined) data.selectedCustomLineItemIds = parseStringArray(body.selectedCustomLineItemIds);
 
   if (body.startDate !== undefined) data.startDate = parseDate(body.startDate);
   if (body.endDate !== undefined) data.endDate = parseDate(body.endDate);
@@ -142,6 +148,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const effectiveIsPartialTurn = data.isPartialTurn !== undefined ? Boolean(data.isPartialTurn) : existing.isPartialTurn;
   const effectivePartialTurnLayout =
     data.partialTurnLayout !== undefined ? (data.partialTurnLayout as string | null) : existing.partialTurnLayout;
+  const effectiveSelectedCustomLineItemIds =
+    data.selectedCustomLineItemIds !== undefined
+      ? (data.selectedCustomLineItemIds as string[])
+      : parseStringArray(existing.selectedCustomLineItemIds);
 
   const pricingInput = {
     requestType: (data.requestType as "TURNOVER" | "REGULAR") ?? existing.requestType,
@@ -162,6 +172,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       body.compounding !== undefined ? parseIntValue(body.compounding) ?? 0 : existing.compounding ?? 0,
     isPartialTurn: effectiveIsPartialTurn,
     partialTurnLayout: effectivePartialTurnLayout,
+    selectedCustomLineItemIds: effectiveSelectedCustomLineItemIds,
   };
 
   const pricing = computeTurnoverPricing(pricingInput);

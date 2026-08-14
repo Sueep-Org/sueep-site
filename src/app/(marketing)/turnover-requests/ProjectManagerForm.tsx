@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { centsToDollars } from "@/lib/erp/money";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -8,7 +9,15 @@ const label = "block text-xs font-medium text-gray-600";
 
 type RequestType = "change-order" | "sov-schedule";
 
-type ProjectOption = { id: string; jobTitle: string; supervisor: string | null };
+type ProjectOption = {
+  id: string;
+  jobTitle: string;
+  supervisor: string | null;
+  /** Whether this project has a real, reviewed Labor rate set (as opposed to
+   * still running on the internal default) — gates whether the CO step even
+   * offers a price estimate at all. See hasCustomChangeOrderLaborRate. */
+  hasCustomLaborRate: boolean;
+};
 type SovItem = { id: string; description: string; completed: boolean };
 
 const STEP_LABELS_CO = ["Your Project", "Request Type", "Details"] as const;
@@ -65,6 +74,11 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [coTitle, setCoTitle] = useState("");
   const [coDescription, setCoDescription] = useState("");
   const [coEstimatedStartDate, setCoEstimatedStartDate] = useState("");
+  const [coCleanerCount, setCoCleanerCount] = useState("");
+  const [coSupervisorCount, setCoSupervisorCount] = useState("");
+  const [coPriceCents, setCoPriceCents] = useState<number | null>(null);
+  const [coPriceLoading, setCoPriceLoading] = useState(false);
+  const coPriceDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
@@ -94,6 +108,30 @@ export function ProjectManagerForm({ onBack }: Props) {
     }, 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // Live price preview as the requester types in a crew size — only fires
+  // once a project with a real Labor rate is selected (see ProjectOption).
+  useEffect(() => {
+    if (coPriceDebounce.current) clearTimeout(coPriceDebounce.current);
+    if (!selectedProject?.hasCustomLaborRate) { setCoPriceCents(null); return; }
+    const cleaners = Number(coCleanerCount) || 0;
+    const supervisors = Number(coSupervisorCount) || 0;
+    if (cleaners <= 0 && supervisors <= 0) { setCoPriceCents(null); return; }
+    coPriceDebounce.current = setTimeout(async () => {
+      setCoPriceLoading(true);
+      try {
+        const params = new URLSearchParams({ cleanerCount: String(cleaners), supervisorCount: String(supervisors) });
+        const res = await fetch(`/api/external/projects/${selectedProject.id}/co-price-estimate?${params}`);
+        const data = (await res.json()) as { priced?: boolean; totalCents?: number };
+        setCoPriceCents(data.priced && typeof data.totalCents === "number" ? data.totalCents : null);
+      } catch {
+        setCoPriceCents(null);
+      } finally {
+        setCoPriceLoading(false);
+      }
+    }, 300);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coCleanerCount, coSupervisorCount, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
 
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
@@ -165,6 +203,8 @@ export function ProjectManagerForm({ onBack }: Props) {
           coTitle: coTitle.trim() || undefined,
           coDescription: coDescription.trim() || undefined,
           coEstimatedStartDate: coEstimatedStartDate || undefined,
+          coCleanerCount: coCleanerCount.trim() || undefined,
+          coSupervisorCount: coSupervisorCount.trim() || undefined,
           sovItemId: selectedSovId || undefined,
           desiredDate: desiredDate || undefined,
           comments: comments.trim() || undefined,
@@ -206,6 +246,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setSelectedProjectId("");
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate("");
+            setCoCleanerCount(""); setCoSupervisorCount(""); setCoPriceCents(null);
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
           }}
@@ -360,9 +401,58 @@ export function ProjectManagerForm({ onBack }: Props) {
                 onChange={(e) => setCoEstimatedStartDate(e.target.value)}
               />
             </div>
-            <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
-              <p className="text-xs text-amber-800">Pricing is not required — Sueep will review and get back to you with a cost estimate.</p>
-            </div>
+            {selectedProject?.hasCustomLaborRate ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+                <p className="text-xs font-medium text-gray-700">Crew size</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className={label} htmlFor="co-cleaner-count"># of cleaners</label>
+                    <input
+                      id="co-cleaner-count"
+                      type="number"
+                      min={0}
+                      step={1}
+                      className={input}
+                      placeholder="0"
+                      value={coCleanerCount}
+                      onChange={(e) => setCoCleanerCount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={label} htmlFor="co-supervisor-count"># of supervisors</label>
+                    <input
+                      id="co-supervisor-count"
+                      type="number"
+                      min={0}
+                      step={1}
+                      className={input}
+                      placeholder="0"
+                      value={coSupervisorCount}
+                      onChange={(e) => setCoSupervisorCount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {(coPriceLoading || coPriceCents != null) && (
+                  <p className="mt-3 text-sm text-gray-700">
+                    Estimated price:{" "}
+                    <span className="font-semibold text-gray-900">
+                      {coPriceLoading ? "Calculating…" : centsToDollars(coPriceCents)}
+                    </span>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0 text-amber-500">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m9.303 3.376c.866 1.5-.217 3.374-1.948 3.374H4.645c-1.731 0-2.814-1.874-1.948-3.374L10.052 3.37c.866-1.5 3.032-1.5 3.898 0l7.354 12.75zM12 15.75h.007v.008H12v-.008z"
+                  />
+                </svg>
+                <p className="text-xs text-amber-800">We do not have rates set for your project. We will get back to you with a cost estimate.</p>
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2 border-t border-gray-100 pt-4">
               <div>
                 <label className={label} htmlFor="co-pm-name">Your name *</label>

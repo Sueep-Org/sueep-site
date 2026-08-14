@@ -1,3 +1,38 @@
+/** Paused on request (Aug 2026) — put on hold mid-build, not shipped. Code
+ * stays in place (types, sanitize, pricing calc, the editor/intake/scope-card
+ * UI) but every UI surface checks this flag and renders nothing, so the
+ * feature is invisible until someone flips it back to true. Flip this one
+ * flag to re-enable everything at once. */
+export const CUSTOM_LINE_ITEMS_ENABLED = false;
+
+/** A one-off line item defined per building (not part of the fixed
+ * cleaning/painting/etc. rate tables above) — e.g. a den surcharge or an
+ * occupied-unit fee that only applies to a handful of buildings. Added
+ * through the Building Pricing Package screen's "Add custom item" button,
+ * not hardcoded, so any building can grow its own list without a code
+ * change. Selected per-unit via TurnoverRequest.selectedCustomLineItemIds. */
+export type CustomLineItemType = "flat" | "percentOfPainting" | "percentOfCleaning";
+
+/** "charge" = price adjustment only, nothing for the crew to do beyond the
+ * unit's normal scope (e.g. a den or extra-square-footage surcharge).
+ * "workItem" = actual additional work (e.g. second coat, primer/sealer) —
+ * shown grouped separately on the intake form, and added to the crew-facing
+ * work scope summary (without photo-evidence tracking, unlike the built-in
+ * clean/paint/etc. items — see UnitScopeCard). */
+export type CustomLineItemKind = "charge" | "workItem";
+
+export type CustomLineItem = {
+  /** Stable slug generated at creation time (see makeCustomLineItemId) — what
+   * TurnoverRequest.selectedCustomLineItemIds references. Not user-editable
+   * so renaming the label later doesn't orphan existing selections. */
+  id: string;
+  label: string;
+  type: CustomLineItemType;
+  /** Dollars when type is "flat", a 0-100 percent otherwise. */
+  amount: number;
+  kind: CustomLineItemKind;
+};
+
 export type TurnoverPricingPackage = {
   cleaningRates: { 1: number; 2: number; 3: number };
   paintingRates: { 1: number; 2: number; 3: number };
@@ -12,6 +47,10 @@ export type TurnoverPricingPackage = {
   /// it with, unlike e.g. touch-up paint's $125), see
   /// getTurnoverCompoundingRate.
   compoundingLayoutRates?: Partial<Record<TurnoverUnitLayout, number>>;
+  /// This building's own extra line items, beyond the fixed rate tables
+  /// above. Empty/absent for buildings that don't need any — see
+  /// CustomLineItem.
+  customLineItems?: CustomLineItem[];
   label: string;
 };
 
@@ -181,6 +220,41 @@ function readLayoutRates(value: unknown): Partial<Record<TurnoverUnitLayout, num
   ) as Partial<Record<TurnoverUnitLayout, number>>;
 }
 
+const CUSTOM_LINE_ITEM_TYPES: CustomLineItemType[] = ["flat", "percentOfPainting", "percentOfCleaning"];
+const CUSTOM_LINE_ITEM_KINDS: CustomLineItemKind[] = ["charge", "workItem"];
+
+/** Slug the label plus a short random suffix so two items with the same
+ * label (or a later rename) never collide as an id. */
+export function makeCustomLineItemId(label: string): string {
+  const slug = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${slug || "item"}-${suffix}`;
+}
+
+function readCustomLineItems(value: unknown): CustomLineItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): CustomLineItem[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const raw = entry as Record<string, unknown>;
+    const label = String(raw.label || "").trim();
+    const type = CUSTOM_LINE_ITEM_TYPES.includes(raw.type as CustomLineItemType)
+      ? (raw.type as CustomLineItemType)
+      : null;
+    const amount = readNumber(raw.amount);
+    if (!label || !type || amount == null) return [];
+    const id = String(raw.id || "").trim() || makeCustomLineItemId(label);
+    // Default to "charge" for items saved before `kind` existed.
+    const kind = CUSTOM_LINE_ITEM_KINDS.includes(raw.kind as CustomLineItemKind)
+      ? (raw.kind as CustomLineItemKind)
+      : "charge";
+    return [{ id, label, type, amount, kind }];
+  });
+}
+
 export function sanitizeTurnoverPricingPackage(
   value: unknown,
   fallback: TurnoverPricingPackage = DEFAULT_TURNOVER_PRICING_PACKAGE
@@ -194,6 +268,10 @@ export function sanitizeTurnoverPricingPackage(
   const additionalMaterialsLayoutRates = { ...fallback.additionalMaterialsLayoutRates, ...readLayoutRates(raw.additionalMaterialsLayoutRates) };
   const ceilingPaintLayoutRates = { ...fallback.ceilingPaintLayoutRates, ...readLayoutRates(raw.ceilingPaintLayoutRates) };
   const compoundingLayoutRates = { ...fallback.compoundingLayoutRates, ...readLayoutRates(raw.compoundingLayoutRates) };
+  // No fallback merge here (unlike the layout-rate tables above) — an
+  // explicit [] in raw.customLineItems means "this building deleted its
+  // items", not "keep the old ones".
+  const customLineItems = raw.customLineItems !== undefined ? readCustomLineItems(raw.customLineItems) : fallback.customLineItems ?? [];
 
   return {
     label: String(raw.label || fallback.label).trim() || fallback.label,
@@ -214,7 +292,18 @@ export function sanitizeTurnoverPricingPackage(
     additionalMaterialsLayoutRates,
     ceilingPaintLayoutRates,
     compoundingLayoutRates,
+    customLineItems,
   };
+}
+
+/** Look up one of this package's custom items by id — used when pricing a
+ * request's selectedCustomLineItemIds. Returns null if the building no
+ * longer defines that item (e.g. it was removed after a unit selected it). */
+export function getTurnoverCustomLineItem(
+  pricingPackage: TurnoverPricingPackage,
+  id: string
+): CustomLineItem | null {
+  return pricingPackage.customLineItems?.find((item) => item.id === id) ?? null;
 }
 
 export function normalizePricingBedrooms(value?: number | null): 1 | 2 | 3 {

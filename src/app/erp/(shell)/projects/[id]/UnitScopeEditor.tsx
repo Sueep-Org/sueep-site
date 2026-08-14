@@ -29,6 +29,9 @@ type Props = {
   otherWork: boolean;
   otherDescription: string | null;
   otherCents: number | null;
+  /** IDs into the building's pricingPackage.customLineItems (den surcharge,
+   * occupied-unit fee, etc.) — see turnoverPricingPackages.ts. */
+  selectedCustomLineItemIds: string[] | null;
   /** YYYY-MM-DD, or null — tenant move dates, informational only (don't drive scheduling/pricing). */
   moveOutDate: string | null;
   moveInDate: string | null;
@@ -57,6 +60,7 @@ export function UnitScopeEditor({
   otherWork,
   otherDescription,
   otherCents,
+  selectedCustomLineItemIds: initialSelectedCustomLineItemIds,
   moveOutDate,
   moveInDate,
 }: Props) {
@@ -80,6 +84,7 @@ export function UnitScopeEditor({
   const [otherWorkVal, setOtherWork] = useState(otherWork);
   const [otherDescriptionVal, setOtherDescription] = useState(otherDescription ?? "");
   const [otherPriceVal, setOtherPrice] = useState(otherCents != null ? (otherCents / 100).toFixed(2) : "");
+  const [selectedCustomLineItemIds, setSelectedCustomLineItemIds] = useState<string[]>(initialSelectedCustomLineItemIds ?? []);
   const [moveOutDateVal, setMoveOutDate] = useState(moveOutDate ?? "");
   const [moveInDateVal, setMoveInDate] = useState(moveInDate ?? "");
   const [commonAreaRates, setCommonAreaRates] = useState(() => {
@@ -153,6 +158,7 @@ export function UnitScopeEditor({
         otherDescription: otherWorkVal ? otherDescriptionVal.trim() || null : null,
         otherCents: otherWorkVal ? otherCentsVal : null,
         otherPrice: otherWorkVal ? otherPriceVal : undefined,
+        selectedCustomLineItemIds,
         isCommonArea,
         isPartialTurn,
         partialTurnLayout: isPartialTurn ? partialTurnLayout || null : null,
@@ -309,6 +315,8 @@ export function UnitScopeEditor({
         otherWork={otherWorkVal}
         otherDescription={otherDescriptionVal}
         otherPrice={otherPriceVal}
+        selectedCustomLineItemIds={selectedCustomLineItemIds}
+        setSelectedCustomLineItemIds={setSelectedCustomLineItemIds}
         commonAreaRates={commonAreaRates}
         setBedrooms={setBedroomsStr}
         setBathrooms={setBathroomsStr}

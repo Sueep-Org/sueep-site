@@ -38,6 +38,11 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
 export async function GET() {
   const requests = await prisma.turnoverRequest.findMany({
     orderBy: [{ createdAt: "desc" }],
@@ -88,6 +93,7 @@ export async function POST(req: Request) {
   const otherDescription = otherWork && body.otherDescription ? String(body.otherDescription).trim() : null;
   const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
   const otherCents = otherCentsRaw ?? (otherWork && body.otherPrice ? Math.round((Number(String(body.otherPrice).replace(/[$,\s]/g, "")) || 0) * 100) : 0);
+  const selectedCustomLineItemIds = parseStringArray(body.selectedCustomLineItemIds);
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
   const moveOutDate = parseDate(body.moveOutDate);
@@ -112,6 +118,7 @@ export async function POST(req: Request) {
     compounding,
     isPartialTurn,
     partialTurnLayout,
+    selectedCustomLineItemIds,
   });
   const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
@@ -137,6 +144,7 @@ export async function POST(req: Request) {
         otherWork,
         otherDescription,
         otherCents: otherWork ? otherCents : null,
+        selectedCustomLineItemIds,
         startDate,
         endDate,
         moveOutDate,

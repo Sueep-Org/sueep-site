@@ -309,6 +309,11 @@ export function buildProjectRequestEmail(params: {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  coCleanerCount?: number;
+  coSupervisorCount?: number;
+  /** Only set when the project has a real Labor rate — see
+   * hasCustomChangeOrderLaborRate. */
+  coQuotedPriceCents?: number;
   // SOV fields
   sovDescription?: string;
   desiredDate?: string;
@@ -317,12 +322,23 @@ export function buildProjectRequestEmail(params: {
 }) {
   const typeLabel = params.type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
 
+  const crewLine =
+    params.coCleanerCount || params.coSupervisorCount
+      ? `<p><strong>Requested Crew:</strong> ${params.coCleanerCount ?? 0} cleaner(s), ${params.coSupervisorCount ?? 0} supervisor(s) — 8-hr day</p>`
+      : "";
+  const priceLine =
+    params.coQuotedPriceCents != null
+      ? `<p><strong>Quoted Price (this project's Labor rates):</strong> ${formatUsd(params.coQuotedPriceCents)}</p>`
+      : "";
+
   const details =
     params.type === "change-order"
       ? `
         <p><strong>Change Order Title:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
         ${params.coDescription ? `<p><strong>Description / Scope:</strong> ${escapeHtml(params.coDescription)}</p>` : ""}
         ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}
+        ${crewLine}
+        ${priceLine}
       `
       : `
         <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
@@ -353,6 +369,9 @@ export function buildProjectRequestConfirmationEmail(params: {
   requesterName: string;
   coTitle?: string;
   coEstimatedStartDate?: string;
+  /** Only set when the project has a real Labor rate — see
+   * hasCustomChangeOrderLaborRate. */
+  coQuotedPriceCents?: number;
   sovDescription?: string;
   desiredDate?: string;
 }) {
@@ -360,7 +379,8 @@ export function buildProjectRequestConfirmationEmail(params: {
   const detail =
     params.type === "change-order"
       ? `<p><strong>Change Order:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
-         ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}`
+         ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}
+         ${params.coQuotedPriceCents != null ? `<p><strong>Estimated Price:</strong> ${formatUsd(params.coQuotedPriceCents)}</p>` : ""}`
       : `
           <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
           ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}

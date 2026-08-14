@@ -13,7 +13,7 @@ import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 
 const input = inputClass.md;
@@ -628,7 +628,6 @@ export function NewProjectForm({
   // "Pricing" block — see ChangeOrderLaborEstimator.
   const [coEstCleanerCount, setCoEstCleanerCount] = useState("");
   const [coEstSupervisorCount, setCoEstSupervisorCount] = useState("");
-  const [coEstHours, setCoEstHours] = useState("");
   const [coContractValue, setCoContractValue] = useState("");
   const [coEstLabor, setCoEstLabor] = useState("");
   const coLaborRates = coProjectId
@@ -1034,7 +1033,9 @@ export function NewProjectForm({
           description: coComments.trim() || undefined,
           estLaborers: coEstCleanerCount.trim() || undefined,
           estSupervisors: coEstSupervisorCount.trim() || undefined,
-          estHours: coEstHours.trim() || undefined,
+          // No hours input anymore — every change order estimate assumes a
+          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
+          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
         }),
@@ -1264,8 +1265,6 @@ export function NewProjectForm({
           onCleanerCountChange={setCoEstCleanerCount}
           supervisorCount={coEstSupervisorCount}
           onSupervisorCountChange={setCoEstSupervisorCount}
-          hours={coEstHours}
-          onHoursChange={setCoEstHours}
           contractValue={coContractValue}
           onContractValueChange={setCoContractValue}
           estLabor={coEstLabor}

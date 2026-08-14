@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
-import { getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
-import { ChangeOrderPackagesTable, type ChangeOrderPackageRow } from "./ChangeOrderPackagesTable";
 import { LaborRateCardEditor } from "./LaborRateCardEditor";
 
 const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
@@ -224,7 +223,6 @@ export function ProjectChangeOrdersSection({
   employees = [],
   laborRateCard,
   isEmployee = false,
-  pricingPackages = [],
   canEditPricing = false,
 }: {
   projectId: string;
@@ -236,7 +234,6 @@ export function ProjectChangeOrdersSection({
   /** Hides the Labor rates editor — same restriction as everywhere else
    * financials are gated from Employee. */
   isEmployee?: boolean;
-  pricingPackages?: ChangeOrderPackageRow[];
   canEditPricing?: boolean;
 }) {
   const router = useRouter();
@@ -252,7 +249,6 @@ export function ProjectChangeOrdersSection({
   // "Pricing" block on the create form — see ChangeOrderLaborEstimator.
   const [estCleanerCount, setEstCleanerCount] = useState("");
   const [estSupervisorCount, setEstSupervisorCount] = useState("");
-  const [estHoursInput, setEstHoursInput] = useState("");
   const [contractValue, setContractValue] = useState("");
   const [estLabor, setEstLabor] = useState("");
 
@@ -425,7 +421,9 @@ export function ProjectChangeOrdersSection({
           description: String(fd.get("description") || "").trim() || undefined,
           estLaborers: estCleanerCount.trim() || undefined,
           estSupervisors: estSupervisorCount.trim() || undefined,
-          estHours: estHoursInput.trim() || undefined,
+          // No hours input anymore — every change order estimate assumes a
+          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
+          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
           contractValue: contractValue.trim() || undefined,
           estLabor: estLabor.trim() || undefined,
         }),
@@ -441,7 +439,6 @@ export function ProjectChangeOrdersSection({
       setPmSupervisor("");
       setEstCleanerCount("");
       setEstSupervisorCount("");
-      setEstHoursInput("");
       setContractValue("");
       setEstLabor("");
 
@@ -691,8 +688,6 @@ export function ProjectChangeOrdersSection({
             onCleanerCountChange={setEstCleanerCount}
             supervisorCount={estSupervisorCount}
             onSupervisorCountChange={setEstSupervisorCount}
-            hours={estHoursInput}
-            onHoursChange={setEstHoursInput}
             contractValue={contractValue}
             onContractValueChange={setContractValue}
             estLabor={estLabor}
@@ -734,16 +729,6 @@ export function ProjectChangeOrdersSection({
           <LaborRateCardEditor projectId={projectId} initialRateCard={laborRateCard} canEdit={canEditPricing} />
         </div>
       ) : null}
-
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">CO pricing packages</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          Reusable labor formulas for common change orders — priced against this project&apos;s Labor rates above.
-        </p>
-        <div className="mt-3">
-          <ChangeOrderPackagesTable initialPackages={pricingPackages} canEdit={canEditPricing} />
-        </div>
-      </div>
     </div>
   );
 }

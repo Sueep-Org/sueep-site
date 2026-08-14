@@ -5,6 +5,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import {
   computeChangeOrderLaborEstimate,
   ACTUAL_CHANGE_ORDER_LABOR_COST_RATES,
+  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
   type ResolvedChangeOrderLaborRates,
 } from "@/lib/changeOrderLaborRates";
 
@@ -20,8 +21,6 @@ type Props = {
   onCleanerCountChange: (v: string) => void;
   supervisorCount: string;
   onSupervisorCountChange: (v: string) => void;
-  hours: string;
-  onHoursChange: (v: string) => void;
   contractValue: string;
   onContractValueChange: (v: string) => void;
   estLabor: string;
@@ -29,11 +28,13 @@ type Props = {
   disabled?: boolean;
 };
 
-/** "# cleaners / # supervisors / hours" → two different calculated numbers:
- * a price (this project's billing rate, has margin built in) and a labor
- * cost (ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, the real wage we pay) — plus
- * the manual price fields either can fill, which stay editable on their own
- * so a calculated number is always just a starting point, never a lock-in.
+/** "# cleaners / # supervisors" (hours are never entered — every estimate
+ * assumes a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour day per person, see
+ * that constant) → two different calculated numbers: a price (this
+ * project's billing rate, has margin built in) and a labor cost
+ * (ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, the real wage we pay) — plus the
+ * manual price fields either can fill, which stay editable on their own so
+ * a calculated number is always just a starting point, never a lock-in.
  * Used on both change order create forms and the CO detail page's Costs
  * tab, so the math and the fields stay identical everywhere a CO gets
  * priced. */
@@ -43,15 +44,17 @@ export function ChangeOrderLaborEstimator({
   onCleanerCountChange,
   supervisorCount,
   onSupervisorCountChange,
-  hours,
-  onHoursChange,
   contractValue,
   onContractValueChange,
   estLabor,
   onEstLaborChange,
   disabled,
 }: Props) {
-  const counts = { cleanerCount: Number(cleanerCount) || 0, supervisorCount: Number(supervisorCount) || 0, hours: Number(hours) || 0 };
+  const counts = {
+    cleanerCount: Number(cleanerCount) || 0,
+    supervisorCount: Number(supervisorCount) || 0,
+    hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS,
+  };
   const priceEstimate = pricingRates ? computeChangeOrderLaborEstimate(counts, pricingRates) : null;
   const costEstimate = computeChangeOrderLaborEstimate(counts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
 
@@ -64,11 +67,12 @@ export function ChangeOrderLaborEstimator({
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pricing</h3>
       <p className="mt-1 text-xs text-gray-500">
-        Enter the crew and estimated hours to calculate a price (this project&apos;s Labor rates) and a labor cost
-        (actual pay), or skip straight to entering your own numbers below.
+        Enter the crew to calculate a price (this project&apos;s Labor rates) and a labor cost (actual pay), assuming
+        a flat {CHANGE_ORDER_ESTIMATE_DAY_HOURS}-hour day per person — or skip straight to entering your own numbers
+        below.
       </p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <label className={label} htmlFor="co-est-cleaner-count"># of cleaners</label>
           <input
@@ -95,20 +99,6 @@ export function ChangeOrderLaborEstimator({
             value={supervisorCount}
             disabled={disabled}
             onChange={(e) => onSupervisorCountChange(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={label} htmlFor="co-est-hours">Estimated hours</label>
-          <input
-            id="co-est-hours"
-            type="number"
-            min={0}
-            step="0.5"
-            className={input}
-            placeholder="0"
-            value={hours}
-            disabled={disabled}
-            onChange={(e) => onHoursChange(e.target.value)}
           />
         </div>
       </div>

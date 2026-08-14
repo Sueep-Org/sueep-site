@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { hasCustomChangeOrderLaborRate } from "@/lib/changeOrderLaborRates";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,18 @@ export async function GET(req: Request) {
       jobTitle: true,
       supervisor: true,
       segment: true,
+      laborRateCard: true,
     },
     orderBy: { jobTitle: "asc" },
     take: 20,
   });
 
-  return NextResponse.json(projects);
+  // Strip the raw rate card out of the public response — only whether one's
+  // been set, never the actual $/hr numbers (see hasCustomChangeOrderLaborRate).
+  const results = projects.map(({ laborRateCard, ...p }) => ({
+    ...p,
+    hasCustomLaborRate: hasCustomChangeOrderLaborRate(laborRateCard),
+  }));
+
+  return NextResponse.json(results);
 }

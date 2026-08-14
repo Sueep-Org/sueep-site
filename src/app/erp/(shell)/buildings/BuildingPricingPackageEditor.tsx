@@ -3,11 +3,34 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CUSTOM_LINE_ITEMS_ENABLED,
   TURNOVER_UNIT_LAYOUTS,
   getTurnoverPricingPackage,
+  makeCustomLineItemId,
   sanitizeTurnoverPricingPackage,
+  type CustomLineItemKind,
+  type CustomLineItemType,
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
+
+type CustomLineItemDraft = {
+  id: string;
+  label: string;
+  type: CustomLineItemType;
+  amount: string;
+  kind: CustomLineItemKind;
+};
+
+const CUSTOM_LINE_ITEM_TYPE_LABELS: Record<CustomLineItemType, string> = {
+  flat: "Flat $ per unit",
+  percentOfPainting: "% of painting price",
+  percentOfCleaning: "% of cleaning price",
+};
+
+const CUSTOM_LINE_ITEM_KIND_LABELS: Record<CustomLineItemKind, string> = {
+  charge: "Extra charge (price only)",
+  workItem: "Work item (crew does this)",
+};
 
 
 type Props = {
@@ -49,6 +72,9 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
   const [compounding, setCompounding] = useState<Record<string, string>>(() =>
     Object.fromEntries(TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, dollars(initial.compoundingLayoutRates?.[layout])]))
   );
+  const [customLineItems, setCustomLineItems] = useState<CustomLineItemDraft[]>(() =>
+    (initial.customLineItems ?? []).map((item) => ({ ...item, amount: String(item.amount) }))
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -75,6 +101,15 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     const compoundingLayoutRates = Object.fromEntries(
       TURNOVER_UNIT_LAYOUTS.map((layout) => [layout, Math.max(0, Math.round(Number(compounding[layout]) || 0))])
     );
+    const validCustomLineItems = customLineItems
+      .filter((item) => item.label.trim())
+      .map((item) => ({
+        id: item.id,
+        label: item.label.trim(),
+        type: item.type,
+        amount: Math.max(0, Number(item.amount) || 0),
+        kind: item.kind,
+      }));
 
     return sanitizeTurnoverPricingPackage({
       label,
@@ -85,7 +120,23 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       additionalMaterialsLayoutRates,
       ceilingPaintLayoutRates,
       compoundingLayoutRates,
+      customLineItems: validCustomLineItems,
     });
+  }
+
+  function addCustomLineItem() {
+    setCustomLineItems((current) => [
+      ...current,
+      { id: makeCustomLineItemId(`item-${current.length + 1}`), label: "", type: "flat", amount: "0", kind: "charge" },
+    ]);
+  }
+
+  function updateCustomLineItem(id: string, patch: Partial<CustomLineItemDraft>) {
+    setCustomLineItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removeCustomLineItem(id: string) {
+    setCustomLineItems((current) => current.filter((item) => item.id !== id));
   }
 
   async function savePackage() {
@@ -227,6 +278,78 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
           </tbody>
         </table>
       </div>
+
+      {CUSTOM_LINE_ITEMS_ENABLED && (
+      <div className="mt-6">
+        <h3 className="text-sm font-semibold text-gray-900">Custom pricing items</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Extra line items specific to this building only (e.g. a den surcharge or an occupied-unit fee). Each
+          shows up as a checkbox on this building&apos;s unit scope form and prices itself automatically.
+        </p>
+
+        {customLineItems.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {customLineItems.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-gray-50 p-2">
+                <input
+                  value={item.label}
+                  onChange={(event) => updateCustomLineItem(item.id, { label: event.target.value })}
+                  disabled={!canEdit || loading}
+                  placeholder="Label, e.g. Has den"
+                  className="min-w-[160px] flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                />
+                <select
+                  value={item.type}
+                  onChange={(event) => updateCustomLineItem(item.id, { type: event.target.value as CustomLineItemType })}
+                  disabled={!canEdit || loading}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                >
+                  {(Object.keys(CUSTOM_LINE_ITEM_TYPE_LABELS) as CustomLineItemType[]).map((type) => (
+                    <option key={type} value={type}>{CUSTOM_LINE_ITEM_TYPE_LABELS[type]}</option>
+                  ))}
+                </select>
+                <select
+                  value={item.kind}
+                  onChange={(event) => updateCustomLineItem(item.id, { kind: event.target.value as CustomLineItemKind })}
+                  disabled={!canEdit || loading}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                >
+                  {(Object.keys(CUSTOM_LINE_ITEM_KIND_LABELS) as CustomLineItemKind[]).map((kind) => (
+                    <option key={kind} value={kind}>{CUSTOM_LINE_ITEM_KIND_LABELS[kind]}</option>
+                  ))}
+                </select>
+                <input
+                  value={item.amount}
+                  onChange={(event) => updateCustomLineItem(item.id, { amount: event.target.value })}
+                  disabled={!canEdit || loading}
+                  type="number"
+                  min="0"
+                  className="w-24 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCustomLineItem(item.id)}
+                  disabled={!canEdit || loading}
+                  aria-label={`Remove ${item.label || "item"}`}
+                  className="rounded-md px-2 py-1 text-sm text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={addCustomLineItem}
+          disabled={!canEdit || loading}
+          className="mt-3 rounded-md border border-dashed border-gray-300 px-3 py-2 text-xs font-semibold text-gray-600 hover:border-pink-400 hover:text-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          + Add custom item
+        </button>
+      </div>
+      )}
 
       {error ? <p className="mt-3 text-xs text-red-600" role="alert">{error}</p> : null}
       {message ? <p className="mt-3 text-xs text-emerald-700" role="status">{message}</p> : null}

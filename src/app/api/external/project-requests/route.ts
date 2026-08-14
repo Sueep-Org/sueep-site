@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildProjectRequestEmail, buildProjectRequestConfirmationEmail } from "@/lib/email";
+import {
+  computeChangeOrderLaborEstimate,
+  getChangeOrderLaborRates,
+  hasCustomChangeOrderLaborRate,
+  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
+} from "@/lib/changeOrderLaborRates";
 
 export const runtime = "nodejs";
 
@@ -13,6 +19,8 @@ type Body = {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  coCleanerCount?: string;
+  coSupervisorCount?: string;
   // SOV fields
   sovItemId?: string;
   desiredDate?: string;
@@ -48,6 +56,7 @@ export async function POST(req: Request) {
       jobTitle: true,
       supervisor: true,
       supervisorUser: { select: { email: true } },
+      laborRateCard: true,
     },
   });
 
@@ -55,10 +64,27 @@ export async function POST(req: Request) {
 
   // Create a change order record when type is change-order
   let changeOrderId: string | null = null;
+  // Recomputed server-side against the project's real rate — never trust a
+  // client-sent total. Stays null (no price stored at all) for any project
+  // that hasn't had a real Labor rate set (see hasCustomChangeOrderLaborRate),
+  // same "don't surface the internal default as if it were reviewed" rule
+  // the price-estimate endpoint follows.
+  let quotedPriceCents: number | null = null;
+  const cleanerCount = Math.max(0, Math.round(Number(body.coCleanerCount) || 0));
+  const supervisorCount = Math.max(0, Math.round(Number(body.coSupervisorCount) || 0));
   if (type === "change-order") {
     const estimatedStartDate = body.coEstimatedStartDate
       ? new Date(`${body.coEstimatedStartDate}T00:00:00Z`)
       : null;
+    const priced = hasCustomChangeOrderLaborRate(project.laborRateCard) && (cleanerCount > 0 || supervisorCount > 0);
+    if (priced) {
+      const rates = getChangeOrderLaborRates(project.laborRateCard);
+      const estimate = computeChangeOrderLaborEstimate(
+        { cleanerCount, supervisorCount, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS },
+        rates,
+      );
+      quotedPriceCents = estimate.totalCents;
+    }
     const co = await prisma.projectChangeOrder.create({
       data: {
         projectId,
@@ -67,6 +93,10 @@ export async function POST(req: Request) {
         requestedBy: `${requesterName.trim()} <${requesterEmail.trim()}>`,
         status: "SUBMITTED",
         requestedDate: estimatedStartDate ?? new Date(),
+        estLaborers: cleanerCount > 0 ? cleanerCount : null,
+        estSupervisors: supervisorCount > 0 ? supervisorCount : null,
+        estHours: priced ? CHANGE_ORDER_ESTIMATE_DAY_HOURS : null,
+        contractValueCents: quotedPriceCents,
       },
       select: { id: true },
     });
@@ -165,6 +195,9 @@ export async function POST(req: Request) {
     coTitle: body.coTitle,
     coDescription: body.coDescription,
     coEstimatedStartDate: body.coEstimatedStartDate,
+    coCleanerCount: cleanerCount > 0 ? cleanerCount : undefined,
+    coSupervisorCount: supervisorCount > 0 ? supervisorCount : undefined,
+    coQuotedPriceCents: quotedPriceCents ?? undefined,
     sovDescription,
     desiredDate: body.desiredDate,
     comments: body.comments,
@@ -177,6 +210,7 @@ export async function POST(req: Request) {
     requesterName: requesterName.trim(),
     coTitle: body.coTitle,
     coEstimatedStartDate: body.coEstimatedStartDate,
+    coQuotedPriceCents: quotedPriceCents ?? undefined,
     sovDescription,
     desiredDate: body.desiredDate,
   });
