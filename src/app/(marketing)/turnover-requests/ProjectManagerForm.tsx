@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { deriveChangeOrderSupervisorCount } from "@/lib/changeOrderLaborRates";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -75,7 +76,9 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [coDescription, setCoDescription] = useState("");
   const [coEstimatedStartDate, setCoEstimatedStartDate] = useState("");
   const [coCleanerCount, setCoCleanerCount] = useState("");
-  const [coSupervisorCount, setCoSupervisorCount] = useState("");
+  // No supervisor input — a crew always needs one, so it's derived from
+  // cleaner count, not entered (see deriveChangeOrderSupervisorCount).
+  const coSupervisorCount = deriveChangeOrderSupervisorCount(Number(coCleanerCount) || 0);
   const [coPriceCents, setCoPriceCents] = useState<number | null>(null);
   const [coPriceLoading, setCoPriceLoading] = useState(false);
   const coPriceDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,16 +114,17 @@ export function ProjectManagerForm({ onBack }: Props) {
 
   // Live price preview as the requester types in a crew size — only fires
   // once a project with a real Labor rate is selected (see ProjectOption).
+  // Supervisor count isn't sent — the estimate endpoint derives it itself
+  // from cleanerCount (see deriveChangeOrderSupervisorCount).
   useEffect(() => {
     if (coPriceDebounce.current) clearTimeout(coPriceDebounce.current);
     if (!selectedProject?.hasCustomLaborRate) { setCoPriceCents(null); return; }
     const cleaners = Number(coCleanerCount) || 0;
-    const supervisors = Number(coSupervisorCount) || 0;
-    if (cleaners <= 0 && supervisors <= 0) { setCoPriceCents(null); return; }
+    if (cleaners <= 0) { setCoPriceCents(null); return; }
     coPriceDebounce.current = setTimeout(async () => {
       setCoPriceLoading(true);
       try {
-        const params = new URLSearchParams({ cleanerCount: String(cleaners), supervisorCount: String(supervisors) });
+        const params = new URLSearchParams({ cleanerCount: String(cleaners) });
         const res = await fetch(`/api/external/projects/${selectedProject.id}/co-price-estimate?${params}`);
         const data = (await res.json()) as { priced?: boolean; totalCents?: number };
         setCoPriceCents(data.priced && typeof data.totalCents === "number" ? data.totalCents : null);
@@ -131,7 +135,7 @@ export function ProjectManagerForm({ onBack }: Props) {
       }
     }, 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coCleanerCount, coSupervisorCount, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
+  }, [coCleanerCount, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
 
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
@@ -203,8 +207,9 @@ export function ProjectManagerForm({ onBack }: Props) {
           coTitle: coTitle.trim() || undefined,
           coDescription: coDescription.trim() || undefined,
           coEstimatedStartDate: coEstimatedStartDate || undefined,
+          // Supervisor count isn't sent — the server derives it from
+          // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
           coCleanerCount: coCleanerCount.trim() || undefined,
-          coSupervisorCount: coSupervisorCount.trim() || undefined,
           sovItemId: selectedSovId || undefined,
           desiredDate: desiredDate || undefined,
           comments: comments.trim() || undefined,
@@ -246,7 +251,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setSelectedProjectId("");
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate("");
-            setCoCleanerCount(""); setCoSupervisorCount(""); setCoPriceCents(null);
+            setCoCleanerCount(""); setCoPriceCents(null);
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
           }}
@@ -404,34 +409,24 @@ export function ProjectManagerForm({ onBack }: Props) {
             {selectedProject?.hasCustomLaborRate ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
                 <p className="text-xs font-medium text-gray-700">Crew size</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={label} htmlFor="co-cleaner-count"># of cleaners</label>
-                    <input
-                      id="co-cleaner-count"
-                      type="number"
-                      min={0}
-                      step={1}
-                      className={input}
-                      placeholder="0"
-                      value={coCleanerCount}
-                      onChange={(e) => setCoCleanerCount(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className={label} htmlFor="co-supervisor-count"># of supervisors</label>
-                    <input
-                      id="co-supervisor-count"
-                      type="number"
-                      min={0}
-                      step={1}
-                      className={input}
-                      placeholder="0"
-                      value={coSupervisorCount}
-                      onChange={(e) => setCoSupervisorCount(e.target.value)}
-                    />
-                  </div>
+                <div className="mt-3 max-w-[calc(50%-0.375rem)]">
+                  <label className={label} htmlFor="co-cleaner-count"># of cleaners</label>
+                  <input
+                    id="co-cleaner-count"
+                    type="number"
+                    min={0}
+                    step={1}
+                    className={input}
+                    placeholder="0"
+                    value={coCleanerCount}
+                    onChange={(e) => setCoCleanerCount(e.target.value)}
+                  />
                 </div>
+                {coSupervisorCount > 0 && (
+                  <p className="mt-2 text-[11px] text-gray-400">
+                    Includes {coSupervisorCount} supervisor{coSupervisorCount === 1 ? "" : "s"} automatically.
+                  </p>
+                )}
                 {(coPriceLoading || coPriceCents != null) && (
                   <p className="mt-3 text-sm text-gray-700">
                     Estimated price:{" "}

@@ -11,7 +11,7 @@ import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
-import { computeChangeOrderLaborEstimate, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
+import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -317,6 +317,23 @@ export function ChangeOrderDetailEditor({
   const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
   const [estLaborers, setEstLaborers] = useState(data.estLaborers != null ? String(data.estLaborers) : "");
   const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
+  // Auto-fills # of supervisors from # of laborers (a crew always needs at
+  // least one — see deriveChangeOrderSupervisorCount), same as the create
+  // forms' ChangeOrderLaborEstimator. Starts "touched" if this CO already had
+  // a real saved value, so opening an existing CO and tweaking crew size
+  // doesn't silently overwrite a supervisor count someone set on purpose.
+  const estSupervisorsTouchedRef = useRef(data.estSupervisors != null);
+  useEffect(() => {
+    if (estSupervisorsTouchedRef.current) return;
+    const derived = deriveChangeOrderSupervisorCount(Number(estLaborers) || 0);
+    const derivedStr = derived > 0 ? String(derived) : "";
+    if (estSupervisors !== derivedStr) setEstSupervisors(derivedStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estLaborers]);
+  function handleEstSupervisorsChange(v: string) {
+    estSupervisorsTouchedRef.current = true;
+    setEstSupervisors(v);
+  }
   const actualLaborers = data.laborers.filter((l) => !l.role?.toLowerCase().includes("supervisor")).length;
   const actualSupervisors = data.laborers.filter((l) => l.role?.toLowerCase().includes("supervisor")).length;
 
@@ -648,7 +665,8 @@ export function ChangeOrderDetailEditor({
                     </div>
                     <div>
                       <label className={label} htmlFor="co-est-supervisors"># of supervisors</label>
-                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} onChange={(e) => setEstSupervisors(e.target.value)} />
+                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} onChange={(e) => handleEstSupervisorsChange(e.target.value)} />
+                      <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2 text-xs">
                       <span className="text-gray-700">

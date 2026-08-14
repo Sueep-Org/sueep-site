@@ -79,6 +79,17 @@ export function getChangeOrderLaborRates(rateCard: unknown): ResolvedChangeOrder
   };
 }
 
+/** A crew always needs a supervisor present — 1 for crews of 10 or fewer
+ * cleaners, 2 for anything larger. Returns 0 when no cleaners are requested
+ * at all (nothing to supervise). Drives the supervisor count on every change
+ * order crew estimate: fixed (not user-enterable) on the public project
+ * portal, auto-filled but still editable in the ERP. */
+export function deriveChangeOrderSupervisorCount(cleanerCount: number): number {
+  const cleaners = Math.max(0, Math.round(cleanerCount || 0));
+  if (cleaners <= 0) return 0;
+  return cleaners > 10 ? 2 : 1;
+}
+
 /** True once someone has explicitly set at least one of this project's
  * Cleaner/Foreman rates (via LaborRateCardEditor) — as opposed to silently
  * running on DEFAULT_CHANGE_ORDER_LABOR_RATES. Used to decide whether the

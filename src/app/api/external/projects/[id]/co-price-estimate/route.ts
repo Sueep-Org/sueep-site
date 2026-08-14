@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   computeChangeOrderLaborEstimate,
+  deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
@@ -21,12 +22,14 @@ function parseCount(value: string | null): number {
  * Cleaner/Foreman $/hr (see hasCustomChangeOrderLaborRate). Priced is false,
  * with no total at all, for any project nobody has set a real rate on yet —
  * the internal default rate is never surfaced as if it were a reviewed
- * number. */
+ * number. Supervisor count is never accepted from the caller — a project
+ * manager can only choose crew size (cleaners), the required supervisor(s)
+ * are always derived server-side (see deriveChangeOrderSupervisorCount). */
 export async function GET(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const { searchParams } = new URL(req.url);
   const cleanerCount = parseCount(searchParams.get("cleanerCount"));
-  const supervisorCount = parseCount(searchParams.get("supervisorCount"));
+  const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
 
   // Same eligible-segment check as the sibling SOV/search endpoints.
   const project = await prisma.project.findFirst({

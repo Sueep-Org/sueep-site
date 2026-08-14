@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, buildProjectRequestEmail, buildProjectRequestConfirmationEmail } from "@/lib/email";
 import {
   computeChangeOrderLaborEstimate,
+  deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
@@ -19,8 +20,10 @@ type Body = {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  // Crew size — cleaners only. The required supervisor(s) are always
+  // derived server-side (deriveChangeOrderSupervisorCount), never accepted
+  // from the client (see ProjectManagerForm — no supervisor input exists).
   coCleanerCount?: string;
-  coSupervisorCount?: string;
   // SOV fields
   sovItemId?: string;
   desiredDate?: string;
@@ -71,7 +74,7 @@ export async function POST(req: Request) {
   // the price-estimate endpoint follows.
   let quotedPriceCents: number | null = null;
   const cleanerCount = Math.max(0, Math.round(Number(body.coCleanerCount) || 0));
-  const supervisorCount = Math.max(0, Math.round(Number(body.coSupervisorCount) || 0));
+  const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
   if (type === "change-order") {
     const estimatedStartDate = body.coEstimatedStartDate
       ? new Date(`${body.coEstimatedStartDate}T00:00:00Z`)

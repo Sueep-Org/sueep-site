@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import {
   computeChangeOrderLaborEstimate,
+  deriveChangeOrderSupervisorCount,
   ACTUAL_CHANGE_ORDER_LABOR_COST_RATES,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
   type ResolvedChangeOrderLaborRates,
@@ -63,14 +65,27 @@ export function ChangeOrderLaborEstimator({
     onEstLaborChange((costEstimate.totalCents / 100).toFixed(2));
   }
 
+  // Auto-fills # of supervisors from # of cleaners (a crew always needs at
+  // least one — see deriveChangeOrderSupervisorCount), but only until
+  // someone actually edits the supervisor field themselves — after that it's
+  // theirs to manage, no more overwriting on every cleaner-count keystroke.
+  const supervisorTouchedRef = useRef(false);
+  useEffect(() => {
+    if (supervisorTouchedRef.current) return;
+    const derived = deriveChangeOrderSupervisorCount(Number(cleanerCount) || 0);
+    const derivedStr = derived > 0 ? String(derived) : "";
+    if (supervisorCount !== derivedStr) onSupervisorCountChange(derivedStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanerCount]);
+
+  function handleSupervisorCountChange(v: string) {
+    supervisorTouchedRef.current = true;
+    onSupervisorCountChange(v);
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pricing</h3>
-      <p className="mt-1 text-xs text-gray-500">
-        Enter the crew to calculate a price (this project&apos;s Labor rates) and a labor cost (actual pay), assuming
-        a flat {CHANGE_ORDER_ESTIMATE_DAY_HOURS}-hour day per person — or skip straight to entering your own numbers
-        below.
-      </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
@@ -98,8 +113,9 @@ export function ChangeOrderLaborEstimator({
             placeholder="0"
             value={supervisorCount}
             disabled={disabled}
-            onChange={(e) => onSupervisorCountChange(e.target.value)}
+            onChange={(e) => handleSupervisorCountChange(e.target.value)}
           />
+          <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>
         </div>
       </div>
 
