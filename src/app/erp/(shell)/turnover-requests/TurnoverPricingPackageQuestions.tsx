@@ -174,6 +174,25 @@ export function TurnoverPricingPackageQuestions({
     }
   }
 
+  // Touch-up paint and compounding are "how many" (rooms/spots), not a
+  // plain yes/no, so they can't be checkbox-driven the same way Full clean
+  // etc. are — but living as bare quantity fields below the "what work is
+  // included?" grid made them easy to miss entirely (matching neither the
+  // checkbox styling nor being visually grouped with it). Deriving a
+  // checked state from quantity > 0 lets them sit as a checkbox in that
+  // same grid; checking it just seeds a starting quantity of 1, unchecking
+  // zeroes it back out — same on/off shape as every other tile there.
+  const touchUpPaintChecked = !fullPaint && Number(touchUpPaint || 0) > 0;
+  const compoundingChecked = Number(compounding || 0) > 0;
+
+  function toggleTouchUpPaint(checked: boolean) {
+    setTouchUpPaint(checked ? (Number(touchUpPaint || 0) > 0 ? touchUpPaint : "1") : "0");
+  }
+
+  function toggleCompounding(checked: boolean) {
+    setCompounding(checked ? (Number(compounding || 0) > 0 ? compounding : "1") : "0");
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -309,6 +328,17 @@ export function TurnoverPricingPackageQuestions({
             />
             Full paint
           </label>
+          <label className={`flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm ${fullPaint ? "bg-gray-100 text-gray-400" : "bg-gray-50 text-gray-700"}`}>
+            <input
+              name="touchUpPaintToggle"
+              checked={touchUpPaintChecked}
+              disabled={fullPaint}
+              onChange={(event) => toggleTouchUpPaint(event.target.checked)}
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-pink-600"
+            />
+            Touch-up paint{fullPaint ? " (included in full paint)" : ""}
+          </label>
           <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <input
               name="carpetCleaning"
@@ -341,6 +371,16 @@ export function TurnoverPricingPackageQuestions({
           </label>
           <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <input
+              name="compoundingToggle"
+              checked={compoundingChecked}
+              onChange={(event) => toggleCompounding(event.target.checked)}
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-pink-600"
+            />
+            Compounding
+          </label>
+          <label className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <input
               name="otherWork"
               checked={otherWork}
               onChange={(event) => {
@@ -353,6 +393,32 @@ export function TurnoverPricingPackageQuestions({
             Other
           </label>
         </div>
+        {touchUpPaintChecked && (
+          <label className="mt-3 block text-xs font-medium text-gray-600">
+            Touch-up paint — how many rooms?
+            <input
+              name="touchUpPaint"
+              value={touchUpPaint}
+              onChange={(event) => setTouchUpPaint(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+        )}
+        {compoundingChecked && (
+          <label className="mt-3 block text-xs font-medium text-gray-600">
+            Compounding — how many spots?
+            <input
+              name="compounding"
+              value={compounding}
+              onChange={(event) => setCompounding(event.target.value)}
+              type="number"
+              min="1"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
+          </label>
+        )}
         {otherWork && (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-medium text-gray-600">
@@ -379,33 +445,6 @@ export function TurnoverPricingPackageQuestions({
           </div>
         )}
       </div>
-
-      <label className="mt-4 block text-xs font-medium text-gray-600">
-        Touch-up paint quantity
-        <input
-          name="touchUpPaint"
-          value={touchUpPaint}
-          onChange={(event) => setTouchUpPaint(event.target.value)}
-          type="number"
-          min="0"
-          disabled={fullPaint}
-          placeholder={fullPaint ? "Included in full paint" : "0"}
-          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-100 disabled:text-gray-400"
-        />
-      </label>
-
-      <label className="mt-4 block text-xs font-medium text-gray-600">
-        Compounding quantity
-        <input
-          name="compounding"
-          value={compounding}
-          onChange={(event) => setCompounding(event.target.value)}
-          type="number"
-          min="0"
-          placeholder="0"
-          className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-        />
-      </label>
 
       {CUSTOM_LINE_ITEMS_ENABLED && (["charge", "workItem"] as const).map((kind) => {
         const items = pricingPackage.customLineItems?.filter((item) => item.kind === kind) ?? [];
