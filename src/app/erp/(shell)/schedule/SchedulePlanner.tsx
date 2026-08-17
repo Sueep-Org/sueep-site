@@ -1114,6 +1114,14 @@ export function SchedulePlanner({
     if (chip.kind === "coPlanned") {
       const result = await moveCoPlannedAssignment(chip.changeOrderId, chip.assignmentId, chip.fromKey, toKey);
       if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
+      // dayAssignments/coDayAssignments update optimistically above, but a
+      // change order attached to a project's own planned day (see
+      // ProjectDayAssignment.changeOrders in page.tsx) is keyed off the
+      // `changeOrders` prop's workDayKeys, which is server-computed and
+      // never touched by local state — without this, a CO nested under a
+      // moved unit went stale (still shown on the old day, or missing
+      // entirely from the new one) until the next full reload.
+      else router.refresh();
       return;
     }
     const existingAssignment = dayAssignments.find((a) => a.id === chip.assignmentId);
@@ -1126,6 +1134,10 @@ export function SchedulePlanner({
       existingAssignment?.endTime ?? null,
     );
     if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
+    // Same reason as the coPlanned branch above — resyncs `changeOrders` so
+    // any CO attached to this unit's day (via its changeOrderIds) reflects
+    // the new day instead of the one it just left.
+    else router.refresh();
   }
 
   // Read-only labor detail card — a "confirmed" chip is backed by actual
