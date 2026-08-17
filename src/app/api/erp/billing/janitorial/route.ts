@@ -47,8 +47,18 @@ export async function GET(req: Request) {
         // COMMERCIAL_CLEANING is shared between the janitorial pipeline and
         // post-construction cleaning jobs — segment alone can't tell them
         // apart, so explicitly exclude anything actually synced from the
-        // post-construction pipeline even if its segment matches.
-        ...(postConstructionPipelineId ? [{ NOT: { hubspotPipelineId: postConstructionPipelineId } }] : []),
+        // post-construction pipeline even if its segment matches. Written as
+        // an explicit "null or not-equal" OR rather than `NOT: {
+        // hubspotPipelineId: postConstructionPipelineId }` — that block-level
+        // NOT compiles to a plain SQL `<>`, which per SQL's null semantics
+        // silently drops every row where hubspotPipelineId IS NULL (i.e.
+        // every project never synced from HubSpot at all) instead of
+        // keeping them. That wiped every manually-created janitorial unit
+        // (an entire building's worth, confirmed: Avery Philly Apartments)
+        // out of this list regardless of date range.
+        ...(postConstructionPipelineId
+          ? [{ OR: [{ hubspotPipelineId: null }, { hubspotPipelineId: { not: postConstructionPipelineId } }] }]
+          : []),
         // Searching bypasses the date range entirely (that's the point of a
         // search), it doesn't bypass "is this actually billing-eligible."
         q
