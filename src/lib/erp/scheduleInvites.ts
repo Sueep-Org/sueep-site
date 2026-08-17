@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
+import { todayEasternKey } from "@/lib/erp/dates";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { SHIFT_RESPONSE_ENABLED } from "@/lib/erp/shiftResponses";
 
@@ -191,6 +192,11 @@ export async function sendDayInvite(params: {
    * when set on a non-cancelled send. */
   responseToken?: string | null;
 }): Promise<void> {
+  // Never notify for a day that's already passed — a schedule change on a
+  // date behind "today" (adding/moving/cancelling someone on a past chip,
+  // e.g. editing a completed job's history) has nobody left to actually
+  // notify about it. Applies to cancellations too, not just new invites.
+  if (params.dateKey < todayEasternKey()) return;
   const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime);
   try {
     const ics = buildDayAssignmentInvite({
@@ -240,6 +246,9 @@ export async function sendSeriesInvite(params: {
   cancelled?: boolean;
   extraHtml?: string;
 }): Promise<void> {
+  // Same "nothing to notify about" rule as sendDayInvite — skip if the
+  // whole range is already behind today.
+  if (params.lastDateKey < todayEasternKey()) return;
   const when = formatInviteRange(params.firstDateKey, params.lastDateKey, params.startTime, params.endTime);
   try {
     const ics = buildScheduleSeriesInvite({

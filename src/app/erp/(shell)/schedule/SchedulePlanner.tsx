@@ -126,6 +126,15 @@ function completionChipClass(complete: boolean): string {
   return complete ? "opacity-60" : "";
 }
 
+// A CO sitting in BILLING is functionally done — the work itself finished,
+// it's just waiting on invoicing — so it should read as complete everywhere
+// a plain `=== "COMPLETED"` check would otherwise miss it and keep showing
+// the in-progress ⚙ icon. Matches ChangeOrderDetailEditor.tsx's own
+// "Complete ✓" badge, which already treats the two statuses the same way.
+function coIsComplete(status: string): boolean {
+  return status === "COMPLETED" || status === "BILLING";
+}
+
 // Accept/decline status, shown as a small traffic-light dot next to a
 // person's name — in the event popover's crew list and the hover tooltip's
 // "Supervisor: {name}" line, never on the compact calendar chip itself (that
@@ -749,6 +758,11 @@ export function SchedulePlanner({
   // A worker's scope reassignment (via the dropdown next to their name in
   // the crew list) in flight, so its own row can show a "saving" state.
   const [reassigningWorkerId, setReassigningWorkerId] = useState<string | null>(null);
+  // "Apply crew to other units in this building" bulk action — in flight +
+  // its own result message, separate from eventWorkerError since it isn't
+  // about the single-worker add form right below it.
+  const [applyingCrewToBuilding, setApplyingCrewToBuilding] = useState(false);
+  const [applyCrewResult, setApplyCrewResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   function openEventPopover(k: string, p: ScheduleProject, assignment?: ScheduleDayAssignment, role?: "start" | "end") {
     setEventPopoverKey(`${k}:${p.id}`);
@@ -783,6 +797,7 @@ export function SchedulePlanner({
     setEventWorkerScopePick("");
     setEventWorkerError("");
     setEventWorkerWarning(null);
+    setApplyCrewResult(null);
   }
 
   // Moves and/or retimes a planned (ProjectDayAssignment), shared by the
@@ -1377,6 +1392,109 @@ export function SchedulePlanner({
     });
   }
 
+  // Other turnover units in the same building that have anything scheduled
+  // on day k — i.e. would show their own chip that day, reconstructed
+  // directly from the underlying data rather than the day-cell's own
+  // categorized lists (those are scoped to that render closure, not
+  // reachable from here). Backs "Apply crew to other units in [Building]".
+  function siblingTurnoverUnitIds(k: string, source: ScheduleProject): string[] {
+    if (!source.buildingId) return [];
+    return projects
+      .filter((p) => p.id !== source.id && p.buildingId === source.buildingId && isGroupableTurnoverProject(p))
+      .filter((p) => {
+        const hasDayAssignment = dayAssignments.some((a) => a.projectId === p.id && a.dateKey === k);
+        const hasWorker = workerAssignments.some((w) => w.projectId === p.id && w.dateKey === k);
+        const hasLoggedWork = p.workDayKeys.includes(k);
+        const isSpanDay = p.projectDate?.slice(0, 10) === k || p.projectEndDate?.slice(0, 10) === k;
+        return hasDayAssignment || hasWorker || hasLoggedWork || isSpanDay;
+      })
+      .map((p) => p.id);
+  }
+
+  // Copies this unit's own crew (and supervisor/PM, if set) onto every
+  // other turnover unit in the same building scheduled the same day — the
+  // normal janitorial-turnover reality of one crew working across several
+  // units in one building in one day, not a mistake to warn about, so this
+  // deliberately skips findWorkerConflicts' "already scheduled elsewhere"
+  // prompt. Each per-unit write is its own request; one unit failing (e.g.
+  // a worker's PTO conflict) doesn't stop the rest — the result message
+  // below reports how many actually went through.
+  async function handleApplyCrewToBuilding(k: string, sourceProjectId: string) {
+    const source = projectById.get(sourceProjectId);
+    if (!source) return;
+    const targetIds = siblingTurnoverUnitIds(k, source);
+    if (targetIds.length === 0) return;
+
+    setApplyCrewResult(null);
+    setApplyingCrewToBuilding(true);
+    try {
+      const sourceDay = dayAssignments.find((a) => a.dateKey === k && a.projectId === sourceProjectId);
+      const sourceWorkers = workerAssignments.filter((w) => w.dateKey === k && w.projectId === sourceProjectId);
+
+      const results = await Promise.allSettled(
+        targetIds.map(async (targetId) => {
+          // Supervisor/PM — preserve whatever the target unit's day already
+          // has (time/scope/SOV/comment), only overriding who's covering
+          // it, so this can't silently wipe out that unit's own coverage
+          // details the way a bare upsert with missing fields would.
+          if (sourceDay?.supervisorUserId || sourceDay?.projectManagerUserId) {
+            const targetDay = dayAssignments.find((a) => a.dateKey === k && a.projectId === targetId);
+            const res = await fetch("/api/erp/schedule/day-assignments", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                projectId: targetId,
+                date: k,
+                supervisorUserId: sourceDay.supervisorUserId || undefined,
+                projectManagerUserId: sourceDay.projectManagerUserId || undefined,
+                startTime: targetDay?.startTime || undefined,
+                endTime: targetDay?.endTime || undefined,
+                sovItemIds: targetDay?.sovItemIds ?? [],
+                scopeItems: targetDay?.scopeItems ?? [],
+                changeOrderIds: targetDay?.changeOrderIds ?? [],
+                comment: targetDay?.comment || undefined,
+              }),
+            });
+            if (!res.ok) throw new Error("supervisor");
+          }
+          // Crew — same worker-assignments POST the single "Add worker" form
+          // uses, one per person; already-there-on-this-unit is a no-op
+          // upsert, not a duplicate.
+          const workerResults = await Promise.allSettled(
+            sourceWorkers.map((w) =>
+              fetch("/api/erp/schedule/worker-assignments", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  projectId: targetId,
+                  employeeId: w.employeeId || undefined,
+                  contractorId: w.contractorId || undefined,
+                  date: k,
+                }),
+              }).then((res) => {
+                if (!res.ok) throw new Error("worker");
+              })
+            )
+          );
+          if (workerResults.some((r) => r.status === "rejected")) throw new Error("worker");
+        })
+      );
+
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const succeeded = targetIds.length - failed;
+      setApplyCrewResult(
+        failed === 0
+          ? { ok: true, msg: `Applied to ${succeeded} other unit${succeeded === 1 ? "" : "s"}.` }
+          : { ok: false, msg: `Applied to ${succeeded} of ${targetIds.length} units — ${failed} had a conflict (e.g. time off) and were skipped.` }
+      );
+      router.refresh();
+    } catch {
+      setApplyCrewResult({ ok: false, msg: "Failed to apply crew to other units." });
+    } finally {
+      setApplyingCrewToBuilding(false);
+    }
+  }
+
   async function handleEventAddWorker(k: string, projectId: string, force = false) {
     setEventWorkerError("");
     if (!eventWorkerId) {
@@ -1571,6 +1689,14 @@ export function SchedulePlanner({
     if (eventPopoverKey !== `${k}:${p.id}`) return null;
 
     const dayWorkers = workerAssignments.filter((a) => a.dateKey === k && a.projectId === p.id);
+    // Only offered for turnover units with sibling units actually scheduled
+    // this same day — see siblingTurnoverUnitIds/handleApplyCrewToBuilding.
+    const siblingUnitIds = isGroupableTurnoverProject(p) ? siblingTurnoverUnitIds(k, p) : [];
+    // Same day-specific supervisor handleApplyCrewToBuilding itself reads
+    // (not currentSupervisorId(p), which is the project's own default —
+    // this is the actual per-day override, if any).
+    const eventDayAssignment = dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
+    const hasSupervisorThisDay = !!(eventDayAssignment?.supervisorUserId ?? eventDayAssignment?.projectManagerUserId);
     const workerOptions = eventWorkerType === "employee" ? employees : contractors;
     const filteredWorkerOptions = eventWorkerQuery.trim()
       ? workerOptions.filter((w) => matchesSearchQuery(w.displayName, eventWorkerQuery))
@@ -1922,6 +2048,29 @@ export function SchedulePlanner({
             <p className="mt-1 text-[10px] text-gray-400">None scheduled yet.</p>
           )}
 
+          {siblingUnitIds.length > 0 ? (
+            <div className="mt-1.5">
+              <button
+                type="button"
+                onClick={() => void handleApplyCrewToBuilding(k, p.id)}
+                disabled={applyingCrewToBuilding || (dayWorkers.length === 0 && !hasSupervisorThisDay)}
+                title={
+                  dayWorkers.length === 0 && !hasSupervisorThisDay
+                    ? "Add a supervisor or crew to this unit first"
+                    : undefined
+                }
+                className="rounded border border-pink-300 px-2 py-1 text-[10px] font-medium text-pink-700 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {applyingCrewToBuilding
+                  ? "Applying…"
+                  : `Apply crew to ${siblingUnitIds.length} other unit${siblingUnitIds.length === 1 ? "" : "s"} in ${p.buildingName ?? "this building"} today`}
+              </button>
+              {applyCrewResult ? (
+                <p className={`mt-1 text-[10px] ${applyCrewResult.ok ? "text-emerald-600" : "text-red-500"}`}>{applyCrewResult.msg}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-1.5 flex gap-1">
             <button
               type="button"
@@ -2225,7 +2374,7 @@ export function SchedulePlanner({
       const supervisorId = currentCoSupervisorId(co);
       if (supervisorId) continue;
       if (Object.keys(co.laborByDay).length > 0) continue;
-      if (co.status === "COMPLETED") continue;
+      if (coIsComplete(co.status)) continue;
       if (!co.scheduledDateKey) continue;
       const occurrences: { k: string; role: "start" | "end" }[] =
         co.scheduledEndDateKey
@@ -2523,16 +2672,15 @@ export function SchedulePlanner({
                 // on a turnover CO even though it's nested under its unit
                 // now, not floating separately (see the split below).
                 const coNeedsSupervisorIds = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
-                // A turnover unit's CO stays nested under its unit (and that
-                // unit's building dropdown) even while it needs a supervisor
-                // — same as every other CO on a turnover unit — rather than
-                // popping out to float separately just because it isn't
-                // staffed yet. Only a non-turnover CO (post-construction
-                // etc., not grouped onto the calendar the same way yet)
-                // keeps the standalone amber chip.
-                dayCoNeedsSupervisor = dayCoNeedsSupervisor.filter(
-                  (x) => projectById.get(x.co.projectId)?.segment !== "JANITORIAL_TURNOVER_REQUESTS",
-                );
+                // Any CO with a parent project stays nested under that
+                // project's own chip (and, for turnover, that unit's building
+                // dropdown) even while it needs a supervisor — same as any
+                // other CO on that project — rather than popping out to float
+                // separately just because it isn't staffed yet. Only a CO
+                // whose project can't be resolved at all (see looseChangeOrders
+                // below) keeps the standalone amber chip, since there's
+                // nowhere to nest it under.
+                dayCoNeedsSupervisor = dayCoNeedsSupervisor.filter((x) => !projectById.has(x.co.projectId));
                 if (dayCoNeedsSupervisor.length > 0) {
                   const flagged = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
                   dayChangeOrders = dayChangeOrders.filter((co) => !flagged.has(co.id));
@@ -2548,40 +2696,45 @@ export function SchedulePlanner({
                   .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
                   .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
 
-                // A janitorial turnover request's change order(s) hang directly
-                // below that request's own chip instead of sitting in the flat
-                // CO list, so the two read as one unit. Post-construction COs
-                // stay in the flat list below for now — that segment's projects
-                // don't map onto a single day's chip the same simple way, so
-                // grouping them needs its own approach (deferred).
-                const janitorialCoByProjectId = new Map<string, ScheduleChangeOrder[]>();
+                // A project's change order(s) hang directly below that
+                // project's own chip instead of sitting in a flat, unrelated
+                // CO list, so the two read as one unit — a Post-Construction
+                // project's CO with logged labor used to render as a totally
+                // separate "loose" chip on the same day with no visual link
+                // to that project's own confirmed/planned chip, same as a
+                // turnover unit's CO always has. Only a CO whose project
+                // can't be resolved at all falls back to the flat list, since
+                // there's nothing to nest it under.
+                const coByProjectId = new Map<string, ScheduleChangeOrder[]>();
                 const looseChangeOrders: ScheduleChangeOrder[] = [];
                 for (const co of dayChangeOrders) {
                   const parent = projectById.get(co.projectId);
-                  if (parent?.segment === "JANITORIAL_TURNOVER_REQUESTS") {
-                    const list = janitorialCoByProjectId.get(co.projectId) ?? [];
+                  if (parent) {
+                    const list = coByProjectId.get(co.projectId) ?? [];
                     list.push(co);
-                    janitorialCoByProjectId.set(co.projectId, list);
+                    coByProjectId.set(co.projectId, list);
                   } else {
                     looseChangeOrders.push(co);
                   }
                 }
-                // A unit's own chip today comes from one of the four buckets
-                // below — but a CO's scheduled day doesn't have to land on a
-                // day its unit is otherwise on the calendar (e.g. extra work
-                // scheduled well after the unit's own turn already finished).
-                // Without this, that CO would never get a home to nest under
-                // and would just silently not render at all. Any orphaned
-                // unit gets a minimal chip of its own instead, purely so the
-                // CO always renders "under" its unit and the two stay
-                // visually linked, same as everywhere else.
+                // A project's own chip today comes from one of the four
+                // buckets below — but a CO's scheduled day doesn't have to
+                // land on a day its project is otherwise on the calendar
+                // (e.g. extra work scheduled well after the base job already
+                // finished). Without this, that CO would never get a home to
+                // nest under and would just silently not render at all
+                // (still named "...JanitorialUnits" below — predates this
+                // covering every segment, not just turnover). Any such
+                // orphaned project gets a minimal chip of its own instead,
+                // purely so the CO always renders "under" it and the two
+                // stay visually linked, same as everywhere else.
                 const projectIdsWithOwnChipToday = new Set<string>([
                   ...dayNeedsSupervisor.map(({ project }) => project.id),
                   ...dayProjectSpanEndpoints.map(({ project }) => project.id),
                   ...dayProjects.map((p) => p.id),
                   ...dayPlanned.map(({ project }) => project.id),
                 ]);
-                const orphanedJanitorialUnits = Array.from(janitorialCoByProjectId.keys())
+                const orphanedJanitorialUnits = Array.from(coByProjectId.keys())
                   .filter((id) => !projectIdsWithOwnChipToday.has(id))
                   .map((id) => projectById.get(id))
                   .filter((p): p is ScheduleProject => !!p);
@@ -2647,11 +2800,11 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(co.status === "COMPLETED")}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status))}`}
                       >
                         {needsSupervisor ? <span aria-hidden>⚠</span> : null}
                         {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                        <CompletionStatusIcon complete={co.status === "COMPLETED"} />
+                        <CompletionStatusIcon complete={coIsComplete(co.status)} />
                         <span className="truncate">{co.title}</span>
                       </button>
                       {renderCoPopover(k, co)}
@@ -2714,7 +2867,7 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
@@ -2755,7 +2908,7 @@ export function SchedulePlanner({
                       ) : null}
                       {renderEventPopover(k, p)}
                     </li>
-                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
@@ -2817,7 +2970,7 @@ export function SchedulePlanner({
                       ) : null}
                       {renderEventPopover(k, p)}
                     </li>
-                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
@@ -2867,7 +3020,7 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {(janitorialCoByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
@@ -2956,7 +3109,7 @@ export function SchedulePlanner({
                       </div>
                     ) : null}
                   </li>
-                  {(janitorialCoByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
+                  {(coByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
                   </Fragment>
                   );
                 }
