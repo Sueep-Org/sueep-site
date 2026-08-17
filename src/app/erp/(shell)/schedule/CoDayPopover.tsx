@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { matchesSearchQuery, type ScheduleChangeOrder, type ScheduleCoDayAssignment, type ScheduleCoWorkerAssignment } from "@/lib/erp/schedule";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { useConfirm } from "@/app/erp/components/ui";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -69,6 +71,45 @@ export function CoDayPopover({
   onWorkerDeleted: (id: string) => void;
 }) {
   const summary = co.laborByDay[dateKey];
+  const router = useRouter();
+  const confirm = useConfirm();
+
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState("");
+
+  // Same request shape as the CO detail page's own "Mark complete" button
+  // (ChangeOrderDetailEditor.tsx) — status COMPLETED plus endDate in one
+  // PATCH, which the API mirrors onto completedAt itself.
+  async function handleMarkComplete() {
+    if (
+      !(await confirm({
+        message: `Mark "${co.title}" complete with an end date of ${dayCellLabel(dateKey)}?`,
+        danger: false,
+        confirmLabel: "Mark complete",
+      }))
+    )
+      return;
+    setCompleting(true);
+    setCompleteError("");
+    try {
+      const res = await fetch(`/api/erp/projects/${co.projectId}/change-orders/${co.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "COMPLETED", endDate: dateKey }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setCompleteError(data.error || "Failed to mark complete");
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setCompleteError("Failed to mark complete");
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   const [supervisorUserId, setSupervisorUserId] = useState(assignment?.supervisorUserId ?? "");
   const [projectManagerUserId, setProjectManagerUserId] = useState(assignment?.projectManagerUserId ?? "");
@@ -406,13 +447,25 @@ export function CoDayPopover({
           {workerError ? <p className="mt-1.5 text-[10px] text-red-500">{workerError}</p> : null}
         </div>
 
-        <div className="mt-3 flex items-center gap-1.5 border-t border-gray-100 pt-2.5">
+        {completeError ? <p className="mt-2.5 text-[10px] text-red-500">{completeError}</p> : null}
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
           <Link
             href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
             className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
           >
             View change order
           </Link>
+          {co.status !== "COMPLETED" && co.status !== "BILLING" ? (
+            <button
+              type="button"
+              onClick={() => void handleMarkComplete()}
+              disabled={completing}
+              className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              {completing ? "Saving…" : "Mark complete"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>,

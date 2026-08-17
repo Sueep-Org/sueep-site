@@ -9,6 +9,7 @@ import { CoDayPopover } from "./CoDayPopover";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { useConfirm } from "@/app/erp/components/ui";
 import {
   addDays,
   computeProjectSpanMarkersByDay,
@@ -579,6 +580,7 @@ export function SchedulePlanner({
   // link) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
+  const confirm = useConfirm();
   const searchParams = useSearchParams();
   useEffect(() => {
     const projectId = searchParams.get("scheduleProjectId");
@@ -1196,7 +1198,9 @@ export function SchedulePlanner({
             onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
           />
 
-          <div className="mt-2.5 flex items-center gap-1.5">
+          {eventError ? <p className="mt-1.5 text-[10px] text-red-500">{eventError}</p> : null}
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <Link
               href={`/erp/projects/${p.id}#labor-log`}
               className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
@@ -1209,6 +1213,16 @@ export function SchedulePlanner({
             >
               View project
             </Link>
+            {p.status !== "COMPLETE" ? (
+              <button
+                type="button"
+                onClick={() => void handleMarkComplete(p.id, p.jobTitle, k)}
+                disabled={eventSaving}
+                className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              >
+                {eventSaving ? "Saving…" : "Mark complete"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>,
@@ -1482,6 +1496,48 @@ export function SchedulePlanner({
     }
   }
 
+  // Mark-complete from the calendar — sets the project's end date to
+  // whichever day's card the user opened this popover from, and flips
+  // status to COMPLETE in the same PATCH. The API route (not this handler)
+  // owns the actual guards: turnover-segment projects require the quality
+  // checklist finished first (unless the acting user can override it), so
+  // that error comes back verbatim in `data.error` and is shown the same
+  // way handleEventDatesSave's own errors are.
+  async function handleMarkComplete(projectId: string, jobTitle: string, endDateKey: string) {
+    if (
+      !(await confirm({
+        message: `Mark "${jobTitle}" complete with an end date of ${formatShortDate(endDateKey)}?`,
+        danger: false,
+        confirmLabel: "Mark complete",
+      }))
+    )
+      return;
+    setEventSaving(true);
+    setEventError("");
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectEndDate: endDateKey, status: "COMPLETE" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setEventError(data.error || "Failed to mark complete");
+        return;
+      }
+      // Reachable from either the date-editing popover or the read-only
+      // labor popover (see renderLaborPopover's own "Mark complete" button)
+      // — close whichever one is actually open.
+      setEventPopoverKey(null);
+      setLaborPopoverKey(null);
+      router.refresh();
+    } catch {
+      setEventError("Failed to mark complete");
+    } finally {
+      setEventSaving(false);
+    }
+  }
+
   function renderEventPopover(k: string, p: ScheduleProject) {
     if (eventPopoverKey !== `${k}:${p.id}`) return null;
 
@@ -1630,6 +1686,16 @@ export function SchedulePlanner({
               {eventSaving ? "Saving…" : "Save dates"}
             </button>
           )}
+          {p.status !== "COMPLETE" ? (
+            <button
+              type="button"
+              onClick={() => void handleMarkComplete(p.id, p.jobTitle, k)}
+              disabled={eventSaving}
+              className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              {eventSaving ? "Saving…" : "Mark complete"}
+            </button>
+          ) : null}
           <Link
             href={`/erp/projects/${p.id}`}
             className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
