@@ -29,27 +29,24 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   await prisma.projectWorkerDayAssignment.delete({ where: { id } }).catch(() => {});
 
-  // A row created as part of a series was only ever sent one combined
-  // recurring invite (see worker-assignments' POST route, workerSeriesUid)
-  // — removing just this one occurrence has no clean single-event
-  // cancellation to send without touching the whole series' invite, so it's
-  // skipped here. "Remove all" (the series DELETE route) is what sends that
-  // cancellation, for the whole range at once.
-  if (!existing.seriesId) {
-    const contact = await resolveWorkerContact(existing.employeeId, existing.contractorId);
-    if (contact) {
-      const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
-      await sendDayInvite({
-        uid: `worker-assignment-${id}@sueep.com`,
-        to: contact.email,
-        attendeeName: contact.name,
-        role: "Working",
-        title: existing.project.jobTitle,
-        dateKey: dayKey(existing.date),
-        location,
-        cancelled: true,
-      });
-    }
+  // Each occurrence (series or not) now gets its own individual invite with
+  // its own UID (see worker-assignments' POST route — a series is one email
+  // per day since this feature shipped, not one combined recurring invite),
+  // so a single-occurrence removal can always send a clean, single-event
+  // cancellation for just this day, series or not.
+  const contact = await resolveWorkerContact(existing.employeeId, existing.contractorId);
+  if (contact) {
+    const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
+    await sendDayInvite({
+      uid: `worker-assignment-${id}@sueep.com`,
+      to: contact.email,
+      attendeeName: contact.name,
+      role: "Working",
+      title: existing.project.jobTitle,
+      dateKey: dayKey(existing.date),
+      location,
+      cancelled: true,
+    });
   }
 
   return NextResponse.json({ ok: true });

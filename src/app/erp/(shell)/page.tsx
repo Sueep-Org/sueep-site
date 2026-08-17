@@ -7,6 +7,8 @@ import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
 import { getErpAuth, canSeeFinancials, isProjectManager } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
+import { SupervisorAssignmentResponse } from "./SupervisorAssignmentResponse";
+import { SHIFT_RESPONSE_ENABLED } from "@/lib/erp/shiftResponses";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
 
 export const dynamic = "force-dynamic";
@@ -268,6 +270,12 @@ export default async function ErpDashboardPage() {
     // ── Supervisor ─────────────────────────────────────────────────────────
     if (role === "SUPERVISOR") {
       const scope = await getSupervisorProjectScope(auth!.uid, auth!.email);
+      // Which ErpUser row *this* supervisor actually is — needed separately
+      // from `scope` so the "My projects" feed below only offers an
+      // Accept/Decline control on assignment rows that are truly this
+      // person's own (supervisorUserId match), not every day-assignment on
+      // a project they merely logged labor on.
+      const supervisorUser = await prisma.erpUser.findUnique({ where: { firebaseUid: auth!.uid }, select: { id: true } });
 
       const todayStart = todayEasternAsUtcMidnight();
       const todayEnd = new Date(todayStart);
@@ -388,7 +396,7 @@ export default async function ErpDashboardPage() {
         ? await Promise.all([
             prisma.projectDayAssignment.findMany({
               where: { projectId: { in: myProjectIds }, date: { gte: feedWindowStart, lte: feedWindowEnd } },
-              select: { projectId: true, date: true },
+              select: { id: true, projectId: true, date: true, supervisorUserId: true, responseStatus: true },
             }),
             prisma.projectWorkerDayAssignment.findMany({
               where: { projectId: { in: myProjectIds }, date: { gte: feedWindowStart, lte: feedWindowEnd } },
@@ -401,8 +409,28 @@ export default async function ErpDashboardPage() {
           ])
         : [[], [], []];
 
-      type DayEntry = { projectId: string; jobTitle: string; dayKey: string; kind: "logged" | "planned" | "missed"; hours?: number; workers?: string[] };
+      type DayEntry = {
+        projectId: string;
+        jobTitle: string;
+        dayKey: string;
+        kind: "logged" | "planned" | "missed";
+        hours?: number;
+        workers?: string[];
+        /** Set only when this project/day has a ProjectDayAssignment row
+         * that's this specific supervisor's own (see supervisorUser above)
+         * — the one thing an Accept/Decline control can actually respond
+         * to. Unset for a day that's only planned via a crew assignment, or
+         * assigned to a different supervisor this account merely logged
+         * labor alongside. */
+        assignmentId?: string;
+        responseStatus?: string;
+      };
       const jobTitleByProjectId = new Map(myProjects.map((p) => [p.id, p.jobTitle]));
+      const myAssignmentByKey = new Map<string, { id: string; responseStatus: string }>();
+      for (const a of feedDayAssignments) {
+        if (!supervisorUser || a.supervisorUserId !== supervisorUser.id) continue;
+        myAssignmentByKey.set(`${a.projectId}::${utcDateKey(a.date)}`, { id: a.id, responseStatus: a.responseStatus });
+      }
 
       const loggedByKey = new Map<string, { hours: number; workers: Set<string> }>();
       for (const e of feedLaborEntries) {
@@ -425,7 +453,15 @@ export default async function ErpDashboardPage() {
       for (const key of plannedKeys) {
         if (loggedByKey.has(key)) continue; // already showing as logged for that day
         const [projectId, dayKey] = key.split("::");
-        dayEntries.push({ projectId, jobTitle: jobTitleByProjectId.get(projectId) ?? "", dayKey, kind: dayKey < todayKeyStr ? "missed" : "planned" });
+        const mine = myAssignmentByKey.get(key);
+        dayEntries.push({
+          projectId,
+          jobTitle: jobTitleByProjectId.get(projectId) ?? "",
+          dayKey,
+          kind: dayKey < todayKeyStr ? "missed" : "planned",
+          assignmentId: mine?.id,
+          responseStatus: mine?.responseStatus,
+        });
       }
       dayEntries.sort((a, b) => {
         if ((a.kind === "missed") !== (b.kind === "missed")) return a.kind === "missed" ? -1 : 1;
@@ -562,6 +598,18 @@ export default async function ErpDashboardPage() {
                             <p className="text-[11px] text-gray-400">{dateLabel}</p>
                           </div>
                         </Link>
+                        {/* Outside the Link above (not nested inside an <a>) —
+                            only for an upcoming day this supervisor's own
+                            assignment row exists for, nothing to respond to
+                            on a crew-only or already-past day. */}
+                        {SHIFT_RESPONSE_ENABLED && e.kind === "planned" && e.assignmentId ? (
+                          <div className="px-4 pb-2.5 pl-[1.625rem]">
+                            <SupervisorAssignmentResponse
+                              assignmentId={e.assignmentId}
+                              status={(e.responseStatus as "PENDING" | "ACCEPTED" | "DECLINED" | undefined) ?? "PENDING"}
+                            />
+                          </div>
+                        ) : null}
                       </li>
                     );
                   })}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { resolveWorkerContact, sendSeriesInvite, workerSeriesUid } from "@/lib/erp/scheduleInvites";
+import { resolveWorkerContact, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,10 +18,13 @@ export async function DELETE(_req: Request, ctx: Ctx) {
           workOrderRecord: { select: { siteAddress: true } },
         },
       },
-      // Every crew row this series generated — read before the cascade
-      // delete below removes them, so each worker can get a cancellation
-      // for the same series-scoped invite they were originally sent.
-      workerAssignments: { select: { employeeId: true, contractorId: true } },
+      // Every day/crew row this series generated — read before the cascade
+      // delete below removes them, so each occurrence can get its own
+      // cancellation (each was sent its own individual invite — see the
+      // day-assignments/worker-assignments POST routes — not one combined
+      // recurring invite for the whole range).
+      dayAssignments: { select: { id: true, date: true } },
+      workerAssignments: { select: { id: true, date: true, employeeId: true, contractorId: true } },
     },
   });
   if (!series) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -40,42 +43,37 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       select: { email: true },
     });
     if (supervisor) {
-      await sendSeriesInvite({
-        uid: `day-assignment-series-${id}@sueep.com`,
-        to: supervisor.email,
-        role: "Supervising",
-        title: series.project.jobTitle,
-        firstDateKey: dayKey(series.startDate),
-        lastDateKey: dayKey(series.endDate),
-        repeatDays: series.repeatDays,
-        startTime: series.startTime,
-        endTime: series.endTime,
-        location,
-        cancelled: true,
-      });
+      await Promise.all(
+        series.dayAssignments.map((a) =>
+          sendDayInvite({
+            uid: `day-assignment-${a.id}@sueep.com`,
+            to: supervisor.email,
+            role: "Supervising",
+            title: series.project.jobTitle,
+            dateKey: dayKey(a.date),
+            startTime: series.startTime,
+            endTime: series.endTime,
+            location,
+            cancelled: true,
+          })
+        )
+      );
     }
   }
 
-  // One cancellation per unique crew member the series had, not per row —
-  // they were only ever sent one combined series invite to begin with, see
-  // worker-assignments' POST route.
-  const uniqueWorkers = new Map<string, { employeeId: string | null; contractorId: string | null }>();
-  for (const w of series.workerAssignments) {
-    uniqueWorkers.set(w.employeeId ?? `c-${w.contractorId}`, w);
-  }
+  // One cancellation per crew row (not per unique worker) — each occurrence
+  // was sent its own invite, so each gets its own cancellation.
   await Promise.all(
-    [...uniqueWorkers.values()].map(async (w) => {
+    series.workerAssignments.map(async (w) => {
       const contact = await resolveWorkerContact(w.employeeId, w.contractorId);
       if (!contact) return;
-      await sendSeriesInvite({
-        uid: workerSeriesUid(id, w.employeeId, w.contractorId),
+      await sendDayInvite({
+        uid: `worker-assignment-${w.id}@sueep.com`,
         to: contact.email,
         attendeeName: contact.name,
         role: "Working",
         title: series.project.jobTitle,
-        firstDateKey: dayKey(series.startDate),
-        lastDateKey: dayKey(series.endDate),
-        repeatDays: series.repeatDays,
+        dateKey: dayKey(w.date),
         startTime: series.startTime,
         endTime: series.endTime,
         location,

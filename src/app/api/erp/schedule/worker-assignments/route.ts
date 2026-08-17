@@ -5,7 +5,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
 import { isTurnoverScopeValue, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
-import { appUrl, resolveWorkerContact, scopeText, sendDayInvite, sendSeriesInvite, workerSeriesUid } from "@/lib/erp/scheduleInvites";
+import { appUrl, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
  * the right upsert shape (and compound-unique key) for whichever it is.
@@ -28,16 +28,28 @@ function workerUpsertArgs(
     ...(assignedSovItemId !== undefined ? { assignedSovItemId } : {}),
     ...(assignedScopeItem !== undefined ? { assignedScopeItem } : {}),
   };
+  // Generated once, at creation only — never on update, so an
+  // already-emailed accept/decline link keeps working after a later edit
+  // (e.g. a scope reassignment) instead of silently breaking.
+  const responseFields = { responseToken: crypto.randomUUID(), responseStatus: "PENDING" as const };
   if (employeeId) {
     return {
       where: { projectId_employeeId_date: { projectId, employeeId, date } },
-      create: { projectId, employeeId, date, seriesId, assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null },
+      create: {
+        projectId, employeeId, date, seriesId,
+        assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null,
+        ...responseFields,
+      },
       update: { seriesId, ...scopeUpdateFields },
     };
   }
   return {
     where: { projectId_contractorId_date: { projectId, contractorId: contractorId!, date } },
-    create: { projectId, contractorId, date, seriesId, assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null },
+    create: {
+      projectId, contractorId, date, seriesId,
+      assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null,
+      ...responseFields,
+    },
     update: { seriesId, ...scopeUpdateFields },
   };
 }
@@ -266,24 +278,29 @@ export async function POST(req: Request) {
       )
     );
 
-    // One combined recurring invite covering the whole range, same as the
-    // supervisor's series invite — not one email per day.
+    // One email per occurrence, each with its own accept/decline link, so
+    // this worker can respond to each day independently (accept Monday,
+    // decline Wednesday) — not one combined recurring invite for the whole
+    // range like this used to send.
     if (contact) {
-      await sendSeriesInvite({
-        uid: workerSeriesUid(seriesId, employeeId, contractorId),
-        to: contact.email,
-        attendeeName: contact.name,
-        role: "Working",
-        title: project.jobTitle,
-        firstDateKey: dayKey(seriesDates[0]!),
-        lastDateKey: dayKey(seriesDates[seriesDates.length - 1]!),
-        repeatDays: [...new Set(seriesDates.map((d) => d.getUTCDay()))],
-        startTime: seriesStartTime,
-        endTime: seriesEndTime,
-        location,
-        scopeText: ownScope,
-        url,
-      });
+      await Promise.all(
+        assignments.map((a) =>
+          sendDayInvite({
+            uid: `worker-assignment-${a.id}@sueep.com`,
+            to: contact.email,
+            attendeeName: contact.name,
+            role: "Working",
+            title: project.jobTitle,
+            dateKey: dayKey(a.date),
+            startTime: seriesStartTime,
+            endTime: seriesEndTime,
+            location,
+            scopeText: ownScope,
+            url,
+            responseToken: a.responseToken,
+          })
+        )
+      );
     }
 
     return NextResponse.json({ seriesId, assignments }, { status: 201 });
@@ -316,6 +333,7 @@ export async function POST(req: Request) {
       location,
       scopeText: ownScope ?? dayScope,
       url,
+      responseToken: assignment.responseToken,
     });
   }
 

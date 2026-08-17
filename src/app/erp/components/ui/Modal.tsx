@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 export type ModalSize = "sm" | "md" | "lg";
 
@@ -66,14 +67,23 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  // Portaled straight to document.body — and z-[60], one notch above the
+  // z-50 every other portaled overlay in the ERP uses (the schedule
+  // calendar's event popover, CoDayPopover, etc.) — so a confirm() fired
+  // from inside an already-open popover always lands on top of it instead
+  // of getting buried behind it. Without the portal, this rendered in
+  // ConfirmProvider's normal tree position (nested inside an earlier
+  // sibling of <body>), so even at equal z-index the popover's own
+  // document.body portal painted above it purely on DOM order.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
       onClick={dismissible ? onClose : undefined}
     >
       <div className={`rounded-xl bg-white p-5 shadow-2xl ${SIZE_CLASSES[size]}`} onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1099,6 +1099,24 @@ model ProjectDayAssignment {
   /// described and shown on the calendar.
   comment String?
 
+  /// The supervisor/PM's accept/decline response to this specific day's
+  /// invite — PENDING | ACCEPTED | DECLINED (see
+  /// src/lib/erp/shiftResponses.ts). Only meaningful when supervisorUserId
+  /// is set, since a PM-only day never gets an invite emailed in the first
+  /// place. Set once at row creation and left alone on later edits (see
+  /// that file's comment for why), so re-scoping a day doesn't silently
+  /// wipe out an existing "yes."
+  responseStatus String    @default("PENDING")
+  respondedAt    DateTime?
+
+  /// Magic-link token for the no-login accept/decline page
+  /// (/shift-response/[token]) — same convention as Employee.infoToken
+  /// (crypto.randomUUID(), generated once at creation), but deliberately no
+  /// expiry column: staleness is judged against `date` instead (a shift
+  /// that's already passed just shows read-only), which is simpler and
+  /// keeps the same link working right up to the shift as intended.
+  responseToken String? @unique
+
   @@unique([projectId, date])
   @@index([date])
   @@index([supervisorUserId])
@@ -1109,8 +1127,7 @@ model ProjectDayAssignment {
 /// A worker planned to be on a project on a future day, before any labor is
 /// logged — same idea as ProjectDayAssignment but for crew (Employee or
 /// Contractor) rather than supervisors, and multiple per project/day since a
-/// crew has more than one person. No notification is sent when these are
-/// created (unlike the supervisor calendar invite) — may be added later.
+/// crew has more than one person.
 model ProjectWorkerDayAssignment {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -1148,6 +1165,13 @@ model ProjectWorkerDayAssignment {
   /// (see ProjectScheduleSeries) rather than a single one-off day assign.
   seriesId String?
   series   ProjectScheduleSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  /// This crew member's accept/decline response to this specific day — same
+  /// idea and same lifecycle rules as ProjectDayAssignment.responseStatus.
+  responseStatus String    @default("PENDING")
+  respondedAt    DateTime?
+  /// See ProjectDayAssignment.responseToken for the token convention.
+  responseToken  String?   @unique
 
   @@unique([projectId, employeeId, date])
   @@unique([projectId, contractorId, date])

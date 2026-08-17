@@ -4,7 +4,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
-import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSeriesInvite } from "@/lib/erp/scheduleInvites";
+import { appUrl, notifyProjectCrew, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -205,6 +205,10 @@ export async function POST(req: Request) {
         create: {
           projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
           scopeItems, comment,
+          // Generated once, at creation only — never on update, so an
+          // already-emailed accept/decline link keeps working after a
+          // later edit instead of silently breaking.
+          responseToken: crypto.randomUUID(), responseStatus: "PENDING",
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
           changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
@@ -217,28 +221,39 @@ export async function POST(req: Request) {
         include: { sovItems: { select: { id: true } }, changeOrders: { select: { id: true } } },
       })
     );
-    const assignments = supervisorUserId
+    // `.slice(1)` on a $transaction([Project.update, ...writes]) tuple loses
+    // Prisma's precise per-element typing (TS widens it to a Project |
+    // ProjectDayAssignment union) — the cast below restores the real shape,
+    // which is genuinely always ProjectDayAssignment past index 0.
+    const assignments = (supervisorUserId
       ? (await prisma.$transaction([prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }), ...writes])).slice(1)
-      : await prisma.$transaction(writes);
+      : await prisma.$transaction(writes)) as Awaited<(typeof writes)[number]>[];
 
     // No calendar invite for a PM-only series, see the field comment above.
+    // One email per occurrence, each with its own accept/decline link, so
+    // the supervisor can respond to each day independently (accept Monday,
+    // decline Wednesday) — not one combined recurring invite for the whole
+    // range like this used to send.
     if (supervisorUserId && supervisor) {
-      const hoursBudgetText = await hoursBudgetTextFor(seriesDates[0]!);
-      await sendSeriesInvite({
-        uid: `day-assignment-series-${series.id}@sueep.com`,
-        to: supervisor.email,
-        role: "Supervising",
-        title: project.jobTitle,
-        firstDateKey: dayKey(seriesDates[0]!),
-        lastDateKey: dayKey(repeatUntil),
-        repeatDays,
-        startTime,
-        endTime,
-        location,
-        scopeText: dayScopeText,
-        url,
-        extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
-      });
+      await Promise.all(
+        assignments.map(async (a) => {
+          const hoursBudgetText = await hoursBudgetTextFor(a.date);
+          await sendDayInvite({
+            uid: `day-assignment-${a.id}@sueep.com`,
+            to: supervisor.email,
+            role: "Supervising",
+            title: project.jobTitle,
+            dateKey: dayKey(a.date),
+            startTime,
+            endTime,
+            location,
+            scopeText: dayScopeText,
+            url,
+            extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
+            responseToken: a.responseToken,
+          });
+        })
+      );
     }
 
     // Refreshes the invite for every crew member already on one of these
@@ -264,6 +279,7 @@ export async function POST(req: Request) {
     create: {
       projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
       scopeItems, comment,
+      responseToken: crypto.randomUUID(), responseStatus: "PENDING",
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
@@ -298,6 +314,7 @@ export async function POST(req: Request) {
       scopeText: dayScopeText,
       url,
       extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
+      responseToken: assignment.responseToken,
     });
   }
 
