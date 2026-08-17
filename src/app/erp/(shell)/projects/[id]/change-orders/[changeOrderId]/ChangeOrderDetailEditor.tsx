@@ -56,6 +56,7 @@ export type ChangeOrderDetailData = {
   actualHours: number | null;
   estLaborers: number | null;
   estSupervisors: number | null;
+  noCrewRequired: boolean;
   computedLaborCents: number;
   computedMaterialCents: number;
   materialEntries: CoMaterialRow[];
@@ -317,6 +318,14 @@ export function ChangeOrderDetailEditor({
   const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
   const [estLaborers, setEstLaborers] = useState(data.estLaborers != null ? String(data.estLaborers) : "");
   const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
+  const [noCrewRequired, setNoCrewRequired] = useState(data.noCrewRequired);
+  function handleNoCrewRequiredChange(checked: boolean) {
+    setNoCrewRequired(checked);
+    if (checked) {
+      setEstLaborers("");
+      setEstSupervisors("");
+    }
+  }
   // Auto-fills # of supervisors from # of laborers (a crew always needs at
   // least one — see deriveChangeOrderSupervisorCount), same as the create
   // forms' ChangeOrderLaborEstimator. Starts "touched" if this CO already had
@@ -391,6 +400,7 @@ export function ChangeOrderDetailEditor({
           actualHours: actualHours.trim() || null,
           estLaborers: estLaborers.trim() || null,
           estSupervisors: estSupervisors.trim() || null,
+          noCrewRequired,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -659,13 +669,22 @@ export function ChangeOrderDetailEditor({
                       <label className={label} htmlFor="co-est-travel">Travel ($)</label>
                       <input id="co-est-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estTravel} onChange={(e) => setEstTravel(e.target.value)} />
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={noCrewRequired}
+                        onChange={(e) => handleNoCrewRequiredChange(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      No crew required (material-only, price adjustment, subcontracted, etc.)
+                    </label>
                     <div>
                       <label className={label} htmlFor="co-est-laborers"># of laborers</label>
-                      <input id="co-est-laborers" type="number" min={0} step={1} className={input} placeholder="0" value={estLaborers} onChange={(e) => setEstLaborers(e.target.value)} />
+                      <input id="co-est-laborers" type="number" min={0} step={1} className={input} placeholder="0" value={estLaborers} disabled={noCrewRequired} onChange={(e) => setEstLaborers(e.target.value)} />
                     </div>
                     <div>
                       <label className={label} htmlFor="co-est-supervisors"># of supervisors</label>
-                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} onChange={(e) => handleEstSupervisorsChange(e.target.value)} />
+                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} disabled={noCrewRequired} onChange={(e) => handleEstSupervisorsChange(e.target.value)} />
                       <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2 text-xs">

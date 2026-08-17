@@ -24,6 +24,10 @@ type Body = {
   // derived server-side (deriveChangeOrderSupervisorCount), never accepted
   // from the client (see ProjectManagerForm — no supervisor input exists).
   coCleanerCount?: string;
+  // Set when the requester marked this CO as not needing a crew at all
+  // (material-only, price adjustment, subcontracted work, etc.) — see
+  // ProjectChangeOrder.noCrewRequired.
+  coNoCrewRequired?: boolean;
   // SOV fields
   sovItemId?: string;
   desiredDate?: string;
@@ -98,6 +102,7 @@ export async function POST(req: Request) {
         requestedDate: estimatedStartDate ?? new Date(),
         estLaborers: cleanerCount > 0 ? cleanerCount : null,
         estSupervisors: supervisorCount > 0 ? supervisorCount : null,
+        noCrewRequired: body.coNoCrewRequired === true,
         estHours: priced ? CHANGE_ORDER_ESTIMATE_DAY_HOURS : null,
         contractValueCents: quotedPriceCents,
       },

@@ -76,6 +76,11 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [coDescription, setCoDescription] = useState("");
   const [coEstimatedStartDate, setCoEstimatedStartDate] = useState("");
   const [coCleanerCount, setCoCleanerCount] = useState("");
+  const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
+  function handleCoNoCrewRequiredChange(checked: boolean) {
+    setCoNoCrewRequired(checked);
+    if (checked) setCoCleanerCount("");
+  }
   // No supervisor input — a crew always needs one, so it's derived from
   // cleaner count, not entered (see deriveChangeOrderSupervisorCount).
   const coSupervisorCount = deriveChangeOrderSupervisorCount(Number(coCleanerCount) || 0);
@@ -210,6 +215,7 @@ export function ProjectManagerForm({ onBack }: Props) {
           // Supervisor count isn't sent — the server derives it from
           // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
           coCleanerCount: coCleanerCount.trim() || undefined,
+          coNoCrewRequired,
           sovItemId: selectedSovId || undefined,
           desiredDate: desiredDate || undefined,
           comments: comments.trim() || undefined,
@@ -406,7 +412,16 @@ export function ProjectManagerForm({ onBack }: Props) {
                 onChange={(e) => setCoEstimatedStartDate(e.target.value)}
               />
             </div>
-            {selectedProject?.hasCustomLaborRate ? (
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={coNoCrewRequired}
+                onChange={(e) => handleCoNoCrewRequiredChange(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+              />
+              No crew required (material-only, price adjustment, subcontracted, etc.)
+            </label>
+            {coNoCrewRequired ? null : selectedProject?.hasCustomLaborRate ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
                 <p className="text-xs font-medium text-gray-700">Crew size</p>
                 <div className="mt-3 max-w-[calc(50%-0.375rem)]">

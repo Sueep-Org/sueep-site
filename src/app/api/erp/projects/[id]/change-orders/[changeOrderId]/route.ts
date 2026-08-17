@@ -154,6 +154,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.commissionPaid !== undefined) {
     data.commissionPaidAt = body.commissionPaid ? new Date() : null;
   }
+  if (body.noCrewRequired !== undefined) data.noCrewRequired = body.noCrewRequired === true;
 
   // endDate and completedAt are the same concept for a CO — there's no
   // meaningfully distinct "target end" vs. "when it actually got done" — so

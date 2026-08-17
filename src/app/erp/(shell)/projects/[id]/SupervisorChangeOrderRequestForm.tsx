@@ -24,6 +24,7 @@ export type SupervisorChangeOrderRow = {
   description: string | null;
   requestedBy: string | null;
   status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED";
+  noCrewRequired: boolean;
 };
 
 const STATUS_COLORS: Record<SupervisorChangeOrderRow["status"], string> = {
@@ -69,6 +70,7 @@ export function SupervisorChangeOrderRequestForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [noCrewRequired, setNoCrewRequired] = useState(false);
 
   const notifyIds = resolveDefaultNotifyIds(employees);
   const notifyNames = employees
@@ -93,6 +95,7 @@ export function SupervisorChangeOrderRequestForm({
           requestedBy: String(fd.get("requestedBy") || "").trim() || undefined,
           description: String(fd.get("description") || "").trim() || undefined,
           status: "SUBMITTED",
+          noCrewRequired,
         }),
       });
       const data = (await res.json()) as SupervisorChangeOrderRow & { error?: string };
@@ -103,6 +106,7 @@ export function SupervisorChangeOrderRequestForm({
       }
       setEntries((prev) => [data, ...prev]);
       form.reset();
+      setNoCrewRequired(false);
 
       if (notifyIds.length > 0) {
         try {
@@ -159,6 +163,17 @@ export function SupervisorChangeOrderRequestForm({
             </label>
             <textarea id="co-description" name="description" rows={3} className={input} placeholder="What's needed and why" />
           </div>
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={noCrewRequired}
+                onChange={(e) => setNoCrewRequired(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+              />
+              No crew required (material-only, price adjustment, subcontracted, etc.)
+            </label>
+          </div>
         </div>
         {error ? (
           <p className="mt-3 text-sm text-red-600" role="alert">
@@ -197,6 +212,11 @@ export function SupervisorChangeOrderRequestForm({
                     {entry.status}
                   </span>
                 </div>
+                {entry.noCrewRequired ? (
+                  <span className="mt-1 inline-block rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                    No crew required
+                  </span>
+                ) : null}
                 {entry.description ? <p className="mt-1 text-xs text-gray-500">{entry.description}</p> : null}
                 <p className="mt-1 text-[11px] text-gray-400">
                   {new Date(entry.createdAt).toLocaleDateString()}

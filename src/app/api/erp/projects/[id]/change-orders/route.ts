@@ -70,6 +70,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const estHours = numOrNull(body.estHours);
   const estLaborers = numOrNull(body.estLaborers);
   const estSupervisors = numOrNull(body.estSupervisors);
+  const noCrewRequired = body.noCrewRequired === true;
 
   // A project's own contractValueCents is the base deal's value only — it's
   // what margin and the base commission line read from, so it must never be
@@ -92,6 +93,7 @@ export async function POST(req: Request, ctx: Ctx) {
         estHours: estHours ?? undefined,
         estLaborers: estLaborers == null ? undefined : Math.round(estLaborers),
         estSupervisors: estSupervisors == null ? undefined : Math.round(estSupervisors),
+        noCrewRequired,
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,

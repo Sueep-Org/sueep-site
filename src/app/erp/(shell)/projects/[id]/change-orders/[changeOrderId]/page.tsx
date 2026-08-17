@@ -179,6 +179,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     actualHours: changeOrder.actualHours,
     estLaborers: changeOrder.estLaborers,
     estSupervisors: changeOrder.estSupervisors,
+    noCrewRequired: changeOrder.noCrewRequired,
     computedLaborCents,
     computedMaterialCents,
     materialEntries: materialEntries.map((e) => ({

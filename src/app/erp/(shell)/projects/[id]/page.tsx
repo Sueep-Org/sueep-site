@@ -381,6 +381,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     actualLaborCents: co.actualLaborCents,
     actualMaterialCents: co.actualMaterialCents,
     actualTravelCents: co.actualTravelCents,
+    noCrewRequired: co.noCrewRequired,
     laborers: (co.laborers ?? []).map((l) => ({ id: l.id, employeeId: l.employeeId, name: l.name, role: l.role })),
   }));
 
@@ -394,6 +395,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     description: co.description,
     requestedBy: co.requestedBy,
     status: co.status as "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED",
+    noCrewRequired: co.noCrewRequired,
   }));
 
   const contractorRows = project.contractorAssignments.map((a) => ({

@@ -27,6 +27,13 @@ type Props = {
   onContractValueChange: (v: string) => void;
   estLabor: string;
   onEstLaborChange: (v: string) => void;
+  /** Marks this CO as not needing a crew at all — material-only, a price
+   * adjustment, subcontracted-only work, etc. Distinguishes "genuinely no
+   * crew" from "crew size just hasn't been filled in yet" (see
+   * ProjectChangeOrder.noCrewRequired). Optional so callers that don't want
+   * this affordance (e.g. the read-only supervisor request form) can omit it. */
+  noCrewRequired?: boolean;
+  onNoCrewRequiredChange?: (v: boolean) => void;
   disabled?: boolean;
 };
 
@@ -50,8 +57,22 @@ export function ChangeOrderLaborEstimator({
   onContractValueChange,
   estLabor,
   onEstLaborChange,
+  noCrewRequired = false,
+  onNoCrewRequiredChange,
   disabled,
 }: Props) {
+  const crewDisabled = disabled || noCrewRequired;
+
+  function handleNoCrewRequiredChange(checked: boolean) {
+    onNoCrewRequiredChange?.(checked);
+    // Checking it means there's genuinely no crew to size — clear whatever
+    // was typed rather than leaving a stale count sitting behind a disabled
+    // input, which would look like it's still in effect.
+    if (checked) {
+      onCleanerCountChange("");
+      onSupervisorCountChange("");
+    }
+  }
   const counts = {
     cleanerCount: Number(cleanerCount) || 0,
     supervisorCount: Number(supervisorCount) || 0,
@@ -87,6 +108,19 @@ export function ChangeOrderLaborEstimator({
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pricing</h3>
 
+      {onNoCrewRequiredChange ? (
+        <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={noCrewRequired}
+            disabled={disabled}
+            onChange={(e) => handleNoCrewRequiredChange(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+          />
+          No crew required (material-only, price adjustment, subcontracted, etc.)
+        </label>
+      ) : null}
+
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <label className={label} htmlFor="co-est-cleaner-count"># of cleaners</label>
@@ -98,7 +132,7 @@ export function ChangeOrderLaborEstimator({
             className={input}
             placeholder="0"
             value={cleanerCount}
-            disabled={disabled}
+            disabled={crewDisabled}
             onChange={(e) => onCleanerCountChange(e.target.value)}
           />
         </div>
@@ -112,7 +146,7 @@ export function ChangeOrderLaborEstimator({
             className={input}
             placeholder="0"
             value={supervisorCount}
-            disabled={disabled}
+            disabled={crewDisabled}
             onChange={(e) => handleSupervisorCountChange(e.target.value)}
           />
           <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>

@@ -663,6 +663,13 @@ model ProjectChangeOrder {
   actualHours         Float?
   estLaborers         Int?
   estSupervisors      Int?
+  /// Set when this CO's own nature makes a crew size meaningless (material-only,
+  /// price adjustment, subcontracted-only work, etc.) — distinguishes "genuinely
+  /// doesn't need a crew" from "crew size just hasn't been estimated yet", which
+  /// otherwise both look like a blank estLaborers/estSupervisors. Purely
+  /// informational: doesn't gate anything server-side, since crew size was
+  /// already optional everywhere before this field existed.
+  noCrewRequired      Boolean @default(false)
 
   /// Sales commission on this CO is marked paid here — separate from the
   /// parent project's own commissionPaidAt, since a CO only becomes

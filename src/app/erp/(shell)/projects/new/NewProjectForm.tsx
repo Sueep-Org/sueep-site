@@ -629,6 +629,7 @@ export function NewProjectForm({
   // "Pricing" block — see ChangeOrderLaborEstimator.
   const [coEstCleanerCount, setCoEstCleanerCount] = useState("");
   const [coEstSupervisorCount, setCoEstSupervisorCount] = useState("");
+  const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
   const [coContractValue, setCoContractValue] = useState("");
   const [coEstLabor, setCoEstLabor] = useState("");
   const coLaborRates = coProjectId
@@ -1070,6 +1071,7 @@ export function NewProjectForm({
           description: coComments.trim() || undefined,
           estLaborers: coEstCleanerCount.trim() || undefined,
           estSupervisors: coEstSupervisorCount.trim() || undefined,
+          noCrewRequired: coNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
           // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
           estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
@@ -1309,6 +1311,8 @@ export function NewProjectForm({
           onCleanerCountChange={setCoEstCleanerCount}
           supervisorCount={coEstSupervisorCount}
           onSupervisorCountChange={setCoEstSupervisorCount}
+          noCrewRequired={coNoCrewRequired}
+          onNoCrewRequiredChange={setCoNoCrewRequired}
           contractValue={coContractValue}
           onContractValueChange={setCoContractValue}
           estLabor={coEstLabor}

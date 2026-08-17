@@ -207,6 +207,7 @@ export type ProjectChangeOrderRow = {
   actualLaborCents: number | null;
   actualMaterialCents: number | null;
   actualTravelCents: number | null;
+  noCrewRequired: boolean;
   laborers: ChangeOrderLaborer[];
 };
 
@@ -249,6 +250,7 @@ export function ProjectChangeOrdersSection({
   // "Pricing" block on the create form — see ChangeOrderLaborEstimator.
   const [estCleanerCount, setEstCleanerCount] = useState("");
   const [estSupervisorCount, setEstSupervisorCount] = useState("");
+  const [estNoCrewRequired, setEstNoCrewRequired] = useState(false);
   const [contractValue, setContractValue] = useState("");
   const [estLabor, setEstLabor] = useState("");
 
@@ -421,6 +423,7 @@ export function ProjectChangeOrdersSection({
           description: String(fd.get("description") || "").trim() || undefined,
           estLaborers: estCleanerCount.trim() || undefined,
           estSupervisors: estSupervisorCount.trim() || undefined,
+          noCrewRequired: estNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
           // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
           estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
@@ -439,6 +442,7 @@ export function ProjectChangeOrdersSection({
       setPmSupervisor("");
       setEstCleanerCount("");
       setEstSupervisorCount("");
+      setEstNoCrewRequired(false);
       setContractValue("");
       setEstLabor("");
 
@@ -688,6 +692,8 @@ export function ProjectChangeOrdersSection({
             onCleanerCountChange={setEstCleanerCount}
             supervisorCount={estSupervisorCount}
             onSupervisorCountChange={setEstSupervisorCount}
+            noCrewRequired={estNoCrewRequired}
+            onNoCrewRequiredChange={setEstNoCrewRequired}
             contractValue={contractValue}
             onContractValueChange={setContractValue}
             estLabor={estLabor}
@@ -827,6 +833,11 @@ function ChangeOrderEditor({
           <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_COLORS[row.status]}`}>
             {row.status}
           </span>
+          {row.noCrewRequired ? (
+            <span className="shrink-0 rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500" title="No crew required">
+              No crew
+            </span>
+          ) : null}
           <span className="truncate text-sm font-medium text-gray-900" title={row.title}>{row.title}</span>
         </div>
         <div className="flex shrink-0 items-center gap-4">
