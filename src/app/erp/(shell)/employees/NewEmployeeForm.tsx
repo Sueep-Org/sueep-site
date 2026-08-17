@@ -10,6 +10,7 @@ export function NewEmployeeForm() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [duplicate, setDuplicate] = useState<{ id: string; message: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   // Same click-outside-to-close pattern as EmployeesFilterBar's popover,
@@ -27,10 +28,41 @@ export function NewEmployeeForm() {
   // detail page), but stays the separate isOffshore flag underneath.
   const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">("HOURLY");
 
+  const pendingPayload = useRef<Record<string, unknown> | null>(null);
+
+  async function submitPayload(payload: Record<string, unknown>) {
+    setError("");
+    setDuplicate(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/erp/employees", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as { id?: string; error?: string; existingEmployeeId?: string; duplicateName?: boolean };
+      if (!res.ok) {
+        if (res.status === 409 && data.duplicateName && data.existingEmployeeId) {
+          pendingPayload.current = payload;
+          setDuplicate({ id: data.existingEmployeeId, message: data.error || "An employee with this name already exists" });
+          setLoading(false);
+          return;
+        }
+        setError(data.error || "Failed to create employee");
+        setLoading(false);
+        return;
+      }
+      setOpen(false);
+      if (data.id) router.push(`/erp/employees/${data.id}`);
+      else router.refresh();
+    } catch {
+      setError("Network error");
+      setLoading(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
-    setLoading(true);
     const fd = new FormData(e.currentTarget);
 
     const payload: Record<string, unknown> = {
@@ -51,25 +83,12 @@ export function NewEmployeeForm() {
       payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || undefined) : undefined;
     }
 
-    try {
-      const res = await fetch("/api/erp/employees", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok) {
-        setError(data.error || "Failed to create employee");
-        setLoading(false);
-        return;
-      }
-      setOpen(false);
-      if (data.id) router.push(`/erp/employees/${data.id}`);
-      else router.refresh();
-    } catch {
-      setError("Network error");
-      setLoading(false);
-    }
+    await submitPayload(payload);
+  }
+
+  async function createAnyway() {
+    if (!pendingPayload.current) return;
+    await submitPayload({ ...pendingPayload.current, confirmDuplicate: true });
   }
 
   return (
@@ -147,6 +166,27 @@ export function NewEmployeeForm() {
           </div>
           <textarea name="notes" rows={2} placeholder="Notes" className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
           {error ? <p className="text-xs text-red-500">{error}</p> : null}
+          {duplicate ? (
+            <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs text-amber-700">{duplicate.message}.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={`/erp/employees/${duplicate.id}`}
+                  className="text-xs font-medium text-amber-800 underline hover:no-underline"
+                >
+                  View existing profile
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void createAnyway()}
+                  disabled={loading}
+                  className="text-xs font-medium text-amber-800 underline hover:no-underline disabled:opacity-50"
+                >
+                  {loading ? "Creating…" : "Create anyway (different person)"}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <button
             type="submit"
             disabled={loading}

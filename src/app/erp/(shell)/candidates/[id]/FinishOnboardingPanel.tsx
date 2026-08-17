@@ -19,6 +19,7 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [existingEmployeeId, setExistingEmployeeId] = useState<string | null>(null);
+  const [existingMatchReason, setExistingMatchReason] = useState<"email" | "name">("email");
 
   const isOnboarding = status === "ONBOARDING";
   const pendingDocs = paperwork.filter((p) => !p.url);
@@ -31,11 +32,13 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
     const json = (await res.json().catch(() => ({}))) as {
       employeeId?: string;
       error?: string;
+      reason?: "email" | "name";
     };
     setLoading(false);
 
     if (res.status === 409 && json.employeeId) {
       setExistingEmployeeId(json.employeeId);
+      setExistingMatchReason(json.reason === "name" ? "name" : "email");
       return;
     }
     if (!res.ok) {
@@ -92,7 +95,9 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
       {existingEmployeeId ? (
         <div className="space-y-2">
           <p className="text-sm text-amber-700">
-            An employee profile already exists for this email.
+            {existingMatchReason === "name"
+              ? "An employee profile already exists with this name."
+              : "An employee profile already exists for this email."}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <a

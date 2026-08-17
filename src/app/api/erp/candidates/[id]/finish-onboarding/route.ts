@@ -110,6 +110,21 @@ export async function POST(
   const firstName = parts[0] ?? candidate.fullName;
   const lastName = parts.slice(1).join(" ") || "-";
 
+  // Name-match guard: the P2002 catch below only catches a duplicate when
+  // both profiles share the same email. A second profile for the same
+  // person with a blank or different email would otherwise slip through
+  // (see the "Martha Rios" duplicate-profile issue), so check by name too.
+  const nameMatch = await prisma.employee.findFirst({
+    where: { firstName: { equals: firstName, mode: "insensitive" }, lastName: { equals: lastName, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (nameMatch) {
+    return NextResponse.json(
+      { error: "An employee with this name already exists", employeeId: nameMatch.id, reason: "name" },
+      { status: 409 }
+    );
+  }
+
   let employee;
   try {
     employee = await prisma.employee.create({
@@ -137,7 +152,7 @@ export async function POST(
         select: { id: true },
       });
       return NextResponse.json(
-        { error: "An employee with this email already exists", employeeId: existing?.id },
+        { error: "An employee with this email already exists", employeeId: existing?.id, reason: "email" },
         { status: 409 }
       );
     }

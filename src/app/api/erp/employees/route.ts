@@ -55,6 +55,25 @@ export async function POST(req: Request) {
   const statusRaw = String(body.status || "ACTIVE").toUpperCase();
   const status = STATUSES.includes(statusRaw as (typeof STATUSES)[number]) ? statusRaw : "ACTIVE";
 
+  // Same-name guard: email uniqueness (the P2002 catch below) only catches
+  // duplicates when both profiles have an email on file. Name collisions
+  // slip through otherwise (see the "Martha Rios" duplicate-profile issue),
+  // so check for one explicitly and let the caller confirm before creating
+  // a second profile for the same person.
+  const confirmDuplicate = body.confirmDuplicate === true;
+  if (!confirmDuplicate) {
+    const existingByName = await prisma.employee.findFirst({
+      where: { firstName: { equals: firstName, mode: "insensitive" }, lastName: { equals: lastName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existingByName) {
+      return NextResponse.json(
+        { error: `An employee named ${firstName} ${lastName} already exists`, existingEmployeeId: existingByName.id, duplicateName: true },
+        { status: 409 }
+      );
+    }
+  }
+
   const hireDate = parseDate(body.hireDate);
   if (body.hireDate !== undefined && hireDate === undefined) {
     return NextResponse.json({ error: "Invalid hireDate" }, { status: 400 });

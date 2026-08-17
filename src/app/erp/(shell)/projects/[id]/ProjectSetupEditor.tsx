@@ -65,7 +65,21 @@ export function ProjectSetupEditor({
   const [endDate, setEndDate] = useState(toInputDate(projectEndDateIso));
 
   // Supervisor — searchable combobox
-  const employeeNames = employees.map((e) => `${e.firstName} ${e.lastName}`.trim());
+  // Dedupe by normalized name: duplicate Employee rows for the same person
+  // (e.g. two profiles created for the same hire) would otherwise show up
+  // as repeated entries in this list.
+  const employeeNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const e of employees) {
+      const name = `${e.firstName} ${e.lastName}`.trim();
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    return names;
+  }, [employees]);
   const [supervisorValue, setSupervisorValue] = useState(supervisor ?? "");
   const [supervisorQuery, setSupervisorQuery] = useState(supervisor ?? "");
   const [showSupervisorDropdown, setShowSupervisorDropdown] = useState(false);
