@@ -829,14 +829,27 @@ export function NewProjectForm({
     () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
     [selectedBuilding]
   );
+  // existingUnitNumbers (from GET /api/erp/buildings) is sourced purely from
+  // TurnoverRequest rows — a recurring-contract unit only shows up there
+  // once its first monthly period has actually generated a project (see
+  // recurringContracts.ts). Folding activeRecurringContractUnits in here
+  // too means a brand-new recurring unit (enrolled but not yet generated)
+  // still trips the duplicate warning instead of silently allowing a
+  // second, redundant one-off unit with the same identifier.
   const existingBuildingUnitNumbers = useMemo(
-    () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase())),
-    [selectedBuilding]
+    () =>
+      new Set([
+        ...(selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase()),
+        ...Array.from(activeRecurringContractUnits).map((n) => n.trim().toLowerCase()),
+      ]),
+    [selectedBuilding, activeRecurringContractUnits]
   );
   const [confirmedDuplicateUnitIds, setConfirmedDuplicateUnitIds] = useState<Set<string>>(new Set());
 
-  /** True if this unit's identifier already exists on the selected building,
-   * or collides with another unit being added in this same submission. */
+  /** True if this unit's identifier already exists on the selected building
+   * (including an active recurring-contract unit not yet generated into a
+   * TurnoverRequest), or collides with another unit being added in this
+   * same submission. */
   function isDuplicateUnitNumber(unitId: string, value: string): boolean {
     const trimmed = value.trim().toLowerCase();
     if (!trimmed) return false;
@@ -1901,7 +1914,10 @@ export function NewProjectForm({
                       />
                       <span className={`${checkboxLabel} break-words`}>
                         Part of this building&apos;s recurring contract — covered by the flat monthly rate, no per-unit charge
-                        {unit.unitNumber.trim() && activeRecurringContractUnits.has(unit.unitNumber.trim()) ? " (already enrolled)" : ""}
+                        {unit.unitNumber.trim() &&
+                        Array.from(activeRecurringContractUnits).some((n) => n.trim().toLowerCase() === unit.unitNumber.trim().toLowerCase())
+                          ? " (already enrolled)"
+                          : ""}
                       </span>
                     </label>
                   )}

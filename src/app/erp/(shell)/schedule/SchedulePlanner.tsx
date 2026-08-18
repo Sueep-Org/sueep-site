@@ -12,6 +12,7 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
 import {
   addDays,
+  coIsComplete,
   computeProjectSpanMarkersByDay,
   dayKey,
   matchesSearchQuery,
@@ -124,15 +125,6 @@ function CompletionStatusIcon({ complete }: { complete: boolean }) {
 
 function completionChipClass(complete: boolean): string {
   return complete ? "opacity-60" : "";
-}
-
-// A CO sitting in BILLING is functionally done — the work itself finished,
-// it's just waiting on invoicing — so it should read as complete everywhere
-// a plain `=== "COMPLETED"` check would otherwise miss it and keep showing
-// the in-progress ⚙ icon. Matches ChangeOrderDetailEditor.tsx's own
-// "Complete ✓" badge, which already treats the two statuses the same way.
-function coIsComplete(status: string): boolean {
-  return status === "COMPLETED" || status === "BILLING";
 }
 
 // Accept/decline status, shown as a small traffic-light dot next to a
@@ -1219,8 +1211,14 @@ export function SchedulePlanner({
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">{e.workerName}</span>
                         <span className="shrink-0 text-gray-500">
-                          {formatHours(e.hours)}
-                          {e.clockIn ? <span className="text-gray-400"> · started {formatClockTime(e.clockIn)}</span> : null}
+                          {e.contractorOnly ? (
+                            <span title="Contractor engagement — no shift-level hours logged">Confirmed</span>
+                          ) : (
+                            <>
+                              {formatHours(e.hours)}
+                              {e.clockIn ? <span className="text-gray-400"> · started {formatClockTime(e.clockIn)}</span> : null}
+                            </>
+                          )}
                         </span>
                       </div>
                       {scopeLabel ? <div className="mt-0.5 truncate text-gray-500">{scopeLabel}</div> : null}
@@ -2861,14 +2859,24 @@ export function SchedulePlanner({
                 // orphanedJanitorialUnits) but with a change order scheduled
                 // this day — a minimal, non-draggable label just so the
                 // CO(s) below still nest under something identifying their
-                // unit, instead of never rendering at all.
+                // unit, instead of never rendering at all. This label is
+                // just a placeholder holding the unit's title for its CO(s)
+                // to nest under, not a read on the unit itself — the unit
+                // can easily still be ongoing (no ✓ here, unlike every other
+                // own-chip renderer that checks p.status) while the CO(s)
+                // scheduled under it today are done. So it fades along with
+                // its nested CO(s) instead: transparent once every CO
+                // nested under it is complete, same "worst wins" rule
+                // buildingGroupSeverity's allComplete uses for a group.
                 function renderOrphanedUnitChip(p: ScheduleProject, compactLabel?: string) {
+                  const nestedCos = coByProjectId.get(p.id) ?? [];
+                  const allNestedCosComplete = nestedCos.length > 0 && nestedCos.every((co) => coIsComplete(co.status));
                   return (
                     <Fragment key={`co-only-${p.id}`}>
                     <li className={inMonth ? "group relative" : "relative"}>
                       <Link
                         href={`/erp/projects/${p.id}`}
-                        className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]}`}
+                        className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(allNestedCosComplete)}`}
                       >
                         <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                       </Link>
@@ -2879,7 +2887,7 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {nestedCos.map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }

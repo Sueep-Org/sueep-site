@@ -86,14 +86,28 @@ export type ScheduleProject = {
   /** Per-day hours/workers breakdown, keyed by the same day keys as workDayKeys — powers the calendar chip tooltip. */
   laborByDay: Record<string, { hours: number; workers: string[] }>;
   /** Per-day individual LaborEntry rows (worker, hours, clock-in, and what
-   * scope of work they logged) — powers the read-only labor detail card on
+   * scope of work they logged), plus one synthetic row per contractor
+   * confirmed that day via a ContractorAssignment (see
+   * contractorAssignmentDayKeys) — powers the read-only labor detail card on
    * the calendar. Editing happens on the project's Labor log, not here.
    * sovItemDescriptions is the SOV item(s) that entry's work covers
    * (Post-Construction); taskDescription is the free-text/turnover-scope
-   * task otherwise — see ProjectLaborSection for how each gets set. */
+   * task otherwise — see ProjectLaborSection for how each gets set.
+   * contractorOnly marks the synthetic rows — a contractor engagement
+   * confirms the day the same way a LaborEntry does for an employee, it
+   * just has no shift-level hours/clock-in to show (hours is always 0),
+   * so the card can render it as "Confirmed" instead of a misleading
+   * "0 hrs". */
   laborEntriesByDay: Record<
     string,
-    { workerName: string; hours: number; clockIn: string | null; taskDescription: string | null; sovItemDescriptions: string[] }[]
+    {
+      workerName: string;
+      hours: number;
+      clockIn: string | null;
+      taskDescription: string | null;
+      sovItemDescriptions: string[];
+      contractorOnly?: boolean;
+    }[]
   >;
   /** Planned (not-yet-logged) worker names per day, from ProjectWorkerDayAssignment. */
   plannedWorkersByDay: Record<string, string[]>;
@@ -153,6 +167,16 @@ export type ScheduleChangeOrder = {
    * supervisor" warning the same way. */
   supervisorUserId: string | null;
 };
+
+// A CO sitting in BILLING is functionally done — the work itself finished,
+// it's just waiting on invoicing — so it should read as complete everywhere
+// a plain `=== "COMPLETED"` check would otherwise miss it. Matches
+// ChangeOrderDetailEditor.tsx's own "Complete ✓" badge, which already
+// treats the two statuses the same way. Shared by SchedulePlanner.tsx (chip
+// icon/fade) and CoDayPopover.tsx (read-only vs. still-planning card).
+export function coIsComplete(status: string): boolean {
+  return status === "COMPLETED" || status === "BILLING";
+}
 
 /** A planned supervisor and/or PM coverage of a ProjectChangeOrder on a
  * specific day (before any labor has actually been logged for it) — same

@@ -27,6 +27,10 @@ type Props = {
   canAddUnit?: boolean;
   canLogHours?: boolean;
   units: BuildingUnit[];
+  /** Unit numbers enrolled on this building's active recurring contract —
+   * see BuildingUnitsSection's own doc comment for why these need folding
+   * into the duplicate-identifier warning alongside `units`. */
+  activeRecurringContractUnitNumbers?: string[];
   employees: { id: string; name: string }[];
   laborEmployees?: LaborEmployeeOption[];
   commissionEmployeeId?: string | null;
@@ -44,6 +48,7 @@ export function BuildingTabs({
   canAddUnit = false,
   canLogHours = false,
   units,
+  activeRecurringContractUnitNumbers = [],
   employees,
   laborEmployees = [],
   commissionEmployeeId = null,
@@ -81,7 +86,14 @@ export function BuildingTabs({
     },
     {
       label: "Units",
-      content: <BuildingUnitsSection buildingId={buildingId} units={units} canAdd={canAddUnit} />,
+      content: (
+        <BuildingUnitsSection
+          buildingId={buildingId}
+          units={units}
+          canAdd={canAddUnit}
+          activeRecurringContractUnitNumbers={activeRecurringContractUnitNumbers}
+        />
+      ),
     },
     ...(canLogHours
       ? [

@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { matchesSearchQuery, type ScheduleChangeOrder, type ScheduleCoDayAssignment, type ScheduleCoWorkerAssignment } from "@/lib/erp/schedule";
+import {
+  coIsComplete,
+  matchesSearchQuery,
+  type ScheduleChangeOrder,
+  type ScheduleCoDayAssignment,
+  type ScheduleCoWorkerAssignment,
+} from "@/lib/erp/schedule";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
 
@@ -32,12 +38,16 @@ function formatHours(hours: number): string {
 }
 
 /** Click-through popover for a change-order chip on the month calendar —
- * shows logged labor for the day (read-only, same as before) plus, new:
- * lets a supervisor/PM/time/comment be planned directly against the CO
- * (ChangeOrderDayAssignment) and a crew planned against it
- * (ChangeOrderWorkerDayAssignment), the same capabilities a project's own
- * event popover already has. Kept as its own component (rather than folded
- * into SchedulePlanner's already-large state) the same way
+ * always shows logged labor for the day (read-only). Once that day is done
+ * — either logged labor already exists for it, or the CO itself is
+ * complete/billing — the rest of the card goes read-only too (coverage +
+ * crew as plain text, no forms), same as a project's own confirmed chip
+ * gives a read-only labor card instead of its editable planning one. Only a
+ * day that's still just a plan gets the editable "plan a supervisor/PM/
+ * time/comment" (ChangeOrderDayAssignment) and crew (
+ * ChangeOrderWorkerDayAssignment) forms, the same capabilities a project's
+ * own event popover already has. Kept as its own component (rather than
+ * folded into SchedulePlanner's already-large state) the same way
  * DuplicateToMoreDaysSection is. */
 export function CoDayPopover({
   co,
@@ -73,6 +83,20 @@ export function CoDayPopover({
   const summary = co.laborByDay[dateKey];
   const router = useRouter();
   const confirm = useConfirm();
+
+  // This day already happened — either it has actual logged labor, or the
+  // CO as a whole is done — so offering a "plan supervisor/PM/crew" form for
+  // it reads as backwards. Falls back to the plain read-only coverage/crew
+  // view instead, same idea as a project's confirmed chip getting the
+  // read-only labor card instead of its editable planned one.
+  const readOnly = coIsComplete(co.status) || !!(summary && (summary.hours > 0 || summary.workers.length > 0));
+  const supervisorName = assignment?.supervisorUserId
+    ? supervisors.find((s) => s.id === assignment.supervisorUserId)?.displayName
+    : null;
+  const pmName =
+    !supervisorName && assignment?.projectManagerUserId
+      ? projectManagers.find((p) => p.id === assignment.projectManagerUserId)?.displayName
+      : null;
 
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState("");
@@ -273,179 +297,215 @@ export function CoDayPopover({
           )}
         </div>
 
-        <div className="mt-3 border-t border-gray-100 pt-2.5">
-          <label className="block text-[10px] font-medium text-gray-500">Plan supervisor / PM for this day</label>
-          <div className="mt-1 grid grid-cols-2 gap-1.5">
-            <SearchableSelect
-              value={supervisorUserId}
-              onChange={setSupervisorUserId}
-              options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
-              placeholder="Search…"
-              allLabel="Supervisor..."
-            />
-            <SearchableSelect
-              value={projectManagerUserId}
-              onChange={setProjectManagerUserId}
-              options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
-              placeholder="Search…"
-              allLabel="PM (if no supervisor)"
-            />
-          </div>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900"
-            />
-            <span className="text-[10px] text-gray-400">to</span>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900"
-            />
-          </div>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Note about this day's coverage..."
-            rows={2}
-            className="mt-1.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400"
-          />
-          {error ? <p className="mt-1 text-[10px] text-red-500">{error}</p> : null}
-          <div className="mt-1.5 flex gap-1.5">
-            <button
-              type="button"
-              onClick={handleSaveCoverage}
-              disabled={saving}
-              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save coverage"}
-            </button>
-            {assignment ? (
-              <button
-                type="button"
-                onClick={handleRemoveCoverage}
-                disabled={removing}
-                className="rounded border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-              >
-                {removing ? "Removing…" : "Remove"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-3 border-t border-gray-100 pt-2.5">
-          <label className="block text-[10px] font-medium text-gray-500">Workers scheduled this day</label>
-          {workersForDay.length > 0 ? (
-            <ul className="mt-1 space-y-1">
-              {workersForDay.map((w) => {
-                const worker = w.employeeId
-                  ? employees.find((e) => e.id === w.employeeId)
-                  : contractors.find((c) => c.id === w.contractorId);
-                return (
-                  <li
-                    key={w.id}
-                    className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
-                  >
-                    <span className="truncate">
-                      {worker?.displayName ?? "Unknown worker"}
-                      {worker && !worker.email ? (
-                        <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
-                          {" "}
-                          (no email)
-                        </span>
-                      ) : null}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteWorker(w.id)}
-                      disabled={deletingWorkerId === w.id}
-                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
-                    >
-                      ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="mt-1 text-[10px] text-gray-400">None scheduled yet.</p>
-          )}
-
-          <div className="mt-1.5 flex gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setWorkerType("employee");
-                setWorkerQuery("");
-                setWorkerId("");
-              }}
-              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                workerType === "employee" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
-              }`}
-            >
-              Employee
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setWorkerType("contractor");
-                setWorkerQuery("");
-                setWorkerId("");
-              }}
-              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                workerType === "contractor" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
-              }`}
-            >
-              Contractor
-            </button>
-          </div>
-
-          <div className="relative mt-1.5">
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                value={workerId ? workerOptions.find((w) => w.id === workerId)?.displayName ?? "" : workerQuery}
-                onChange={(e) => {
-                  setWorkerQuery(e.target.value);
-                  setWorkerId("");
-                }}
-                placeholder={workerType === "employee" ? "Search workers..." : "Search contractors..."}
-                className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddWorker}
-                disabled={addingWorker}
-                className="shrink-0 rounded bg-gray-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-gray-600 disabled:opacity-50"
-              >
-                {addingWorker ? "Adding…" : "Add"}
-              </button>
-            </div>
-            {workerQuery && !workerId ? (
-              <div className="absolute z-10 mt-1 max-h-32 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
-                {filteredWorkerOptions.slice(0, 8).map((w) => (
-                  <button
-                    key={w.id}
-                    type="button"
-                    onClick={() => {
-                      setWorkerId(w.id);
-                      setWorkerQuery(w.displayName);
-                    }}
-                    className="block w-full truncate px-1.5 py-1 text-left text-[11px] text-gray-700 hover:bg-pink-50"
-                  >
-                    {w.displayName}
-                    {!w.email ? <span className="text-gray-400"> (no email)</span> : null}
-                  </button>
-                ))}
-                {filteredWorkerOptions.length === 0 ? <div className="px-1.5 py-1 text-[11px] text-gray-400">No matches</div> : null}
+        {readOnly ? (
+          <>
+            {assignment && (supervisorName || pmName || assignment.startTime || assignment.comment) ? (
+              <div className="mt-3 border-t border-gray-100 pt-2.5">
+                <label className="block text-[10px] font-medium text-gray-500">Coverage</label>
+                {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}</p> : null}
+                {pmName ? <p className="mt-1 text-[11px] text-gray-600">PM: {pmName}</p> : null}
+                {assignment.startTime && assignment.endTime ? (
+                  <p className="mt-1 text-[11px] text-gray-600">
+                    {assignment.startTime} to {assignment.endTime}
+                  </p>
+                ) : null}
+                {assignment.comment ? <p className="mt-1 text-[11px] text-gray-600">Note: {assignment.comment}</p> : null}
               </div>
             ) : null}
-          </div>
-          {workerError ? <p className="mt-1.5 text-[10px] text-red-500">{workerError}</p> : null}
-        </div>
+
+            {workersForDay.length > 0 ? (
+              <div className="mt-3 border-t border-gray-100 pt-2.5">
+                <label className="block text-[10px] font-medium text-gray-500">Crew scheduled this day</label>
+                <p className="mt-1.5 text-[11px] text-gray-600">
+                  {workersForDay
+                    .map((w) =>
+                      w.employeeId
+                        ? employees.find((e) => e.id === w.employeeId)?.displayName
+                        : contractors.find((c) => c.id === w.contractorId)?.displayName,
+                    )
+                    .filter((name): name is string => !!name)
+                    .join(", ")}
+                </p>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className="mt-3 border-t border-gray-100 pt-2.5">
+              <label className="block text-[10px] font-medium text-gray-500">Plan supervisor / PM for this day</label>
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                <SearchableSelect
+                  value={supervisorUserId}
+                  onChange={setSupervisorUserId}
+                  options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+                  placeholder="Search…"
+                  allLabel="Supervisor..."
+                />
+                <SearchableSelect
+                  value={projectManagerUserId}
+                  onChange={setProjectManagerUserId}
+                  options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
+                  placeholder="Search…"
+                  allLabel="PM (if no supervisor)"
+                />
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900"
+                />
+                <span className="text-[10px] text-gray-400">to</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900"
+                />
+              </div>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Note about this day's coverage..."
+                rows={2}
+                className="mt-1.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400"
+              />
+              {error ? <p className="mt-1 text-[10px] text-red-500">{error}</p> : null}
+              <div className="mt-1.5 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSaveCoverage}
+                  disabled={saving}
+                  className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save coverage"}
+                </button>
+                {assignment ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoverage}
+                    disabled={removing}
+                    className="rounded border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {removing ? "Removing…" : "Remove"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-3 border-t border-gray-100 pt-2.5">
+              <label className="block text-[10px] font-medium text-gray-500">Workers scheduled this day</label>
+              {workersForDay.length > 0 ? (
+                <ul className="mt-1 space-y-1">
+                  {workersForDay.map((w) => {
+                    const worker = w.employeeId
+                      ? employees.find((e) => e.id === w.employeeId)
+                      : contractors.find((c) => c.id === w.contractorId);
+                    return (
+                      <li
+                        key={w.id}
+                        className="flex items-center justify-between gap-1.5 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700"
+                      >
+                        <span className="truncate">
+                          {worker?.displayName ?? "Unknown worker"}
+                          {worker && !worker.email ? (
+                            <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                              {" "}
+                              (no email)
+                            </span>
+                          ) : null}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteWorker(w.id)}
+                          disabled={deletingWorkerId === w.id}
+                          className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-1 text-[10px] text-gray-400">None scheduled yet.</p>
+              )}
+
+              <div className="mt-1.5 flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkerType("employee");
+                    setWorkerQuery("");
+                    setWorkerId("");
+                  }}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    workerType === "employee" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  Employee
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkerType("contractor");
+                    setWorkerQuery("");
+                    setWorkerId("");
+                  }}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    workerType === "contractor" ? "bg-gray-700 text-white" : "border border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  Contractor
+                </button>
+              </div>
+
+              <div className="relative mt-1.5">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={workerId ? workerOptions.find((w) => w.id === workerId)?.displayName ?? "" : workerQuery}
+                    onChange={(e) => {
+                      setWorkerQuery(e.target.value);
+                      setWorkerId("");
+                    }}
+                    placeholder={workerType === "employee" ? "Search workers..." : "Search contractors..."}
+                    className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddWorker}
+                    disabled={addingWorker}
+                    className="shrink-0 rounded bg-gray-700 px-2 py-1 text-[10px] font-medium text-white hover:bg-gray-600 disabled:opacity-50"
+                  >
+                    {addingWorker ? "Adding…" : "Add"}
+                  </button>
+                </div>
+                {workerQuery && !workerId ? (
+                  <div className="absolute z-10 mt-1 max-h-32 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                    {filteredWorkerOptions.slice(0, 8).map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => {
+                          setWorkerId(w.id);
+                          setWorkerQuery(w.displayName);
+                        }}
+                        className="block w-full truncate px-1.5 py-1 text-left text-[11px] text-gray-700 hover:bg-pink-50"
+                      >
+                        {w.displayName}
+                        {!w.email ? <span className="text-gray-400"> (no email)</span> : null}
+                      </button>
+                    ))}
+                    {filteredWorkerOptions.length === 0 ? <div className="px-1.5 py-1 text-[11px] text-gray-400">No matches</div> : null}
+                  </div>
+                ) : null}
+              </div>
+              {workerError ? <p className="mt-1.5 text-[10px] text-red-500">{workerError}</p> : null}
+            </div>
+          </>
+        )}
 
         {completeError ? <p className="mt-2.5 text-[10px] text-red-500">{completeError}</p> : null}
 

@@ -257,10 +257,21 @@ export default async function SchedulePage() {
   // on the LaborEntry itself: sovItems for Post-Construction work,
   // taskDescription for everything else (on a turnover job this is picked
   // from the same TURNOVER_SCOPE_OPTIONS vocabulary, see ProjectLaborSection).
-  const laborEntriesByProject = new Map<
-    string,
-    Map<string, { workerName: string; hours: number; clockIn: string | null; taskDescription: string | null; sovItemDescriptions: string[] }[]>
-  >();
+  // A contractor engagement (below) also lands here, as a synthetic 0-hour
+  // "contractorOnly" row — the detail card is supposed to be the click-
+  // through counterpart of the aggregate tooltip above, and the aggregate
+  // already folds a confirmed contractor into its worker list, so leaving
+  // them out here just because there's no shift-level hours to show made
+  // the two disagree (tooltip says "Nelson", detail card shows nothing).
+  type LaborDetailEntry = {
+    workerName: string;
+    hours: number;
+    clockIn: string | null;
+    taskDescription: string | null;
+    sovItemDescriptions: string[];
+    contractorOnly?: boolean;
+  };
+  const laborEntriesByProject = new Map<string, Map<string, LaborDetailEntry[]>>();
   for (const le of laborEntryRows) {
     const k = dayKey(le.workDate);
     const set = workDayKeysByProject.get(le.projectId) ?? new Set<string>();
@@ -274,9 +285,7 @@ export default async function SchedulePage() {
     byDay.set(k, entry);
     laborSummaryByProject.set(le.projectId, byDay);
 
-    const entriesByDay =
-      laborEntriesByProject.get(le.projectId) ??
-      new Map<string, { workerName: string; hours: number; clockIn: string | null; taskDescription: string | null; sovItemDescriptions: string[] }[]>();
+    const entriesByDay = laborEntriesByProject.get(le.projectId) ?? new Map<string, LaborDetailEntry[]>();
     const entries = entriesByDay.get(k) ?? [];
     entries.push({
       workerName: le.workerName,
@@ -291,10 +300,7 @@ export default async function SchedulePage() {
 
   // Contractor engagements confirm a day the same way LaborEntry does for
   // employees, just without per-day hours to add — see
-  // contractorAssignmentDayKeys's doc comment. Not added to
-  // laborEntriesByProject: that list is specifically shift-level LaborEntry
-  // rows (clock-in, exact hours) for the read-only detail card, which a
-  // contractor engagement record isn't.
+  // contractorAssignmentDayKeys's doc comment.
   for (const ca of contractorAssignmentRows) {
     if (!ca.projectId) continue;
     const contractorName = contractorNameById.get(ca.contractorId);
@@ -309,6 +315,19 @@ export default async function SchedulePage() {
       entry.workers.add(contractorName);
       byDay.set(k, entry);
       laborSummaryByProject.set(ca.projectId, byDay);
+
+      const entriesByDay = laborEntriesByProject.get(ca.projectId) ?? new Map<string, LaborDetailEntry[]>();
+      const entries = entriesByDay.get(k) ?? [];
+      entries.push({
+        workerName: contractorName,
+        hours: 0,
+        clockIn: null,
+        taskDescription: null,
+        sovItemDescriptions: [],
+        contractorOnly: true,
+      });
+      entriesByDay.set(k, entries);
+      laborEntriesByProject.set(ca.projectId, entriesByDay);
     }
   }
 
