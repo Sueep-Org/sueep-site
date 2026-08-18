@@ -3998,8 +3998,9 @@ async function initApp(){
     const qualitySelectValue = getValue('paintingPaintQualitySelect') || 'standard';
     const customQualityField = document.getElementById('paintingPaintQualityCustomInput');
     const customQuality = customQualityField ? parseFloat(customQualityField.value) : NaN;
+    const validCustomQuality = Number.isFinite(customQuality) && customQuality >= 0;
     const quality = qualitySelectValue === 'custom'
-      ? (Number.isFinite(customQuality) && customQuality >= 0 ? 'custom' : 'standard')
+      ? (validCustomQuality ? 'custom' : 'standard')
       : qualitySelectValue;
     const finish = getValue('paintingFinishTypeSelect') || 'flat';
     const color = getValue('paintingColorDepthSelect') || 'white_light';
@@ -4012,13 +4013,15 @@ async function initApp(){
     const primerApplication = getValue('paintingPrimerApplicationMethodSelect') || application || 'roller';
     const activeApplicationMethod = application || primerApplication || 'roller';
     const paintPrice = quality === 'custom'
-      ? (Number.isFinite(customQuality) && customQuality >= 0 ? customQuality : (PAINTING_PRICE_PER_GALLON.standard ?? 45))
+      ? (validCustomQuality ? customQuality : (PAINTING_PRICE_PER_GALLON.standard ?? 45))
       : (PAINTING_PRICE_PER_GALLON[quality] ?? 45);
 
     return {
       coats,
       surface,
       quality,
+      qualityLabel: qualitySelectValue,
+      customQuality: validCustomQuality ? customQuality : null,
       finish,
       color,
       primer,
@@ -4138,6 +4141,15 @@ async function initApp(){
     }
   }
 
+  function _syncPaintingCustomQualityInputState() {
+    const qualitySelect = document.getElementById('paintingPaintQualitySelect');
+    const qualityCustomInput = document.getElementById('paintingPaintQualityCustomInput');
+    if (!qualitySelect || !qualityCustomInput) return;
+    const isCustom = qualitySelect.value === 'custom';
+    qualityCustomInput.disabled = !isCustom;
+    qualityCustomInput.style.opacity = isCustom ? '1' : '0.6';
+  }
+
   function _attachPaintingMaterialsListeners() {
     const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingPaintQualityCustomInput', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
     const handleMaterialChange = () => {
@@ -4148,11 +4160,7 @@ async function initApp(){
     const qualitySelect = document.getElementById('paintingPaintQualitySelect');
     const qualityCustomInput = document.getElementById('paintingPaintQualityCustomInput');
     const syncCustomPaintQualityInput = () => {
-      if (!qualitySelect || !qualityCustomInput) return;
-      const isCustom = qualitySelect.value === 'custom';
-      qualityCustomInput.disabled = !isCustom;
-      qualityCustomInput.style.opacity = isCustom ? '1' : '0.6';
-      if (!isCustom) qualityCustomInput.value = '';
+      _syncPaintingCustomQualityInputState();
     };
     if (qualitySelect && qualityCustomInput) {
       qualitySelect.addEventListener('input', syncCustomPaintQualityInput);
@@ -6526,6 +6534,7 @@ async function initApp(){
       });
     }
     setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
+    setVal('cleaningScopeInput', _loadedProjectData.labor_breakdown?.scope ?? '');
     _updateCrewCalcs();
 
 
@@ -6646,9 +6655,26 @@ async function initApp(){
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
+      setVal('paintingScopeInput', bd.scope ?? '');
       setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
       setVal('paintingSurfaceConditionSelect', resolveMaterialOption(bd.paint_surface_condition_key, bd.paint_surface_condition, PAINTING_SURFACE_MULTIPLIERS, 'smooth'));
-      setVal('paintingPaintQualitySelect', resolveMaterialOption(bd.paint_quality_key, bd.paint_quality, PAINTING_PRICE_PER_GALLON, 'standard'));
+      const savedPaintQualityKey = bd.paint_quality_key ?? bd.paint_quality_label ?? null;
+      const savedCustomPaintValue = bd.paint_quality_custom_value ?? bd.paint_quality ?? null;
+      const shouldUseCustomPaintQuality = savedPaintQualityKey === 'custom'
+        || bd.paint_quality_label === 'custom'
+        || (savedPaintQualityKey == null && Number.isFinite(Number(savedCustomPaintValue)) && Number(savedCustomPaintValue) >= 0 && !(savedPaintQualityKey && Object.prototype.hasOwnProperty.call(PAINTING_PRICE_PER_GALLON, savedPaintQualityKey)));
+      if (shouldUseCustomPaintQuality) {
+        setVal('paintingPaintQualitySelect', 'custom');
+        const customPaintQualityInput = document.getElementById('paintingPaintQualityCustomInput');
+        if (customPaintQualityInput && savedCustomPaintValue != null && savedCustomPaintValue !== '') {
+          customPaintQualityInput.value = String(savedCustomPaintValue);
+        }
+        _syncPaintingCustomQualityInputState();
+      } else {
+        const restoredKey = resolveMaterialOption(savedPaintQualityKey, savedCustomPaintValue, PAINTING_PRICE_PER_GALLON, 'standard');
+        setVal('paintingPaintQualitySelect', restoredKey);
+        _syncPaintingCustomQualityInputState();
+      }
       setVal('paintingFinishTypeSelect', resolveMaterialOption(bd.paint_finish_key, bd.paint_finish_multiplier, PAINTING_FINISH_MULTIPLIERS, 'flat'));
       setVal('paintingColorDepthSelect', resolveMaterialOption(bd.paint_color_key, bd.paint_color_multiplier, PAINTING_COLOR_MULTIPLIERS, 'white_light'));
       setVal('paintingPrimerTypeSelect', resolveMaterialOption(bd.primer_type_key, bd.primer_type, PAINTING_PRIMER_PRICE_PER_GALLON, 'none'));
@@ -6914,6 +6940,7 @@ async function initApp(){
       ? (Number.isFinite(parseFloat(materialsInput.value)) ? parseFloat(materialsInput.value) : derived.materials)
       : derived.materials;
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
+    const scope = document.getElementById('paintingScopeInput')?.value?.trim() || '';
 
     const paintRates = _getPaintingRates();
     let paintSubtotal = 0;
@@ -6950,6 +6977,7 @@ async function initApp(){
       expected_days: expectedDays,
       address,
       comments,
+      scope,
       primer_area_per_person: primerAreaPerPerson,
       interior_area_per_person: interiorAreaPerPerson,
       paint_coats: materialSettings.coats,
@@ -6957,6 +6985,8 @@ async function initApp(){
       paint_surface_condition_key: materialSettings.surface,
       paint_quality: materialSettings.paintPrice,
       paint_quality_key: materialSettings.quality,
+      paint_quality_label: materialSettings.qualityLabel,
+      paint_quality_custom_value: materialSettings.customQuality,
       paint_finish_multiplier: materialSettings.finishMultiplier,
       paint_finish_key: materialSettings.finish,
       paint_color_multiplier: materialSettings.colorMultiplier,
@@ -7055,6 +7085,7 @@ async function initApp(){
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
+      const scope = document.getElementById('cleaningScopeInput')?.value?.trim() || '';
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
         foreman_rate: rates.foremanRate,
@@ -7066,6 +7097,7 @@ async function initApp(){
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
         comments,
+        scope,
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;
