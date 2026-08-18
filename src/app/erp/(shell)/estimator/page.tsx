@@ -1054,6 +1054,18 @@ export default function EstimatorPage() {
 
                 <div id="calcSummaryContainer" className="mb-4"></div>
 
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Scope
+                  </label>
+                  <textarea
+                    id="cleaningScopeInput"
+                    rows={3}
+                    placeholder="Describe the scope of work"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+
                 <div className="mb-4 pt-4 border-t border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
                     Comments
@@ -1586,6 +1598,18 @@ export default function EstimatorPage() {
                 </div>
 
                 <div id="paintingCalcSummaryContainer" className="mb-4"></div>
+
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Scope
+                  </label>
+                  <textarea
+                    id="paintingScopeInput"
+                    rows={3}
+                    placeholder="Describe the scope of work"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                  />
+                </div>
 
                 <div className="mb-4 pt-4 border-t border-gray-100">
                   <label className="block text-xs text-gray-500 mb-1">
