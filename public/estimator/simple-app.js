@@ -3848,6 +3848,33 @@ async function initApp(){
   let _analysisAreaManualValue = null;
   const CLEANING_MATERIALS_PER_SF = 57.4;
   const GASOLINE_PER_DISTANCE = 1.210580204778157;
+  const CLEANING_BUILDING_TYPE_FACTORS = {
+    commercial: 1.00,
+    retail: 1.03,
+    multifamily: 1.05,
+    schoolinstitutional: 1.05,
+    medicalhealthcare: 1.08,
+    warehouse: 1.10,
+    industrialmanufacturing: 1.12,
+    highriselargecommercial: 1.15,
+  };
+
+  function _normalizeCleaningBuildingType(value) {
+    const raw = String(value ?? 'Commercial').trim();
+    if (!raw) return 'commercial';
+    const normalized = raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (normalized === 'schoolinstitutional' || normalized === 'schoolinstitutional') return 'schoolinstitutional';
+    if (normalized === 'medicalhealthcare') return 'medicalhealthcare';
+    if (normalized === 'industrialmanufacturing') return 'industrialmanufacturing';
+    if (normalized === 'highriselargecommercial') return 'highriselargecommercial';
+    if (normalized in CLEANING_BUILDING_TYPE_FACTORS) return normalized;
+    return 'commercial';
+  }
+
+  function _getCleaningBuildingTypeMultiplier(value) {
+    const key = _normalizeCleaningBuildingType(value);
+    return CLEANING_BUILDING_TYPE_FACTORS[key] ?? 1.00;
+  }
 
   function _getCleaningMaterialsDerivedValue(totalArea) {
     const area = parseFloat(totalArea) || 0;
@@ -3998,9 +4025,8 @@ async function initApp(){
     const qualitySelectValue = getValue('paintingPaintQualitySelect') || 'standard';
     const customQualityField = document.getElementById('paintingPaintQualityCustomInput');
     const customQuality = customQualityField ? parseFloat(customQualityField.value) : NaN;
-    const validCustomQuality = Number.isFinite(customQuality) && customQuality >= 0;
     const quality = qualitySelectValue === 'custom'
-      ? (validCustomQuality ? 'custom' : 'standard')
+      ? (Number.isFinite(customQuality) && customQuality >= 0 ? 'custom' : 'standard')
       : qualitySelectValue;
     const finish = getValue('paintingFinishTypeSelect') || 'flat';
     const color = getValue('paintingColorDepthSelect') || 'white_light';
@@ -4013,15 +4039,13 @@ async function initApp(){
     const primerApplication = getValue('paintingPrimerApplicationMethodSelect') || application || 'roller';
     const activeApplicationMethod = application || primerApplication || 'roller';
     const paintPrice = quality === 'custom'
-      ? (validCustomQuality ? customQuality : (PAINTING_PRICE_PER_GALLON.standard ?? 45))
+      ? (Number.isFinite(customQuality) && customQuality >= 0 ? customQuality : (PAINTING_PRICE_PER_GALLON.standard ?? 45))
       : (PAINTING_PRICE_PER_GALLON[quality] ?? 45);
 
     return {
       coats,
       surface,
       quality,
-      qualityLabel: qualitySelectValue,
-      customQuality: validCustomQuality ? customQuality : null,
       finish,
       color,
       primer,
@@ -4141,15 +4165,6 @@ async function initApp(){
     }
   }
 
-  function _syncPaintingCustomQualityInputState() {
-    const qualitySelect = document.getElementById('paintingPaintQualitySelect');
-    const qualityCustomInput = document.getElementById('paintingPaintQualityCustomInput');
-    if (!qualitySelect || !qualityCustomInput) return;
-    const isCustom = qualitySelect.value === 'custom';
-    qualityCustomInput.disabled = !isCustom;
-    qualityCustomInput.style.opacity = isCustom ? '1' : '0.6';
-  }
-
   function _attachPaintingMaterialsListeners() {
     const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingPaintQualityCustomInput', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
     const handleMaterialChange = () => {
@@ -4160,7 +4175,11 @@ async function initApp(){
     const qualitySelect = document.getElementById('paintingPaintQualitySelect');
     const qualityCustomInput = document.getElementById('paintingPaintQualityCustomInput');
     const syncCustomPaintQualityInput = () => {
-      _syncPaintingCustomQualityInputState();
+      if (!qualitySelect || !qualityCustomInput) return;
+      const isCustom = qualitySelect.value === 'custom';
+      qualityCustomInput.disabled = !isCustom;
+      qualityCustomInput.style.opacity = isCustom ? '1' : '0.6';
+      if (!isCustom) qualityCustomInput.value = '';
     };
     if (qualitySelect && qualityCustomInput) {
       qualitySelect.addEventListener('input', syncCustomPaintQualityInput);
@@ -4373,7 +4392,9 @@ async function initApp(){
       cleanersPay = (p.persons || 0) * (p.days || 0) * (rates.cleanerRate || 0);
       foremanPay = (p.days || 0) * (rates.foremanRate || 0);
     }
-    const laborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
+    const baseLaborCost = cleanersPay + foremanPay + assistantPay + painterPay + pmPay;
+    const buildingMultiplier = _getCleaningBuildingTypeMultiplier(document.getElementById('buildingTypeSelect')?.value);
+    const laborCost = baseLaborCost * buildingMultiplier;
     const materials = p.materials || 0;
     const subtotal = laborCost;
     const markupBase = subtotal + materials;
@@ -6302,6 +6323,23 @@ async function initApp(){
       setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
       setVal('commissionInput', bd.commission_pct ?? 10);
+      const savedBuildingType = bd.building_type ?? 'Commercial';
+      const buildingTypeEl = document.getElementById('buildingTypeSelect');
+      if (buildingTypeEl) {
+        const normalizedValue = [
+          'Commercial',
+          'Retail',
+          'Multifamily',
+          'School / Institutional',
+          'Medical / Healthcare',
+          'Warehouse',
+          'Industrial / Manufacturing',
+          'High-Rise / Large Commercial',
+        ].includes(savedBuildingType)
+          ? savedBuildingType
+          : 'Commercial';
+        buildingTypeEl.value = normalizedValue;
+      }
     }
 
     if (bd && bd.phases) {
@@ -6483,6 +6521,14 @@ async function initApp(){
         _updateTransportCosts();
       });
     }
+    const buildingTypeSelect = document.getElementById('buildingTypeSelect');
+    if (buildingTypeSelect) {
+      const handleBuildingTypeChange = () => {
+        if (typeof _updateCrewCalcs === 'function') _updateCrewCalcs();
+      };
+      buildingTypeSelect.oninput = handleBuildingTypeChange;
+      buildingTypeSelect.onchange = handleBuildingTypeChange;
+    }
     const driverCostInput = document.getElementById('driverCostDisplay');
     if (driverCostInput) {
       const savedDriverCost = _loadedProjectData?.driver_cost;
@@ -6534,7 +6580,6 @@ async function initApp(){
       });
     }
     setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
-    setVal('cleaningScopeInput', _loadedProjectData.labor_breakdown?.scope ?? '');
     _updateCrewCalcs();
 
 
@@ -6655,26 +6700,9 @@ async function initApp(){
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
-      setVal('paintingScopeInput', bd.scope ?? '');
       setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
       setVal('paintingSurfaceConditionSelect', resolveMaterialOption(bd.paint_surface_condition_key, bd.paint_surface_condition, PAINTING_SURFACE_MULTIPLIERS, 'smooth'));
-      const savedPaintQualityKey = bd.paint_quality_key ?? bd.paint_quality_label ?? null;
-      const savedCustomPaintValue = bd.paint_quality_custom_value ?? bd.paint_quality ?? null;
-      const shouldUseCustomPaintQuality = savedPaintQualityKey === 'custom'
-        || bd.paint_quality_label === 'custom'
-        || (savedPaintQualityKey == null && Number.isFinite(Number(savedCustomPaintValue)) && Number(savedCustomPaintValue) >= 0 && !(savedPaintQualityKey && Object.prototype.hasOwnProperty.call(PAINTING_PRICE_PER_GALLON, savedPaintQualityKey)));
-      if (shouldUseCustomPaintQuality) {
-        setVal('paintingPaintQualitySelect', 'custom');
-        const customPaintQualityInput = document.getElementById('paintingPaintQualityCustomInput');
-        if (customPaintQualityInput && savedCustomPaintValue != null && savedCustomPaintValue !== '') {
-          customPaintQualityInput.value = String(savedCustomPaintValue);
-        }
-        _syncPaintingCustomQualityInputState();
-      } else {
-        const restoredKey = resolveMaterialOption(savedPaintQualityKey, savedCustomPaintValue, PAINTING_PRICE_PER_GALLON, 'standard');
-        setVal('paintingPaintQualitySelect', restoredKey);
-        _syncPaintingCustomQualityInputState();
-      }
+      setVal('paintingPaintQualitySelect', resolveMaterialOption(bd.paint_quality_key, bd.paint_quality, PAINTING_PRICE_PER_GALLON, 'standard'));
       setVal('paintingFinishTypeSelect', resolveMaterialOption(bd.paint_finish_key, bd.paint_finish_multiplier, PAINTING_FINISH_MULTIPLIERS, 'flat'));
       setVal('paintingColorDepthSelect', resolveMaterialOption(bd.paint_color_key, bd.paint_color_multiplier, PAINTING_COLOR_MULTIPLIERS, 'white_light'));
       setVal('paintingPrimerTypeSelect', resolveMaterialOption(bd.primer_type_key, bd.primer_type, PAINTING_PRIMER_PRICE_PER_GALLON, 'none'));
@@ -6940,7 +6968,6 @@ async function initApp(){
       ? (Number.isFinite(parseFloat(materialsInput.value)) ? parseFloat(materialsInput.value) : derived.materials)
       : derived.materials;
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
-    const scope = document.getElementById('paintingScopeInput')?.value?.trim() || '';
 
     const paintRates = _getPaintingRates();
     let paintSubtotal = 0;
@@ -6977,7 +7004,6 @@ async function initApp(){
       expected_days: expectedDays,
       address,
       comments,
-      scope,
       primer_area_per_person: primerAreaPerPerson,
       interior_area_per_person: interiorAreaPerPerson,
       paint_coats: materialSettings.coats,
@@ -6985,8 +7011,6 @@ async function initApp(){
       paint_surface_condition_key: materialSettings.surface,
       paint_quality: materialSettings.paintPrice,
       paint_quality_key: materialSettings.quality,
-      paint_quality_label: materialSettings.qualityLabel,
-      paint_quality_custom_value: materialSettings.customQuality,
       paint_finish_multiplier: materialSettings.finishMultiplier,
       paint_finish_key: materialSettings.finish,
       paint_color_multiplier: materialSettings.colorMultiplier,
@@ -7057,6 +7081,7 @@ async function initApp(){
       const overheadPct = parseFloat(document.getElementById('overheadInput')?.value) || 0;
       const profitPct = parseFloat(document.getElementById('profitInput')?.value) || 0;
       const taxPct = parseFloat(document.getElementById('taxInput')?.value) || 0;
+      const buildingType = document.getElementById('buildingTypeSelect')?.value || 'Commercial';
       let totLabor = 0, totSubtotalSave = 0;
       for (const p of phases) {
         const c = _calcPhase(p, rates);
@@ -7085,7 +7110,6 @@ async function initApp(){
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
-      const scope = document.getElementById('cleaningScopeInput')?.value?.trim() || '';
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
         foreman_rate: rates.foremanRate,
@@ -7094,10 +7118,11 @@ async function initApp(){
         tax_pct: taxPct,
         commission_pct: commPct,
         materials: parseFloat(document.getElementById('materialsInput')?.value) || 0,
+        building_type: buildingType,
+        building_type_multiplier: _getCleaningBuildingTypeMultiplier(buildingType),
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
         comments,
-        scope,
       };
 
       const areaVal = document.getElementById('analysisTotalAreaInput')?.value;

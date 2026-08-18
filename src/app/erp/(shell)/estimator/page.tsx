@@ -692,34 +692,65 @@ export default function EstimatorPage() {
               <div id="analysisEditForm" style={{ display: "none" }}>
                 {/* Total Area */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Total Area (SF)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      id="analysisTotalAreaInput"
-                      placeholder="0"
-                      min="0"
-                      step="1"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                    />
-                    <button
-                      type="button"
-                      id="totalAreaModifyBtn"
-                      style={{ display: "none" }}
-                      className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-                    >
-                      Modify
-                    </button>
-                    <button
-                      type="button"
-                      id="totalAreaResetBtn"
-                      style={{ display: "none" }}
-                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
-                    >
-                      Reset to auto
-                    </button>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Total Area (SF)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          id="analysisTotalAreaInput"
+                          placeholder="0"
+                          min="0"
+                          step="1"
+                          className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        />
+                        <button
+                          type="button"
+                          id="totalAreaModifyBtn"
+                          style={{ display: "none" }}
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                        >
+                          Modify
+                        </button>
+                        <button
+                          type="button"
+                          id="totalAreaResetBtn"
+                          style={{ display: "none" }}
+                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        >
+                          Reset to auto
+                        </button>
+                      </div>
+                    </div>
+                    <div className="min-w-[220px] flex-1">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Building Type
+                      </label>
+                      <select
+                        id="buildingTypeSelect"
+                        defaultValue="Commercial"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="Commercial">Commercial</option>
+                        <option value="Retail">Retail</option>
+                        <option value="Multifamily">Multifamily</option>
+                        <option value="School / Institutional">
+                          School / Institutional
+                        </option>
+                        <option value="Medical / Healthcare">
+                          Medical / Healthcare
+                        </option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="Industrial / Manufacturing">
+                          Industrial / Manufacturing
+                        </option>
+                        <option value="High-Rise / Large Commercial">
+                          High-Rise / Large Commercial
+                        </option>
+                      </select>
+                    </div>
                   </div>
                 </div>
                 {/* Start Address */}
