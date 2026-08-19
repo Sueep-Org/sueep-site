@@ -14,8 +14,12 @@ import {
   addDays,
   coIsComplete,
   computeProjectSpanMarkersByDay,
+  dayCellLabel,
   dayKey,
+  formatHours,
+  formatShortDate,
   matchesSearchQuery,
+  monthLabel,
   monthMatrix,
   projectWindow,
   startOfDay,
@@ -46,7 +50,7 @@ function statusBarClass(status: string): string {
     case "COMPLETE":
       return "bg-emerald-700/90 hover:bg-emerald-600";
     case "ARCHIVED":
-      return "bg-zinc-600/90 hover:bg-zinc-500";
+      return "bg-gray-600/90 hover:bg-gray-500";
     default:
       return "bg-pink-600/80";
   }
@@ -145,23 +149,18 @@ function ResponseDot({ status }: { status: string }) {
 // month-calendar chips, which need to read as a scannable legend rather than
 // compete for attention the way the status-colored Gantt bars do.
 const CALENDAR_GROUP_CHIP_CLASS: Record<CalendarSegmentGroup, string> = {
-  POST_CONSTRUCTION: "bg-pink-200 text-pink-900 hover:bg-pink-300",
+  POST_CONSTRUCTION: "bg-purple-200 text-purple-900 hover:bg-purple-300",
   JANITORIAL_TURNOVER_REQUESTS: "bg-green-200 text-green-900 hover:bg-green-300",
-  REAL_ESTATE: "bg-purple-200 text-purple-900 hover:bg-purple-300",
-  OTHER: "bg-slate-200 text-slate-800 hover:bg-slate-300",
+  REAL_ESTATE: "bg-pink-200 text-pink-900 hover:bg-pink-300",
+  OTHER: "bg-gray-200 text-gray-800 hover:bg-gray-300",
 };
 
 const CALENDAR_GROUP_SWATCH_CLASS: Record<CalendarSegmentGroup, string> = {
-  POST_CONSTRUCTION: "bg-pink-200",
+  POST_CONSTRUCTION: "bg-purple-200",
   JANITORIAL_TURNOVER_REQUESTS: "bg-green-200",
-  REAL_ESTATE: "bg-purple-200",
-  OTHER: "bg-slate-200",
+  REAL_ESTATE: "bg-pink-200",
+  OTHER: "bg-gray-200",
 };
-
-function formatHours(hours: number): string {
-  const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
-  return `${n} hr${hours === 1 ? "" : "s"}`;
-}
 
 // Restricts the scope picker to what was actually contracted for the unit
 // (e.g. only "Clean"/"Paint" if that's all it has), then drops anything
@@ -248,27 +247,6 @@ function formatClockTime(time: string): string {
   return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-function dayCellLabel(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-// Compact "Jul 21" form — dayCellLabel above is deliberately verbose (full
-// weekday + month) for a single day-cell tooltip; this is for the overdue-
-// chip copy (see renderNeedsSupervisorChip / renderSpanEndpointChip) where a
-// whole sentence per row doesn't fit.
-function formatShortDate(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // "CO" (ProjectChangeOrder, blue) and "SOV" (ProjectSovScheduleRequest, amber,
 // same as any other no-supervisor-assigned chip) aren't project segments,
 // they're layered on top as their own filterable types alongside the
@@ -285,10 +263,6 @@ const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; sw
 ];
 
 const ALL_PROJECT_TYPE_FILTERS = PROJECT_TYPE_FILTER_OPTIONS.map((o) => o.value);
-
-function monthLabel(d: Date): string {
-  return d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-}
 
 type Person = { id: string; displayName: string };
 /** Employees/contractors specifically — unlike a supervisor/PM (always an
@@ -2461,7 +2435,7 @@ export function SchedulePlanner({
           type="button"
           onClick={() => setFilterOpen((v) => !v)}
           aria-label="Filter calendar"
-          className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+          className={`flex h-8 w-8 items-center justify-center rounded border transition-colors ${
             filtersActive
               ? "border-pink-300 bg-pink-50 text-pink-600"
               : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
@@ -2549,7 +2523,7 @@ export function SchedulePlanner({
         value={ganttSearch}
         onChange={(e) => setGanttSearch(e.target.value)}
         placeholder="Search projects..."
-        className="w-40 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
+        className="w-40 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
       />
       <button
         type="button"
@@ -2564,7 +2538,7 @@ export function SchedulePlanner({
       <button
         type="button"
         onClick={() => scrollGanttToToday("smooth")}
-        className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-pink-300 hover:text-pink-600"
+        className="rounded border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-pink-300 hover:text-pink-600"
       >
         Today
       </button>
@@ -2819,7 +2793,7 @@ export function SchedulePlanner({
                       </button>
                       {renderCoPopover(k, co)}
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{co.title}</div>
                           <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
                           {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
@@ -2881,7 +2855,7 @@ export function SchedulePlanner({
                         <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                       </Link>
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className="text-gray-300">Not otherwise scheduled this day — shown for its change order below</div>
                         </div>
@@ -2916,7 +2890,7 @@ export function SchedulePlanner({
                         <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
                       </button>
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className="text-amber-300">
                             {isFutureOrToday
@@ -2978,7 +2952,7 @@ export function SchedulePlanner({
                         ×
                       </button>
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className={isOverdue ? "text-red-400" : "text-gray-300"}>
                             {isOverdue
@@ -3020,7 +2994,7 @@ export function SchedulePlanner({
                       </button>
                       {renderLaborPopover(k, p)}
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
                           {summary ? (
@@ -3099,7 +3073,7 @@ export function SchedulePlanner({
                       ×
                     </button>
                     {inMonth ? (
-                      <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                      <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                         <div className="font-semibold">{project.jobTitle}</div>
                         <div className="text-gray-300">
                           {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
@@ -3254,7 +3228,7 @@ export function SchedulePlanner({
                         </span>
                       </button>
                       {inMonth ? (
-                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{buildingName}</div>
                           <div className="text-gray-300">
                             {entries.length} turnover units this day{allComplete ? " — all complete" : ""}
@@ -3365,7 +3339,7 @@ export function SchedulePlanner({
                               <span className="truncate" title={co.title}>{co.title}</span>
                             </button>
                             {inMonth ? (
-                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{co.title}</div>
                                 <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
                                 <div className="text-amber-300">
@@ -3416,7 +3390,7 @@ export function SchedulePlanner({
                               ×
                             </button>
                             {inMonth ? (
-                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                              <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                 <div className="font-semibold">{r.title}</div>
                                 <div className="text-gray-300">{SOV_REQUEST_LABEL}</div>
                                 {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
@@ -3469,7 +3443,7 @@ export function SchedulePlanner({
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                   {presentGroups.length > 0 ? (
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-slate-300" />
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-gray-300" />
                       Solid = work actually logged that day
                     </div>
                   ) : null}

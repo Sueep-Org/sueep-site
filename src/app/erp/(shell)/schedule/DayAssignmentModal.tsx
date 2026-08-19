@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  dayCellLabelWithYear,
   matchesSearchQuery,
   type ScheduleCoDayAssignment,
   type ScheduleCoWorkerAssignment,
@@ -57,16 +58,6 @@ type Person = { id: string; displayName: string };
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
 type WorkerPerson = Person & { email: string | null };
-
-function dateLabel(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 /**
  * Closed-by-default section for everything in this modal that isn't the
@@ -683,7 +674,7 @@ export function DayAssignmentModal({
       >
         <div className="shrink-0 border-b border-gray-100 p-6 pb-4">
           <h2 className="text-lg font-semibold text-gray-900">Assign to this day</h2>
-          <p className="mt-1 text-sm text-gray-500">{dateLabel(dateKey)}</p>
+          <p className="mt-1 text-sm text-gray-500">{dayCellLabelWithYear(dateKey)}</p>
         </div>
         <div className="min-h-0 overflow-y-auto p-6 pt-4">
         <div className="flex gap-1 rounded border border-gray-200 bg-gray-50 p-1">

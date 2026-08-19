@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { getDescLine } from "@/lib/erp/descLine";
 import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
+import { formatLongDate } from "@/lib/erp/schedule";
 
 // David Rodriguez, Project Manager (david@sueep.com) — stopgap recipient when
 // a rescheduled project has no day-assignment-level PM and its freeform
@@ -9,15 +10,6 @@ import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 // reliable, always-populated "project manager" relation to fall back on
 // otherwise (supervisorUserId is the *supervisor*, not a PM).
 const FALLBACK_PM_EMAIL = "david@sueep.com";
-
-function dateKeyLabel(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 /**
  * Emails the project's supervisor and PM whenever a project's schedule
@@ -81,8 +73,8 @@ export async function notifyProjectRescheduled(params: {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const projectUrl = appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined;
-  const oldLabel = oldDateKey ? dateKeyLabel(oldDateKey) : "unscheduled";
-  const newLabel = dateKeyLabel(newDateKey);
+  const oldLabel = oldDateKey ? formatLongDate(oldDateKey) : "unscheduled";
+  const newLabel = formatLongDate(newDateKey);
 
   await Promise.all(
     [...recipients.values()].map((email) =>

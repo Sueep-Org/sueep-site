@@ -1,16 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { addDays, dayKey, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
+import { addDays, dayKey, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
 
 const WEEKDAY_HEADS = ["S", "M", "T", "W", "T", "F", "S"];
 
 function shiftMonth(anchor: Date, delta: number): Date {
   return new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + delta, 1));
-}
-
-function monthLabel(anchor: Date): string {
-  return anchor.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 /** A small month-grid date picker for selecting an arbitrary, not

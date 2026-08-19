@@ -11,6 +11,8 @@ import {
 
 export const runtime = "nodejs";
 
+const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 type Body = {
   type: "change-order" | "sov-schedule";
   projectId: string;
@@ -35,11 +37,57 @@ type Body = {
 };
 
 export async function POST(req: Request) {
+  // The priced-CO path submits multipart/form-data — it carries the
+  // requester's signed contract PDF alongside the same fields the JSON path
+  // sends (see ProjectManagerForm's "Download & Sign" step, which downloads
+  // a prefilled PDF from /api/co-request-contract-pdf and uploads the
+  // signed copy back here). Every other request type still posts plain
+  // JSON.
+  const contentType = req.headers.get("content-type") ?? "";
   let body: Body;
-  try {
-    body = (await req.json()) as Body;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  let signedContractFile: File | null = null;
+
+  if (contentType.includes("multipart/form-data")) {
+    let fd: FormData;
+    try {
+      fd = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    }
+    const field = (name: string) => {
+      const v = fd.get(name);
+      return typeof v === "string" ? v : undefined;
+    };
+    body = {
+      type: (field("type") as Body["type"]) ?? "change-order",
+      projectId: field("projectId") ?? "",
+      requesterName: field("requesterName") ?? "",
+      requesterEmail: field("requesterEmail") ?? "",
+      coTitle: field("coTitle"),
+      coDescription: field("coDescription"),
+      coEstimatedStartDate: field("coEstimatedStartDate"),
+      coCleanerCount: field("coCleanerCount"),
+      coNoCrewRequired: field("coNoCrewRequired") === "true",
+      sovItemId: field("sovItemId"),
+      desiredDate: field("desiredDate"),
+      comments: field("comments"),
+    };
+    const file = fd.get("signedContract");
+    if (file instanceof File && file.size > 0) {
+      if (file.type !== "application/pdf") {
+        return NextResponse.json({ error: "Signed contract must be a PDF" }, { status: 415 });
+      }
+      if (file.size > MAX_CONTRACT_FILE_BYTES) {
+        return NextResponse.json({ error: "Signed contract must be 10 MB or smaller" }, { status: 413 });
+      }
+      signedContractFile = file;
+    }
+  } else {
+    try {
+      body = (await req.json()) as Body;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
   }
 
   const { type, projectId, requesterEmail, requesterName } = body;
@@ -109,6 +157,31 @@ export async function POST(req: Request) {
       select: { id: true },
     });
     changeOrderId = co.id;
+
+    // Requester downloaded the prefilled contract, signed it themselves, and
+    // uploaded the signed copy right back (see /api/co-request-contract-pdf
+    // + ProjectManagerForm's "Download & Sign" step). Store it the same way
+    // the ERP's own "Already signed? Upload it here" path does — as a base64
+    // data URL — non-fatal on failure since the CO itself is already created
+    // and notified regardless.
+    if (signedContractFile) {
+      try {
+        const bytes = Buffer.from(await signedContractFile.arrayBuffer());
+        const signedDocumentUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
+        await prisma.changeOrderContract.create({
+          data: {
+            changeOrderId,
+            contractPdfFilename: signedContractFile.name,
+            signingStatus: "SIGNED",
+            customerEmail: requesterEmail.trim(),
+            signedAt: new Date(),
+            signedDocumentUrl,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to store signed ChangeOrderContract (non-fatal):", err);
+      }
+    }
   }
 
   // A "Schedule SOV Work" request always lands as a real ProjectDayAssignment

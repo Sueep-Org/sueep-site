@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   coIsComplete,
+  dayCellLabel,
+  formatHours,
   matchesSearchQuery,
   type ScheduleChangeOrder,
   type ScheduleCoDayAssignment,
@@ -22,20 +24,6 @@ type Person = { id: string; displayName: string };
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
 type WorkerPerson = Person & { email: string | null };
-
-function dayCellLabel(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function formatHours(hours: number): string {
-  const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
-  return `${n} hr${hours === 1 ? "" : "s"}`;
-}
 
 /** Click-through popover for a change-order chip on the month calendar —
  * always shows logged labor for the day (read-only). Once that day is done

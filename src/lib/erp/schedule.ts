@@ -312,6 +312,70 @@ export function dayKey(d: Date): string {
   return startOfDay(d).toISOString().slice(0, 10);
 }
 
+// UTC-anchored date-label formatters, shared by every schedule surface that
+// renders a dateKey/Date to a human-readable string. These used to be
+// reimplemented (with small, easy-to-miss drifts) in SchedulePlanner.tsx,
+// CoDayPopover.tsx, DayAssignmentModal.tsx, MiniCalendarPicker.tsx, and
+// notifyReschedule.ts — consolidated here so a fix or format change only
+// needs to happen once. All read dateKey as literal UTC midnight (see
+// startOfDay above), never local time.
+
+export function formatHours(hours: number): string {
+  const n = Number.isInteger(hours) ? hours : hours.toFixed(1);
+  return `${n} hr${hours === 1 ? "" : "s"}`;
+}
+
+/** Verbose "Monday, July 21" — for a single day-cell tooltip/header where
+ * the day of week matters but the year (almost always the current one) can
+ * be left off. */
+export function dayCellLabel(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Same as dayCellLabel plus the year — "Monday, July 21, 2026" — for modal
+ * headers where the picked day could roll into a different year (e.g.
+ * "duplicate to more days"). */
+export function dayCellLabelWithYear(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Compact "Jul 21" form, no weekday — for space-constrained copy like an
+ * overdue chip's sentence, where a full dayCellLabel doesn't fit. */
+export function formatShortDate(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Formal "July 21, 2026" form, no weekday — for email/notification copy. */
+export function formatLongDate(dateKey: string): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "July 2026" — month-grid header, shared by the main calendar and the
+ * MiniCalendarPicker. */
+export function monthLabel(d: Date): string {
+  return d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 const MAX_CONTRACTOR_ASSIGNMENT_SPAN_DAYS = 180;
 
 /**

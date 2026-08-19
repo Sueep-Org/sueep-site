@@ -22,10 +22,11 @@ type ProjectOption = {
 type SovItem = { id: string; description: string; completed: boolean };
 
 const STEP_LABELS_CO = ["Your Project", "Request Type", "Details"] as const;
+const STEP_LABELS_CO_SIGNED = ["Your Project", "Request Type", "Details", "Sign Contract"] as const;
 const STEP_LABELS_SOV = ["Your Project", "Request Type", "SOV Item"] as const;
 
-function StepIndicator({ current, type }: { current: number; type: RequestType | null }) {
-  const labels = type === "sov-schedule" ? STEP_LABELS_SOV : STEP_LABELS_CO;
+function StepIndicator({ current, type, willSign }: { current: number; type: RequestType | null; willSign: boolean }) {
+  const labels = type === "sov-schedule" ? STEP_LABELS_SOV : willSign ? STEP_LABELS_CO_SIGNED : STEP_LABELS_CO;
   const total = labels.length;
   return (
     <div className="flex items-center gap-1.5 border-b border-gray-100 pb-4">
@@ -87,6 +88,18 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [coPriceCents, setCoPriceCents] = useState<number | null>(null);
   const [coPriceLoading, setCoPriceLoading] = useState(false);
   const coPriceDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [clientCompany, setClientCompany] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
+
+  // Step 4, Download & Sign (only reached for a priced change order, see
+  // willSign below). An unpriced/no-crew CO submits straight from step 3,
+  // the contract gets sent for signature later once Sueep prices it.
+  const willSign = requestType === "change-order" && !coNoCrewRequired && coPriceCents != null;
+  const [contractPdfUrl, setContractPdfUrl] = useState("");
+  const [contractDownloaded, setContractDownloaded] = useState(false);
+  const [signingLoading, setSigningLoading] = useState(false);
+  const [signedFile, setSignedFile] = useState<File | null>(null);
+  const signedFileRef = useRef<HTMLInputElement>(null);
 
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
@@ -161,6 +174,13 @@ export function ProjectManagerForm({ onBack }: Props) {
     setError("");
     if (step === 1) { onBack(); return; }
     if (step === 2) { setRequestType(null); }
+    if (step === 4) {
+      if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
+      setContractPdfUrl("");
+      setContractDownloaded(false);
+      setSignedFile(null);
+      if (signedFileRef.current) signedFileRef.current.value = "";
+    }
     setStep((s) => s - 1);
   }
 
@@ -179,29 +199,39 @@ export function ProjectManagerForm({ onBack }: Props) {
     setStep(3);
   }
 
-  async function handleSubmit() {
-    setError("");
-    if (!requesterName.trim()) { setError("Your name is required."); return; }
-    if (!requesterEmail.trim()) { setError("Your email is required."); return; }
-    if (requestType === "change-order" && !coTitle.trim()) {
-      setError("Title is required.");
-      return;
-    }
-    if (requestType === "change-order" && !coEstimatedStartDate) {
-      setError("Estimated start date is required.");
-      return;
-    }
-    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovId) {
-      setError("Please select an SOV item.");
-      return;
-    }
-    if (requestType === "sov-schedule" && !desiredDate) {
-      setError("Desired date is required.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch("/api/external/project-requests", {
+  function validateStep3(): string {
+    if (!requesterName.trim()) return "Your name is required.";
+    if (!requesterEmail.trim()) return "Your email is required.";
+    if (requestType === "change-order" && !coTitle.trim()) return "Title is required.";
+    if (requestType === "change-order" && !coEstimatedStartDate) return "Estimated start date is required.";
+    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovId) return "Please select an SOV item.";
+    if (requestType === "sov-schedule" && !desiredDate) return "Desired date is required.";
+    return "";
+  }
+
+  /** Actually creates the request (and, for a signed CO, attaches the
+   * uploaded contract). Called directly for SOV/unpriced-CO requests, or
+   * after the signed PDF is uploaded for a priced CO (see
+   * handleUploadSigned). */
+  async function submitRequest(signedContract?: File) {
+    let res: Response;
+    if (signedContract) {
+      const fd = new FormData();
+      fd.append("type", requestType ?? "");
+      fd.append("projectId", selectedProjectId);
+      fd.append("requesterName", requesterName.trim());
+      fd.append("requesterEmail", requesterEmail.trim());
+      if (coTitle.trim()) fd.append("coTitle", coTitle.trim());
+      if (coDescription.trim()) fd.append("coDescription", coDescription.trim());
+      if (coEstimatedStartDate) fd.append("coEstimatedStartDate", coEstimatedStartDate);
+      // Supervisor count isn't sent, the server derives it from
+      // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
+      if (coCleanerCount.trim()) fd.append("coCleanerCount", coCleanerCount.trim());
+      fd.append("coNoCrewRequired", String(coNoCrewRequired));
+      fd.append("signedContract", signedContract);
+      res = await fetch("/api/external/project-requests", { method: "POST", body: fd });
+    } else {
+      res = await fetch("/api/external/project-requests", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -212,8 +242,6 @@ export function ProjectManagerForm({ onBack }: Props) {
           coTitle: coTitle.trim() || undefined,
           coDescription: coDescription.trim() || undefined,
           coEstimatedStartDate: coEstimatedStartDate || undefined,
-          // Supervisor count isn't sent — the server derives it from
-          // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
           coCleanerCount: coCleanerCount.trim() || undefined,
           coNoCrewRequired,
           sovItemId: selectedSovId || undefined,
@@ -221,9 +249,73 @@ export function ProjectManagerForm({ onBack }: Props) {
           comments: comments.trim() || undefined,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) { setError(data.error || "Submission failed. Please try again."); return; }
-      setSubmitted(true);
+    }
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) { setError(data.error || "Submission failed. Please try again."); return false; }
+    setSubmitted(true);
+    return true;
+  }
+
+  async function handleSubmit() {
+    const err = validateStep3();
+    if (err) { setError(err); return; }
+    setError("");
+
+    if (willSign) {
+      if (!clientCompany.trim()) { setError("Client / GC name is required."); return; }
+      if (!clientAddress.trim()) { setError("Client address is required."); return; }
+      setSigningLoading(true);
+      try {
+        const res = await fetch("/api/co-request-contract-pdf", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            projectId: selectedProjectId,
+            coTitle: coTitle.trim(),
+            coDescription: coDescription.trim() || undefined,
+            coEstimatedStartDate: coEstimatedStartDate || undefined,
+            coCleanerCount: coCleanerCount.trim() || undefined,
+            clientCompany: clientCompany.trim(),
+            clientAddress: clientAddress.trim(),
+            requesterName: requesterName.trim(),
+            requesterEmail: requesterEmail.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          setError(data.error || "Could not prepare the contract. Please try again.");
+          return;
+        }
+        const blob = await res.blob();
+        setContractPdfUrl(URL.createObjectURL(blob));
+        setContractDownloaded(false);
+        setSignedFile(null);
+        setStep(4);
+      } catch {
+        setError("Network error preparing contract. Please try again.");
+      } finally {
+        setSigningLoading(false);
+      }
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await submitRequest();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUploadSigned() {
+    if (!signedFile) { setError("Please upload your signed contract PDF."); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const ok = await submitRequest(signedFile);
+      if (!ok) return;
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -260,6 +352,8 @@ export function ProjectManagerForm({ onBack }: Props) {
             setCoCleanerCount(""); setCoPriceCents(null);
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
+            if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
+            setContractPdfUrl(""); setContractDownloaded(false); setSignedFile(null);
           }}
           className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
         >
@@ -271,7 +365,7 @@ export function ProjectManagerForm({ onBack }: Props) {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-      <StepIndicator current={step} type={requestType} />
+      <StepIndicator current={step} type={requestType} willSign={willSign} />
 
       <div className="mt-6 space-y-5">
 
@@ -450,6 +544,21 @@ export function ProjectManagerForm({ onBack }: Props) {
                     </span>
                   </p>
                 )}
+                {coPriceCents != null && (
+                  <div className="mt-4 grid gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
+                    <p className="text-xs text-gray-500 sm:col-span-2">
+                      This project is priced, you&apos;ll sign the contract below before submitting.
+                    </p>
+                    <div>
+                      <label className={label} htmlFor="co-client-company">Client / GC name *</label>
+                      <input id="co-client-company" className={input} value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} placeholder="e.g. Brightview Construction" />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-client-address">Client address *</label>
+                      <input id="co-client-address" className={input} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Street, city, state, zip" />
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
@@ -474,6 +583,46 @@ export function ProjectManagerForm({ onBack }: Props) {
               </div>
             </div>
           </>
+        )}
+
+        {/* Step 4, Download & Sign (priced change orders only) */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-medium text-blue-900">Almost done, download and sign the change order below.</p>
+              <p className="mt-1 text-xs text-blue-700">
+                {coTitle} - {coPriceCents != null ? centsToDollars(coPriceCents) : ""}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-800">1. Download your contract</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Open it, fill in the signature, printed name, and date at the bottom, and save it.
+              </p>
+              <a
+                href={contractPdfUrl}
+                download={`${coTitle.trim() || "change-order"}.pdf`}
+                onClick={() => setContractDownloaded(true)}
+                className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                Download contract PDF
+              </a>
+              {contractDownloaded && <span className="ml-3 text-xs font-medium text-green-600">Downloaded ✓</span>}
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-800">2. Upload your signed contract</p>
+              <p className="mt-1 text-xs text-gray-500">Upload the signed PDF, then submit your request.</p>
+              <input
+                ref={signedFileRef}
+                type="file"
+                accept="application/pdf"
+                className="mt-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 file:shadow-sm hover:file:bg-gray-100"
+                onChange={(e) => { setSignedFile(e.target.files?.[0] ?? null); setError(""); }}
+              />
+            </div>
+          </div>
         )}
 
         {/* Step 3 — SOV details */}
@@ -590,11 +739,21 @@ export function ProjectManagerForm({ onBack }: Props) {
         {step === 3 && (
           <button
             type="button"
-            disabled={loading}
+            disabled={loading || signingLoading}
             onClick={() => { void handleSubmit(); }}
             className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {loading ? "Submitting…" : "Submit request"}
+            {signingLoading ? "Preparing contract…" : loading ? "Submitting…" : willSign ? "Continue to download & sign" : "Submit request"}
+          </button>
+        )}
+        {step === 4 && (
+          <button
+            type="button"
+            disabled={loading || !signedFile}
+            onClick={() => { void handleUploadSigned(); }}
+            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? "Submitting…" : "Submit signed contract"}
           </button>
         )}
       </div>
