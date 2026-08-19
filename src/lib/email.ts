@@ -309,6 +309,7 @@ export function buildProjectRequestEmail(params: {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  coEstimatedEndDate?: string;
   coCleanerCount?: number;
   coSupervisorCount?: number;
   /** Only set when the project has a real Labor rate — see
@@ -337,6 +338,7 @@ export function buildProjectRequestEmail(params: {
         <p><strong>Change Order Title:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
         ${params.coDescription ? `<p><strong>Description / Scope:</strong> ${escapeHtml(params.coDescription)}</p>` : ""}
         ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}
+        ${params.coEstimatedEndDate ? `<p><strong>Estimated End Date:</strong> ${escapeHtml(params.coEstimatedEndDate)}</p>` : ""}
         ${crewLine}
         ${priceLine}
       `
@@ -369,6 +371,7 @@ export function buildProjectRequestConfirmationEmail(params: {
   requesterName: string;
   coTitle?: string;
   coEstimatedStartDate?: string;
+  coEstimatedEndDate?: string;
   /** Only set when the project has a real Labor rate — see
    * hasCustomChangeOrderLaborRate. */
   coQuotedPriceCents?: number;
@@ -380,6 +383,7 @@ export function buildProjectRequestConfirmationEmail(params: {
     params.type === "change-order"
       ? `<p><strong>Change Order:</strong> ${escapeHtml(params.coTitle ?? "")}</p>
          ${params.coEstimatedStartDate ? `<p><strong>Estimated Start Date:</strong> ${escapeHtml(params.coEstimatedStartDate)}</p>` : ""}
+         ${params.coEstimatedEndDate ? `<p><strong>Estimated End Date:</strong> ${escapeHtml(params.coEstimatedEndDate)}</p>` : ""}
          ${params.coQuotedPriceCents != null ? `<p><strong>Estimated Price:</strong> ${formatUsd(params.coQuotedPriceCents)}</p>` : ""}`
       : `
           <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>

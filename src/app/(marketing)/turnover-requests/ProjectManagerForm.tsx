@@ -76,6 +76,7 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [coTitle, setCoTitle] = useState("");
   const [coDescription, setCoDescription] = useState("");
   const [coEstimatedStartDate, setCoEstimatedStartDate] = useState("");
+  const [coEstimatedEndDate, setCoEstimatedEndDate] = useState("");
   const [coCleanerCount, setCoCleanerCount] = useState("");
   const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
   function handleCoNoCrewRequiredChange(checked: boolean) {
@@ -204,6 +205,9 @@ export function ProjectManagerForm({ onBack }: Props) {
     if (!requesterEmail.trim()) return "Your email is required.";
     if (requestType === "change-order" && !coTitle.trim()) return "Title is required.";
     if (requestType === "change-order" && !coEstimatedStartDate) return "Estimated start date is required.";
+    if (requestType === "change-order" && coEstimatedEndDate && coEstimatedEndDate < coEstimatedStartDate) {
+      return "Estimated end date must be on or after the start date.";
+    }
     if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovId) return "Please select an SOV item.";
     if (requestType === "sov-schedule" && !desiredDate) return "Desired date is required.";
     return "";
@@ -224,6 +228,7 @@ export function ProjectManagerForm({ onBack }: Props) {
       if (coTitle.trim()) fd.append("coTitle", coTitle.trim());
       if (coDescription.trim()) fd.append("coDescription", coDescription.trim());
       if (coEstimatedStartDate) fd.append("coEstimatedStartDate", coEstimatedStartDate);
+      if (coEstimatedEndDate) fd.append("coEstimatedEndDate", coEstimatedEndDate);
       // Supervisor count isn't sent, the server derives it from
       // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
       if (coCleanerCount.trim()) fd.append("coCleanerCount", coCleanerCount.trim());
@@ -242,6 +247,7 @@ export function ProjectManagerForm({ onBack }: Props) {
           coTitle: coTitle.trim() || undefined,
           coDescription: coDescription.trim() || undefined,
           coEstimatedStartDate: coEstimatedStartDate || undefined,
+          coEstimatedEndDate: coEstimatedEndDate || undefined,
           coCleanerCount: coCleanerCount.trim() || undefined,
           coNoCrewRequired,
           sovItemId: selectedSovId || undefined,
@@ -348,7 +354,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setProjects([]);
             setSelectedProjectId("");
             setRequestType(null);
-            setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate("");
+            setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate(""); setCoEstimatedEndDate("");
             setCoCleanerCount(""); setCoPriceCents(null);
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
@@ -495,16 +501,29 @@ export function ProjectManagerForm({ onBack }: Props) {
                 placeholder="Describe what needs to be done and why…"
               />
             </div>
-            <div>
-              <label className={label} htmlFor="co-start-date">Estimated start date *</label>
-              <input
-                id="co-start-date"
-                type="date"
-                required
-                className={input}
-                value={coEstimatedStartDate}
-                onChange={(e) => setCoEstimatedStartDate(e.target.value)}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="co-start-date">Estimated start date *</label>
+                <input
+                  id="co-start-date"
+                  type="date"
+                  required
+                  className={input}
+                  value={coEstimatedStartDate}
+                  onChange={(e) => setCoEstimatedStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="co-end-date">Estimated end date</label>
+                <input
+                  id="co-end-date"
+                  type="date"
+                  min={coEstimatedStartDate || undefined}
+                  className={input}
+                  value={coEstimatedEndDate}
+                  onChange={(e) => setCoEstimatedEndDate(e.target.value)}
+                />
+              </div>
             </div>
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input

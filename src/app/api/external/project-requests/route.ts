@@ -22,6 +22,10 @@ type Body = {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  // Optional — when set, the CO gets its own end-day chip on the calendar
+  // (via ProjectChangeOrder.endDate) the same way an internally-created CO
+  // does, in addition to the day it's requested for.
+  coEstimatedEndDate?: string;
   // Crew size — cleaners only. The required supervisor(s) are always
   // derived server-side (deriveChangeOrderSupervisorCount), never accepted
   // from the client (see ProjectManagerForm — no supervisor input exists).
@@ -66,6 +70,7 @@ export async function POST(req: Request) {
       coTitle: field("coTitle"),
       coDescription: field("coDescription"),
       coEstimatedStartDate: field("coEstimatedStartDate"),
+      coEstimatedEndDate: field("coEstimatedEndDate"),
       coCleanerCount: field("coCleanerCount"),
       coNoCrewRequired: field("coNoCrewRequired") === "true",
       sovItemId: field("sovItemId"),
@@ -100,6 +105,14 @@ export async function POST(req: Request) {
   if (type === "change-order" && !body.coEstimatedStartDate) {
     return NextResponse.json({ error: "coEstimatedStartDate is required for change order requests" }, { status: 400 });
   }
+  if (
+    type === "change-order" &&
+    body.coEstimatedEndDate &&
+    body.coEstimatedStartDate &&
+    body.coEstimatedEndDate < body.coEstimatedStartDate
+  ) {
+    return NextResponse.json({ error: "coEstimatedEndDate must be on or after coEstimatedStartDate" }, { status: 400 });
+  }
   if (type === "sov-schedule" && !body.desiredDate) {
     return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
   }
@@ -131,6 +144,9 @@ export async function POST(req: Request) {
     const estimatedStartDate = body.coEstimatedStartDate
       ? new Date(`${body.coEstimatedStartDate}T00:00:00Z`)
       : null;
+    const estimatedEndDate = body.coEstimatedEndDate
+      ? new Date(`${body.coEstimatedEndDate}T00:00:00Z`)
+      : null;
     const priced = hasCustomChangeOrderLaborRate(project.laborRateCard) && (cleanerCount > 0 || supervisorCount > 0);
     if (priced) {
       const rates = getChangeOrderLaborRates(project.laborRateCard);
@@ -148,6 +164,10 @@ export async function POST(req: Request) {
         requestedBy: `${requesterName.trim()} <${requesterEmail.trim()}>`,
         status: "SUBMITTED",
         requestedDate: estimatedStartDate ?? new Date(),
+        // Optional — lets this CO show up on the schedule calendar on its
+        // end day too, exactly like a CO scheduled internally (see the
+        // ProjectChangeOrder.endDate doc comment).
+        endDate: estimatedEndDate,
         estLaborers: cleanerCount > 0 ? cleanerCount : null,
         estSupervisors: supervisorCount > 0 ? supervisorCount : null,
         noCrewRequired: body.coNoCrewRequired === true,
@@ -276,6 +296,7 @@ export async function POST(req: Request) {
     coTitle: body.coTitle,
     coDescription: body.coDescription,
     coEstimatedStartDate: body.coEstimatedStartDate,
+    coEstimatedEndDate: body.coEstimatedEndDate,
     coCleanerCount: cleanerCount > 0 ? cleanerCount : undefined,
     coSupervisorCount: supervisorCount > 0 ? supervisorCount : undefined,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
@@ -291,6 +312,7 @@ export async function POST(req: Request) {
     requesterName: requesterName.trim(),
     coTitle: body.coTitle,
     coEstimatedStartDate: body.coEstimatedStartDate,
+    coEstimatedEndDate: body.coEstimatedEndDate,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
     sovDescription,
     desiredDate: body.desiredDate,
