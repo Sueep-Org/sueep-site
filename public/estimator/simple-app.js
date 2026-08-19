@@ -5043,9 +5043,29 @@ async function initApp(){
           footer.appendChild(span);
         });
         body.appendChild(footer);
+
         const matRow = document.createElement('div');
         matRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid #f3f4f6;font-size:12px;';
-        matRow.innerHTML = `<span style="color:#6b7280;">Materials ($):</span><span style="color:#374151;font-weight:600;">${fmt$(phaseMat)}</span>`;
+        const matLabel = document.createElement('label');
+        matLabel.textContent = 'Materials ($):';
+        matLabel.style.cssText = 'color:#6b7280;white-space:nowrap;';
+        const matInput = document.createElement('input');
+        matInput.type = 'number';
+        matInput.min = '0';
+        matInput.step = '0.01';
+        matInput.value = Number.isFinite(phaseMat) ? phaseMat : 0;
+        matInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:120px;outline:none;';
+        matInput.addEventListener('input', () => {
+          _phaseMaterials[pid] = parseFloat(matInput.value) || 0;
+          _analysisMaterialsManual = false;
+          const totalPhaseMaterials = PHASE_IDS.filter(activePid => !_deletedPhaseIds.has(activePid))
+            .reduce((sum, activePid) => sum + (_phaseMaterials[activePid] || 0), 0);
+          const materialsInput = document.getElementById('materialsInput');
+          if (materialsInput) materialsInput.value = totalPhaseMaterials.toFixed(2);
+          _updateCrewCalcs();
+        });
+        matRow.appendChild(matLabel);
+        matRow.appendChild(matInput);
         body.appendChild(matRow);
         details.appendChild(body);
         container.appendChild(details);
@@ -5257,6 +5277,11 @@ async function initApp(){
       matInput.style.cssText = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:120px;outline:none;';
       matInput.addEventListener('input', () => {
         _phaseMaterials[pid] = parseFloat(matInput.value) || 0;
+        _analysisMaterialsManual = false;
+        const totalPhaseMaterials = PHASE_IDS.filter(activePid => !_deletedPhaseIds.has(activePid))
+          .reduce((sum, activePid) => sum + (_phaseMaterials[activePid] || 0), 0);
+        const materialsInput = document.getElementById('materialsInput');
+        if (materialsInput) materialsInput.value = totalPhaseMaterials.toFixed(2);
         _updateCrewCalcs();
       });
       matRow.appendChild(matLabel); matRow.appendChild(matInput);
