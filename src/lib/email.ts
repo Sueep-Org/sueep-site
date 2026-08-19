@@ -487,16 +487,36 @@ export function buildTimeOffLoggedEmail(params: {
   `;
 }
 
+// turnoverCompletedAt/projectDate are calendar-day labels stored as UTC
+// midnight (see the date convention notes in dates.ts), so this reads
+// calendar components back with an explicit UTC timeZone rather than
+// whatever zone the server process happens to be running in.
+function formatCompletedLabel(completedAt: Date, today: Date): string {
+  const diffDays = Math.round((today.getTime() - completedAt.getTime()) / 86400000);
+  const dateStr = completedAt.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+  if (diffDays === 0) return `completed today, ${dateStr}`;
+  const weekday = completedAt.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long" });
+  return `completed ${weekday}, ${dateStr}`;
+}
+
 export function buildTurnoverCompletionDigestEmail(params: {
   buildingName: string;
   buildingAddress: string;
-  units: { jobTitle: string; unitNumber: string | null }[];
+  /** "Today," as a UTC-midnight Date, same anchor the digest cron used to
+   * decide what counts as recent, so the per-unit labels below line up with
+   * however the subject line phrased things. */
+  today: Date;
+  units: { jobTitle: string; unitNumber: string | null; completedAt: Date }[];
   upcoming?: { jobTitle: string; unitNumber: string | null; projectDate: Date }[];
 }) {
   const items = params.units
-    .map((u) => `<li>${escapeHtml(u.unitNumber ? `Unit ${u.unitNumber} — ${u.jobTitle}` : u.jobTitle)}</li>`)
+    .map((u) => {
+      const label = u.unitNumber ? `Unit ${u.unitNumber}, ${u.jobTitle}` : u.jobTitle;
+      return `<li>${escapeHtml(label)}, ${escapeHtml(formatCompletedLabel(u.completedAt, params.today))}</li>`;
+    })
     .join("");
   const plural = params.units.length === 1 ? "unit" : "units";
+  const allToday = params.units.every((u) => Math.round((params.today.getTime() - u.completedAt.getTime()) / 86400000) === 0);
 
   const upcoming = params.upcoming ?? [];
   const upcomingSection =
@@ -506,19 +526,23 @@ export function buildTurnoverCompletionDigestEmail(params: {
       <ul style="margin:12px 0 20px;padding-left:20px">
         ${upcoming
           .map((u) => {
-            const label = u.unitNumber ? `Unit ${u.unitNumber} — ${u.jobTitle}` : u.jobTitle;
-            const date = u.projectDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-            return `<li>${escapeHtml(label)} — ${escapeHtml(date)}</li>`;
+            const label = u.unitNumber ? `Unit ${u.unitNumber}, ${u.jobTitle}` : u.jobTitle;
+            const date = u.projectDate.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+            return `<li>${escapeHtml(label)}, ${escapeHtml(date)}</li>`;
           })
           .join("")}
       </ul>`
       : "";
 
+  const heading = allToday
+    ? `${params.units.length} ${plural} completed today at ${escapeHtml(params.buildingName)}`
+    : `${params.units.length} ${plural} completed at ${escapeHtml(params.buildingName)}`;
+
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">${params.units.length} ${plural} completed today at ${escapeHtml(params.buildingName)}</h2>
+      <h2 style="margin-bottom:12px;color:#E73C6E">${heading}</h2>
       <p>${escapeHtml(params.buildingAddress)}</p>
-      <p>The following ${plural} finished turnover today:</p>
+      <p>The following ${plural} finished turnover:</p>
       <ul style="margin:12px 0 20px;padding-left:20px">${items}</ul>
       ${upcomingSection}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>

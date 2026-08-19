@@ -4,12 +4,16 @@ import { sendTurnoverCompletionDigest } from "@/lib/erp/turnoverCompletionDigest
 export const dynamic = "force-dynamic";
 
 /**
- * Runs daily (see vercel.json), ~6pm Eastern (5pm during EST — this fixed-UTC
+ * Runs daily (see vercel.json), ~6pm Eastern (5pm during EST, this fixed-UTC
  * schedule doesn't correct for DST, same as the existing schedule-nudge
  * crons). Emails each building's property manager a digest of every
- * turnover unit that finished today, bcc'ing the Sueep PM(s) involved;
- * skipped entirely for a building with nothing completed today, and skipped
- * (logged) for a building with no pmEmail on file.
+ * turnover unit completed since it was last accounted for (not just what
+ * finished today, a unit marked complete a few days late still gets caught
+ * here rather than missing its window entirely, see
+ * turnoverCompletionDigest.ts for the recent/stale/safety-ceiling
+ * thresholds), bcc'ing the Sueep PM(s) involved. Skipped entirely for a
+ * building with nothing to report, and skipped (logged, retried next run)
+ * for a building with no pmEmail on file.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
