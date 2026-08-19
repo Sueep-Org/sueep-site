@@ -1626,6 +1626,35 @@ export default function EstimatorPage() {
                       className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Building Type
+                    </label>
+                    <select
+                      id="paintingBuildingTypeSelect"
+                      defaultValue="Office / Commercial"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    >
+                      <option value="Office / Commercial">
+                        Office / Commercial
+                      </option>
+                      <option value="Retail / Store">Retail / Store</option>
+                      <option value="Multifamily / Apartment">
+                        Multifamily / Apartment
+                      </option>
+                      <option value="School / Institutional">
+                        School / Institutional
+                      </option>
+                      <option value="Medical / Healthcare">
+                        Medical / Healthcare
+                      </option>
+                      <option value="Warehouse">Warehouse</option>
+                      <option value="Manufacturing">Manufacturing</option>
+                      <option value="High-Rise / Large Commercial">
+                        High-Rise / Large Commercial
+                      </option>
+                    </select>
+                  </div>
                 </div>
 
                 <div id="paintingCalcSummaryContainer" className="mb-4"></div>
