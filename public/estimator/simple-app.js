@@ -4011,6 +4011,29 @@ async function initApp(){
     stain_blocking: 55,
     metal_corrosion: 60,
   };
+  const PAINTING_BUILDING_TYPE_FACTORS = {
+    officecommercial: 1.00,
+    retailstore: 1.03,
+    multifamilyapartment: 1.05,
+    schoolinstitutional: 1.08,
+    medicalhealthcare: 1.12,
+    warehouse: 1.15,
+    manufacturing: 1.20,
+    highriselargecommercial: 1.20,
+  };
+
+  function _normalizePaintingBuildingType(value) {
+    const raw = String(value ?? 'Office / Commercial').trim();
+    if (!raw) return 'officecommercial';
+    const normalized = raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (normalized in PAINTING_BUILDING_TYPE_FACTORS) return normalized;
+    return 'officecommercial';
+  }
+
+  function _getPaintingBuildingTypeMultiplier(value) {
+    const key = _normalizePaintingBuildingType(value);
+    return PAINTING_BUILDING_TYPE_FACTORS[key] ?? 1.00;
+  }
 
   function _getPaintingMaterialOptionKey(mapping, value, fallback) {
     if (value == null) return fallback;
@@ -4120,7 +4143,9 @@ async function initApp(){
       }
     }
 
-    const totalCost = paintCost + primerCost + consumablesCost;
+    const baseTotalCost = paintCost + primerCost + consumablesCost;
+    const buildingTypeMultiplier = _getPaintingBuildingTypeMultiplier(document.getElementById('paintingBuildingTypeSelect')?.value);
+    const totalCost = baseTotalCost * buildingTypeMultiplier;
 
     return {
       paintGallons,
@@ -4166,7 +4191,7 @@ async function initApp(){
   }
 
   function _attachPaintingMaterialsListeners() {
-    const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingPaintQualityCustomInput', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect'];
+    const materialIds = ['paintingTotalAreaInput', 'paintingCoatsSelect', 'paintingSurfaceConditionSelect', 'paintingPaintQualitySelect', 'paintingPaintQualityCustomInput', 'paintingFinishTypeSelect', 'paintingColorDepthSelect', 'paintingPrimerTypeSelect', 'paintingPrimerRequiredSelect', 'paintingApplicationMethodSelect', 'paintingPrimerCoatsSelect', 'paintingPrimerApplicationMethodSelect', 'paintingBuildingTypeSelect'];
     const handleMaterialChange = () => {
       _updatePaintingMaterialsCostDisplays();
       _updatePaintingCrewCalcs();
@@ -6700,6 +6725,7 @@ async function initApp(){
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
+      setVal('paintingBuildingTypeSelect', bd.building_type ?? 'Office / Commercial');
       setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
       setVal('paintingSurfaceConditionSelect', resolveMaterialOption(bd.paint_surface_condition_key, bd.paint_surface_condition, PAINTING_SURFACE_MULTIPLIERS, 'smooth'));
       setVal('paintingPaintQualitySelect', resolveMaterialOption(bd.paint_quality_key, bd.paint_quality, PAINTING_PRICE_PER_GALLON, 'standard'));
@@ -6754,6 +6780,16 @@ async function initApp(){
         _paintingMaterialsManual = true;
         _updatePaintingCrewCalcs();
       };
+    }
+    const paintingBuildingTypeSelect = document.getElementById('paintingBuildingTypeSelect');
+    if (paintingBuildingTypeSelect) {
+      const handlePaintingBuildingTypeChange = () => {
+        _paintingMaterialsManual = false;
+        _updatePaintingMaterialsCostDisplays();
+        _updatePaintingCrewCalcs();
+      };
+      paintingBuildingTypeSelect.oninput = handlePaintingBuildingTypeChange;
+      paintingBuildingTypeSelect.onchange = handlePaintingBuildingTypeChange;
     }
     if (primerRateInput) {
       const _primerChanged = () => { _paintingExpectedDaysManual = false; _refreshPaintingDays(); };
@@ -6946,6 +6982,7 @@ async function initApp(){
     const tax      = parseFloat(document.getElementById('paintingTaxInput')?.value) || 0;
     const comm     = parseFloat(document.getElementById('paintingCommissionInput')?.value) || 0;
     const margin   = parseFloat(document.getElementById('paintingMarginInput')?.value) || 0;
+    const buildingType = document.getElementById('paintingBuildingTypeSelect')?.value || 'Office / Commercial';
     const gasoline = parseFloat(document.getElementById('paintingGasolineInput')?.value) || 0;
     const tollCost = parseFloat(document.getElementById('paintingTollCostInput')?.value) || 0;
     const mobilizations = parseFloat(document.getElementById('paintingMobilizationsInput')?.value) || 0;
@@ -6995,6 +7032,8 @@ async function initApp(){
       commission_pct: comm,
       margin,
       materials,
+      building_type: buildingType,
+      building_type_multiplier: _getPaintingBuildingTypeMultiplier(buildingType),
       gasoline,
       toll_cost: tollCost,
       mobilizations,
