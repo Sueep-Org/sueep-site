@@ -354,11 +354,6 @@ export function DayAssignmentModal({
             scopeItems: scopePicks,
             changeOrderIds: coPicks,
             comment: comment.trim() || null,
-            // A freshly created assignment always starts PENDING — the real
-            // value (and its own responseToken) lives server-side, this is
-            // just enough for the optimistic local state to type-check and
-            // render correctly until the next full refresh.
-            responseStatus: "PENDING",
           }))
         );
       } else if (data.id) {
@@ -375,7 +370,6 @@ export function DayAssignmentModal({
           scopeItems: scopePicks,
           changeOrderIds: coPicks,
           comment: comment.trim() || null,
-          responseStatus: "PENDING",
         });
       }
       setProjectId("");
@@ -584,7 +578,6 @@ export function DayAssignmentModal({
             seriesId: data.seriesId!,
             assignedSovItemId,
             assignedScopeItem,
-            responseStatus: "PENDING",
           }))
         );
       } else if (data.id) {
@@ -597,7 +590,6 @@ export function DayAssignmentModal({
           seriesId: null,
           assignedSovItemId,
           assignedScopeItem,
-          responseStatus: "PENDING",
         });
       }
       setEmployeeId("");

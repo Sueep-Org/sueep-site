@@ -28,17 +28,12 @@ function workerUpsertArgs(
     ...(assignedSovItemId !== undefined ? { assignedSovItemId } : {}),
     ...(assignedScopeItem !== undefined ? { assignedScopeItem } : {}),
   };
-  // Generated once, at creation only — never on update, so an
-  // already-emailed accept/decline link keeps working after a later edit
-  // (e.g. a scope reassignment) instead of silently breaking.
-  const responseFields = { responseToken: crypto.randomUUID(), responseStatus: "PENDING" as const };
   if (employeeId) {
     return {
       where: { projectId_employeeId_date: { projectId, employeeId, date } },
       create: {
         projectId, employeeId, date, seriesId,
         assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null,
-        ...responseFields,
       },
       update: { seriesId, ...scopeUpdateFields },
     };
@@ -48,7 +43,6 @@ function workerUpsertArgs(
     create: {
       projectId, contractorId, date, seriesId,
       assignedSovItemId: assignedSovItemId ?? null, assignedScopeItem: assignedScopeItem ?? null,
-      ...responseFields,
     },
     update: { seriesId, ...scopeUpdateFields },
   };
@@ -297,7 +291,6 @@ export async function POST(req: Request) {
             location,
             scopeText: ownScope,
             url,
-            responseToken: a.responseToken,
           })
         )
       );
@@ -333,7 +326,6 @@ export async function POST(req: Request) {
       location,
       scopeText: ownScope ?? dayScope,
       url,
-      responseToken: assignment.responseToken,
     });
   }
 

@@ -1,6 +1,5 @@
 /** Pure date helpers for ERP schedule / Gantt (no external deps beyond
  * dates.ts, itself dependency-free). */
-import { todayEasternKey } from "@/lib/erp/dates";
 
 // A plain `text.includes(query)` requires the whole typed phrase to appear
 // contiguously and in order, which fails for a very common search pattern:
@@ -254,9 +253,6 @@ export type ScheduleDayAssignment = {
   /** Free-text note about this day's coverage, mainly used when there are
    * no SOV items yet to pick from. */
   comment: string | null;
-  /** The supervisor/PM's accept/decline response — PENDING | ACCEPTED |
-   * DECLINED, see src/lib/erp/shiftResponses.ts. */
-  responseStatus: string;
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future
@@ -282,9 +278,6 @@ export type ScheduleWorkerAssignment = {
    * ProjectWorkerDayAssignment.assignedScopeItem. Null when there's nothing
    * to split, or a split hasn't been chosen yet. */
   assignedScopeItem: string | null;
-  /** This crew member's accept/decline response — same idea as
-   * ScheduleDayAssignment.responseStatus. */
-  responseStatus: string;
 };
 
 export function projectWindow(p: ScheduleProject): { start: Date; end: Date } {
@@ -502,62 +495,3 @@ export function computeProjectSpanMarkersByDay(
   return map;
 }
 
-/** How urgently a single accept/decline status deserves a dispatcher's
- * attention on the calendar — separate from `needsSupervisor` above
- * (that's "nobody assigned at all"; this is "somebody's assigned but hasn't
- * said yes"). A response that's still PENDING only becomes worth flagging
- * once shiftResponseCutoffPassed says it's too close to the shift to keep
- * waiting quietly. */
-export type ShiftResponseSeverity = "declined" | "overdueUnresponded" | "pending" | "accepted";
-
-export function shiftResponseSeverity(status: string, dateKey: string, now: Date): ShiftResponseSeverity {
-  if (status === "DECLINED") return "declined";
-  if (status === "ACCEPTED") return "accepted";
-  return shiftResponseCutoffPassed(dateKey, now) ? "overdueUnresponded" : "pending";
-}
-
-/** "Worst wins" rollup across a single project/day — the supervisor's own
- * ScheduleDayAssignment (if any) plus every crew ScheduleWorkerAssignment on
- * that same day — same idea SchedulePlanner's buildingGroupSeverity already
- * applies across a whole building's units, just at the single-day level
- * here. Returns null when there's nothing to flag at all (every response
- * accepted, or nothing invited yet — e.g. a PM-only day never got an invite
- * in the first place, so there's no response to chase).
- *
- * Callers pre-filter `workerAssignmentsForDay` to this exact project+day —
- * this stays a pure function over already-scoped data, same as every other
- * computation in this file. */
-export function computeDayResponseRollup(
-  dayAssignment: ScheduleDayAssignment | undefined,
-  workerAssignmentsForDay: ScheduleWorkerAssignment[],
-  now: Date
-): ShiftResponseSeverity | null {
-  const severities: ShiftResponseSeverity[] = [];
-  // A PM-only day (no supervisorUserId) never got an invite emailed, so its
-  // responseStatus is a meaningless permanent PENDING — nothing to flag.
-  if (dayAssignment?.supervisorUserId) {
-    severities.push(shiftResponseSeverity(dayAssignment.responseStatus, dayAssignment.dateKey, now));
-  }
-  for (const w of workerAssignmentsForDay) {
-    severities.push(shiftResponseSeverity(w.responseStatus, w.dateKey, now));
-  }
-  if (severities.length === 0) return null;
-  if (severities.includes("declined")) return "declined";
-  if (severities.includes("overdueUnresponded")) return "overdueUnresponded";
-  if (severities.includes("pending")) return null; // not yet at cutoff, nothing to show yet
-  return "accepted";
-}
-
-/** "Evening before the shift" cutoff — 6pm Eastern the day before `dateKey`.
- * A day that's already arrived (or passed) is past the cutoff too, no need
- * to keep checking the exact hour at that point. */
-export function shiftResponseCutoffPassed(dateKey: string, now: Date): boolean {
-  const todayKey = todayEasternKey(now);
-  const cutoffDayKey = dayKey(addDays(new Date(`${dateKey}T00:00:00.000Z`), -1));
-  if (todayKey > cutoffDayKey) return true;
-  if (todayKey < cutoffDayKey) return false;
-  const eveningHour = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }).format(now)
-  );
-  return eveningHour >= 18;
-}

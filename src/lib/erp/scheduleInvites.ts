@@ -4,7 +4,6 @@ import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calen
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
-import { SHIFT_RESPONSE_ENABLED } from "@/lib/erp/shiftResponses";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -27,24 +26,6 @@ function organizerEmail(): string {
 
 export function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
-}
-
-/** Public-facing site base URL — the audience for a shift's accept/decline
- * link is the crew member/supervisor's own inbox, not the ERP, so this
- * deliberately reuses the same env var (and fallback) the employee-info/
- * contractor-info magic links already build their URLs from, not appUrl()
- * above (that one's for the "view project" ERP deep link in the same email,
- * a different audience). */
-function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "") || "https://sueep.com";
-}
-
-/** The two links a "you're scheduled" invite's Accept/Decline buttons point
- * to — same token, `action` just pre-selects which single confirm button
- * the landing page shows first (see /shift-response/[token]). */
-export function shiftResponseLinks(token: string): { acceptUrl: string; declineUrl: string } {
-  const base = `${siteUrl()}/shift-response/${token}`;
-  return { acceptUrl: `${base}?action=accept`, declineUrl: `${base}?action=decline` };
 }
 
 /** Stable UID for a crew member's *series* invite (a worker added onto a
@@ -139,23 +120,8 @@ function inviteHtml(params: {
   /** Extra HTML paragraph(s) inserted right after the main sentence — e.g.
    * the turnover crew-hours-budget note, supervisor-only. */
   extraHtml?: string;
-  /** Present only for a non-cancelled send where the underlying assignment
-   * row has a responseToken — renders the "I'll be there" / "Can't make it"
-   * buttons. Never shown on a cancellation email (nothing to respond to
-   * once the shift's been pulled). */
-  responseToken?: string | null;
 }): string {
   const verb = params.role === "Supervising" ? "assigned to supervise" : "scheduled to work on";
-  const responseButtons =
-    SHIFT_RESPONSE_ENABLED && !params.cancelled && params.responseToken
-      ? (() => {
-          const { acceptUrl, declineUrl } = shiftResponseLinks(params.responseToken);
-          return `<p style="margin:20px 0">
-  <a href="${acceptUrl}" style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;margin-right:10px;display:inline-block">I'll be there</a>
-  <a href="${declineUrl}" style="background:#fff;color:#374151;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;border:1px solid #d1d5db;display:inline-block">Can't make it</a>
-</p>`;
-        })()
-      : "";
   const lines = [
     params.cancelled
       ? `<p>Your assignment to <strong>${params.title}</strong> on ${params.when} has been removed.</p>`
@@ -163,7 +129,6 @@ function inviteHtml(params: {
     params.extraHtml ?? "",
     params.scopeText ? `<p><strong>Scope:</strong> ${params.scopeText}</p>` : "",
     params.location ? `<p><strong>Address:</strong> ${params.location}</p>` : "",
-    responseButtons,
     !params.cancelled ? `<p>Add the attached invite to your calendar.</p>` : "",
   ];
   return lines.filter(Boolean).join("");
@@ -188,9 +153,6 @@ export async function sendDayInvite(params: {
   url?: string;
   cancelled?: boolean;
   extraHtml?: string;
-  /** See inviteHtml's responseToken param — renders Accept/Decline buttons
-   * when set on a non-cancelled send. */
-  responseToken?: string | null;
 }): Promise<void> {
   // Never notify for a day that's already passed — a schedule change on a
   // date behind "today" (adding/moving/cancelling someone on a past chip,
@@ -312,7 +274,6 @@ export async function notifyProjectCrew(params: {
       contractorId: true,
       assignedSovItemId: true,
       assignedScopeItem: true,
-      responseToken: true,
     },
   });
   if (rows.length === 0) return;
@@ -349,7 +310,6 @@ export async function notifyProjectCrew(params: {
         scopeText: ownScope ?? dayScope,
         url: params.url,
         cancelled: params.cancelled,
-        responseToken: r.responseToken,
       });
     })
   );

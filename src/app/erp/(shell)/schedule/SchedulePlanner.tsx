@@ -33,7 +33,6 @@ import {
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { SHIFT_RESPONSE_ENABLED } from "@/lib/erp/shiftResponseFlag";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox } from "@/app/erp/components/SOVCombobox";
@@ -129,20 +128,6 @@ function CompletionStatusIcon({ complete }: { complete: boolean }) {
 
 function completionChipClass(complete: boolean): string {
   return complete ? "opacity-60" : "";
-}
-
-// Accept/decline status, shown as a small traffic-light dot next to a
-// person's name — in the event popover's crew list and the hover tooltip's
-// "Supervisor: {name}" line, never on the compact calendar chip itself (that
-// used to carry a ring + icon, which read as too much noise on a chip
-// that's already busy — see git history). Green/yellow/red maps directly to
-// ACCEPTED/PENDING/DECLINED, no separate "overdue" color — once someone
-// opens the card they can see the date themselves and judge urgency.
-function ResponseDot({ status }: { status: string }) {
-  if (!SHIFT_RESPONSE_ENABLED) return null;
-  const color = status === "ACCEPTED" ? "bg-emerald-500" : status === "DECLINED" ? "bg-red-500" : "bg-amber-400";
-  const label = status === "ACCEPTED" ? "Confirmed" : status === "DECLINED" ? "Declined" : "Hasn't responded yet";
-  return <span aria-hidden title={label} className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
 }
 
 // Muted, pastel-ish colors keyed by calendar group — used for the
@@ -393,7 +378,6 @@ function DuplicateToMoreDaysSection({
             scopeItems,
             changeOrderIds,
             comment: comment.trim() || null,
-            responseStatus: "PENDING",
           }))
         : data.id
         ? [
@@ -410,7 +394,6 @@ function DuplicateToMoreDaysSection({
               scopeItems,
               changeOrderIds,
               comment: comment.trim() || null,
-              responseStatus: "PENDING",
             },
           ]
         : [];
@@ -839,9 +822,6 @@ export function SchedulePlanner({
               seriesId: null,
               assignedSovItemId: w.assignedSovItemId,
               assignedScopeItem: w.assignedScopeItem,
-              // A new row on the new day, same as the server creates —
-              // fresh PENDING, not a carry-over of the old day's response.
-              responseStatus: "PENDING",
             });
           }
         }
@@ -867,10 +847,6 @@ export function SchedulePlanner({
           scopeItems: finalScopeItems,
           changeOrderIds: finalChangeOrderIds,
           comment: existingAssignment.comment,
-          // A same-day edit (time/scope only) keeps whatever the supervisor
-          // already answered; moving to a different day is a fresh row
-          // server-side, so it starts PENDING again like any new one does.
-          responseStatus: dateChanged ? "PENDING" : existingAssignment.responseStatus,
         },
       ]);
       if (dateChanged) {
@@ -1350,10 +1326,6 @@ export function SchedulePlanner({
             scopeItems: eventScopePicks,
             changeOrderIds: eventCoPicks,
             comment: eventComment.trim() || null,
-            // Editing an existing day's coverage never touches its response
-            // server-side (see the day-assignments POST route) — only a
-            // brand-new row starts PENDING.
-            responseStatus: existing?.responseStatus ?? "PENDING",
           },
         ]);
       }
@@ -1535,7 +1507,6 @@ export function SchedulePlanner({
             seriesId: null,
             assignedSovItemId: group === "POST_CONSTRUCTION" ? scopePick : null,
             assignedScopeItem: group === "JANITORIAL_TURNOVER_REQUESTS" ? scopePick : null,
-            responseStatus: "PENDING",
           },
         ]);
       }
@@ -1988,9 +1959,7 @@ export function SchedulePlanner({
                         <span className="shrink-0 text-gray-400" title="No email on file — didn't get a schedule invite">
                           (no email)
                         </span>
-                      ) : (
-                        <ResponseDot status={w.responseStatus} />
-                      )}
+                      ) : null}
                     </span>
                     <span className="flex shrink-0 items-center gap-1">
                       {eventSplitOptions.length > 1 ? (
@@ -3081,7 +3050,6 @@ export function SchedulePlanner({
                         {supervisor ? (
                           <div className="flex items-center gap-1 text-gray-300">
                             Supervisor: {supervisor.displayName}
-                            <ResponseDot status={assignment.responseStatus} />
                           </div>
                         ) : pm ? (
                           <div className="text-gray-300">PM: {pm.displayName}</div>

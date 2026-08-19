@@ -205,10 +205,6 @@ export async function POST(req: Request) {
         create: {
           projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
           scopeItems, comment,
-          // Generated once, at creation only — never on update, so an
-          // already-emailed accept/decline link keeps working after a
-          // later edit instead of silently breaking.
-          responseToken: crypto.randomUUID(), responseStatus: "PENDING",
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
           changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
@@ -250,7 +246,6 @@ export async function POST(req: Request) {
             scopeText: dayScopeText,
             url,
             extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
-            responseToken: a.responseToken,
           });
         })
       );
@@ -279,7 +274,6 @@ export async function POST(req: Request) {
     create: {
       projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
       scopeItems, comment,
-      responseToken: crypto.randomUUID(), responseStatus: "PENDING",
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
@@ -314,7 +308,6 @@ export async function POST(req: Request) {
       scopeText: dayScopeText,
       url,
       extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
-      responseToken: assignment.responseToken,
     });
   }
 
