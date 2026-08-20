@@ -501,30 +501,19 @@ export function ProjectManagerForm({ onBack }: Props) {
                 placeholder="Describe what needs to be done and why…"
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={label} htmlFor="co-start-date">Estimated start date *</label>
-                <input
-                  id="co-start-date"
-                  type="date"
-                  required
-                  className={input}
-                  value={coEstimatedStartDate}
-                  onChange={(e) => setCoEstimatedStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={label} htmlFor="co-end-date">Estimated end date</label>
-                <input
-                  id="co-end-date"
-                  type="date"
-                  min={coEstimatedStartDate || undefined}
-                  className={input}
-                  value={coEstimatedEndDate}
-                  onChange={(e) => setCoEstimatedEndDate(e.target.value)}
-                />
-              </div>
+            <div>
+              <label className={label} htmlFor="co-start-date">Estimated start date *</label>
+              <input
+                id="co-start-date"
+                type="date"
+                required
+                className={input}
+                value={coEstimatedStartDate}
+                onChange={(e) => setCoEstimatedStartDate(e.target.value)}
+              />
             </div>
+            {/* Estimated end date hidden from the external form for now, per request. State and
+                submit wiring left intact so it can be re-shown by restoring this block. */}
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
                 type="checkbox"
