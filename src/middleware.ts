@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyErpJwtEdge } from "@/lib/erpSessionEdge";
 import { erpSessionCookieName } from "@/lib/erpSession";
-import { isAppSubdomainHost, MARKETING_SITE_URL } from "@/lib/siteHosts";
+import { estimatorSessionCookieName } from "@/lib/estimatorSession";
+
+function isAppSubdomain(host: string): boolean {
+  if (host === "app.sueep.com" || host.startsWith("app.sueep.com:")) return true;
+  if (process.env.NODE_ENV === "development") {
+    if (host === "app.localhost:3000" || host.startsWith("app.localhost:")) return true;
+  }
+  return false;
+}
 
 function hasStaticExtension(pathname: string): boolean {
   const base = pathname.split("/").pop() || "";
@@ -12,42 +20,22 @@ function isPublicAppPath(pathname: string): boolean {
   return pathname === "/janitorial-turnover" || pathname.startsWith("/janitorial-turnover/");
 }
 
-/** Paths served on app.sueep.com (ERP). All other browser paths belong on sueep.com. */
-function isErpBrowserPath(pathname: string): boolean {
-  if (pathname === "/" || pathname === "") return true;
-  if (pathname === "/login") return true;
-  if (pathname.startsWith("/erp")) return true;
-  return false;
-}
-
-function redirectMarketingPathFromApp(request: NextRequest): NextResponse | null {
-  const host = request.headers.get("host") || "";
-  if (!isAppSubdomainHost(host)) return null;
-
-  const pathname = request.nextUrl.pathname;
-  if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
-  if (hasStaticExtension(pathname)) return null;
-  if (isErpBrowserPath(pathname)) return null;
-
-  const target = new URL(`${pathname}${request.nextUrl.search}`, MARKETING_SITE_URL);
-  return NextResponse.redirect(target);
-}
-
-/** Browser URL path → internal ERP route. Marketing paths are never mapped into /erp. */
+/** Browser URL path → internal app route (same as rewrite target). */
 function logicalErpPath(pathname: string, host: string): string {
-  if (!isAppSubdomainHost(host)) return pathname;
+  if (!isAppSubdomain(host)) return pathname;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return pathname;
   if (hasStaticExtension(pathname)) return pathname;
   if (isPublicAppPath(pathname)) return pathname;
   if (pathname === "/" || pathname === "") return "/erp";
   if (pathname === "/login") return "/erp/login";
+  if (!pathname.startsWith("/erp")) return `/erp${pathname}`;
   return pathname;
 }
 
 function rewriteUrlIfNeeded(request: NextRequest): URL | null {
   const host = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
-  if (!isAppSubdomainHost(host)) return null;
+  if (!isAppSubdomain(host)) return null;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
   if (hasStaticExtension(pathname)) return null;
   const logical = logicalErpPath(pathname, host);
@@ -58,9 +46,6 @@ function rewriteUrlIfNeeded(request: NextRequest): URL | null {
 }
 
 export async function middleware(request: NextRequest) {
-  const marketingRedirect = redirectMarketingPathFromApp(request);
-  if (marketingRedirect) return marketingRedirect;
-
   const host = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
   const logical = logicalErpPath(pathname, host);
@@ -68,6 +53,30 @@ export async function middleware(request: NextRequest) {
   const allowLoginApi = pathname === "/api/erp/auth/login" && request.method === "POST";
   // DocuSeal webhook — called by DocuSeal's servers, no ERP session cookie
   const allowDocusealWebhook = pathname === "/api/erp/webhooks/docuseal" && request.method === "POST";
+  const isEstimatorPath = logical === "/estimator" || logical.startsWith("/estimator/");
+  const isEstimatorApi = pathname === "/api/estimator" || pathname.startsWith("/api/estimator/");
+
+  if (isEstimatorPath || isEstimatorApi) {
+    // Allow static assets to pass through (e.g. /estimator/simple-app.js)
+    if (hasStaticExtension(pathname)) {
+      // do nothing; let static file serve
+    } else {
+      const isEstimatorPublicPath = logical === "/estimator/login" || logical === "/estimator/signup" || logical === "/estimator/forgot-password";
+      const isEstimatorAuthApi = pathname.startsWith("/api/estimator/auth/");
+      const needsEstimatorAuth = isEstimatorApi ? !isEstimatorAuthApi : !isEstimatorPublicPath;
+      if (needsEstimatorAuth) {
+        const token = request.cookies.get(estimatorSessionCookieName)?.value;
+        const secret = process.env.ESTIMATOR_SESSION_SECRET || "";
+        // Use the estimator edge verifier (not the ERP verifier)
+        const ok = token && secret ? await (await import("@/lib/estimatorSessionEdge")).verifyEstimatorJwtEdge(token, secret) : false;
+        if (!ok) {
+          if (isEstimatorApi) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+          return NextResponse.redirect(new URL("/estimator/login", request.url));
+        }
+      }
+    }
+  }
+
   const needsErpAuth =
     (logical.startsWith("/erp") && !logical.startsWith("/erp/login")) ||
     (pathname.startsWith("/api/erp/") && !allowLoginApi && !allowDocusealWebhook);
@@ -75,25 +84,14 @@ export async function middleware(request: NextRequest) {
   if (needsErpAuth) {
     const token = request.cookies.get(erpSessionCookieName)?.value;
     const secret = process.env.ERP_SESSION_SECRET || "";
-    const session = token && secret ? await verifyErpJwtEdge(token, secret) : null;
-    if (!session) {
+    const ok = token && secret ? await verifyErpJwtEdge(token, secret) : false;
+    if (!ok) {
       if (pathname.startsWith("/api/erp/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const loginPath = isAppSubdomainHost(host) ? "/login" : "/erp/login";
+      const loginPath = isAppSubdomain(host) ? "/login" : "/erp/login";
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
-
-    // Attach role/uid headers for server components and API routes
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-erp-role", session.role);
-    requestHeaders.set("x-erp-uid", session.uid);
-    requestHeaders.set("x-erp-email", session.email);
-
-    const rw = rewriteUrlIfNeeded(request);
-    const nextOpts = { request: { headers: requestHeaders } };
-    if (rw) return NextResponse.rewrite(rw, nextOpts);
-    return NextResponse.next(nextOpts);
   }
 
   const rw = rewriteUrlIfNeeded(request);
