@@ -171,6 +171,17 @@ model Project {
   @@index([recurringContractPeriodId])
 }
 
+model EstimatorUser {
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  email       String   @unique
+  displayName String?
+  createdAt   DateTime @default(now())
+  lastLoginAt DateTime?
+
+  @@index([email])
+}
+
 model Building {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
