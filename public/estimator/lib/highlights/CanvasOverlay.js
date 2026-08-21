@@ -1,5 +1,17 @@
 import { toast } from '../toast.js';
 
+const MEASUREMENT_SNAP_ANGLE = Math.PI / 18;
+
+function snapMeasurementEndpoint(start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const angle = Math.atan2(Math.abs(dy), Math.abs(dx));
+
+  if (angle <= MEASUREMENT_SNAP_ANGLE) return { x: end.x, y: start.y };
+  if (Math.abs(Math.PI / 2 - angle) <= MEASUREMENT_SNAP_ANGLE) return { x: start.x, y: end.y };
+  return end;
+}
+
 export class CanvasOverlay {
   constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved }) {
     this.wrapperEl = wrapperEl;
@@ -844,7 +856,10 @@ export class CanvasOverlay {
     // Drawing-specific hover logic — only when a drawing tool is active
     if (this.active) {
       if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
-        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+        const end = this.tool === 'measure'
+          ? snapMeasurementEndpoint(this._measureStart, { x, y })
+          : { x, y };
+        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: end.x, y2: end.y };
         this.redraw();
         return;
       }
@@ -1007,7 +1022,9 @@ export class CanvasOverlay {
     const y = e.clientY - rect.top;
 
     const start = this._measureStart;
-    const end = { x, y };
+    const end = this.tool === 'measure'
+      ? snapMeasurementEndpoint(start, { x, y })
+      : { x, y };
 
     // reset preview state
     this._isDraggingMeasure = false;
