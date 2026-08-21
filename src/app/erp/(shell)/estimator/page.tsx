@@ -379,16 +379,6 @@ export default function EstimatorPage() {
                         >
                           Scale not set
                         </div>
-                        <div
-                          id="measurementPageAggregateInfo"
-                          style={{
-                            fontSize: "12px",
-                            color: "#6b7280",
-                            marginTop: "4px",
-                          }}
-                        >
-                          Page total: 0&quot;
-                        </div>
                       </div>
 
                       <div className="flex gap-2 flex-wrap mb-3">
@@ -512,6 +502,16 @@ export default function EstimatorPage() {
                             No surface area
                           </div>
                         </div>
+                      </div>
+                      <div
+                        id="measurementPageAggregateInfo"
+                        style={{
+                          fontSize: "12px",
+                          color: "#6b7280",
+                          marginTop: "12px",
+                        }}
+                      >
+                        Page total: 0&quot;
                       </div>
                     </div>
                     {/* measurementsContent */}
