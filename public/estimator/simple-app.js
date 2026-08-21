@@ -2893,6 +2893,10 @@ async function initApp(){
 
     // Left column: line measurements
     if (measurementListLeft) {
+      const showLeftScroll = lineMeasurements.length > 6;
+      measurementListLeft.style.maxHeight = showLeftScroll ? '220px' : 'none';
+      measurementListLeft.style.overflowY = showLeftScroll ? 'auto' : 'visible';
+
       if (!lineMeasurements.length) {
         measurementListLeft.innerHTML = 'No measurements';
       } else {
@@ -2924,6 +2928,10 @@ async function initApp(){
 
     // Right column: surface area measurements
     if (measurementListRight) {
+      const showRightScroll = areaMeasurements.length > 6;
+      measurementListRight.style.maxHeight = showRightScroll ? '220px' : 'none';
+      measurementListRight.style.overflowY = showRightScroll ? 'auto' : 'visible';
+
       if (!areaMeasurements.length) {
         measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
       } else {
