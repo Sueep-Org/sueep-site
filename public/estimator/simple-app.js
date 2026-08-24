@@ -2893,10 +2893,6 @@ async function initApp(){
 
     // Left column: line measurements
     if (measurementListLeft) {
-      const showLeftScroll = lineMeasurements.length > 6;
-      measurementListLeft.style.maxHeight = showLeftScroll ? '220px' : 'none';
-      measurementListLeft.style.overflowY = showLeftScroll ? 'auto' : 'visible';
-
       if (!lineMeasurements.length) {
         measurementListLeft.innerHTML = 'No measurements';
       } else {
@@ -2928,10 +2924,6 @@ async function initApp(){
 
     // Right column: surface area measurements
     if (measurementListRight) {
-      const showRightScroll = areaMeasurements.length > 6;
-      measurementListRight.style.maxHeight = showRightScroll ? '220px' : 'none';
-      measurementListRight.style.overflowY = showRightScroll ? 'auto' : 'visible';
-
       if (!areaMeasurements.length) {
         measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
       } else {
@@ -4940,7 +4932,7 @@ async function initApp(){
           return btn;
         };
         addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
-        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', 28));
+        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
         addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
         addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
         addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
@@ -5143,7 +5135,7 @@ async function initApp(){
         return btn;
       };
       addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
-      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', 28));
+      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
       addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
       addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
       addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
@@ -6376,7 +6368,7 @@ async function initApp(){
 
     if (bd) {
       setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
-      setVal('foremanRateInput', bd.foreman_rate ?? 28);
+      setVal('foremanRateInput', bd.foreman_rate ?? 220);
       setVal('overheadInput', bd.overhead_pct ?? 0);
       setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
@@ -6412,7 +6404,7 @@ async function initApp(){
         } else {
           // Convert old format (persons/days + global rates) to crew
           const cr = bd.cleaner_rate || 22;
-          const fr = bd.foreman_rate || 28;
+          const fr = bd.foreman_rate || 220;
           const days = p.days || 1;
           for (let k = 0; k < (p.persons || 1); k++) _phaseCrews[pid].push({ role: 'cleaner', rate: cr, days, _uid: Math.random().toString(36).slice(2) });
           _phaseCrews[pid].push({ role: 'foreman', rate: fr, days, _uid: Math.random().toString(36).slice(2) });
@@ -6428,7 +6420,7 @@ async function initApp(){
         _autoGeneratePhases(totalArea);
       } else {
         ['rough', 'final', 'touchup'].forEach(pid => {
-          _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 28, days: 2, _uid: Math.random().toString(36).slice(2) }];
+          _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 220, days: 2, _uid: Math.random().toString(36).slice(2) }];
         });
       }
     }
