@@ -60,7 +60,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "mobile-pdf-6";
+    const ESTIMATOR_ASSET_VERSION = "mobile-pdf-7";
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -270,30 +270,35 @@ export default function EstimatorPage() {
               {/* TOOLBAR */}
               <div
                 id="toolbar"
-                className="flex items-center gap-2 mb-4 flex-wrap"
+                className="flex items-center gap-3 mb-4 flex-wrap"
               >
-                <button id="measureToggle" className="mini-btn">
-                  Measure
-                </button>
-                <button id="drawRectBtn" className="mini-btn">
-                  Draw Rect
-                </button>
-                <button id="drawIrregBtn" className="mini-btn">
-                  Draw Irreg
-                </button>
-                <button
-                  id="undoShapeBtn"
-                  className="mini-btn"
-                  type="button"
-                  disabled
-                >
-                  Undo
-                </button>
+                {/* Drawing / measurement tools */}
+                <div className="toolbar-group">
+                  <button id="measureToggle" className="mini-btn">
+                    Measure
+                  </button>
+                  <button id="drawRectBtn" className="mini-btn">
+                    Draw Rect
+                  </button>
+                  <button id="drawIrregBtn" className="mini-btn">
+                    Draw Irreg
+                  </button>
+                  <button
+                    id="undoShapeBtn"
+                    className="mini-btn"
+                    type="button"
+                    disabled
+                  >
+                    Undo
+                  </button>
+                  <button id="doubleSideToggle" className="mini-btn">
+                    Single sided
+                  </button>
+                </div>
 
-                <button id="doubleSideToggle" className="mini-btn">
-                  Single sided
-                </button>
+                <div className="toolbar-divider" aria-hidden="true" />
 
+                {/* Zoom controls */}
                 <div className="zoom-group">
                   <button id="zoomOutBtn" className="mini-btn">
                     −
@@ -307,14 +312,10 @@ export default function EstimatorPage() {
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginLeft: "12px",
-                  }}
-                >
+                <div className="toolbar-divider" aria-hidden="true" />
+
+                {/* Page navigation */}
+                <div className="toolbar-group">
                   <button
                     id="prevPageBtn"
                     className="mini-btn"

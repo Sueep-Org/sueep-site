@@ -43,6 +43,25 @@
     z-index: 5;
 }
 
+/* Visually clusters related toolbar buttons into a single pill instead of
+   a flat wall of identical-looking buttons. Purely presentational — no
+   ids live here, nothing JS looks up. */
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px;
+    background: #f9fafb;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 22px;
+    background: #e5e7eb;
+}
+
 #viewerRow {
     display: flex;
     gap: 16px;
@@ -93,6 +112,10 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    padding: 3px;
+    background: #f9fafb;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
 }
 
 #zoomLabel {
