@@ -379,6 +379,16 @@ export default function EstimatorPage() {
                         >
                           Scale not set
                         </div>
+                        <div
+                          id="measurementPageAggregateInfo"
+                          style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Page total: 0&quot;
+                        </div>
                       </div>
 
                       <div className="flex gap-2 flex-wrap mb-3">
@@ -468,9 +478,6 @@ export default function EstimatorPage() {
                               fontSize: "12px",
                               color: "#374151",
                               minHeight: "200px",
-                              maxHeight: "220px",
-                              overflowY: "auto",
-                              paddingRight: "4px",
                             }}
                           >
                             No measurements
@@ -494,24 +501,11 @@ export default function EstimatorPage() {
                               fontSize: "12px",
                               color: "#374151",
                               minHeight: "200px",
-                              maxHeight: "220px",
-                              overflowY: "auto",
-                              paddingRight: "4px",
                             }}
                           >
                             No surface area
                           </div>
                         </div>
-                      </div>
-                      <div
-                        id="measurementPageAggregateInfo"
-                        style={{
-                          fontSize: "12px",
-                          color: "#6b7280",
-                          marginTop: "12px",
-                        }}
-                      >
-                        Page total: 0&quot;
                       </div>
                     </div>
                     {/* measurementsContent */}
@@ -935,7 +929,7 @@ export default function EstimatorPage() {
                 </div>
                 {/* Hidden inputs keep default values for new crew members */}
                 <input type="hidden" id="cleanerRateInput" defaultValue="22" />
-                <input type="hidden" id="foremanRateInput" defaultValue="28" />
+                <input type="hidden" id="foremanRateInput" defaultValue="220" />
 
                 {/* Area per person per day */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
@@ -1493,7 +1487,7 @@ export default function EstimatorPage() {
                 <input
                   type="hidden"
                   id="paintingForemanRateInput"
-                  defaultValue="28"
+                  defaultValue="220"
                 />
 
                 {/* Area per person per day */}
