@@ -14,6 +14,9 @@ import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
 import { CompensationOverview } from "./compensation/compensation-overview";
+import { QualityChecks } from "./projects/quality-checks";
+import { BillingOverview } from "./billing/billing-overview";
+import { BuildingsOverview } from "./buildings/buildings-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -151,5 +154,31 @@ export const registry: ArticleEntry[] = [
     order: 1,
     component: CompensationOverview,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "projects/quality-checks",
+    title: "Quality Checks",
+    category: "Projects",
+    description: "How to create, view, and edit quality checks from a project's Quality Checks tab.",
+    order: 8,
+    component: QualityChecks,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION", "SUPERVISOR"],
+  },
+  {
+    slug: "billing/billing-overview",
+    title: "Billing Overview",
+    category: "Billing",
+    description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring, and resolve items in Needs Review.",
+    order: 1,
+    component: BillingOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "buildings/buildings-overview",
+    title: "Buildings Overview",
+    category: "Buildings",
+    description: "How to add a building, manage its units, log hours, set its pricing package, and set up a recurring contract.",
+    order: 1,
+    component: BuildingsOverview,
   },
 ];

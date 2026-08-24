@@ -19,14 +19,18 @@ export function CreatingAProject() {
         <Step n={2} title="Creating your project manually">
           Once you click new project this page will come up called the new project form.
           <Img src="/help/projects/projects_2.png" alt="New Projects form locations" />
-          From here you can create commercial painting, commercial cleaning, real estate, change
-          order, janitorial turnover request, and other projects.
+          From here you can create commercial painting, commercial cleaning, change order,
+          janitorial turnover request, and other projects.
           <br></br>
           For information on <A href="/erp/help/projects/creating-a-change-order">change</A> orders or <A href="/erp/help/turnover/creating-a-request">janitorial turnover requests</A> visit their seperate tutorials.
           <br></br>
           Commercial painting and commercial cleaning follow the same creation process and the
-          same detail-page view, so they&apos;re covered together here. Real estate projects use
-          this same form too, but land on a different detail page once created.
+          same detail-page view, so they&apos;re covered together here.
+          <Callout type="info">
+            Real estate is no longer a segment you can pick here. A couple of older real estate
+            projects still exist and can be viewed and edited, they just can&apos;t be created new
+            anymore.
+          </Callout>
           <Img src="/help/projects/projects_3.png" alt="New Projects form locations" />
           Once you chose your segment you can enter your start and end date. This is all editable later so you do not have to enter it to start.
           <br></br>
