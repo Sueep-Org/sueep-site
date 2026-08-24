@@ -55,9 +55,16 @@ export default function EstimatorPage() {
     if (loaded.current) return;
     loaded.current = true;
 
+    // Bump this whenever /public/estimator-ui.css or simple-app.js change.
+    // Both files are loaded via plain <link>/<script> tags with no build
+    // pipeline, so without a version query a browser (or even just this
+    // one that never got a hard refresh) can keep serving a stale cached
+    // copy indefinitely.
+    const ESTIMATOR_ASSET_VERSION = "mobile-pdf-7";
+
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = "/estimator-ui.css";
+    link.href = `/estimator-ui.css?v=${ESTIMATOR_ASSET_VERSION}`;
     link.id = "estimator-ui-css";
     if (!document.getElementById("estimator-ui-css")) {
       document.head.appendChild(link);
@@ -91,7 +98,10 @@ export default function EstimatorPage() {
             "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
         }
         await loadScript("https://unpkg.com/lucide@latest/dist/umd/lucide.js");
-        await loadScript("/estimator/simple-app.js", { type: "module" });
+        await loadScript(
+          `/estimator/simple-app.js?v=${ESTIMATOR_ASSET_VERSION}`,
+          { type: "module" },
+        );
       } catch (e) {
         console.error("[estimator] script load error", e);
       }
@@ -260,30 +270,35 @@ export default function EstimatorPage() {
               {/* TOOLBAR */}
               <div
                 id="toolbar"
-                className="flex items-center gap-2 mb-4 flex-wrap"
+                className="flex items-center gap-3 mb-4 flex-wrap"
               >
-                <button id="measureToggle" className="mini-btn">
-                  Measure
-                </button>
-                <button id="drawRectBtn" className="mini-btn">
-                  Draw Rect
-                </button>
-                <button id="drawIrregBtn" className="mini-btn">
-                  Draw Irreg
-                </button>
-                <button
-                  id="undoShapeBtn"
-                  className="mini-btn"
-                  type="button"
-                  disabled
-                >
-                  Undo
-                </button>
+                {/* Drawing / measurement tools */}
+                <div className="toolbar-group">
+                  <button id="measureToggle" className="mini-btn">
+                    Measure
+                  </button>
+                  <button id="drawRectBtn" className="mini-btn">
+                    Draw Rect
+                  </button>
+                  <button id="drawIrregBtn" className="mini-btn">
+                    Draw Irreg
+                  </button>
+                  <button
+                    id="undoShapeBtn"
+                    className="mini-btn"
+                    type="button"
+                    disabled
+                  >
+                    Undo
+                  </button>
+                  <button id="doubleSideToggle" className="mini-btn">
+                    Single sided
+                  </button>
+                </div>
 
-                <button id="doubleSideToggle" className="mini-btn">
-                  Single sided
-                </button>
+                <div className="toolbar-divider" aria-hidden="true" />
 
+                {/* Zoom controls */}
                 <div className="zoom-group">
                   <button id="zoomOutBtn" className="mini-btn">
                     −
@@ -297,14 +312,10 @@ export default function EstimatorPage() {
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginLeft: "12px",
-                  }}
-                >
+                <div className="toolbar-divider" aria-hidden="true" />
+
+                {/* Page navigation */}
+                <div className="toolbar-group">
                   <button
                     id="prevPageBtn"
                     className="mini-btn"
@@ -577,7 +588,7 @@ export default function EstimatorPage() {
                   </div>
                 </div>
                 {/* Address + Drive info */}
-                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Start Address
@@ -635,7 +646,7 @@ export default function EstimatorPage() {
                 {/* Labor breakdown table — rendered by JS */}
                 <div id="analysisViewBreakdown" className="mb-4"></div>
                 {/* Summary row */}
-                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Total Labor
@@ -1159,7 +1170,7 @@ export default function EstimatorPage() {
                     —
                   </div>
                 </div>
-                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3 text-sm mb-4">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Start Address
@@ -1217,7 +1228,7 @@ export default function EstimatorPage() {
                   </div>
                 </div>
                 <div id="paintingViewBreakdown" className="mb-4"></div>
-                <div className="grid grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-3 text-sm pt-3 border-t border-gray-100">
                   <div>
                     <span className="text-gray-400 text-xs uppercase tracking-wide">
                       Total Labor
