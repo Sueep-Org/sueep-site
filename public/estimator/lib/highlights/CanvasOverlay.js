@@ -1,5 +1,17 @@
 import { toast } from '../toast.js';
 
+const MEASUREMENT_SNAP_ANGLE = Math.PI / 18;
+
+function snapMeasurementEndpoint(start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const angle = Math.atan2(Math.abs(dy), Math.abs(dx));
+
+  if (angle <= MEASUREMENT_SNAP_ANGLE) return { x: end.x, y: start.y };
+  if (Math.abs(Math.PI / 2 - angle) <= MEASUREMENT_SNAP_ANGLE) return { x: start.x, y: end.y };
+  return end;
+}
+
 export class CanvasOverlay {
   constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved }) {
     this.wrapperEl = wrapperEl;
@@ -241,9 +253,9 @@ export class CanvasOverlay {
         if (scale && scale.factor) {
           const inches = (pxLen / (this._pxPerPt || 1)) * scale.factor;
           const txt = formatInches(inches);
-          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt);
+          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, txt, this.zoom);
         } else {
-          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`);
+          drawLabel(ctx, (a.x + b.x) / 2, (a.y + b.y) / 2, `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`, this.zoom);
         }
       }
     }
@@ -279,7 +291,7 @@ export class CanvasOverlay {
           const centroid = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
           const midX = centroid.x / pts.length;
           const midY = centroid.y / pts.length;
-          drawLabel(ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`);
+          drawLabel(ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`, this.zoom);
         }
         continue;
       }
@@ -294,7 +306,7 @@ export class CanvasOverlay {
       const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
       const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
       const labelText = m.label || formatInches(m.inches || 0);
-      drawLabel(ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText);
+      drawLabel(ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText, this.zoom);
     }
 
     if (this.tool === 'measure' && this.active && lines.length > 0) {
@@ -311,7 +323,7 @@ export class CanvasOverlay {
         const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
         const scale = this.store.getScale(this.currentPage);
         const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
-        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16, labelTxt);
+        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, labelTxt, this.zoom);
       }
       if (this.tool === 'rect') {
         drawPreviewRect(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
@@ -320,7 +332,7 @@ export class CanvasOverlay {
         const pxArea = pxW * pxH;
         const scale = this.store.getScale(this.currentPage);
         const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
-        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16, `${areaScaled.toFixed(2)} sq`);
+        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, `${areaScaled.toFixed(2)} sq`, this.zoom);
       }
     }
 
@@ -844,7 +856,10 @@ export class CanvasOverlay {
     // Drawing-specific hover logic — only when a drawing tool is active
     if (this.active) {
       if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
-        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+        const end = this.tool === 'measure'
+          ? snapMeasurementEndpoint(this._measureStart, { x, y })
+          : { x, y };
+        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: end.x, y2: end.y };
         this.redraw();
         return;
       }
@@ -1007,7 +1022,9 @@ export class CanvasOverlay {
     const y = e.clientY - rect.top;
 
     const start = this._measureStart;
-    const end = { x, y };
+    const end = this.tool === 'measure'
+      ? snapMeasurementEndpoint(start, { x, y })
+      : { x, y };
 
     // reset preview state
     this._isDraggingMeasure = false;
@@ -1697,18 +1714,19 @@ function drawLine(ctx, a, b, { hover = false, selected = false } = {}) {
   ctx.restore();
 }
 
-function drawLabel(ctx, x, y, txt) {
+function drawLabel(ctx, x, y, txt, scale = 1) {
   ctx.save();
-  ctx.font = '14px sans-serif';
+  const labelScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  ctx.font = `${14 * labelScale}px sans-serif`;
   ctx.fillStyle = 'rgba(20,20,20,0.95)';
-  const padding = 6;
+  const padding = 6 * labelScale;
   const m = ctx.measureText(txt);
   const w = m.width + padding * 2;
-  const h = 18 + padding;
+  const h = (18 + 6) * labelScale;
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
   ctx.fillRect(x - w / 2, y - h / 2, w, h);
   ctx.fillStyle = 'rgba(0,0,0,0.9)';
-  ctx.fillText(txt, x - m.width / 2, y + 6);
+  ctx.fillText(txt, x - m.width / 2, y + 6 * labelScale);
   ctx.restore();
 }
 
