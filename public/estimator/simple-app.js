@@ -459,6 +459,11 @@ async function initApp(){
 
   let zoomAnchor = null;
 
+  // Tracks whether the user has deliberately zoomed (buttons, wheel,
+  // pinch). Once true, the auto-fit-to-width resize handler below backs
+  // off instead of overriding a zoom level they chose on purpose.
+  let _userAdjustedZoom = false;
+
   // ======================================================
   // DRAG / PAN
   // ======================================================
@@ -3305,6 +3310,7 @@ async function initApp(){
         measurementViewPage = 1;
         zoom = 1;
         panOffset = { x: 0, y: 0 };
+        _userAdjustedZoom = false;
         await renderPage();
         _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
 
@@ -3348,6 +3354,19 @@ async function initApp(){
 
         mainContent.classList.remove('hidden');
         overlay.resizeToMatchCanvas();
+
+        // Only now is #pdfContainer actually laid out (it was display:none
+        // a moment ago, so measuring it earlier would read 0). If the page
+        // is wider than the now-visible container — typical on a phone —
+        // zoom out to fit it instead of leaving it spilling off the edge.
+        if (pdfDoc) {
+          const fitZoom = await computeFitZoom(pdfDoc, currentPage);
+          if (fitZoom < zoom) {
+            zoom = fitZoom;
+            await renderPage();
+            overlay.resizeToMatchCanvas();
+          }
+        }
       }
 
       // collapse upload zone, show file name
@@ -4519,7 +4538,7 @@ async function initApp(){
       const totTax = taxBase * (taxPct / 100);
       const totFinal = taxBase + totTax;
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Labor`, totSubtotal],
         [`Materials`, materialsForSummary],
@@ -4876,6 +4895,19 @@ async function initApp(){
     card.style.display = '';
   }
 
+  // ======================================================
+  // MOBILE: SCROLLABLE TABLE WRAPPER
+  // ======================================================
+  // These phase/crew tables have a fixed set of nowrap columns, so on a
+  // narrow phone they'd otherwise squeeze/overlap. Wrap them so they
+  // scroll horizontally instead.
+  function _scrollX(el){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    wrap.appendChild(el);
+    return wrap;
+  }
+
   function _renderPhaseTable() {
     const container = document.getElementById('phaseTableContainer');
     if (!container) return;
@@ -5025,7 +5057,7 @@ async function initApp(){
             delBtn.onclick = () => { const realIdx = _phaseCrews[pid].indexOf(member); if (realIdx !== -1) _phaseCrews[pid].splice(realIdx, 1); _renderPhaseTable(); };
             delTd.appendChild(delBtn);
           });
-          table.appendChild(tbody); body.appendChild(table);
+          table.appendChild(tbody); body.appendChild(_scrollX(table));
         }
         const footer = document.createElement('div');
         footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
@@ -5245,7 +5277,7 @@ async function initApp(){
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
-        section.appendChild(table);
+        section.appendChild(_scrollX(table));
       }
 
       const footer = document.createElement('div');
@@ -5385,7 +5417,7 @@ async function initApp(){
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Labor`, totSubtotal],
         [`Materials`, materialsForPricing],
@@ -5717,7 +5749,7 @@ async function initApp(){
             delBtn.onclick = () => { const realIdx = _paintingPhaseCrews[pid].indexOf(member); if (realIdx !== -1) _paintingPhaseCrews[pid].splice(realIdx, 1); _renderPaintingPhaseTable(); };
             delTd.appendChild(delBtn);
           });
-          table.appendChild(tbody); body.appendChild(table);
+          table.appendChild(tbody); body.appendChild(_scrollX(table));
         }
         const footer = document.createElement('div');
         footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
@@ -5902,7 +5934,7 @@ async function initApp(){
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
-        section.appendChild(table);
+        section.appendChild(_scrollX(table));
       }
 
       const footer = document.createElement('div');
@@ -6065,7 +6097,7 @@ async function initApp(){
             td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
-        breakdownDiv.appendChild(table);
+        breakdownDiv.appendChild(_scrollX(table));
 
         const totalPhaseMaterials = bd.phases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
         const savedMaterials = Number.isFinite(parseFloat(bd.materials)) ? parseFloat(bd.materials) : totalPhaseMaterials;
@@ -6078,7 +6110,7 @@ async function initApp(){
         const totTax = taxBase * ((bd.tax_pct || 0) / 100);
         const totFinal = taxBase + totTax;
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
@@ -6248,7 +6280,7 @@ async function initApp(){
             td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
-        breakdownDiv.appendChild(table);
+        breakdownDiv.appendChild(_scrollX(table));
 
         const phaseMaterials = effectivePhases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
         const savedMaterials = Number.isFinite(parseFloat(bd?.materials))
@@ -6265,7 +6297,7 @@ async function initApp(){
           ? parseFloat(bd.final_price)
           : (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
@@ -7306,8 +7338,32 @@ async function initApp(){
     return { x: 0, y: 0 };
   }
 
+  // On narrow (mobile) screens the container is often much narrower than a
+  // page rendered at its native scale, so start zoomed out just enough to
+  // show the whole page width instead of spilling off the edge. Desktop
+  // containers are already wide enough, so this never upscales past 100%.
+  async function computeFitZoom(doc, pageNum){
+    try {
+      if (!pdfContainer || !doc) return 1;
+      const page = await doc.getPage(pageNum);
+      const vp = page.getViewport({ scale: 1 });
+      const availableWidth = pdfContainer.clientWidth;
+      if (!availableWidth || !vp.width) return 1;
+      const fit = availableWidth / vp.width;
+      // No floor here (beyond a sane absolute minimum) — a full-size
+      // architectural sheet needs to shrink well past the 0.25 floor used
+      // for interactive pinch/wheel zoom (applyZoom) to actually fit a
+      // phone-width container. Never upscale past 100% though.
+      return Math.max(0.03, Math.min(1, fit));
+    } catch (err) {
+      return 1;
+    }
+  }
+
   async function applyZoom(nextZoom, anchor = null){
     if (!pdfDoc) return;
+
+    _userAdjustedZoom = true;
 
     const targetAnchor = getZoomAnchorPoint(anchor);
     const worldX = (targetAnchor.x - panOffset.x) / zoom;
@@ -7503,6 +7559,165 @@ async function initApp(){
 
     syncOverlayTransform();
   });
+
+  // ======================================================
+  // TOUCH: ONE-FINGER PAN + TWO-FINGER PINCH ZOOM
+  // ======================================================
+  // Mirrors the mouse pan/wheel-zoom behavior above so the PDF is
+  // navigable on phones and tablets, where there is no mouse.
+
+  if (pdfContainer){
+
+    let touchMode = null; // 'pan' | 'pinch'
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let pinchAnchor = { x: 0, y: 0 };
+    let pinchRAFPending = false;
+
+    const touchDistance = (t0, t1) =>
+      Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+
+    const touchMidpoint = (t0, t1) => {
+      const rect = (pdfWrapper || pdfContainer).getBoundingClientRect();
+      return {
+        x: (t0.clientX + t1.clientX) / 2 - rect.left,
+        y: (t0.clientY + t1.clientY) / 2 - rect.top
+      };
+    };
+
+    const shouldSkipTouch = (e) => {
+      if (e.target.closest('#toolbar') || e.target.closest('button')) return true;
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return true;
+      if (overlay && overlay._dragState) return true;
+      if (!pdfDoc) return true;
+      return false;
+    };
+
+    pdfContainer.addEventListener('touchstart', (e)=>{
+
+      if (shouldSkipTouch(e)) return;
+
+      if (e.touches.length === 1){
+
+        touchMode = 'pan';
+        isDragging = true;
+
+        const t = e.touches[0];
+        dragStart = {
+          x: t.clientX - panOffset.x,
+          y: t.clientY - panOffset.y
+        };
+
+      } else if (e.touches.length === 2){
+
+        e.preventDefault();
+
+        touchMode = 'pinch';
+        isDragging = false;
+
+        pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
+        pinchStartZoom = zoom;
+        pinchAnchor = touchMidpoint(e.touches[0], e.touches[1]);
+      }
+    }, { passive: false });
+
+    pdfContainer.addEventListener('touchmove', (e)=>{
+
+      if (!touchMode) return;
+      if (overlay && overlay._dragState) return;
+
+      if (touchMode === 'pan' && e.touches.length === 1){
+
+        e.preventDefault();
+
+        const t = e.touches[0];
+        panOffset.x = t.clientX - dragStart.x;
+        panOffset.y = t.clientY - dragStart.y;
+
+        syncOverlayTransform();
+
+      } else if (touchMode === 'pinch' && e.touches.length === 2){
+
+        e.preventDefault();
+
+        if (!pinchStartDist || pinchRAFPending) return;
+
+        const dist = touchDistance(e.touches[0], e.touches[1]);
+        const nextZoom = pinchStartZoom * (dist / pinchStartDist);
+
+        pinchRAFPending = true;
+        requestAnimationFrame(async ()=>{
+          pinchRAFPending = false;
+          await applyZoom(nextZoom, pinchAnchor);
+        });
+      }
+    }, { passive: false });
+
+    const endTouch = (e)=>{
+
+      if (e.touches.length === 0){
+
+        touchMode = null;
+        isDragging = false;
+        pdfContainer.style.cursor = 'grab';
+
+      } else if (e.touches.length === 1 && touchMode === 'pinch'){
+
+        // Lift one finger out of a pinch: keep panning with the other.
+        touchMode = 'pan';
+        isDragging = true;
+
+        const t = e.touches[0];
+        dragStart = {
+          x: t.clientX - panOffset.x,
+          y: t.clientY - panOffset.y
+        };
+      }
+    };
+
+    pdfContainer.addEventListener('touchend', endTouch);
+    pdfContainer.addEventListener('touchcancel', endTouch);
+  }
+
+  // ======================================================
+  // KEEP THE PAGE FIT TO ITS BOX WHEN THE BOX RESIZES
+  // ======================================================
+  // The initial fit-to-width in handleFile() only runs once, right when a
+  // file loads. If the box narrows afterward for any reason — rotating a
+  // phone, resizing the window, the "Measurements" sidebar opening and
+  // taking width away from #pdfPanel, the sidebar nav collapsing/expanding
+  // — the already-rendered page never re-fit and would hang over the right
+  // edge. Watch the container itself (not just window resize) so any of
+  // those cases are covered, and only ever shrink automatically — never
+  // fight a zoom level the user picked on purpose (see _userAdjustedZoom).
+
+  if (pdfContainer && typeof ResizeObserver !== 'undefined'){
+
+    let fitResizeTimer = null;
+
+    const fitResizeObserver = new ResizeObserver(()=>{
+
+      if (!pdfDoc || _userAdjustedZoom) return;
+      if (mainContent && mainContent.classList.contains('hidden')) return;
+
+      clearTimeout(fitResizeTimer);
+
+      fitResizeTimer = setTimeout(async ()=>{
+
+        const fitZoom = await computeFitZoom(pdfDoc, currentPage);
+
+        // Small epsilon so trivial sub-pixel jitter doesn't re-render in a loop.
+        if (fitZoom < zoom - 0.005){
+
+          zoom = fitZoom;
+          await renderPage();
+          overlay.resizeToMatchCanvas();
+        }
+      }, 150);
+    });
+
+    fitResizeObserver.observe(pdfContainer);
+  }
 
   // ======================================================
   // FILE INPUTS

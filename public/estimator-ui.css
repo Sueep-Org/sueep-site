@@ -9,6 +9,9 @@
     height: 600px;
     min-height: 600px;
     cursor: grab;
+    /* Let our own JS drive one-finger pan and two-finger pinch-zoom instead
+       of the browser's native scroll/zoom gestures fighting with them. */
+    touch-action: none;
 }
 
 #pdfContainer:active {
@@ -48,6 +51,7 @@
 
 #pdfPanel {
     min-width: 320px;
+    width: 100%;
     flex: 1 1 0;
 }
 
@@ -156,4 +160,24 @@
 
 .sidebar-close-btn:hover {
     background: #f3f4f6;
+}
+
+/* MOBILE OVERRIDES */
+/* Must stay LAST in this file: these have the same #id specificity as the
+   base rules above, so with a tie, CSS resolves by source order — being
+   later is what makes these actually win when the media query matches. */
+
+@media (max-width: 640px) {
+    #pdfContainer {
+        height: 70vh;
+        min-height: 320px;
+    }
+
+    #pdfPanel {
+        min-width: 0;
+    }
+
+    #measurementSidebar {
+        min-width: 0;
+    }
 }
