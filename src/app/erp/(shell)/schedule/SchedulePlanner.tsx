@@ -269,6 +269,7 @@ function DuplicateToMoreDaysSection({
   fromDateKey,
   supervisorUserId,
   projectManagerUserId,
+  supervisorContractorId,
   sovItemIds,
   scopeItems,
   changeOrderIds,
@@ -283,6 +284,7 @@ function DuplicateToMoreDaysSection({
   fromDateKey: string;
   supervisorUserId: string;
   projectManagerUserId: string;
+  supervisorContractorId: string;
   sovItemIds: string[];
   scopeItems: string[];
   changeOrderIds: string[];
@@ -312,6 +314,7 @@ function DuplicateToMoreDaysSection({
   const hasCoverage =
     !!effectiveSupervisorId ||
     !!projectManagerUserId ||
+    !!supervisorContractorId ||
     comment.trim().length > 0 ||
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
@@ -348,6 +351,7 @@ function DuplicateToMoreDaysSection({
           date: sortedKeys[0],
           supervisorUserId: effectiveSupervisorId || undefined,
           projectManagerUserId: projectManagerUserId || undefined,
+          supervisorContractorId: supervisorContractorId || undefined,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           sovItemIds: sovItemIds.length > 0 ? sovItemIds : undefined,
@@ -371,6 +375,7 @@ function DuplicateToMoreDaysSection({
             dateKey: sortedKeys[i]!,
             supervisorUserId: effectiveSupervisorId || null,
             projectManagerUserId: projectManagerUserId || null,
+            supervisorContractorId: supervisorContractorId || null,
             startTime: startTime || null,
             endTime: endTime || null,
             seriesId: data.seriesId ?? null,
@@ -387,6 +392,7 @@ function DuplicateToMoreDaysSection({
               dateKey: sortedKeys[0]!,
               supervisorUserId: effectiveSupervisorId || null,
               projectManagerUserId: projectManagerUserId || null,
+              supervisorContractorId: supervisorContractorId || null,
               startTime: startTime || null,
               endTime: endTime || null,
               seriesId: null,
@@ -676,6 +682,9 @@ export function SchedulePlanner({
   // PM only, with no supervisor at all (see the day-assignments API comment).
   const [eventDaySupervisorId, setEventDaySupervisorId] = useState("");
   const [eventDayPmId, setEventDayPmId] = useState("");
+  // Same idea, but an outside Contractor covered the day instead of a
+  // supervisor (e.g. a subcontractor running the site solo).
+  const [eventDaySupervisorContractorId, setEventDaySupervisorContractorId] = useState("");
   const [eventDaySaving, setEventDaySaving] = useState(false);
   const [eventDayError, setEventDayError] = useState("");
   // SOV item(s) / janitorial scope for this specific day's coverage — same
@@ -735,6 +744,7 @@ export function SchedulePlanner({
     const da = assignment ?? dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
     setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
     setEventDayPmId(da?.projectManagerUserId ?? "");
+    setEventDaySupervisorContractorId(da?.supervisorContractorId ?? "");
     setEventDayError("");
     setEventSovPicks(da?.sovItemIds ?? []);
     setEventScopePicks(da?.scopeItems ?? []);
@@ -783,6 +793,7 @@ export function SchedulePlanner({
           date: toK,
           supervisorUserId: existingAssignment.supervisorUserId || undefined,
           projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
+          supervisorContractorId: existingAssignment.supervisorContractorId || undefined,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           sovItemIds: finalSovItemIds.length > 0 ? finalSovItemIds : undefined,
@@ -840,6 +851,7 @@ export function SchedulePlanner({
           dateKey: toK,
           supervisorUserId: existingAssignment.supervisorUserId,
           projectManagerUserId: existingAssignment.projectManagerUserId,
+          supervisorContractorId: existingAssignment.supervisorContractorId,
           startTime,
           endTime,
           seriesId: dateChanged ? null : existingAssignment.seriesId,
@@ -896,6 +908,7 @@ export function SchedulePlanner({
           date: toK,
           supervisorUserId: existingAssignment.supervisorUserId || undefined,
           projectManagerUserId: existingAssignment.projectManagerUserId || undefined,
+          supervisorContractorId: existingAssignment.supervisorContractorId || undefined,
           startTime: existingAssignment.startTime || undefined,
           endTime: existingAssignment.endTime || undefined,
           comment: existingAssignment.comment || undefined,
@@ -934,6 +947,7 @@ export function SchedulePlanner({
           dateKey: toK,
           supervisorUserId: existingAssignment.supervisorUserId,
           projectManagerUserId: existingAssignment.projectManagerUserId,
+          supervisorContractorId: existingAssignment.supervisorContractorId,
           startTime: existingAssignment.startTime,
           endTime: existingAssignment.endTime,
           comment: existingAssignment.comment,
@@ -1186,6 +1200,7 @@ export function SchedulePlanner({
             fromDateKey={k}
             supervisorUserId={existingAssignment?.supervisorUserId ?? currentSupervisorId(p)}
             projectManagerUserId={existingAssignment?.projectManagerUserId ?? ""}
+            supervisorContractorId={existingAssignment?.supervisorContractorId ?? ""}
             sovItemIds={existingAssignment?.sovItemIds ?? []}
             scopeItems={existingAssignment?.scopeItems ?? []}
             changeOrderIds={existingAssignment?.changeOrderIds ?? []}
@@ -1278,7 +1293,7 @@ export function SchedulePlanner({
     // coverage on their own. Only clear the row when literally nothing is set.
     const hasCoverage =
       eventSovPicks.length > 0 || eventScopePicks.length > 0 || eventCoPicks.length > 0 || eventComment.trim().length > 0;
-    if (!eventDaySupervisorId && !eventDayPmId && !hasCoverage) {
+    if (!eventDaySupervisorId && !eventDayPmId && !eventDaySupervisorContractorId && !hasCoverage) {
       if (!existing) return;
       setEventDaySaving(true);
       try {
@@ -1302,6 +1317,7 @@ export function SchedulePlanner({
           date: k,
           supervisorUserId: eventDaySupervisorId || undefined,
           projectManagerUserId: eventDayPmId || undefined,
+          supervisorContractorId: eventDaySupervisorContractorId || undefined,
           sovItemIds: eventSovPicks.length > 0 ? eventSovPicks : undefined,
           scopeItems: eventScopePicks.length > 0 ? eventScopePicks : undefined,
           changeOrderIds: eventCoPicks.length > 0 ? eventCoPicks : undefined,
@@ -1319,6 +1335,7 @@ export function SchedulePlanner({
             dateKey: k,
             supervisorUserId: eventDaySupervisorId || null,
             projectManagerUserId: eventDayPmId || null,
+            supervisorContractorId: eventDaySupervisorContractorId || null,
             startTime: existing?.startTime ?? null,
             endTime: existing?.endTime ?? null,
             seriesId: existing?.seriesId ?? null,
@@ -1651,7 +1668,11 @@ export function SchedulePlanner({
     // (not currentSupervisorId(p), which is the project's own default —
     // this is the actual per-day override, if any).
     const eventDayAssignment = dayAssignments.find((a) => a.dateKey === k && a.projectId === p.id);
-    const hasSupervisorThisDay = !!(eventDayAssignment?.supervisorUserId ?? eventDayAssignment?.projectManagerUserId);
+    const hasSupervisorThisDay = !!(
+      eventDayAssignment?.supervisorUserId ??
+      eventDayAssignment?.projectManagerUserId ??
+      eventDayAssignment?.supervisorContractorId
+    );
     const workerOptions = eventWorkerType === "employee" ? employees : contractors;
     const filteredWorkerOptions = eventWorkerQuery.trim()
       ? workerOptions.filter((w) => matchesSearchQuery(w.displayName, eventWorkerQuery))
@@ -1718,6 +1739,7 @@ export function SchedulePlanner({
               fromDateKey={k}
               supervisorUserId={eventDaySupervisorId}
               projectManagerUserId={eventDayPmId}
+              supervisorContractorId={eventDaySupervisorContractorId}
               sovItemIds={eventSovPicks}
               scopeItems={eventScopePicks}
               changeOrderIds={eventCoPicks}
@@ -1761,6 +1783,7 @@ export function SchedulePlanner({
               fromDateKey={k}
               supervisorUserId={eventDaySupervisorId}
               projectManagerUserId={eventDayPmId}
+              supervisorContractorId={eventDaySupervisorContractorId}
               sovItemIds={eventSovPicks}
               scopeItems={eventScopePicks}
               changeOrderIds={eventCoPicks}
@@ -1816,7 +1839,7 @@ export function SchedulePlanner({
 
         <div className="mt-3 border-t border-gray-100 pt-2.5">
           <label className="block text-[10px] font-medium text-gray-500">Coverage for this day</label>
-          <div className="mt-0.5 grid grid-cols-2 gap-1.5">
+          <div className="mt-0.5 grid grid-cols-3 gap-1.5">
             <div>
               <label className="block text-[9px] text-gray-400">Supervisor</label>
               <SearchableSelect
@@ -1834,6 +1857,17 @@ export function SchedulePlanner({
                 value={eventDayPmId}
                 onChange={setEventDayPmId}
                 options={projectManagers.map((pm) => ({ value: pm.id, label: pm.displayName }))}
+                placeholder="Search…"
+                allLabel="— None —"
+                className="mt-0.5"
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] text-gray-400">Contractor (if no supervisor)</label>
+              <SearchableSelect
+                value={eventDaySupervisorContractorId}
+                onChange={setEventDaySupervisorContractorId}
+                options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
                 placeholder="Search…"
                 allLabel="— None —"
                 className="mt-0.5"
@@ -2532,7 +2566,9 @@ export function SchedulePlanner({
   // re-deriving its own condition inline.
   const legendShowsOverdue = dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey);
   const legendShowsNeedsSupervisor = hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0;
-  const legendShowsNoSupervisorPlanned = dayAssignments.some((a) => !a.supervisorUserId && !a.projectManagerUserId);
+  const legendShowsNoSupervisorPlanned = dayAssignments.some(
+    (a) => !a.supervisorUserId && !a.projectManagerUserId && !a.supervisorContractorId
+  );
   const legendShowsType = presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0;
   const legendShowsStatus =
     presentGroups.length > 0 ||
@@ -2727,6 +2763,9 @@ export function SchedulePlanner({
                   const coPm = !coSupervisor && coAssignment?.projectManagerUserId
                     ? projectManagers.find((p) => p.id === coAssignment.projectManagerUserId)
                     : null;
+                  const coContractor = !coSupervisor && !coPm && coAssignment?.supervisorContractorId
+                    ? contractors.find((c) => c.id === coAssignment.supervisorContractorId)
+                    : null;
                   // Still flagged even though it's nested under its unit now
                   // instead of floating separately — see the
                   // coNeedsSupervisorIds split above.
@@ -2777,6 +2816,8 @@ export function SchedulePlanner({
                             <div className="mt-1 text-gray-300">Supervisor: {coSupervisor.displayName}</div>
                           ) : coPm ? (
                             <div className="mt-1 text-gray-300">PM: {coPm.displayName}</div>
+                          ) : coContractor ? (
+                            <div className="mt-1 text-gray-300">Contractor: {coContractor.displayName}</div>
                           ) : needsSupervisor ? (
                             <div className="mt-1 text-amber-300">No supervisor assigned yet — click to assign one</div>
                           ) : null}
@@ -2993,11 +3034,14 @@ export function SchedulePlanner({
                   const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                   const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
                   const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
+                  const contractor = !supervisor && !pm && assignment.supervisorContractorId
+                    ? contractors.find((c) => c.id === assignment.supervisorContractorId)
+                    : null;
                   const assignmentSovDescriptions = assignment.sovItemIds
                     .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
                     .filter((d): d is string => !!d);
                   const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
-                  const noSupervisor = !isOverdue && !supervisor && !pm;
+                  const noSupervisor = !isOverdue && !supervisor && !pm && !contractor;
                   return (
                   <Fragment key={`plan-${assignment.id}`}>
                   <li className={inMonth ? "group relative" : "relative"}>
@@ -3053,6 +3097,8 @@ export function SchedulePlanner({
                           </div>
                         ) : pm ? (
                           <div className="text-gray-300">PM: {pm.displayName}</div>
+                        ) : contractor ? (
+                          <div className="text-gray-300">Contractor: {contractor.displayName}</div>
                         ) : (
                           <div className="text-amber-400">No supervisor assigned yet</div>
                         )}
@@ -3136,7 +3182,11 @@ export function SchedulePlanner({
                   const needsSupervisor = entries.some(
                     (e) =>
                       e.kind === "needsSupervisor" ||
-                      (e.kind === "planned" && !dayIsOverdue && !e.assignment.supervisorUserId && !e.assignment.projectManagerUserId),
+                      (e.kind === "planned" &&
+                        !dayIsOverdue &&
+                        !e.assignment.supervisorUserId &&
+                        !e.assignment.projectManagerUserId &&
+                        !e.assignment.supervisorContractorId),
                   );
                   if (needsSupervisor) return "needsSupervisor";
                   if (dayIsOverdue && entries.some((e) => e.kind === "planned")) return "overdue";

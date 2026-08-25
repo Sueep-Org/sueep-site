@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   // ProjectChangeOrder (unlike supervisorUserId), calendar/day-assignment
   // concept only, no calendar-invite email goes out for it.
   const projectManagerUserId = String(body.projectManagerUserId || "").trim() || null;
+  // Same idea, but an outside Contractor covered the day instead of a
+  // supervisor, see /api/erp/schedule/day-assignments's supervisorContractorId.
+  const supervisorContractorId = String(body.supervisorContractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
   if (!changeOrderId) return NextResponse.json({ error: "changeOrderId is required" }, { status: 400 });
@@ -48,7 +51,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const [changeOrder, supervisor, projectManager] = await Promise.all([
+  const [changeOrder, supervisor, projectManager, supervisorContractor] = await Promise.all([
     prisma.projectChangeOrder.findUnique({
       where: { id: changeOrderId },
       select: {
@@ -67,6 +70,7 @@ export async function POST(req: Request) {
     }),
     supervisorUserId ? prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }) : null,
     projectManagerUserId ? prisma.erpUser.findUnique({ where: { id: projectManagerUserId }, select: { id: true, email: true } }) : null,
+    supervisorContractorId ? prisma.contractor.findUnique({ where: { id: supervisorContractorId }, select: { id: true } }) : null,
   ]);
   if (!changeOrder) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
   if (CO_STATUS_EXCLUDED.includes(changeOrder.status)) {
@@ -74,14 +78,15 @@ export async function POST(req: Request) {
   }
   if (supervisorUserId && !supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
   if (projectManagerUserId && !projectManager) return NextResponse.json({ error: "PM not found" }, { status: 404 });
+  if (supervisorContractorId && !supervisorContractor) return NextResponse.json({ error: "Contractor not found" }, { status: 404 });
 
   const location =
     changeOrder.project.building?.address || changeOrder.project.workOrderRecord?.siteAddress || undefined;
 
   const writeAssignment = prisma.changeOrderDayAssignment.upsert({
     where: { changeOrderId_date: { changeOrderId, date } },
-    create: { changeOrderId, date, supervisorUserId, projectManagerUserId, startTime, endTime, comment },
-    update: { supervisorUserId, projectManagerUserId, startTime, endTime, comment },
+    create: { changeOrderId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment },
+    update: { supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment },
   });
   // Assigning a supervisor here also makes them the CO's current supervisor
   // (ProjectChangeOrder.supervisorUserId), same "last assignment wins" rule
