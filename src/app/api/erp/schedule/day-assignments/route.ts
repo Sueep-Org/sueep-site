@@ -22,6 +22,10 @@ export async function POST(req: Request) {
   // Project (unlike supervisorUserId below) and no calendar-invite email
   // goes out for it, calendar/day-assignment concept only.
   const projectManagerUserId = String(body.projectManagerUserId || "").trim() || null;
+  // Same idea, but an outside Contractor covered the day instead of a
+  // supervisor (e.g. a subcontractor running the site solo). Also not
+  // synced onto Project, also no calendar-invite email.
+  const supervisorContractorId = String(body.supervisorContractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
@@ -116,7 +120,7 @@ export async function POST(req: Request) {
   // "no supervisor assigned" warning on the chip). The only thing actually
   // required is a project and a date, both already validated above.
 
-  const [project, supervisor, projectManager] = await Promise.all([
+  const [project, supervisor, projectManager, supervisorContractor] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -131,10 +135,12 @@ export async function POST(req: Request) {
     }),
     supervisorUserId ? prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }) : null,
     projectManagerUserId ? prisma.erpUser.findUnique({ where: { id: projectManagerUserId }, select: { id: true, email: true } }) : null,
+    supervisorContractorId ? prisma.contractor.findUnique({ where: { id: supervisorContractorId }, select: { id: true } }) : null,
   ]);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (supervisorUserId && !supervisor) return NextResponse.json({ error: "Supervisor not found" }, { status: 404 });
   if (projectManagerUserId && !projectManager) return NextResponse.json({ error: "PM not found" }, { status: 404 });
+  if (supervisorContractorId && !supervisorContractor) return NextResponse.json({ error: "Contractor not found" }, { status: 404 });
 
   // Also doubles as the source for the SOV item descriptions used in the
   // invite's "Scope:" line below, so this fetches the full rows rather than
@@ -191,25 +197,25 @@ export async function POST(req: Request) {
 
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
-      data: { projectId, supervisorUserId, projectManagerUserId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
+      data: { projectId, supervisorUserId, projectManagerUserId, supervisorContractorId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
     });
 
     // Assigning a supervisor here also makes them the project's supervisor on
     // the project details page (Project.supervisorUserId), same field the
     // Gantt's inline reassignment dropdown writes to. Last assignment wins,
-    // consistent with that dropdown's behavior. Skipped for a PM-only series,
-    // there's no project-level PM field to sync to.
+    // consistent with that dropdown's behavior. Skipped for a PM-only or
+    // contractor-only series, there's no project-level field to sync to.
     const writes = seriesDates.map((d) =>
       prisma.projectDayAssignment.upsert({
         where: { projectId_date: { projectId, date: d } },
         create: {
-          projectId, date: d, supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
+          projectId, date: d, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, seriesId: series.id,
           scopeItems, comment,
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
           changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
         update: {
-          supervisorUserId, projectManagerUserId, startTime, endTime, seriesId: series.id,
+          supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, seriesId: series.id,
           scopeItems, comment,
           sovItems: { set: sovItemIds.map((id) => ({ id })) },
           changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
@@ -272,13 +278,13 @@ export async function POST(req: Request) {
   const writeAssignment = prisma.projectDayAssignment.upsert({
     where: { projectId_date: { projectId, date } },
     create: {
-      projectId, date, supervisorUserId, projectManagerUserId, startTime, endTime,
+      projectId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
       scopeItems, comment,
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
     update: {
-      supervisorUserId, projectManagerUserId, startTime, endTime,
+      supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
       scopeItems, comment,
       sovItems: { set: sovItemIds.map((id) => ({ id })) },
       changeOrders: { set: changeOrderIds.map((id) => ({ id })) },

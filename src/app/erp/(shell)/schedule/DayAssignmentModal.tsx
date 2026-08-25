@@ -164,6 +164,9 @@ export function DayAssignmentModal({
   // Rare case: only the PM is on site that day, no supervisor. At least one
   // of supervisorUserId/projectManagerUserId is required to submit.
   const [projectManagerUserId, setProjectManagerUserId] = useState("");
+  // Same idea, but an outside Contractor covered the day instead of a
+  // supervisor (e.g. a subcontractor running the site solo).
+  const [supervisorContractorId, setSupervisorContractorId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   // Post-Construction: which SOV line item(s) this day's work is for.
@@ -321,6 +324,7 @@ export function DayAssignmentModal({
           projectId,
           supervisorUserId: supervisorUserId || undefined,
           projectManagerUserId: projectManagerUserId || undefined,
+          supervisorContractorId: supervisorContractorId || undefined,
           date: dateKey,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
@@ -347,6 +351,7 @@ export function DayAssignmentModal({
             dateKey: allDateKeys[i]!,
             supervisorUserId: supervisorUserId || null,
             projectManagerUserId: projectManagerUserId || null,
+            supervisorContractorId: supervisorContractorId || null,
             startTime: startTime || null,
             endTime: endTime || null,
             seriesId: data.seriesId!,
@@ -363,6 +368,7 @@ export function DayAssignmentModal({
           dateKey,
           supervisorUserId: supervisorUserId || null,
           projectManagerUserId: projectManagerUserId || null,
+          supervisorContractorId: supervisorContractorId || null,
           startTime: startTime || null,
           endTime: endTime || null,
           seriesId: null,
@@ -376,6 +382,7 @@ export function DayAssignmentModal({
       setProjectQuery("");
       setSupervisorUserId("");
       setProjectManagerUserId("");
+      setSupervisorContractorId("");
       setStartTime("");
       setSovPicks([]);
       setScopePicks([]);
@@ -416,6 +423,7 @@ export function DayAssignmentModal({
           changeOrderId: coId,
           supervisorUserId: supervisorUserId || undefined,
           projectManagerUserId: projectManagerUserId || undefined,
+          supervisorContractorId: supervisorContractorId || undefined,
           date: dateKey,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
@@ -430,6 +438,7 @@ export function DayAssignmentModal({
         dateKey,
         supervisorUserId: supervisorUserId || null,
         projectManagerUserId: projectManagerUserId || null,
+        supervisorContractorId: supervisorContractorId || null,
         startTime: startTime || null,
         endTime: endTime || null,
         comment: comment.trim() || null,
@@ -438,6 +447,7 @@ export function DayAssignmentModal({
       setCoQuery("");
       setSupervisorUserId("");
       setProjectManagerUserId("");
+      setSupervisorContractorId("");
       setStartTime("");
       setComment("");
       setEndTime("");
@@ -677,6 +687,7 @@ export function DayAssignmentModal({
               setError("");
               setSupervisorUserId("");
               setProjectManagerUserId("");
+              setSupervisorContractorId("");
               setStartTime("");
               setEndTime("");
               setComment("");
@@ -700,6 +711,7 @@ export function DayAssignmentModal({
               setWorkerScopePick("");
               setSupervisorUserId("");
               setProjectManagerUserId("");
+              setSupervisorContractorId("");
               setStartTime("");
               setEndTime("");
               setComment("");
@@ -879,18 +891,18 @@ export function DayAssignmentModal({
             </CollapsibleField>
           ) : null}
 
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Supervisor</label>
+            <SearchableSelect
+              value={supervisorUserId}
+              onChange={setSupervisorUserId}
+              options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
+              placeholder="Search supervisors…"
+              allLabel="Select a supervisor..."
+              className="mt-1"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-600">Supervisor</label>
-              <SearchableSelect
-                value={supervisorUserId}
-                onChange={setSupervisorUserId}
-                options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
-                placeholder="Search supervisors…"
-                allLabel="Select a supervisor..."
-                className="mt-1"
-              />
-            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600">PM (if no supervisor)</label>
               <SearchableSelect
@@ -898,6 +910,17 @@ export function DayAssignmentModal({
                 onChange={setProjectManagerUserId}
                 options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
                 placeholder="Search PMs…"
+                allLabel="None"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">Contractor (if no supervisor)</label>
+              <SearchableSelect
+                value={supervisorContractorId}
+                onChange={setSupervisorContractorId}
+                options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
+                placeholder="Search contractors…"
                 allLabel="None"
                 className="mt-1"
               />

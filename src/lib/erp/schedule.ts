@@ -191,6 +191,9 @@ export type ScheduleCoDayAssignment = {
   supervisorUserId: string | null;
   /** Set when only the PM covers this day, no supervisor. */
   projectManagerUserId: string | null;
+  /** Set when an outside Contractor covered this day instead of a
+   * supervisor, see ScheduleDayAssignment.supervisorContractorId. */
+  supervisorContractorId: string | null;
   /** Optional "HH:MM" (24h) local times — all-day on the calendar invite if either is unset. */
   startTime: string | null;
   endTime: string | null;
@@ -226,8 +229,9 @@ export type ScheduleSovRequest = {
 
 /** A planned supervisor and/or PM coverage of a project on a future day
  * (before any labor has actually been logged for it). Rarely, only a PM
- * covers a day with no supervisor on site, at least one of the two is
- * always set. */
+ * covers a day with no supervisor on site, or an outside Contractor covers
+ * it instead of either — one of the three is generally set, but none is
+ * enforced (a day can be held on the calendar with none of them yet). */
 export type ScheduleDayAssignment = {
   id: string;
   projectId: string;
@@ -236,6 +240,9 @@ export type ScheduleDayAssignment = {
   supervisorUserId: string | null;
   /** Set when only the PM covers this day, no supervisor. */
   projectManagerUserId: string | null;
+  /** Set when an outside Contractor covered this day instead of a
+   * supervisor (e.g. a subcontractor running the site solo). */
+  supervisorContractorId: string | null;
   /** Optional "HH:MM" (24h) local times — all-day on the calendar invite if either is unset. */
   startTime: string | null;
   endTime: string | null;

@@ -85,6 +85,10 @@ export function CoDayPopover({
     !supervisorName && assignment?.projectManagerUserId
       ? projectManagers.find((p) => p.id === assignment.projectManagerUserId)?.displayName
       : null;
+  const contractorName =
+    !supervisorName && !pmName && assignment?.supervisorContractorId
+      ? contractors.find((c) => c.id === assignment.supervisorContractorId)?.displayName
+      : null;
 
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState("");
@@ -125,6 +129,7 @@ export function CoDayPopover({
 
   const [supervisorUserId, setSupervisorUserId] = useState(assignment?.supervisorUserId ?? "");
   const [projectManagerUserId, setProjectManagerUserId] = useState(assignment?.projectManagerUserId ?? "");
+  const [supervisorContractorId, setSupervisorContractorId] = useState(assignment?.supervisorContractorId ?? "");
   const [startTime, setStartTime] = useState(assignment?.startTime ?? "");
   const [endTime, setEndTime] = useState(assignment?.endTime ?? "");
   const [comment, setComment] = useState(assignment?.comment ?? "");
@@ -164,6 +169,7 @@ export function CoDayPopover({
           date: dateKey,
           supervisorUserId: supervisorUserId || undefined,
           projectManagerUserId: projectManagerUserId || undefined,
+          supervisorContractorId: supervisorContractorId || undefined,
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           comment: comment.trim() || undefined,
@@ -177,6 +183,7 @@ export function CoDayPopover({
         dateKey,
         supervisorUserId: supervisorUserId || null,
         projectManagerUserId: projectManagerUserId || null,
+        supervisorContractorId: supervisorContractorId || null,
         startTime: startTime || null,
         endTime: endTime || null,
         comment: comment.trim() || null,
@@ -197,6 +204,7 @@ export function CoDayPopover({
       onAssignmentDeleted(assignment.id);
       setSupervisorUserId("");
       setProjectManagerUserId("");
+      setSupervisorContractorId("");
       setStartTime("");
       setEndTime("");
       setComment("");
@@ -287,11 +295,12 @@ export function CoDayPopover({
 
         {readOnly ? (
           <>
-            {assignment && (supervisorName || pmName || assignment.startTime || assignment.comment) ? (
+            {assignment && (supervisorName || pmName || contractorName || assignment.startTime || assignment.comment) ? (
               <div className="mt-3 border-t border-gray-100 pt-2.5">
                 <label className="block text-[10px] font-medium text-gray-500">Coverage</label>
                 {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}</p> : null}
                 {pmName ? <p className="mt-1 text-[11px] text-gray-600">PM: {pmName}</p> : null}
+                {contractorName ? <p className="mt-1 text-[11px] text-gray-600">Contractor: {contractorName}</p> : null}
                 {assignment.startTime && assignment.endTime ? (
                   <p className="mt-1 text-[11px] text-gray-600">
                     {assignment.startTime} to {assignment.endTime}
@@ -320,8 +329,8 @@ export function CoDayPopover({
         ) : (
           <>
             <div className="mt-3 border-t border-gray-100 pt-2.5">
-              <label className="block text-[10px] font-medium text-gray-500">Plan supervisor / PM for this day</label>
-              <div className="mt-1 grid grid-cols-2 gap-1.5">
+              <label className="block text-[10px] font-medium text-gray-500">Plan supervisor / PM / contractor for this day</label>
+              <div className="mt-1 grid grid-cols-3 gap-1.5">
                 <SearchableSelect
                   value={supervisorUserId}
                   onChange={setSupervisorUserId}
@@ -335,6 +344,13 @@ export function CoDayPopover({
                   options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
                   placeholder="Search…"
                   allLabel="PM (if no supervisor)"
+                />
+                <SearchableSelect
+                  value={supervisorContractorId}
+                  onChange={setSupervisorContractorId}
+                  options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
+                  placeholder="Search…"
+                  allLabel="Contractor (if no supervisor)"
                 />
               </div>
               <div className="mt-1.5 flex items-center gap-1.5">
