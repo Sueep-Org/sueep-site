@@ -308,6 +308,12 @@ async function initApp(){
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
+  // The live /erp/estimator page (src/app/erp/(shell)/estimator/page.tsx)
+  // hand-codes its own toolbar JSX and has never had this button in its
+  // markup, same situation savePdfBtn was already in above. Built here
+  // with plain JS for the same reason, so it doesn't depend on editing
+  // that React page.
+  let detectWallsBtn = $('detectWallsBtn') || createDetectWallsBtn();
   let sovModal = null;
   let _sovRows = [];
   let _pdfMetadataSummary = null;
@@ -435,6 +441,25 @@ async function initApp(){
     btn.textContent = 'Save';
     if (zoomResetBtn && zoomResetBtn.parentElement === toolbar) {
       toolbar.insertBefore(btn, zoomResetBtn.nextSibling);
+    } else {
+      toolbar.appendChild(btn);
+    }
+    return btn;
+  }
+
+  function createDetectWallsBtn() {
+    const existing = $('detectWallsBtn');
+    if (existing) return existing;
+    const toolbar = $('toolbar');
+    if (!toolbar) return null;
+    const btn = document.createElement('button');
+    btn.id = 'detectWallsBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Detect Walls';
+    btn.style.display = 'none';
+    const anchor = $('savePdfBtn');
+    if (anchor && anchor.parentElement === toolbar) {
+      toolbar.insertBefore(btn, anchor.nextSibling);
     } else {
       toolbar.appendChild(btn);
     }
@@ -570,6 +595,7 @@ async function initApp(){
           if (!hydratedVectors) {
             await loadProjectFigureAnalysis(projectId);
           }
+          updateDetectWallsButtonVisibility();
           return;
         }
       }
@@ -587,12 +613,14 @@ async function initApp(){
         console.log('[restore] no vector hydration from annotations, loading figure analysis');
         await loadProjectFigureAnalysis(projectId);
       }
+      updateDetectWallsButtonVisibility();
       return;
     }
 
     await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
+    updateDetectWallsButtonVisibility();
   };
 
   if (downloadPdfBtn) {
@@ -1883,6 +1911,111 @@ async function initApp(){
     };
   }
 
+  // Runs the offline wall-finder worker (lib/walls/wallWorker.js) against
+  // the current page. For a raw image upload there's only ever one
+  // resolution to work with, so it reads straight off pdfCanvas. For a PDF
+  // page, it deliberately re-renders at a fixed, higher resolution instead
+  // of reusing whatever's on screen: thin wall lines get anti-aliased into
+  // near-nothing at a small on-screen zoom (23%, say), which starves the
+  // detector before it even runs, independent of anything the algorithm
+  // itself is doing right or wrong.
+  const WALL_DETECT_TARGET_LONG_SIDE = 2200;
+
+  async function detectWallsFromImage() {
+    let worker;
+    const finish = () => {
+      try { worker?.terminate(); } catch (_) {}
+    };
+
+    try {
+      let width, height, imageData;
+
+      if (pdfDoc) {
+        const page = await pdfDoc.getPage(currentPage);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const longSide = Math.max(baseViewport.width, baseViewport.height);
+        const detectScale = Math.max(1, WALL_DETECT_TARGET_LONG_SIDE / longSide);
+        const vp = page.getViewport({ scale: detectScale });
+
+        const off = document.createElement('canvas');
+        off.width = Math.ceil(vp.width);
+        off.height = Math.ceil(vp.height);
+        await page.render({ canvasContext: off.getContext('2d'), viewport: vp }).promise;
+
+        width = off.width;
+        height = off.height;
+        imageData = off.getContext('2d').getImageData(0, 0, width, height);
+      } else {
+        width = pdfCanvas.width;
+        height = pdfCanvas.height;
+        if (!width || !height) return;
+        imageData = pdfCanvas.getContext('2d').getImageData(0, 0, width, height);
+      }
+
+      await new Promise((resolve) => {
+        try {
+          // ?v= below: the worker is fetched as its own file, separately
+          // from the ?v= cache-bust on simple-app.js itself. Bump this
+          // alongside changes to wallWorker.js or the browser can keep
+          // running an old cached copy indefinitely, same trap simple-app.js
+          // already needed ESTIMATOR_ASSET_VERSION for.
+          worker = new Worker(new URL('./lib/walls/wallWorker.js?v=7', import.meta.url), { type: 'module' });
+
+          worker.onmessage = (e) => {
+            const msg = e.data || {};
+            if (msg.type !== 'walls') return;
+
+            console.log('[wall-detect] result', {
+              segments: (msg.segments || []).length,
+              debug: msg.debug,
+              error: msg.error,
+            });
+
+            try {
+              const segments = Array.isArray(msg.segments) ? msg.segments : [];
+              if (segments.length) {
+                const normalized = segments.map((seg) => coerceLineCoordinates(seg, width, height));
+                highlightsStore.setLines(currentPage || 1, normalized);
+                overlay.redraw();
+                updateVectorLineInfo();
+                updateMeasurementList();
+                toast(
+                  `Guessed ${normalized.length} wall${normalized.length === 1 ? '' : 's'} from the image — check them against the plan`,
+                  'info'
+                );
+              } else {
+                toast('No straight walls found automatically on this image — trace manually below', 'info');
+              }
+            } catch (err) {
+              console.warn('wall detection hydration failed', err);
+            } finally {
+              finish();
+              resolve();
+            }
+          };
+
+          worker.onerror = (err) => {
+            console.warn('wall detection worker failed', err);
+            finish();
+            resolve();
+          };
+
+          worker.postMessage(
+            { type: 'build', width, height, data: imageData.data.buffer },
+            [imageData.data.buffer]
+          );
+        } catch (err) {
+          console.warn('wall detection setup failed', err);
+          finish();
+          resolve();
+        }
+      });
+    } catch (err) {
+      console.warn('wall detection setup failed', err);
+      finish();
+    }
+  }
+
   async function hydrateDetectedWallsFromResult(result) {
     if (!result) return;
     if (!pdfDoc) {
@@ -1925,6 +2058,8 @@ async function initApp(){
     if (_pdfMetadataSummary) {
       renderExtractedMeasurements(_pdfMetadataSummary);
     }
+
+    updateDetectWallsButtonVisibility();
   }
 
   async function fetchProjectFigures(projectId, options = {}) {
@@ -3183,6 +3318,25 @@ async function initApp(){
     restorePageAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
     updateVectorLineInfo();
     updateMeasurementList();
+    updateDetectWallsButtonVisibility();
+  }
+
+  // A "PDF" on disk isn't necessarily a vector drawing — a lot of real
+  // uploads are a scan or photo that got wrapped in a PDF by a scanning
+  // app, with no wall lines baked into the file at all. So the button
+  // isn't just an "image files only" toggle: it shows for a raw image,
+  // and for a PDF page that came back from the vector backend with zero
+  // wall lines on it. Both cases mean "nothing automatic has found walls
+  // here yet, offer to try the pixel-based guesser."
+  function updateDetectWallsButtonVisibility() {
+    if (!detectWallsBtn) return;
+    if (!pdfDoc) {
+      // image upload, no vector data ever applies
+      detectWallsBtn.style.display = 'inline-block';
+      return;
+    }
+    const hasVectorWalls = (highlightsStore.getLines(currentPage) || []).length > 0;
+    detectWallsBtn.style.display = hasVectorWalls ? 'none' : 'inline-block';
   }
 
   function getMeasurementPixelLength(measurement) {
@@ -3310,6 +3464,11 @@ async function initApp(){
         document.getElementById('prevPageBtn').style.display = 'none';
         document.getElementById('nextPageBtn').style.display = 'none';
         document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+
+        // Scanned/photographed plans have no vector data to read, so wall
+        // guessing runs from the pixels instead, on demand via the button
+        // below, not automatically on every upload.
+        updateDetectWallsButtonVisibility();
       } else {
         const ab = await file.arrayBuffer();
         const lib = window.pdfjsLib;
@@ -7423,6 +7582,24 @@ async function initApp(){
         currentPage += 1;
         measurementViewPage = currentPage;
         await renderPage();
+      }
+    };
+  }
+
+  if (detectWallsBtn) {
+    detectWallsBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (detectWallsBtn.disabled) return;
+      detectWallsBtn.disabled = true;
+      const originalLabel = detectWallsBtn.textContent;
+      detectWallsBtn.textContent = 'Detecting…';
+      showGlobalLoading('Finding walls…');
+      try {
+        await detectWallsFromImage();
+      } finally {
+        hideGlobalLoading();
+        detectWallsBtn.disabled = false;
+        detectWallsBtn.textContent = originalLabel;
       }
     };
   }
