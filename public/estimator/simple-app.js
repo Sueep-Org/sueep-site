@@ -309,6 +309,16 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
+  // Steps createDimBackgroundToggleBtn/dimBackgroundToggle's click handler
+  // cycle through -- declared up here (ahead of createDimBackgroundToggleBtn
+  // itself further down) because that button gets created eagerly below,
+  // and a const declared after its own first use would throw a
+  // temporal-dead-zone ReferenceError at load.
+  const DIM_BACKGROUND_STEPS = [
+    { key: 'full', label: 'BG: Full', opacity: '1' },
+    { key: 'dim', label: 'BG: Dim', opacity: '0.25' },
+    { key: 'off', label: 'BG: Off', opacity: '0.03' },
+  ];
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
   // The live /erp/estimator page (src/app/erp/(shell)/estimator/page.tsx)
   // hand-codes its own toolbar JSX and has never had this button in its
@@ -327,6 +337,7 @@ async function initApp(){
   let exportAnnotationsBtn = $('exportAnnotationsBtn') || createExportAnnotationsBtn();
   let exportLinesOnlyBtn = $('exportLinesOnlyBtn') || createExportLinesOnlyBtn();
   let showLabelsToggle = $('showLabelsToggle') || createShowLabelsToggleBtn();
+  let dimBackgroundToggle = $('dimBackgroundToggle') || createDimBackgroundToggleBtn();
   let sovModal = null;
   let _sovRows = [];
   let _pdfMetadataSummary = null;
@@ -592,6 +603,27 @@ async function initApp(){
     btn.className = 'mini-btn active';
     btn.textContent = 'Labels On';
     btn.title = 'Show/hide the length and area labels drawn on lines and shapes';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Cycles the background PDF page's opacity (Full -> Dim -> Off -> Full)
+  // so already-drawn lines/measurements are easier to see against a busy
+  // floor plan without leaving the page or losing your annotations -- the
+  // overlay canvas sits above pdfCanvas and is untouched by this, this is
+  // purely a display toggle on the source image, same spirit as
+  // createShowLabelsToggleBtn above.
+  function createDimBackgroundToggleBtn() {
+    const existing = $('dimBackgroundToggle');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('viewToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'dimBackgroundToggle';
+    btn.className = 'mini-btn';
+    btn.textContent = DIM_BACKGROUND_STEPS[0].label;
+    btn.dataset.dimStep = '0';
+    btn.title = 'Dim or hide the floor plan behind your drawn lines, to see your work more clearly';
     group.appendChild(btn);
     return btn;
   }
@@ -8104,7 +8136,14 @@ async function initApp(){
 
     if (pdfContainer){
 
-      pdfContainer.style.cursor = 'grab';
+      // Don't blindly reset to 'grab' here -- this listener fires on every
+      // mouseup, including the one that ends drawing a measurement/rect
+      // line, not just the one that ends a pan. Stomping the cursor back
+      // to 'grab' unconditionally undid the crosshair the draw/measure
+      // toggle set, right after finishing the very first line (see
+      // isOn ? 'crosshair' : 'grab' below -- same condition, kept in sync).
+      const drawModeActive = overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect');
+      pdfContainer.style.cursor = drawModeActive ? 'crosshair' : 'grab';
     }
   });
 
@@ -8662,6 +8701,19 @@ async function initApp(){
       showLabelsToggle.classList.toggle('active', isOn);
       showLabelsToggle.textContent = isOn ? 'Labels On' : 'Labels Off';
       overlay.setShowLabels(isOn);
+    };
+  }
+
+  if (dimBackgroundToggle && pdfCanvas) {
+    dimBackgroundToggle.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nextIndex = (Number(dimBackgroundToggle.dataset.dimStep || '0') + 1) % DIM_BACKGROUND_STEPS.length;
+      const step = DIM_BACKGROUND_STEPS[nextIndex];
+      dimBackgroundToggle.dataset.dimStep = String(nextIndex);
+      dimBackgroundToggle.textContent = step.label;
+      dimBackgroundToggle.classList.toggle('active', step.key !== 'full');
+      pdfCanvas.style.opacity = step.opacity;
     };
   }
 

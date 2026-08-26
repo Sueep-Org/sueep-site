@@ -726,7 +726,14 @@ export class CanvasOverlay {
     return null;
   }
 
-  _findCopyTargetAtPoint(x, y) {
+  // `strict`: pass true while a draw tool (measure/rect) is armed and the
+  // caller is about to start a brand-new line/shape. Without it, starting a
+  // new line within the normal (generous) hit radius of an existing one
+  // always grabbed the existing line instead of drawing -- the "can't draw
+  // close to an existing line" bug. Dragging still works fine at the normal
+  // radius any time a draw tool isn't actively armed (the common case for
+  // repositioning something you already drew).
+  _findCopyTargetAtPoint(x, y, strict = false) {
     const polygon = this._findPolygonAtPoint(x, y);
     if (polygon) {
       const linkedMeasurement = this._findLinkedMeasurement(polygon);
@@ -764,7 +771,9 @@ export class CanvasOverlay {
       }
     }
 
-    const hitThreshold = Math.max(14, 14 * (this.zoom || 1));
+    const hitThreshold = strict
+      ? Math.max(5, 5 * (this.zoom || 1))
+      : Math.max(14, 14 * (this.zoom || 1));
     return nearestLine && nearestLineDist <= hitThreshold ? { type: 'line', value: nearestLine } : null;
   }
 
@@ -966,9 +975,14 @@ export class CanvasOverlay {
     // In irregular mode while actively adding points, never intercept for drag
     const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
 
-    // Always allow drag/select on existing shapes, regardless of drawing mode
+    // Always allow drag/select on existing shapes, regardless of drawing
+    // mode -- but use the tighter (strict) hit radius while a draw tool is
+    // armed, so starting a new line/rect close to an existing one draws
+    // instead of grabbing it. Normal (generous) radius otherwise, so
+    // repositioning something you already drew stays easy.
+    const drawToolArmed = this.active && (this.tool === 'measure' || this.tool === 'rect');
     if (!isAddingIrregPoints) {
-      const target = this._findCopyTargetAtPoint(x, y);
+      const target = this._findCopyTargetAtPoint(x, y, drawToolArmed);
       if (target) {
         e.preventDefault();
         e.stopPropagation();
