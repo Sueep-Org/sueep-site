@@ -62,6 +62,42 @@
     background: #e5e7eb;
 }
 
+/* #viewToolsGroup and #debugToolsGroup (page.tsx) start out as empty
+   containers — the buttons inside them are injected by simple-app.js at
+   runtime (see createShowLabelsToggleBtn / createDetectWallsBtn / etc.),
+   same reasoning as the comment on those functions: this page's toolbar
+   JSX predates those features. Hide the pill box entirely until
+   something's actually been put in it, instead of showing an empty
+   sliver for the moment before JS runs. */
+.toolbar-group:empty {
+    display: none;
+}
+
+/* Detect Walls / Export / Lines Only are debugging & one-off actions, not
+   everyday drawing tools — a visibly quieter treatment than the main
+   .toolbar-group keeps them from reading as equally important. Save is
+   deliberately NOT in here — see #saveToolsGroup in page.tsx and
+   #savePdfBtn below. */
+.toolbar-group-debug {
+    background: #f3f4f6;
+    border-color: #e5e7eb;
+    opacity: 0.9;
+}
+
+.toolbar-group-debug .mini-btn {
+    font-size: 11px;
+}
+
+/* Reports which method (vector vs. pixel-guess) produced the walls shown
+   for the current page — see detectWallsMethodCaption / runWallDetection
+   in simple-app.js. Purely informational, not interactive. */
+.detect-walls-method-caption {
+    font-size: 11px;
+    color: #6b7280;
+    padding: 4px 2px;
+    white-space: nowrap;
+}
+
 #viewerRow {
     display: flex;
     gap: 16px;
@@ -93,6 +129,22 @@
     background: #f3f4f6;
 }
 
+/* Save is a real action (not a debug/QA tool, see #saveToolsGroup in
+   page.tsx), so it gets its own solid color instead of blending in as
+   just another mini-btn — the one button in the toolbar meant to stand
+   out at a glance. */
+#savePdfBtn {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: white;
+    font-weight: 600;
+}
+
+#savePdfBtn:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
 #measureToggle.active {
     background: #bfdbfe;
 }
@@ -104,6 +156,10 @@
 
 #doubleSideToggle.active {
     background: #bbf7d0;
+}
+
+#showLabelsToggle.active {
+    background: #fde68a;
 }
 
 /* ZOOM */

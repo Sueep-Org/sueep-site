@@ -60,7 +60,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "mobile-pdf-7";
+    const ESTIMATOR_ASSET_VERSION = "wall-detect-7";
 
     const link = document.createElement("link");
     link.rel = "stylesheet";

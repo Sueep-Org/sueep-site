@@ -4,6 +4,8 @@ console.log('[drawer] wired v2');
 import { API_BASE } from './config.js';
 import { listFiles, downloadSas, humanSize, humanDate } from './lib/library.js';
 import { toast } from './lib/toast.js';
+import { textPrompt } from './lib/textPrompt.js';
+import { confirmDialog } from './lib/confirmDialog.js';
 
 import {
   saveFromProcessing,
@@ -165,7 +167,7 @@ async function refreshDrawer(){
       delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
       delBtn.onclick = async (e) => {
         e.stopPropagation();
-        if (!confirm(`Delete project "${project.name}" and all its files?`)) return;
+        if (!(await confirmDialog({ title: 'Delete project', message: `Delete project "${project.name}" and all its files?`, confirmLabel: 'Delete', danger: true }))) return;
         try {
           const r = await fetch(`${API_BASE}/api/projects/${project.id}`, { method: 'DELETE' });
           if (!r.ok) throw new Error('Delete failed');
@@ -308,9 +310,31 @@ async function initApp(){
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
+  // The live /erp/estimator page (src/app/erp/(shell)/estimator/page.tsx)
+  // hand-codes its own toolbar JSX and has never had this button in its
+  // markup, same situation savePdfBtn was already in above. Built here
+  // with plain JS for the same reason, so it doesn't depend on editing
+  // that React page.
+  let detectWallsBtn = $('detectWallsBtn') || createDetectWallsBtn();
+  // Secondary, explicit override: run the pixel guesser even when vector
+  // wall data exists for the page, for comparing the two against each
+  // other. detectWallsBtn itself always prefers vector when it's there.
+  let detectWallsPixelBtn = $('detectWallsPixelBtn') || createDetectWallsPixelBtn();
+  // Small "Vector: N walls" / "Pixel guess: N walls" caption next to the
+  // buttons so it's visible at a glance which method actually produced
+  // what's on screen for the current page.
+  let detectWallsMethodCaption = $('detectWallsMethodCaption') || createDetectWallsMethodCaption();
+  let exportAnnotationsBtn = $('exportAnnotationsBtn') || createExportAnnotationsBtn();
+  let exportLinesOnlyBtn = $('exportLinesOnlyBtn') || createExportLinesOnlyBtn();
+  let showLabelsToggle = $('showLabelsToggle') || createShowLabelsToggleBtn();
   let sovModal = null;
   let _sovRows = [];
   let _pdfMetadataSummary = null;
+  // Wall-detect worker's own debug stats (thresholds, filter counts, etc.),
+  // keyed by page number — kept only for whichever pages "Detect Walls" has
+  // actually been run on this session, purely for the annotations-export
+  // debugging aid (see exportPageAnnotations). Not persisted.
+  let _wallDetectDebugByPage = {};
   let _pageAggregateOverrides = {};
   let _projectAggregateOverrides = {};
   let _sovUndoStack = [];
@@ -424,20 +448,151 @@ async function initApp(){
     savePdfBtn
   });
 
+  // Finds the dedicated container page.tsx sets aside for a group of
+  // JS-injected toolbar buttons (see #saveToolsGroup/#debugToolsGroup/
+  // #viewToolsGroup there) so they render in a predictable spot — grouped
+  // into a pill like the native groups for view/debug, standalone for
+  // save — instead of each landing as a bare button loose in the toolbar.
+  // Falls back to #toolbar itself when that container doesn't exist —
+  // true for the older standalone public/estimator/index.html, which
+  // predates this grouping and doesn't have it, so buttons still show up
+  // there, just ungrouped.
+  function getInjectedToolGroup(groupId) {
+    const toolbar = $('toolbar');
+    if (!toolbar) return null;
+    return document.getElementById(groupId) || toolbar;
+  }
+
+  // Not a debug tool like the ones below — a real save action, so it gets
+  // its own spot (#saveToolsGroup in page.tsx) styled to stand out (see
+  // #savePdfBtn in estimator-ui.css) rather than blending into the muted
+  // debug cluster.
   function createSavePdfBtn() {
     const existing = $('savePdfBtn');
     if (existing) return existing;
-    const toolbar = $('toolbar');
-    if (!toolbar) return null;
+    const group = getInjectedToolGroup('saveToolsGroup');
+    if (!group) return null;
     const btn = document.createElement('button');
     btn.id = 'savePdfBtn';
     btn.className = 'mini-btn';
     btn.textContent = 'Save';
-    if (zoomResetBtn && zoomResetBtn.parentElement === toolbar) {
-      toolbar.insertBefore(btn, zoomResetBtn.nextSibling);
-    } else {
-      toolbar.appendChild(btn);
-    }
+    btn.title = 'Save the current page as a PDF with annotations';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Always visible now, on every page — detection is manual/button-gated
+  // only, never auto-run on load (see [[wall-detection-manual-trigger-pref]]
+  // in project memory). Uses vector wall data when the backend found any
+  // for this page, otherwise falls back to the pixel guesser — see
+  // runWallDetection().
+  function createDetectWallsBtn() {
+    const existing = $('detectWallsBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('debugToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'detectWallsBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Detect Walls';
+    btn.title = 'Find walls for this page — uses vector wall data when available, otherwise guesses from the page image';
+    btn.style.display = 'inline-block';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Secondary override next to detectWallsBtn: skips the vector lookup
+  // entirely and always runs the pixel guesser, even when vector data
+  // exists for the page — for comparing the two by eye.
+  function createDetectWallsPixelBtn() {
+    const existing = $('detectWallsPixelBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('debugToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'detectWallsPixelBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Try pixel instead';
+    btn.title = 'Force the pixel-based guesser for this page, even if vector wall data exists — for comparison';
+    btn.style.display = 'inline-block';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Read-only caption reporting which method actually produced the walls
+  // currently shown for this page ("Vector: 12 walls" / "Pixel guess: 8
+  // walls"), and how many. Not a button — just visibility into a decision
+  // that used to be invisible (auto vector hydration with no indication).
+  function createDetectWallsMethodCaption() {
+    const existing = $('detectWallsMethodCaption');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('debugToolsGroup');
+    if (!group) return null;
+    const span = document.createElement('span');
+    span.id = 'detectWallsMethodCaption';
+    span.className = 'detect-walls-method-caption';
+    group.appendChild(span);
+    return span;
+  }
+
+  // Downloads a PNG snapshot of the current page with detected/vector
+  // lines, measurements, and polygons drawn on top — plus a burned-in
+  // debug caption when "Detect Walls" has run for that page this session
+  // (see drawWallDetectDebugCaption). Not for end users: this is a
+  // debugging aid for eyeballing wall-detection accuracy page by page
+  // across iterations, same reasoning as detectWallsBtn above for why it's
+  // built here rather than in the React page's markup.
+  function createExportAnnotationsBtn() {
+    const existing = $('exportAnnotationsBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('debugToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'exportAnnotationsBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Export';
+    btn.title = 'Download this page as a PNG with detected walls/measurements drawn on it, for debugging';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Same debugging export as exportAnnotationsBtn above, but with the
+  // floor plan itself left out (includeSource: false) — just the detected
+  // lines on a plain white background, for comparing where the lines
+  // landed between runs without the plan competing for attention or
+  // subtly shifting the crop/zoom between two screenshots.
+  function createExportLinesOnlyBtn() {
+    const existing = $('exportLinesOnlyBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('debugToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'exportLinesOnlyBtn';
+    btn.className = 'mini-btn';
+    btn.textContent = 'Lines Only';
+    btn.title = 'Download this page\'s detected walls/measurements as a PNG with no floor plan behind them, for comparing runs';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Toggles the length/area labels ("17 ft", "42 sq") the overlay draws
+  // next to every line/shape — on by default, but they sit right on top
+  // of the linework, which gets in the way while actively tracing more
+  // lines nearby (worst with the live label that follows your cursor
+  // while dragging a new measurement). Off just stops drawing them; the
+  // underlying measurements/lines and their values are untouched, this is
+  // purely a display toggle (see CanvasOverlay.setShowLabels).
+  function createShowLabelsToggleBtn() {
+    const existing = $('showLabelsToggle');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('viewToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'showLabelsToggle';
+    btn.className = 'mini-btn active';
+    btn.textContent = 'Labels On';
+    btn.title = 'Show/hide the length and area labels drawn on lines and shapes';
+    group.appendChild(btn);
     return btn;
   }
 
@@ -546,7 +701,10 @@ async function initApp(){
     console.log('[restore] annotations projectId=', projectId);
     highlightsStore.clearAll();
     let restoredAnnotations = false;
-    let hydratedVectors = false;
+    // Whether this response gave us an analysis payload to cache for the
+    // "Detect Walls" button to use on click — NOT whether anything got
+    // drawn (that's restoredAnnotations, for actual saved user shapes).
+    let cachedVectorAnalysis = false;
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
       console.log('[restore] annotations response status=', res.status);
@@ -561,15 +719,16 @@ async function initApp(){
           restoreWallMeasurementSectionValues(data.wall_measurements);
         }
         if (data.vector_annotations || data.analysis) {
-          await hydrateDetectedWallsFromResult(data);
-          hydratedVectors = true;
+          cacheAnalysisResult(data);
+          cachedVectorAnalysis = true;
         }
-        if (restoredAnnotations || hydratedVectors) {
+        if (restoredAnnotations || cachedVectorAnalysis) {
           overlay.redraw();
           updateMeasurementList();
-          if (!hydratedVectors) {
+          if (!cachedVectorAnalysis) {
             await loadProjectFigureAnalysis(projectId);
           }
+          updateDetectWallsButtonVisibility();
           return;
         }
       }
@@ -583,16 +742,18 @@ async function initApp(){
       highlightsStore.deserialize(json);
       overlay.redraw();
       updateMeasurementList();
-      if (!hydratedVectors) {
-        console.log('[restore] no vector hydration from annotations, loading figure analysis');
+      if (!cachedVectorAnalysis) {
+        console.log('[restore] no cached analysis from annotations, loading figure analysis');
         await loadProjectFigureAnalysis(projectId);
       }
+      updateDetectWallsButtonVisibility();
       return;
     }
 
     await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
+    updateDetectWallsButtonVisibility();
   };
 
   if (downloadPdfBtn) {
@@ -1665,10 +1826,10 @@ async function initApp(){
     container.querySelectorAll('[data-wall-measurement-button]').forEach((button) => {
       if (button.dataset.boundLabel === 'true') return;
       button.dataset.boundLabel = 'true';
-      button.addEventListener('dblclick', () => {
+      button.addEventListener('dblclick', async () => {
         const section = button.dataset.wallMeasurementLabel;
         if (!section) return;
-        const nextLabel = window.prompt('Edit section name', wallMeasurementSectionLabels[section] || '');
+        const nextLabel = await textPrompt({ title: 'Edit section name', defaultValue: wallMeasurementSectionLabels[section] || '' });
         if (nextLabel == null) return;
         const trimmedLabel = nextLabel.trim();
         wallMeasurementSectionLabels[section] = trimmedLabel || 'Untitled';
@@ -1863,10 +2024,15 @@ async function initApp(){
   }
 
   function coerceLineCoordinates(rawLine = {}, pageWidth = 0, pageHeight = 0) {
-    const x1 = Number(rawLine.x1 ?? rawLine.x ?? rawLine.startX ?? rawLine.start?.x ?? rawLine.pt1?.x ?? rawLine.points?.[0]?.x ?? 0);
-    const y1 = Number(rawLine.y1 ?? rawLine.y ?? rawLine.startY ?? rawLine.start?.y ?? rawLine.pt1?.y ?? rawLine.points?.[0]?.y ?? 0);
-    const x2 = Number(rawLine.x2 ?? rawLine.x ?? rawLine.endX ?? rawLine.end?.x ?? rawLine.pt2?.x ?? rawLine.points?.[1]?.x ?? rawLine.points?.[2]?.x ?? 0);
-    const y2 = Number(rawLine.y2 ?? rawLine.y ?? rawLine.endY ?? rawLine.end?.y ?? rawLine.pt2?.y ?? rawLine.points?.[1]?.y ?? rawLine.points?.[2]?.y ?? 0);
+    // start/end can arrive as {x,y} objects (most producers) or as [x,y]
+    // coordinate pairs -- that's what the vector backend's analyze_vector_text
+    // emits ({"start": [x,y], "end": [x,y]}). Without the array fallbacks
+    // here, rawLine.start?.x on an array is undefined and every line
+    // silently collapses to (0,0)-(0,0).
+    const x1 = Number(rawLine.x1 ?? rawLine.x ?? rawLine.startX ?? rawLine.start?.x ?? rawLine.start?.[0] ?? rawLine.pt1?.x ?? rawLine.points?.[0]?.x ?? 0);
+    const y1 = Number(rawLine.y1 ?? rawLine.y ?? rawLine.startY ?? rawLine.start?.y ?? rawLine.start?.[1] ?? rawLine.pt1?.y ?? rawLine.points?.[0]?.y ?? 0);
+    const x2 = Number(rawLine.x2 ?? rawLine.x ?? rawLine.endX ?? rawLine.end?.x ?? rawLine.end?.[0] ?? rawLine.pt2?.x ?? rawLine.points?.[1]?.x ?? rawLine.points?.[2]?.x ?? 0);
+    const y2 = Number(rawLine.y2 ?? rawLine.y ?? rawLine.endY ?? rawLine.end?.y ?? rawLine.end?.[1] ?? rawLine.pt2?.y ?? rawLine.points?.[1]?.y ?? rawLine.points?.[2]?.y ?? 0);
 
     const normalize = (value, dimension) => {
       if (!Number.isFinite(value)) return 0;
@@ -1883,48 +2049,359 @@ async function initApp(){
     };
   }
 
-  async function hydrateDetectedWallsFromResult(result) {
-    if (!result) return;
-    if (!pdfDoc) {
-      // PDF not loaded yet — save for later hydration after file open
-      try { window.__pendingVectorAnalysis = result; } catch (_) {}
-      return;
+  // Runs the offline wall-finder worker (lib/walls/wallWorker.js) against
+  // the current page. For a raw image upload there's only ever one
+  // resolution to work with, so it reads straight off pdfCanvas. For a PDF
+  // page, it deliberately re-renders at a fixed, higher resolution instead
+  // of reusing whatever's on screen: thin wall lines get anti-aliased into
+  // near-nothing at a small on-screen zoom (23%, say), which starves the
+  // detector before it even runs, independent of anything the algorithm
+  // itself is doing right or wrong.
+  const WALL_DETECT_TARGET_LONG_SIDE = 2200;
+
+  async function detectWallsFromImage() {
+    let worker;
+    const finish = () => {
+      try { worker?.terminate(); } catch (_) {}
+    };
+
+    try {
+      let width, height, imageData;
+
+      if (pdfDoc) {
+        const page = await pdfDoc.getPage(currentPage);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const longSide = Math.max(baseViewport.width, baseViewport.height);
+        const detectScale = Math.max(1, WALL_DETECT_TARGET_LONG_SIDE / longSide);
+        const vp = page.getViewport({ scale: detectScale });
+
+        const off = document.createElement('canvas');
+        off.width = Math.ceil(vp.width);
+        off.height = Math.ceil(vp.height);
+        await page.render({ canvasContext: off.getContext('2d'), viewport: vp }).promise;
+
+        width = off.width;
+        height = off.height;
+        imageData = off.getContext('2d').getImageData(0, 0, width, height);
+      } else {
+        width = pdfCanvas.width;
+        height = pdfCanvas.height;
+        if (!width || !height) return;
+        imageData = pdfCanvas.getContext('2d').getImageData(0, 0, width, height);
+      }
+
+      await new Promise((resolve) => {
+        try {
+          // ?v= below: the worker is fetched as its own file, separately
+          // from the ?v= cache-bust on simple-app.js itself. Bump this
+          // alongside changes to wallWorker.js or the browser can keep
+          // running an old cached copy indefinitely, same trap simple-app.js
+          // already needed ESTIMATOR_ASSET_VERSION for.
+          worker = new Worker(new URL('./lib/walls/wallWorker.js?v=10', import.meta.url), { type: 'module' });
+
+          worker.onmessage = (e) => {
+            const msg = e.data || {};
+            if (msg.type !== 'walls') return;
+
+            console.log('[wall-detect] result', {
+              segments: (msg.segments || []).length,
+              debug: msg.debug,
+              error: msg.error,
+            });
+            _wallDetectDebugByPage[currentPage || 1] = msg.debug || null;
+
+            try {
+              const segments = Array.isArray(msg.segments) ? msg.segments : [];
+              if (segments.length) {
+                const normalized = segments.map((seg) => coerceLineCoordinates(seg, width, height));
+                highlightsStore.setLines(currentPage || 1, normalized);
+                overlay.redraw();
+                updateVectorLineInfo();
+                updateMeasurementList();
+                toast(
+                  `Guessed ${normalized.length} wall${normalized.length === 1 ? '' : 's'} from the image — check them against the plan`,
+                  'info'
+                );
+              } else {
+                toast('No straight walls found automatically on this image — trace manually below', 'info');
+              }
+            } catch (err) {
+              console.warn('wall detection hydration failed', err);
+            } finally {
+              finish();
+              resolve();
+            }
+          };
+
+          worker.onerror = (err) => {
+            console.warn('wall detection worker failed', err);
+            finish();
+            resolve();
+          };
+
+          worker.postMessage(
+            { type: 'build', width, height, data: imageData.data.buffer },
+            [imageData.data.buffer]
+          );
+        } catch (err) {
+          console.warn('wall detection setup failed', err);
+          finish();
+          resolve();
+        }
+      });
+    } catch (err) {
+      console.warn('wall detection setup failed', err);
+      finish();
+    }
+  }
+
+  // Renders one page (the source PDF page, or the raw uploaded image when
+  // there's no pdfDoc) plus everything the overlay draws on top of it —
+  // detected/vector wall lines, measurements, polygons — flattened onto a
+  // single canvas. Doesn't touch renderPageWithAnnotationsToCanvas above:
+  // that one's PDF-only and shared by the multi-page PDF export flow, this
+  // is specifically for the single-page debug image below and needs to
+  // work for a plain image upload too, which has no PDF page to re-render.
+  //
+  // includeSource: false skips drawing the plan itself (PDF page / image)
+  // entirely and just fills a plain white background before the overlay —
+  // for comparing detected-line positions run to run without the floor
+  // plan underneath competing for attention or shifting focus/zoom between
+  // screenshots.
+  async function renderAnnotatedPageToCanvas(pageNum, { includeSource = true } = {}) {
+    let width, height;
+    if (pdfDoc) {
+      if (includeSource) {
+        const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+        return rendered ? rendered.exportCanvas : null;
+      }
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1 });
+      width = Math.ceil(viewport.width);
+      height = Math.ceil(viewport.height);
+    } else {
+      if (!pdfCanvas || !pdfCanvas.width || !pdfCanvas.height) return null;
+      width = pdfCanvas.width;
+      height = pdfCanvas.height;
+      if (includeSource) {
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = width;
+        exportCanvas.height = height;
+        const ctx = exportCanvas.getContext('2d');
+        ctx.drawImage(pdfCanvas, 0, 0);
+        overlay.renderToContext(ctx, { width, height });
+        return exportCanvas;
+      }
     }
 
+    // includeSource === false, either case above falls through to here —
+    // same overlay-state save/swap/restore dance renderPageWithAnnotationsToCanvas
+    // does, just against a blank canvas instead of a rendered page.
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = width;
+    exportCanvas.height = height;
+    const ctx = exportCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    const prevPage = overlay.currentPage;
+    const prevActive = overlay.active;
+    const prevMeasurePreview = overlay._measurePreview;
+    const prevIrregularPreview = overlay._irregularPreview;
+    const prevHoverPoly = overlay.hoverPoly;
+    overlay.currentPage = pageNum;
+    overlay.active = false;
+    overlay._measurePreview = null;
+    overlay._irregularPreview = null;
+    overlay.hoverPoly = null;
+
+    overlay.renderToContext(ctx, { width, height });
+
+    overlay.currentPage = prevPage;
+    overlay.active = prevActive;
+    overlay._measurePreview = prevMeasurePreview;
+    overlay._irregularPreview = prevIrregularPreview;
+    overlay.hoverPoly = prevHoverPoly;
+
+    return exportCanvas;
+  }
+
+  // Draws a small dark caption box in the top-left with the wall-detect
+  // worker's own debug stats — see the call site for why this rides along
+  // in the image itself instead of a separate file.
+  function drawWallDetectDebugCaption(ctx, canvasWidth, debug) {
+    const fs = debug.filterStats || {};
+    const lines = [
+      `Detect Walls debug — ${new Date().toLocaleString()}`,
+      `kept ${fs.kept ?? '?'}  ·  filtered: stub ${fs.stub ?? 0}, curved ${fs.notStraight ?? 0}, too short ${fs.tooShort ?? 0}, title block ${fs.excludedTitleBlock ?? 0}`,
+      `minLen ${debug.minLenPx ?? '?'}px  ·  threshold ${debug.binThreshold ?? '?'} (otsu ${debug.otsuThreshold ?? '?'})  ·  downsample ${debug.downsampleScale ?? '?'}x`,
+    ];
+
+    ctx.save();
+    ctx.font = '13px monospace';
+    const padding = 8;
+    const lineHeight = 17;
+    const boxWidth = Math.min(canvasWidth - 16, Math.max(...lines.map((l) => ctx.measureText(l).width)) + padding * 2);
+    const boxHeight = lines.length * lineHeight + padding * 2;
+
+    ctx.fillStyle = 'rgba(15,23,42,0.82)';
+    ctx.fillRect(8, 8, boxWidth, boxHeight);
+
+    ctx.fillStyle = '#f8fafc';
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 8 + padding, 8 + padding + lineHeight * (i + 0.8));
+    });
+    ctx.restore();
+  }
+
+  // Downloads a PNG of one page with detected walls (and any other
+  // annotations) drawn on top, for eyeballing wall-detection accuracy
+  // page by page — e.g. saving one before and one after a wallWorker.js
+  // change to compare side by side. PNG rather than JPEG: this is thin
+  // linework, and JPEG's lossy compression visibly blurs/ghosts thin lines
+  // in a way that defeats the point of a debugging image.
+  //
+  // includeSource: false leaves the floor plan out entirely (see
+  // renderAnnotatedPageToCanvas) — just the lines on white, for comparing
+  // detected-line positions between runs without the plan itself pulling
+  // focus or shifting between screenshots.
+  async function exportPageAnnotations(pageNum, { includeSource = true } = {}) {
+    const page = pageNum || currentPage || 1;
+    const canvas = await renderAnnotatedPageToCanvas(page, { includeSource });
+    if (!canvas) throw new Error('Nothing loaded to export for this page.');
+
+    // When "Detect Walls" has been run on this page this session, burn its
+    // own debug stats into a corner of the image — segment count, the
+    // thresholds it used, how many candidate runs got filtered and why.
+    // Point of the export is judging detection accuracy over time, and
+    // having those numbers travel with the image (not a separate file to
+    // keep matched up) makes a run-to-run comparison much easier to reason
+    // about than the picture alone.
+    const debug = _wallDetectDebugByPage[page];
+    if (debug) drawWallDetectDebugCaption(canvas.getContext('2d'), canvas.width, debug);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Failed to render the page image.');
+
+    const projectPart = activeProjectId ? `${activeProjectId}-` : '';
+    const suffix = includeSource ? '' : '-linesonly';
+    await downloadBlob(blob, `annotations-${projectPart}page${page}${suffix}-${Date.now()}.png`);
+    toast(`Exported page ${page} as an image${includeSource ? '' : ' (lines only)'}`, 'success');
+  }
+
+  function getVectorPageEntries(result) {
     const source = result.analysis || result.result || result;
     const pages = Array.isArray(source.pages)
       ? source.pages
       : source.pages || source.vector_annotations || source;
-    const pageEntries = Array.isArray(pages)
+    return Array.isArray(pages)
       ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
       : Object.keys(pages || {}).map((key) => ({ page: Number(key), data: pages[key] }));
+  }
 
-    for (const entry of pageEntries) {
-      const pageNum = Number(entry.page || 1);
-      const pageData = entry.data || {};
-      const lines = getVectorPayloadLines(pageData);
-      if (!Array.isArray(lines) || !lines.length) continue;
+  // Pure extraction: given a raw analysis payload (backend /figures
+  // response) and a page number, returns that page's normalized wall lines
+  // (or [] if the backend found none for it / the page isn't in the
+  // payload). No side effects — doesn't touch highlightsStore or redraw.
+  // Split out of the old auto-hydrating hydrateDetectedWallsFromResult so
+  // the "Detect Walls" click handler (runWallDetection) can pull just the
+  // current page on demand instead of every page drawing itself the moment
+  // analysis arrives.
+  async function getVectorLinesForPage(result, pageNum) {
+    if (!result) return [];
+    const entry = getVectorPageEntries(result).find((e) => Number(e.page || 1) === Number(pageNum));
+    if (!entry) return [];
+    const pageData = entry.data || {};
+    const lines = getVectorPayloadLines(pageData);
+    if (!Array.isArray(lines) || !lines.length) return [];
 
-      const pageViewport = await pdfDoc.getPage(pageNum).then((page) => page.getViewport({ scale: zoom })).catch(() => null);
-      const pageWidth = pageViewport?.width || pdfCanvas?.width || 0;
-      const pageHeight = pageViewport?.height || pdfCanvas?.height || 0;
-      const normalized = lines.map((line, idx) => coerceLineCoordinates(line, pageWidth, pageHeight));
-      highlightsStore.setLines(pageNum, normalized);
-      console.log(`[vector] loaded ${normalized.length} wall lines for page ${pageNum}`);
+    // The backend's line coordinates are in the PDF's fixed native point
+    // space (page.rect, sent per-page as size_points) -- NOT the on-screen
+    // pdf.js viewport. Normalizing against a zoomed viewport instead
+    // scatters every line across the page depending on whatever zoom level
+    // happened to be active. size_points is the divisor the backend
+    // actually intends.
+    const [sizePointsWidth, sizePointsHeight] = Array.isArray(pageData.size_points) ? pageData.size_points : [];
+    let pageWidth = Number(sizePointsWidth) || 0;
+    let pageHeight = Number(sizePointsHeight) || 0;
+    if (!pageWidth || !pageHeight) {
+      // Fallback for payloads without size_points (e.g. non-vector
+      // producers). scale: 1 matches native point space -- scale: zoom
+      // here would reintroduce the same bug for this fallback path.
+      const pageViewport = pdfDoc
+        ? await pdfDoc.getPage(pageNum).then((page) => page.getViewport({ scale: 1 })).catch(() => null)
+        : null;
+      pageWidth = pageWidth || pageViewport?.width || pdfCanvas?.width || 0;
+      pageHeight = pageHeight || pageViewport?.height || pdfCanvas?.height || 0;
     }
+    return lines.map((line) => coerceLineCoordinates(line, pageWidth, pageHeight));
+  }
 
-    overlay.redraw();
-    updateVectorLineInfo();
-    updateMeasurementList();
+  // Analysis results (vector lines + page metadata) fetched automatically
+  // in the background are only ever cached here — NOT drawn. Populating
+  // highlightsStore with wall lines is entirely gated behind a
+  // "Detect Walls" click now (see runWallDetection); nothing should draw
+  // walls on a page just because analysis happened to finish loading. See
+  // [[wall-detection-manual-trigger-pref]] in project memory.
+  function cacheAnalysisResult(result) {
+    if (!result) return;
+    try { window.__lastFetchedAnalysis = result; } catch (_) {}
 
+    // Extracted-measurements text panel is a separate feature from wall
+    // line drawing (it lists dimension text, not canvas overlay lines), so
+    // it's fine for this to stay automatic — it already has its own
+    // fallback to window.__lastFetchedAnalysis when highlightsStore is
+    // empty, so it renders something useful even before any click.
     const extractedContainer = document.getElementById('extractedMeasurementsContainer');
     if (extractedContainer) {
       renderExtractedWallMeasurements(extractedContainer);
     }
-
     if (_pdfMetadataSummary) {
       renderExtractedMeasurements(_pdfMetadataSummary);
     }
+  }
+
+  // Per-page record of which method last produced the walls shown, purely
+  // for the caption next to the buttons — not persisted across reloads.
+  let _wallDetectMethodByPage = {};
+
+  function refreshWallDetectMethodCaption() {
+    if (!detectWallsMethodCaption) return;
+    const info = _wallDetectMethodByPage[currentPage || 1];
+    if (!info) { detectWallsMethodCaption.textContent = ''; return; }
+    const label = info.method === 'vector' ? 'Vector' : 'Pixel guess';
+    detectWallsMethodCaption.textContent = `${label}: ${info.count} wall${info.count === 1 ? '' : 's'}`;
+  }
+
+  // Orchestrates the "Detect Walls" click: vector-first, pixel fallback,
+  // single button — see [[wall-detection-manual-trigger-pref]].
+  // forcePixel is set by the "Try pixel instead" secondary button, which
+  // bypasses the vector lookup entirely so the two methods can be compared
+  // by eye even when vector data exists for the page.
+  async function runWallDetection({ forcePixel = false } = {}) {
+    const pageNum = currentPage || 1;
+    if (!forcePixel) {
+      const vectorLines = await getVectorLinesForPage(window.__lastFetchedAnalysis, pageNum);
+      if (vectorLines.length) {
+        highlightsStore.setLines(pageNum, vectorLines);
+        overlay.redraw();
+        updateVectorLineInfo();
+        updateMeasurementList();
+        _wallDetectMethodByPage[pageNum] = { method: 'vector', count: vectorLines.length };
+        refreshWallDetectMethodCaption();
+        toast(
+          `Loaded ${vectorLines.length} vector wall line${vectorLines.length === 1 ? '' : 's'} for this page`,
+          'info'
+        );
+        return;
+      }
+    }
+    // No vector data for this page (or pixel explicitly requested) — fall
+    // back to the pixel-based guesser. detectWallsFromImage already writes
+    // to highlightsStore, redraws, and toasts its own result.
+    await detectWallsFromImage();
+    _wallDetectMethodByPage[pageNum] = { method: 'pixel', count: (highlightsStore.getLines(pageNum) || []).length };
+    refreshWallDetectMethodCaption();
   }
 
   async function fetchProjectFigures(projectId, options = {}) {
@@ -1989,14 +2466,15 @@ async function initApp(){
       console.warn('[analysis] no figures returned');
       return null;
     }
-    // Persist last fetched analysis for debug/fallback rendering
-    try { window.__lastFetchedAnalysis = figures.analysis || figures.result || figures; } catch (_) {}
     window.__lastFetchedFigures = figures;
     const analysisPayload = figures.analysis || figures.result || figures;
     console.log('[analysis] fetched figures', figures?.status, summarizeAnalysis(analysisPayload), figures);
     if (analysisPayload) {
-      await hydrateDetectedWallsFromResult(analysisPayload);
+      // Caches for the "Detect Walls" button to use on click — does not
+      // draw anything. See cacheAnalysisResult.
+      cacheAnalysisResult(analysisPayload);
     }
+    updateDetectWallsButtonVisibility();
     return figures;
   }
 
@@ -3183,6 +3661,19 @@ async function initApp(){
     restorePageAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
     updateVectorLineInfo();
     updateMeasurementList();
+    updateDetectWallsButtonVisibility();
+  }
+
+  // Both buttons stay visible on every page regardless of whether vector
+  // data exists yet — detection (vector-first, pixel-fallback) is entirely
+  // click-gated now, never automatic, so there's no "already found, hide
+  // it" state to compute. See [[wall-detection-manual-trigger-pref]]. This
+  // just keeps them shown and refreshes the per-page method caption
+  // whenever it's called (e.g. on page navigation).
+  function updateDetectWallsButtonVisibility() {
+    if (detectWallsBtn) detectWallsBtn.style.display = 'inline-block';
+    if (detectWallsPixelBtn) detectWallsPixelBtn.style.display = 'inline-block';
+    refreshWallDetectMethodCaption();
   }
 
   function getMeasurementPixelLength(measurement) {
@@ -3310,6 +3801,11 @@ async function initApp(){
         document.getElementById('prevPageBtn').style.display = 'none';
         document.getElementById('nextPageBtn').style.display = 'none';
         document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+
+        // Scanned/photographed plans have no vector data to read, so wall
+        // guessing runs from the pixels instead, on demand via the button
+        // below, not automatically on every upload.
+        updateDetectWallsButtonVisibility();
       } else {
         const ab = await file.arrayBuffer();
         const lib = window.pdfjsLib;
@@ -3321,16 +3817,6 @@ async function initApp(){
         _userAdjustedZoom = false;
         await renderPage();
         _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
-
-        // If vector analysis arrived before the PDF was loaded, hydrate it now
-        try {
-          if (window.__pendingVectorAnalysis) {
-            await hydrateDetectedWallsFromResult(window.__pendingVectorAnalysis);
-            window.__pendingVectorAnalysis = null;
-          }
-        } catch (e) {
-          console.warn('pending vector hydration failed', e);
-        }
 
         renderExtractedMeasurements(_pdfMetadataSummary);
       }
@@ -6471,7 +6957,7 @@ async function initApp(){
     const regenPhasesBtn = document.getElementById('regenPhasesBtn');
     if (regenPhasesBtn) regenPhasesBtn.onclick = () => {
       const area = parseFloat(document.getElementById('analysisTotalAreaInput')?.value) || 0;
-      if (!area) { alert('Please set Total Area first.'); return; }
+      if (!area) { toast('Please set Total Area first.', 'error'); return; }
       _autoGeneratePhases(area);
       _phasesLocked = true;
       _renderPhaseTable();
@@ -6677,7 +7163,7 @@ async function initApp(){
     const taxZipLookupBtn = document.getElementById('taxZipLookupBtn');
     if (taxZipLookupBtn) taxZipLookupBtn.onclick = async () => {
       const zip = document.getElementById('taxZipInput')?.value?.trim();
-      if (!zip || zip.length !== 5) { alert('Enter a valid 5-digit ZIP'); return; }
+      if (!zip || zip.length !== 5) { toast('Enter a valid 5-digit ZIP', 'error'); return; }
       try {
         const r = await fetch(`${API_BASE}/api/projects/tax-rate?zip=${zip}`);
         const data = r.ok ? await r.json() : null;
@@ -6685,9 +7171,9 @@ async function initApp(){
           setVal('taxInput', parseFloat(data.combined_rate).toFixed(3));
           _updateCrewCalcs();
         } else {
-          alert('Could not find tax rate for this ZIP');
+          toast('Could not find tax rate for this ZIP', 'error');
         }
-      } catch { alert('Lookup failed'); }
+      } catch { toast('Lookup failed', 'error'); }
     };
 
     // Auto-fill tax rate from ZIP (TaxJar) or fallback to state hardcode
@@ -7019,7 +7505,7 @@ async function initApp(){
   const paintingRegenPhasesBtn = document.getElementById('paintingRegenPhasesBtn');
   if (paintingRegenPhasesBtn) paintingRegenPhasesBtn.addEventListener('click', () => {
     const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
-    if (area <= 0) { alert('Enter a Total Area first'); return; }
+    if (area <= 0) { toast('Enter a Total Area first', 'error'); return; }
     _autoGeneratePaintingPhases(area);
     _paintingExpectedDaysManual = false;
     const derived = _getPaintingAreaDerivedValues(area);
@@ -7165,7 +7651,7 @@ async function initApp(){
       persistCostPerMileValue(costPerMile, activeProjectId, 'painting');
       showPaintingCard(_loadedProjectData);
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast('Save failed: ' + e.message, 'error');
     }
   });
 
@@ -7423,6 +7909,74 @@ async function initApp(){
         currentPage += 1;
         measurementViewPage = currentPage;
         await renderPage();
+      }
+    };
+  }
+
+  if (detectWallsBtn) {
+    detectWallsBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (detectWallsBtn.disabled) return;
+      detectWallsBtn.disabled = true;
+      const originalLabel = detectWallsBtn.textContent;
+      detectWallsBtn.textContent = 'Detecting…';
+      showGlobalLoading('Finding walls…');
+      try {
+        await runWallDetection();
+      } finally {
+        hideGlobalLoading();
+        detectWallsBtn.disabled = false;
+        detectWallsBtn.textContent = originalLabel;
+      }
+    };
+  }
+
+  if (detectWallsPixelBtn) {
+    detectWallsPixelBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (detectWallsPixelBtn.disabled) return;
+      detectWallsPixelBtn.disabled = true;
+      const originalLabel = detectWallsPixelBtn.textContent;
+      detectWallsPixelBtn.textContent = 'Detecting…';
+      showGlobalLoading('Guessing walls from image…');
+      try {
+        await runWallDetection({ forcePixel: true });
+      } finally {
+        hideGlobalLoading();
+        detectWallsPixelBtn.disabled = false;
+        detectWallsPixelBtn.textContent = originalLabel;
+      }
+    };
+  }
+
+  if (exportAnnotationsBtn) {
+    exportAnnotationsBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (exportAnnotationsBtn.disabled) return;
+      exportAnnotationsBtn.disabled = true;
+      try {
+        await exportPageAnnotations(currentPage);
+      } catch (err) {
+        console.warn('annotations export failed', err);
+        toast('Export failed', 'error');
+      } finally {
+        exportAnnotationsBtn.disabled = false;
+      }
+    };
+  }
+
+  if (exportLinesOnlyBtn) {
+    exportLinesOnlyBtn.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (exportLinesOnlyBtn.disabled) return;
+      exportLinesOnlyBtn.disabled = true;
+      try {
+        await exportPageAnnotations(currentPage, { includeSource: false });
+      } catch (err) {
+        console.warn('lines-only export failed', err);
+        toast('Export failed', 'error');
+      } finally {
+        exportLinesOnlyBtn.disabled = false;
       }
     };
   }
@@ -7806,7 +8360,7 @@ async function initApp(){
       file.name
     );
 
-    if (!window.confirm(`Are you sure you want to upload "${file.name}"?`)) return;
+    if (!(await confirmDialog({ title: 'Upload file', message: `Are you sure you want to upload "${file.name}"?`, confirmLabel: 'Upload' }))) return;
 
     showGlobalLoading('Uploading file…');
     try {
@@ -7826,7 +8380,11 @@ async function initApp(){
         body: JSON.stringify({ name: projectName })
       });
       if (projectRes.status === 409) {
-        const openExisting = window.confirm(`A project named "${projectName}" already exists.\n\nWould you like to open the existing project?`);
+        const openExisting = await confirmDialog({
+          title: 'Project already exists',
+          message: `A project named "${projectName}" already exists.\n\nWould you like to open the existing project?`,
+          confirmLabel: 'Open existing',
+        });
         if (!openExisting) return;
         const listRes = await fetch(`${API_BASE}/api/projects`, { cache: 'no-store' });
         const listData = await listRes.json();
@@ -7908,7 +8466,10 @@ async function initApp(){
 
       try {
         if (analysis) {
-          await hydrateDetectedWallsFromResult(analysis);
+          // Caches for the "Detect Walls" button — doesn't draw anything;
+          // the just-uploaded PDF is loaded but no click has happened yet.
+          cacheAnalysisResult(analysis);
+          updateDetectWallsButtonVisibility();
         }
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);
@@ -8055,10 +8616,13 @@ async function initApp(){
     }
 
   if (changeScaleBtn) {
-    changeScaleBtn.onclick = (e) => {
+    changeScaleBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const entry = window.prompt('Enter a real-world length (for example: "22 ft 10 in") or a scale expression (for example: "1/16 in = 1 ft").');
+      const entry = await textPrompt({
+        title: 'Change scale',
+        message: 'Enter a real-world length (for example: "22 ft 10 in") or a scale expression (for example: "1/16 in = 1 ft").',
+      });
       if (!entry || !entry.trim()) return;
 
       const measurements = highlightsStore.listMeasurements(currentPage) || [];
@@ -8087,6 +8651,17 @@ async function initApp(){
       doubleSideToggle.classList.toggle('active', isDouble);
       doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
       overlay.setDoubleSided(isDouble);
+    };
+  }
+
+  if (showLabelsToggle) {
+    showLabelsToggle.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isOn = !showLabelsToggle.classList.contains('active');
+      showLabelsToggle.classList.toggle('active', isOn);
+      showLabelsToggle.textContent = isOn ? 'Labels On' : 'Labels Off';
+      overlay.setShowLabels(isOn);
     };
   }
 
