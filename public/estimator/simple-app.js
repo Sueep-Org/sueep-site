@@ -8104,7 +8104,14 @@ async function initApp(){
 
     if (pdfContainer){
 
-      pdfContainer.style.cursor = 'grab';
+      // Don't blindly reset to 'grab' here -- this listener fires on every
+      // mouseup, including the one that ends drawing a measurement/rect
+      // line, not just the one that ends a pan. Stomping the cursor back
+      // to 'grab' unconditionally undid the crosshair the draw/measure
+      // toggle set, right after finishing the very first line (see
+      // isOn ? 'crosshair' : 'grab' below -- same condition, kept in sync).
+      const drawModeActive = overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect');
+      pdfContainer.style.cursor = drawModeActive ? 'crosshair' : 'grab';
     }
   });
 
