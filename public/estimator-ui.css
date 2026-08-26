@@ -34,6 +34,7 @@
     max-width: none;
     height: auto;
     transform-origin: top left;
+    transition: opacity 0.15s ease;
 }
 
 /* TOOLBAR */
@@ -159,6 +160,10 @@
 }
 
 #showLabelsToggle.active {
+    background: #fde68a;
+}
+
+#dimBackgroundToggle.active {
     background: #fde68a;
 }
 
