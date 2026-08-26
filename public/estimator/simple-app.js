@@ -2097,7 +2097,7 @@ async function initApp(){
           // alongside changes to wallWorker.js or the browser can keep
           // running an old cached copy indefinitely, same trap simple-app.js
           // already needed ESTIMATOR_ASSET_VERSION for.
-          worker = new Worker(new URL('./lib/walls/wallWorker.js?v=10', import.meta.url), { type: 'module' });
+          worker = new Worker(new URL('./lib/walls/wallWorker.js?v=11', import.meta.url), { type: 'module' });
 
           worker.onmessage = (e) => {
             const msg = e.data || {};
