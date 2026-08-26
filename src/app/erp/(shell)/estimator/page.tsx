@@ -2,6 +2,44 @@
 
 import { useEffect, useRef } from "react";
 
+// A minimal stand-in for window.confirm(), which throws "not supported" in
+// this Next.js-hosted environment (no real OS-level dialog available to
+// it) — same reasoning and same visual style as
+// public/estimator/lib/confirmDialog.js, just reimplemented here since a
+// .tsx file can't import a plain script served out of /public. Resolves
+// true/false instead of returning synchronously.
+function confirmLeaveDialog(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.style.cssText =
+      "position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10001;";
+    const panel = document.createElement("div");
+    panel.style.cssText =
+      "width:min(420px, 100%);background:white;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.25);padding:18px;";
+    panel.innerHTML = `
+      <div style="font-size:13px;color:#374151;white-space:pre-wrap;">${message}</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+        <button class="mini-btn" data-leave-cancel type="button">Stay</button>
+        <button class="mini-btn" data-leave-confirm type="button" style="background:#dc2626;color:white;">Leave</button>
+      </div>
+    `;
+    let settled = false;
+    function finish(value: boolean) {
+      if (settled) return;
+      settled = true;
+      backdrop.remove();
+      resolve(value);
+    }
+    panel.querySelector("[data-leave-cancel]")?.addEventListener("click", () => finish(false));
+    panel.querySelector("[data-leave-confirm]")?.addEventListener("click", () => finish(true));
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) finish(false);
+    });
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+  });
+}
+
 export default function EstimatorPage() {
   const loaded = useRef(false);
 
@@ -31,14 +69,22 @@ export default function EstimatorPage() {
       const href = anchor.getAttribute("href");
       if (!href || href.includes("/estimator")) return;
       if (w.__estimatorProjectLoaded) {
-        if (
-          !window.confirm(
-            "Are you sure you want to leave? Any unsaved changes will be lost.",
-          )
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
+        // Must intercept synchronously — the confirm dialog below is async,
+        // and preventDefault() called after the fact (once its promise
+        // resolves) is a no-op, the click has already been processed by
+        // then. So this always stops the click first, then re-dispatches it
+        // on the same anchor if the user actually confirms leaving —
+        // clearing the loaded flag first so this same handler doesn't
+        // intercept its own re-dispatched click.
+        e.preventDefault();
+        e.stopPropagation();
+        confirmLeaveDialog(
+          "Are you sure you want to leave? Any unsaved changes will be lost.",
+        ).then((ok) => {
+          if (!ok) return;
+          w.__estimatorProjectLoaded = false;
+          anchor.click();
+        });
       }
     };
 
@@ -60,7 +106,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "wall-detect-7";
+    const ESTIMATOR_ASSET_VERSION = "wall-detect-13";
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -274,24 +320,25 @@ export default function EstimatorPage() {
               >
                 {/* Drawing / measurement tools */}
                 <div className="toolbar-group">
-                  <button id="measureToggle" className="mini-btn">
+                  <button id="measureToggle" className="mini-btn" title="Measure a distance">
                     Measure
                   </button>
-                  <button id="drawRectBtn" className="mini-btn">
-                    Draw Rect
+                  <button id="drawRectBtn" className="mini-btn" title="Draw a rectangular area">
+                    Rect
                   </button>
-                  <button id="drawIrregBtn" className="mini-btn">
-                    Draw Irreg
+                  <button id="drawIrregBtn" className="mini-btn" title="Draw a freeform area">
+                    Freeform
                   </button>
                   <button
                     id="undoShapeBtn"
                     className="mini-btn"
                     type="button"
+                    title="Undo last shape"
                     disabled
                   >
-                    Undo
+                    ↺ Undo
                   </button>
-                  <button id="doubleSideToggle" className="mini-btn">
+                  <button id="doubleSideToggle" className="mini-btn" title="Toggle single/double-sided measurement">
                     Single sided
                   </button>
                 </div>
@@ -300,14 +347,14 @@ export default function EstimatorPage() {
 
                 {/* Zoom controls */}
                 <div className="zoom-group">
-                  <button id="zoomOutBtn" className="mini-btn">
+                  <button id="zoomOutBtn" className="mini-btn" title="Zoom out">
                     −
                   </button>
                   <div id="zoomLabel">100%</div>
-                  <button id="zoomInBtn" className="mini-btn">
+                  <button id="zoomInBtn" className="mini-btn" title="Zoom in">
                     +
                   </button>
-                  <button id="zoomResetBtn" className="mini-btn">
+                  <button id="zoomResetBtn" className="mini-btn" title="Reset zoom">
                     Reset
                   </button>
                 </div>
@@ -319,9 +366,10 @@ export default function EstimatorPage() {
                   <button
                     id="prevPageBtn"
                     className="mini-btn"
+                    title="Previous page"
                     style={{ display: "none" }}
                   >
-                    Prev
+                    ◀
                   </button>
                   <div
                     style={{
@@ -347,15 +395,36 @@ export default function EstimatorPage() {
                   <button
                     id="nextPageBtn"
                     className="mini-btn"
+                    title="Next page"
                     style={{ display: "none" }}
                   >
-                    Next
+                    ▶
                   </button>
                 </div>
+
+                <div className="toolbar-divider" aria-hidden="true" />
+
+                {/* View options (Labels toggle lives here, injected by
+                    simple-app.js — see createShowLabelsToggleBtn) */}
+                <div id="viewToolsGroup" className="toolbar-group" />
+
+                {/* Save (injected by simple-app.js, see createSavePdfBtn)
+                    — a real action, not a debug tool, so it's kept out of
+                    debugToolsGroup below and styled to stand out (see
+                    #savePdfBtn in estimator-ui.css) rather than blending
+                    into that muted cluster. */}
+                <div id="saveToolsGroup" />
+
+                {/* Debug / QA tools (Detect Walls, Export — injected by
+                    simple-app.js, see their createXBtn functions).
+                    Visually set apart from the drawing tools above since
+                    these aren't everyday actions. */}
+                <div id="debugToolsGroup" className="toolbar-group toolbar-group-debug" />
 
                 <button
                   id="toggleSidebarBtn"
                   className="mini-btn"
+                  title="Toggle measurements list"
                   style={{ marginLeft: "auto" }}
                 >
                   Measurements

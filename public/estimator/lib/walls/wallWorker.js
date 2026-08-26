@@ -43,8 +43,26 @@ self.onmessage = (e)=>{
     // linework survives untouched; only fat/filled shapes lose their center.
     const HOLLOW_RADIUS = 3;
     const deepInterior = erode(rawBin, dsW, dsH, HOLLOW_RADIUS);
+
+    // Peeling to just the boundary is right for an *empty* fill, but a real
+    // interior wall drawn on top of (or bordering) that same gray shading
+    // is just as "deep interior" to the eroder as the fill around it —
+    // once both are collapsed to one binary ink value, erosion has no way
+    // to tell "thin stroke surrounded by more ink" apart from "more fill,"
+    // since it only measures distance to the mask's own edge. Recover it
+    // from the original grayscale instead of the binary mask: re-run Otsu,
+    // but only over the pixels belonging to each individual fill blob
+    // (found by flood-filling rawBin, keeping only blobs that actually
+    // have deep-interior pixels — an ordinary wall/text stroke never does,
+    // see above). A stroke that's locally darker than the fill around it
+    // clears that blob's own threshold even when it wouldn't have stood
+    // out against the whole page.
+    const recoveredStrokes = recoverStrokesInFills(rawBin, deepInterior, gray, dsW, dsH);
+
     const bin = new Uint8ClampedArray(rawBin.length);
-    for (let i = 0; i < rawBin.length; i++) bin[i] = rawBin[i] && !deepInterior[i] ? 1 : 0;
+    for (let i = 0; i < rawBin.length; i++) {
+      bin[i] = (rawBin[i] && !deepInterior[i]) || recoveredStrokes[i] ? 1 : 0;
+    }
 
     let foregroundPixels = 0;
     for (let i = 0; i < bin.length; i++) foregroundPixels += bin[i];
@@ -62,16 +80,26 @@ self.onmessage = (e)=>{
     const degree = computeDegrees(skeleton, dsW, dsH);
     const rawRuns = traceSkeletonRuns(skeleton, degree, dsW, dsH);
 
-    const minLen = Math.max(45, Math.ceil(Math.min(dsW, dsH) * 0.06));
+    // How short a *kept* wall is allowed to be. Deliberately not the basis
+    // for the door-bridging tolerance below anymore (it used to be) — those
+    // are different questions. This one only needs to be long enough to not
+    // be text/noise; real interior walls, closet returns, and short jogs
+    // are legitimately much shorter than "6% of the sheet," and the old
+    // floor was dropping them outright. Straightness + angle-bucketing
+    // still do the real work of rejecting non-wall clutter, so this can
+    // afford to run low.
+    const minLen = Math.max(24, Math.ceil(Math.min(dsW, dsH) * 0.03));
     // A door interrupts an otherwise-continuous wall, breaking its skeleton
-    // into two runs each too short to individually clear minLen. maxGap/
-    // crossTol are expressed against minLen's own ds-space equivalent
-    // (minLen was computed from dsW/dsH but gets compared against a
-    // *scale'd length, so divide scale back out to stay in the same
-    // ds-space units the run coordinates are already in).
-    const minLenDs = minLen / scale;
-    const crossTol = Math.max(2, Math.round(minLenDs * 0.25));
-    const maxGap = Math.max(6, Math.round(minLenDs * 1.2));
+    // into two runs each too short to individually clear minLen — bridging
+    // that gap is what mergeCollinearRuns' maxGap is for. Kept independent
+    // of minLen (rather than derived from it, as before) specifically so
+    // lowering minLen to catch smaller walls above doesn't also shrink how
+    // generously doors get bridged; this is sized off a typical door's
+    // width relative to the sheet instead, using the same ds-space
+    // conversion minLen used to use for itself.
+    const doorGapBasisDs = Math.max(45, Math.ceil(Math.min(dsW, dsH) * 0.06)) / scale;
+    const crossTol = Math.max(2, Math.round(doorGapBasisDs * 0.25));
+    const maxGap = Math.max(6, Math.round(doorGapBasisDs * 1.2));
     const angleTolDeg = 4;
 
     const excludeFromX = detectTitleBlockExclusionX(closed, dsW, dsH);
@@ -105,20 +133,56 @@ self.onmessage = (e)=>{
 
     const mergedRuns = mergeCollinearRuns(straightRuns, angleTolDeg, crossTol, maxGap);
 
+    // minLen is checked against the *whole* merged span (r.tMin/r.tMax),
+    // door gap included — a stub too short to count on its own still
+    // clears the bar as part of one long wall, same as before this change.
+    // What's actually drawn is one line per piece (see mergeCollinearRuns),
+    // so the door opening itself is left blank instead of getting a line
+    // drawn straight through it.
     const segments = [];
     let sid = 1;
     for (const r of mergedRuns) {
       const length = (r.tMax - r.tMin) * scale;
       if (length < minLen) { filterStats.tooShort++; continue; }
       filterStats.kept++;
-      segments.push({
-        id: String(sid++),
-        points: [
-          { x: r.startPt.x * scale, y: r.startPt.y * scale },
-          { x: r.endPt.x * scale, y: r.endPt.y * scale },
-        ],
-      });
+      for (const piece of r.pieces) {
+        segments.push({
+          id: String(sid++),
+          points: [
+            { x: piece.startPt.x * scale, y: piece.startPt.y * scale },
+            { x: piece.endPt.x * scale, y: piece.endPt.y * scale },
+          ],
+        });
+      }
     }
+
+    // A wall's angle comes from just its raw two endpoints (see analyzeRun),
+    // so the same few px of pixel-level jitter at either end produces a
+    // much bigger apparent angle on a short wall than a long one — a 3px
+    // wobble over 20px reads as ~8.5°, the same wobble over 500px reads as
+    // ~0.3°. A single fixed tolerance can't serve both: loose enough to
+    // straighten short walls lets it falsely flatten a real long diagonal,
+    // tight enough to leave long diagonals alone misses short walls' noise
+    // entirely — which is exactly the "still comes out at an angle"
+    // complaint after minLen was lowered to admit shorter walls. Scale the
+    // tolerance with each wall's own length instead (see snapAxisAligned).
+    const AXIS_SNAP_JITTER_PX = 4;
+    const AXIS_SNAP_MIN_TOL_DEG = 15;
+    const AXIS_SNAP_MAX_TOL_DEG = 25;
+    snapAxisAligned(segments, AXIS_SNAP_JITTER_PX, AXIS_SNAP_MIN_TOL_DEG, AXIS_SNAP_MAX_TOL_DEG);
+
+    // Two walls that actually meet at a corner rarely come out of
+    // skeletonization meeting exactly — Zhang–Suen thinning tends to clip
+    // the outer pixel or two right at an L-shaped junction (its medial axis
+    // cuts the corner slightly), so each wall's endpoint lands a couple px
+    // short. Left alone that reads as a visible notch/gap at every corner.
+    // Snap it: endpoints from *different* walls that land within
+    // cornerSnapTol of each other get pulled to where their two infinite
+    // lines actually cross, rather than left at their raw skeleton ends.
+    // Runs after axis-snapping so two walls that just got squared up also
+    // meet at a clean right angle, not just a corrected-but-still-off one.
+    const cornerSnapTol = Math.max(6, minLen * 0.3);
+    snapCornerEndpoints(segments, cornerSnapTol);
 
     self.postMessage({
       type:'walls',
@@ -166,7 +230,10 @@ function downsampleRGBA(rgba, w, h, maxDim){
 }
 
 function toGray(rgba,w,h){ const out=new Uint8ClampedArray(w*h); for(let i=0,j=0;i<rgba.length;i+=4,j++){ out[j]=(0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2])|0; } return out; }
-function otsu(gray){ const hist=new Uint32Array(256); for(let i=0;i<gray.length;i++) hist[gray[i]]++; let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i]; let sumB=0,wB=0,maxVar=0,th=0; const total=gray.length; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=total-wB; if(!wF) break; sumB+=t*hist[t]; const mB=sumB/wB, mF=(sum-sumB)/wF; const diff=mB-mF; const v=wB*wF*diff*diff; if(v>maxVar){ maxVar=v; th=t; } } return th; }
+function otsu(gray){ const hist=new Uint32Array(256); for(let i=0;i<gray.length;i++) hist[gray[i]]++; return otsuFromHistogram(hist, gray.length); }
+// Shared with recoverStrokesInFills, which needs Otsu run per-blob against
+// just that blob's own pixels rather than the whole page.
+function otsuFromHistogram(hist, total){ let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i]; let sumB=0,wB=0,maxVar=0,th=0; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=total-wB; if(!wF) break; sumB+=t*hist[t]; const mB=sumB/wB, mF=(sum-sumB)/wF; const diff=mB-mF; const v=wB*wF*diff*diff; if(v>maxVar){ maxVar=v; th=t; } } return th; }
 // Foreground (ink) is DARK pixels, not bright ones: a drawing is mostly
 // white/light paper with dark wall lines and text on top. This was
 // previously ">=", which marked the white background as "foreground" and
@@ -176,6 +243,89 @@ function otsu(gray){ const hist=new Uint32Array(256); for(let i=0;i<gray.length;
 function threshold(gray,w,h,t){ const out=new Uint8ClampedArray(w*h); for(let i=0;i<gray.length;i++) out[i]=gray[i]<=t?1:0; return out; }
 function erode(mask,w,h,r){ const out=new Uint8ClampedArray(mask.length); for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ let all=1; for(let dy=-r;dy<=r&&all;dy++){ for(let dx=-r;dx<=r&&all;dx++){ const xx=x+dx, yy=y+dy; if(!(xx>=0&&xx<w&&yy>=0&&yy<h&&mask[yy*w+xx])) all=0; } } out[y*w+x]=all; } } return out; }
 function dilate(mask,w,h,r){ const out=new Uint8ClampedArray(mask.length); for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ let on=0; for(let dy=-r;dy<=r&&!on;dy++){ for(let dx=-r;dx<=r&&!on;dx++){ const xx=x+dx, yy=y+dy; if(xx>=0&&xx<w&&yy>=0&&yy<h&&mask[yy*w+xx]) on=1; } } out[y*w+x]=on; } } return out; }
+
+// 8-connected flood-fill labeling of a binary mask. labels[i] is -1 for
+// background, otherwise the 0-based id of the blob that pixel belongs to.
+// Iterative (own stack, not recursion) since a large fill can easily cover
+// tens of thousands of pixels — deep enough to blow a real call stack.
+function labelComponents(mask, w, h){
+  const labels = new Int32Array(w * h).fill(-1);
+  const stackX = new Int32Array(w * h);
+  const stackY = new Int32Array(w * h);
+  let count = 0;
+  for (let y0 = 0; y0 < h; y0++) {
+    for (let x0 = 0; x0 < w; x0++) {
+      const idx0 = y0 * w + x0;
+      if (!mask[idx0] || labels[idx0] !== -1) continue;
+      const label = count++;
+      let sp = 0;
+      stackX[sp] = x0; stackY[sp] = y0; sp++;
+      labels[idx0] = label;
+      while (sp > 0) {
+        sp--;
+        const cx = stackX[sp], cy = stackY[sp];
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            const nidx = ny * w + nx;
+            if (!mask[nidx] || labels[nidx] !== -1) continue;
+            labels[nidx] = label;
+            stackX[sp] = nx; stackY[sp] = ny; sp++;
+          }
+        }
+      }
+    }
+  }
+  return { labels, count };
+}
+
+// See the call site's comment for why this exists: a wall stroke embedded
+// in (or bordering) a solid fill is indistinguishable from more fill once
+// everything's collapsed to one binary ink value, so erosion-based
+// hollowing can only ever throw it away along with the fill. This recovers
+// it by re-thresholding, blob by blob, against each blob's *own* grayscale
+// values rather than the whole page's — a stroke that's locally darker
+// than the fill immediately around it clears its own blob's Otsu cut even
+// when the page-wide cut couldn't tell them apart. Only bothers with blobs
+// that have deep-interior pixels at all (ordinary linework/text never
+// does, per the HOLLOW_RADIUS comment above), so this is a no-op for the
+// common case of a page with no fills on it.
+function recoverStrokesInFills(rawBin, deepInterior, gray, w, h){
+  const { labels, count } = labelComponents(rawBin, w, h);
+  if (!count) return new Uint8ClampedArray(rawBin.length);
+
+  const isFillBlob = new Uint8Array(count);
+  for (let i = 0; i < deepInterior.length; i++) if (deepInterior[i]) isFillBlob[labels[i]] = 1;
+
+  const hist = new Array(count);
+  for (let i = 0; i < rawBin.length; i++) {
+    if (!rawBin[i]) continue;
+    const lbl = labels[i];
+    if (!isFillBlob[lbl]) continue;
+    if (!hist[lbl]) hist[lbl] = new Uint32Array(256);
+    hist[lbl][gray[i]]++;
+  }
+
+  const thresholds = new Array(count);
+  for (let lbl = 0; lbl < count; lbl++) {
+    if (!hist[lbl]) continue;
+    let total = 0;
+    for (let v = 0; v < 256; v++) total += hist[lbl][v];
+    thresholds[lbl] = otsuFromHistogram(hist[lbl], total);
+  }
+
+  const recovered = new Uint8ClampedArray(rawBin.length);
+  for (let i = 0; i < rawBin.length; i++) {
+    if (!rawBin[i]) continue;
+    const lbl = labels[i];
+    if (!isFillBlob[lbl]) continue;
+    const t = thresholds[lbl];
+    if (t != null && gray[i] <= t) recovered[i] = 1;
+  }
+  return recovered;
+}
 
 // Standard Zhang–Suen thinning: reduces a filled binary shape to a 1px
 // medial-axis skeleton. Runs until convergence (or maxIters, whichever
@@ -367,6 +517,14 @@ function detectTitleBlockExclusionX(mask, w, h){
   return excludeFromX;
 }
 
+// Gaps at or under this (ds-space px) are treated as tracing noise — a
+// skeleton run occasionally comes up a pixel or two short of where it
+// "should" end near a junction/corner-split, with nothing actually missing
+// in the ink. Drawn straight through, same as always. Anything wider than
+// this is presumed a real opening (see mergeCollinearRuns below) and is
+// deliberately left as a visible break instead.
+const SEAMLESS_JOIN_TOL = 2;
+
 // Merges straight runs that sit on (nearly) the same infinite line and are
 // close enough end-to-end that the gap between them is more likely a door
 // opening than two unrelated walls. Bucketing by rounded (angle, offset)
@@ -375,6 +533,15 @@ function detectTitleBlockExclusionX(mask, w, h){
 // acceptable trade for a heuristic like this. Unlike the old axis-aligned
 // version, this works at any angle, so a diagonal wall now merges across a
 // door too, not just horizontal/vertical ones.
+//
+// A merged group's overall [tMin,tMax] span still covers the door gap —
+// that's what lets a stub too short to clear minLen on its own count as
+// part of one long wall — but the group also keeps `pieces`, the sub-runs
+// actually worth drawing. A gap over SEAMLESS_JOIN_TOL starts a new piece
+// instead of stretching the previous one across it, so the rendered line
+// stops at the door opening on each side instead of being drawn straight
+// through it (see the segment-emission loop in self.onmessage, which draws
+// one line per piece rather than one line per group).
 function mergeCollinearRuns(runs, angleTolDeg, crossTol, maxGap){
   const buckets = new Map();
   for (const r of runs) {
@@ -404,15 +571,111 @@ function mergeCollinearRuns(runs, angleTolDeg, crossTol, maxGap){
     let current = null;
     for (const r of withT) {
       if (!current) {
-        current = { tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt };
+        current = { tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt, pieces: [{ tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt }] };
       } else if (r.tMin <= current.tMax + maxGap) {
+        const lastPiece = current.pieces[current.pieces.length - 1];
+        // Measured against the last *drawn piece's* end, not the group's
+        // farthest reach so far — those normally match, but keeping them
+        // separate avoids a stale/too-generous gap reading if a run ever
+        // arrives that doesn't extend past what's already covered.
+        const gap = r.tMin - lastPiece.tMax;
         if (r.tMax > current.tMax) { current.tMax = r.tMax; current.endPt = r.endPt; }
+        if (gap <= SEAMLESS_JOIN_TOL) {
+          if (r.tMax > lastPiece.tMax) { lastPiece.tMax = r.tMax; lastPiece.endPt = r.endPt; }
+        } else {
+          current.pieces.push({ tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt });
+        }
       } else {
         merged.push(current);
-        current = { tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt };
+        current = { tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt, pieces: [{ tMin: r.tMin, tMax: r.tMax, startPt: r.startPt, endPt: r.endPt }] };
       }
     }
     if (current) merged.push(current);
   }
   return merged;
+}
+
+// Where two segments' own infinite lines cross, or null if they're too
+// close to parallel to trust (near-parallel means a tiny angle error blows
+// up into a huge position error, so it's safer to leave those alone than
+// snap them somewhere wrong).
+function lineIntersection(p1, p2, p3, p4){
+  const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
+  const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-6) return null;
+  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom;
+  return { x: p1.x + t * d1x, y: p1.y + t * d1y };
+}
+
+// Squares up any wall whose measured angle is within its own (length-
+// dependent — see the call site's comment) tolerance of horizontal or
+// vertical, by moving both endpoints to share a common y (horizontal) or
+// x (vertical) — their midpoint, so the correction doesn't favor whichever
+// end happened to be measured more precisely. A wall further off-axis than
+// its tolerance is left exactly as detected, since it's more likely a real
+// angle than jitter. Mutates `segments` in place; each segment is handled
+// independently of the others.
+function snapAxisAligned(segments, jitterPx, minToleranceDeg, maxToleranceDeg){
+  for (const seg of segments) {
+    const [p0, p1] = seg.points;
+    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    const length = Math.hypot(dx, dy);
+    if (!length) continue; // degenerate (zero-length) — nothing to snap
+    // The angle jitterPx of endpoint noise would produce at this specific
+    // wall's length, clamped to a sane range — see the call site.
+    const toleranceDeg = Math.min(maxToleranceDeg, Math.max(minToleranceDeg, Math.atan2(jitterPx, length) * 180 / Math.PI));
+    // atan2 of the absolute deltas folds the angle into [0,90]: 0 = perfectly
+    // horizontal, 90 = perfectly vertical, regardless of which direction the
+    // wall runs in.
+    const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI;
+    if (angle <= toleranceDeg) {
+      const midY = (p0.y + p1.y) / 2;
+      p0.y = midY; p1.y = midY;
+    } else if (angle >= 90 - toleranceDeg) {
+      const midX = (p0.x + p1.x) / 2;
+      p0.x = midX; p1.x = midX;
+    }
+  }
+}
+
+// Pulls corners together: for every pair of endpoints from *different*
+// walls that land within `tolerance` of each other, moves both to where
+// the two walls' infinite lines actually intersect, instead of leaving
+// them at their raw (slightly short, per the call site's comment) skeleton
+// ends. Mutates `segments` in place. O(n^2) over endpoints, which is fine
+// here — a floor plan realistically has dozens of walls, not thousands.
+function snapCornerEndpoints(segments, tolerance){
+  const endpoints = [];
+  segments.forEach((seg, segIdx) => {
+    endpoints.push({ segIdx, which: 0, x: seg.points[0].x, y: seg.points[0].y });
+    endpoints.push({ segIdx, which: 1, x: seg.points[1].x, y: seg.points[1].y });
+  });
+
+  // Extending a near-parallel or barely-off-axis pair all the way to their
+  // true intersection can fling a corner far away from where either wall
+  // actually ends. Cap how far a snap is allowed to move a point, relative
+  // to the gap it's bridging, so a bad pairing gets skipped instead of
+  // producing a worse result than leaving the raw endpoint alone.
+  const maxSnapExtend = tolerance * 3;
+
+  for (let i = 0; i < endpoints.length; i++) {
+    for (let j = i + 1; j < endpoints.length; j++) {
+      const a = endpoints[i], b = endpoints[j];
+      if (a.segIdx === b.segIdx) continue; // a wall's own two ends never snap to each other
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (dist > tolerance) continue;
+
+      const segA = segments[a.segIdx], segB = segments[b.segIdx];
+      const ix = lineIntersection(segA.points[0], segA.points[1], segB.points[0], segB.points[1]);
+      if (!ix) continue;
+      if (Math.hypot(ix.x - a.x, ix.y - a.y) > maxSnapExtend) continue;
+      if (Math.hypot(ix.x - b.x, ix.y - b.y) > maxSnapExtend) continue;
+
+      segA.points[a.which] = { x: ix.x, y: ix.y };
+      segB.points[b.which] = { x: ix.x, y: ix.y };
+      a.x = ix.x; a.y = ix.y;
+      b.x = ix.x; b.y = ix.y;
+    }
+  }
 }
