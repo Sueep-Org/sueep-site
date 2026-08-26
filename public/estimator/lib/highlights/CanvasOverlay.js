@@ -1,4 +1,5 @@
 import { toast } from '../toast.js';
+import { textPrompt } from '../textPrompt.js';
 
 const MEASUREMENT_SNAP_ANGLE = Math.PI / 18;
 
@@ -45,6 +46,11 @@ export class CanvasOverlay {
     this.zoom = 1;
     this._pxPerPt = 1;
     this.doubleSided = false;
+    // Length/area labels ("17 ft", "42 sq") drawn next to every
+    // measurement/line — on by default, but they sit right on top of the
+    // linework they're labeling, which gets in the way while actively
+    // tracing more lines nearby. See setShowLabels below.
+    this.showLabels = true;
     // drag-to-measure state
     this._isDraggingMeasure = false;
     this._measureStart = null; // {x,y}
@@ -247,7 +253,7 @@ export class CanvasOverlay {
 
       drawLine(ctx, a, b, { hover: isHover, selected: isSel });
 
-      if (isSel || isHover) {
+      if ((isSel || isHover) && this.showLabels) {
         const pxLen = Math.hypot(b.x - a.x, b.y - a.y) || 0;
         const scale = this.store.getScale(this.currentPage);
         if (scale && scale.factor) {
@@ -291,7 +297,7 @@ export class CanvasOverlay {
           const centroid = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
           const midX = centroid.x / pts.length;
           const midY = centroid.y / pts.length;
-          drawLabel(ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`, this.zoom);
+          if (this.showLabels) drawLabel(ctx, midX, midY, m.areaLabel || `${(m.area || 0).toFixed(2)} sq`, this.zoom);
         }
         continue;
       }
@@ -303,10 +309,12 @@ export class CanvasOverlay {
         const b = { x: seg.x2 * w, y: seg.y2 * h };
         drawMeasurementLine(ctx, a, b, { hover: isHover, selected: isSelected });
       }
-      const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
-      const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
-      const labelText = m.label || formatInches(m.inches || 0);
-      drawLabel(ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText, this.zoom);
+      if (this.showLabels) {
+        const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
+        const midY = m.pts.length ? ((m.pts[0].y1 + m.pts[0].y2) / 2) * h : h / 2;
+        const labelText = m.label || formatInches(m.inches || 0);
+        drawLabel(ctx, midX, midY, m.doubleSided ? `${labelText} (double-sided)` : labelText, this.zoom);
+      }
     }
 
     if (this.tool === 'measure' && this.active && lines.length > 0) {
@@ -320,19 +328,23 @@ export class CanvasOverlay {
       const p = this._measurePreview;
       if (this.tool === 'measure') {
         drawPreviewLine(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
-        const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
-        const scale = this.store.getScale(this.currentPage);
-        const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
-        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, labelTxt, this.zoom);
+        if (this.showLabels) {
+          const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
+          const scale = this.store.getScale(this.currentPage);
+          const labelTxt = (scale && scale.factor) ? formatInches((pxLen / (this._pxPerPt || 1)) * scale.factor) : `${((pxLen / this._pxPerPt) / 72).toFixed(2)} in`;
+          drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, labelTxt, this.zoom);
+        }
       }
       if (this.tool === 'rect') {
         drawPreviewRect(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
-        const pxW = Math.abs(p.x2 - p.x1);
-        const pxH = Math.abs(p.y2 - p.y1);
-        const pxArea = pxW * pxH;
-        const scale = this.store.getScale(this.currentPage);
-        const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
-        drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, `${areaScaled.toFixed(2)} sq`, this.zoom);
+        if (this.showLabels) {
+          const pxW = Math.abs(p.x2 - p.x1);
+          const pxH = Math.abs(p.y2 - p.y1);
+          const pxArea = pxW * pxH;
+          const scale = this.store.getScale(this.currentPage);
+          const areaScaled = applyScale(pxArea, this._pxPerPt, scale?.factor);
+          drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, `${areaScaled.toFixed(2)} sq`, this.zoom);
+        }
       }
     }
 
@@ -343,6 +355,11 @@ export class CanvasOverlay {
 
   setDoubleSided(value) {
     this.doubleSided = Boolean(value);
+    this.redraw();
+  }
+
+  setShowLabels(value) {
+    this.showLabels = Boolean(value);
     this.redraw();
   }
 
@@ -643,10 +660,24 @@ export class CanvasOverlay {
 
     const isCopy = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'c';
     const isPaste = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'v';
-    if (!isCopy && !isPaste) return;
+    // Alt+click deletes one detected line at a time (see _onClick); this is
+    // the equivalent for however many are currently multi-selected via
+    // Ctrl/Cmd+click, so a batch of them can be cleared in one go.
+    const isDelete = (event.key === 'Delete' || event.key === 'Backspace') && this._selectedLineIds.size > 0;
+    if (!isCopy && !isPaste && !isDelete) return;
 
     event.preventDefault();
     event.stopPropagation();
+
+    if (isDelete) {
+      const count = this._selectedLineIds.size;
+      for (const id of this._selectedLineIds) this.store.removeLine(this.currentPage, id);
+      this._selectedLineIds.clear();
+      this.onMeasurementsChanged?.();
+      toast(`${count} line${count === 1 ? '' : 's'} removed`, 'info');
+      this.redraw();
+      return;
+    }
 
     if (isCopy) {
       // Find shape at current pointer position first, then fall back to selected
@@ -988,7 +1019,7 @@ export class CanvasOverlay {
     this.redraw();
   };
 
-  _onPointerUp = (e) => {
+  _onPointerUp = async (e) => {
     // Always handle drag end regardless of drawing mode
     if (this._dragState) {
       const dragState = this._dragState;
@@ -1038,7 +1069,10 @@ export class CanvasOverlay {
 
       let scaleFactor = this.store.getScale(this.currentPage)?.factor;
       if (!scaleFactor) {
-        const entry = window.prompt('Enter page scale (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to measure in raw inches:');
+        const entry = await textPrompt({
+          title: 'Set page scale',
+          message: 'Examples: "1/16 in = 1 ft" or "3 ft". Leave blank to measure in raw inches.',
+        });
         if (entry && entry.trim()) {
           const parsed = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
           if (!parsed || !(parsed > 0)) {
@@ -1384,7 +1418,7 @@ export class CanvasOverlay {
     this.redraw();
   };
 
-  _onClick = (e) => {
+  _onClick = async (e) => {
     if (this._suppressNextClick) {
       this._suppressNextClick = false;
       return;
@@ -1489,6 +1523,18 @@ export class CanvasOverlay {
 
     const id = nearest.id || nearest.__id;
 
+    // Alt+click a detected/vector line to remove just that one — same
+    // gesture the measurement-delete path above already uses, so it's one
+    // consistent shortcut across every kind of shape on the calendar.
+    if (e.altKey) {
+      this.store.removeLine(this.currentPage, id);
+      this._selectedLineIds.delete(id);
+      this.onMeasurementsChanged?.();
+      toast('Line removed', 'info');
+      this.redraw();
+      return;
+    }
+
     if (e.ctrlKey || e.metaKey) {
       // toggle selection
       if (this._selectedLineIds.has(id)) this._selectedLineIds.delete(id); else this._selectedLineIds.add(id);
@@ -1507,7 +1553,10 @@ export class CanvasOverlay {
 
     let scaleFactor = existingScale?.factor;
     if (!scaleFactor) {
-      const entry = window.prompt('Enter page scale for this line (examples: "1/16 in = 1 ft" or "3 ft"). Leave blank to cancel:');
+      const entry = await textPrompt({
+        title: 'Set page scale',
+        message: 'Examples: "1/16 in = 1 ft" or "3 ft". Leave blank to cancel.',
+      });
       if (!entry || !entry.trim()) {
         this.redraw();
         return;
