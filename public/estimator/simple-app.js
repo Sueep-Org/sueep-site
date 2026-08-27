@@ -325,17 +325,12 @@ async function initApp(){
   // markup, same situation savePdfBtn was already in above. Built here
   // with plain JS for the same reason, so it doesn't depend on editing
   // that React page.
-  let detectWallsBtn = $('detectWallsBtn') || createDetectWallsBtn();
-  // Secondary, explicit override: run the pixel guesser even when vector
-  // wall data exists for the page, for comparing the two against each
-  // other. detectWallsBtn itself always prefers vector when it's there.
-  let detectWallsPixelBtn = $('detectWallsPixelBtn') || createDetectWallsPixelBtn();
-  // Small "Vector: N walls" / "Pixel guess: N walls" caption next to the
-  // buttons so it's visible at a glance which method actually produced
-  // what's on screen for the current page.
-  let detectWallsMethodCaption = $('detectWallsMethodCaption') || createDetectWallsMethodCaption();
-  let exportAnnotationsBtn = $('exportAnnotationsBtn') || createExportAnnotationsBtn();
-  let exportLinesOnlyBtn = $('exportLinesOnlyBtn') || createExportLinesOnlyBtn();
+  let detectWallsMenuBtn = $('detectWallsMenuBtn') || createDetectWallsMenu();
+  // Small "Vector: N walls" / "Pixel guess: N walls" caption inside the
+  // dropdown panel so it's visible at a glance which method actually
+  // produced what's on screen for the current page.
+  let detectWallsMethodCaption = $('detectWallsMethodCaption');
+  let exportMenuBtn = $('exportMenuBtn') || createExportMenu();
   let showLabelsToggle = $('showLabelsToggle') || createShowLabelsToggleBtn();
   let dimBackgroundToggle = $('dimBackgroundToggle') || createDimBackgroundToggleBtn();
   let sovModal = null;
@@ -460,14 +455,13 @@ async function initApp(){
   });
 
   // Finds the dedicated container page.tsx sets aside for a group of
-  // JS-injected toolbar buttons (see #saveToolsGroup/#debugToolsGroup/
-  // #viewToolsGroup there) so they render in a predictable spot — grouped
-  // into a pill like the native groups for view/debug, standalone for
-  // save — instead of each landing as a bare button loose in the toolbar.
-  // Falls back to #toolbar itself when that container doesn't exist —
-  // true for the older standalone public/estimator/index.html, which
-  // predates this grouping and doesn't have it, so buttons still show up
-  // there, just ungrouped.
+  // JS-injected toolbar buttons (see #saveToolsGroup/#betaToolsGroup/
+  // #viewToolsGroup there) so they render in a predictable spot, grouped
+  // into a pill alongside the other toolbar clusters instead of each
+  // landing as a bare button loose in the toolbar. Falls back to #toolbar
+  // itself when that container doesn't exist — true for the older
+  // standalone public/estimator/index.html, which predates this grouping
+  // and doesn't have it, so buttons still show up there, just ungrouped.
   function getInjectedToolGroup(groupId) {
     const toolbar = $('toolbar');
     if (!toolbar) return null;
@@ -492,97 +486,138 @@ async function initApp(){
     return btn;
   }
 
-  // Always visible now, on every page — detection is manual/button-gated
-  // only, never auto-run on load (see [[wall-detection-manual-trigger-pref]]
-  // in project memory). Uses vector wall data when the backend found any
-  // for this page, otherwise falls back to the pixel guesser — see
-  // runWallDetection().
-  function createDetectWallsBtn() {
-    const existing = $('detectWallsBtn');
-    if (existing) return existing;
-    const group = getInjectedToolGroup('debugToolsGroup');
-    if (!group) return null;
-    const btn = document.createElement('button');
-    btn.id = 'detectWallsBtn';
-    btn.className = 'mini-btn';
-    btn.textContent = 'Detect Walls';
-    btn.title = 'Find walls for this page — uses vector wall data when available, otherwise guesses from the page image';
-    btn.style.display = 'inline-block';
-    group.appendChild(btn);
-    return btn;
+  // Shared open/close wiring for a "button toggles a floating menu panel"
+  // control — used by both the Export dropdown and the Detect Walls (beta)
+  // dropdown below, so the click/outside-click/Escape behavior only lives
+  // in one place. onItemClick receives the clicked .toolbar-dropdown-item
+  // element; the caller decides what each item actually does.
+  function wireDropdownMenu(btn, panel, onItemClick) {
+    if (!btn || !panel) return;
+
+    function close() {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const isOpen = !panel.hidden;
+      panel.hidden = isOpen;
+      btn.setAttribute('aria-expanded', String(!isOpen));
+    };
+
+    panel.querySelectorAll('.toolbar-dropdown-item').forEach((item) => {
+      item.onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        close();
+        await onItemClick(item);
+      };
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!panel.hidden && !btn.contains(e.target) && !panel.contains(e.target)) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
   }
 
-  // Secondary override next to detectWallsBtn: skips the vector lookup
-  // entirely and always runs the pixel guesser, even when vector data
-  // exists for the page — for comparing the two by eye.
-  function createDetectWallsPixelBtn() {
-    const existing = $('detectWallsPixelBtn');
+  // Wall detection is experimental — vector data is solid when the
+  // backend found it, but the pixel guesser especially can be noisy, so
+  // it's marked "BETA" and tucked into its own flask-icon dropdown rather
+  // than a full-size button. Grouped in with the rest of the measurement
+  // tools (see #betaToolsGroup in page.tsx, nested inside that same
+  // .toolbar-group pill) rather than off on its own. Never auto-run on
+  // load, only ever from picking an item here (see
+  // [[wall-detection-manual-trigger-pref]] in project memory).
+  function createDetectWallsMenu() {
+    const existing = $('detectWallsMenuBtn');
     if (existing) return existing;
-    const group = getInjectedToolGroup('debugToolsGroup');
+    const group = getInjectedToolGroup('betaToolsGroup');
     if (!group) return null;
-    const btn = document.createElement('button');
-    btn.id = 'detectWallsPixelBtn';
-    btn.className = 'mini-btn';
-    btn.textContent = 'Try pixel instead';
-    btn.title = 'Force the pixel-based guesser for this page, even if vector wall data exists — for comparison';
-    btn.style.display = 'inline-block';
-    group.appendChild(btn);
-    return btn;
-  }
 
-  // Read-only caption reporting which method actually produced the walls
-  // currently shown for this page ("Vector: 12 walls" / "Pixel guess: 8
-  // walls"), and how many. Not a button — just visibility into a decision
-  // that used to be invisible (auto vector hydration with no indication).
-  function createDetectWallsMethodCaption() {
-    const existing = $('detectWallsMethodCaption');
-    if (existing) return existing;
-    const group = getInjectedToolGroup('debugToolsGroup');
-    if (!group) return null;
-    const span = document.createElement('span');
-    span.id = 'detectWallsMethodCaption';
-    span.className = 'detect-walls-method-caption';
-    group.appendChild(span);
-    return span;
+    const wrap = document.createElement('div');
+    wrap.className = 'toolbar-dropdown';
+
+    const btn = document.createElement('button');
+    btn.id = 'detectWallsMenuBtn';
+    btn.type = 'button';
+    btn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+    btn.title = 'Wall detection (beta) — experimental, accuracy varies. Uses vector wall data when available, otherwise guesses from the page image.';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2v6a2 2 0 0 0 .24.96l5.98 10.95A2 2 0 0 1 18.5 23h-13a2 2 0 0 1-1.74-2.99l5.98-10.95A2 2 0 0 0 10 8V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+      <span class="beta-badge">Beta</span>
+      <svg class="toolbar-dropdown-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    `;
+
+    const panel = document.createElement('div');
+    panel.id = 'detectWallsMenuPanel';
+    panel.className = 'toolbar-dropdown-panel';
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+    panel.innerHTML = `
+      <button type="button" class="toolbar-dropdown-item" data-detect="auto" role="menuitem">Detect walls</button>
+      <button type="button" class="toolbar-dropdown-item" data-detect="pixel" role="menuitem">Try pixel instead</button>
+      <div id="detectWallsMethodCaption" class="detect-walls-method-caption"></div>
+    `;
+
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    group.appendChild(wrap);
+    return btn;
   }
 
   // Downloads a PNG snapshot of the current page with detected/vector
   // lines, measurements, and polygons drawn on top — plus a burned-in
-  // debug caption when "Detect Walls" has run for that page this session
+  // debug caption when wall detection has run for that page this session
   // (see drawWallDetectDebugCaption). Not for end users: this is a
   // debugging aid for eyeballing wall-detection accuracy page by page
-  // across iterations, same reasoning as detectWallsBtn above for why it's
-  // built here rather than in the React page's markup.
-  function createExportAnnotationsBtn() {
-    const existing = $('exportAnnotationsBtn');
+  // across iterations, same reasoning as createDetectWallsMenu above for
+  // why it's built here rather than in the React page's markup.
+  //
+  // A single dropdown next to Save rather than two separate buttons
+  // ("Export" / "Lines Only") — a custom button + floating menu (see
+  // wireDropdownMenu above) instead of a native <select>, which can't be
+  // themed to match the rest of the toolbar and renders its option list
+  // with whatever the OS/browser feels like that day.
+  function createExportMenu() {
+    const existing = $('exportMenuBtn');
     if (existing) return existing;
-    const group = getInjectedToolGroup('debugToolsGroup');
+    const group = getInjectedToolGroup('saveToolsGroup');
     if (!group) return null;
-    const btn = document.createElement('button');
-    btn.id = 'exportAnnotationsBtn';
-    btn.className = 'mini-btn';
-    btn.textContent = 'Export';
-    btn.title = 'Download this page as a PNG with detected walls/measurements drawn on it, for debugging';
-    group.appendChild(btn);
-    return btn;
-  }
 
-  // Same debugging export as exportAnnotationsBtn above, but with the
-  // floor plan itself left out (includeSource: false) — just the detected
-  // lines on a plain white background, for comparing where the lines
-  // landed between runs without the plan competing for attention or
-  // subtly shifting the crop/zoom between two screenshots.
-  function createExportLinesOnlyBtn() {
-    const existing = $('exportLinesOnlyBtn');
-    if (existing) return existing;
-    const group = getInjectedToolGroup('debugToolsGroup');
-    if (!group) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'toolbar-dropdown';
+
     const btn = document.createElement('button');
-    btn.id = 'exportLinesOnlyBtn';
-    btn.className = 'mini-btn';
-    btn.textContent = 'Lines Only';
-    btn.title = 'Download this page\'s detected walls/measurements as a PNG with no floor plan behind them, for comparing runs';
-    group.appendChild(btn);
+    btn.id = 'exportMenuBtn';
+    btn.type = 'button';
+    btn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+    btn.title = 'Export this page as a PNG, for debugging';
+    btn.setAttribute('aria-label', 'Export');
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      <svg class="toolbar-dropdown-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    `;
+
+    const panel = document.createElement('div');
+    panel.id = 'exportMenuPanel';
+    panel.className = 'toolbar-dropdown-panel';
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+    panel.innerHTML = `
+      <button type="button" class="toolbar-dropdown-item" data-export="full" role="menuitem">Full page</button>
+      <button type="button" class="toolbar-dropdown-item" data-export="lines" role="menuitem">Lines only</button>
+    `;
+
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    group.appendChild(wrap);
     return btn;
   }
 
@@ -760,7 +795,7 @@ async function initApp(){
           if (!cachedVectorAnalysis) {
             await loadProjectFigureAnalysis(projectId);
           }
-          updateDetectWallsButtonVisibility();
+          refreshWallDetectMethodCaption();
           return;
         }
       }
@@ -778,14 +813,14 @@ async function initApp(){
         console.log('[restore] no cached analysis from annotations, loading figure analysis');
         await loadProjectFigureAnalysis(projectId);
       }
-      updateDetectWallsButtonVisibility();
+      refreshWallDetectMethodCaption();
       return;
     }
 
     await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
-    updateDetectWallsButtonVisibility();
+    refreshWallDetectMethodCaption();
   };
 
   if (downloadPdfBtn) {
@@ -2405,11 +2440,11 @@ async function initApp(){
     detectWallsMethodCaption.textContent = `${label}: ${info.count} wall${info.count === 1 ? '' : 's'}`;
   }
 
-  // Orchestrates the "Detect Walls" click: vector-first, pixel fallback,
-  // single button — see [[wall-detection-manual-trigger-pref]].
-  // forcePixel is set by the "Try pixel instead" secondary button, which
-  // bypasses the vector lookup entirely so the two methods can be compared
-  // by eye even when vector data exists for the page.
+  // Orchestrates the Detect Walls (beta) dropdown: vector-first, pixel
+  // fallback — see [[wall-detection-manual-trigger-pref]]. forcePixel is
+  // set by the "Try pixel instead" menu item, which bypasses the vector
+  // lookup entirely so the two methods can be compared by eye even when
+  // vector data exists for the page.
   async function runWallDetection({ forcePixel = false } = {}) {
     const pageNum = currentPage || 1;
     if (!forcePixel) {
@@ -2506,7 +2541,7 @@ async function initApp(){
       // draw anything. See cacheAnalysisResult.
       cacheAnalysisResult(analysisPayload);
     }
-    updateDetectWallsButtonVisibility();
+    refreshWallDetectMethodCaption();
     return figures;
   }
 
@@ -2909,7 +2944,42 @@ async function initApp(){
   // OVERLAY ALIGNMENT
   // ======================================================
 
+  // Keeps panOffset from ever sliding the page far enough to expose blank
+  // container background on an edge it doesn't need to — the "weird
+  // bounding that shows up when I move around" bug. #pdfWrapper sits
+  // flex-centered in #pdfContainer at rest (panOffset 0,0); on either
+  // axis where the wrapper is no bigger than the container, there's
+  // nothing legitimate to pan into, so that axis is locked at 0. Where
+  // the wrapper IS bigger (zoomed in past the box, or just a page taller
+  // than the fixed 600px height), panning is capped at exactly the point
+  // where the wrapper's own edge reaches the container's edge — beyond
+  // that there's nothing left to reveal but blank, so the container stays
+  // fully covered by content the whole time it's able to be.
+  function clampPanOffset(offset){
+    if (!pdfContainer || !pdfWrapper) return offset;
+
+    const containerWidth = pdfContainer.clientWidth;
+    const containerHeight = pdfContainer.clientHeight;
+    const wrapperWidth = pdfWrapper.offsetWidth;
+    const wrapperHeight = pdfWrapper.offsetHeight;
+
+    const maxX = Math.max(0, (wrapperWidth - containerWidth) / 2);
+    const maxY = Math.max(0, (wrapperHeight - containerHeight) / 2);
+
+    return {
+      x: Math.min(maxX, Math.max(-maxX, offset.x)),
+      y: Math.min(maxY, Math.max(-maxY, offset.y))
+    };
+  }
+
   function syncOverlayTransform(){
+
+    // Mutate the shared panOffset itself (not just a local copy) so the
+    // next drag's delta math (dragStart = clientX - panOffset.x, etc.)
+    // starts from the clamped value — otherwise the first move after
+    // hitting a bound would jump by however far past it the raw drag had
+    // gone.
+    panOffset = clampPanOffset(panOffset);
 
     const overlayCanvas =
       pdfWrapper.querySelector('canvas:not(#pdfCanvas)');
@@ -2944,7 +3014,7 @@ async function initApp(){
     if (lines.length === 0) {
       vectorLineInfo.textContent = '';
     } else {
-      vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
+      vectorLineInfo.textContent = `Vector: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
     }
   }
@@ -3677,7 +3747,7 @@ async function initApp(){
 
     updateZoomLabel();
     // update page UI
-    if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${pdfDoc.numPages}`;
+    if (pageInfo) pageInfo.textContent = `${currentPage} of ${pdfDoc.numPages}`;
     if (prevPageBtn) {
       prevPageBtn.disabled = currentPage <= 1;
       prevPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
@@ -3693,20 +3763,9 @@ async function initApp(){
     restorePageAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
     updateVectorLineInfo();
     updateMeasurementList();
-    updateDetectWallsButtonVisibility();
-  }
-
-  // Both buttons stay visible on every page regardless of whether vector
-  // data exists yet — detection (vector-first, pixel-fallback) is entirely
-  // click-gated now, never automatic, so there's no "already found, hide
-  // it" state to compute. See [[wall-detection-manual-trigger-pref]]. This
-  // just keeps them shown and refreshes the per-page method caption
-  // whenever it's called (e.g. on page navigation).
-  function updateDetectWallsButtonVisibility() {
-    if (detectWallsBtn) detectWallsBtn.style.display = 'inline-block';
-    if (detectWallsPixelBtn) detectWallsPixelBtn.style.display = 'inline-block';
     refreshWallDetectMethodCaption();
   }
+
 
   function getMeasurementPixelLength(measurement) {
     if (!measurement || measurement.area != null || !Array.isArray(measurement.pts) || !measurement.pts.length) return 0;
@@ -3832,12 +3891,12 @@ async function initApp(){
         // hide page nav since there's only one "page"
         document.getElementById('prevPageBtn').style.display = 'none';
         document.getElementById('nextPageBtn').style.display = 'none';
-        document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+        document.getElementById('pageInfo').textContent = '1 of 1';
 
         // Scanned/photographed plans have no vector data to read, so wall
         // guessing runs from the pixels instead, on demand via the button
         // below, not automatically on every upload.
-        updateDetectWallsButtonVisibility();
+        refreshWallDetectMethodCaption();
       } else {
         const ab = await file.arrayBuffer();
         const lib = window.pdfjsLib;
@@ -7945,73 +8004,32 @@ async function initApp(){
     };
   }
 
-  if (detectWallsBtn) {
-    detectWallsBtn.onclick = async (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if (detectWallsBtn.disabled) return;
-      detectWallsBtn.disabled = true;
-      const originalLabel = detectWallsBtn.textContent;
-      detectWallsBtn.textContent = 'Detecting…';
-      showGlobalLoading('Finding walls…');
-      try {
-        await runWallDetection();
-      } finally {
-        hideGlobalLoading();
-        detectWallsBtn.disabled = false;
-        detectWallsBtn.textContent = originalLabel;
-      }
-    };
-  }
+  wireDropdownMenu(detectWallsMenuBtn, $('detectWallsMenuPanel'), async (item) => {
+    if (detectWallsMenuBtn.disabled) return;
+    const forcePixel = item.dataset.detect === 'pixel';
+    detectWallsMenuBtn.disabled = true;
+    showGlobalLoading(forcePixel ? 'Guessing walls from image…' : 'Finding walls…');
+    try {
+      await runWallDetection({ forcePixel });
+    } finally {
+      hideGlobalLoading();
+      detectWallsMenuBtn.disabled = false;
+    }
+  });
 
-  if (detectWallsPixelBtn) {
-    detectWallsPixelBtn.onclick = async (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if (detectWallsPixelBtn.disabled) return;
-      detectWallsPixelBtn.disabled = true;
-      const originalLabel = detectWallsPixelBtn.textContent;
-      detectWallsPixelBtn.textContent = 'Detecting…';
-      showGlobalLoading('Guessing walls from image…');
-      try {
-        await runWallDetection({ forcePixel: true });
-      } finally {
-        hideGlobalLoading();
-        detectWallsPixelBtn.disabled = false;
-        detectWallsPixelBtn.textContent = originalLabel;
-      }
-    };
-  }
-
-  if (exportAnnotationsBtn) {
-    exportAnnotationsBtn.onclick = async (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if (exportAnnotationsBtn.disabled) return;
-      exportAnnotationsBtn.disabled = true;
-      try {
-        await exportPageAnnotations(currentPage);
-      } catch (err) {
-        console.warn('annotations export failed', err);
-        toast('Export failed', 'error');
-      } finally {
-        exportAnnotationsBtn.disabled = false;
-      }
-    };
-  }
-
-  if (exportLinesOnlyBtn) {
-    exportLinesOnlyBtn.onclick = async (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if (exportLinesOnlyBtn.disabled) return;
-      exportLinesOnlyBtn.disabled = true;
-      try {
-        await exportPageAnnotations(currentPage, { includeSource: false });
-      } catch (err) {
-        console.warn('lines-only export failed', err);
-        toast('Export failed', 'error');
-      } finally {
-        exportLinesOnlyBtn.disabled = false;
-      }
-    };
-  }
+  wireDropdownMenu(exportMenuBtn, $('exportMenuPanel'), async (item) => {
+    if (exportMenuBtn.disabled) return;
+    const includeSource = item.dataset.export === 'full';
+    exportMenuBtn.disabled = true;
+    try {
+      await exportPageAnnotations(currentPage, { includeSource });
+    } catch (err) {
+      console.warn('export failed', err);
+      toast('Export failed', 'error');
+    } finally {
+      exportMenuBtn.disabled = false;
+    }
+  });
 
   // ======================================================
   // MOUSE WHEEL ZOOM
@@ -8284,13 +8302,16 @@ async function initApp(){
   // KEEP THE PAGE FIT TO ITS BOX WHEN THE BOX RESIZES
   // ======================================================
   // The initial fit-to-width in handleFile() only runs once, right when a
-  // file loads. If the box narrows afterward for any reason — rotating a
-  // phone, resizing the window, the "Measurements" sidebar opening and
-  // taking width away from #pdfPanel, the sidebar nav collapsing/expanding
-  // — the already-rendered page never re-fit and would hang over the right
-  // edge. Watch the container itself (not just window resize) so any of
-  // those cases are covered, and only ever shrink automatically — never
-  // fight a zoom level the user picked on purpose (see _userAdjustedZoom).
+  // file loads. If the box changes size afterward for any reason —
+  // rotating a phone, resizing the window, the "Measurements" sidebar
+  // opening (taking width away from #pdfPanel) or closing (giving it
+  // back) — the already-rendered page never re-fit. Watch the container
+  // itself (not just window resize) so any of those cases are covered.
+  // Re-fits in BOTH directions (shrink and grow) — it used to only ever
+  // shrink, which meant closing the Measurements sidebar freed up width
+  // that the page never grew back into, leaving a blank strip where the
+  // sidebar had been. Still never fights a zoom level the user picked on
+  // purpose (see _userAdjustedZoom).
 
   if (pdfContainer && typeof ResizeObserver !== 'undefined'){
 
@@ -8308,7 +8329,7 @@ async function initApp(){
         const fitZoom = await computeFitZoom(pdfDoc, currentPage);
 
         // Small epsilon so trivial sub-pixel jitter doesn't re-render in a loop.
-        if (fitZoom < zoom - 0.005){
+        if (Math.abs(fitZoom - zoom) > 0.005){
 
           zoom = fitZoom;
           await renderPage();
@@ -8508,7 +8529,7 @@ async function initApp(){
           // Caches for the "Detect Walls" button — doesn't draw anything;
           // the just-uploaded PDF is loaded but no click has happened yet.
           cacheAnalysisResult(analysis);
-          updateDetectWallsButtonVisibility();
+          refreshWallDetectMethodCaption();
         }
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);

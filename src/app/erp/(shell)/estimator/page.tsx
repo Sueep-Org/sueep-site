@@ -2,6 +2,35 @@
 
 import { useEffect, useRef } from "react";
 
+// Small stroke-style icon wrapper for toolbar buttons — one consistent
+// line-icon language (uniform size/weight, currentColor so hover/active
+// states recolor the icon along with the button text) instead of emoji or
+// bare unicode glyphs, which render inconsistently across platforms/fonts
+// and read as mismatched next to each other.
+function Icon({
+  children,
+  size = 16,
+}: {
+  children: React.ReactNode;
+  size?: number;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
 // A minimal stand-in for window.confirm(), which throws "not supported" in
 // this Next.js-hosted environment (no real OS-level dialog available to
 // it) — same reasoning and same visual style as
@@ -106,7 +135,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "wall-detect-14";
+    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-26";
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -312,47 +341,91 @@ export default function EstimatorPage() {
 
           {/* PDF VIEWER */}
           <div id="mainContent" className="hidden">
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              {/* TOOLBAR */}
+            <div className="window-card mb-6">
+              {/* TOOLBAR — kept to a single row (flex-nowrap) rather than
+                  wrapping to a second line; on narrow windows it scrolls
+                  horizontally (overflow-x-auto) instead of stacking. */}
               <div
                 id="toolbar"
-                className="flex items-center gap-3 mb-4 flex-wrap"
+                className="flex items-center gap-2 mb-4 flex-nowrap overflow-x-auto"
               >
-                {/* Drawing / measurement tools */}
+                {/* Drawing / measurement tools — icon-only so the row reads
+                    at a glance instead of as a wall of button labels; each
+                    keeps a title/aria-label for the tooltip and screen
+                    readers. Order: undo, then Single/Double sided (a
+                    measure-specific setting) right before Measure itself,
+                    then the three draw tools, then wall detection (beta —
+                    injected by simple-app.js, see createDetectWallsMenu),
+                    grouped here with the rest of the measurement tools
+                    rather than off on its own. */}
                 <div className="toolbar-group">
-                  <button id="measureToggle" className="mini-btn" title="Measure a distance">
-                    Measure
-                  </button>
-                  <button id="drawRectBtn" className="mini-btn" title="Draw a rectangular area">
-                    Rect
-                  </button>
-                  <button id="drawIrregBtn" className="mini-btn" title="Draw a freeform area">
-                    Freeform
-                  </button>
                   <button
                     id="undoShapeBtn"
-                    className="mini-btn"
+                    className="mini-btn icon-btn"
                     type="button"
                     title="Undo last shape"
+                    aria-label="Undo last shape"
                     disabled
                   >
-                    ↺ Undo
+                    <Icon>
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </Icon>
                   </button>
                   <button id="doubleSideToggle" className="mini-btn" title="Toggle single/double-sided measurement">
                     Single sided
                   </button>
+                  <button
+                    id="measureToggle"
+                    className="mini-btn icon-btn"
+                    title="Measure a distance"
+                    aria-label="Measure a distance"
+                  >
+                    <Icon>
+                      <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z" />
+                      <path d="m14.5 12.5 2-2" />
+                      <path d="m11.5 9.5 2-2" />
+                      <path d="m8.5 6.5 2-2" />
+                    </Icon>
+                  </button>
+                  <button
+                    id="drawRectBtn"
+                    className="mini-btn icon-btn"
+                    title="Draw a rectangular area"
+                    aria-label="Draw a rectangular area"
+                  >
+                    <Icon>
+                      <rect x="4" y="4" width="16" height="16" rx="2" />
+                    </Icon>
+                  </button>
+                  <button
+                    id="drawIrregBtn"
+                    className="mini-btn icon-btn"
+                    title="Draw a freeform area"
+                    aria-label="Draw a freeform area"
+                  >
+                    <Icon>
+                      <path d="M2 12c1.5-4 3.5-4 5 0s3.5 4 5 0 3.5-4 5 0 3.5 4 5 0" />
+                    </Icon>
+                  </button>
+                  <div id="betaToolsGroup" />
                 </div>
 
                 <div className="toolbar-divider" aria-hidden="true" />
 
                 {/* Zoom controls */}
                 <div className="zoom-group">
-                  <button id="zoomOutBtn" className="mini-btn" title="Zoom out">
-                    −
+                  <button id="zoomOutBtn" className="mini-btn icon-btn" title="Zoom out" aria-label="Zoom out">
+                    <Icon>
+                      <path d="M5 12h14" />
+                    </Icon>
                   </button>
                   <div id="zoomLabel">100%</div>
-                  <button id="zoomInBtn" className="mini-btn" title="Zoom in">
-                    +
+                  <button id="zoomInBtn" className="mini-btn icon-btn" title="Zoom in" aria-label="Zoom in">
+                    <Icon>
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </Icon>
                   </button>
                   <button id="zoomResetBtn" className="mini-btn" title="Reset zoom">
                     Reset
@@ -361,44 +434,43 @@ export default function EstimatorPage() {
 
                 <div className="toolbar-divider" aria-hidden="true" />
 
-                {/* Page navigation */}
+                {/* Page navigation — pageInfo/vectorLineInfo left to size to
+                    their own (short) content instead of reserving a fixed
+                    width, so this cluster stays as small as possible. */}
                 <div className="toolbar-group">
                   <button
                     id="prevPageBtn"
-                    className="mini-btn"
+                    className="mini-btn icon-btn"
                     title="Previous page"
+                    aria-label="Previous page"
                     style={{ display: "none" }}
                   >
-                    ◀
+                    <Icon>
+                      <path d="m15 18-6-6 6-6" />
+                    </Icon>
                   </button>
                   <div
                     style={{
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
-                      minWidth: "140px",
                     }}
                   >
-                    <div
-                      id="pageInfo"
-                      style={{ minWidth: "120px", textAlign: "center" }}
-                    >
-                      Page 1
+                    <div id="pageInfo" style={{ fontSize: "12px", fontWeight: 600 }}>
+                      1 of 1
                     </div>
-                    <div
-                      id="vectorLineInfo"
-                      style={{ fontSize: "12px", color: "#4b5563" }}
-                    >
-                      Vector lines: unknown
-                    </div>
+                    <div id="vectorLineInfo" style={{ fontSize: "10px", color: "#9ca3af" }} />
                   </div>
                   <button
                     id="nextPageBtn"
-                    className="mini-btn"
+                    className="mini-btn icon-btn"
                     title="Next page"
+                    aria-label="Next page"
                     style={{ display: "none" }}
                   >
-                    ▶
+                    <Icon>
+                      <path d="m9 18 6-6-6-6" />
+                    </Icon>
                   </button>
                 </div>
 
@@ -409,33 +481,37 @@ export default function EstimatorPage() {
                 <div id="viewToolsGroup" className="toolbar-group" />
 
                 {/* Save (injected by simple-app.js, see createSavePdfBtn)
-                    — a real action, not a debug tool, so it's kept out of
-                    debugToolsGroup below and styled to stand out (see
-                    #savePdfBtn in estimator-ui.css) rather than blending
-                    into that muted cluster. */}
-                <div id="saveToolsGroup" />
+                    plus the Export dropdown (see createExportMenu). Save
+                    keeps its own solid color (see #savePdfBtn in
+                    estimator-ui.css) so it still stands out inside the
+                    pill. */}
+                <div id="saveToolsGroup" className="toolbar-group" />
 
-                {/* Debug / QA tools (Detect Walls, Export — injected by
-                    simple-app.js, see their createXBtn functions).
-                    Visually set apart from the drawing tools above since
-                    these aren't everyday actions. */}
-                <div id="debugToolsGroup" className="toolbar-group toolbar-group-debug" />
-
-                <button
-                  id="toggleSidebarBtn"
-                  className="mini-btn"
-                  title="Toggle measurements list"
-                  style={{ marginLeft: "auto" }}
-                >
-                  Measurements
-                </button>
+                {/* Wrapped in its own pill (rather than a bare button) so
+                    it flattens/hovers the same way as every other toolbar
+                    button — see ".toolbar-group .mini-btn" in
+                    estimator-ui.css — instead of standing out as the one
+                    bordered button. marginLeft:auto pushes this pill (and
+                    only this one) to the far right; it must stay last. */}
+                <div className="toolbar-group" style={{ marginLeft: "auto" }}>
+                  <button
+                    id="toggleSidebarBtn"
+                    className="mini-btn"
+                    title="Toggle measurements list"
+                  >
+                    Measurements
+                  </button>
+                </div>
               </div>
 
               {/* VIEWER ROW */}
               <div id="viewerRow" className="flex flex-col lg:flex-row gap-6">
-                {/* PDF PANEL */}
+                {/* PDF PANEL — no "PDF Preview" label; the toolbar sitting
+                    directly above it already makes it obvious what this
+                    is, so the heading was just repeating what's visible.
+                    Measurements keeps its own heading since that panel
+                    isn't self-explanatory the same way. */}
                 <div id="pdfPanel" className="flex-1">
-                  <h2 className="text-xl font-semibold mb-2">PDF Preview</h2>
                   <div id="pdfContainer">
                     <div id="pdfWrapper">
                       <canvas id="pdfCanvas"></canvas>
@@ -443,159 +519,157 @@ export default function EstimatorPage() {
                   </div>
                 </div>
 
-                {/* MEASUREMENT SIDEBAR */}
-                <aside id="measurementSidebar" className="w-full lg:w-80">
-                  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+                {/* MEASUREMENT SIDEBAR — a plain column rather than a
+                    second nested white/shadow card, since it already sits
+                    inside the one card wrapping this whole window; a
+                    hairline divider on large screens (lg:border-l) is
+                    enough to separate it from the PDF panel. */}
+                <aside
+                  id="measurementSidebar"
+                  className="w-full lg:w-80 lg:border-l lg:border-gray-100 lg:pl-6"
+                >
+                  <h3 className="text-base font-semibold text-gray-800 mb-3">
+                    Measurements
+                  </h3>
+                  <div id="measurementsContent">
                     <div className="mb-3">
-                      <h3 className="text-lg font-semibold mb-2">
-                        Measurements
-                      </h3>
+                      <div
+                        id="measurementScaleInfo"
+                        style={{ fontSize: "12px", color: "#6b7280" }}
+                      >
+                        Scale not set
+                      </div>
                     </div>
-                    <div id="measurementsContent">
-                      <div className="mb-3">
-                        <div
-                          id="measurementScaleInfo"
-                          style={{ fontSize: "12px", color: "#6b7280" }}
-                        >
-                          Scale not set
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2 flex-wrap mb-3">
-                        <button
-                          id="changeScaleBtn"
-                          className="mini-btn"
-                          style={{ flex: 1, minWidth: "110px" }}
-                        >
-                          Change scale
-                        </button>
-                      </div>
-
-                      {/* MEASUREMENT PAGE NAV */}
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          marginBottom: "12px",
-                        }}
+                    <div className="flex gap-2 flex-wrap mb-3">
+                      <button
+                        id="changeScaleBtn"
+                        className="mini-btn"
+                        style={{ flex: 1, minWidth: "110px" }}
                       >
-                        <button
-                          id="measurementPrevPageBtn"
-                          className="mini-btn"
-                          style={{ flex: 1 }}
-                        >
-                          ←
-                        </button>
-                        <input
-                          id="measurementPageInput"
-                          type="number"
-                          min={1}
-                          placeholder="1"
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            padding: "4px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "6px",
-                            textAlign: "center",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <button
-                          id="measurementNextPageBtn"
-                          className="mini-btn"
-                          style={{ flex: 1 }}
-                        >
-                          →
-                        </button>
-                        <span
-                          id="measurementPageLabel"
-                          style={{ display: "none" }}
-                        >
-                          Page 1
-                        </span>
-                      </div>
+                        Change scale
+                      </button>
+                    </div>
 
-                      <div
-                        id="extractedMeasurementsContainer"
-                        style={{ display: "none", marginBottom: "12px" }}
+                    {/* MEASUREMENT PAGE NAV */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <button
+                        id="measurementPrevPageBtn"
+                        className="mini-btn icon-btn"
+                        title="Previous page"
+                        aria-label="Previous page"
+                      >
+                        <Icon>
+                          <path d="m15 18-6-6 6-6" />
+                        </Icon>
+                      </button>
+                      <input
+                        id="measurementPageInput"
+                        type="number"
+                        min={1}
+                        placeholder="1"
+                        className="mini-input"
+                        style={{ flex: 1, minWidth: 0, textAlign: "center" }}
                       />
-
-                      {/* TWO-COLUMN MEASUREMENT LIST */}
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: "12px",
-                        }}
+                      <button
+                        id="measurementNextPageBtn"
+                        className="mini-btn icon-btn"
+                        title="Next page"
+                        aria-label="Next page"
                       >
-                        <div>
-                          <h4
-                            style={{
-                              fontWeight: 600,
-                              fontSize: "13px",
-                              marginBottom: "8px",
-                              borderBottom: "2px solid #3b82f6",
-                              paddingBottom: "4px",
-                            }}
-                          >
+                        <Icon>
+                          <path d="m9 18 6-6-6-6" />
+                        </Icon>
+                      </button>
+                      <span
+                        id="measurementPageLabel"
+                        style={{ display: "none" }}
+                      >
+                        Page 1
+                      </span>
+                    </div>
+
+                    <div
+                      id="extractedMeasurementsContainer"
+                      style={{ display: "none", marginBottom: "12px" }}
+                    />
+
+                    {/* TWO-COLUMN MEASUREMENT LIST */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "12px",
+                      }}
+                    >
+                      <div>
+                        <div className="measurement-column-label">
+                          <span
+                            className="measurement-column-swatch"
+                            style={{ background: "#3b82f6" }}
+                          />
+                          <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
                             Line Measurements
                           </h4>
-                          <div
-                            id="measurementListLeft"
-                            style={{
-                              fontSize: "12px",
-                              color: "#374151",
-                              minHeight: "200px",
-                              maxHeight: "220px",
-                              overflowY: "auto",
-                              paddingRight: "4px",
-                            }}
-                          >
-                            No measurements
-                          </div>
                         </div>
-                        <div>
-                          <h4
-                            style={{
-                              fontWeight: 600,
-                              fontSize: "13px",
-                              marginBottom: "8px",
-                              borderBottom: "2px solid #10b981",
-                              paddingBottom: "4px",
-                            }}
-                          >
+                        <div
+                          id="measurementListLeft"
+                          className="measurement-column-list"
+                          style={{
+                            fontSize: "12px",
+                            color: "#374151",
+                            minHeight: "200px",
+                            maxHeight: "220px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          No measurements
+                        </div>
+                      </div>
+                      <div>
+                        <div className="measurement-column-label">
+                          <span
+                            className="measurement-column-swatch"
+                            style={{ background: "#10b981" }}
+                          />
+                          <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
                             Surface Area
                           </h4>
-                          <div
-                            id="measurementListRight"
-                            style={{
-                              fontSize: "12px",
-                              color: "#374151",
-                              minHeight: "200px",
-                              maxHeight: "220px",
-                              overflowY: "auto",
-                              paddingRight: "4px",
-                            }}
-                          >
-                            No surface area
-                          </div>
+                        </div>
+                        <div
+                          id="measurementListRight"
+                          className="measurement-column-list"
+                          style={{
+                            fontSize: "12px",
+                            color: "#374151",
+                            minHeight: "200px",
+                            maxHeight: "220px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          No surface area
                         </div>
                       </div>
-                      <div
-                        id="measurementPageAggregateInfo"
-                        style={{
-                          fontSize: "12px",
-                          color: "#6b7280",
-                          marginTop: "12px",
-                        }}
-                      >
-                        Page total: 0&quot;
-                      </div>
                     </div>
-                    {/* measurementsContent */}
+                    <div
+                      id="measurementPageAggregateInfo"
+                      style={{
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        marginTop: "12px",
+                      }}
+                    >
+                      Page total: 0&quot;
+                    </div>
                   </div>
+                  {/* measurementsContent */}
                 </aside>
               </div>
             </div>
