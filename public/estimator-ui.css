@@ -416,6 +416,7 @@
 #measureToggle.active,
 #drawRectBtn.active,
 #drawIrregBtn.active,
+#drawSelectBtn.active,
 #doubleSideToggle.active,
 #showLabelsToggle.active,
 #dimBackgroundToggle.active {
@@ -427,6 +428,7 @@
 #measureToggle.active:hover,
 #drawRectBtn.active:hover,
 #drawIrregBtn.active:hover,
+#drawSelectBtn.active:hover,
 #doubleSideToggle.active:hover,
 #showLabelsToggle.active:hover,
 #dimBackgroundToggle.active:hover {

@@ -43,6 +43,17 @@ export class CanvasOverlay {
     this._hoverMeasurementId = null;
     this._selectedMeasurementId = null;
     this._selectedPolygonId = null;
+    // Box-select (Select tool) state — a separate multi-item selection
+    // set for measurements, alongside the single _selectedMeasurementId
+    // above (left untouched by everything below; every existing
+    // click-to-select/drag/delete path still only ever uses that one).
+    // Bulk actions (delete, group-drag, single/double-sided toggle) check
+    // this set first and fall back to _selectedMeasurementId so a lone
+    // click-selected measurement still works the same as before.
+    this._selectedMeasurementIds = new Set();
+    this._marqueeStart = null; // {x,y} — box-select drag start
+    this._marqueePreview = null; // {x1,y1,x2,y2} — box-select drag in progress
+    this._groupDragState = null; // dragging every box-selected measurement together
 
     this._edgeWorker = null;
     this._fillWorker = null;
@@ -310,7 +321,7 @@ export class CanvasOverlay {
       }
 
       const isHover = this._hoverMeasurementId === m.id;
-      const isSelected = this._selectedMeasurementId === m.id;
+      const isSelected = this._selectedMeasurementId === m.id || this._selectedMeasurementIds.has(m.id);
       for (const seg of m.pts) {
         const a = { x: seg.x1 * w, y: seg.y1 * h };
         const b = { x: seg.x2 * w, y: seg.y2 * h };
@@ -353,6 +364,11 @@ export class CanvasOverlay {
           drawLabel(ctx, (p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2 - 16 * this.zoom, `${areaScaled.toFixed(2)} sq`, this.zoom);
         }
       }
+    }
+
+    if (this._marqueePreview) {
+      const p = this._marqueePreview;
+      drawMarqueeSelection(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
     }
 
     if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
@@ -529,6 +545,22 @@ export class CanvasOverlay {
     );
   }
 
+  // Whether a measurement "touches" a box-select rect, in pixel space —
+  // line measurements only (see the Select tool in _onPointerUp). Area
+  // measurements are deliberately left out of box-select for now: it's
+  // scoped to lines, which is what single/double-sided (the other new
+  // bulk action) applies to anyway, and it keeps this from having to
+  // also teach the polygon-selection rendering path (driven by
+  // _selectedPolygonId, not this) about a multi-select set.
+  _measurementIntersectsRect(measurement, box, w, h) {
+    if (this._isAreaMeasurement(measurement) || !Array.isArray(measurement.pts)) return false;
+    return measurement.pts.some((seg) => segmentIntersectsRect(
+      { x: (seg.x1 || 0) * w, y: (seg.y1 || 0) * h },
+      { x: (seg.x2 || 0) * w, y: (seg.y2 || 0) * h },
+      box
+    ));
+  }
+
   _storeMeasurement(measurement, { select = true } = {}) {
     if (!measurement) return null;
 
@@ -667,21 +699,53 @@ export class CanvasOverlay {
 
     const isCopy = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'c';
     const isPaste = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'v';
-    // Alt+click deletes one detected line at a time (see _onClick); this is
-    // the equivalent for however many are currently multi-selected via
-    // Ctrl/Cmd+click, so a batch of them can be cleared in one go.
-    const isDelete = (event.key === 'Delete' || event.key === 'Backspace') && this._selectedLineIds.size > 0;
+    // Alt+click deletes one detected line/measurement at a time (see
+    // _onClick); this is the equivalent for however many are currently
+    // selected — lines multi-selected via Ctrl/Cmd+click, or measurements
+    // selected (one via a plain click, or several via the Select tool's
+    // box-select) — so a whole batch can be cleared in one go.
+    const hasSelectedMeasurements = this._selectedMeasurementIds.size > 0 || Boolean(this._selectedMeasurementId);
+    const isDelete = (event.key === 'Delete' || event.key === 'Backspace') &&
+      (this._selectedLineIds.size > 0 || hasSelectedMeasurements);
     if (!isCopy && !isPaste && !isDelete) return;
 
     event.preventDefault();
     event.stopPropagation();
 
     if (isDelete) {
-      const count = this._selectedLineIds.size;
-      for (const id of this._selectedLineIds) this.store.removeLine(this.currentPage, id);
-      this._selectedLineIds.clear();
+      let removedLines = 0;
+      let removedMeasurements = 0;
+
+      if (this._selectedLineIds.size > 0) {
+        removedLines = this._selectedLineIds.size;
+        for (const id of this._selectedLineIds) this.store.removeLine(this.currentPage, id);
+        this._selectedLineIds.clear();
+      }
+
+      if (hasSelectedMeasurements) {
+        const ids = this._selectedMeasurementIds.size > 0
+          ? Array.from(this._selectedMeasurementIds)
+          : [this._selectedMeasurementId];
+        const measurements = this.store.listMeasurements(this.currentPage) || [];
+        for (const id of ids) {
+          const measurement = measurements.find((entry) => entry.id === id);
+          if (!measurement) continue;
+          this.onLineMeasurementRemoved?.(measurement);
+          this.store.removeMeasurement(this.currentPage, id);
+          removedMeasurements += 1;
+        }
+        this._selectedMeasurementId = null;
+        this._selectedMeasurementIds = new Set();
+        this._selectedPolygonId = null;
+      }
+
       this.onMeasurementsChanged?.();
-      toast(`${count} line${count === 1 ? '' : 's'} removed`, 'info');
+
+      const parts = [];
+      if (removedLines) parts.push(`${removedLines} line${removedLines === 1 ? '' : 's'}`);
+      if (removedMeasurements) parts.push(`${removedMeasurements} measurement${removedMeasurements === 1 ? '' : 's'}`);
+      if (parts.length) toast(`${parts.join(' and ')} removed`, 'info');
+
       this.redraw();
       return;
     }
@@ -855,32 +919,46 @@ export class CanvasOverlay {
     }
 
     if (type === 'measurement') {
-      const measurement = item;
-      if (Array.isArray(measurement.pts)) {
-        measurement.pts = (initialSnapshot.pts || []).map((seg) => ({
-          ...seg,
-          x1: clamp((seg.x1 || 0) + deltaX),
-          y1: clamp((seg.y1 || 0) + deltaY),
-          x2: clamp((seg.x2 || 0) + deltaX),
-          y2: clamp((seg.y2 || 0) + deltaY)
-        }));
-      }
-
-      if (Array.isArray(measurement.shapePoints)) {
-        measurement.shapePoints = applyToPoints(initialSnapshot.shapePoints || []);
-      }
-
-      if (Array.isArray(measurement.polygonPoints)) {
-        measurement.polygonPoints = applyToPoints(initialSnapshot.polygonPoints || []);
-      }
-
-      const polygons = this.store.getPage(this.currentPage) || [];
-      const polygon = polygons.find((entry) => entry.measurementId === measurement.id || entry.id === measurement.id || entry.id === (measurement.polygonId || measurement.id));
-      if (polygon && Array.isArray(polygon.points)) {
-        polygon.points = applyToPoints(initialSnapshot.shapePoints || initialSnapshot.polygonPoints || []);
-      }
-
+      this._applyMeasurementDragDelta(item, initialSnapshot, deltaX, deltaY);
       this.redraw();
+    }
+  }
+
+  // Pulled out of _updateDragTarget's 'measurement' branch so the group
+  // drag path below (multiple box-selected measurements moved together)
+  // can apply the exact same per-measurement math without duplicating it.
+  // Doesn't redraw itself — callers decide when (the group path redraws
+  // once after moving everything, not once per item).
+  _applyMeasurementDragDelta(measurement, initialSnapshot, deltaX, deltaY) {
+    const clamp = (value) => Math.min(1, Math.max(0, value));
+    const applyToPoints = (points) => points.map((point) => ({
+      ...point,
+      x: clamp((point.x || 0) + deltaX),
+      y: clamp((point.y || 0) + deltaY)
+    }));
+
+    if (Array.isArray(measurement.pts)) {
+      measurement.pts = (initialSnapshot.pts || []).map((seg) => ({
+        ...seg,
+        x1: clamp((seg.x1 || 0) + deltaX),
+        y1: clamp((seg.y1 || 0) + deltaY),
+        x2: clamp((seg.x2 || 0) + deltaX),
+        y2: clamp((seg.y2 || 0) + deltaY)
+      }));
+    }
+
+    if (Array.isArray(measurement.shapePoints)) {
+      measurement.shapePoints = applyToPoints(initialSnapshot.shapePoints || []);
+    }
+
+    if (Array.isArray(measurement.polygonPoints)) {
+      measurement.polygonPoints = applyToPoints(initialSnapshot.polygonPoints || []);
+    }
+
+    const polygons = this.store.getPage(this.currentPage) || [];
+    const polygon = polygons.find((entry) => entry.measurementId === measurement.id || entry.id === measurement.id || entry.id === (measurement.polygonId || measurement.id));
+    if (polygon && Array.isArray(polygon.points)) {
+      polygon.points = applyToPoints(initialSnapshot.shapePoints || initialSnapshot.polygonPoints || []);
     }
   }
 
@@ -890,6 +968,18 @@ export class CanvasOverlay {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     this._lastPointerPosition = { x, y };
+
+    if (this._groupDragState && this._groupDragState.startPoint) {
+      const startPoint = this._groupDragState.startPoint;
+      const dx = (x - startPoint.x) / Math.max(1, this.overlay.width || 1);
+      const dy = (y - startPoint.y) / Math.max(1, this.overlay.height || 1);
+      this._groupDragState.lastPoint = { x, y };
+      for (const entry of this._groupDragState.items) {
+        this._applyMeasurementDragDelta(entry.measurement, entry.initialSnapshot, dx, dy);
+      }
+      this.redraw();
+      return;
+    }
 
     if (this._dragState && this._dragState.startPoint) {
       const startPoint = this._dragState.startPoint;
@@ -902,6 +992,12 @@ export class CanvasOverlay {
 
     // Drawing-specific hover logic — only when a drawing tool is active
     if (this.active) {
+      if (this.tool === 'select' && this._marqueeStart) {
+        this._marqueePreview = { x1: this._marqueeStart.x, y1: this._marqueeStart.y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
+
       if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
         const end = this.tool === 'measure'
           ? snapMeasurementEndpoint(this._measureStart, { x, y })
@@ -993,6 +1089,33 @@ export class CanvasOverlay {
       if (target) {
         e.preventDefault();
         e.stopPropagation();
+
+        // Clicked on a measurement that's part of an active box-selection
+        // (see the Select tool below) — drag the whole group together
+        // instead of collapsing the selection down to just this one item.
+        if (
+          target.type === 'measurement' &&
+          this._selectedMeasurementIds.size > 1 &&
+          this._selectedMeasurementIds.has(target.value.id)
+        ) {
+          const measurements = this.store.listMeasurements(this.currentPage) || [];
+          this._groupDragState = {
+            startPoint: { x, y },
+            lastPoint: { x, y },
+            items: Array.from(this._selectedMeasurementIds)
+              .map((id) => measurements.find((entry) => entry.id === id))
+              .filter(Boolean)
+              .map((measurement) => ({
+                measurement,
+                initialSnapshot: this._captureDragSnapshot(measurement, 'measurement')
+              }))
+          };
+          this._suppressNextClick = true;
+          try { if (this.overlay.setPointerCapture) this.overlay.setPointerCapture(e.pointerId); } catch (err) {}
+          this.redraw();
+          return;
+        }
+
         this._copiedMeasurement = target;
         this._lastClickedCopyTarget = target;
         this._dragState = {
@@ -1022,11 +1145,23 @@ export class CanvasOverlay {
     }
 
     // Not clicking on a shape — clear selection
-    if (this._selectedPolygonId || this._selectedMeasurementId || this._selectedLineIds?.size) {
+    if (this._selectedPolygonId || this._selectedMeasurementId || this._selectedLineIds?.size || this._selectedMeasurementIds.size) {
       this._selectedPolygonId = null;
       this._selectedMeasurementId = null;
       this._selectedLineIds = new Set();
+      this._selectedMeasurementIds = new Set();
       this.redraw();
+    }
+
+    // Box-select: dragging empty canvas while the Select tool is armed
+    // draws a marquee instead of starting a shape (panning is disabled
+    // for this tool too — see the mousedown guard in simple-app.js).
+    if (this.active && this.tool === 'select') {
+      this._marqueeStart = { x, y };
+      this._marqueePreview = { x1: x, y1: y, x2: x, y2: y };
+      try { if (this.overlay.setPointerCapture) this.overlay.setPointerCapture(e.pointerId); } catch (err) {}
+      this.redraw();
+      return;
     }
 
     // Start drawing (only if drawing mode is active)
@@ -1060,6 +1195,79 @@ export class CanvasOverlay {
       this._dragState = null;
       try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
       this.onMeasurementsChanged?.();
+      this.redraw();
+      return;
+    }
+
+    // Finishing a group drag (multiple box-selected measurements moved
+    // together) — also handled regardless of drawing mode, same as the
+    // single-item _dragState above.
+    if (this._groupDragState) {
+      const groupDragState = this._groupDragState;
+      const moved = Boolean(groupDragState.lastPoint && groupDragState.startPoint) && (
+        Math.abs((groupDragState.lastPoint.x || 0) - (groupDragState.startPoint.x || 0)) > 0.5 ||
+        Math.abs((groupDragState.lastPoint.y || 0) - (groupDragState.startPoint.y || 0)) > 0.5
+      );
+      if (moved) {
+        // One undo entry per item rather than teaching undoLastShapeAction
+        // a new "group move" action type — reuses it exactly as-is. The
+        // tradeoff: Undo has to be pressed once per item to fully revert
+        // one group move, instead of once for the whole group.
+        for (const entry of groupDragState.items) {
+          this._pushShapeUndo({
+            type: 'move',
+            page: this.currentPage,
+            targetType: 'measurement',
+            itemRef: entry.measurement,
+            beforeSnapshot: entry.initialSnapshot
+          });
+        }
+      }
+      this._groupDragState = null;
+      try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
+      this.onMeasurementsChanged?.();
+      this.redraw();
+      return;
+    }
+
+    // Finishing a box-select drag — same "regardless of drawing mode"
+    // treatment, since it needs to run even though the checks below this
+    // point gate everything on tool === 'measure'/'rect'.
+    if (this._marqueeStart) {
+      const upRect = this.overlay.getBoundingClientRect();
+      const upX = e.clientX - upRect.left;
+      const upY = e.clientY - upRect.top;
+
+      const box = {
+        x1: Math.min(this._marqueeStart.x, upX),
+        y1: Math.min(this._marqueeStart.y, upY),
+        x2: Math.max(this._marqueeStart.x, upX),
+        y2: Math.max(this._marqueeStart.y, upY)
+      };
+      // A few pixels of accidental drag (vs. a real box) just clears the
+      // selection, same as a plain click on empty canvas already does
+      // above.
+      const isRealDrag = (box.x2 - box.x1) > 3 || (box.y2 - box.y1) > 3;
+
+      this._marqueeStart = null;
+      this._marqueePreview = null;
+      try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
+
+      if (isRealDrag) {
+        const w = this.overlay.width;
+        const h = this.overlay.height;
+        const measurements = this.store.listMeasurements(this.currentPage) || [];
+        const matched = new Set();
+        for (const m of measurements) {
+          if (this._measurementIntersectsRect(m, box, w, h)) matched.add(m.id);
+        }
+        this._selectedMeasurementIds = matched;
+        this._selectedMeasurementId = null;
+        if (matched.size) {
+          toast(`${matched.size} measurement${matched.size === 1 ? '' : 's'} selected`, 'info');
+        }
+      }
+
       this.redraw();
       return;
     }
@@ -1656,45 +1864,51 @@ export class CanvasOverlay {
   // places selection gets set (_onPointerDown, _pasteMeasurement,
   // _onContextMenu, ...).
   _notifySelectionChangeIfNeeded() {
-    const key = `${this._selectedMeasurementId || ''}|${this._selectedPolygonId || ''}`;
+    const key = `${this._selectedMeasurementId || ''}|${this._selectedPolygonId || ''}|${Array.from(this._selectedMeasurementIds).sort().join(',')}`;
     if (key === this._lastNotifiedSelectionKey) return;
     this._lastNotifiedSelectionKey = key;
     this.onSelectionChanged?.();
   }
 
-  // The measurement currently selected on canvas, if it's a line
-  // measurement (not an area/rect shape — "single/double-sided" only
-  // means anything for a linear wall measurement). Used by the
-  // Single/Double sided toolbar toggle to act on the selected measurement
-  // instead of just the default for new ones (see setSelectedMeasurementDoubleSided).
-  getSelectedLineMeasurement() {
-    if (!this._selectedMeasurementId) return null;
-    const measurement = (this.store.listMeasurements(this.currentPage) || [])
-      .find((entry) => entry.id === this._selectedMeasurementId);
-    if (!measurement || this._isAreaMeasurement(measurement)) return null;
-    return measurement;
+  // Every currently-selected line measurement (not area/rect shapes —
+  // "single/double-sided" only means anything for a linear wall
+  // measurement) — one via a plain click (_selectedMeasurementId), or
+  // several via the Select tool's box-select (_selectedMeasurementIds).
+  // Used by the Single/Double sided toolbar toggle so it acts on
+  // whatever's selected instead of just the default for new measurements
+  // (see setSelectedMeasurementsDoubleSided).
+  getSelectedLineMeasurements() {
+    const ids = this._selectedMeasurementIds.size > 0
+      ? Array.from(this._selectedMeasurementIds)
+      : (this._selectedMeasurementId ? [this._selectedMeasurementId] : []);
+    if (!ids.length) return [];
+    const measurements = this.store.listMeasurements(this.currentPage) || [];
+    return ids
+      .map((id) => measurements.find((entry) => entry.id === id))
+      .filter((measurement) => measurement && !this._isAreaMeasurement(measurement));
   }
 
-  // Flips the selected line measurement's single/double-sided flag after
+  // Sets every selected line measurement's single/double-sided flag after
   // the fact, rather than only setting the default new measurements are
   // created with (see this.doubleSided/setDoubleSided). The real-world
   // length was doubled into `inches` at creation time (see the line-
-  // measurement creation code below), not recomputed live from
+  // measurement creation code above), not recomputed live from
   // doubleSided on every redraw/total, so flipping the flag here has to
   // also double/halve the stored inches to match — otherwise every
   // downstream total that reads `inches` would silently go stale.
-  setSelectedMeasurementDoubleSided(value) {
-    const measurement = this.getSelectedLineMeasurement();
-    if (!measurement) return false;
+  setSelectedMeasurementsDoubleSided(value) {
+    const measurements = this.getSelectedLineMeasurements();
+    if (!measurements.length) return false;
 
     const nextDoubleSided = Boolean(value);
-    if (Boolean(measurement.doubleSided) === nextDoubleSided) return true;
-
-    measurement.inches = nextDoubleSided
-      ? (measurement.inches || 0) * 2
-      : (measurement.inches || 0) / 2;
-    measurement.doubleSided = nextDoubleSided;
-    measurement.label = formatInches(measurement.inches);
+    for (const measurement of measurements) {
+      if (Boolean(measurement.doubleSided) === nextDoubleSided) continue;
+      measurement.inches = nextDoubleSided
+        ? (measurement.inches || 0) * 2
+        : (measurement.inches || 0) / 2;
+      measurement.doubleSided = nextDoubleSided;
+      measurement.label = formatInches(measurement.inches);
+    }
 
     this.onMeasurementsChanged?.();
     this.redraw();
@@ -1867,36 +2081,15 @@ function drawPreviewLine(ctx, a, b, { doubleSided = false } = {}) {
   ctx.save();
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 3;
-  // Same dashed=single/solid=double convention as drawMeasurementLine.
+  // Same dashed=single/solid=double convention as drawMeasurementLine —
+  // a single line either way.
   ctx.setLineDash(doubleSided ? [] : [6, 6]);
   ctx.lineCap = 'round';
 
-  if (doubleSided) {
-    // Same double-line treatment as drawMeasurementLine, so the preview
-    // while dragging out a new line already shows which mode you're in
-    // instead of only the toolbar toggle telling you.
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const offset = Math.max(2.5, ctx.lineWidth);
-    const nx = (-dy / len) * offset;
-    const ny = (dx / len) * offset;
-
-    ctx.beginPath();
-    ctx.moveTo(a.x + nx, a.y + ny);
-    ctx.lineTo(b.x + nx, b.y + ny);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(a.x - nx, a.y - ny);
-    ctx.lineTo(b.x - nx, b.y - ny);
-    ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -1940,6 +2133,57 @@ function drawIrregularPath(ctx, points, preview) {
   ctx.restore();
 }
 
+// Dashed blue box with a faint fill — the box-select marquee (see the
+// Select tool / _marqueePreview in CanvasOverlay). Drawn live while
+// dragging, same visual vocabulary as the other preview shapes below.
+function drawMarqueeSelection(ctx, a, b) {
+  ctx.save();
+  const left = Math.min(a.x, b.x);
+  const top = Math.min(a.y, b.y);
+  const width = Math.abs(b.x - a.x);
+  const height = Math.abs(b.y - a.y);
+  ctx.fillStyle = 'rgba(37, 99, 235, 0.08)';
+  ctx.fillRect(left, top, width, height);
+  ctx.strokeStyle = 'rgba(37, 99, 235, 0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(left, top, width, height);
+  ctx.restore();
+}
+
+function pointInRect(p, rect) {
+  return p.x >= rect.x1 && p.x <= rect.x2 && p.y >= rect.y1 && p.y <= rect.y2;
+}
+
+// Standard orientation-based segment intersection test (degenerate
+// collinear-overlap cases aren't handled — acceptable for a selection
+// box, not for anything geometrically load-bearing).
+function ccw(a, b, c) {
+  return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+}
+
+function segmentsIntersect(a, b, c, d) {
+  return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+}
+
+// Whether segment a-b "touches" rect at all — either endpoint inside it,
+// or the segment crosses one of its four edges. Used by the Select
+// tool's box-select to decide which measurement lines a dragged marquee
+// caught (see _measurementIntersectsRect).
+function segmentIntersectsRect(a, b, rect) {
+  if (pointInRect(a, rect) || pointInRect(b, rect)) return true;
+  const corners = [
+    { x: rect.x1, y: rect.y1 },
+    { x: rect.x2, y: rect.y1 },
+    { x: rect.x2, y: rect.y2 },
+    { x: rect.x1, y: rect.y2 }
+  ];
+  for (let i = 0; i < 4; i++) {
+    if (segmentsIntersect(a, b, corners[i], corners[(i + 1) % 4])) return true;
+  }
+  return false;
+}
+
 function pointInPolygon(p, pts) {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -1967,42 +2211,17 @@ function drawMeasurementLine(ctx, a, b, { hover = false, selected = false, doubl
   ctx.save();
   ctx.strokeStyle = selected ? 'rgba(0,220,120,0.95)' : hover ? 'rgba(120,220,180,0.95)' : 'rgba(0,180,120,0.8)';
   ctx.lineWidth = selected ? 4 : hover ? 3 : 2.5;
-  // Dashed = single-sided, solid = double-sided — a second, independent
-  // cue on top of the double-line treatment below, so the distinction
-  // holds up even at a glance/small size where two close parallel lines
-  // might read as one. Used to be selected ? solid : dashed (i.e. a
-  // selection cue); selection already has its own color/thickness bump
-  // above, so it doesn't need the dash too.
+  // Dashed = single-sided, solid = double-sided — a single line either
+  // way. (Used to also draw double-sided as two parallel strokes; that
+  // read as a rendering glitch rather than a deliberate style, so it's
+  // just the dash/solid distinction now.)
   ctx.setLineDash(doubleSided ? [] : [4, 4]);
   ctx.lineCap = 'round';
 
-  if (doubleSided) {
-    // Two parallel strokes instead of one — a literal "double line" for
-    // "double-sided", so single- vs double-sided measurements read apart
-    // at a glance on the canvas itself, not just from the "(double-
-    // sided)" label text or the sidebar's "(2x)" badge.
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const offset = Math.max(2.5, ctx.lineWidth);
-    const nx = (-dy / len) * offset;
-    const ny = (dx / len) * offset;
-
-    ctx.beginPath();
-    ctx.moveTo(a.x + nx, a.y + ny);
-    ctx.lineTo(b.x + nx, b.y + ny);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(a.x - nx, a.y - ny);
-    ctx.lineTo(b.x - nx, b.y - ny);
-    ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
 
   ctx.restore();
 }

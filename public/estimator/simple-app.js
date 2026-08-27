@@ -350,6 +350,7 @@ async function initApp(){
   const measureToggle = $('measureToggle');
   const drawRectBtn = $('drawRectBtn');
   const drawIrregBtn = $('drawIrregBtn');
+  const drawSelectBtn = $('drawSelectBtn');
   const undoShapeBtn = $('undoShapeBtn');
 
   const zoomInBtn = $('zoomInBtn');
@@ -8407,8 +8408,9 @@ async function initApp(){
         return;
       }
 
-      // do not start panning while measurement tools are active
-      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
+      // do not start panning while measurement tools (or the Select
+      // tool's box-select) are active
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect' || overlay.tool === 'select')) return;
 
       if (overlay && overlay._dragState) return;
 
@@ -8897,6 +8899,7 @@ async function initApp(){
 
       if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
       if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+      if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
       if (pdfContainer) {
         pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
@@ -8913,6 +8916,7 @@ async function initApp(){
 
         if (measureToggle) measureToggle.classList.toggle('active', false);
         if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+        if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
         drawRectBtn.classList.toggle('active', isOn);
 
@@ -8932,11 +8936,35 @@ async function initApp(){
 
         if (measureToggle) measureToggle.classList.toggle('active', false);
         if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+        if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
         drawIrregBtn.classList.toggle('active', isOn);
 
         overlay.setActive(isOn);
         overlay.setTool(isOn ? 'irregular' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
+
+    // Select tool — box-select measurements (see the Select tool comments
+    // in CanvasOverlay.js). Mirrors the three tools above exactly: turns
+    // the others off, arms/disarms the overlay, same crosshair cursor.
+    if (drawSelectBtn) {
+      drawSelectBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawSelectBtn.classList.contains('active');
+
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+        if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+
+        drawSelectBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'select' : 'area');
 
         if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       };
@@ -8981,19 +9009,23 @@ async function initApp(){
   }
 
   // Reflects whichever state is actually "in charge" of the button right
-  // now: the selected measurement's own single/double-sided flag if one's
-  // selected on canvas, otherwise the global default new measurements get
-  // created with. Called on click (after acting) and from
-  // onSelectionChanged (see createCanvasOverlay call) whenever selection
-  // changes, so clicking a different line updates the button to match it.
+  // now: the selected measurement(s)' own single/double-sided flag if
+  // anything's selected on canvas (one via a plain click, or several via
+  // the Select tool's box-select), otherwise the global default new
+  // measurements get created with. Called on click (after acting) and
+  // from onSelectionChanged (see createCanvasOverlay call) whenever
+  // selection changes, so selecting something else updates the button to
+  // match it.
   function _syncDoubleSideToggleToSelection() {
     if (!doubleSideToggle) return;
-    const selected = overlay.getSelectedLineMeasurement();
-    const isDouble = selected ? !!selected.doubleSided : overlay.doubleSided;
+    const selected = overlay.getSelectedLineMeasurements();
+    const isDouble = selected.length ? selected.every((m) => m.doubleSided) : overlay.doubleSided;
     doubleSideToggle.classList.toggle('active', isDouble);
     doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
-    doubleSideToggle.title = selected
-      ? 'Toggle single/double-sided for the selected measurement'
+    doubleSideToggle.title = selected.length
+      ? (selected.length === 1
+        ? 'Toggle single/double-sided for the selected measurement'
+        : `Toggle single/double-sided for ${selected.length} selected measurements`)
       : 'Toggle single/double-sided measurement';
   }
 
@@ -9002,11 +9034,15 @@ async function initApp(){
       e.preventDefault();
       e.stopPropagation();
 
-      // A measurement is selected on canvas — flip *its* flag instead of
-      // just the default for new ones.
-      const selected = overlay.getSelectedLineMeasurement();
-      if (selected) {
-        overlay.setSelectedMeasurementDoubleSided(!selected.doubleSided);
+      // One or more measurements are selected on canvas — flip *their*
+      // flag instead of just the default for new ones. When they're not
+      // all in the same state, one click makes them all double-sided
+      // (matching everything to the "on" state, same as most bulk
+      // toggles) rather than leaving the mixed state ambiguous.
+      const selected = overlay.getSelectedLineMeasurements();
+      if (selected.length) {
+        const allDouble = selected.every((m) => m.doubleSided);
+        overlay.setSelectedMeasurementsDoubleSided(!allDouble);
         _syncDoubleSideToggleToSelection();
         return;
       }

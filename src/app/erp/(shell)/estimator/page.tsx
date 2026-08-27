@@ -135,7 +135,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-38";
+    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-40";
 
     // Update the existing <link>'s href in place if one's already there
     // from an earlier mount (soft-navigating back to this page within the
@@ -457,6 +457,16 @@ export default function EstimatorPage() {
                   >
                     <Icon>
                       <path d="M2 12c1.5-4 3.5-4 5 0s3.5 4 5 0 3.5-4 5 0 3.5 4 5 0" />
+                    </Icon>
+                  </button>
+                  <button
+                    id="drawSelectBtn"
+                    className="mini-btn icon-btn"
+                    title="Box-select measurements — drag a box to select several, then delete/move them or toggle single/double-sided together"
+                    aria-label="Box-select measurements"
+                  >
+                    <Icon>
+                      <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="3 3" />
                     </Icon>
                   </button>
                   <div id="betaToolsGroup" />
