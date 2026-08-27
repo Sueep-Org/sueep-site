@@ -116,6 +116,11 @@
     background: #f8fafc;
     border: 1px solid #eef1f5;
     border-radius: 10px;
+    /* Keep this pill at its natural size rather than letting #toolbar's
+       flex layout shrink it (and, in turn, the nowrap buttons inside it)
+       when the row runs out of room — #toolbar scrolls horizontally
+       instead (overflow-x-auto) so nothing here needs to shrink or wrap. */
+    flex-shrink: 0;
 }
 
 .toolbar-divider {
@@ -248,6 +253,15 @@
     border: 1px solid transparent;
     background: #f3f4f6;
     cursor: pointer;
+    /* Longer labels (Single sided/Double sided, Change PDF, ...) would
+       otherwise wrap to a second line the moment a flex parent
+       (.toolbar-group etc.) gets squeezed narrower than their natural
+       width. flex-shrink:0 keeps the button at its natural size instead
+       of shrinking, so the parent/toolbar overflows and scrolls
+       horizontally (see #toolbar's overflow-x-auto) rather than any one
+       button's text ever wrapping. */
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: background-color .15s ease, color .15s ease,
         border-color .15s ease, transform .08s ease;
 }
@@ -590,6 +604,9 @@
     background: #f8fafc;
     border: 1px solid #eef1f5;
     border-radius: 10px;
+    /* Same reasoning as .toolbar-group above — stay at natural size, let
+       #toolbar scroll instead of squeezing this pill. */
+    flex-shrink: 0;
 }
 
 #zoomLabel {

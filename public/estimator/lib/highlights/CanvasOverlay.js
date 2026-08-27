@@ -14,13 +14,20 @@ function snapMeasurementEndpoint(start, end) {
 }
 
 export class CanvasOverlay {
-  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved }) {
+  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved, onSelectionChanged }) {
     this.wrapperEl = wrapperEl;
     this.canvasEl = canvasEl;
     this.store = store;
     this.onMeasurementsChanged = onMeasurementsChanged || null;
     this.onLineMeasurementCreated = onLineMeasurementCreated || null;
     this.onLineMeasurementRemoved = onLineMeasurementRemoved || null;
+    // Fired whenever the selected measurement/polygon changes — see
+    // _notifySelectionChangeIfNeeded, called from redraw() rather than at
+    // every individual place selection gets set (_onPointerDown,
+    // _pasteMeasurement, _onContextMenu, ...), since all of those already
+    // call redraw() right after changing it.
+    this.onSelectionChanged = onSelectionChanged || null;
+    this._lastNotifiedSelectionKey = null;
 
     this.overlay = null;
     this.ctx = null;
@@ -307,7 +314,7 @@ export class CanvasOverlay {
       for (const seg of m.pts) {
         const a = { x: seg.x1 * w, y: seg.y1 * h };
         const b = { x: seg.x2 * w, y: seg.y2 * h };
-        drawMeasurementLine(ctx, a, b, { hover: isHover, selected: isSelected });
+        drawMeasurementLine(ctx, a, b, { hover: isHover, selected: isSelected, doubleSided: !!m.doubleSided });
       }
       if (this.showLabels) {
         const midX = m.pts.length ? ((m.pts[0].x1 + m.pts[0].x2) / 2) * w : w / 2;
@@ -327,7 +334,7 @@ export class CanvasOverlay {
     if (this._measurePreview) {
       const p = this._measurePreview;
       if (this.tool === 'measure') {
-        drawPreviewLine(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 });
+        drawPreviewLine(ctx, { x: p.x1, y: p.y1 }, { x: p.x2, y: p.y2 }, { doubleSided: this.doubleSided });
         if (this.showLabels) {
           const pxLen = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 0;
           const scale = this.store.getScale(this.currentPage);
@@ -1636,8 +1643,62 @@ export class CanvasOverlay {
   redraw() {
     if (!this.ctx) return;
 
+    this._notifySelectionChangeIfNeeded();
+
     this.clear();
     this.renderToContext(this.ctx, { width: this.overlay.width, height: this.overlay.height });
+  }
+
+  // redraw() runs on every selection change (and plenty of other things —
+  // zoom, pan, drag) so this only actually fires onSelectionChanged when
+  // the selected measurement/polygon id has changed since the last check,
+  // rather than needing a dedicated call at every one of the several
+  // places selection gets set (_onPointerDown, _pasteMeasurement,
+  // _onContextMenu, ...).
+  _notifySelectionChangeIfNeeded() {
+    const key = `${this._selectedMeasurementId || ''}|${this._selectedPolygonId || ''}`;
+    if (key === this._lastNotifiedSelectionKey) return;
+    this._lastNotifiedSelectionKey = key;
+    this.onSelectionChanged?.();
+  }
+
+  // The measurement currently selected on canvas, if it's a line
+  // measurement (not an area/rect shape — "single/double-sided" only
+  // means anything for a linear wall measurement). Used by the
+  // Single/Double sided toolbar toggle to act on the selected measurement
+  // instead of just the default for new ones (see setSelectedMeasurementDoubleSided).
+  getSelectedLineMeasurement() {
+    if (!this._selectedMeasurementId) return null;
+    const measurement = (this.store.listMeasurements(this.currentPage) || [])
+      .find((entry) => entry.id === this._selectedMeasurementId);
+    if (!measurement || this._isAreaMeasurement(measurement)) return null;
+    return measurement;
+  }
+
+  // Flips the selected line measurement's single/double-sided flag after
+  // the fact, rather than only setting the default new measurements are
+  // created with (see this.doubleSided/setDoubleSided). The real-world
+  // length was doubled into `inches` at creation time (see the line-
+  // measurement creation code below), not recomputed live from
+  // doubleSided on every redraw/total, so flipping the flag here has to
+  // also double/halve the stored inches to match — otherwise every
+  // downstream total that reads `inches` would silently go stale.
+  setSelectedMeasurementDoubleSided(value) {
+    const measurement = this.getSelectedLineMeasurement();
+    if (!measurement) return false;
+
+    const nextDoubleSided = Boolean(value);
+    if (Boolean(measurement.doubleSided) === nextDoubleSided) return true;
+
+    measurement.inches = nextDoubleSided
+      ? (measurement.inches || 0) * 2
+      : (measurement.inches || 0) / 2;
+    measurement.doubleSided = nextDoubleSided;
+    measurement.label = formatInches(measurement.inches);
+
+    this.onMeasurementsChanged?.();
+    this.redraw();
+    return true;
   }
 }
 
@@ -1802,16 +1863,41 @@ function formatInches(inches) {
 }
 
 // draw a preview (temporary) measurement line
-function drawPreviewLine(ctx, a, b) {
+function drawPreviewLine(ctx, a, b, { doubleSided = false } = {}) {
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
   ctx.strokeStyle = 'rgba(0,120,212,0.95)';
   ctx.lineWidth = 3;
-  ctx.setLineDash([6, 6]);
+  // Same dashed=single/solid=double convention as drawMeasurementLine.
+  ctx.setLineDash(doubleSided ? [] : [6, 6]);
   ctx.lineCap = 'round';
-  ctx.stroke();
+
+  if (doubleSided) {
+    // Same double-line treatment as drawMeasurementLine, so the preview
+    // while dragging out a new line already shows which mode you're in
+    // instead of only the toolbar toggle telling you.
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const offset = Math.max(2.5, ctx.lineWidth);
+    const nx = (-dy / len) * offset;
+    const ny = (dx / len) * offset;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x + nx, a.y + ny);
+    ctx.lineTo(b.x + nx, b.y + ny);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(a.x - nx, a.y - ny);
+    ctx.lineTo(b.x - nx, b.y - ny);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 
@@ -1877,16 +1963,47 @@ function makeStableId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function drawMeasurementLine(ctx, a, b, { hover = false, selected = false } = {}) {
+function drawMeasurementLine(ctx, a, b, { hover = false, selected = false, doubleSided = false } = {}) {
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
   ctx.strokeStyle = selected ? 'rgba(0,220,120,0.95)' : hover ? 'rgba(120,220,180,0.95)' : 'rgba(0,180,120,0.8)';
   ctx.lineWidth = selected ? 4 : hover ? 3 : 2.5;
-  ctx.setLineDash(selected ? [] : [4, 4]);
+  // Dashed = single-sided, solid = double-sided — a second, independent
+  // cue on top of the double-line treatment below, so the distinction
+  // holds up even at a glance/small size where two close parallel lines
+  // might read as one. Used to be selected ? solid : dashed (i.e. a
+  // selection cue); selection already has its own color/thickness bump
+  // above, so it doesn't need the dash too.
+  ctx.setLineDash(doubleSided ? [] : [4, 4]);
   ctx.lineCap = 'round';
-  ctx.stroke();
+
+  if (doubleSided) {
+    // Two parallel strokes instead of one — a literal "double line" for
+    // "double-sided", so single- vs double-sided measurements read apart
+    // at a glance on the canvas itself, not just from the "(double-
+    // sided)" label text or the sidebar's "(2x)" badge.
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const offset = Math.max(2.5, ctx.lineWidth);
+    const nx = (-dy / len) * offset;
+    const ny = (dx / len) * offset;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x + nx, a.y + ny);
+    ctx.lineTo(b.x + nx, b.y + ny);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(a.x - nx, a.y - ny);
+    ctx.lineTo(b.x - nx, b.y - ny);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 

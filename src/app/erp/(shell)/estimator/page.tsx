@@ -135,13 +135,28 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-33";
+    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-37";
 
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = `/estimator-ui.css?v=${ESTIMATOR_ASSET_VERSION}`;
-    link.id = "estimator-ui-css";
-    if (!document.getElementById("estimator-ui-css")) {
+    // Update the existing <link>'s href in place if one's already there
+    // from an earlier mount (soft-navigating back to this page within the
+    // same tab) rather than just skipping — checking only "does a tag
+    // with this id exist" (regardless of *which* version it's pointing
+    // at) meant a version bump here never actually reloaded the CSS for
+    // any tab that had already visited this page once, only a hard
+    // refresh did.
+    const cssHref = `/estimator-ui.css?v=${ESTIMATOR_ASSET_VERSION}`;
+    const existingLink = document.getElementById(
+      "estimator-ui-css",
+    ) as HTMLLinkElement | null;
+    if (existingLink) {
+      if (existingLink.getAttribute("href") !== cssHref) {
+        existingLink.setAttribute("href", cssHref);
+      }
+    } else {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = cssHref;
+      link.id = "estimator-ui-css";
       document.head.appendChild(link);
     }
 
@@ -243,7 +258,13 @@ export default function EstimatorPage() {
           style={{ display: "none", color: "#b00", fontSize: "12px" }}
         ></div>
 
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* max-w bumped from 7xl (1280px) to 120rem (1920px, ~50% wider)
+            to try out a roomier layout — easy to dial back to max-w-7xl
+            if it reads as too wide/edge-to-edge on common screens. Side
+            padding grows with viewport width too (px-4 → lg:px-8) so a
+            1920px-wide window doesn't end up with content flush against
+            the browser edges. */}
+        <div className="container mx-auto px-4 lg:px-8 py-8 max-w-[120rem]">
           {/* UPLOAD — same .window-card treatment (layered shadow, thin
               border, 16px radius) as the PDF window below it, so this is
               the first thing you see and it already reads as part of one
@@ -484,12 +505,19 @@ export default function EstimatorPage() {
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    <div id="pageInfo" style={{ fontSize: "12px", fontWeight: 600 }}>
+                    <div
+                      id="pageInfo"
+                      style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}
+                    >
                       1 of 1
                     </div>
-                    <div id="vectorLineInfo" style={{ fontSize: "10px", color: "#9ca3af" }} />
+                    <div
+                      id="vectorLineInfo"
+                      style={{ fontSize: "10px", color: "#9ca3af", whiteSpace: "nowrap" }}
+                    />
                   </div>
                   <button
                     id="nextPageBtn"

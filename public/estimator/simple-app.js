@@ -562,6 +562,29 @@ async function initApp(){
   function wireDropdownMenu(btn, panel, onItemClick) {
     if (!btn || !panel) return;
 
+    // #toolbar (this button's container) has overflow-x:auto so the
+    // whole toolbar can scroll as one line instead of wrapping to a
+    // second one — but setting overflow-x on an element makes the
+    // browser compute overflow-y as non-visible too, so this panel
+    // (position:absolute in .toolbar-dropdown-panel's default CSS,
+    // opening below the button) was getting clipped at #toolbar's own
+    // bottom edge instead of floating over the PDF preview underneath it.
+    // Switching it to position:fixed with coordinates computed here, at
+    // open time, escapes that: fixed positioning isn't confined by an
+    // ancestor's overflow unless that ancestor also has a
+    // transform/filter/perspective, which #toolbar doesn't. Only these
+    // two toolbar dropdowns (Export, Detect Walls) need this — the
+    // library row "more actions" menu uses this same panel class but
+    // isn't inside an overflow-clipping ancestor, so it's left on the
+    // CSS default (position:absolute).
+    function positionPanel() {
+      const rect = btn.getBoundingClientRect();
+      panel.style.position = 'fixed';
+      panel.style.top = `${rect.bottom + 6}px`;
+      panel.style.left = 'auto';
+      panel.style.right = `${Math.max(0, window.innerWidth - rect.right)}px`;
+    }
+
     function close() {
       panel.hidden = true;
       btn.setAttribute('aria-expanded', 'false');
@@ -570,8 +593,13 @@ async function initApp(){
     btn.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
       const isOpen = !panel.hidden;
-      panel.hidden = isOpen;
-      btn.setAttribute('aria-expanded', String(!isOpen));
+      if (isOpen) {
+        close();
+      } else {
+        positionPanel();
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+      }
     };
 
     panel.querySelectorAll('.toolbar-dropdown-item').forEach((item) => {
@@ -589,6 +617,14 @@ async function initApp(){
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') close();
     });
+
+    // Now that it's fixed-positioned, nothing keeps it glued to the
+    // button if the page (or the toolbar's own horizontal scroller)
+    // moves out from under it — a plain position:absolute panel would've
+    // followed automatically. Simplest fix: just close it, same as
+    // clicking outside.
+    window.addEventListener('scroll', () => { if (!panel.hidden) close(); }, true);
+    window.addEventListener('resize', () => { if (!panel.hidden) close(); });
   }
 
   // Wall detection is experimental — vector data is solid when the
@@ -793,7 +829,12 @@ async function initApp(){
       removeMeasurementFromActiveWallSection(measurement);
       updateMeasurementList();
       window.__saveAnnotations?.();
-    }
+    },
+    // Keeps the Single/Double sided toolbar toggle showing the *selected*
+    // measurement's own state (and acting on it) rather than always just
+    // the global default for new measurements — see
+    // _syncDoubleSideToggleToSelection.
+    onSelectionChanged: () => _syncDoubleSideToggleToSelection()
   });
 
   overlay.attach();
@@ -8896,14 +8937,40 @@ async function initApp(){
     };
   }
 
+  // Reflects whichever state is actually "in charge" of the button right
+  // now: the selected measurement's own single/double-sided flag if one's
+  // selected on canvas, otherwise the global default new measurements get
+  // created with. Called on click (after acting) and from
+  // onSelectionChanged (see createCanvasOverlay call) whenever selection
+  // changes, so clicking a different line updates the button to match it.
+  function _syncDoubleSideToggleToSelection() {
+    if (!doubleSideToggle) return;
+    const selected = overlay.getSelectedLineMeasurement();
+    const isDouble = selected ? !!selected.doubleSided : overlay.doubleSided;
+    doubleSideToggle.classList.toggle('active', isDouble);
+    doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
+    doubleSideToggle.title = selected
+      ? 'Toggle single/double-sided for the selected measurement'
+      : 'Toggle single/double-sided measurement';
+  }
+
   if (doubleSideToggle) {
     doubleSideToggle.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      // A measurement is selected on canvas — flip *its* flag instead of
+      // just the default for new ones.
+      const selected = overlay.getSelectedLineMeasurement();
+      if (selected) {
+        overlay.setSelectedMeasurementDoubleSided(!selected.doubleSided);
+        _syncDoubleSideToggleToSelection();
+        return;
+      }
+
       const isDouble = !doubleSideToggle.classList.contains('active');
-      doubleSideToggle.classList.toggle('active', isDouble);
-      doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
       overlay.setDoubleSided(isDouble);
+      _syncDoubleSideToggleToSelection();
     };
   }
 
