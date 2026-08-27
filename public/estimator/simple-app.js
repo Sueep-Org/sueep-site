@@ -3049,6 +3049,11 @@ async function initApp(){
   window.__openSovModal = openSovModal;
 
   let __renderSeq = 0;
+  // The pdf.js render task currently in flight, if any — lets a newer
+  // renderPage() call cancel a superseded one instead of letting it run
+  // to completion (expensive full-page rasterization) only to be thrown
+  // away by the __renderSeq check. See renderPage().
+  let _activeRenderTask = null;
 
   // ======================================================
   // OVERLAY ALIGNMENT
@@ -3801,6 +3806,16 @@ async function initApp(){
 
     const seq = ++__renderSeq;
 
+    // A render from an earlier zoom/pan/page-change step is still in
+    // flight — it's about to be superseded by this one anyway (see the
+    // seq check below), so cancel it now rather than let pdf.js finish
+    // rasterizing the whole page just to throw the result away. Standard
+    // pdf.js API; its promise rejects (RenderingCancelledException),
+    // caught where that render's own await is, below.
+    if (_activeRenderTask) {
+      try { _activeRenderTask.cancel(); } catch (err) {}
+    }
+
     const page = await pdfDoc.getPage(currentPage);
 
     const vp = page.getViewport({
@@ -3812,10 +3827,21 @@ async function initApp(){
     sc.width = vp.width;
     sc.height = vp.height;
 
-    await page.render({
+    const renderTask = page.render({
       canvasContext: sc.getContext('2d'),
       viewport: vp
-    }).promise;
+    });
+    _activeRenderTask = renderTask;
+
+    try {
+      await renderTask.promise;
+    } catch (err) {
+      // Cancelled by a newer renderPage() call above, or any other render
+      // failure — either way, nothing more to do with this pass.
+      if (_activeRenderTask === renderTask) _activeRenderTask = null;
+      return;
+    }
+    if (_activeRenderTask === renderTask) _activeRenderTask = null;
 
     if (seq !== __renderSeq) return;
 
@@ -8271,7 +8297,19 @@ async function initApp(){
 
   if (pdfContainer){
 
-    pdfContainer.addEventListener('wheel', async (e)=>{
+    // A fast trackpad/mouse wheel can fire far more 'wheel' events per
+    // second than the (expensive — full PDF re-rasterization) zoom
+    // pipeline can keep up with, and unlike pinch-zoom below this had no
+    // throttling at all: every single tick used to kick off its own
+    // render immediately. Batches ticks to at most one applied zoom per
+    // animation frame instead — same net zoom amount for a given amount
+    // of scrolling (accumulated as a signed step count and applied in one
+    // shot), just far fewer actual re-renders during a fast scroll.
+    let wheelZoomStepsPending = 0;
+    let wheelRAFPending = false;
+    let pendingWheelAnchor = null;
+
+    pdfContainer.addEventListener('wheel', (e)=>{
 
       if (!pdfDoc) return;
 
@@ -8290,13 +8328,18 @@ async function initApp(){
       e.preventDefault();
 
       const rect = (pdfWrapper || pdfContainer)?.getBoundingClientRect();
-      const anchor = rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null;
+      if (rect) pendingWheelAnchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      wheelZoomStepsPending += e.deltaY < 0 ? 1 : -1;
 
-      if (e.deltaY < 0){
-        await zoomIn(anchor);
-      } else {
-        await zoomOut(anchor);
-      }
+      if (wheelRAFPending) return;
+      wheelRAFPending = true;
+      requestAnimationFrame(async () => {
+        wheelRAFPending = false;
+        const steps = wheelZoomStepsPending;
+        wheelZoomStepsPending = 0;
+        if (!steps) return;
+        await applyZoom(zoom + steps * 0.1, pendingWheelAnchor);
+      });
 
     }, { passive: false });
   }

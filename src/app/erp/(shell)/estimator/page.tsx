@@ -135,7 +135,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-37";
+    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-38";
 
     // Update the existing <link>'s href in place if one's already there
     // from an earlier mount (soft-navigating back to this page within the
