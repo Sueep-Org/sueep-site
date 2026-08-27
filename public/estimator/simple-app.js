@@ -81,8 +81,7 @@ function renderDrawerSkeleton(){
 
   libraryMount.innerHTML = `
     <div id="listContainer" style="padding:.5rem;">
-      <input id="librarySearch" type="text" placeholder="Search projects…"
-        style="width:100%;box-sizing:border-box;padding:6px 10px;margin-bottom:.5rem;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none;" />
+      <input id="librarySearch" type="text" placeholder="Search projects…" class="mini-input" />
       <div id="listLoading">Loading…</div>
       <div id="savedSection"></div>
     </div>
@@ -118,13 +117,14 @@ async function refreshDrawer(){
       const blueprint = files.find(f => f.file_type === 'blueprint') || files[0] || null;
 
       const row = document.createElement('div');
+      row.className = 'library-row';
       row.dataset.name = (project.name || '').toLowerCase();
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;flex-wrap:nowrap;min-width:0;';
 
       const nameBtn = document.createElement('button');
-      nameBtn.textContent = `📄 ${project.name}`;
+      nameBtn.className = 'library-name-btn';
+      nameBtn.textContent = project.name;
       nameBtn.title = project.name;
-      nameBtn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:6px;background:white;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:' + (blueprint ? 'pointer' : 'default') + ';';
+      if (!blueprint) nameBtn.dataset.noFile = '';
 
       if (blueprint) {
         nameBtn.onclick = async () => {
@@ -152,21 +152,52 @@ async function refreshDrawer(){
 
       row.appendChild(nameBtn);
 
+      // "More actions" (⋮) — Download + Delete used to be two separate
+      // bordered buttons sitting in every row; folded into one dropdown
+      // (same .toolbar-dropdown-* pattern as the main toolbar's Export
+      // and Detect Walls menus) so each row reads as just a name plus one
+      // small control, not a name plus a row of icon buttons.
+      const menuWrap = document.createElement('div');
+      menuWrap.className = 'toolbar-dropdown';
+
+      const menuBtn = document.createElement('button');
+      menuBtn.type = 'button';
+      menuBtn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+      menuBtn.title = 'More actions';
+      menuBtn.setAttribute('aria-label', 'More actions');
+      menuBtn.setAttribute('aria-haspopup', 'menu');
+      menuBtn.setAttribute('aria-expanded', 'false');
+      menuBtn.innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>';
+
+      const menuPanel = document.createElement('div');
+      menuPanel.className = 'toolbar-dropdown-panel toolbar-dropdown-panel--right';
+      menuPanel.setAttribute('role', 'menu');
+      menuPanel.hidden = true;
+
       if (blueprint) {
-        const dlBtn = document.createElement('a');
-        dlBtn.textContent = '⬇';
-        dlBtn.href = `${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`;
-        dlBtn.target = '_blank';
-        dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#3b82f6;text-decoration:none;';
-        row.appendChild(dlBtn);
+        const downloadItem = document.createElement('a');
+        downloadItem.className = 'toolbar-dropdown-item';
+        downloadItem.textContent = 'Download';
+        downloadItem.href = `${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`;
+        downloadItem.target = '_blank';
+        downloadItem.setAttribute('role', 'menuitem');
+        downloadItem.onclick = (e) => {
+          e.stopPropagation();
+          closeAllLibraryRowMenus();
+        };
+        menuPanel.appendChild(downloadItem);
       }
 
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
-      delBtn.title = 'Delete project';
-      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
-      delBtn.onclick = async (e) => {
+      const deleteItem = document.createElement('button');
+      deleteItem.type = 'button';
+      deleteItem.className = 'toolbar-dropdown-item danger';
+      deleteItem.textContent = 'Delete';
+      deleteItem.setAttribute('role', 'menuitem');
+      deleteItem.onclick = async (e) => {
+        e.preventDefault();
         e.stopPropagation();
+        closeAllLibraryRowMenus();
         if (!(await confirmDialog({ title: 'Delete project', message: `Delete project "${project.name}" and all its files?`, confirmLabel: 'Delete', danger: true }))) return;
         try {
           const r = await fetch(`${API_BASE}/api/projects/${project.id}`, { method: 'DELETE' });
@@ -178,7 +209,20 @@ async function refreshDrawer(){
         }
         try { await refreshDrawer(); } catch(_) {}
       };
-      row.appendChild(delBtn);
+      menuPanel.appendChild(deleteItem);
+
+      menuBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const willOpen = menuPanel.hidden;
+        closeAllLibraryRowMenus();
+        menuPanel.hidden = !willOpen;
+        menuBtn.setAttribute('aria-expanded', String(willOpen));
+      };
+
+      menuWrap.appendChild(menuBtn);
+      menuWrap.appendChild(menuPanel);
+      row.appendChild(menuWrap);
 
       savedSec.appendChild(row);
     }
@@ -239,6 +283,22 @@ function closeSidebar(){
   if (toggle) toggle.style.display = '';
 }
 
+// Closes any open library row "more actions" menu (see refreshDrawer)
+// other than the one currently being opened/interacted with. A single
+// shared helper + shared listeners below, rather than each row wiring its
+// own document-level click/Escape listener (the way the toolbar's
+// Export/Detect Walls dropdowns do via wireDropdownMenu) — library rows
+// get torn down and rebuilt on every refreshDrawer() call (search,
+// delete, reopening the sidebar), so a listener added per row would never
+// get cleaned up and pile up on `document` across refreshes.
+function closeAllLibraryRowMenus(){
+  document.querySelectorAll('#libraryMount .toolbar-dropdown-panel').forEach((panel) => {
+    if (panel.hidden) return;
+    panel.hidden = true;
+    panel.previousElementSibling?.setAttribute('aria-expanded', 'false');
+  });
+}
+
 document.addEventListener('click', (e)=>{
 
   if(e.target.closest('[data-open-sidebar]')){
@@ -250,6 +310,14 @@ document.addEventListener('click', (e)=>{
 
     closeSidebar();
   }
+
+  if (!e.target.closest('#libraryMount .toolbar-dropdown')) {
+    closeAllLibraryRowMenus();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAllLibraryRowMenus();
 });
 
 // ======================================================
@@ -2758,24 +2826,22 @@ async function initApp(){
     containerEl.innerHTML = '';
 
     if (!visibleRows.length) {
-      containerEl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No schedule data available yet.</div>';
+      containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:10px;">No schedule data available yet.</div>';
       return;
     }
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'overflow:auto;border:1px solid #e5e7eb;border-radius:8px;';
+    wrapper.className = 'sov-table-wrapper';
 
     const table = document.createElement('table');
-    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+    table.className = 'sov-table';
 
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
-    headRow.style.cssText = 'background:#f9fafb;';
     const columns = getSovColumns();
     columns.forEach((column) => {
       const th = document.createElement('th');
       th.textContent = column.label;
-      th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;white-space:nowrap;';
       headRow.appendChild(th);
     });
     thead.appendChild(headRow);
@@ -2788,23 +2854,23 @@ async function initApp(){
         switch (column.key) {
           case 'page':
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+              <td>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <button type="button" class="mini-btn" data-delete-sov-row="${row.page}" style="padding:2px 6px;min-width:auto;font-size:11px;line-height:1;">×</button>
+                  <button type="button" class="mini-btn icon-btn danger" data-delete-sov-row="${row.page}" title="Delete row" aria-label="Delete row">${TRASH_ICON_SVG}</button>
                   <span>${escapeHtml(row.page)}</span>
                 </div>
               </td>
             `;
           case 'description':
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-                <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              <td>
+                <input type="text" class="mini-input" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;" />
               </td>
             `;
           default:
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-                <input type="text" value="${escapeHtml(formatSovCurrency(row[column.key]))}" data-sov-amount="${row.page}" data-sov-key="${column.key}" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              <td>
+                <input type="text" class="mini-input" value="${escapeHtml(formatSovCurrency(row[column.key]))}" data-sov-amount="${row.page}" data-sov-key="${column.key}" style="width:110px;" />
               </td>
             `;
         }
@@ -2862,22 +2928,25 @@ async function initApp(){
     containerEl.appendChild(wrapper);
   }
 
+  // NOTE: this no longer touches #sovCard's own display — that panel now
+  // lives inside #changeOrderSovTabCard (see page.tsx) and is shown/hidden
+  // solely by _setChangeOrderSovTab, same as #changeOrderCard. This just
+  // populates #sovTableContainer; if there's no project loaded it's
+  // cleared to empty (the tab card itself is hidden at that point anyway,
+  // by the same code that hides #estimatorTabCard).
   function renderSovCard() {
-    const card = document.getElementById('sovCard');
     const container = document.getElementById('sovTableContainer');
     const undoBtn = document.getElementById('undoSovRowBtn');
     const addBtn = document.getElementById('addSovRowBtn');
-    if (!card || !container) return;
+    if (!container) return;
 
     if (!pdfDoc || !_loadedProjectData) {
-      card.style.display = 'none';
       container.innerHTML = '';
       return;
     }
 
     const rows = getSovPageRows();
     const visibleRows = rows.filter((row) => hasVisibleSovRow(row));
-    card.style.display = 'block';
     container.innerHTML = '';
 
     if (undoBtn) {
@@ -4046,6 +4115,10 @@ async function initApp(){
     document.getElementById('editProjectForm').style.display = 'none';
     const tabCard = document.getElementById('estimatorTabCard');
     if (tabCard) tabCard.style.display = 'none';
+    const changeOrderSovTabCard = document.getElementById('changeOrderSovTabCard');
+    if (changeOrderSovTabCard) changeOrderSovTabCard.style.display = 'none';
+    const scopeCommentsTabCard = document.getElementById('scopeCommentsTabCard');
+    if (scopeCommentsTabCard) scopeCommentsTabCard.style.display = 'none';
   }
 
   function showEditProjectForm() {
@@ -5317,11 +5390,15 @@ async function initApp(){
     }
   }
 
+  // Shared trash icon for the delete buttons below (change order, crew
+  // member, and — via renderSovTable — SOV row), same stroke-icon
+  // language as the toolbar instead of a raw "×"/"Delete" text button.
+  const TRASH_ICON_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
   function _renderChangeOrders() {
     const container = document.getElementById('changeOrdersContainer');
     if (!container) return;
     container.innerHTML = '';
-    const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
     const coRoleDefs = [
       { label: '+ Cleaner', role: 'cleaner', rate: 42, color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
       { label: '+ Foreman', role: 'foreman', rate: 47, color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
@@ -5339,39 +5416,44 @@ async function initApp(){
     if (_changeOrders.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = 'No change orders yet. Click "+ Add" to create one.';
-      empty.style.cssText = 'padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:8px;';
+      empty.style.cssText = 'padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:10px;';
       container.appendChild(empty);
       return;
     }
 
     _changeOrders.forEach((co, idx) => {
       const section = document.createElement('div');
-      section.style.cssText = 'margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
+      section.className = 'co-section';
 
       // Header: name input + delete
       const hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb;';
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#f9fafb;border-bottom:1px solid #eef1f5;';
       const nameLabel = document.createElement('span');
       nameLabel.textContent = 'Name:';
-      nameLabel.style.cssText = 'font-size:12px;color:#6b7280;font-weight:500;margin-right:6px;white-space:nowrap;';
+      nameLabel.style.cssText = 'font-size:12px;color:#6b7280;font-weight:500;white-space:nowrap;';
       const nameInp = document.createElement('input');
       nameInp.type = 'text'; nameInp.value = co.name || `Change Order ${idx + 1}`; nameInp.placeholder = 'Change Order Name';
-      nameInp.style.cssText = 'font-weight:600;font-size:13px;color:#374151;border:1px solid #d1d5db;background:white;outline:none;flex:1;min-width:0;padding:3px 8px;border-radius:4px;';
+      nameInp.className = 'mini-input';
+      nameInp.style.cssText = 'font-weight:600;flex:1;min-width:0;';
       nameInp.addEventListener('input', () => { co.name = nameInp.value; });
       const delCOBtn = document.createElement('button');
-      delCOBtn.type = 'button'; delCOBtn.textContent = 'Delete';
-      delCOBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;flex-shrink:0;margin-left:8px;';
+      delCOBtn.type = 'button';
+      delCOBtn.className = 'mini-btn icon-btn danger';
+      delCOBtn.title = 'Delete change order';
+      delCOBtn.setAttribute('aria-label', 'Delete change order');
+      delCOBtn.innerHTML = TRASH_ICON_SVG;
       delCOBtn.onclick = () => { _changeOrders.splice(idx, 1); _renderChangeOrders(); };
       hdr.appendChild(nameLabel); hdr.appendChild(nameInp); hdr.appendChild(delCOBtn);
       section.appendChild(hdr);
 
-      // Add role buttons
+      // Add role buttons — full-pill "chips", still color-coded per role
       const addRow = document.createElement('div');
-      addRow.style.cssText = 'display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;';
+      addRow.style.cssText = 'display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid #eef1f5;';
       coRoleDefs.forEach(({ label, role, rate, color, bg, border }) => {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.textContent = label;
-        btn.style.cssText = `padding:3px 10px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
+        btn.className = 'co-role-chip';
+        btn.style.cssText = `color:${color};background:${bg};border-color:${border};`;
         btn.onclick = () => { co.crew.push({ role, name: '', rate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) }); _renderChangeOrders(); };
         addRow.appendChild(btn);
       });
@@ -5380,50 +5462,55 @@ async function initApp(){
       // Crew table
       if (co.crew.length > 0) {
         const table = document.createElement('table');
+        table.className = 'co-crew-table';
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead(); const hrow = thead.insertRow();
         ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
           const th = document.createElement('th'); th.textContent = h;
-          th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+          th.style.textAlign = hi >= 4 ? 'right' : 'left';
           hrow.appendChild(th);
         });
         const tbody = table.createTBody();
         co.crew.forEach(member => {
-          const tr = tbody.insertRow(); tr.style.cssText = 'border-top:1px solid #f3f4f6;';
-          const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
+          const tr = tbody.insertRow();
+          const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:6px 10px;';
           const badge = document.createElement('span');
           badge.textContent = roleLabels[member.role] || member.role;
-          badge.style.cssText = `padding:2px 7px;border-radius:10px;${roleStyles[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
+          badge.style.cssText = `padding:3px 9px;border-radius:999px;${roleStyles[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:600;`;
           roleTd.appendChild(badge);
-          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:6px 10px;';
           const nameI = document.createElement('input'); nameI.type = 'text'; nameI.placeholder = 'Name'; nameI.value = member.name || '';
-          nameI.style.cssText = iStyle + 'width:100px;'; nameI.addEventListener('input', () => { member.name = nameI.value.trim(); });
+          nameI.className = 'mini-input'; nameI.style.width = '100px';
+          nameI.addEventListener('input', () => { member.name = nameI.value.trim(); });
           nameTd.appendChild(nameI);
-          const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
+          const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:6px 10px;';
           const rw = document.createElement('div'); rw.style.cssText = 'display:flex;align-items:center;gap:4px;';
           const rateI = document.createElement('input'); rateI.type = 'number'; rateI.min = '0'; rateI.step = '0.01'; rateI.value = member.rate;
-          rateI.style.cssText = iStyle + 'width:64px;';
+          rateI.className = 'mini-input'; rateI.style.width = '64px';
           rateI.addEventListener('input', () => { member.rate = parseFloat(rateI.value) || 0; _updateOneChangeOrderCalc(co); });
-          const rl = document.createElement('span'); rl.textContent = '$/hr'; rl.style.cssText = 'font-size:11px;color:#6b7280;';
+          const rl = document.createElement('span'); rl.textContent = '$/hr'; rl.style.cssText = 'font-size:11px;color:#9ca3af;';
           rw.appendChild(rateI); rw.appendChild(rl); rateTd.appendChild(rw);
-          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:6px 10px;';
           const hw = document.createElement('div'); hw.style.cssText = 'display:flex;align-items:center;gap:4px;';
           const hoursI = document.createElement('input'); hoursI.type = 'number'; hoursI.min = '0'; hoursI.max = '24'; hoursI.step = '0.5'; hoursI.value = member.hours ?? 8;
-          hoursI.style.cssText = iStyle + 'width:44px;';
+          hoursI.className = 'mini-input'; hoursI.style.width = '44px';
           hoursI.addEventListener('input', () => { member.hours = parseFloat(hoursI.value) || 0; _updateOneChangeOrderCalc(co); });
-          const hl = document.createElement('span'); hl.textContent = 'hrs'; hl.style.cssText = 'font-size:11px;color:#6b7280;';
+          const hl = document.createElement('span'); hl.textContent = 'hrs'; hl.style.cssText = 'font-size:11px;color:#9ca3af;';
           hw.appendChild(hoursI); hw.appendChild(hl); hoursTd.appendChild(hw);
-          const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
+          const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:6px 10px;text-align:right;';
           const daysI = document.createElement('input'); daysI.type = 'number'; daysI.min = '0'; daysI.step = '0.5'; daysI.value = member.days;
-          daysI.style.cssText = iStyle + 'width:56px;';
+          daysI.className = 'mini-input'; daysI.style.width = '56px';
           daysI.addEventListener('input', () => { member.days = parseFloat(daysI.value) || 0; _updateOneChangeOrderCalc(co); });
           daysTd.appendChild(daysI);
           const payTd = tr.insertCell(); payTd.id = `co_pay_${member._uid}`;
-          payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
+          payTd.style.cssText = 'padding:6px 10px;text-align:right;color:#374151;font-weight:600;white-space:nowrap;';
           payTd.textContent = fmt$((member.rate || 0) * (member.hours ?? 8) * (member.days || 0));
-          const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
-          const delMBtn = document.createElement('button'); delMBtn.type = 'button'; delMBtn.textContent = '×';
-          delMBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;';
+          const delTd = tr.insertCell(); delTd.style.cssText = 'padding:6px 8px;text-align:right;';
+          const delMBtn = document.createElement('button'); delMBtn.type = 'button';
+          delMBtn.className = 'mini-btn icon-btn danger';
+          delMBtn.title = 'Remove crew member';
+          delMBtn.setAttribute('aria-label', 'Remove crew member');
+          delMBtn.innerHTML = TRASH_ICON_SVG;
           delMBtn.onclick = () => { co.crew.splice(co.crew.indexOf(member), 1); _renderChangeOrders(); };
           delTd.appendChild(delMBtn);
         });
@@ -5437,7 +5524,7 @@ async function initApp(){
 
       // Bottom: materials inputs + summary
       const bottom = document.createElement('div');
-      bottom.style.cssText = 'padding:12px;background:#fafafa;border-top:1px solid #e5e7eb;';
+      bottom.style.cssText = 'padding:12px;background:#fafbfc;border-top:1px solid #eef1f5;';
       const matRow = document.createElement('div'); matRow.style.cssText = 'display:flex;gap:16px;margin-bottom:10px;';
       const mkMat = (label, key) => {
         const wrap = document.createElement('div');
@@ -5445,7 +5532,7 @@ async function initApp(){
         lbl.style.cssText = 'display:block;font-size:10px;color:#6b7280;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;';
         const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.step = '0.01'; inp.placeholder = '0.00';
         inp.value = co[key] ?? ''; inp.id = `co_${co.id}_${key}`;
-        inp.style.cssText = 'width:120px;border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;outline:none;';
+        inp.className = 'mini-input'; inp.style.width = '120px';
         inp.addEventListener('input', () => { co[key] = parseFloat(inp.value) || 0; _updateOneChangeOrderCalc(co); });
         wrap.appendChild(lbl); wrap.appendChild(inp); return wrap;
       };
@@ -5477,7 +5564,11 @@ async function initApp(){
         materials: old.materials || 0, materials_gc: old.materials_gc || 0 }];
     }
     _renderChangeOrders();
-    card.style.display = '';
+    // Not this function's job to touch card.style.display — it's a tab
+    // panel now, and _setChangeOrderSovTab is the only thing that should
+    // set that (see its comment). This used to set it too; harmless since
+    // the one call site already runs right after _setChangeOrderSovTab
+    // sets the same panel visible, but redundant, so dropped.
   }
 
   // ======================================================
@@ -6591,6 +6682,51 @@ async function initApp(){
 
   }
 
+  // Mirrors _setEstimatorTab above, for the Change Orders / Schedule of
+  // Values tab card (see #changeOrderSovTabCard in page.tsx). This is the
+  // ONLY thing that should ever set #changeOrderCard/#sovCard's own
+  // display now that they're tab panels rather than independent cards —
+  // renderSovCard/showChangeOrderCard just populate content and leave
+  // display alone, same as showAnalysisCard/showPaintingCard already do
+  // for their panels.
+  function _setChangeOrderSovTab(activeTab) {
+    const coPanel  = document.getElementById('changeOrderCard');
+    const sovPanel = document.getElementById('sovCard');
+    const tabCO    = document.getElementById('tabChangeOrdersBtn');
+    const tabSov   = document.getElementById('tabSovBtn');
+    if (!coPanel || !sovPanel) return;
+
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
+
+    coPanel.style.display  = activeTab === 'changeOrders' ? 'block' : 'none';
+    sovPanel.style.display = activeTab === 'sov' ? 'block' : 'none';
+    if (tabCO) tabCO.className = activeTab === 'changeOrders' ? activeStyle : inactiveStyle;
+    if (tabSov) tabSov.className = activeTab === 'sov' ? activeStyle : inactiveStyle;
+  }
+
+  // Mirrors _setEstimatorTab/_setChangeOrderSovTab above, for the
+  // Scope/Comments tab card (see #scopeCommentsTabCard in page.tsx).
+  // Scope/Comments has no data of its own to (re)fetch on tab switch —
+  // the fields are just relocated pieces of the Cleaning/Painting forms,
+  // so switching tabs here is purely a display toggle, same as
+  // _setEstimatorTab.
+  function _setScopeCommentsTab(activeTab) {
+    const cleaningPanel = document.getElementById('scopeCommentsCleaningPanel');
+    const paintingPanel = document.getElementById('scopeCommentsPaintingPanel');
+    const tabCleaning    = document.getElementById('tabScopeCleaningBtn');
+    const tabPainting    = document.getElementById('tabScopePaintingBtn');
+    if (!cleaningPanel || !paintingPanel) return;
+
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
+
+    cleaningPanel.style.display = activeTab === 'cleaning' ? 'block' : 'none';
+    paintingPanel.style.display = activeTab === 'painting' ? 'block' : 'none';
+    if (tabCleaning) tabCleaning.className = activeTab === 'cleaning' ? activeStyle : inactiveStyle;
+    if (tabPainting) tabPainting.className = activeTab === 'painting' ? activeStyle : inactiveStyle;
+  }
+
   function _getAnalysisAreaValue(projData) {
     if (_analysisAreaManual && _analysisAreaManualValue != null && _analysisAreaManualValue !== '') {
       const parsed = parseFloat(_analysisAreaManualValue);
@@ -6749,8 +6885,33 @@ async function initApp(){
     const tabCard = document.getElementById('estimatorTabCard');
     if (tabCard) tabCard.style.display = 'block';
     _setEstimatorTab('analysis');
+
+    const changeOrderSovTabCard = document.getElementById('changeOrderSovTabCard');
+    if (changeOrderSovTabCard) changeOrderSovTabCard.style.display = 'block';
+    _setChangeOrderSovTab('changeOrders');
     showChangeOrderCard(projData);
     renderSovCard();
+
+    const scopeCommentsTabCard = document.getElementById('scopeCommentsTabCard');
+    if (scopeCommentsTabCard) scopeCommentsTabCard.style.display = 'block';
+    _setScopeCommentsTab('cleaning');
+    // Scope/Comments now lives outside analysisEditForm, in its own
+    // always-visible section — so unlike before, it can't rely on
+    // showAnalysisEditForm's setVal calls to populate it, since that only
+    // runs once the user clicks into Cleaning's edit mode. Populate it
+    // here too, at load time, so it isn't just blank until then.
+    const cleaningScopeEl = document.getElementById('cleaningScopeInput');
+    if (cleaningScopeEl) cleaningScopeEl.value = projData.labor_breakdown?.scope ?? '';
+    const cleaningCommentsEl = document.getElementById('cleaningCommentsInput');
+    if (cleaningCommentsEl) cleaningCommentsEl.value = projData.labor_breakdown?.comments ?? '';
+    // Same reasoning for Painting's half of the section — showPaintingCard
+    // (which would otherwise set these) doesn't run until the user visits
+    // the Painting tab at least once, but this section is visible
+    // immediately, so populate its fields straight from projData here too.
+    const paintingScopeEl = document.getElementById('paintingScopeInput');
+    if (paintingScopeEl) paintingScopeEl.value = projData.painting_breakdown?.scope ?? '';
+    const paintingCommentsEl = document.getElementById('paintingCommentsInput');
+    if (paintingCommentsEl) paintingCommentsEl.value = projData.painting_breakdown?.comments ?? '';
   }
 
 
@@ -7246,6 +7407,7 @@ async function initApp(){
         _updateTransportCosts();
       });
     }
+    setVal('cleaningScopeInput', _loadedProjectData.labor_breakdown?.scope ?? '');
     setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
     _updateCrewCalcs();
 
@@ -7335,6 +7497,32 @@ async function initApp(){
     }
   });
 
+  // Change Orders doesn't re-fetch on click (unlike Painting above) —
+  // it's already populated eagerly alongside Analysis (see
+  // showChangeOrderCard in showAnalysisCard), and re-running it here
+  // would stomp any in-progress edits made before hitting "Save All"
+  // with whatever was last saved. SOV re-renders on every visit since
+  // renderSovCard reads from live in-memory state rather than resetting
+  // it, so refreshing it is always safe and keeps it current.
+  document.getElementById('tabChangeOrdersBtn')?.addEventListener('click', () => _setChangeOrderSovTab('changeOrders'));
+  document.getElementById('tabSovBtn')?.addEventListener('click', () => {
+    _setChangeOrderSovTab('sov');
+    renderSovCard();
+  });
+
+  document.getElementById('tabScopeCleaningBtn')?.addEventListener('click', () => _setScopeCommentsTab('cleaning'));
+  document.getElementById('tabScopePaintingBtn')?.addEventListener('click', () => _setScopeCommentsTab('painting'));
+
+  // Scope/Comments' Save/Cancel just forward to that trade's real
+  // button (see the comment on #scopeCommentsTabCard in page.tsx for
+  // why) — #saveAnalysisBtn/#savePaintingBtn and their cancel
+  // counterparts already gather/reset every field for that trade by id,
+  // regardless of where in the DOM those fields actually render.
+  document.getElementById('scopeCleaningSaveBtn')?.addEventListener('click', () => document.getElementById('saveAnalysisBtn')?.click());
+  document.getElementById('scopeCleaningCancelBtn')?.addEventListener('click', () => document.getElementById('cancelAnalysisBtn')?.click());
+  document.getElementById('scopePaintingSaveBtn')?.addEventListener('click', () => document.getElementById('savePaintingBtn')?.click());
+  document.getElementById('scopePaintingCancelBtn')?.addEventListener('click', () => document.getElementById('cancelPaintingBtn')?.click());
+
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
   if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
@@ -7366,6 +7554,7 @@ async function initApp(){
       setVal('paintingTollCostInput', bd.toll_cost ?? 0);
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
+      setVal('paintingScopeInput', bd.scope ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
       setVal('paintingBuildingTypeSelect', bd.building_type ?? 'Office / Commercial');
       setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
@@ -7646,6 +7835,7 @@ async function initApp(){
     const materials = materialsInput && materialsInput.value !== ''
       ? (Number.isFinite(parseFloat(materialsInput.value)) ? parseFloat(materialsInput.value) : derived.materials)
       : derived.materials;
+    const scope = document.getElementById('paintingScopeInput')?.value?.trim() || '';
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
 
     const paintRates = _getPaintingRates();
@@ -7684,6 +7874,7 @@ async function initApp(){
       total_area: totalArea,
       expected_days: expectedDays,
       address,
+      scope,
       comments,
       primer_area_per_person: primerAreaPerPerson,
       interior_area_per_person: interiorAreaPerPerson,
@@ -7790,6 +7981,7 @@ async function initApp(){
       const totFinalPrice = taxBaseSave + totTaxSave;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const scope = document.getElementById('cleaningScopeInput')?.value?.trim() || '';
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
@@ -7803,6 +7995,7 @@ async function initApp(){
         building_type_multiplier: _getCleaningBuildingTypeMultiplier(buildingType),
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
+        scope,
         comments,
       };
 

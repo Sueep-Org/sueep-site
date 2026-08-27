@@ -135,7 +135,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-26";
+    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-33";
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -244,18 +244,38 @@ export default function EstimatorPage() {
         ></div>
 
         <div className="container mx-auto px-4 py-8 max-w-7xl">
-          {/* UPLOAD */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          {/* UPLOAD — same .window-card treatment (layered shadow, thin
+              border, 16px radius) as the PDF window below it, so this is
+              the first thing you see and it already reads as part of one
+              consistent, modern system rather than an older card style. */}
+          <div className="window-card mb-6">
             {/* PROJECT LOADED CARD — shown when a project is opened from the Library */}
             <div id="projectLoadedCard" style={{ display: "none" }}>
-              {/* Top row: name + edit button */}
+              {/* Top row: name + edit button. A small uppercase "Project"
+                  eyebrow above the name, same label convention the
+                  Analysis card below uses for its fields, so the project
+                  name reads as this page's title rather than just another
+                  line of text. */}
               <div className="flex items-start justify-between gap-3 mb-1">
-                <div
-                  id="loadedProjectName"
-                  className="text-base font-semibold text-gray-900"
-                ></div>
-                <button id="editProjectBtn" className="mini-btn flex-shrink-0">
-                  Edit
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-400 mb-0.5">
+                    Project
+                  </div>
+                  <div
+                    id="loadedProjectName"
+                    className="text-lg font-semibold text-gray-900"
+                  ></div>
+                </div>
+                <button
+                  id="editProjectBtn"
+                  className="mini-btn icon-btn flex-shrink-0"
+                  title="Edit project"
+                  aria-label="Edit project"
+                >
+                  <Icon>
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </Icon>
                 </button>
               </div>
 
@@ -263,12 +283,17 @@ export default function EstimatorPage() {
               <div id="loadedProjectAddress" style={{ display: "none" }}></div>
 
               {/* PDF row + actions */}
-              <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-3 pt-3 mt-2 border-t border-gray-100">
                 <span
                   id="loadedPdfName"
                   className="text-sm text-gray-600 flex-1 truncate"
                 ></span>
                 <button id="changePdfBtn" className="mini-btn">
+                  <Icon>
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </Icon>
                   Change PDF
                 </button>
               </div>
@@ -282,7 +307,7 @@ export default function EstimatorPage() {
               </label>
               <div
                 id="dropZone"
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400"
+                className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
               >
                 <input
                   type="file"
@@ -293,7 +318,7 @@ export default function EstimatorPage() {
                 <p>Drag and drop OR click below</p>
                 <button
                   id="selectFileBtn"
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg transition-colors hover:bg-blue-700"
                 >
                   Select file
                 </button>
@@ -308,6 +333,11 @@ export default function EstimatorPage() {
                   className="text-sm text-gray-700 font-medium flex-1 truncate"
                 ></span>
                 <button id="changeFileBtn" className="mini-btn">
+                  <Icon>
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </Icon>
                   Change file
                 </button>
               </div>
@@ -322,13 +352,13 @@ export default function EstimatorPage() {
                 <input
                   type="text"
                   id="editProjectNameInput"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   id="saveProjectBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
                 >
                   Save
                 </button>
@@ -1245,29 +1275,12 @@ export default function EstimatorPage() {
 
                 <div id="calcSummaryContainer" className="mb-4"></div>
 
-                <div className="mb-4">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Scope
-                  </label>
-                  <textarea
-                    id="cleaningScopeInput"
-                    rows={3}
-                    placeholder="Describe the scope of work"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-
-                <div className="mb-4 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Comments
-                  </label>
-                  <textarea
-                    id="cleaningCommentsInput"
-                    rows={3}
-                    placeholder="Add any cleaning notes or comments"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
+                {/* Scope & Comments now live in their own tabbed section
+                    (see #scopeCommentsTabCard below), not here — but this
+                    trade's own Save/Cancel below is still what actually
+                    persists them (see scopeCleaningSaveBtn there, which
+                    forwards its click to #saveAnalysisBtn), so this is
+                    still the button that does the work. */}
 
                 <div className="flex gap-2">
                   <button
@@ -1819,29 +1832,12 @@ export default function EstimatorPage() {
 
                 <div id="paintingCalcSummaryContainer" className="mb-4"></div>
 
-                <div className="mb-4">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Scope
-                  </label>
-                  <textarea
-                    id="paintingScopeInput"
-                    rows={3}
-                    placeholder="Describe the scope of work"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-
-                <div className="mb-4 pt-4 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Comments
-                  </label>
-                  <textarea
-                    id="paintingCommentsInput"
-                    rows={3}
-                    placeholder="Add any painting notes or comments"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
+                {/* Scope & Comments now live in their own tabbed section
+                    (see #scopeCommentsTabCard below), not here — but this
+                    trade's own Save/Cancel below is still what actually
+                    persists them (see scopePaintingSaveBtn there, which
+                    forwards its click to #savePaintingBtn), so this is
+                    still the button that does the work. */}
 
                 <div className="flex gap-2">
                   <button
@@ -1860,51 +1856,221 @@ export default function EstimatorPage() {
           </div>
           {/* end estimatorTabCard */}
 
-          {/* CHANGE ORDER CARD */}
+          {/* SCOPE / COMMENTS TABBED CARD — its own section (same
+              tab-bar pattern as Cleaning/Painting and Change Orders/SOV),
+              pulled out of each trade's edit form rather than buried
+              inside it. The fields keep their original ids
+              (cleaningScopeInput/cleaningCommentsInput,
+              paintingScopeInput/paintingCommentsInput) — only their
+              location moved, so loading/saving them is unaffected by
+              where they render. There's no separate save path for this
+              card: each tab's Save button just forwards its click to
+              that trade's real Save button (#saveAnalysisBtn /
+              #savePaintingBtn), which already gathers every other field
+              for that trade's full breakdown too — a save split off from
+              that would risk silently dropping the rest of the payload,
+              or fighting it if the two saved independently. Visibility
+              mirrors #estimatorTabCard/#changeOrderSovTabCard: hidden
+              until a project is loaded, shown via the same trigger point
+              in showAnalysisCard. */}
           <div
-            id="changeOrderCard"
-            className="bg-white rounded-lg shadow-md p-6 mt-4"
+            id="scopeCommentsTabCard"
+            className="bg-white rounded-lg shadow-md mt-4"
             style={{ display: "none" }}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800">
-                Change Orders
+            {/* Tab bar */}
+            <div
+              id="scopeCommentsTabBar"
+              className="flex items-center border-b border-gray-200 px-6 pt-4"
+            >
+              <button
+                id="tabScopeCleaningBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+              >
+                Cleaning
+              </button>
+              <button
+                id="tabScopePaintingBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2"
+              >
+                Painting
+              </button>
+            </div>
+
+            {/* CLEANING SCOPE/COMMENTS PANEL */}
+            <div id="scopeCommentsCleaningPanel" className="p-6">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">
+                Scope &amp; Comments
               </h3>
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  <Icon size={13}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                    <path d="M14 2v6h6" />
+                    <path d="M9 13h6" />
+                    <path d="M9 17h6" />
+                  </Icon>
+                  Scope
+                </label>
+                <textarea
+                  id="cleaningScopeInput"
+                  rows={4}
+                  placeholder="Describe the scope of work"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  <Icon size={13}>
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </Icon>
+                  Comments
+                </label>
+                <textarea
+                  id="cleaningCommentsInput"
+                  rows={4}
+                  placeholder="Add any cleaning notes or comments"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                />
+              </div>
               <div className="flex gap-2">
-                <button id="addChangeOrderBtn" className="mini-btn">
-                  + Add
-                </button>
                 <button
-                  id="saveChangeOrderBtn"
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+                  id="scopeCleaningSaveBtn"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
                 >
-                  Save All
+                  Save
+                </button>
+                <button id="scopeCleaningCancelBtn" className="mini-btn">
+                  Cancel
                 </button>
               </div>
             </div>
-            {/* All change order sections rendered by JS */}
-            <div id="changeOrdersContainer"></div>
+
+            {/* PAINTING SCOPE/COMMENTS PANEL */}
+            <div
+              id="scopeCommentsPaintingPanel"
+              className="p-6"
+              style={{ display: "none" }}
+            >
+              <h3 className="text-base font-semibold text-gray-800 mb-4">
+                Scope &amp; Comments
+              </h3>
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  <Icon size={13}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                    <path d="M14 2v6h6" />
+                    <path d="M9 13h6" />
+                    <path d="M9 17h6" />
+                  </Icon>
+                  Scope
+                </label>
+                <textarea
+                  id="paintingScopeInput"
+                  rows={4}
+                  placeholder="Describe the scope of work"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  <Icon size={13}>
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </Icon>
+                  Comments
+                </label>
+                <textarea
+                  id="paintingCommentsInput"
+                  rows={4}
+                  placeholder="Add any painting notes or comments"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  id="scopePaintingSaveBtn"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
+                >
+                  Save
+                </button>
+                <button id="scopePaintingCancelBtn" className="mini-btn">
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
 
+          {/* CHANGE ORDER / SOV TABBED CARD — same tab-bar pattern as the
+              Cleaning/Painting card above (see _setEstimatorTab in
+              simple-app.js), rather than two cards stacked or sitting
+              side by side. Visibility of the whole card and which tab is
+              active are both handled by the mirroring
+              _setChangeOrderSovTab; #changeOrderCard/#sovCard keep their
+              original ids (now tab panels instead of standalone cards) so
+              nothing that already targets them by id needed to change. */}
           <div
-            id="sovCard"
-            className="bg-white rounded-lg shadow-md p-6 mt-4"
+            id="changeOrderSovTabCard"
+            className="bg-white rounded-lg shadow-md mt-4"
             style={{ display: "none" }}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-gray-800">
-                  Schedule of Values
-                </h3>
-                <button id="undoSovRowBtn" className="mini-btn" type="button">
-                  Undo
-                </button>
-                <button id="addSovRowBtn" className="mini-btn" type="button">
-                  +
-                </button>
-              </div>
+            {/* Tab bar */}
+            <div
+              id="changeOrderSovTabBar"
+              className="flex items-center border-b border-gray-200 px-6 pt-4"
+            >
+              <button
+                id="tabChangeOrdersBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+              >
+                Change Orders
+              </button>
+              <button
+                id="tabSovBtn"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2"
+              >
+                Schedule of Values
+              </button>
             </div>
-            <div id="sovTableContainer"></div>
+
+            {/* CHANGE ORDER PANEL */}
+            <div id="changeOrderCard" className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-800">
+                  Change Orders
+                </h3>
+                <div className="flex gap-2">
+                  <button id="addChangeOrderBtn" className="mini-btn">
+                    + Add
+                  </button>
+                  <button
+                    id="saveChangeOrderBtn"
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium transition-colors hover:bg-blue-700"
+                  >
+                    Save All
+                  </button>
+                </div>
+              </div>
+              {/* All change order sections rendered by JS */}
+              <div id="changeOrdersContainer"></div>
+            </div>
+
+            {/* SOV PANEL */}
+            <div id="sovCard" className="p-6" style={{ display: "none" }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-gray-800">
+                    Schedule of Values
+                  </h3>
+                  <button id="undoSovRowBtn" className="mini-btn" type="button">
+                    Undo
+                  </button>
+                  <button id="addSovRowBtn" className="mini-btn" type="button">
+                    +
+                  </button>
+                </div>
+              </div>
+              <div id="sovTableContainer"></div>
+            </div>
           </div>
         </div>
       </div>

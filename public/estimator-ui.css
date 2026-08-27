@@ -226,6 +226,15 @@
 
 /* BUTTONS */
 
+/* Flat by default everywhere on the estimator — no border, a permanent
+   light gray fill, darkening slightly on hover — the same look the
+   toolbar's buttons have (there, .toolbar-group/.zoom-group below give
+   individual buttons a transparent background since the pill they sit in
+   already supplies the gray; standalone buttons like these carry that
+   fill themselves instead of borrowing a pill's). Anything that needs to
+   stand out from this — Save's solid blue, the .active accent color,
+   confirmLeaveDialog's red "Leave" — does so via a more specific
+   selector or inline style, which still wins over this base rule. */
 .mini-btn {
     display: inline-flex;
     align-items: center;
@@ -236,15 +245,15 @@
     font-weight: 500;
     color: #374151;
     border-radius: 7px;
-    border: 1px solid #d1d5db;
-    background: white;
+    border: 1px solid transparent;
+    background: #f3f4f6;
     cursor: pointer;
     transition: background-color .15s ease, color .15s ease,
         border-color .15s ease, transform .08s ease;
 }
 
 .mini-btn:hover {
-    background: #f3f4f6;
+    background: #e5e7eb;
 }
 
 .mini-btn:active {
@@ -273,20 +282,14 @@
     padding: 6px 8px;
 }
 
-/* Buttons that live inside one of the toolbar pills (.toolbar-group,
-   .zoom-group) already have the pill's border for a visual boundary, so
-   the buttons themselves go borderless/transparent — flatter and less
-   busy than every single button also drawing its own border. This also
-   covers the Export dropdown, since it sits inside #saveToolsGroup (a
-   .toolbar-group). The Detect Walls dropdown is NOT inside a pill (it's
-   the one control standing alone at the toolbar's right edge — see
-   #betaToolsGroup in page.tsx), so it keeps the normal bordered .mini-btn
-   look below instead of flattening into nothing. Buttons elsewhere
-   (sidebar, Schedule of Values, change orders, etc.) keep that bordered
-   look too, for the same reason. */
+/* .mini-btn is already flat/gray by default now (see above) — inside a
+   .toolbar-group/.zoom-group pill specifically, that per-button fill
+   would double up against the pill's own gray background (a gray box
+   inside a gray box), so here it goes fully transparent instead and lets
+   the pill itself supply the color. This also covers the Export
+   dropdown, since it sits inside #saveToolsGroup (a .toolbar-group). */
 .toolbar-group .mini-btn,
 .zoom-group .mini-btn {
-    border-color: transparent;
     background: transparent;
     color: #4b5563;
 }
@@ -312,6 +315,85 @@
     background: #1d4ed8;
     border-color: #1d4ed8;
     color: white;
+}
+
+/* Destructive icon buttons (delete a change order / crew member / SOV
+   row — see _renderChangeOrders/renderSovTable in simple-app.js) — red
+   instead of the default gray fill, same treatment as
+   .toolbar-dropdown-item.danger. */
+.mini-btn.danger {
+    color: #dc2626;
+}
+
+.mini-btn.danger:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+/* SCHEDULE OF VALUES / CHANGE ORDERS (see renderSovTable /
+   _renderChangeOrders in simple-app.js) */
+
+.sov-table-wrapper {
+    overflow: auto;
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
+}
+
+.sov-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.sov-table th,
+.co-crew-table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #9ca3af;
+    background: #f9fafb;
+    border-bottom: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+
+.sov-table tbody tr:hover,
+.co-crew-table tbody tr:hover {
+    background: #fafbfc;
+}
+
+.sov-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #111827;
+}
+
+/* Role "+ Cleaner" / "+ Foreman" / etc. add-crew chips — a full pill
+   instead of a barely-rounded rectangle, same "chip" language as
+   .beta-badge/.measurement-column-swatch elsewhere, still carrying their
+   per-role color coding. */
+.co-role-chip {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border-width: 1px;
+    border-style: solid;
+    transition: filter .12s ease;
+}
+
+.co-role-chip:hover {
+    filter: brightness(0.96);
+}
+
+.co-section {
+    margin-bottom: 16px;
+    border: 1px solid #eef1f5;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 /* One consistent accent for every "this tool/view is on" state, instead
@@ -380,11 +462,32 @@
     border: none;
     border-radius: 7px;
     cursor: pointer;
+    text-decoration: none;
     transition: background-color .12s ease;
 }
 
 .toolbar-dropdown-item:hover {
     background: #f3f4f6;
+}
+
+/* Destructive action variant (Delete in the library row menu) — red
+   instead of the default neutral gray, same treatment as everywhere else
+   dangerous actions get called out (see confirmDialog's danger option). */
+.toolbar-dropdown-item.danger {
+    color: #dc2626;
+}
+
+.toolbar-dropdown-item.danger:hover {
+    background: #fef2f2;
+}
+
+/* Right-anchored variant for dropdowns that sit close to their
+   container's right edge — a left-anchored panel there would either
+   overflow off-screen or hang past the sidebar's own edge. Used by the
+   library row "more actions" menu (see refreshDrawer in simple-app.js). */
+.toolbar-dropdown-panel--right {
+    left: auto;
+    right: 0;
 }
 
 /* Small "Beta" tag on the Detect Walls dropdown button — amber rather
@@ -403,6 +506,79 @@
     line-height: 1.3;
 }
 
+/* LIBRARY SIDEBAR (see refreshDrawer/renderDrawerSkeleton in
+   simple-app.js) */
+
+/* Reuses .mini-input's look (radius/border/focus ring) — applied via
+   class here instead of the inline style.cssText the rest of this list
+   is still built with in JS, since :focus can't be done inline. */
+#librarySearch {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: .5rem;
+}
+
+/* One row per project — a plain hover-highlighted row instead of a
+   bordered box per button, closer to how a modern file list (Drive,
+   Notion, Linear) reads than a wall of separately-outlined buttons.
+   flex-wrap:nowrap + the name button's own min-width:0/ellipsis (below)
+   is what actually keeps a row from splitting across two lines when its
+   project name is long; this class just supplies the layout those rules
+   depend on. */
+.library-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding: 2px;
+    border-radius: 8px;
+    transition: background-color .12s ease;
+}
+
+.library-row:hover {
+    background: #f3f4f6;
+}
+
+/* flex:1 + min-width:0 is the actual fix for long names: a flex child
+   won't shrink below its content's natural width by default, which is
+   what was letting long project names force the row onto a second line
+   instead of truncating. */
+.library-name-btn {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    border-radius: 7px;
+    font-size: 12px;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.library-name-btn[data-no-file] {
+    cursor: default;
+    color: #9ca3af;
+}
+
+/* The "more actions" (⋮) trigger flattens/hovers like the toolbar's own
+   pill-grouped buttons, rather than drawing its own border on every row
+   down the list — the row's own hover highlight already gives it enough
+   visual boundary. */
+.library-row .mini-btn {
+    border-color: transparent;
+    background: transparent;
+    color: #6b7280;
+}
+
+.library-row .mini-btn:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+}
 
 /* ZOOM */
 
