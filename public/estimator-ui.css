@@ -1,10 +1,27 @@
+/* WINDOW CARD — the single card wrapping the toolbar, PDF preview, and
+   measurements sidebar (see page.tsx). A layered shadow (a tight low-
+   opacity contact shadow plus a softer, wider ambient one) instead of one
+   flat shadow reads a lot less "default Bootstrap card" than shadow-sm
+   alone. Border color matches the toolbar pills' (#eef1f5) so the whole
+   window reads as one consistent system. */
+.window-card {
+    background: white;
+    border: 1px solid #eef1f5;
+    border-radius: 16px;
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, .04),
+        0 16px 40px rgba(15, 23, 42, .06);
+    padding: 24px;
+}
+
 /* PDF VIEWER */
 
 #pdfContainer {
     position: relative;
     overflow: hidden;
     background: #f8f9fa;
-    border-radius: 0 0 8px 8px;
+    border: 1px solid #eef1f5;
+    border-radius: 12px;
     width: 100%;
     height: 600px;
     min-height: 600px;
@@ -12,6 +29,20 @@
     /* Let our own JS drive one-finger pan and two-finger pinch-zoom instead
        of the browser's native scroll/zoom gestures fighting with them. */
     touch-action: none;
+    /* #pdfWrapper is sized in JS to exactly the rendered page's pixel
+       dimensions (see renderPage in simple-app.js), which shrink as you
+       zoom out. Without this, a plain block-flow child like that just
+       sits pinned to the top-left corner of this fixed-size box — so
+       zooming out reads as the whole preview window shrinking toward one
+       corner, not just the page getting smaller inside a stable window.
+       Centering it keeps the box itself feeling constant and the page
+       shrinking/growing in place. Harmless when the page is zoomed in
+       past the box's size too — it just centers which edges get clipped
+       by default, before any panning (see #pdfWrapper below for why the
+       clipping itself has to happen here and not on the wrapper). */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #pdfContainer:active {
@@ -22,7 +53,30 @@
     position: relative;
     width: 100%;
     height: 100%;
-    overflow: hidden;
+    /* #pdfContainer is now display:flex (for centering, see above), which
+       makes this a flex item — and flex items default to flex-shrink:1,
+       meaning the browser was auto-shrinking this wrapper's width back
+       down to fit the container the instant it was wider (i.e. any time
+       you were zoomed in enough to need horizontal panning at all). That
+       made wrapperWidth == containerWidth horizontally no matter the zoom
+       level, so the pan clamp below always computed zero room to pan
+       sideways — height isn't a flex main-axis property here so it was
+       never affected, which is why only up/down still worked. flex-
+       shrink:0 lets this wrapper actually be wider than the container
+       (clipped by #pdfContainer's overflow:hidden, same as it always
+       was) so horizontal panning has room to work again. */
+    flex-shrink: 0;
+    /* NOT overflow:hidden, deliberately. #pdfWrapper is sized in JS to
+       exactly match the rendered page at the current zoom (see
+       renderPage), and panning translates #pdfCanvas/the overlay canvas
+       *inside* it (see syncOverlayTransform in simple-app.js) — so at
+       rest the canvas exactly fills the wrapper and any pan immediately
+       pushes part of it past the wrapper's own edge. If this wrapper
+       clipped too, that pushed-out part would vanish the instant you
+       dragged at all, clipped far tighter than the actual visible box —
+       exactly the "gray bounding that appears when I move around" bug.
+       #pdfContainer (the actual fixed-size viewport) is what should clip,
+       and does, via its own overflow:hidden above. */
 }
 
 #pdfCanvas {
@@ -41,7 +95,14 @@
 
 #toolbar {
     position: relative;
-    z-index: 5;
+    /* Must outrank the PDF measurement overlay canvas, which sets itself to
+       z-index:20 (see CanvasOverlay.resizeToMatchCanvas) on an element
+       that isn't inside #toolbar's stacking context — so that overlay
+       competes directly against #toolbar's own z-index, not against the
+       .toolbar-dropdown-panel z-index inside it. Anything lower than 20
+       here lets the overlay canvas paint over the whole toolbar, dropdown
+       panels included. */
+    z-index: 30;
 }
 
 /* Visually clusters related toolbar buttons into a single pill instead of
@@ -50,11 +111,11 @@
 .toolbar-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     padding: 3px;
-    background: #f9fafb;
-    border: 1px solid #f1f5f9;
-    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
 }
 
 .toolbar-divider {
@@ -63,40 +124,42 @@
     background: #e5e7eb;
 }
 
-/* #viewToolsGroup and #debugToolsGroup (page.tsx) start out as empty
-   containers — the buttons inside them are injected by simple-app.js at
-   runtime (see createShowLabelsToggleBtn / createDetectWallsBtn / etc.),
-   same reasoning as the comment on those functions: this page's toolbar
-   JSX predates those features. Hide the pill box entirely until
-   something's actually been put in it, instead of showing an empty
-   sliver for the moment before JS runs. */
+/* #viewToolsGroup (page.tsx) starts out as an empty container — the
+   buttons inside it are injected by simple-app.js at runtime (see
+   createShowLabelsToggleBtn / etc.), same reasoning as the comment on
+   those functions: this page's toolbar JSX predates those features. Hide
+   the pill box entirely until something's actually been put in it,
+   instead of showing an empty sliver for the moment before JS runs. */
 .toolbar-group:empty {
     display: none;
 }
 
-/* Detect Walls / Export / Lines Only are debugging & one-off actions, not
-   everyday drawing tools — a visibly quieter treatment than the main
-   .toolbar-group keeps them from reading as equally important. Save is
-   deliberately NOT in here — see #saveToolsGroup in page.tsx and
-   #savePdfBtn below. */
-.toolbar-group-debug {
-    background: #f3f4f6;
-    border-color: #e5e7eb;
-    opacity: 0.9;
-}
-
-.toolbar-group-debug .mini-btn {
-    font-size: 11px;
-}
-
 /* Reports which method (vector vs. pixel-guess) produced the walls shown
    for the current page — see detectWallsMethodCaption / runWallDetection
-   in simple-app.js. Purely informational, not interactive. */
+   in simple-app.js. Lives as a small footer line inside the Detect Walls
+   dropdown panel (see .toolbar-dropdown-panel below), not interactive.
+   Empty (no detection run yet on this page) collapses to nothing instead
+   of leaving a blank gap under the menu items. */
 .detect-walls-method-caption {
     font-size: 11px;
     color: #6b7280;
-    padding: 4px 2px;
-    white-space: nowrap;
+    padding: 6px 10px 4px;
+}
+
+.detect-walls-method-caption:not(:empty) {
+    border-top: 1px solid #f1f5f9;
+    margin-top: 4px;
+}
+
+.detect-walls-method-caption:empty {
+    display: none;
+}
+
+/* Collapses to nothing when there's no vector-line count yet for the
+   current page (see updateVectorLineInfo in simple-app.js), instead of
+   reserving a blank line and widening the page-nav cluster. */
+#vectorLineInfo:empty {
+    display: none;
 }
 
 #viewerRow {
@@ -115,19 +178,126 @@
     min-width: 240px;
 }
 
+/* Small labeled swatch in front of the "Line Measurements" / "Surface
+   Area" column headers (see measurement-column-label in page.tsx) — a
+   colored dot instead of a full-width colored underline bar, same color
+   signal with less visual weight. */
+.measurement-column-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.measurement-column-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+/* Light card treatment for the measurement list columns themselves,
+   matching the flat-bordered look used elsewhere in this window instead
+   of the list floating with no boundary against the sidebar background. */
+.measurement-column-list {
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    background: #fafbfc;
+    padding: 8px;
+}
+
+/* Small text input to match the toolbar's button radius/border and pick
+   up a visible focus state — plain inline styles can't do :focus. */
+.mini-input {
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: #374151;
+    background: white;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.mini-input:focus {
+    outline: none;
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
+}
+
 /* BUTTONS */
 
+/* Flat by default everywhere on the estimator — no border, a permanent
+   light gray fill, darkening slightly on hover — the same look the
+   toolbar's buttons have (there, .toolbar-group/.zoom-group below give
+   individual buttons a transparent background since the pill they sit in
+   already supplies the gray; standalone buttons like these carry that
+   fill themselves instead of borrowing a pill's). Anything that needs to
+   stand out from this — Save's solid blue, the .active accent color,
+   confirmLeaveDialog's red "Leave" — does so via a more specific
+   selector or inline style, which still wins over this base rule. */
 .mini-btn {
-    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 11px;
     font-size: 12px;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
-    background: white;
+    font-weight: 500;
+    color: #374151;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    background: #f3f4f6;
     cursor: pointer;
+    transition: background-color .15s ease, color .15s ease,
+        border-color .15s ease, transform .08s ease;
 }
 
 .mini-btn:hover {
-    background: #f3f4f6;
+    background: #e5e7eb;
+}
+
+.mini-btn:active {
+    transform: scale(0.96);
+}
+
+.mini-btn:disabled {
+    opacity: .4;
+    cursor: default;
+    pointer-events: none;
+    transform: none;
+}
+
+/* Every icon svg inherits its color from the button (stroke="currentColor"
+   in the markup) so hover/active states recolor icon + label together —
+   no separate icon-color rules needed anywhere below. */
+.mini-btn svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+/* Icon-only toolbar buttons (undo, measure, rect, freeform, zoom, page
+   nav) — even horizontal/vertical padding so they read as compact square
+   glyphs instead of stretched text buttons. */
+.mini-btn.icon-btn {
+    padding: 6px 8px;
+}
+
+/* .mini-btn is already flat/gray by default now (see above) — inside a
+   .toolbar-group/.zoom-group pill specifically, that per-button fill
+   would double up against the pill's own gray background (a gray box
+   inside a gray box), so here it goes fully transparent instead and lets
+   the pill itself supply the color. This also covers the Export
+   dropdown, since it sits inside #saveToolsGroup (a .toolbar-group). */
+.toolbar-group .mini-btn,
+.zoom-group .mini-btn {
+    background: transparent;
+    color: #4b5563;
+}
+
+.toolbar-group .mini-btn:hover,
+.zoom-group .mini-btn:hover {
+    background: #eef2f7;
+    color: #1f2937;
 }
 
 /* Save is a real action (not a debug/QA tool, see #saveToolsGroup in
@@ -144,46 +314,290 @@
 #savePdfBtn:hover {
     background: #1d4ed8;
     border-color: #1d4ed8;
+    color: white;
 }
 
-#measureToggle.active {
-    background: #bfdbfe;
+/* Destructive icon buttons (delete a change order / crew member / SOV
+   row — see _renderChangeOrders/renderSovTable in simple-app.js) — red
+   instead of the default gray fill, same treatment as
+   .toolbar-dropdown-item.danger. */
+.mini-btn.danger {
+    color: #dc2626;
 }
 
+.mini-btn.danger:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+/* SCHEDULE OF VALUES / CHANGE ORDERS (see renderSovTable /
+   _renderChangeOrders in simple-app.js) */
+
+.sov-table-wrapper {
+    overflow: auto;
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
+}
+
+.sov-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.sov-table th,
+.co-crew-table th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #9ca3af;
+    background: #f9fafb;
+    border-bottom: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+
+.sov-table tbody tr:hover,
+.co-crew-table tbody tr:hover {
+    background: #fafbfc;
+}
+
+.sov-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #111827;
+}
+
+/* Role "+ Cleaner" / "+ Foreman" / etc. add-crew chips — a full pill
+   instead of a barely-rounded rectangle, same "chip" language as
+   .beta-badge/.measurement-column-swatch elsewhere, still carrying their
+   per-role color coding. */
+.co-role-chip {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border-width: 1px;
+    border-style: solid;
+    transition: filter .12s ease;
+}
+
+.co-role-chip:hover {
+    filter: brightness(0.96);
+}
+
+.co-section {
+    margin-bottom: 16px;
+    border: 1px solid #eef1f5;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* One consistent accent for every "this tool/view is on" state, instead
+   of a different pastel per button — reads as a single coherent system
+   rather than a handful of unrelated highlight colors. */
+#measureToggle.active,
 #drawRectBtn.active,
-#drawIrregBtn.active {
-    background: #bfdbfe;
-}
-
-#doubleSideToggle.active {
-    background: #bbf7d0;
-}
-
-#showLabelsToggle.active {
-    background: #fde68a;
-}
-
+#drawIrregBtn.active,
+#doubleSideToggle.active,
+#showLabelsToggle.active,
 #dimBackgroundToggle.active {
-    background: #fde68a;
+    background: #eff6ff;
+    border-color: #dbeafe;
+    color: #2563eb;
+}
+
+#measureToggle.active:hover,
+#drawRectBtn.active:hover,
+#drawIrregBtn.active:hover,
+#doubleSideToggle.active:hover,
+#showLabelsToggle.active:hover,
+#dimBackgroundToggle.active:hover {
+    background: #e0edff;
+}
+
+/* TOOLBAR DROPDOWNS — custom button + floating menu (see createExportMenu
+   / createDetectWallsMenu / wireDropdownMenu in simple-app.js) rather than
+   a native <select>, so both Export and Detect Walls (beta) can be themed
+   to match the rest of the toolbar instead of falling back to whatever
+   the OS renders for a select's option list. */
+.toolbar-dropdown {
+    position: relative;
+    display: inline-flex;
+}
+
+.toolbar-dropdown-caret {
+    transition: transform .15s ease;
+}
+
+.toolbar-dropdown-btn[aria-expanded="true"] .toolbar-dropdown-caret {
+    transform: rotate(180deg);
+}
+
+.toolbar-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 150px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .12);
+    padding: 4px;
+    z-index: 20;
+}
+
+.toolbar-dropdown-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color .12s ease;
+}
+
+.toolbar-dropdown-item:hover {
+    background: #f3f4f6;
+}
+
+/* Destructive action variant (Delete in the library row menu) — red
+   instead of the default neutral gray, same treatment as everywhere else
+   dangerous actions get called out (see confirmDialog's danger option). */
+.toolbar-dropdown-item.danger {
+    color: #dc2626;
+}
+
+.toolbar-dropdown-item.danger:hover {
+    background: #fef2f2;
+}
+
+/* Right-anchored variant for dropdowns that sit close to their
+   container's right edge — a left-anchored panel there would either
+   overflow off-screen or hang past the sidebar's own edge. Used by the
+   library row "more actions" menu (see refreshDrawer in simple-app.js). */
+.toolbar-dropdown-panel--right {
+    left: auto;
+    right: 0;
+}
+
+/* Small "Beta" tag on the Detect Walls dropdown button — amber rather
+   than the blue used for active/on states elsewhere, so it reads as a
+   distinct "experimental, accuracy varies" signal instead of another
+   selected-tool highlight. */
+.beta-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: 999px;
+    padding: 2px 6px;
+    line-height: 1.3;
+}
+
+/* LIBRARY SIDEBAR (see refreshDrawer/renderDrawerSkeleton in
+   simple-app.js) */
+
+/* Reuses .mini-input's look (radius/border/focus ring) — applied via
+   class here instead of the inline style.cssText the rest of this list
+   is still built with in JS, since :focus can't be done inline. */
+#librarySearch {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: .5rem;
+}
+
+/* One row per project — a plain hover-highlighted row instead of a
+   bordered box per button, closer to how a modern file list (Drive,
+   Notion, Linear) reads than a wall of separately-outlined buttons.
+   flex-wrap:nowrap + the name button's own min-width:0/ellipsis (below)
+   is what actually keeps a row from splitting across two lines when its
+   project name is long; this class just supplies the layout those rules
+   depend on. */
+.library-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: nowrap;
+    min-width: 0;
+    padding: 2px;
+    border-radius: 8px;
+    transition: background-color .12s ease;
+}
+
+.library-row:hover {
+    background: #f3f4f6;
+}
+
+/* flex:1 + min-width:0 is the actual fix for long names: a flex child
+   won't shrink below its content's natural width by default, which is
+   what was letting long project names force the row onto a second line
+   instead of truncating. */
+.library-name-btn {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    border-radius: 7px;
+    font-size: 12px;
+    color: #1f2937;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.library-name-btn[data-no-file] {
+    cursor: default;
+    color: #9ca3af;
+}
+
+/* The "more actions" (⋮) trigger flattens/hovers like the toolbar's own
+   pill-grouped buttons, rather than drawing its own border on every row
+   down the list — the row's own hover highlight already gives it enough
+   visual boundary. */
+.library-row .mini-btn {
+    border-color: transparent;
+    background: transparent;
+    color: #6b7280;
+}
+
+.library-row .mini-btn:hover {
+    background: #e5e7eb;
+    color: #1f2937;
 }
 
 /* ZOOM */
 
 .zoom-group {
     display: flex;
-    gap: 8px;
+    gap: 2px;
     align-items: center;
     padding: 3px;
-    background: #f9fafb;
-    border: 1px solid #f1f5f9;
-    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
 }
 
 #zoomLabel {
-    min-width: 60px;
+    min-width: 44px;
     text-align: center;
     font-size: 12px;
     font-weight: 600;
+    color: #4b5563;
 }
 
 /* SIDEBAR — slides from RIGHT */
