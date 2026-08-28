@@ -19,6 +19,38 @@ import {
 import { CanvasOverlay } from './lib/highlights/CanvasOverlay.js';
 import { HighlightsStore } from './lib/highlights/HighlightsStore.js';
 
+// Per-user overrides for crew wage defaults and default dispatch address
+// (see /api/estimator/settings and EstimatorUserSettings in schema.prisma).
+// Starts at the same numbers that used to be hardcoded throughout this
+// file, so anything read before the fetch below resolves just sees
+// today's existing defaults, same as before this endpoint existed.
+// cleaner=22, foreman=28, assistant=22, painter=25, project_manager=55
+// also replace a handful of one-off literals that used to quietly
+// disagree with these (rate:42/47 in the change-order role defs, 220 in a
+// few saved-project-load fallbacks, 28.84 for the painting PM rate) --
+// those were inconsistencies/bugs, not intentional different defaults.
+let _estimatorSettings = {
+  cleanerRateCents: 2200,
+  foremanRateCents: 2800,
+  assistantRateCents: 2200,
+  painterRateCents: 2500,
+  projectManagerRateCents: 5500,
+  officeAddress: '2 Bala Plaza, Bala Cynwyd, PA 19004',
+};
+
+function _rate(centsKey) {
+  return (_estimatorSettings[centsKey] ?? 0) / 100;
+}
+
+fetch('/api/estimator/settings', { credentials: 'include' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((data) => {
+    if (data) _estimatorSettings = { ..._estimatorSettings, ...data };
+  })
+  .catch((err) => {
+    console.warn('[estimator] could not load user settings, using built-in defaults', err);
+  });
+
 function showAppError(msg){
 
   const n = document.getElementById('appError');
@@ -1677,7 +1709,7 @@ async function initApp(){
               <label class="block text-[10px] uppercase tracking-wide text-gray-400">Description</label>
               <input
                 type="text"
-                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                 data-extracted-field="label"
                 data-extracted-index="${index}"
                 value="${escapeHtml(row.label || '')}"
@@ -1685,7 +1717,7 @@ async function initApp(){
               <label class="block text-[10px] uppercase tracking-wide text-gray-400">Measurement</label>
               <input
                 type="text"
-                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                 data-extracted-field="value"
                 data-extracted-index="${index}"
                 value="${escapeHtml(row.value || '')}"
@@ -1871,7 +1903,7 @@ async function initApp(){
           type="button"
           data-extracted-toggle
           aria-expanded="${_showExtractedMeasurements ? 'true' : 'false'}"
-          class="w-full rounded border border-blue-200 bg-blue-50 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-300 hover:bg-blue-100 focus:outline-none"
+          class="w-full rounded border border-green-200 bg-green-50 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-green-600 transition-colors hover:border-green-300 hover:bg-green-100 focus:outline-none"
         >
           Extracted measurements
         </button>
@@ -1887,7 +1919,7 @@ async function initApp(){
                 data-extracted-search-input
                 value="${escapeHtml(_activeExtractedMeasurementQuery)}"
                 placeholder="Search extracted measurements or PDF"
-                class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
               />
             </div>
             <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
@@ -1900,7 +1932,7 @@ async function initApp(){
           type="button"
           data-wall-measurements-toggle
           aria-expanded="${_showWallMeasurements ? 'true' : 'false'}"
-          class="w-full rounded border border-transparent px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none"
+          class="w-full rounded border border-transparent px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-green-600 transition-colors hover:border-green-200 hover:text-green-600 focus:outline-none"
         >
           Wall measurements
         </button>
@@ -1921,7 +1953,7 @@ async function initApp(){
                   <div class="mb-1">
                     <button
                       type="button"
-                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
+                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-green-200 hover:text-green-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-green-600 font-semibold' : 'text-gray-400'}"
                       data-wall-measurement-button="${key}"
                       data-wall-measurement-label="${key}"
                     >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
@@ -1929,7 +1961,7 @@ async function initApp(){
                   <div class="flex items-center gap-2">
                     <input
                       type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                       data-wall-measurement-section="${key}"
                       data-wall-measurement-unit="ft"
                       value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
@@ -1937,7 +1969,7 @@ async function initApp(){
                     <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
                     <input
                       type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                       data-wall-measurement-section="${key}"
                       data-wall-measurement-unit="in"
                       value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
@@ -1993,7 +2025,7 @@ async function initApp(){
         });
         container.querySelectorAll('[data-wall-measurement-button]').forEach((btn) => {
           const isActive = btn.dataset.wallMeasurementButton === activeWallMeasurementSection;
-          btn.classList.toggle('text-blue-600', isActive);
+          btn.classList.toggle('text-green-600', isActive);
           btn.classList.toggle('font-semibold', isActive);
           btn.classList.toggle('text-gray-400', !isActive);
         });
@@ -4645,13 +4677,19 @@ async function initApp(){
 
   const PAINTING_PRIMER_SF_PER_PERSON_DAY = 2000;
   const PAINTING_INTERIOR_SF_PER_PERSON_DAY = 1200;
-  const PAINTING_STANDARD_CREW = [
-    { role: 'project_manager', rate: 28.84, hours: 8 },
-    { role: 'assistant', rate: 22, hours: 8 },
-    { role: 'painter', rate: 25, hours: 8 },
-    { role: 'painter', rate: 25, hours: 8 },
-    { role: 'painter', rate: 25, hours: 8 },
-  ];
+  // Was a module-load-time const; now a function so it always reflects
+  // whatever _estimatorSettings currently holds (including after the
+  // settings fetch resolves), not just whatever was true when this script
+  // first evaluated.
+  function _getPaintingStandardCrew() {
+    return [
+      { role: 'project_manager', rate: _rate('projectManagerRateCents'), hours: 8 },
+      { role: 'assistant', rate: _rate('assistantRateCents'), hours: 8 },
+      { role: 'painter', rate: _rate('painterRateCents'), hours: 8 },
+      { role: 'painter', rate: _rate('painterRateCents'), hours: 8 },
+      { role: 'painter', rate: _rate('painterRateCents'), hours: 8 },
+    ];
+  }
 
   const PAINTING_PAINT_COVERAGE_SF = 350;
   const PAINTING_PRIMER_COVERAGE_SF = 250;
@@ -5030,7 +5068,7 @@ async function initApp(){
   function _generatePaintingCrewForPhase(pid, totalArea) {
     const days = _getPaintingPhaseDays(totalArea, pid);
     const uid = () => Math.random().toString(36).slice(2);
-    return PAINTING_STANDARD_CREW.map(member => ({ ...member, days, _uid: uid() }));
+    return _getPaintingStandardCrew().map(member => ({ ...member, days, _uid: uid() }));
   }
 
   function _autoGeneratePaintingPhases(totalArea) {
@@ -5098,19 +5136,19 @@ async function initApp(){
     const touchupDays = Math.ceil(area / (touchupCleaners * touchupAppd));
 
     const makeCleaners = (count, days) =>
-      Array.from({ length: count }, () => ({ role: 'cleaner', rate: 22, hours: 8, days, _uid: uid() }));
+      Array.from({ length: count }, () => ({ role: 'cleaner', rate: _rate('cleanerRateCents'), hours: 8, days, _uid: uid() }));
 
     _phaseCrews.rough = [
       ...makeCleaners(mainCleaners, roughDays),
-      { role: 'foreman', rate: 28, hours: 8, days: roughDays, _uid: uid() },
+      { role: 'foreman', rate: _rate('foremanRateCents'), hours: 8, days: roughDays, _uid: uid() },
     ];
     _phaseCrews.final = [
       ...makeCleaners(mainCleaners, finalDays),
-      { role: 'foreman', rate: 28, hours: 8, days: finalDays, _uid: uid() },
+      { role: 'foreman', rate: _rate('foremanRateCents'), hours: 8, days: finalDays, _uid: uid() },
     ];
     _phaseCrews.touchup = [
       ...makeCleaners(touchupCleaners, touchupDays),
-      { role: 'foreman', rate: 28, hours: 8, days: touchupDays, _uid: uid() },
+      { role: 'foreman', rate: _rate('foremanRateCents'), hours: 8, days: touchupDays, _uid: uid() },
     ];
     _deletedPhaseIds = new Set();
   }
@@ -5268,7 +5306,7 @@ async function initApp(){
       ].forEach(([label, val], i) => {
         const isLast = i === 6;
         const item = document.createElement('div');
-        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
@@ -5324,9 +5362,9 @@ async function initApp(){
   function _getForemanRate() {
     for (const pid of PHASE_IDS) {
       const foreman = (_phaseCrews[pid] || []).find(m => m.role === 'foreman');
-      if (foreman) return foreman.rate || 28;
+      if (foreman) return foreman.rate || _rate('foremanRateCents');
     }
-    return 28;
+    return _rate('foremanRateCents');
   }
 
   function _updateTransportCosts() {
@@ -5372,9 +5410,9 @@ async function initApp(){
     const foremanRate = (() => {
       for (const pid of PAINTING_PHASE_IDS) {
         const f = (_paintingPhaseCrews[pid] || []).find(m => m.role === 'foreman');
-        if (f) return f.rate || 28;
+        if (f) return f.rate || _rate('foremanRateCents');
       }
-      return 28;
+      return _rate('foremanRateCents');
     })();
     const mobilizationsInput = document.getElementById('paintingMobilizationsInput');
     const mobilizations = parseFloat(mobilizationsInput?.value) || 0;
@@ -5445,7 +5483,7 @@ async function initApp(){
         <span style="color:#6b7280;">Labor</span><span style="font-weight:600;text-align:right;">${fmt$(laborCosts)}</span>
         <span style="color:#6b7280;">Materials</span><span style="font-weight:600;text-align:right;">${fmt$(materials)}</span>
         <span style="color:#6b7280;">Materials GC</span><span style="font-weight:600;text-align:right;">${fmt$(materialsGC)}</span>
-        <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#2563eb;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
+        <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#16a34a;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
       </div>`;
     }
   }
@@ -5460,11 +5498,11 @@ async function initApp(){
     if (!container) return;
     container.innerHTML = '';
     const coRoleDefs = [
-      { label: '+ Cleaner', role: 'cleaner', rate: 42, color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
-      { label: '+ Foreman', role: 'foreman', rate: 47, color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
-      { label: '+ Assistant', role: 'assistant', rate: 22, color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
-      { label: '+ Painter', role: 'painter', rate: 22, color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
-      { label: '+ PM', role: 'project_manager', rate: 55, color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
+      { label: '+ Cleaner', role: 'cleaner', rate: _rate('cleanerRateCents'), color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
+      { label: '+ Foreman', role: 'foreman', rate: _rate('foremanRateCents'), color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+      { label: '+ Assistant', role: 'assistant', rate: _rate('assistantRateCents'), color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+      { label: '+ Painter', role: 'painter', rate: _rate('painterRateCents'), color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+      { label: '+ PM', role: 'project_manager', rate: _rate('projectManagerRateCents'), color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
     ];
     const roleLabels = { cleaner: 'Cleaner', foreman: 'Foreman', assistant: 'Assistant', painter: 'Painter', project_manager: 'PM' };
     const roleStyles = {
@@ -5699,11 +5737,11 @@ async function initApp(){
           };
           return btn;
         };
-        addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
-        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
-        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
-        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
-        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
+        addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || _rate('cleanerRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || _rate('foremanRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', _rate('assistantRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', _rate('painterRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', _rate('projectManagerRateCents')));
         const delPhaseBtn = document.createElement('button');
         delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
         delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
@@ -5902,11 +5940,11 @@ async function initApp(){
         };
         return btn;
       };
-      addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || 22));
-      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || 28));
-      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
-      addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 22));
-      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 55));
+      addBtns.appendChild(mkAddBtn('+ Cleaner', 'cleaner', '#2563eb', '#eff6ff', '#93c5fd', parseFloat(document.getElementById('cleanerRateInput')?.value) || _rate('cleanerRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', parseFloat(document.getElementById('foremanRateInput')?.value) || _rate('foremanRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', _rate('assistantRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', _rate('painterRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', _rate('projectManagerRateCents')));
 
       const delPhaseBtn = document.createElement('button');
       delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
@@ -6165,7 +6203,7 @@ async function initApp(){
       ].forEach(([label, val], i) => {
         const isLast = i === 6;
         const item = document.createElement('div');
-        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
@@ -6210,14 +6248,14 @@ async function initApp(){
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Required</label>
-            <select id="paintingPrimerRequiredSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerRequiredSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="yes">Yes</option>
               <option value="no">No</option>
             </select>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Type</label>
-            <select id="paintingPrimerTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="none">None</option>
               <option value="standard_commercial">Standard Commercial: $30/gal</option>
               <option value="commercial_acrylic">Commercial Acrylic: $40/gal</option>
@@ -6228,14 +6266,14 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Coats</label>
-            <select id="paintingPrimerCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="1">1 coat</option>
               <option value="2">2 coats</option>
             </select>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Application</label>
-            <select id="paintingPrimerApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="roller">Roller</option>
               <option value="brush">Brush</option>
               <option value="airless">Airless Spray</option>
@@ -6253,15 +6291,15 @@ async function initApp(){
             <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Consumables & PPE Cost</div>
             <div id="paintingConsumablesCostDisplay" class="text-gray-900 font-semibold">—</div>
           </div>
-          <div class="rounded-xl border border-gray-200 bg-blue-50 p-3 xl:col-span-2">
-            <div class="text-xs text-blue-700 uppercase tracking-wide mb-1">Total Materials Cost</div>
-            <div id="paintingTotalMaterialsCostDisplay" class="text-blue-900 font-semibold text-lg">—</div>
+          <div class="rounded-xl border border-gray-200 bg-green-50 p-3 xl:col-span-2">
+            <div class="text-xs text-green-700 uppercase tracking-wide mb-1">Total Materials Cost</div>
+            <div id="paintingTotalMaterialsCostDisplay" class="text-green-900 font-semibold text-lg">—</div>
           </div>
         </div>` : `
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-gray-500 mb-1">Coats</label>
-            <select id="paintingCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="1">1 coat</option>
               <option value="2">2 coats</option>
               <option value="3">3 coats</option>
@@ -6269,7 +6307,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Application Method</label>
-            <select id="paintingApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="roller">Roller</option>
               <option value="brush">Brush</option>
               <option value="airless">Airless Spray</option>
@@ -6278,19 +6316,19 @@ async function initApp(){
           <div>
             <label class="block text-xs text-gray-500 mb-1">Paint Quality</label>
             <div class="flex gap-2 items-end">
-              <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
                 <option value="economy">Economy: $32/gal</option>
                 <option value="standard">Standard: $45/gal</option>
                 <option value="premium">Premium: $60/gal</option>
                 <option value="ultra">Ultra Premium: $75/gal</option>
                 <option value="custom">Custom</option>
               </select>
-              <input id="paintingPaintQualityCustomInput" type="number" min="0" step="0.01" placeholder="$/gal" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400" style="opacity:0.6;" />
+              <input id="paintingPaintQualityCustomInput" type="number" min="0" step="0.01" placeholder="$/gal" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-green-400" style="opacity:0.6;" />
             </div>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Surface Condition</label>
-            <select id="paintingSurfaceConditionSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingSurfaceConditionSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="smooth">Smooth</option>
               <option value="normal">Normal</option>
               <option value="rough">Rough</option>
@@ -6299,7 +6337,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Finish Type</label>
-            <select id="paintingFinishTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingFinishTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="flat">Flat</option>
               <option value="matte">Matte</option>
               <option value="eggshell">Eggshell</option>
@@ -6310,7 +6348,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Color Depth</label>
-            <select id="paintingColorDepthSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingColorDepthSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="white_light">White / Light</option>
               <option value="medium">Medium</option>
               <option value="dark">Dark</option>
@@ -6400,10 +6438,10 @@ async function initApp(){
           };
           return btn;
         };
-        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', 28));
-        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
-        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', 25));
-        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 28.84));
+        addBtns.appendChild(mkAddBtn('+ Foreman', 'foreman', '#16a34a', '#f0fdf4', '#86efac', _rate('foremanRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', _rate('assistantRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Painter', 'painter', '#dc2626', '#fef2f2', '#fca5a5', _rate('painterRateCents')));
+        addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', _rate('projectManagerRateCents')));
         const delPhaseBtn = document.createElement('button');
         delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
         delPhaseBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;margin-left:8px;';
@@ -6562,10 +6600,10 @@ async function initApp(){
         };
         return btn;
       };
-      addBtns.appendChild(mkAddBtn('+ Foreman',   'foreman',   '#16a34a', '#f0fdf4', '#86efac', 28));
-      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', 22));
-      addBtns.appendChild(mkAddBtn('+ Painter',   'painter',   '#dc2626', '#fef2f2', '#fca5a5', 25));
-      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', 28.84));
+      addBtns.appendChild(mkAddBtn('+ Foreman',   'foreman',   '#16a34a', '#f0fdf4', '#86efac', _rate('foremanRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Assistant', 'assistant', '#d97706', '#fffbeb', '#fcd34d', _rate('assistantRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Painter',   'painter',   '#dc2626', '#fef2f2', '#fca5a5', _rate('painterRateCents')));
+      addBtns.appendChild(mkAddBtn('+ Project Manager', 'project_manager', '#7c3aed', '#f5f3ff', '#c4b5fd', _rate('projectManagerRateCents')));
 
       const delPhaseBtn = document.createElement('button');
       delPhaseBtn.type = 'button'; delPhaseBtn.textContent = 'Delete Phase';
@@ -6732,7 +6770,7 @@ async function initApp(){
     const tabPainting   = document.getElementById('tabPaintingBtn');
     if (!analysisPanel || !paintingPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     analysisPanel.style.display = activeTab === 'analysis' ? 'block' : 'none';
@@ -6756,7 +6794,7 @@ async function initApp(){
     const tabSov   = document.getElementById('tabSovBtn');
     if (!coPanel || !sovPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     coPanel.style.display  = activeTab === 'changeOrders' ? 'block' : 'none';
@@ -6778,7 +6816,7 @@ async function initApp(){
     const tabPainting    = document.getElementById('tabScopePaintingBtn');
     if (!cleaningPanel || !paintingPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     cleaningPanel.style.display = activeTab === 'cleaning' ? 'block' : 'none';
@@ -6829,10 +6867,10 @@ async function initApp(){
       if (bd?.phases) {
         for (const p of bd.phases) {
           const f = (p.crew || []).find(m => m.role === 'foreman');
-          if (f) return f.rate || 28;
+          if (f) return f.rate || _rate('foremanRateCents');
         }
       }
-      return 28;
+      return _rate('foremanRateCents');
     })();
     const driverCostView = driveHoursView > 0 ? (mobilizationsView * 2 * driveHoursView * foremanRateView) : 0;
     const tollCostView = (projData.toll_cost != null && projData.toll_cost !== '' ? parseFloat(projData.toll_cost) : 0) || 0;
@@ -6903,7 +6941,7 @@ async function initApp(){
         ].forEach(([label, val], i) => {
           const isLast = i === 6;
           const item = document.createElement('div');
-          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
         });
         breakdownDiv.appendChild(pricingDiv);
@@ -6911,7 +6949,7 @@ async function initApp(){
     }
 
     setText('analysisViewAddress', resolvedAddress || '');
-    const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
+    const DEFAULT_OFFICE = _estimatorSettings.officeAddress;
     setText('analysisViewStartAddress', projData.start_address || DEFAULT_OFFICE);
     const laborTotal = displayLaborTotal + driverCostView;
     const lps = (laborTotal > 0 && resolvedArea) ? (laborTotal / resolvedArea) : null;
@@ -6979,7 +7017,7 @@ async function initApp(){
     const card = document.getElementById('paintingCard');
     if (!card) return;
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const DEFAULT_OFFICE = '2 Bala Plaza, Bala Cynwyd, PA 19004';
+    const DEFAULT_OFFICE = _estimatorSettings.officeAddress;
 
     const bd = projData.painting_breakdown;
     const resolvedArea = bd?.total_area ?? projData.total_area;
@@ -6999,8 +7037,8 @@ async function initApp(){
       const uid = () => Math.random().toString(36).slice(2);
       const days = Math.ceil(resolvedArea / 5000) || 1;
       effectivePhases = [
-        { name: 'Phase 1', crew: [{ role: 'foreman', rate: 28, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 25, hours: 8, days, _uid: uid() }, { role: 'painter', rate: 25, hours: 8, days, _uid: uid() }] },
-        { name: 'Phase 2', crew: [{ role: 'painter', rate: 25, hours: 8, days, _uid: uid() }, { role: 'assistant', rate: 22, hours: 8, days, _uid: uid() }] },
+        { name: 'Phase 1', crew: [{ role: 'foreman', rate: _rate('foremanRateCents'), hours: 8, days, _uid: uid() }, { role: 'painter', rate: _rate('painterRateCents'), hours: 8, days, _uid: uid() }, { role: 'painter', rate: _rate('painterRateCents'), hours: 8, days, _uid: uid() }] },
+        { name: 'Phase 2', crew: [{ role: 'painter', rate: _rate('painterRateCents'), hours: 8, days, _uid: uid() }, { role: 'assistant', rate: _rate('assistantRateCents'), hours: 8, days, _uid: uid() }] },
       ];
       isAutoGenerated = true;
     }
@@ -7031,10 +7069,10 @@ async function initApp(){
       if (bd?.phases) {
         for (const p of bd.phases) {
           const f = (p.crew || []).find(m => m.role === 'foreman');
-          if (f) return f.rate || 28;
+          if (f) return f.rate || _rate('foremanRateCents');
         }
       }
-      return 28;
+      return _rate('foremanRateCents');
     })();
     const driverCostView = (bd?.driver_cost != null && bd?.driver_cost !== '')
       ? parseFloat(bd.driver_cost)
@@ -7115,7 +7153,7 @@ async function initApp(){
         ].forEach(([label, val], i) => {
           const isLast = i === 6;
           const item = document.createElement('div');
-          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
         });
         breakdownDiv.appendChild(pricingDiv);
@@ -7205,8 +7243,8 @@ async function initApp(){
     _deletedPhaseIds = new Set();
 
     if (bd) {
-      setVal('cleanerRateInput', bd.cleaner_rate ?? 22);
-      setVal('foremanRateInput', bd.foreman_rate ?? 220);
+      setVal('cleanerRateInput', bd.cleaner_rate ?? _rate('cleanerRateCents'));
+      setVal('foremanRateInput', bd.foreman_rate ?? _rate('foremanRateCents'));
       setVal('overheadInput', bd.overhead_pct ?? 0);
       setVal('profitInput', bd.profit_pct ?? 30);
       setVal('taxInput', bd.tax_pct ?? 6);
@@ -7241,8 +7279,8 @@ async function initApp(){
           _phaseCrews[pid] = p.crew.map(m => ({ ...m, _uid: m._uid || Math.random().toString(36).slice(2) }));
         } else {
           // Convert old format (persons/days + global rates) to crew
-          const cr = bd.cleaner_rate || 22;
-          const fr = bd.foreman_rate || 220;
+          const cr = bd.cleaner_rate || _rate('cleanerRateCents');
+          const fr = bd.foreman_rate || _rate('foremanRateCents');
           const days = p.days || 1;
           for (let k = 0; k < (p.persons || 1); k++) _phaseCrews[pid].push({ role: 'cleaner', rate: cr, days, _uid: Math.random().toString(36).slice(2) });
           _phaseCrews[pid].push({ role: 'foreman', rate: fr, days, _uid: Math.random().toString(36).slice(2) });
@@ -7258,7 +7296,7 @@ async function initApp(){
         _autoGeneratePhases(totalArea);
       } else {
         ['rough', 'final', 'touchup'].forEach(pid => {
-          _phaseCrews[pid] = [{ role: 'cleaner', rate: 22, days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: 220, days: 2, _uid: Math.random().toString(36).slice(2) }];
+          _phaseCrews[pid] = [{ role: 'cleaner', rate: _rate('cleanerRateCents'), days: 2, _uid: Math.random().toString(36).slice(2) }, { role: 'foreman', rate: _rate('foremanRateCents'), days: 2, _uid: Math.random().toString(36).slice(2) }];
         });
       }
     }
@@ -7284,7 +7322,7 @@ async function initApp(){
     if (daysInput) {
       daysInput.readOnly = !_expectedDaysManual;
       daysInput.className = _expectedDaysManual
-        ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'
+        ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'
         : 'w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
       daysInput.addEventListener('input', () => {
         if (daysInput.readOnly) return;
@@ -7297,7 +7335,7 @@ async function initApp(){
 
     if (modifyBtn) modifyBtn.onclick = () => {
       _expectedDaysManual = true;
-      if (daysInput) { daysInput.readOnly = false; daysInput.className = 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; daysInput.focus(); }
+      if (daysInput) { daysInput.readOnly = false; daysInput.className = 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'; daysInput.focus(); }
       modifyBtn.style.display = 'none';
       if (resetBtn) resetBtn.style.display = '';
     };
@@ -7348,7 +7386,7 @@ async function initApp(){
       });
     }
     if (totalAreaModifyBtn) totalAreaModifyBtn.onclick = () => {
-      if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; totalAreaInput.focus(); }
+      if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'; totalAreaInput.focus(); }
       totalAreaModifyBtn.style.display = 'none';
       if (totalAreaResetBtn) totalAreaResetBtn.style.display = autoTotalArea != null ? '' : 'none';
     };
@@ -8657,19 +8695,19 @@ async function initApp(){
 
       e.preventDefault();
 
-      dropZone.classList.add('border-blue-400');
+      dropZone.classList.add('border-green-400');
     });
 
     dropZone.addEventListener('dragleave', ()=>{
 
-      dropZone.classList.remove('border-blue-400');
+      dropZone.classList.remove('border-green-400');
     });
 
     dropZone.addEventListener('drop', async (e)=>{
 
       e.preventDefault();
 
-      dropZone.classList.remove('border-blue-400');
+      dropZone.classList.remove('border-green-400');
 
       const file =
         e.dataTransfer.files?.[0];

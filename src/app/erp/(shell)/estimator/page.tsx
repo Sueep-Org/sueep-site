@@ -228,7 +228,7 @@ export default function EstimatorPage() {
             left: 0,
             width: "100%",
             height: "3px",
-            background: "linear-gradient(90deg, #60a5fa, #a78bfa, #60a5fa)",
+            background: "linear-gradient(90deg, #4ade80, #a78bfa, #4ade80)",
             animation: "globalLoadingBar 1.5s linear infinite",
           }}
         ></div>
@@ -328,7 +328,7 @@ export default function EstimatorPage() {
               </label>
               <div
                 id="dropZone"
-                className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+                className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center transition-colors hover:border-green-300 hover:bg-green-50/40"
               >
                 <input
                   type="file"
@@ -339,7 +339,7 @@ export default function EstimatorPage() {
                 <p>Drag and drop OR click below</p>
                 <button
                   id="selectFileBtn"
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg transition-colors hover:bg-blue-700"
+                  className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg transition-colors hover:bg-green-700"
                 >
                   Select file
                 </button>
@@ -373,13 +373,13 @@ export default function EstimatorPage() {
                 <input
                   type="text"
                   id="editProjectNameInput"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none focus:border-green-300 focus:ring-2 focus:ring-green-100"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   id="saveProjectBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-green-700"
                 >
                   Save
                 </button>
@@ -681,7 +681,7 @@ export default function EstimatorPage() {
                         <div className="measurement-column-label">
                           <span
                             className="measurement-column-swatch"
-                            style={{ background: "#3b82f6" }}
+                            style={{ background: "#00b478" }}
                           />
                           <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
                             Line Measurements
@@ -705,7 +705,7 @@ export default function EstimatorPage() {
                         <div className="measurement-column-label">
                           <span
                             className="measurement-column-swatch"
-                            style={{ background: "#10b981" }}
+                            style={{ background: "#ffc300" }}
                           />
                           <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
                             Surface Area
@@ -756,7 +756,7 @@ export default function EstimatorPage() {
             >
               <button
                 id="tabAnalysisBtn"
-                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2"
               >
                 Cleaning
               </button>
@@ -932,7 +932,7 @@ export default function EstimatorPage() {
                           placeholder="0"
                           min="0"
                           step="1"
-                          className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                          className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                         />
                         <button
                           type="button"
@@ -946,7 +946,7 @@ export default function EstimatorPage() {
                           type="button"
                           id="totalAreaResetBtn"
                           style={{ display: "none" }}
-                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                          className="px-3 py-1.5 text-xs border border-green-300 rounded bg-white text-green-600 hover:bg-green-50 cursor-pointer"
                         >
                           Reset to auto
                         </button>
@@ -959,7 +959,7 @@ export default function EstimatorPage() {
                       <select
                         id="buildingTypeSelect"
                         defaultValue="Commercial"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       >
                         <option value="Commercial">Commercial</option>
                         <option value="Retail">Retail</option>
@@ -988,7 +988,7 @@ export default function EstimatorPage() {
                   </label>
                   <select
                     id="startAddressSelect"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400 mb-2"
                   >
                     <option value="default">
                       Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
@@ -1000,7 +1000,7 @@ export default function EstimatorPage() {
                     id="startAddressInput"
                     placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
                     style={{ display: "none" }}
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                   />
                 </div>
                 {/* Project Address */}
@@ -1012,7 +1012,7 @@ export default function EstimatorPage() {
                     type="text"
                     id="analysisAddressInput"
                     placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                   />
                 </div>
                 {/* Drive info (read-only, below address) */}
@@ -1052,7 +1052,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1065,7 +1065,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1078,7 +1078,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1087,7 +1087,7 @@ export default function EstimatorPage() {
                     </label>
                     <div
                       id="totalTransportDisplay"
-                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                      className="w-48 border border-green-200 rounded px-3 py-1.5 text-sm bg-green-50 text-green-700 font-semibold"
                     >
                       —
                     </div>
@@ -1102,7 +1102,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                 </div>
@@ -1134,7 +1134,7 @@ export default function EstimatorPage() {
                           type="button"
                           id="expectedDaysResetBtn"
                           style={{ display: "none" }}
-                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                          className="px-3 py-1.5 text-xs border border-green-300 rounded bg-white text-green-600 hover:bg-green-50 cursor-pointer"
                         >
                           Reset to auto
                         </button>
@@ -1175,7 +1175,7 @@ export default function EstimatorPage() {
                         defaultValue={4000}
                         min="0"
                         step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       />
                     </div>
                     <div>
@@ -1188,7 +1188,7 @@ export default function EstimatorPage() {
                         defaultValue={4000}
                         min="0"
                         step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       />
                     </div>
                     <div>
@@ -1201,7 +1201,7 @@ export default function EstimatorPage() {
                         defaultValue={4000}
                         min="0"
                         step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       />
                     </div>
                   </div>
@@ -1237,7 +1237,7 @@ export default function EstimatorPage() {
                       defaultValue="0"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1250,7 +1250,7 @@ export default function EstimatorPage() {
                       defaultValue="30"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1263,7 +1263,7 @@ export default function EstimatorPage() {
                       defaultValue="6"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                     <div className="flex items-center gap-1 mt-1">
                       <input
@@ -1271,7 +1271,7 @@ export default function EstimatorPage() {
                         id="taxZipInput"
                         placeholder="ZIP"
                         maxLength={5}
-                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-green-400"
                       />
                       <button
                         type="button"
@@ -1292,7 +1292,7 @@ export default function EstimatorPage() {
                       defaultValue="5"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1306,7 +1306,7 @@ export default function EstimatorPage() {
                       defaultValue="0"
                       min="0"
                       step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                 </div>
@@ -1323,7 +1323,7 @@ export default function EstimatorPage() {
                 <div className="flex gap-2">
                   <button
                     id="saveAnalysisBtn"
-                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                    className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
                   >
                     Save
                   </button>
@@ -1495,7 +1495,7 @@ export default function EstimatorPage() {
                       placeholder="0"
                       min="0"
                       step="1"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                     <button
                       type="button"
@@ -1509,7 +1509,7 @@ export default function EstimatorPage() {
                       type="button"
                       id="paintingTotalAreaResetBtn"
                       style={{ display: "none" }}
-                      className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                      className="px-3 py-1.5 text-xs border border-green-300 rounded bg-white text-green-600 hover:bg-green-50 cursor-pointer"
                     >
                       Reset to auto
                     </button>
@@ -1522,7 +1522,7 @@ export default function EstimatorPage() {
                   </label>
                   <select
                     id="paintingStartAddressSelect"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400 mb-2"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400 mb-2"
                   >
                     <option value="default">
                       Company HQ — 2 Bala Plaza, Bala Cynwyd, PA 19004
@@ -1534,7 +1534,7 @@ export default function EstimatorPage() {
                     id="paintingStartAddressInput"
                     placeholder="e.g. 456 Other St, Philadelphia, PA 19103"
                     style={{ display: "none" }}
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                   />
                 </div>
                 {/* Project Address */}
@@ -1546,7 +1546,7 @@ export default function EstimatorPage() {
                     type="text"
                     id="paintingAddressInput"
                     placeholder="e.g. 123 Main St, Philadelphia, PA 19103"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                   />
                 </div>
                 {/* Drive info */}
@@ -1586,7 +1586,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1599,7 +1599,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1612,7 +1612,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1621,7 +1621,7 @@ export default function EstimatorPage() {
                     </label>
                     <div
                       id="paintingTotalTransportDisplay"
-                      className="w-48 border border-blue-200 rounded px-3 py-1.5 text-sm bg-blue-50 text-blue-700 font-semibold"
+                      className="w-48 border border-green-200 rounded px-3 py-1.5 text-sm bg-green-50 text-green-700 font-semibold"
                     >
                       —
                     </div>
@@ -1636,7 +1636,7 @@ export default function EstimatorPage() {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                 </div>
@@ -1668,7 +1668,7 @@ export default function EstimatorPage() {
                           type="button"
                           id="paintingExpectedDaysResetBtn"
                           style={{ display: "none" }}
-                          className="px-3 py-1.5 text-xs border border-blue-300 rounded bg-white text-blue-600 hover:bg-blue-50 cursor-pointer"
+                          className="px-3 py-1.5 text-xs border border-green-300 rounded bg-white text-green-600 hover:bg-green-50 cursor-pointer"
                         >
                           Reset to auto
                         </button>
@@ -1717,7 +1717,7 @@ export default function EstimatorPage() {
                         defaultValue={2000}
                         min="0"
                         step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       />
                     </div>
                     <div>
@@ -1730,7 +1730,7 @@ export default function EstimatorPage() {
                         defaultValue={1200}
                         min="0"
                         step="1"
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                       />
                     </div>
                   </div>
@@ -1765,7 +1765,7 @@ export default function EstimatorPage() {
                       defaultValue="0"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1778,7 +1778,7 @@ export default function EstimatorPage() {
                       defaultValue="30"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1791,7 +1791,7 @@ export default function EstimatorPage() {
                       defaultValue="6"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                     <div className="flex items-center gap-1 mt-1">
                       <input
@@ -1799,7 +1799,7 @@ export default function EstimatorPage() {
                         id="paintingTaxZipInput"
                         placeholder="ZIP"
                         maxLength={5}
-                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                        className="w-16 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-green-400"
                       />
                       <button
                         type="button"
@@ -1820,7 +1820,7 @@ export default function EstimatorPage() {
                       defaultValue="5"
                       min="0"
                       step="0.1"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1834,7 +1834,7 @@ export default function EstimatorPage() {
                       defaultValue="0"
                       min="0"
                       step="0.01"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     />
                   </div>
                   <div>
@@ -1844,7 +1844,7 @@ export default function EstimatorPage() {
                     <select
                       id="paintingBuildingTypeSelect"
                       defaultValue="Office / Commercial"
-                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400"
                     >
                       <option value="Office / Commercial">
                         Office / Commercial
@@ -1880,7 +1880,7 @@ export default function EstimatorPage() {
                 <div className="flex gap-2">
                   <button
                     id="savePaintingBtn"
-                    className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                    className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
                   >
                     Save
                   </button>
@@ -1923,7 +1923,7 @@ export default function EstimatorPage() {
             >
               <button
                 id="tabScopeCleaningBtn"
-                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2"
               >
                 Cleaning
               </button>
@@ -1954,7 +1954,7 @@ export default function EstimatorPage() {
                   id="cleaningScopeInput"
                   rows={4}
                   placeholder="Describe the scope of work"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-green-300 focus:ring-4 focus:ring-green-100/60"
                 />
               </div>
               <div className="mb-4">
@@ -1968,13 +1968,13 @@ export default function EstimatorPage() {
                   id="cleaningCommentsInput"
                   rows={4}
                   placeholder="Add any cleaning notes or comments"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-green-300 focus:ring-4 focus:ring-green-100/60"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   id="scopeCleaningSaveBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-green-700"
                 >
                   Save
                 </button>
@@ -2007,7 +2007,7 @@ export default function EstimatorPage() {
                   id="paintingScopeInput"
                   rows={4}
                   placeholder="Describe the scope of work"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-green-300 focus:ring-4 focus:ring-green-100/60"
                 />
               </div>
               <div className="mb-4">
@@ -2021,13 +2021,13 @@ export default function EstimatorPage() {
                   id="paintingCommentsInput"
                   rows={4}
                   placeholder="Add any painting notes or comments"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-100/60"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 bg-gray-50 resize-y transition-all placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-green-300 focus:ring-4 focus:ring-green-100/60"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   id="scopePaintingSaveBtn"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-blue-700"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium transition-colors hover:bg-green-700"
                 >
                   Save
                 </button>
@@ -2058,7 +2058,7 @@ export default function EstimatorPage() {
             >
               <button
                 id="tabChangeOrdersBtn"
-                className="px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2"
+                className="px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2"
               >
                 Change Orders
               </button>
@@ -2082,7 +2082,7 @@ export default function EstimatorPage() {
                   </button>
                   <button
                     id="saveChangeOrderBtn"
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium transition-colors hover:bg-blue-700"
+                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium transition-colors hover:bg-green-700"
                   >
                     Save All
                   </button>
