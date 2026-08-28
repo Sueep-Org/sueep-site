@@ -179,7 +179,39 @@ model EstimatorUser {
   createdAt   DateTime  @default(now())
   lastLoginAt DateTime?
 
+  /// Profile photo, stored directly in the DB rather than an external
+  /// object store, same pattern as EmployeeDocument.fileData (see
+  /// /api/estimator/avatar). avatarUpdatedAt exists purely as a cache-
+  /// busting query param for the <img> tag, not otherwise read.
+  avatarData      Bytes?
+  avatarMimeType  String?
+  avatarUpdatedAt DateTime?
+
+  settings EstimatorUserSettings?
+
   @@index([email])
+}
+
+/// Per-user overrides for the estimator's crew wage defaults and default
+/// dispatch address, previously hardcoded in public/estimator/simple-app.js
+/// (Sueep's own rates, meaningless for anyone else using the tool). Rate
+/// fields are nullable rather than DB-defaulted so "not set" stays
+/// distinguishable from "explicitly set to 0". The app falls back to
+/// today's hardcoded values when a field is null (see simple-app.js).
+model EstimatorUserSettings {
+  id              String        @id @default(cuid())
+  estimatorUserId String        @unique
+  estimatorUser   EstimatorUser @relation(fields: [estimatorUserId], references: [id], onDelete: Cascade)
+
+  cleanerRateCents        Int?
+  foremanRateCents        Int?
+  assistantRateCents      Int?
+  painterRateCents        Int?
+  projectManagerRateCents Int?
+  officeAddress           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Building {
