@@ -1677,7 +1677,7 @@ async function initApp(){
               <label class="block text-[10px] uppercase tracking-wide text-gray-400">Description</label>
               <input
                 type="text"
-                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                 data-extracted-field="label"
                 data-extracted-index="${index}"
                 value="${escapeHtml(row.label || '')}"
@@ -1685,7 +1685,7 @@ async function initApp(){
               <label class="block text-[10px] uppercase tracking-wide text-gray-400">Measurement</label>
               <input
                 type="text"
-                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                 data-extracted-field="value"
                 data-extracted-index="${index}"
                 value="${escapeHtml(row.value || '')}"
@@ -1871,7 +1871,7 @@ async function initApp(){
           type="button"
           data-extracted-toggle
           aria-expanded="${_showExtractedMeasurements ? 'true' : 'false'}"
-          class="w-full rounded border border-blue-200 bg-blue-50 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-300 hover:bg-blue-100 focus:outline-none"
+          class="w-full rounded border border-green-200 bg-green-50 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-green-600 transition-colors hover:border-green-300 hover:bg-green-100 focus:outline-none"
         >
           Extracted measurements
         </button>
@@ -1887,7 +1887,7 @@ async function initApp(){
                 data-extracted-search-input
                 value="${escapeHtml(_activeExtractedMeasurementQuery)}"
                 placeholder="Search extracted measurements or PDF"
-                class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
               />
             </div>
             <div class="max-h-48 overflow-y-auto pr-1" data-extracted-list></div>
@@ -1900,7 +1900,7 @@ async function initApp(){
           type="button"
           data-wall-measurements-toggle
           aria-expanded="${_showWallMeasurements ? 'true' : 'false'}"
-          class="w-full rounded border border-transparent px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-600 transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none"
+          class="w-full rounded border border-transparent px-0 py-0 text-left text-[11px] font-semibold uppercase tracking-wide text-green-600 transition-colors hover:border-green-200 hover:text-green-600 focus:outline-none"
         >
           Wall measurements
         </button>
@@ -1921,7 +1921,7 @@ async function initApp(){
                   <div class="mb-1">
                     <button
                       type="button"
-                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-blue-200 hover:text-blue-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-blue-600 font-semibold' : 'text-gray-400'}"
+                      class="w-full rounded border border-transparent px-1 py-0.5 text-left text-[10px] uppercase tracking-wide transition-colors hover:border-green-200 hover:text-green-600 focus:outline-none ${activeWallMeasurementSection === key ? 'text-green-600 font-semibold' : 'text-gray-400'}"
                       data-wall-measurement-button="${key}"
                       data-wall-measurement-label="${key}"
                     >${escapeHtml(wallMeasurementSectionLabels[key] || label)}</button>
@@ -1929,7 +1929,7 @@ async function initApp(){
                   <div class="flex items-center gap-2">
                     <input
                       type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                       data-wall-measurement-section="${key}"
                       data-wall-measurement-unit="ft"
                       value="${escapeHtml(getWallMeasurementSectionValue(key, 'ft'))}"
@@ -1937,7 +1937,7 @@ async function initApp(){
                     <span class="text-[10px] uppercase tracking-wide text-gray-400">ft</span>
                     <input
                       type="text"
-                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-blue-400"
+                      class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:border-green-400"
                       data-wall-measurement-section="${key}"
                       data-wall-measurement-unit="in"
                       value="${escapeHtml(getWallMeasurementSectionValue(key, 'in'))}"
@@ -1993,7 +1993,7 @@ async function initApp(){
         });
         container.querySelectorAll('[data-wall-measurement-button]').forEach((btn) => {
           const isActive = btn.dataset.wallMeasurementButton === activeWallMeasurementSection;
-          btn.classList.toggle('text-blue-600', isActive);
+          btn.classList.toggle('text-green-600', isActive);
           btn.classList.toggle('font-semibold', isActive);
           btn.classList.toggle('text-gray-400', !isActive);
         });
@@ -5268,7 +5268,7 @@ async function initApp(){
       ].forEach(([label, val], i) => {
         const isLast = i === 6;
         const item = document.createElement('div');
-        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
@@ -5445,7 +5445,7 @@ async function initApp(){
         <span style="color:#6b7280;">Labor</span><span style="font-weight:600;text-align:right;">${fmt$(laborCosts)}</span>
         <span style="color:#6b7280;">Materials</span><span style="font-weight:600;text-align:right;">${fmt$(materials)}</span>
         <span style="color:#6b7280;">Materials GC</span><span style="font-weight:600;text-align:right;">${fmt$(materialsGC)}</span>
-        <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#2563eb;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
+        <span style="font-weight:700;border-top:1px solid #e5e7eb;padding-top:4px;">Profit</span><span style="font-weight:700;color:#16a34a;text-align:right;border-top:1px solid #e5e7eb;padding-top:4px;">${fmt$(profit)}</span>
       </div>`;
     }
   }
@@ -6165,7 +6165,7 @@ async function initApp(){
       ].forEach(([label, val], i) => {
         const isLast = i === 6;
         const item = document.createElement('div');
-        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+        item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
         grid.appendChild(item);
       });
       summaryContainer.appendChild(grid);
@@ -6210,14 +6210,14 @@ async function initApp(){
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Required</label>
-            <select id="paintingPrimerRequiredSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerRequiredSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="yes">Yes</option>
               <option value="no">No</option>
             </select>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Type</label>
-            <select id="paintingPrimerTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="none">None</option>
               <option value="standard_commercial">Standard Commercial: $30/gal</option>
               <option value="commercial_acrylic">Commercial Acrylic: $40/gal</option>
@@ -6228,14 +6228,14 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Coats</label>
-            <select id="paintingPrimerCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="1">1 coat</option>
               <option value="2">2 coats</option>
             </select>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Primer Application</label>
-            <select id="paintingPrimerApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingPrimerApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="roller">Roller</option>
               <option value="brush">Brush</option>
               <option value="airless">Airless Spray</option>
@@ -6253,15 +6253,15 @@ async function initApp(){
             <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Consumables & PPE Cost</div>
             <div id="paintingConsumablesCostDisplay" class="text-gray-900 font-semibold">—</div>
           </div>
-          <div class="rounded-xl border border-gray-200 bg-blue-50 p-3 xl:col-span-2">
-            <div class="text-xs text-blue-700 uppercase tracking-wide mb-1">Total Materials Cost</div>
-            <div id="paintingTotalMaterialsCostDisplay" class="text-blue-900 font-semibold text-lg">—</div>
+          <div class="rounded-xl border border-gray-200 bg-green-50 p-3 xl:col-span-2">
+            <div class="text-xs text-green-700 uppercase tracking-wide mb-1">Total Materials Cost</div>
+            <div id="paintingTotalMaterialsCostDisplay" class="text-green-900 font-semibold text-lg">—</div>
           </div>
         </div>` : `
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-gray-500 mb-1">Coats</label>
-            <select id="paintingCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingCoatsSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="1">1 coat</option>
               <option value="2">2 coats</option>
               <option value="3">3 coats</option>
@@ -6269,7 +6269,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Application Method</label>
-            <select id="paintingApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingApplicationMethodSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="roller">Roller</option>
               <option value="brush">Brush</option>
               <option value="airless">Airless Spray</option>
@@ -6278,19 +6278,19 @@ async function initApp(){
           <div>
             <label class="block text-xs text-gray-500 mb-1">Paint Quality</label>
             <div class="flex gap-2 items-end">
-              <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+              <select id="paintingPaintQualitySelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
                 <option value="economy">Economy: $32/gal</option>
                 <option value="standard">Standard: $45/gal</option>
                 <option value="premium">Premium: $60/gal</option>
                 <option value="ultra">Ultra Premium: $75/gal</option>
                 <option value="custom">Custom</option>
               </select>
-              <input id="paintingPaintQualityCustomInput" type="number" min="0" step="0.01" placeholder="$/gal" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-400" style="opacity:0.6;" />
+              <input id="paintingPaintQualityCustomInput" type="number" min="0" step="0.01" placeholder="$/gal" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-green-400" style="opacity:0.6;" />
             </div>
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Surface Condition</label>
-            <select id="paintingSurfaceConditionSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingSurfaceConditionSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="smooth">Smooth</option>
               <option value="normal">Normal</option>
               <option value="rough">Rough</option>
@@ -6299,7 +6299,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Finish Type</label>
-            <select id="paintingFinishTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingFinishTypeSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="flat">Flat</option>
               <option value="matte">Matte</option>
               <option value="eggshell">Eggshell</option>
@@ -6310,7 +6310,7 @@ async function initApp(){
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-1">Color Depth</label>
-            <select id="paintingColorDepthSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400">
+            <select id="paintingColorDepthSelect" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400">
               <option value="white_light">White / Light</option>
               <option value="medium">Medium</option>
               <option value="dark">Dark</option>
@@ -6732,7 +6732,7 @@ async function initApp(){
     const tabPainting   = document.getElementById('tabPaintingBtn');
     if (!analysisPanel || !paintingPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     analysisPanel.style.display = activeTab === 'analysis' ? 'block' : 'none';
@@ -6756,7 +6756,7 @@ async function initApp(){
     const tabSov   = document.getElementById('tabSovBtn');
     if (!coPanel || !sovPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     coPanel.style.display  = activeTab === 'changeOrders' ? 'block' : 'none';
@@ -6778,7 +6778,7 @@ async function initApp(){
     const tabPainting    = document.getElementById('tabScopePaintingBtn');
     if (!cleaningPanel || !paintingPanel) return;
 
-    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-green-600 text-green-600 mr-2';
     const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
 
     cleaningPanel.style.display = activeTab === 'cleaning' ? 'block' : 'none';
@@ -6903,7 +6903,7 @@ async function initApp(){
         ].forEach(([label, val], i) => {
           const isLast = i === 6;
           const item = document.createElement('div');
-          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
         });
         breakdownDiv.appendChild(pricingDiv);
@@ -7115,7 +7115,7 @@ async function initApp(){
         ].forEach(([label, val], i) => {
           const isLast = i === 6;
           const item = document.createElement('div');
-          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#2563eb' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
+          item.innerHTML = `<div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px;">${label}</div><div style="color:${isLast ? '#16a34a' : '#111827'};font-weight:${isLast ? '700' : '600'};">${fmt$(val)}</div>`;
           pricingDiv.appendChild(item);
         });
         breakdownDiv.appendChild(pricingDiv);
@@ -7284,7 +7284,7 @@ async function initApp(){
     if (daysInput) {
       daysInput.readOnly = !_expectedDaysManual;
       daysInput.className = _expectedDaysManual
-        ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'
+        ? 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'
         : 'w-32 border border-gray-200 rounded px-3 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none';
       daysInput.addEventListener('input', () => {
         if (daysInput.readOnly) return;
@@ -7297,7 +7297,7 @@ async function initApp(){
 
     if (modifyBtn) modifyBtn.onclick = () => {
       _expectedDaysManual = true;
-      if (daysInput) { daysInput.readOnly = false; daysInput.className = 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; daysInput.focus(); }
+      if (daysInput) { daysInput.readOnly = false; daysInput.className = 'w-32 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'; daysInput.focus(); }
       modifyBtn.style.display = 'none';
       if (resetBtn) resetBtn.style.display = '';
     };
@@ -7348,7 +7348,7 @@ async function initApp(){
       });
     }
     if (totalAreaModifyBtn) totalAreaModifyBtn.onclick = () => {
-      if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400'; totalAreaInput.focus(); }
+      if (totalAreaInput) { totalAreaInput.readOnly = false; totalAreaInput.className = 'w-40 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-400'; totalAreaInput.focus(); }
       totalAreaModifyBtn.style.display = 'none';
       if (totalAreaResetBtn) totalAreaResetBtn.style.display = autoTotalArea != null ? '' : 'none';
     };
@@ -8657,19 +8657,19 @@ async function initApp(){
 
       e.preventDefault();
 
-      dropZone.classList.add('border-blue-400');
+      dropZone.classList.add('border-green-400');
     });
 
     dropZone.addEventListener('dragleave', ()=>{
 
-      dropZone.classList.remove('border-blue-400');
+      dropZone.classList.remove('border-green-400');
     });
 
     dropZone.addEventListener('drop', async (e)=>{
 
       e.preventDefault();
 
-      dropZone.classList.remove('border-blue-400');
+      dropZone.classList.remove('border-green-400');
 
       const file =
         e.dataTransfer.files?.[0];

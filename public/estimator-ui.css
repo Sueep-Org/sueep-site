@@ -225,8 +225,8 @@
 
 .mini-input:focus {
     outline: none;
-    border-color: #93c5fd;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
+    border-color: #86efac;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .15);
 }
 
 /* BUTTONS */
@@ -237,7 +237,7 @@
    individual buttons a transparent background since the pill they sit in
    already supplies the gray; standalone buttons like these carry that
    fill themselves instead of borrowing a pill's). Anything that needs to
-   stand out from this — Save's solid blue, the .active accent color,
+   stand out from this — Save's solid green, the .active accent color,
    confirmLeaveDialog's red "Leave" — does so via a more specific
    selector or inline style, which still wins over this base rule. */
 .mini-btn {
@@ -319,15 +319,15 @@
    just another mini-btn — the one button in the toolbar meant to stand
    out at a glance. */
 #savePdfBtn {
-    background: #2563eb;
-    border-color: #2563eb;
+    background: #16a34a;
+    border-color: #16a34a;
     color: white;
     font-weight: 600;
 }
 
 #savePdfBtn:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: #15803d;
+    border-color: #15803d;
     color: white;
 }
 
@@ -420,9 +420,9 @@
 #doubleSideToggle.active,
 #showLabelsToggle.active,
 #dimBackgroundToggle.active {
-    background: #eff6ff;
-    border-color: #dbeafe;
-    color: #2563eb;
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #16a34a;
 }
 
 #measureToggle.active:hover,
@@ -432,7 +432,7 @@
 #doubleSideToggle.active:hover,
 #showLabelsToggle.active:hover,
 #dimBackgroundToggle.active:hover {
-    background: #e0edff;
+    background: #dcfce7;
 }
 
 /* TOOLBAR DROPDOWNS — custom button + floating menu (see createExportMenu
@@ -507,7 +507,7 @@
 }
 
 /* Small "Beta" tag on the Detect Walls dropdown button — amber rather
-   than the blue used for active/on states elsewhere, so it reads as a
+   than the green used for active/on states elsewhere, so it reads as a
    distinct "experimental, accuracy varies" signal instead of another
    selected-tool highlight. */
 .beta-badge {

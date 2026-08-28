@@ -1944,8 +1944,8 @@ function drawPolygon(ctx, pts, solid, { selected = false } = {}) {
   ctx.closePath();
 
   if (selected) {
-    ctx.fillStyle = 'rgba(99,102,241,0.25)';
-    ctx.strokeStyle = 'rgba(99,102,241,0.95)';
+    ctx.fillStyle = 'rgba(22,163,74,0.25)';
+    ctx.strokeStyle = 'rgba(22,163,74,0.95)';
     ctx.lineWidth = 3;
     ctx.setLineDash([6, 3]);
   } else {
@@ -2045,7 +2045,7 @@ function drawLine(ctx, a, b, { hover = false, selected = false } = {}) {
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
-  ctx.strokeStyle = selected ? 'rgba(0,200,255,0.95)' : hover ? 'rgba(255,255,0,0.95)' : 'rgba(255,195,0,0.9)';
+  ctx.strokeStyle = selected ? 'rgba(34,197,94,0.95)' : hover ? 'rgba(255,255,0,0.95)' : 'rgba(255,195,0,0.9)';
   ctx.lineWidth = selected ? 4 : hover ? 3 : 2;
   ctx.lineCap = 'round';
   ctx.stroke();
@@ -2079,7 +2079,7 @@ function formatInches(inches) {
 // draw a preview (temporary) measurement line
 function drawPreviewLine(ctx, a, b, { doubleSided = false } = {}) {
   ctx.save();
-  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.strokeStyle = 'rgba(22,163,74,0.95)';
   ctx.lineWidth = 3;
   // Same dashed=single/solid=double convention as drawMeasurementLine —
   // a single line either way.
@@ -2102,9 +2102,9 @@ function drawPreviewRect(ctx, a, b) {
   const h = Math.abs(b.y - a.y);
   ctx.beginPath();
   ctx.rect(left, top, w, h);
-  ctx.fillStyle = 'rgba(0,120,212,0.18)';
+  ctx.fillStyle = 'rgba(22,163,74,0.18)';
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.strokeStyle = 'rgba(22,163,74,0.95)';
   ctx.lineWidth = 3;
   ctx.setLineDash([6,6]);
   ctx.stroke();
@@ -2126,7 +2126,7 @@ function drawIrregularPath(ctx, points, preview) {
   for (let i = 1; i < pathPoints.length; i++) {
     ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
   }
-  ctx.strokeStyle = 'rgba(0,120,212,0.95)';
+  ctx.strokeStyle = 'rgba(22,163,74,0.95)';
   ctx.lineWidth = 2.5;
   ctx.setLineDash([6, 4]);
   ctx.stroke();
@@ -2142,9 +2142,9 @@ function drawMarqueeSelection(ctx, a, b) {
   const top = Math.min(a.y, b.y);
   const width = Math.abs(b.x - a.x);
   const height = Math.abs(b.y - a.y);
-  ctx.fillStyle = 'rgba(37, 99, 235, 0.08)';
+  ctx.fillStyle = 'rgba(22, 163, 74, 0.08)';
   ctx.fillRect(left, top, width, height);
-  ctx.strokeStyle = 'rgba(37, 99, 235, 0.9)';
+  ctx.strokeStyle = 'rgba(22, 163, 74, 0.9)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([4, 3]);
   ctx.strokeRect(left, top, width, height);
