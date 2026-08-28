@@ -3,6 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import {
+  turnoverTotalHoursBudget,
+  turnoverImpliedMarginPct,
+  turnoverMarginSeverity,
+  type TurnoverMarginSeverity,
+} from "@/lib/erp/turnoverHoursBudget";
+import { TRANSPORTATION_METHOD_OPTIONS, transportationMethodShortLabel } from "@/lib/erp/transportationMethods";
+import { CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
+import { UnitScopeCard } from "./UnitScopeCard";
+import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { Button, Modal, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type LaborRow = {
   id: string;
@@ -12,25 +24,15 @@ export type LaborRow = {
   workerName: string;
   role: string | null;
   hours: string;
+  clockIn: string | null;
+  commuteHours: number | null;
+  transportationMethod: string | null;
+  regHours: number;
+  otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
-  qualityRating: string | null;
+  sovItemIds: string[];
   qualityNotes: string | null;
-};
-
-const QUALITY_OPTIONS = [
-  { value: "", label: "—" },
-  { value: "EXCELLENT", label: "Excellent" },
-  { value: "GOOD", label: "Good" },
-  { value: "FAIR", label: "Fair" },
-  { value: "POOR", label: "Poor" },
-];
-
-const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-emerald-600",
-  GOOD: "text-blue-600",
-  FAIR: "text-amber-600",
-  POOR: "text-red-600",
 };
 
 export type LaborEmployeeOption = {
@@ -44,16 +46,30 @@ export type LaborEmployeeOption = {
 
 const OTHER_VALUE = "__other__";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+// Sourced from the shared ui/styles module (see its header comment) instead
+// of being redefined locally, which is how this file and dozens of others
+// used to carry their own copy of the same three strings.
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
 
-function lineCostCents(hours: string, rateCents: number): number {
-  const h = Number(hours);
-  if (!Number.isFinite(h)) return 0;
-  return Math.round(h * rateCents);
+function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
+  if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
+  return Math.round(regHours * rateCents + otHours * rateCents * 1.5);
+}
+
+function calcHours(clockIn: string, clockOut: string): number {
+  if (!clockIn || !clockOut) return 0;
+  const [inH, inM] = clockIn.split(":").map(Number);
+  const [outH, outM] = clockOut.split(":").map(Number);
+  const diff = outH * 60 + outM - (inH * 60 + inM);
+  return diff > 0 ? Math.round(diff) / 60 : 0;
+}
+
+function hoursToClockOut(clockIn: string, hours: number): string {
+  const [h, m] = clockIn.split(":").map(Number);
+  const total = h * 60 + m + Math.round(hours * 60);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function employeeLabel(e: LaborEmployeeOption): string {
@@ -61,14 +77,38 @@ function employeeLabel(e: LaborEmployeeOption): string {
   return e.status === "INACTIVE" ? `${name} (inactive)` : name;
 }
 
+/**
+ * Conservative "did you mean" check for when someone picks "Other" and types
+ * a name instead of picking from the roster. The roster search above is a
+ * plain substring match on "First Last", so a shorthand like "Maria V" won't
+ * find "Maria Karelly Veloza Velandia" even though she's right there — and
+ * once an entry is saved as "Other" it's permanently unlinked from that
+ * employee (no employeeId), so it won't show on their profile or merge into
+ * their payroll total. This requires every word the user typed to line up
+ * with a word in some employee's name, to keep false positives rare.
+ */
+function suggestEmployeeMatch(typedName: string, employees: LaborEmployeeOption[]): LaborEmployeeOption | null {
+  const typedWords = typedName.toLowerCase().split(/\s+/).filter(Boolean);
+  if (typedWords.length === 0) return null;
+  let best: { emp: LaborEmployeeOption; score: number } | null = null;
+  for (const emp of employees) {
+    const empWords = `${emp.firstName} ${emp.lastName}`.toLowerCase().split(/\s+/).filter(Boolean);
+    const score = typedWords.filter((w) => empWords.some((ew) => ew === w || ew.startsWith(w) || w.startsWith(ew))).length;
+    if (score >= typedWords.length && (!best || score > best.score)) best = { emp, score };
+  }
+  return best?.emp ?? null;
+}
+
 function EmployeeCombobox({
   employees,
   value,
   onChange,
+  className,
 }: {
   employees: LaborEmployeeOption[];
   value: string;
   onChange: (id: string) => void;
+  className?: string;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -109,7 +149,7 @@ function EmployeeCombobox({
       <input
         type="text"
         autoComplete="off"
-        className={input}
+        className={className ?? input}
         placeholder={displayName || "Type to search…"}
         value={open ? query : displayName}
         onFocus={() => { setQuery(""); setOpen(true); }}
@@ -139,28 +179,127 @@ function EmployeeCombobox({
   );
 }
 
+// Labor entries on or after this date are expected to have a safety check.
+const SAFETY_CUTOFF = "2026-06-18";
+
+function laborDateStr(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
 export function ProjectLaborSection({
   projectId,
   initialEntries,
   employees,
+  sovItems = [],
+  canEdit = true,
+  showFinancials = true,
+  isJanitorialUnit = false,
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
+  requiresSafetyCheck = true,
+  contractValueCents = null,
+  unitScope = null,
+  qualityChecklistBlocking = false,
+  safetyCheckBlocking = false,
+  contractedScopeItems = [],
+  completedScopeItems = [],
 }: {
   projectId: string;
   initialEntries: LaborRow[];
   employees: LaborEmployeeOption[];
+  sovItems?: SOVItemOption[];
+  canEdit?: boolean;
+  showFinancials?: boolean;
+  isJanitorialUnit?: boolean;
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
+  requiresSafetyCheck?: boolean;
+  /** Turnovers only, powers the hours-budget callout below. */
+  contractValueCents?: number | null;
+  /** True when this is a turnover unit with an unfinished quality checklist
+   * and the viewer isn't a PM/ADMIN who can override — blocks logging labor
+   * client-side as a courtesy; the API enforces this regardless. */
+  qualityChecklistBlocking?: boolean;
+  /** True when this is a post-construction project without today's daily
+   * safety check approved and the viewer isn't a PM/ADMIN who can override —
+   * blocks logging labor client-side as a courtesy; the API enforces this
+   * regardless. */
+  safetyCheckBlocking?: boolean;
+  /** Read-only scope-of-work summary shown above the labor log, for roles
+   * (supervisors) that don't have access to the Overview tab where this
+   * normally lives. Null hides it entirely. */
+  unitScope?: {
+    unitNumber: string | null;
+    bedrooms: number | null;
+    bathrooms: number | null;
+    sqft: number | null;
+    unitQuality: string | null;
+    fullClean: boolean;
+    fullPaint: boolean;
+    touchUpPaint: number | null;
+    carpetCleaning: boolean;
+    materialsAdditional: boolean;
+    ceilingPaint: boolean;
+    compounding: number | null;
+    otherWork: boolean;
+    otherDescription: string | null;
+    pricingPackage?: unknown;
+    selectedCustomLineItemIds?: string[] | null;
+  } | null;
+  /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit, lets
+   * a labor entry be tagged with which part of the scope it covers, same
+   * idea as sovItems. Empty for non-turnover projects. */
+  contractedScopeItems?: string[];
+  /** Subset of contractedScopeItems already marked done, same "assume
+   * everything's done once the unit is COMPLETED" resolution as the
+   * Overview/Checklist tabs, computed by the parent page. */
+  completedScopeItems?: string[];
 }) {
   const router = useRouter();
+  const passedKeySet = new Set(safetyPassedKeys);
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [pendingOverBudget, setPendingOverBudget] = useState<{
+    form: HTMLFormElement;
+    hours: number;
+    projectedHours: number;
+    projectedMarginPct: number;
+    severity: TurnoverMarginSeverity;
+    employeeOverrideId?: string;
+  } | null>(null);
+  // Shown when "Other" is picked and the typed name looks like it could be an
+  // existing roster employee (see suggestEmployeeMatch) — logging as "Other"
+  // permanently unlinks the entry from that person's profile and payroll, so
+  // this is a last chance to link it correctly instead.
+  const [pendingNameMatch, setPendingNameMatch] = useState<{
+    form: HTMLFormElement;
+    hours: number;
+    typedName: string;
+    match: LaborEmployeeOption;
+  } | null>(null);
+  const [blockedModal, setBlockedModal] = useState<"quality" | "safety" | null>(null);
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
   const [roleStr, setRoleStr] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterLaborer, setFilterLaborer] = useState("");
+  const [clockInStr, setClockInStr] = useState("08:00");
+  const [clockOutStr, setClockOutStr] = useState("");
+  const [commuteMinutesStr, setCommuteMinutesStr] = useState("");
+  const [transportationMethodStr, setTransportationMethodStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState<{ workDate: string; workerName: string; role: string; hours: string; hourlyRate: string; taskDescription: string }>({ workDate: "", workerName: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
-  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
-    Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""]))
+  const [editFields, setEditFields] = useState<{ workDate: string; employeeId: string; workerName: string; role: string; clockIn: string; clockOut: string; commuteMinutes: string; transportationMethod: string; hourlyRate: string; taskDescription: string; sovItemIds: string[] }>({ workDate: "", employeeId: OTHER_VALUE, workerName: "", role: "", clockIn: "", clockOut: "", commuteMinutes: "", transportationMethod: "", hourlyRate: "", taskDescription: "", sovItemIds: [] });
+  const [sovPicks, setSovPicks] = useState<string[]>([]);
+  const [sovMarkCompleteIds, setSovMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [scopeMarkCompleteIds, setScopeMarkCompleteIds] = useState<Set<string>>(new Set());
+  const [editScopeMarkComplete, setEditScopeMarkComplete] = useState(false);
+  const [scopeCompletedItems, setScopeCompletedItems] = useState<string[]>(completedScopeItems);
+  const availableScopeItems = contractedScopeItems.filter((v) => !scopeCompletedItems.includes(v));
+  const [unitCompleted, setUnitCompleted] = useState(false);
+  const [sovCompletedMap, setSovCompletedMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(sovItems.map((s) => [s.id, s.completed]))
   );
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""]))
@@ -169,9 +308,12 @@ export function ProjectLaborSection({
 
   useEffect(() => {
     setEntries(initialEntries);
-    setQualityMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityRating ?? ""])));
     setNotesMap(Object.fromEntries(initialEntries.map((e) => [e.id, e.qualityNotes ?? ""])));
   }, [initialEntries]);
+
+  useEffect(() => {
+    setScopeCompletedItems(completedScopeItems);
+  }, [completedScopeItems]);
 
   useEffect(() => {
     if (!employeePick || employeePick === OTHER_VALUE) {
@@ -183,15 +325,6 @@ export function ProjectLaborSection({
     setHourlyRateStr(e?.hourlyPayCents != null ? (e.hourlyPayCents / 100).toFixed(2) : "");
     setRoleStr(e?.role ?? "");
   }, [employeePick, employees]);
-
-  function handleQualityChange(entryId: string, value: string) {
-    setQualityMap((prev) => ({ ...prev, [entryId]: value }));
-    fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ qualityRating: value || null }),
-    }).catch(() => {});
-  }
 
   function handleQualityNotesSave() {
     if (!qualityPopup) return;
@@ -214,42 +347,141 @@ export function ProjectLaborSection({
     }
   }
 
-  function startEdit(r: LaborRow) {
-    setEditingId(r.id);
-    setEditFields({
-      workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
-      workerName: r.workerName,
-      role: r.role ?? "",
-      hours: r.hours,
-      hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
-      taskDescription: r.taskDescription ?? "",
-    });
+  async function markScopeItemsComplete(values: string[]) {
+    if (values.length === 0) return;
+    const next = [...new Set([...scopeCompletedItems, ...values])];
+    setScopeCompletedItems(next);
+    try {
+      await fetch(`/api/erp/projects/${projectId}/scope-items`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ completedScopeItems: next }),
+      });
+    } catch {
+      setScopeCompletedItems(scopeCompletedItems);
+    }
   }
 
+  async function toggleSOVComplete(sovItemId: string) {
+    const next = !sovCompletedMap[sovItemId];
+    setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: next }));
+    try {
+      await fetch(`/api/erp/projects/${projectId}/sov/items/${sovItemId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ completed: next }),
+      });
+    } catch {
+      setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: !next }));
+    }
+  }
+
+  function startEdit(r: LaborRow) {
+    setEditingId(r.id);
+    const defaultIn = r.clockIn || "08:00";
+    setEditFields({
+      workDate: new Date(r.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+      employeeId: r.employeeId || OTHER_VALUE,
+      workerName: r.workerName,
+      role: r.role ?? "",
+      clockIn: defaultIn,
+      clockOut: hoursToClockOut(defaultIn, Number(r.hours)),
+      commuteMinutes: r.commuteHours != null ? String(Math.round(r.commuteHours * 60)) : "",
+      transportationMethod: r.transportationMethod ?? "",
+      hourlyRate: (r.hourlyRateCents / 100).toFixed(2),
+      taskDescription: r.taskDescription ?? "",
+      sovItemIds: r.sovItemIds,
+    });
+    setEditScopeMarkComplete(false);
+  }
+
+  // Keeps the free-text workerName in sync when a real employee is picked
+  // during edit, same as the add-entry form; only left directly editable
+  // when "Other" is selected.
+  function handleEditEmployeeChange(id: string) {
+    if (id === OTHER_VALUE) {
+      setEditFields((f) => ({ ...f, employeeId: OTHER_VALUE }));
+      return;
+    }
+    const emp = employees.find((e) => e.id === id);
+    setEditFields((f) => ({ ...f, employeeId: id, workerName: emp ? `${emp.firstName} ${emp.lastName}`.trim() : f.workerName }));
+  }
+
+  // Raw TURNOVER_SCOPE_OPTIONS value behind the edit row's Task select
+  // (which stores/displays the human label), so the "mark complete" checkbox
+  // and save handler can work with the same value markScopeItemsComplete
+  // expects.
+  const editScopeRawValue = contractedScopeItems.find((v) => turnoverScopeLabel(v) === editFields.taskDescription);
+
   async function onSaveEdit(entryId: string) {
+    if (!editFields.transportationMethod) {
+      setError("Transportation is required.");
+      return;
+    }
+    if (!editFields.workerName.trim()) {
+      setError("Worker name is required.");
+      return;
+    }
     const res = await fetch(`/api/erp/projects/${projectId}/labor/${entryId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         workDate: editFields.workDate,
+        employeeId: editFields.employeeId !== OTHER_VALUE ? editFields.employeeId : null,
         workerName: editFields.workerName,
         role: editFields.role || null,
-        hours: Number(editFields.hours),
+        hours: calcHours(editFields.clockIn, editFields.clockOut),
+        clockIn: editFields.clockIn || null,
+        commuteHours: editFields.commuteMinutes === "" ? null : String(Number(editFields.commuteMinutes) / 60),
+        transportationMethod: editFields.transportationMethod || null,
         hourlyRate: editFields.hourlyRate,
-        taskDescription: editFields.taskDescription || null,
+        taskDescription: editFields.taskDescription.trim() || null,
+        sovItemIds: editFields.sovItemIds,
       }),
     });
     if (res.ok) {
-      const updated = (await res.json()) as { workDate: string; workerName: string; role: string | null; hours: unknown; hourlyRateCents: number; taskDescription: string | null };
+      const updated = (await res.json()) as {
+        employeeId: string | null;
+        employee: { firstName: string; lastName: string } | null;
+        workDate: string;
+        workerName: string;
+        role: string | null;
+        hours: unknown;
+        clockIn: string | null;
+        commuteHours: number | null;
+        transportationMethod: string | null;
+        hourlyRateCents: number;
+        taskDescription: string | null;
+        sovItems: { id: string }[];
+      };
       setEntries((prev) =>
         prev.map((e) =>
           e.id === entryId
-            ? { ...e, workDate: updated.workDate, workerName: updated.workerName, role: updated.role ?? null, hours: String(updated.hours), hourlyRateCents: updated.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
+            ? {
+                ...e,
+                employeeId: updated.employeeId,
+                employeeName: updated.employee ? `${updated.employee.firstName} ${updated.employee.lastName}`.trim() : null,
+                workDate: updated.workDate,
+                workerName: updated.workerName,
+                role: updated.role ?? null,
+                hours: String(updated.hours),
+                clockIn: updated.clockIn ?? null,
+                commuteHours: updated.commuteHours ?? null,
+                transportationMethod: updated.transportationMethod ?? null,
+                hourlyRateCents: updated.hourlyRateCents,
+                taskDescription: updated.taskDescription ?? null,
+                sovItemIds: updated.sovItems.map((s) => s.id),
+              }
             : e,
         ),
       );
+      if (editScopeMarkComplete && editScopeRawValue) void markScopeItemsComplete([editScopeRawValue]);
+      setEditScopeMarkComplete(false);
       setEditingId(null);
       router.refresh();
+    } else {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(data.error || "Failed to save entry");
     }
   }
 
@@ -257,21 +489,71 @@ export function ProjectLaborSection({
     e.preventDefault();
     const form = e.currentTarget;
     setError("");
+    if (qualityChecklistBlocking) {
+      setBlockedModal("quality");
+      return;
+    }
+    if (safetyCheckBlocking) {
+      setBlockedModal("safety");
+      return;
+    }
     if (!employeePick) {
       setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
+    if (!transportationMethodStr) {
+      setError("Transportation is required.");
+      return;
+    }
+    const hours = calcHours(clockInStr, clockOutStr);
+    if (hours <= 0) {
+      setError("Clock-out must be after clock-in.");
+      return;
+    }
+    if (commuteMinutesStr && Number(commuteMinutesStr) / 60 > hours) {
+      setError("Commute time can't exceed total hours.");
+      return;
+    }
+    if (employeePick === OTHER_VALUE) {
+      const fd = new FormData(form);
+      const typedName = String(fd.get("workerName") || "").trim();
+      const match = suggestEmployeeMatch(typedName, employees);
+      if (match) {
+        setPendingNameMatch({ form, hours, typedName, match });
+        return;
+      }
+    }
+    proceedAfterNameCheck(form, hours);
+  }
+
+  // Split out so both the normal submit path and the "did you mean" modal's
+  // "use this person" action land here with the right employeeId, without
+  // relying on employeePick state that hasn't re-rendered yet.
+  function proceedAfterNameCheck(form: HTMLFormElement, hours: number, employeeOverrideId?: string) {
+    if (hoursBudget != null && contractValueCents) {
+      const projectedHours = totalHoursLogged + hours;
+      const projectedMarginPct = turnoverImpliedMarginPct(contractValueCents, projectedHours);
+      const severity = turnoverMarginSeverity(projectedMarginPct);
+      if (severity !== "on-track") {
+        setPendingOverBudget({ form, hours, projectedHours, projectedMarginPct, severity, employeeOverrideId });
+        return;
+      }
+    }
+    void submitLaborEntry(form, hours, employeeOverrideId);
+  }
+
+  async function submitLaborEntry(form: HTMLFormElement, hours: number, employeeOverrideId?: string) {
     setLoading(true);
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
     const role = roleStr.trim();
-    const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const taskDescription = String(fd.get("taskDescription") || "").trim();
+    const effectiveEmployeePick = employeeOverrideId ?? employeePick;
 
-    const picked = employees.find((x) => x.id === employeePick);
+    const picked = employees.find((x) => x.id === effectiveEmployeePick);
     const workerName =
-      employeePick === OTHER_VALUE
+      effectiveEmployeePick === OTHER_VALUE
         ? String(fd.get("workerName") || "").trim()
         : picked
           ? `${picked.firstName} ${picked.lastName}`.trim()
@@ -290,11 +572,16 @@ export function ProjectLaborSection({
         body: JSON.stringify({
           workDate: workDate || "",
           workerName,
-          employeeId: employeePick !== OTHER_VALUE ? employeePick : undefined,
+          employeeId: effectiveEmployeePick !== OTHER_VALUE ? effectiveEmployeePick : undefined,
           role: role || undefined,
           hours,
+          clockIn: clockInStr || undefined,
+          commuteHours: commuteMinutesStr !== "" ? Number(commuteMinutesStr) / 60 : undefined,
+          transportationMethod: transportationMethodStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
+          sovItemIds: sovPicks.length > 0 ? sovPicks : undefined,
+          sovCompletedIds: sovPicks.length > 0 ? sovPicks.filter((id) => sovMarkCompleteIds.has(id)) : undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -305,8 +592,12 @@ export function ProjectLaborSection({
         workerName?: string;
         role?: string | null;
         hours?: unknown;
+        clockIn?: string | null;
+        commuteHours?: number | null;
+        transportationMethod?: string | null;
         hourlyRateCents?: number;
         taskDescription?: string | null;
+        sovItems?: { id: string }[];
         error?: string;
       };
       if (!res.ok) {
@@ -325,16 +616,60 @@ export function ProjectLaborSection({
         workerName: data.workerName!,
         role: data.role ?? null,
         hours: String(data.hours),
+        clockIn: data.clockIn ?? clockInStr,
+        commuteHours: data.commuteHours ?? null,
+        transportationMethod: data.transportationMethod ?? null,
+        regHours: Number(data.hours),
+        otHours: 0,
         hourlyRateCents: data.hourlyRateCents!,
         taskDescription: data.taskDescription ?? null,
-        qualityRating: null,
+        sovItemIds: (data.sovItems ?? []).map((s) => s.id),
         qualityNotes: null,
       };
+      if (sovMarkCompleteIds.size > 0) {
+        setSovCompletedMap((prev) => {
+          const next = { ...prev };
+          for (const id of sovPicks) {
+            if (sovMarkCompleteIds.has(id)) next[id] = true;
+          }
+          return next;
+        });
+      }
+      let unitCompleteError = "";
+      if (unitCompleted) {
+        // Use the labor entry's own work date, not today — logging Friday's
+        // work on Monday should mark the unit complete as of Friday, not
+        // Monday, so the completion-digest email groups it under the day it
+        // actually finished.
+        try {
+          const completeRes = await fetch(`/api/erp/projects/${projectId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ status: "COMPLETE", projectEndDate: workDate }),
+          });
+          if (!completeRes.ok) {
+            const completeData = (await completeRes.json().catch(() => ({}))) as { error?: string };
+            unitCompleteError = completeData.error || "Failed to mark unit as completed.";
+          }
+        } catch {
+          unitCompleteError = "Network error marking unit as completed.";
+        }
+      }
       setEntries((prev) => [row, ...prev]);
       form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
+      setClockInStr("08:00");
+      setClockOutStr("");
+      setCommuteMinutesStr("");
+      setTransportationMethodStr("");
+      setSovPicks([]);
+      setSovMarkCompleteIds(new Set());
+      if (scopeMarkCompleteIds.size > 0) void markScopeItemsComplete(Array.from(scopeMarkCompleteIds));
+      setScopeMarkCompleteIds(new Set());
+      setUnitCompleted(false);
+      if (unitCompleteError) setError(unitCompleteError);
       router.refresh();
     } catch {
       setError("Network error");
@@ -343,7 +678,12 @@ export function ProjectLaborSection({
     }
   }
 
-  const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
+  const totalLaborCents = entries.reduce((s, e) => s + lineCostCents(e.regHours, e.otHours, e.hourlyRateCents), 0);
+
+  const totalHoursLogged = entries.reduce((s, e) => s + (e.regHours + e.otHours), 0);
+  const hoursBudget = isJanitorialUnit && contractValueCents ? turnoverTotalHoursBudget(contractValueCents) : null;
+  const impliedMarginPct = hoursBudget != null ? turnoverImpliedMarginPct(contractValueCents!, totalHoursLogged) : null;
+  const marginSeverity = impliedMarginPct != null ? turnoverMarginSeverity(impliedMarginPct) : null;
 
   const visibleEntries = entries.filter((r) => {
     if (filterDate) {
@@ -357,13 +697,120 @@ export function ProjectLaborSection({
     return true;
   });
 
-  const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.hours, e.hourlyRateCents), 0);
+  const filteredTotalCents = visibleEntries.reduce((s, e) => s + lineCostCents(e.regHours, e.otHours, e.hourlyRateCents), 0);
+
+  const colCount = 8 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
 
   return (
     <>
     <div className="space-y-6">
-      <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+      {unitScope && (
+        <UnitScopeCard
+          unitNumber={unitScope.unitNumber}
+          bedrooms={unitScope.bedrooms}
+          bathrooms={unitScope.bathrooms}
+          sqft={unitScope.sqft}
+          unitQuality={unitScope.unitQuality}
+          fullClean={unitScope.fullClean}
+          fullPaint={unitScope.fullPaint}
+          touchUpPaint={unitScope.touchUpPaint}
+          carpetCleaning={unitScope.carpetCleaning}
+          materialsAdditional={unitScope.materialsAdditional}
+          ceilingPaint={unitScope.ceilingPaint}
+          compounding={unitScope.compounding}
+          otherWork={unitScope.otherWork}
+          otherDescription={unitScope.otherDescription}
+          pricingPackage={unitScope.pricingPackage}
+          selectedCustomLineItemIds={unitScope.selectedCustomLineItemIds}
+          contractValueCents={contractValueCents}
+          completedScopeItems={scopeCompletedItems}
+        />
+      )}
+      {hoursBudget != null && impliedMarginPct != null && (
+        <div
+          className={
+            marginSeverity === "bad"
+              ? "flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+              : marginSeverity === "critical"
+                ? "flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3"
+                : marginSeverity === "watch"
+                  ? "flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  : "flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+          }
+        >
+          {marginSeverity !== "on-track" && (
+            <span
+              className={
+                marginSeverity === "bad"
+                  ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white"
+                  : marginSeverity === "critical"
+                    ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white"
+                    : "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
+              }
+            >
+              !
+            </span>
+          )}
+          <div>
+            <p
+              className={
+                marginSeverity === "bad"
+                  ? "text-sm font-medium text-red-800"
+                  : marginSeverity === "critical"
+                    ? "text-sm font-medium text-orange-800"
+                    : marginSeverity === "watch"
+                      ? "text-sm font-medium text-amber-800"
+                      : "text-sm text-gray-600"
+              }
+            >
+              {marginSeverity === "bad"
+                ? `Well over the hours budget. This job is on track to lose money on labor (~${impliedMarginPct.toFixed(0)}% margin).`
+                : marginSeverity === "critical"
+                  ? `Margin has dropped below 30% (~${impliedMarginPct.toFixed(0)}%). Getting close to break-even.`
+                  : marginSeverity === "watch"
+                    ? `Over the recommended hours budget. Margin is trending below the 50% target (~${impliedMarginPct.toFixed(0)}%).`
+                    : "On track for the 50% margin target."}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {totalHoursLogged.toFixed(1)} hrs logged of a {hoursBudget.toFixed(1)} hr budget
+            </p>
+          </div>
+        </div>
+      )}
+      {qualityChecklistBlocking && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-red-800">
+            The quality checklist needs to be at least {CHECKLIST_LABOR_THRESHOLD_PCT}% complete before logging labor on this unit. Complete more of it on the Checklist tab, or ask a PM to override.
+          </p>
+        </div>
+      )}
+      {safetyCheckBlocking ? (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-red-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor. A PM can override this.
+          </p>
+        </div>
+      ) : requiresSafetyCheck && hasApprovedCheckToday === false && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-amber-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor.
+          </p>
+        </div>
+      )}
+      {canEdit && showAddForm && <form onSubmit={onAddLabor} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(false)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Close
+          </button>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
           &quot;Other&quot; only when the worker is not in the list.
@@ -373,7 +820,7 @@ export function ProjectLaborSection({
             <label className={label} htmlFor="l-workDate">
               Work date *
             </label>
-            <input id="l-workDate" name="workDate" type="date" required className={input} />
+            <input id="l-workDate" name="workDate" type="date" required className={input} defaultValue={new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" })} />
           </div>
           <div className="sm:col-span-2 lg:col-span-2">
             <label className={label} htmlFor="l-employee">
@@ -407,33 +854,171 @@ export function ProjectLaborSection({
             />
           </div>
           <div>
-            <label className={label} htmlFor="l-hours">
-              Hours *
-            </label>
-            <input id="l-hours" name="hours" type="number" min={0.25} step={0.25} required className={input} />
+            <label className={label} htmlFor="l-clock-in">Clock in *</label>
+            <input id="l-clock-in" type="time" required className={input} value={clockInStr} onChange={(e) => setClockInStr(e.target.value)} />
           </div>
           <div>
-            <label className={label} htmlFor="l-rate">
-              Hourly rate (USD) *
-            </label>
+            <label className={label} htmlFor="l-clock-out">Clock out *</label>
+            <input id="l-clock-out" type="time" required className={input} value={clockOutStr} onChange={(e) => setClockOutStr(e.target.value)} />
+          </div>
+          <div>
+            <p className={label}>Hours</p>
+            <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+              {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
+                ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
+                : <span className="text-gray-400">—</span>}
+            </p>
+          </div>
+          <div>
+            <label className={label} htmlFor="l-commute">Commute minutes (optional)</label>
             <input
-              id="l-rate"
-              name="hourlyRate"
-              type="text"
+              id="l-commute"
+              type="number"
+              min={0}
+              step="5"
+              className={input}
+              placeholder="e.g. 15"
+              value={commuteMinutesStr}
+              onChange={(e) => setCommuteMinutesStr(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Included in the hours above, not added on top.</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="l-transportation">Transportation *</label>
+            <select
+              id="l-transportation"
               required
               className={input}
-              placeholder="28.84"
-              value={hourlyRateStr}
-              onChange={(ev) => setHourlyRateStr(ev.target.value)}
-            />
+              value={transportationMethodStr}
+              onChange={(e) => setTransportationMethodStr(e.target.value)}
+            >
+              <option value="" disabled>— Select —</option>
+              {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
+          {showFinancials ? (
+            <div>
+              <label className={label} htmlFor="l-rate">
+                Hourly rate (USD) *
+              </label>
+              <input
+                id="l-rate"
+                name="hourlyRate"
+                type="text"
+                required
+                className={input}
+                placeholder="28.84"
+                value={hourlyRateStr}
+                onChange={(ev) => setHourlyRateStr(ev.target.value)}
+              />
+            </div>
+          ) : (
+            <div>
+              <input type="hidden" name="hourlyRate" value={hourlyRateStr} />
+              <p className={label}>Hourly rate</p>
+              <p className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400 italic">
+                Pulled from employee profile
+              </p>
+            </div>
+          )}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className={label} htmlFor="l-task">
-              Task
-            </label>
-            <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+            {sovItems.length > 0 && (
+              <div>
+                <label className={label}>SOV Items / Tasks</label>
+                <div className="space-y-2">
+                  <SOVMultiCombobox sovItems={sovItems} selectedIds={sovPicks} onChange={(ids) => {
+                    setSovPicks(ids);
+                    setSovMarkCompleteIds((prev) => {
+                      const next = new Set<string>();
+                      for (const id of ids) if (prev.has(id)) next.add(id);
+                      return next;
+                    });
+                  }} />
+                  {sovPicks.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+                      {sovPicks.map((id) => {
+                        const item = sovItems.find((s) => s.id === id);
+                        if (!item) return null;
+                        return (
+                          <label key={id} className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={sovMarkCompleteIds.has(id)}
+                              onChange={(e) => setSovMarkCompleteIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(id); else next.delete(id);
+                                return next;
+                              })}
+                              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                            />
+                            Mark &quot;{item.description}&quot; complete
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className={sovItems.length > 0 ? "mt-3" : ""}>
+              <label className={label} htmlFor="l-task">
+                {sovItems.length > 0 ? "Additional task notes (optional)" : "Task"}
+              </label>
+              {isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                <select id="l-task" name="taskDescription" className={input} defaultValue="">
+                  <option value="" disabled>
+                    Select scope item
+                  </option>
+                  {contractedScopeItems.map((value) => (
+                    <option key={value} value={turnoverScopeLabel(value)}>
+                      {turnoverScopeLabel(value)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input id="l-task" name="taskDescription" className={input} placeholder="Rough clean unit 590…" />
+              )}
+            </div>
+            {isJanitorialUnit && availableScopeItems.length > 0 && (
+              <div className="mt-3">
+                <label className={label}>Mark scope complete</label>
+                <div className="space-y-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+                  {availableScopeItems.map((value) => (
+                    <label key={value} className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={scopeMarkCompleteIds.has(value)}
+                        onChange={(e) => setScopeMarkCompleteIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(value); else next.delete(value);
+                          return next;
+                        })}
+                        className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      This entry finishes &quot;{turnoverScopeLabel(value)}&quot;
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+        {isJanitorialUnit && (
+          <div className="mt-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={unitCompleted}
+                onChange={(e) => setUnitCompleted(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+              />
+              Mark unit as completed
+            </label>
+            <p className="mt-1 text-[11px] text-gray-400">Requires the quality checklist to be fully checked off (a PM can override).</p>
+          </div>
+        )}
         {error ? (
           <p className="mt-3 text-sm text-red-400" role="alert">
             {error}
@@ -446,25 +1031,40 @@ export function ProjectLaborSection({
         >
           {loading ? "Adding…" : "Add entry"}
         </button>
-      </form>
+      </form>}
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div id="labor-log" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          <p className="text-sm text-gray-700">
-            {filterDate || filterLaborer ? (
-              <>
-                Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
-                <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalLaborCents)})</span>
-              </>
-            ) : (
-              <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span></>
+          <div className="flex flex-wrap items-center gap-3">
+            {showFinancials && (
+              <p className="text-sm text-gray-700">
+                {filterDate || filterLaborer ? (
+                  <>
+                    Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                    <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalLaborCents)})</span>
+                  </>
+                ) : (
+                  <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalLaborCents)}</span></>
+                )}
+              </p>
             )}
-          </p>
+            {canEdit && !showAddForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                aria-label="Add labor entry"
+                title="Add labor entry"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-lg font-semibold leading-none text-white shadow hover:bg-pink-500"
+              >
+                +
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[140px]">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
             <label className={label} htmlFor="filter-date">Filter by date</label>
             <input
               id="filter-date"
@@ -474,7 +1074,7 @@ export function ProjectLaborSection({
               onChange={(e) => setFilterDate(e.target.value)}
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div>
             <label className={label} htmlFor="filter-laborer">Filter by laborer</label>
             <input
               id="filter-laborer"
@@ -486,11 +1086,11 @@ export function ProjectLaborSection({
             />
           </div>
           {(filterDate || filterLaborer) && (
-            <div className="flex items-end">
+            <div className="flex sm:items-end">
               <button
                 type="button"
                 onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
-                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+                className="rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 sm:mb-0.5"
               >
                 Clear
               </button>
@@ -506,60 +1106,147 @@ export function ProjectLaborSection({
                 <th className="py-2 pr-2 font-medium">Worker</th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
-                <th className="py-2 pr-2 font-medium">Rate</th>
-                <th className="py-2 pr-2 font-medium">Line $</th>
+                <th className="py-2 pr-2 font-medium">Commute</th>
+                <th className="py-2 pr-2 font-medium text-amber-600">OT Hrs</th>
+                {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
+                {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
-                <th className="py-2 pr-2 font-medium">Quality</th>
                 <th className="py-2 pr-2 font-medium">Notes</th>
-                <th className="py-2" />
+                {canEdit && <th className="py-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-gray-500">
+                  <td colSpan={colCount} className="py-6 text-center text-gray-500">
                     {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
                   </td>
                 </tr>
               ) : (
                 visibleEntries.map((r) => {
-                  const quality = qualityMap[r.id] ?? "";
                   const notes = notesMap[r.id] ?? "";
+                  const dateStr = laborDateStr(r.workDate);
+                  const needsSafetyCheck = requiresSafetyCheck && dateStr >= SAFETY_CUTOFF;
+                  const hasSafety = needsSafetyCheck && (
+                    (r.employeeId && passedKeySet.has(`emp:${r.employeeId}:${dateStr}`)) ||
+                    passedKeySet.has(`name:${r.workerName.toLowerCase()}:${dateStr}`)
+                  );
+                  const missingSafety = needsSafetyCheck && !hasSafety;
                   return editingId === r.id ? (
                     <tr key={r.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
                         <input type="date" className={editInput} value={editFields.workDate} onChange={(e) => setEditFields((f) => ({ ...f, workDate: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} value={editFields.workerName} onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))} />
+                        <EmployeeCombobox employees={employees} value={editFields.employeeId} onChange={handleEditEmployeeChange} className={editInput} />
+                        {editFields.employeeId === OTHER_VALUE && (
+                          <input
+                            type="text"
+                            className={`${editInput} mt-1`}
+                            placeholder="Worker name"
+                            value={editFields.workerName}
+                            onChange={(e) => setEditFields((f) => ({ ...f, workerName: e.target.value }))}
+                          />
+                        )}
                       </td>
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                        <div className="flex items-center gap-1">
+                          <input type="time" className={editInput} value={editFields.clockIn} onChange={(e) => setEditFields((f) => ({ ...f, clockIn: e.target.value }))} />
+                          <span className="text-gray-400 text-xs">–</span>
+                          <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
+                          <span className="ml-1 shrink-0 text-xs text-gray-500">
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
-                      </td>
-                      <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(editFields.hours, Number(editFields.hourlyRate) * 100))}</td>
-                      <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
-                      </td>
-                      <td className="py-1 pr-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step="5"
+                          className={editInput}
+                          placeholder="min"
+                          value={editFields.commuteMinutes}
+                          onChange={(e) => setEditFields((f) => ({ ...f, commuteMinutes: e.target.value }))}
+                        />
                         <select
-                          value={quality}
-                          onChange={(e) => handleQualityChange(r.id, e.target.value)}
-                          className={`w-full rounded border border-gray-300 bg-white px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                          required
+                          className={`${editInput} mt-1`}
+                          value={editFields.transportationMethod}
+                          onChange={(e) => setEditFields((f) => ({ ...f, transportationMethod: e.target.value }))}
                         >
-                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          <option value="" disabled>— Transport —</option>
+                          {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
                         </select>
+                      </td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
+                      {showFinancials && (
+                        <td className="py-1 pr-2">
+                          <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
+                        </td>
+                      )}
+                      {showFinancials && (
+                        <td className="py-1 pr-2 text-gray-800 text-xs">{centsToDollars(lineCostCents(calcHours(editFields.clockIn ?? "", editFields.clockOut ?? ""), 0, Number(editFields.hourlyRate) * 100))}<span className="ml-1 text-gray-400">(est.)</span></td>
+                      )}
+                      <td className="py-1 pr-2">
+                        {sovItems.length > 0 ? (
+                          <div className="space-y-1">
+                            <SOVMultiCombobox
+                              sovItems={sovItems}
+                              selectedIds={editFields.sovItemIds}
+                              onChange={(ids) => setEditFields((f) => ({ ...f, sovItemIds: ids }))}
+                            />
+                            <input
+                              type="text"
+                              className={editInput}
+                              placeholder="Additional task notes…"
+                              value={editFields.taskDescription}
+                              onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))}
+                            />
+                          </div>
+                        ) : isJanitorialUnit && contractedScopeItems.length > 0 ? (
+                          <div className="space-y-1">
+                            <select
+                              className={editInput}
+                              value={editFields.taskDescription}
+                              onChange={(e) => {
+                                setEditFields((f) => ({ ...f, taskDescription: e.target.value }));
+                                setEditScopeMarkComplete(false);
+                              }}
+                            >
+                              <option value="">Select scope item</option>
+                              {contractedScopeItems.map((value) => (
+                                <option key={value} value={turnoverScopeLabel(value)}>
+                                  {turnoverScopeLabel(value)}
+                                </option>
+                              ))}
+                            </select>
+                            {editScopeRawValue && !scopeCompletedItems.includes(editScopeRawValue) && (
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={editScopeMarkComplete}
+                                  onChange={(e) => setEditScopeMarkComplete(e.target.checked)}
+                                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                                />
+                                Mark complete
+                              </label>
+                            )}
+                          </div>
+                        ) : (
+                          <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                        )}
                       </td>
                       <td className="py-1 pr-2">
                         <button
                           type="button"
                           onClick={() => setQualityPopup({ id: r.id, draft: notes })}
-                          title={notes || "Add quality notes"}
+                          title={notes || "Add notes"}
                           className={`rounded p-1 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
@@ -578,41 +1265,87 @@ export function ProjectLaborSection({
                         {new Date(r.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}
                       </td>
                       <td className="py-2 pr-2 text-gray-900">
-                        {r.employeeName || r.workerName}
-                        {r.employeeName && r.employeeName !== r.workerName ? (
-                          <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
-                        ) : null}
+                        <div className="flex items-center gap-1.5">
+                          {missingSafety && (
+                            <span
+                              title="No passing safety check for this worker on this date"
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white text-[9px] font-bold"
+                            >
+                              !
+                            </span>
+                          )}
+                          <span>
+                            {r.employeeName || r.workerName}
+                            {r.employeeName && r.employeeName !== r.workerName ? (
+                              <span className="ml-1 text-xs text-gray-500">({r.workerName})</span>
+                            ) : null}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
-                      <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>
-                      <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.hours, r.hourlyRateCents))}</td>
-                      <td className="py-2 pr-2 text-gray-500">{r.taskDescription || "—"}</td>
-                      <td className="py-2 pr-2">
-                        <select
-                          value={quality}
-                          onChange={(e) => handleQualityChange(r.id, e.target.value)}
-                          className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                        >
-                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                      <td className="py-2 pr-2 text-gray-500">
+                        {r.commuteHours != null ? `${Math.round(r.commuteHours * 60)} min` : <span className="text-gray-300">—</span>}
+                        {transportationMethodShortLabel(r.transportationMethod) && (
+                          <span className="block text-[11px] text-gray-400">{transportationMethodShortLabel(r.transportationMethod)}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
-                        <button
-                          type="button"
-                          onClick={() => setQualityPopup({ id: r.id, draft: notes })}
-                          title={notes || "Add quality notes"}
-                          className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
-                          </svg>
-                        </button>
+                        {r.otHours > 0
+                          ? <span className="font-medium text-amber-600">{r.otHours.toFixed(2)}</span>
+                          : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
-                        <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>
+                      {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>}
+                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.regHours, r.otHours, r.hourlyRateCents))}</td>}
+                      <td className="py-2 pr-2">
+                        {r.sovItemIds.length > 0 ? (
+                          <div className="space-y-1">
+                            {r.sovItemIds.map((sovItemId) => (
+                              <div key={sovItemId} className="flex items-center gap-1.5">
+                                {canEdit ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={!!sovCompletedMap[sovItemId]}
+                                    onChange={() => toggleSOVComplete(sovItemId)}
+                                    title="Mark SOV item complete"
+                                    className="h-4 w-4 shrink-0 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className={`h-4 w-4 shrink-0 rounded border text-center text-[10px] ${sovCompletedMap[sovItemId] ? "border-emerald-500 bg-emerald-100 text-emerald-700" : "border-gray-300"}`}>
+                                    {sovCompletedMap[sovItemId] ? "✓" : ""}
+                                  </span>
+                                )}
+                                <span className={`text-xs ${sovCompletedMap[sovItemId] ? "line-through text-gray-400" : "text-gray-700"}`}>
+                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "—"}
+                                </span>
+                              </div>
+                            ))}
+                            {r.taskDescription ? <span className="block text-xs text-gray-500">{r.taskDescription}</span> : null}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">{r.taskDescription || "—"}</span>
+                        )}
                       </td>
+                      <td className="py-2 pr-2">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setQualityPopup({ id: r.id, draft: notes })}
+                            title={notes || "Add notes"}
+                            className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                            </svg>
+                          </button>
+                        )}
+                      </td>
+                      {canEdit && (
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                          <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -623,6 +1356,150 @@ export function ProjectLaborSection({
       </div>
     </div>
 
+    {/* Not dismissible: this modal gates a real submit, and closing it
+        discards the entry (it was never sent to the server). A stray tap
+        outside the card used to silently drop it with no confirmation.
+        Cancel is now the only way out, and it says so. */}
+    <Modal open={!!pendingOverBudget} onClose={() => {}} dismissible={false}>
+      {pendingOverBudget && (
+        <>
+          <div className="flex items-center gap-2">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
+                pendingOverBudget.severity === "bad"
+                  ? "bg-red-500"
+                  : pendingOverBudget.severity === "critical"
+                    ? "bg-orange-500"
+                    : "bg-amber-400"
+              }`}
+            >
+              !
+            </span>
+            <h3 className="text-sm font-semibold text-gray-800">
+              {pendingOverBudget.severity === "bad"
+                ? "This puts the job in the red"
+                : pendingOverBudget.severity === "critical"
+                  ? "This drops margin below 30%"
+                  : "This goes over budget"}
+            </h3>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums text-gray-900">
+              {pendingOverBudget.projectedHours.toFixed(1)}
+            </span>
+            <span className="text-sm text-gray-500">of {hoursBudget?.toFixed(1)} hr budget</span>
+          </div>
+          <p
+            className={`mt-1 text-sm font-medium ${
+              pendingOverBudget.severity === "bad"
+                ? "text-red-600"
+                : pendingOverBudget.severity === "critical"
+                  ? "text-orange-600"
+                  : "text-amber-600"
+            }`}
+          >
+            ~{pendingOverBudget.projectedMarginPct.toFixed(0)}% margin (target: 50%)
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setPendingOverBudget(null);
+                setError("Entry not saved.");
+              }}
+            >
+              Cancel
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                const p = pendingOverBudget;
+                setPendingOverBudget(null);
+                submitLaborEntry(p.form, p.hours, p.employeeOverrideId);
+              }}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold text-white ${
+                pendingOverBudget.severity === "bad"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : pendingOverBudget.severity === "critical"
+                    ? "bg-orange-600 hover:bg-orange-700"
+                    : "bg-amber-500 hover:bg-amber-600"
+              }`}
+            >
+              Add anyway
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+
+    {/* Also not dismissible via backdrop, same reasoning as above — picking
+        "No, log as typed" is the explicit way out. */}
+    <Modal open={!!pendingNameMatch} onClose={() => {}} dismissible={false}>
+      {pendingNameMatch && (
+        <>
+          <h3 className="text-sm font-semibold text-gray-800">Did you mean an existing employee?</h3>
+          <p className="mt-2 text-sm text-gray-600">
+            You typed &quot;{pendingNameMatch.typedName}&quot;, which looks like it could be{" "}
+            <span className="font-medium text-gray-800">{employeeLabel(pendingNameMatch.match)}</span>, already in
+            the roster. Picking them keeps these hours linked to their profile and payroll — logging as a new name
+            won&apos;t.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                const p = pendingNameMatch;
+                setPendingNameMatch(null);
+                proceedAfterNameCheck(p.form, p.hours);
+              }}
+            >
+              No, log as typed
+            </Button>
+            <Button
+              variant="primary"
+              size="xs"
+              onClick={() => {
+                const p = pendingNameMatch;
+                setPendingNameMatch(null);
+                setEmployeePick(p.match.id);
+                proceedAfterNameCheck(p.form, p.hours, p.match.id);
+              }}
+            >
+              Use {employeeLabel(pendingNameMatch.match)}
+            </Button>
+          </div>
+        </>
+      )}
+    </Modal>
+
+    {/* Purely informational (doesn't gate an unsaved submit the way the two
+        above do), so a backdrop click closing it is fine. */}
+    <Modal open={!!blockedModal} onClose={() => setBlockedModal(null)}>
+      {blockedModal && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">!</span>
+            <h3 className="text-sm font-semibold text-gray-800">
+              {blockedModal === "quality" ? "Finish the quality checklist first" : "Safety checklist not approved"}
+            </h3>
+          </div>
+          <p className="mt-3 text-sm text-gray-600">
+            {blockedModal === "quality"
+              ? `The quality checklist needs to be at least ${CHECKLIST_LABOR_THRESHOLD_PCT}% complete before you can log labor on this unit. Go to the Checklist tab and finish more items.`
+              : "Today's safety checklist needs to be approved before you can log labor. Go to the Safety Checklist tab and complete and approve it."}
+          </p>
+          <p className="mt-2 text-xs text-gray-400">A PM can override this if needed.</p>
+          <div className="mt-4 flex justify-end">
+            <Button variant="danger" size="xs" onClick={() => setBlockedModal(null)}>
+              Got it
+            </Button>
+          </div>
+        </>
+      )}
+    </Modal>
+
     {qualityPopup ? (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -632,13 +1509,13 @@ export function ProjectLaborSection({
           className="w-80 rounded-xl bg-white p-5 shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+          <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
           <textarea
             autoFocus
             rows={4}
             value={qualityPopup.draft}
             onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
-            placeholder="Add notes about work quality..."
+            placeholder="Add notes..."
             className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
           />
           <div className="mt-3 flex justify-end gap-2">

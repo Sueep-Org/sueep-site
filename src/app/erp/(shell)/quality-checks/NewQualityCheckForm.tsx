@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 import { SignaturePadInput } from "./SignaturePadInput";
+import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
 type ProjectOption = { id: string; jobTitle: string };
 type TurnoverOption = { id: string; requestType: string; unitNumber: string | null; building: { name: string } };
@@ -107,18 +108,22 @@ function SearchCombobox({
   );
 }
 
-export function NewQualityCheckForm() {
+export function NewQualityCheckForm({ defaultProjectId, defaultProjectTitle }: { defaultProjectId?: string; defaultProjectTitle?: string } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("project");
 
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
 
   const [turnoverRequestId, setTurnoverRequestId] = useState("");
   const [turnoverRequests, setTurnoverRequests] = useState<TurnoverOption[]>([]);
   const [turnoverLoading, setTurnoverLoading] = useState(false);
+
+  const [sovItems, setSovItems] = useState<SOVItemOption[]>([]);
+  const [sovPicks, setSovPicks] = useState<string[]>([]);
+  const [scopeDescription, setScopeDescription] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -145,16 +150,33 @@ export function NewQualityCheckForm() {
       .finally(() => setTurnoverLoading(false));
   }, [open]);
 
+  // SOV items only apply in "project" mode (turnover requests have no SOV) —
+  // refetched whenever the selected project changes, including the
+  // defaultProjectId case (embedded on a project's own Quality Checks tab).
+  useEffect(() => {
+    if (!open || mode !== "project" || !projectId) {
+      setSovItems([]);
+      return;
+    }
+    fetch(`/api/erp/projects/${projectId}/sov`)
+      .then((r) => r.json())
+      .then((data: { items?: SOVItemOption[] }) => setSovItems(data.items ?? []))
+      .catch(() => setSovItems([]));
+  }, [open, mode, projectId]);
+
   function close() {
     setOpen(false);
     setError("");
-    setProjectId("");
+    setProjectId(defaultProjectId ?? "");
     setTurnoverRequestId("");
     setMode("project");
     setSupervisorSignature("");
     setEvidenceFiles([]);
     setUploadProgress(null);
     setPmApproval(false);
+    setSovItems([]);
+    setSovPicks([]);
+    setScopeDescription("");
   }
 
   const projectItems = projects.map((p) => ({ id: p.id, display: p.jobTitle }));
@@ -195,6 +217,12 @@ export function NewQualityCheckForm() {
       return;
     }
 
+    // The SOV picker only shows when there's actually something in it to
+    // pick from — turnover requests never have SOV, and a project with no
+    // SOV items configured yet falls back to the same free-text field
+    // turnover uses, same as DayAssignmentModal's fallback.
+    const usesSovPicker = mode === "project" && sovItems.length > 0;
+
     const payload = {
       ...(mode === "project" ? { projectId: resolvedProjectId } : { turnoverRequestId: resolvedTurnoverRequestId }),
       supervisorName: fd.get("supervisorName"),
@@ -202,6 +230,8 @@ export function NewQualityCheckForm() {
       pmApproval,
       evidencePhotos,
       notes: fd.get("notes") || null,
+      sovItemIds: usesSovPicker ? sovPicks : [],
+      scopeDescription: usesSovPicker ? null : scopeDescription.trim() || null,
     };
 
     try {
@@ -256,36 +286,45 @@ export function NewQualityCheckForm() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5 px-6 py-5">
-              <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setMode("project")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "project" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Project
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("turnover")}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "turnover" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Turnover request
-                </button>
-              </div>
+              {!defaultProjectId && (
+                <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => { setMode("project"); setSovPicks([]); setScopeDescription(""); }}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === "project" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Project
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode("turnover"); setSovPicks([]); setScopeDescription(""); }}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === "turnover" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Turnover request
+                  </button>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  {mode === "project" ? (
+                  {defaultProjectId ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-600">Project</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {defaultProjectTitle ?? defaultProjectId}
+                      </p>
+                    </div>
+                  ) : mode === "project" ? (
                     <SearchCombobox
                       label="Project"
                       items={projectItems}
                       loading={projectsLoading}
                       value={projectId}
-                      onChange={setProjectId}
+                      onChange={(id) => { setProjectId(id); setSovPicks([]); setScopeDescription(""); }}
                       emptyText="No projects found"
                     />
                   ) : (
@@ -299,6 +338,36 @@ export function NewQualityCheckForm() {
                     />
                   )}
                 </div>
+
+                {mode === "project" && sovItems.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600">SOV item(s)</label>
+                    <p className="mb-1 text-xs text-gray-400">Tag the scope this check covers, if any.</p>
+                    <SOVMultiCombobox sovItems={sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                  </div>
+                )}
+
+                {(mode === "turnover" || (mode === "project" && sovItems.length === 0)) && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600" htmlFor="qc-scope">
+                      Scope
+                    </label>
+                    <p className="mb-1 text-xs text-gray-400">
+                      {mode === "turnover"
+                        ? "Turnover requests don't have SOV items — briefly describe what this check covers."
+                        : "No SOV items on this project yet — briefly describe what this check covers."}
+                    </p>
+                    <textarea
+                      id="qc-scope"
+                      value={scopeDescription}
+                      onChange={(e) => setScopeDescription(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Kitchen paint touch-up, unit 4B"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-medium text-gray-600" htmlFor="qc-supervisor">
                     Supervisor name
@@ -335,6 +404,7 @@ export function NewQualityCheckForm() {
                 <label className="block text-xs font-medium text-gray-600" htmlFor="qc-evidence">
                   Evidence photos
                 </label>
+                <p className="mt-0.5 text-xs text-gray-500">Please provide all photos</p>
                 <input
                   id="qc-evidence"
                   type="file"

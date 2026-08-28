@@ -24,17 +24,48 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
+  max-width: 100%;
 }
 
-/* Smooth scrolling for in-page anchor links */
+/* Smooth scrolling for in-page anchor links. Background/color are set here too,
+ * not just on body, as a safety net: an unstyled html would let its raw
+ * background show through in any gap, which is the OS/browser canvas color,
+ * not this app's theme.
+ *
+ * overflow-x uses clip, not hidden: hidden forces the browser to compute
+ * overflow-y as auto (a box can't have one axis clipped and the other left
+ * truly "visible"), making html its own independent scroll container. */
 html {
   scroll-behavior: smooth;
+  background: var(--background);
+  color: var(--foreground);
+  max-width: 100%;
+  overflow-x: clip;
 }
 
-/* Prevent horizontal overflow/gap on mobile and desktop */
-html, body {
-  max-width: 100%;
-  overflow-x: hidden;
+/* The ERP shell (src/app/erp/(shell)/layout.tsx, root element id="erp-shell")
+ * clamps to exactly one viewport tall at the md breakpoint and up, with its
+ * own <main> scrolling internally, so it's the single source of truth for
+ * scroll position there. html/body being independently scrollable at the
+ * same time, even by a small amount, is enough for the browser to send
+ * wheel/scroll input to html instead of main: confirmed by direct
+ * measurement, html could be scrolled to a real position (window.scrollY
+ * reaching a value that main's own content doesn't back), landing on
+ * genuinely empty space below main's clamped box, while main's own
+ * scrollTop never moved. Below md, the shell has no such clamp (content
+ * flows and grows the page naturally), so this has to stay scoped to md and
+ * up rather than applying globally.
+ *
+ * Scoped with :has(#erp-shell) rather than a bare `html, body` selector —
+ * this file is imported by the root layout, so an unscoped rule here also
+ * clamped the public marketing site (any page ≥768px wide, i.e. effectively
+ * every desktop/laptop visitor) with no internal scroll container to take
+ * over, making those pages completely unscrollable. */
+@media (min-width: 768px) {
+  html:has(#erp-shell),
+  body:has(#erp-shell) {
+    overflow: hidden;
+  }
 }
 
 /* Improve raster/SVG rendering for small logos */

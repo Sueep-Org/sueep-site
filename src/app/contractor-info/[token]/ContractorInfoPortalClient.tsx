@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { CONTRACTOR_MANUAL_SECTIONS, subFieldName, type SubField } from "@/lib/erp/subcontractorQuestionnaire";
 
 type Props = {
   token: string;
   name: string;
+  /** True when an ERP staffer has linked this contractor to a submitted
+   * /careers application — Company profile / Insurance / Licensing already
+   * have answers from that application, so this form skips re-asking for
+   * them (see ContractorQuestionnaireCard on the ERP profile). */
+  isLinkedToApplication: boolean;
   initial: {
     contractorFullName: string | null;
     address: string | null;
@@ -15,6 +21,14 @@ type Props = {
     bankRoutingNumber: string | null;
     phone: string | null;
     hasInsurance: boolean | null;
+    workersCompCarrier: string | null;
+    workersCompPolicyNumber: string | null;
+    workersCompExpiresAt: string | null;
+    workersCompDocFilename: string | null;
+    /** sub_<key>-keyed values for the Company profile / additional
+     * insurance / licensing fields below, already saved to
+     * Contractor.manualApplicationInfo. */
+    questionnaireValues: Record<string, string>;
   };
 };
 
@@ -22,7 +36,34 @@ const fieldCls =
   "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
 const labelCls = "block text-xs font-medium text-gray-600 mb-1";
 
-export function ContractorInfoPortalClient({ token, name, initial }: Props) {
+const COMPANY_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "company")?.fields ?? [];
+const INSURANCE_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "insurance")?.fields ?? [];
+const LICENSING_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "licensing")?.fields ?? [];
+
+function questionnaireInput(field: SubField, value: string, onChange: (v: string) => void) {
+  if (field.type === "select") {
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldCls}>
+        <option value="">— Select —</option>
+        {(field.options ?? []).map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      type={field.type === "number" ? "number" : "text"}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={fieldCls}
+    />
+  );
+}
+
+export function ContractorInfoPortalClient({ token, name, isLinkedToApplication, initial }: Props) {
   const [contractorFullName, setContractorFullName] = useState(initial.contractorFullName ?? "");
   const [address, setAddress] = useState(initial.address ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(initial.dateOfBirth ?? "");
@@ -32,10 +73,43 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
   const [bankRoutingNumber, setBankRoutingNumber] = useState(initial.bankRoutingNumber ?? "");
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(initial.hasInsurance ?? null);
+  const [workersCompCarrier, setWorkersCompCarrier] = useState(initial.workersCompCarrier ?? "");
+  const [workersCompPolicyNumber, setWorkersCompPolicyNumber] = useState(initial.workersCompPolicyNumber ?? "");
+  const [workersCompExpiresAt, setWorkersCompExpiresAt] = useState(
+    initial.workersCompExpiresAt ? initial.workersCompExpiresAt.slice(0, 10) : ""
+  );
+  const [workersCompDocFilename, setWorkersCompDocFilename] = useState(initial.workersCompDocFilename ?? "");
+  const [uploadingCoi, setUploadingCoi] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [questionnaireValues, setQuestionnaireValues] = useState<Record<string, string>>(initial.questionnaireValues);
+
+  function setQuestionnaireField(key: string, value: string) {
+    setQuestionnaireValues((prev) => ({ ...prev, [subFieldName(key)]: value }));
+  }
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(Boolean(initial.contractorFullName));
   const [error, setError] = useState("");
+
+  async function onCoiFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCoi(true);
+    setUploadError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch(`/api/contractor-info/${token}/upload`, { method: "POST", body });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      setWorkersCompDocFilename(file.name);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingCoi(false);
+      e.target.value = "";
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +137,10 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
           bankRoutingNumber: bankRoutingNumber || null,
           phone: phone || null,
           hasInsurance,
+          workersCompCarrier: workersCompCarrier || null,
+          workersCompPolicyNumber: workersCompPolicyNumber || null,
+          workersCompExpiresAt: workersCompExpiresAt || null,
+          ...(isLinkedToApplication ? {} : { questionnaireValues }),
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
@@ -214,6 +292,95 @@ export function ContractorInfoPortalClient({ token, name, initial }: Props) {
               </label>
             </div>
           </div>
+
+          <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <legend className="text-sm font-semibold text-gray-800 px-1">Workers&rsquo; Compensation</legend>
+
+            <div>
+              <label className={labelCls}>Insurance carrier</label>
+              <input
+                type="text"
+                value={workersCompCarrier}
+                onChange={(e) => setWorkersCompCarrier(e.target.value)}
+                placeholder="e.g. Travelers"
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Policy number</label>
+              <input
+                type="text"
+                value={workersCompPolicyNumber}
+                onChange={(e) => setWorkersCompPolicyNumber(e.target.value)}
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Policy expiration date</label>
+              <input
+                type="date"
+                value={workersCompExpiresAt}
+                onChange={(e) => setWorkersCompExpiresAt(e.target.value)}
+                className={fieldCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Certificate of insurance (COI)</label>
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                onChange={(e) => void onCoiFileChange(e)}
+                disabled={uploadingCoi}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+              />
+              {uploadingCoi && <p className="mt-1 text-xs text-gray-400">Uploading…</p>}
+              {!uploadingCoi && workersCompDocFilename && (
+                <p className="mt-1 text-xs text-emerald-600">Uploaded: {workersCompDocFilename}</p>
+              )}
+              {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+            </div>
+          </fieldset>
+
+          {isLinkedToApplication ? (
+            <p className="text-xs text-gray-400">
+              We already have your company, insurance, and licensing details on file from your subcontractor application.
+            </p>
+          ) : (
+            <>
+              <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <legend className="text-sm font-semibold text-gray-800 px-1">Additional Insurance</legend>
+                {INSURANCE_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <label className={labelCls}>{field.label}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                  </div>
+                ))}
+              </fieldset>
+
+              <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <legend className="text-sm font-semibold text-gray-800 px-1">Company Profile</legend>
+                {COMPANY_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <label className={labelCls}>{field.label}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                  </div>
+                ))}
+              </fieldset>
+
+              <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <legend className="text-sm font-semibold text-gray-800 px-1">Licensing</legend>
+                {LICENSING_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <label className={labelCls}>{field.label}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                  </div>
+                ))}
+              </fieldset>
+            </>
+          )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 

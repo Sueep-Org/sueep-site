@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import type { ErpRole } from "@/lib/erpSession";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,6 +16,11 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const role = (req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE";
+  if (role === "SUPERVISOR" || role === "EMPLOYEE") {
+    return NextResponse.json({ error: "Not authorized to edit building details" }, { status: 403 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -55,25 +62,42 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const trimmed = String(body.pmPhone || "").trim();
     data.pmPhone = trimmed || null;
   }
+  if (body.hubspotDealId !== undefined) {
+    const trimmed = String(body.hubspotDealId || "").trim();
+    data.hubspotDealId = trimmed || null;
+  }
   if (body.pricingPackage !== undefined) {
-    if (!isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-      return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+    if (!canEditPricing(role)) {
+      return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
     }
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);
+  }
+  if (body.commissionEmployeeId !== undefined) {
+    if (!canEditPricing(role)) {
+      return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit the commission owner" }, { status: 403 });
+    }
+    data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId) : null;
   }
 
   try {
     const building = await prisma.building.update({ where: { id }, data: data as object });
     return NextResponse.json(building);
   } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return NextResponse.json({ error: "That HubSpot deal ID is already linked to a different building" }, { status: 409 });
+    }
     console.error("PATCH /api/erp/buildings/[id]", e);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export async function DELETE(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const role = (req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE";
+  if (role === "SUPERVISOR" || role === "EMPLOYEE") {
+    return NextResponse.json({ error: "Not authorized to delete buildings" }, { status: 403 });
+  }
   try {
     await prisma.building.delete({ where: { id } });
     return NextResponse.json({ ok: true });

@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 
 type RequestBody = Record<string, unknown>;
 
 const REQUEST_TYPES = ["TURNOVER", "REGULAR"] as const;
+const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+
+function parseUnitQuality(value: unknown): string | null {
+  const quality = String(value ?? "").trim().toUpperCase();
+  return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
+}
+
+function parsePartialTurnLayout(value: unknown): string | null {
+  const layout = String(value ?? "").trim();
+  return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
+}
 
 function parseDate(value: unknown): Date | null | undefined {
   if (value === undefined) return undefined;
@@ -23,6 +36,11 @@ function parseIntValue(value: unknown): number | null | undefined {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
 }
 
 export async function GET() {
@@ -59,29 +77,50 @@ export async function POST(req: Request) {
   const unitNumber = body.unitNumber != null ? String(body.unitNumber).trim() : null;
   const bedrooms = parseIntValue(body.bedrooms);
   const bathrooms = parseIntValue(body.bathrooms);
+  const isCommonArea = Boolean(body.isCommonArea) || (bedrooms === null && bathrooms === null && body.isCommonArea !== false);
+  const isPartialTurn = !isCommonArea && Boolean(body.isPartialTurn);
+  const partialTurnLayout = isPartialTurn ? parsePartialTurnLayout(body.partialTurnLayout) : null;
+  const sqft = parseIntValue(body.sqft);
+  const unitQuality = parseUnitQuality(body.unitQuality);
   const fullPaint = Boolean(body.fullPaint);
   const touchUpPaint = parseIntValue(body.touchUpPaint) ?? 0;
   const fullClean = Boolean(body.fullClean);
   const carpetCleaning = Boolean(body.carpetCleaning);
   const materialsAdditional = Boolean(body.materialsAdditional);
+  const ceilingPaint = Boolean(body.ceilingPaint);
+  const compounding = parseIntValue(body.compounding) ?? 0;
+  const otherWork = Boolean(body.otherWork);
+  const otherDescription = otherWork && body.otherDescription ? String(body.otherDescription).trim() : null;
+  const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
+  const otherCents = otherCentsRaw ?? (otherWork && body.otherPrice ? Math.round((Number(String(body.otherPrice).replace(/[$,\s]/g, "")) || 0) * 100) : 0);
+  const selectedCustomLineItemIds = parseStringArray(body.selectedCustomLineItemIds);
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
+  const moveOutDate = parseDate(body.moveOutDate);
+  const moveInDate = parseDate(body.moveInDate);
   const createdBy = body.createdBy != null ? String(body.createdBy).trim() : null;
   const sueepPmName = stringValue(body.sueepPmName);
   const sueepPmEmail = stringValue(body.sueepPmEmail);
 
-  const pricing = computeTurnoverPricing({
+  const basePricing = computeTurnoverPricing({
     requestType,
     buildingName: building.name,
     pricingPackage: building.pricingPackage,
     bedrooms,
     bathrooms,
+    isCommonArea,
     fullPaint,
     touchUpPaint,
     fullClean,
     carpetCleaning,
     materialsAdditional,
+    ceilingPaint,
+    compounding,
+    isPartialTurn,
+    partialTurnLayout,
+    selectedCustomLineItemIds,
   });
+  const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
   try {
     const request = await prisma.turnoverRequest.create({
@@ -89,16 +128,28 @@ export async function POST(req: Request) {
         buildingId,
         requestType,
         unitNumber: unitNumber || null,
-        bedrooms: bedrooms ?? null,
-        bathrooms: bathrooms ?? null,
+        bedrooms: isCommonArea ? null : (bedrooms ?? null),
+        bathrooms: isCommonArea ? null : (bathrooms ?? null),
+        isPartialTurn,
+        partialTurnLayout,
+        sqft,
+        unitQuality,
         fullPaint,
         touchUpPaint,
         fullClean,
         carpetCleaning,
         materialsAdditional,
+        ceilingPaint,
+        compounding,
+        otherWork,
+        otherDescription,
+        otherCents: otherWork ? otherCents : null,
+        selectedCustomLineItemIds,
         startDate,
         endDate,
-        priceCents: pricing.priceCents || null,
+        moveOutDate,
+        moveInDate,
+        priceCents: totalPriceCents || null,
         approvedPriceCents: null,
         createdBy: createdBy || null,
       },
@@ -111,10 +162,10 @@ export async function POST(req: Request) {
       requestType,
       bedrooms,
       bathrooms,
-      services: pricing.services,
+      services: basePricing.services,
       startDate: startDate ? startDate.toISOString().split("T")[0] : null,
       endDate: endDate ? endDate.toISOString().split("T")[0] : null,
-      priceLabel: pricing.priceLabel,
+      priceLabel: basePricing.priceLabel,
       createdBy,
       sueepPmName,
     });

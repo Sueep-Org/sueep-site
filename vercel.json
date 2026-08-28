@@ -1,0 +1,32 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/recurring-contracts",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/hubspot-invoice-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/schedule-nudge-morning",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/schedule-nudge-midday",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/turnover-completion-digest",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/delete-denied-candidates",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/employee-inactivity-check",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

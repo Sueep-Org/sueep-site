@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isTurnoverPricingAdmin } from "@/lib/erp/turnoverAdmins";
+import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import type { ErpRole } from "@/lib/erpSession";
 
 export async function GET() {
-  const buildings = await prisma.building.findMany({ orderBy: { name: "asc" } });
-  return NextResponse.json(buildings);
+  const buildings = await prisma.building.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      recurringContract: {
+        select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
+      },
+      turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
+    },
+  });
+  // Flatten to just the unit numbers already used on each building, so the
+  // "new project" form can warn on a duplicate unit identifier client-side.
+  const shaped = buildings.map(({ turnoverRequests, ...building }) => ({
+    ...building,
+    existingUnitNumbers: Array.from(
+      new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
+    ),
+  }));
+  return NextResponse.json(shaped);
 }
 
 export async function POST(req: Request) {
@@ -21,8 +38,8 @@ export async function POST(req: Request) {
   if (!name || !address) {
     return NextResponse.json({ error: "name and address are required" }, { status: 400 });
   }
-  if (body.pricingPackage !== undefined && !isTurnoverPricingAdmin(req.headers.get("x-erp-user-email"))) {
-    return NextResponse.json({ error: "Only approved pricing admins can edit pricing packages" }, { status: 403 });
+  if (body.pricingPackage !== undefined && !canEditPricing((req.headers.get("x-erp-role") as ErpRole) ?? "EMPLOYEE")) {
+    return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
   }
 
   try {

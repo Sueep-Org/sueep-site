@@ -1,25 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
+import { useEffect, useState } from "react";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
+import { PROJECTS_LIST_URL_STORAGE_KEY } from "@/lib/erp/projectsListUrl";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
 
-type Tab = "all" | "post-construction" | "janitorial" | "residential" | "manual";
-type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING";
+type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
+type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "post-construction", label: "Post-Const" },
   { id: "janitorial", label: "Janitorial" },
-  { id: "residential", label: "Residential" },
+  { id: "real-estate", label: "Real Estate" },
   { id: "manual", label: "Manual" },
 ];
 
 const LIFECYCLE_FILTERS: { id: Lifecycle; label: string }[] = [
   { id: "UPCOMING", label: "Upcoming" },
   { id: "ACTIVE", label: "WIP" },
+  { id: "ON_HOLD", label: "On Hold" },
   { id: "BILLING", label: "Billing" },
   { id: "COMPLETED", label: "Completed" },
 ];
@@ -28,38 +30,80 @@ type Props = {
   rows: ProjectTableRow[];
   postConstructionPipelineId: string | null;
   janitorialPipelineId: string | null;
-  residentialPipelineId: string | null;
+  canSeeFinancials: boolean;
+  /** SUPERVISOR: hide dollar figures but still show a Margin % column. */
+  canSeeMarginOnly: boolean;
 };
 
-export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, residentialPipelineId }: Props) {
+export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipelineId, canSeeFinancials, canSeeMarginOnly }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [activeLifecycle, setActiveLifecycle] = useState<Lifecycle | null>(null);
   const [search, setSearch] = useState("");
 
+  // On mount, restore tab and status filter from URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab") as Tab | null;
+    if (tab && TABS.some((t) => t.id === tab)) setActiveTab(tab);
+    const status = params.get("status") as Lifecycle | null;
+    if (status && LIFECYCLE_FILTERS.some((f) => f.id === status)) setActiveLifecycle(status);
+    persistListUrl();
+  }, []);
+
+  // So the project detail page's "← Projects" link can return to the same
+  // tab/status filter instead of always resetting to "All".
+  function persistListUrl() {
+    sessionStorage.setItem(
+      PROJECTS_LIST_URL_STORAGE_KEY,
+      window.location.pathname + window.location.search
+    );
+  }
+
+  function updateTab(tab: Tab) {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", tab);
+    params.delete("status"); // reset lifecycle filter when switching tabs
+    setActiveLifecycle(null);
+    history.replaceState(null, "", `?${params.toString()}`);
+    persistListUrl();
+  }
+
+  function updateLifecycle(lc: Lifecycle | null) {
+    setActiveLifecycle(lc);
+    const params = new URLSearchParams(window.location.search);
+    if (lc) {
+      params.set("status", lc);
+    } else {
+      params.delete("status");
+    }
+    history.replaceState(null, "", `?${params.toString()}`);
+    persistListUrl();
+  }
+
   function getTab(row: ProjectTableRow): Tab {
     const pid = row.hubspotPipelineId;
     const segment = normalizeProjectSegment(row.segment);
+
+    // Explicit segment takes priority over description heuristics
+    if (segment === "REAL_ESTATE") return "real-estate";
+
     const looksLikeTurnoverRequest =
       segment === "JANITORIAL_TURNOVER_REQUESTS" ||
       Boolean(row.description?.match(/^(Property|Units|Estimated Turnover Total|Pricing Breakdown):/im));
 
     if (pid === janitorialPipelineId || looksLikeTurnoverRequest) return "janitorial";
-    if (pid === residentialPipelineId) return "residential";
     if (pid === postConstructionPipelineId) return "post-construction";
     return "manual";
   }
 
   function getLifecycle(row: ProjectTableRow): Lifecycle {
-    return deriveProjectLifecycle(row.status, row.projectDate) as Lifecycle;
+    return deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders)) as Lifecycle;
   }
 
   function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {
     if (lc === "BILLING") return row.billingStatus === "BILLING";
     return getLifecycle(row) === lc;
-  }
-
-  function toggleLifecycle(lc: Lifecycle) {
-    setActiveLifecycle((prev) => (prev === lc ? null : lc));
   }
 
   const query = search.trim().toLowerCase();
@@ -79,7 +123,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
       <div className="flex flex-col gap-2 md:hidden mb-3">
         <select
           value={activeTab}
-          onChange={(e) => setActiveTab(e.target.value as Tab)}
+          onChange={(e) => updateTab(e.target.value as Tab)}
           className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         >
           {TABS.filter((tab) => tab.id === "all" || countFor(tab.id) > 0).map((tab) => (
@@ -96,7 +140,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
           />
           <select
             value={activeLifecycle ?? ""}
-            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            onChange={(e) => updateLifecycle((e.target.value as Lifecycle) || null)}
             className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           >
             <option value="">All statuses</option>
@@ -117,7 +161,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => updateTab(tab.id)}
                 className={[
                   "flex items-center gap-1 px-2 py-2 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
                   isActive
@@ -143,7 +187,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
           />
           <select
             value={activeLifecycle ?? ""}
-            onChange={(e) => setActiveLifecycle((e.target.value as Lifecycle) || null)}
+            onChange={(e) => updateLifecycle((e.target.value as Lifecycle) || null)}
             className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-600 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
           >
             <option value="">All statuses</option>
@@ -160,9 +204,9 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
             {query ? `No projects matching "${search}".` : "No projects in this category."}
           </p>
         ) : activeTab === "janitorial" ? (
-          <JanitorialProjectsExpandableTable rows={filtered} />
+          <JanitorialProjectsExpandableTable rows={filtered} canSeeFinancials={canSeeFinancials} canSeeMarginOnly={canSeeMarginOnly} />
         ) : (
-          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} />
+          <ProjectsExpandableTable rows={filtered} janitorialPipelineId={janitorialPipelineId} canSeeFinancials={canSeeFinancials} canSeeMarginOnly={canSeeMarginOnly} />
         )}
       </div>
     </div>

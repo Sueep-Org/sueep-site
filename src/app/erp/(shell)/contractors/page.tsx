@@ -25,6 +25,7 @@ export default async function ContractorsPage() {
               <tr>
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Email</th>
+                <th className="px-4 py-2">Role</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Added</th>
               </tr>
@@ -49,6 +50,7 @@ export default async function ContractorsPage() {
                       "—"
                     )}
                   </td>
+                  <td className="px-4 py-3 text-gray-700">{c.role || "—"}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${

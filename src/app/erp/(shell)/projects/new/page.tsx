@@ -1,12 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { NewProjectForm } from "./NewProjectForm";
+import { getErpAuth } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function NewProjectPage() {
+  const auth = await getErpAuth();
+  // Supervisors add janitorial units from a building's own Units tab, a
+  // simple scope-only form with no pricing exposure — not this full form,
+  // which covers every project type and shows PM-only detail (cost fields,
+  // HubSpot pipeline info, etc.). Redirect rather than just hiding the nav
+  // link/button, since this page has no other role gate of its own.
+  if (auth?.role === "SUPERVISOR" || auth?.role === "EMPLOYEE") {
+    redirect("/erp/projects");
+  }
   const cfg = parseHubSpotPipelineStageMap();
   const janitorialSegments = cfg?.janitorial.pipelineId
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
@@ -22,15 +33,27 @@ export default async function NewProjectPage() {
       }
     : {};
 
-  const [buildings, allProjects, employees] = await Promise.all([
+  const [rawBuildings, allProjects, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, pricingPackage: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        pmName: true,
+        pmEmail: true,
+        pmPhone: true,
+        pricingPackage: true,
+        recurringContract: {
+          select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
+        },
+        turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
+      },
     }),
     prisma.project.findMany({
       where: changeOrderProjectFilter,
       orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-      select: { id: true, jobTitle: true },
+      select: { id: true, jobTitle: true, segment: true, hubspotPipelineId: true, laborRateCard: true },
     }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
@@ -54,6 +77,14 @@ export default async function NewProjectPage() {
       supervisor: true,
     },
   });
+  // Flatten to just the unit numbers already used on each building, so the
+  // form can warn on a duplicate unit identifier client-side.
+  const buildings = rawBuildings.map(({ turnoverRequests, ...building }) => ({
+    ...building,
+    existingUnitNumbers: Array.from(
+      new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
+    ),
+  }));
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-0">

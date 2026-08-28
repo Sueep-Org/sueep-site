@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,9 @@ export async function GET(_req: Request, ctx: Ctx) {
     include: { documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] } },
   });
   if (!employee) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(employee);
+  // ssn is only ever exposed via the dedicated, role-gated reveal endpoint.
+  const { ssn: _ssn, ...safeEmployee } = employee;
+  return NextResponse.json(safeEmployee);
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -41,6 +44,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const auth = await getErpAuth();
 
   const existing = await prisma.employee.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -58,11 +63,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.email !== undefined) data.email = body.email ? String(body.email).trim().toLowerCase() : null;
   if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+  if (body.address !== undefined) data.address = body.address ? String(body.address).trim() : null;
+  if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? String(body.dateOfBirth).trim() : null;
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() : null;
+  if (body.payType !== undefined) {
+    const pt = String(body.payType || "").toUpperCase();
+    if (pt !== "HOURLY" && pt !== "SALARY") return NextResponse.json({ error: "Invalid payType" }, { status: 400 });
+    data.payType = pt;
+  }
   if (body.hourlyPay !== undefined) {
     const cents = parseHourlyPayCents(body.hourlyPay);
     if (cents === undefined) return NextResponse.json({ error: "Invalid hourlyPay" }, { status: 400 });
     data.hourlyPayCents = cents;
+  }
+  if (body.annualSalary !== undefined) {
+    const cents = parseHourlyPayCents(body.annualSalary);
+    if (cents === undefined) return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
+    data.annualSalaryCents = cents;
   }
   if (body.defaultProject !== undefined) data.defaultProject = body.defaultProject ? String(body.defaultProject).trim() : null;
   if (body.status !== undefined) {
@@ -71,6 +88,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
+    // A person editing this field via the profile form always counts as a
+    // manual decision — even if they're just re-setting the same value the
+    // inactivity cron already set (see employeeInactivity.ts) — so it stops
+    // being eligible for auto-reactivation until a person changes it again.
+    if (statusRaw !== existing.status || existing.statusSource !== "MANUAL") {
+      data.statusSource = "MANUAL";
+      data.statusChangedAt = new Date();
+    }
   }
   if (body.hireDate !== undefined) {
     const d = parseDate(body.hireDate);
@@ -78,10 +103,21 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hireDate = d;
   }
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).trim() : null;
-  if (body.adpFileNumber !== undefined) data.adpFileNumber = body.adpFileNumber ? String(body.adpFileNumber).trim() : null;
+  if (body.isOffshore !== undefined) data.isOffshore = Boolean(body.isOffshore);
+  if (body.offshoreMonthlyRate !== undefined) {
+    const cents = parseHourlyPayCents(body.offshoreMonthlyRate);
+    if (cents === undefined) return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
+    data.offshoreMonthlyRateCents = cents;
+  }
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;
+  if (body.ssn !== undefined) {
+    if (!auth || !canViewSsn(auth.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    data.ssn = body.ssn ? String(body.ssn).trim() : null;
+  }
   if (body.requiredDocuments !== undefined) {
     if (!Array.isArray(body.requiredDocuments)) {
       return NextResponse.json({ error: "requiredDocuments must be an array" }, { status: 400 });
@@ -95,10 +131,51 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     data.backgroundCheckStatus = bcs;
   }
+  if (body.backgroundCheckedAt !== undefined) {
+    const d = parseDate(body.backgroundCheckedAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckedAt" }, { status: 400 });
+    data.backgroundCheckedAt = d;
+  }
+  if (body.backgroundCheckExpiresAt !== undefined) {
+    const d = parseDate(body.backgroundCheckExpiresAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckExpiresAt" }, { status: 400 });
+    data.backgroundCheckExpiresAt = d;
+  }
+  if (body.backgroundCheckProvider !== undefined) {
+    data.backgroundCheckProvider = body.backgroundCheckProvider ? String(body.backgroundCheckProvider).trim() : null;
+  }
+  if (body.backgroundCheckNotes !== undefined) {
+    data.backgroundCheckNotes = body.backgroundCheckNotes ? String(body.backgroundCheckNotes).trim() : null;
+  }
+  if (body.backgroundCheckConsentAt !== undefined) {
+    const d = parseDate(body.backgroundCheckConsentAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid backgroundCheckConsentAt" }, { status: 400 });
+    data.backgroundCheckConsentAt = d;
+  }
+
+  // Record a history event whenever the background check status actually changes,
+  // so "when did this person get cleared" can be answered later without trusting
+  // only the current snapshot.
+  const statusChanged =
+    typeof data.backgroundCheckStatus === "string" && data.backgroundCheckStatus !== existing.backgroundCheckStatus;
 
   try {
-    const employee = await prisma.employee.update({ where: { id }, data });
-    return NextResponse.json(employee);
+    const { employee, backgroundCheckEvent } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.employee.update({ where: { id }, data });
+      const event = statusChanged
+        ? await tx.employeeBackgroundCheckEvent.create({
+            data: {
+              employeeId: id,
+              previousStatus: existing.backgroundCheckStatus,
+              newStatus: data.backgroundCheckStatus as string,
+              changedBy: auth?.email ?? null,
+            },
+          })
+        : null;
+      return { employee: updated, backgroundCheckEvent: event };
+    });
+    const { ssn: _ssn, ...safeEmployee } = employee;
+    return NextResponse.json({ ...safeEmployee, backgroundCheckEvent });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });

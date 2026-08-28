@@ -5,15 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ChangeOrderLaborersSection } from "./ChangeOrderLaborersSection";
-import { ChangeOrderBillingEditor } from "./ChangeOrderBillingEditor";
 import { ChangeOrderMaterialsSection, type CoMaterialRow } from "./ChangeOrderMaterialsSection";
+import { ChangeOrderContractorsSection, type ContractorRow, type ContractorOption } from "./ChangeOrderContractorsSection";
+import { ProjectSafetySection } from "../../ProjectSafetySection";
+import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -23,11 +26,16 @@ const STATUS_COLORS: Record<Status, string> = {
   REJECTED: "bg-red-100 text-red-700",
   VOID: "bg-amber-100 text-amber-700",
   BILLING: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
 export type ChangeOrderDetailData = {
   id: string;
   createdAt: string;
+  requestedDate: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  completedAt: string | null;
   title: string;
   description: string | null;
   requestedBy: string | null;
@@ -46,10 +54,13 @@ export type ChangeOrderDetailData = {
   actualTravelCents: number | null;
   estHours: number | null;
   actualHours: number | null;
+  estLaborers: number | null;
+  estSupervisors: number | null;
+  noCrewRequired: boolean;
   computedLaborCents: number;
   computedMaterialCents: number;
   materialEntries: CoMaterialRow[];
-  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null }[];
+  laborers: { id: string; employeeId: string | null; name: string; role: string | null; workDate: string; hours: number; clockIn: string | null; regHours: number; otHours: number; hourlyRateCents: number; taskDescription: string | null; qualityRating: string | null; qualityNotes: string | null; completed: boolean }[];
 };
 
 export type EmployeeOption = {
@@ -168,18 +179,91 @@ function LaborerMultiSelect({
   );
 }
 
+function PmCombobox({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const blurRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) => `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase()))
+    : employees;
+
+  return (
+    <div className="relative mt-1">
+      <input
+        type="text"
+        autoComplete="off"
+        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+        placeholder="Search employees…"
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
+        onBlur={() => { blurRef.current = setTimeout(() => setOpen(false), 150); }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.map((e) => {
+            const name = `${e.firstName} ${e.lastName}`.trim();
+            return (
+              <li
+                key={e.id}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  if (blurRef.current) clearTimeout(blurRef.current);
+                  onChange(name);
+                  setQuery(name);
+                  setOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                {name}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ChangeOrderDetailEditor({
   projectId,
   projectTitle,
+  laborRateCard,
   data,
   employees,
   signingContent,
+  isSupervisor,
+  isEmployee,
+  safetyChecks = [],
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
+  contractors = [],
+  contractorRows = [],
 }: {
   projectId: string;
   projectTitle: string;
+  /** This project's Labor rates override (see Project.laborRateCard) — falls
+   * back to DEFAULT_CHANGE_ORDER_LABOR_RATES via getChangeOrderLaborRates. */
+  laborRateCard?: unknown;
   data: ChangeOrderDetailData;
   employees: EmployeeOption[];
   signingContent?: React.ReactNode;
+  isSupervisor?: boolean;
+  isEmployee?: boolean;
+  safetyChecks?: SafetyCheck[];
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
+  contractors?: ContractorOption[];
+  contractorRows?: ContractorRow[];
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -189,6 +273,20 @@ export function ChangeOrderDetailEditor({
 
   const [title, setTitle] = useState(data.title);
   const [status, setStatus] = useState<Status>(data.status);
+  const [requestedDate, setRequestedDate] = useState(
+    data.requestedDate ? data.requestedDate.slice(0, 10) : "",
+  );
+  const [startDate, setStartDate] = useState(
+    data.startDate ? data.startDate.slice(0, 10) : "",
+  );
+  // endDate doubles as the CO's completed date — the two aren't a
+  // meaningfully distinct concept for a CO, so there's only one field on
+  // screen (see the merged "End date" block below and the server-side
+  // sync in the PATCH route). Falls back to data.completedAt so a CO
+  // completed before this merge still shows its date here.
+  const [endDate, setEndDate] = useState(
+    (data.endDate ?? data.completedAt) ? (data.endDate ?? data.completedAt)!.slice(0, 10) : "",
+  );
   const [requestedBy, setRequestedBy] = useState(data.requestedBy || "");
   const [supervisor, setSupervisor] = useState(data.supervisor || "");
   const [comments, setComments] = useState(data.description || "");
@@ -210,17 +308,58 @@ export function ChangeOrderDetailEditor({
   const [estLabor, setEstLabor] = useState(
     data.estLaborCents != null ? (data.estLaborCents / 100).toFixed(2) : "",
   );
-  const [actualLabor, setActualLabor] = useState(
-    data.actualLaborCents != null ? (data.actualLaborCents / 100).toFixed(2) : "",
-  );
-  const [actualMaterial, setActualMaterial] = useState(
-    data.actualMaterialCents != null ? (data.actualMaterialCents / 100).toFixed(2) : "",
-  );
   const [actualTravel, setActualTravel] = useState(
     data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
   );
-  const [estHours, setEstHours] = useState(data.estHours != null ? String(data.estHours) : "");
+  // No longer editable (see CHANGE_ORDER_ESTIMATE_DAY_HOURS) — kept as a
+  // plain value, not state, so saving this CO round-trips whatever was
+  // already stored instead of silently resetting older records to 8.
+  const estHours = data.estHours != null ? String(data.estHours) : "";
   const [actualHours, setActualHours] = useState(data.actualHours != null ? String(data.actualHours) : "");
+  const [estLaborers, setEstLaborers] = useState(data.estLaborers != null ? String(data.estLaborers) : "");
+  const [estSupervisors, setEstSupervisors] = useState(data.estSupervisors != null ? String(data.estSupervisors) : "");
+  const [noCrewRequired, setNoCrewRequired] = useState(data.noCrewRequired);
+  function handleNoCrewRequiredChange(checked: boolean) {
+    setNoCrewRequired(checked);
+    if (checked) {
+      setEstLaborers("");
+      setEstSupervisors("");
+    }
+  }
+  // Auto-fills # of supervisors from # of laborers (a crew always needs at
+  // least one — see deriveChangeOrderSupervisorCount), same as the create
+  // forms' ChangeOrderLaborEstimator. Starts "touched" if this CO already had
+  // a real saved value, so opening an existing CO and tweaking crew size
+  // doesn't silently overwrite a supervisor count someone set on purpose.
+  const estSupervisorsTouchedRef = useRef(data.estSupervisors != null);
+  useEffect(() => {
+    if (estSupervisorsTouchedRef.current) return;
+    const derived = deriveChangeOrderSupervisorCount(Number(estLaborers) || 0);
+    const derivedStr = derived > 0 ? String(derived) : "";
+    if (estSupervisors !== derivedStr) setEstSupervisors(derivedStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estLaborers]);
+  function handleEstSupervisorsChange(v: string) {
+    estSupervisorsTouchedRef.current = true;
+    setEstSupervisors(v);
+  }
+  const actualLaborers = data.laborers.filter((l) => !l.role?.toLowerCase().includes("supervisor")).length;
+  const actualSupervisors = data.laborers.filter((l) => l.role?.toLowerCase().includes("supervisor")).length;
+
+  // Two calculated numbers from the crew estimate above — see
+  // ChangeOrderLaborEstimator for the same math on the create forms. No
+  // hours input here either — a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour
+  // day per person is always assumed. Price uses this project's Labor rates
+  // (billing rate, has margin); labor cost uses the fixed actual pay rate.
+  // Purely a suggestion: "Use this price" is the only thing that writes into
+  // contractValue/estLabor below.
+  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS };
+  const priceEstimate = computeChangeOrderLaborEstimate(crewCounts, getChangeOrderLaborRates(laborRateCard));
+  const costEstimate = computeChangeOrderLaborEstimate(crewCounts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+  function useCalculatedPrice() {
+    setContractValue((priceEstimate.totalCents / 100).toFixed(2));
+    setEstLabor((costEstimate.totalCents / 100).toFixed(2));
+  }
   const [liveMaterialCents, setLiveMaterialCents] = useState(data.computedMaterialCents);
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
@@ -238,6 +377,9 @@ export function ChangeOrderDetailEditor({
         body: JSON.stringify({
           title: title.trim(),
           status,
+          requestedDate: requestedDate || null,
+          startDate: startDate || null,
+          endDate: endDate || null,
           requestedBy: requestedBy.trim() || null,
           supervisor: supervisor.trim() || null,
           description: comments.trim() || null,
@@ -247,11 +389,18 @@ export function ChangeOrderDetailEditor({
           estMaterial: estMaterial.trim() || null,
           estTravel: estTravel.trim() || null,
           estLabor: estLabor.trim() || null,
-          actualLabor: actualLabor.trim() || null,
-          actualMaterial: actualMaterial.trim() || null,
+          // Actual labor/material aren't hand-entered (see the read-only "from
+          // laborers/materials log" display below) — send the live computed
+          // totals, not a value captured once at mount, so a material entry
+          // added earlier in this session doesn't get silently reverted on save.
+          actualLabor: (data.computedLaborCents / 100).toFixed(2),
+          actualMaterial: (liveMaterialCents / 100).toFixed(2),
           actualTravel: actualTravel.trim() || null,
           estHours: estHours.trim() || null,
           actualHours: actualHours.trim() || null,
+          estLaborers: estLaborers.trim() || null,
+          estSupervisors: estSupervisors.trim() || null,
+          noCrewRequired,
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -312,6 +461,25 @@ export function ChangeOrderDetailEditor({
         </div>
       </div>
 
+      {isSupervisor ? (
+        <ChangeOrderLaborersSection
+          projectId={projectId}
+          changeOrderId={data.id}
+          initialLaborers={data.laborers}
+          employees={employees}
+          safetyPassedKeys={safetyPassedKeys}
+          hasApprovedCheckToday={hasApprovedCheckToday}
+        />
+      ) : isEmployee ? (
+        <ChangeOrderLaborersSection
+          projectId={projectId}
+          changeOrderId={data.id}
+          initialLaborers={data.laborers}
+          employees={employees}
+          canEdit={false}
+          showFinancials={false}
+        />
+      ) : (
       <DetailTabs tabs={[
         {
           label: "Details",
@@ -329,18 +497,84 @@ export function ChangeOrderDetailEditor({
                   </select>
                 </div>
                 <div>
+                  <label className={label} htmlFor="co-requested-date">Requested date</label>
+                  <input
+                    id="co-requested-date"
+                    type="date"
+                    className={input}
+                    value={requestedDate}
+                    onChange={(e) => setRequestedDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={label} htmlFor="co-start-date">
+                    Start date
+                  </label>
+                  <input
+                    id="co-start-date"
+                    type="date"
+                    className={input}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className={label} htmlFor="co-end-date">
+                    End date
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="co-end-date"
+                      type="date"
+                      className={`${input} mt-0`}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                    {status !== "COMPLETED" && status !== "BILLING" && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={async () => {
+                          const date = endDate || new Date().toISOString().slice(0, 10);
+                          setStatus("COMPLETED");
+                          setEndDate(date);
+                          setSaving(true);
+                          setError("");
+                          try {
+                            const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${data.id}`, {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ status: "COMPLETED", endDate: date }),
+                            });
+                            const json = (await res.json()) as { error?: string };
+                            if (!res.ok) { setError(json.error || "Failed to save"); setStatus(data.status); return; }
+                            router.refresh();
+                          } catch {
+                            setError("Network error");
+                            setStatus(data.status);
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        className="shrink-0 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        {saving ? "Saving…" : "Mark complete"}
+                      </button>
+                    )}
+                    {(status === "COMPLETED" || status === "BILLING") && (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        Complete ✓
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
                   <label className={label} htmlFor="co-requested-by">Requested by</label>
                   <input id="co-requested-by" className={input} value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)} />
                 </div>
                 <div>
-                  <label className={label} htmlFor="co-supervisor">Supervisor / PM</label>
-                  <select id="co-supervisor" className={input} value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
-                    <option value="">— None —</option>
-                    {employees.map((e) => {
-                      const name = `${e.firstName} ${e.lastName}`.trim();
-                      return <option key={e.id} value={name}>{name}</option>;
-                    })}
-                  </select>
+                  <label className={label}>PM</label>
+                  <PmCombobox employees={employees} value={supervisor} onChange={setSupervisor} />
                 </div>
                 <div>
                   <label className={label} htmlFor="co-est-cost">Estimated cost (USD)</label>
@@ -435,9 +669,38 @@ export function ChangeOrderDetailEditor({
                       <label className={label} htmlFor="co-est-travel">Travel ($)</label>
                       <input id="co-est-travel" type="number" min={0} step="0.01" inputMode="decimal" className={input} placeholder="0.00" value={estTravel} onChange={(e) => setEstTravel(e.target.value)} />
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={noCrewRequired}
+                        onChange={(e) => handleNoCrewRequiredChange(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      No crew required (material-only, price adjustment, subcontracted, etc.)
+                    </label>
                     <div>
-                      <label className={label} htmlFor="co-est-hours">Hours</label>
-                      <input id="co-est-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={estHours} onChange={(e) => setEstHours(e.target.value)} />
+                      <label className={label} htmlFor="co-est-laborers"># of laborers</label>
+                      <input id="co-est-laborers" type="number" min={0} step={1} className={input} placeholder="0" value={estLaborers} disabled={noCrewRequired} onChange={(e) => setEstLaborers(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="co-est-supervisors"># of supervisors</label>
+                      <input id="co-est-supervisors" type="number" min={0} step={1} className={input} placeholder="0" value={estSupervisors} disabled={noCrewRequired} onChange={(e) => handleEstSupervisorsChange(e.target.value)} />
+                      <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2 text-xs">
+                      <span className="text-gray-700">
+                        Price: <span className="font-semibold text-gray-900">{centsToDollars(priceEstimate.totalCents)}</span>
+                        {" · "}
+                        Labor cost: <span className="font-semibold text-gray-900">{centsToDollars(costEstimate.totalCents)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={priceEstimate.totalCents === 0 && costEstimate.totalCents === 0}
+                        onClick={useCalculatedPrice}
+                        className="rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs font-semibold text-pink-700 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Use this price
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -467,6 +730,20 @@ export function ChangeOrderDetailEditor({
                       <label className={label} htmlFor="co-actual-hours">Hours</label>
                       <input id="co-actual-hours" type="number" min={0} step="0.5" className={input} placeholder="0" value={actualHours} onChange={(e) => setActualHours(e.target.value)} />
                     </div>
+                    <div>
+                      <p className={label}># of laborers</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {actualLaborers}
+                        <span className="ml-2 text-xs text-gray-400">from laborers log</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className={label}># of supervisors</p>
+                      <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+                        {actualSupervisors}
+                        <span className="ml-2 text-xs text-gray-400">from laborers log</span>
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -494,6 +771,19 @@ export function ChangeOrderDetailEditor({
               changeOrderId={data.id}
               initialLaborers={data.laborers}
               employees={employees}
+              safetyPassedKeys={safetyPassedKeys}
+              hasApprovedCheckToday={hasApprovedCheckToday}
+            />
+          ),
+        },
+        {
+          label: "Contractors",
+          content: (
+            <ChangeOrderContractorsSection
+              projectId={projectId}
+              changeOrderId={data.id}
+              initialAssignments={contractorRows}
+              contractors={contractors}
             />
           ),
         },
@@ -509,13 +799,13 @@ export function ChangeOrderDetailEditor({
           ),
         },
         {
-          label: "Billing",
+          label: "Safety Checklist",
           content: (
-            <ChangeOrderBillingEditor
+            <ProjectSafetySection
               projectId={projectId}
-              changeOrderId={data.id}
-              percentInvoiced={data.percentInvoiced}
-              billingStatus={data.billingStatus}
+              initialChecks={safetyChecks}
+              defaultSupervisorName=""
+              employees={employees.map((e) => ({ id: e.id, firstName: e.firstName, lastName: e.lastName }))}
             />
           ),
         },
@@ -575,6 +865,7 @@ export function ChangeOrderDetailEditor({
           : []),
         ...(signingContent ? [{ label: "Signing", content: signingContent }] : []),
       ]} />
+      )}
     </div>
   );
 }

@@ -2,8 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import {
   sanitizeTurnoverPricingPackage,
+  TURNOVER_UNIT_LAYOUTS,
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
+
+const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
 
 type UnitScopePayload = {
   unitNumber?: unknown;
@@ -12,12 +15,26 @@ type UnitScopePayload = {
   paintDate?: unknown;
   cleanDate?: unknown;
   moveOutDate?: unknown;
-  features?: unknown;
+  moveInDate?: unknown;
+  bedrooms?: unknown;
+  bathrooms?: unknown;
+  isCommonArea?: unknown;
+  isPartialTurn?: unknown;
+  partialTurnLayout?: unknown;
+  sqft?: unknown;
+  unitQuality?: unknown;
   fullPaint?: unknown;
   touchUpPaint?: unknown;
   materialsAdditional?: unknown;
   fullClean?: unknown;
   carpetCleaning?: unknown;
+  ceilingPaint?: unknown;
+  compounding?: unknown;
+  otherWork?: unknown;
+  otherDescription?: unknown;
+  otherPrice?: unknown;
+  /** Covered by the building's flat monthly recurring contract — skips pricing-package pricing. */
+  recurringContractUnit?: unknown;
 };
 
 function stringValue(value: unknown) {
@@ -35,15 +52,22 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function featureToBedsBaths(value: unknown) {
-  const feature = stringValue(value);
-  if (feature === "studio") return { bedrooms: 0, bathrooms: 1 };
-  const match = feature.match(/^(\d+)\/(\d+)$/);
-  if (!match) return { bedrooms: 1, bathrooms: 1 };
-  return {
-    bedrooms: Number(match[1]),
-    bathrooms: Number(match[2]),
-  };
+const UNIT_QUALITY_VALUES = ["GOOD", "FAIR", "POOR"] as const;
+
+function parseIntValue(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function parseUnitQuality(value: unknown): string | null {
+  const quality = stringValue(value).toUpperCase();
+  return (UNIT_QUALITY_VALUES as readonly string[]).includes(quality) ? quality : null;
+}
+
+function parsePartialTurnLayout(value: unknown): string | null {
+  const layout = stringValue(value);
+  return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
 }
 
 function parseUnitScopes(value: unknown): UnitScopePayload[] {
@@ -64,8 +88,13 @@ function pricingPackageFromPayload(body: Record<string, unknown>, fallback: unkn
     pricing.pricePackageDollars && typeof pricing.pricePackageDollars === "object"
       ? (pricing.pricePackageDollars as Record<string, unknown>)
       : {};
-  const clean = readDollar(dollars.fullClean);
-  const paint = readDollar(dollars.fullPaint);
+  // A missing key means "no override intended, use the building's real rates"
+  // — distinct from an explicit $0 override — so this only reads/applies a
+  // rate when the caller actually sent one (readDollar(undefined) would
+  // otherwise resolve to 0, not null, and silently zero out every layout's
+  // rate for every caller that doesn't send a pricing override at all).
+  const clean = dollars.fullClean !== undefined ? readDollar(dollars.fullClean) : null;
+  const paint = dollars.fullPaint !== undefined ? readDollar(dollars.fullPaint) : null;
 
   if (clean == null && paint == null) return base;
 
@@ -119,13 +148,14 @@ async function resolveBuilding(body: Record<string, unknown>) {
       pmName: stringValue(body.pmName) || null,
       pmEmail: stringValue(body.pmEmail) || null,
       pmPhone: stringValue(body.pmPhone) || null,
+      hubspotDealId: stringValue(body.buildingHubspotDealId) || null,
       pricingPackage: pricingPackageFromPayload(body, null),
     },
   });
 }
 
 function unitDateRange(unit: UnitScopePayload) {
-  const dates = [unit.startDate, unit.endDate, unit.moveOutDate, unit.paintDate, unit.cleanDate]
+  const dates = [unit.startDate, unit.endDate, unit.moveOutDate, unit.moveInDate, unit.paintDate, unit.cleanDate]
     .map(dateValue)
     .filter((date): date is Date => Boolean(date))
     .sort((a, b) => a.getTime() - b.getTime());
@@ -137,50 +167,113 @@ function unitDateRange(unit: UnitScopePayload) {
 }
 
 export async function createTurnoverRequestsFromPayload(body: Record<string, unknown>) {
-  const building = await resolveBuilding(body);
   const units = parseUnitScopes(body.unitScopes);
+  if (units.some((unit) => !unitDateRange(unit).startDate)) {
+    throw new Error("Start date is required for every unit");
+  }
+
+  const building = await resolveBuilding(body);
   const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage);
 
+  const recurringContract = units.some((u) => Boolean(u.recurringContractUnit))
+    ? await prisma.recurringContract.findUnique({ where: { buildingId: building.id } })
+    : null;
+
   const requests = await Promise.all(
-    units.map((unit, index) => {
-      const { bedrooms, bathrooms } = featureToBedsBaths(unit.features);
+    units.map(async (unit, index) => {
+      const isCommonArea = Boolean(unit.isCommonArea);
+      const bedrooms = isCommonArea ? null : parseIntValue(unit.bedrooms) ?? 1;
+      const bathrooms = isCommonArea ? null : parseIntValue(unit.bathrooms) ?? 1;
+      const isPartialTurn = !isCommonArea && Boolean(unit.isPartialTurn);
+      const partialTurnLayout = isPartialTurn ? parsePartialTurnLayout(unit.partialTurnLayout) : null;
+      const sqft = parseIntValue(unit.sqft);
+      const unitQuality = parseUnitQuality(unit.unitQuality);
       const { startDate, endDate } = unitDateRange(unit);
       const fullPaint = Boolean(unit.fullPaint);
       const touchUpPaint = Boolean(unit.touchUpPaint) && !fullPaint ? 1 : 0;
       const fullClean = Boolean(unit.fullClean);
       const carpetCleaning = Boolean(unit.carpetCleaning);
       const materialsAdditional = Boolean(unit.materialsAdditional);
-      const pricing = computeTurnoverPricing({
-        requestType: "TURNOVER",
-        buildingName: building.name,
-        pricingPackage,
-        bedrooms,
-        bathrooms,
-        fullPaint,
-        touchUpPaint,
-        fullClean,
-        carpetCleaning,
-        materialsAdditional,
-      });
+      const ceilingPaint = Boolean(unit.ceilingPaint);
+      const compounding = Boolean(unit.compounding) ? 1 : 0;
+      const otherWork = Boolean(unit.otherWork);
+      const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
+      const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
+      const unitNumber = stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`);
 
-      return prisma.turnoverRequest.create({
+      // Units covered by an active recurring contract skip the pricing-package
+      // rate card entirely — they're already paid for by the flat monthly fee.
+      // An explicit "other work" charge (a one-off extra, not from the rate
+      // card) still applies since it's a manually-typed override, not a
+      // pricing-package lookup.
+      const isRecurringContractUnit = Boolean(unit.recurringContractUnit) && recurringContract?.status === "ACTIVE";
+      const priceCents = isRecurringContractUnit
+        ? otherCents || null
+        : (() => {
+            const pricing = computeTurnoverPricing({
+              requestType: "TURNOVER",
+              buildingName: building.name,
+              pricingPackage,
+              bedrooms,
+              bathrooms,
+              isCommonArea,
+              fullPaint,
+              touchUpPaint,
+              fullClean,
+              carpetCleaning,
+              materialsAdditional,
+              ceilingPaint,
+              compounding,
+              isPartialTurn,
+              partialTurnLayout,
+            });
+            return (pricing.priceCents || 0) + otherCents || null;
+          })();
+
+      if (isRecurringContractUnit && recurringContract) {
+        await prisma.recurringContractUnit.upsert({
+          where: { recurringContractId_unitNumber: { recurringContractId: recurringContract.id, unitNumber } },
+          update: { active: true, bedrooms, bathrooms, isCommonArea, fullClean, carpetCleaning },
+          create: { recurringContractId: recurringContract.id, unitNumber, bedrooms, bathrooms, isCommonArea, fullClean, carpetCleaning },
+        });
+      }
+
+      const created = await prisma.turnoverRequest.create({
         data: {
           buildingId: building.id,
           requestType: "TURNOVER",
-          unitNumber: stringValue(unit.unitNumber) || `Unit ${index + 1}`,
+          unitNumber,
           bedrooms,
           bathrooms,
+          isPartialTurn,
+          partialTurnLayout,
+          sqft,
+          unitQuality,
           fullPaint,
           touchUpPaint,
           fullClean,
           carpetCleaning,
           materialsAdditional,
+          ceilingPaint,
+          compounding,
+          otherWork,
+          otherDescription: otherDescription || null,
+          otherCents: otherWork ? otherCents : null,
           startDate,
           endDate,
-          priceCents: pricing.priceCents || null,
+          moveOutDate: dateValue(unit.moveOutDate),
+          moveInDate: dateValue(unit.moveInDate),
+          priceCents,
           createdBy: stringValue(body.sueepPmEmail) || stringValue(body.pmEmail) || null,
         },
       });
+
+      // Not persisted as their own TurnoverRequest columns (unlike
+      // moveOutDate/moveInDate above) — paintDate/cleanDate exist only to
+      // schedule the corresponding ProjectDayAssignment once this unit's
+      // Project is created (see createProjectFromPayload), same as they
+      // already fold into startDate/endDate above via unitDateRange.
+      return { ...created, paintDate: dateValue(unit.paintDate), cleanDate: dateValue(unit.cleanDate) };
     })
   );
 

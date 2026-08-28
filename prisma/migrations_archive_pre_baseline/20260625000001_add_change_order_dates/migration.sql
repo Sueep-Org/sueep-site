@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "ProjectChangeOrder" ADD COLUMN "requestedDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN "startDate" TIMESTAMP(3);

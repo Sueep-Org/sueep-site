@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 
 type Props = {
   employeeId: string;
@@ -53,9 +53,7 @@ export function EmployeeBankAccountSection({ employeeId, initial }: Props) {
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">Bank Account Info</h2>
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={label} htmlFor="bankAccountType">
@@ -106,6 +104,5 @@ export function EmployeeBankAccountSection({ employeeId, initial }: Props) {
           {loading ? "Saving…" : "Save bank info"}
         </button>
       </form>
-    </section>
   );
 }

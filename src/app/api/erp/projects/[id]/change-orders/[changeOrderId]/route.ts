@@ -3,11 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
 import { centsToDollars } from "@/lib/erp/money";
+import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
-const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING"] as const;
-const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE"] as const;
+const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"] as const;
+// BILLING/INVOICE_PAID/INACTIVE: used by the billing editor tab
+// NOT_BILLED/BILLED/PAID: used by the billing table (same vocabulary as SOV items / turnover requests)
+const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE", "NOT_BILLED", "BILLED", "PAID"] as const;
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, changeOrderId } = await ctx.params;
@@ -42,6 +45,30 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
+    // Auto-set completedAt when marking as complete for the first time —
+    // skipped when this same request already supplies endDate too (the
+    // editor's "Mark complete" button sends one explicitly; the sync block
+    // below mirrors it onto completedAt), so a caller-chosen date doesn't
+    // get silently overwritten with "now". endDate and completedAt are
+    // treated as the same concept for a CO (see that sync block) — this
+    // only needs to guard against being clobbered by that mirroring, not
+    // duplicate its logic.
+    if (
+      (statusRaw === "BILLING" || statusRaw === "COMPLETED") &&
+      !(existing as Record<string, unknown>).completedAt &&
+      (body.completedAt === undefined || body.completedAt === null || body.completedAt === "") &&
+      (body.endDate === undefined || body.endDate === null || body.endDate === "")
+    ) {
+      data.completedAt = new Date();
+    }
+  }
+  if (body.completedAt !== undefined) {
+    if (body.completedAt === null || body.completedAt === "") {
+      data.completedAt = null;
+    } else {
+      const d = new Date(String(body.completedAt));
+      if (!isNaN(d.getTime())) data.completedAt = d;
+    }
   }
   if (body.billingStatus !== undefined) {
     if (body.billingStatus === null || body.billingStatus === "") {
@@ -52,6 +79,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
         return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
       }
       data.billingStatus = bs;
+      // Being marked paid is a strong enough signal that the work itself is
+      // done too, auto-complete the CO's own status so it doesn't drift
+      // (billingStatus=PAID with status stuck at an earlier stage used to
+      // require a separate manual "Mark complete" step and silently missed
+      // it, which also meant it could never count toward commission, see
+      // payroll/page.tsx's isFullyPaidCo). Only kicks in when this same
+      // request isn't already managing status itself.
+      if ((bs === "PAID" || bs === "INVOICE_PAID") && body.status === undefined && existing.status !== "COMPLETED") {
+        data.status = "COMPLETED";
+        if (!existing.completedAt) data.completedAt = new Date();
+      }
     }
   }
   if (body.percentInvoiced !== undefined) {
@@ -72,6 +110,36 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.actualHours !== undefined) {
     data.actualHours = body.actualHours === null || body.actualHours === "" ? null : Number(body.actualHours);
   }
+  if (body.estLaborers !== undefined) {
+    data.estLaborers = body.estLaborers === null || body.estLaborers === "" ? null : Math.max(0, Math.round(Number(body.estLaborers)));
+  }
+  if (body.estSupervisors !== undefined) {
+    data.estSupervisors = body.estSupervisors === null || body.estSupervisors === "" ? null : Math.max(0, Math.round(Number(body.estSupervisors)));
+  }
+  if (body.requestedDate !== undefined) {
+    if (body.requestedDate === null || body.requestedDate === "") {
+      data.requestedDate = null;
+    } else {
+      const d = new Date(String(body.requestedDate));
+      if (!isNaN(d.getTime())) data.requestedDate = d;
+    }
+  }
+  if (body.startDate !== undefined) {
+    if (body.startDate === null || body.startDate === "") {
+      data.startDate = null;
+    } else {
+      const d = new Date(String(body.startDate));
+      if (!isNaN(d.getTime())) data.startDate = d;
+    }
+  }
+  if (body.endDate !== undefined) {
+    if (body.endDate === null || body.endDate === "") {
+      data.endDate = null;
+    } else {
+      const d = new Date(String(body.endDate));
+      if (!isNaN(d.getTime())) data.endDate = d;
+    }
+  }
   if (body.estimatedDays !== undefined) {
     if (body.estimatedDays === null || body.estimatedDays === "") {
       data.estimatedDays = null;
@@ -82,6 +150,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
       }
       data.estimatedDays = Math.round(n);
     }
+  }
+  if (body.commissionPaid !== undefined) {
+    data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+  }
+  if (body.noCrewRequired !== undefined) data.noCrewRequired = body.noCrewRequired === true;
+
+  // endDate and completedAt are the same concept for a CO — there's no
+  // meaningfully distinct "target end" vs. "when it actually got done" — so
+  // whichever one this request actually touched (the editor's End date
+  // field, the Mark complete button, or the billingStatus=PAID auto-complete
+  // branch above) gets mirrored onto the other, regardless of which code
+  // path set it. Only fires when exactly one of the two was set this
+  // request — if a caller ever sends both explicitly, that's respected as-is.
+  if (data.endDate !== undefined && data.completedAt === undefined) {
+    data.completedAt = data.endDate;
+  } else if (data.completedAt !== undefined && data.endDate === undefined) {
+    data.endDate = data.completedAt;
   }
 
   const laborersRaw = Array.isArray(body.laborers)
@@ -158,6 +243,33 @@ export async function PATCH(req: Request, ctx: Ctx) {
         }
       } catch (emailErr) {
         console.error("approval notification email failed", emailErr);
+      }
+    }
+
+    // Notify the project's PM/supervisor when this change order's own
+    // schedule moves — same reschedule email a base-project date edit
+    // sends, previously missing entirely for change orders.
+    const oldStartTime = existing.startDate ? existing.startDate.getTime() : null;
+    const newStartTime = updated.startDate ? updated.startDate.getTime() : null;
+    if (data.startDate !== undefined && oldStartTime !== newStartTime && updated.startDate) {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id },
+          select: { jobTitle: true, supervisor: true, supervisorUserId: true, description: true },
+        });
+        if (project) {
+          await notifyProjectRescheduled({
+            projectId: id,
+            jobTitle: `${project.jobTitle} — ${updated.title}`,
+            oldDateKey: existing.startDate ? existing.startDate.toISOString().slice(0, 10) : null,
+            newDateKey: updated.startDate.toISOString().slice(0, 10),
+            supervisorUserId: project.supervisorUserId,
+            projectManagerName: project.supervisor,
+            projectDescription: project.description,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to notify change-order reschedule", e);
       }
     }
 

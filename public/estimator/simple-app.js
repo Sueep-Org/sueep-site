@@ -4,6 +4,8 @@ console.log('[drawer] wired v2');
 import { API_BASE } from './config.js';
 import { listFiles, downloadSas, humanSize, humanDate } from './lib/library.js';
 import { toast } from './lib/toast.js';
+import { textPrompt } from './lib/textPrompt.js';
+import { confirmDialog } from './lib/confirmDialog.js';
 
 import {
   saveFromProcessing,
@@ -79,8 +81,7 @@ function renderDrawerSkeleton(){
 
   libraryMount.innerHTML = `
     <div id="listContainer" style="padding:.5rem;">
-      <input id="librarySearch" type="text" placeholder="Search projects…"
-        style="width:100%;box-sizing:border-box;padding:6px 10px;margin-bottom:.5rem;border:1px solid #ddd;border-radius:6px;font-size:12px;outline:none;" />
+      <input id="librarySearch" type="text" placeholder="Search projects…" class="mini-input" />
       <div id="listLoading">Loading…</div>
       <div id="savedSection"></div>
     </div>
@@ -116,13 +117,14 @@ async function refreshDrawer(){
       const blueprint = files.find(f => f.file_type === 'blueprint') || files[0] || null;
 
       const row = document.createElement('div');
+      row.className = 'library-row';
       row.dataset.name = (project.name || '').toLowerCase();
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:.4rem;flex-wrap:nowrap;min-width:0;';
 
       const nameBtn = document.createElement('button');
-      nameBtn.textContent = `📄 ${project.name}`;
+      nameBtn.className = 'library-name-btn';
+      nameBtn.textContent = project.name;
       nameBtn.title = project.name;
-      nameBtn.style.cssText = 'flex:1;text-align:left;padding:.4rem .5rem;border:1px solid #ddd;border-radius:6px;background:white;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:' + (blueprint ? 'pointer' : 'default') + ';';
+      if (!blueprint) nameBtn.dataset.noFile = '';
 
       if (blueprint) {
         nameBtn.onclick = async () => {
@@ -150,22 +152,53 @@ async function refreshDrawer(){
 
       row.appendChild(nameBtn);
 
+      // "More actions" (⋮) — Download + Delete used to be two separate
+      // bordered buttons sitting in every row; folded into one dropdown
+      // (same .toolbar-dropdown-* pattern as the main toolbar's Export
+      // and Detect Walls menus) so each row reads as just a name plus one
+      // small control, not a name plus a row of icon buttons.
+      const menuWrap = document.createElement('div');
+      menuWrap.className = 'toolbar-dropdown';
+
+      const menuBtn = document.createElement('button');
+      menuBtn.type = 'button';
+      menuBtn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+      menuBtn.title = 'More actions';
+      menuBtn.setAttribute('aria-label', 'More actions');
+      menuBtn.setAttribute('aria-haspopup', 'menu');
+      menuBtn.setAttribute('aria-expanded', 'false');
+      menuBtn.innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>';
+
+      const menuPanel = document.createElement('div');
+      menuPanel.className = 'toolbar-dropdown-panel toolbar-dropdown-panel--right';
+      menuPanel.setAttribute('role', 'menu');
+      menuPanel.hidden = true;
+
       if (blueprint) {
-        const dlBtn = document.createElement('a');
-        dlBtn.textContent = '⬇';
-        dlBtn.href = `${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`;
-        dlBtn.target = '_blank';
-        dlBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#3b82f6;text-decoration:none;';
-        row.appendChild(dlBtn);
+        const downloadItem = document.createElement('a');
+        downloadItem.className = 'toolbar-dropdown-item';
+        downloadItem.textContent = 'Download';
+        downloadItem.href = `${API_BASE}/api/projects/${project.id}/files/${blueprint.id}/download`;
+        downloadItem.target = '_blank';
+        downloadItem.setAttribute('role', 'menuitem');
+        downloadItem.onclick = (e) => {
+          e.stopPropagation();
+          closeAllLibraryRowMenus();
+        };
+        menuPanel.appendChild(downloadItem);
       }
 
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑';
-      delBtn.title = 'Delete project';
-      delBtn.style.cssText = 'flex-shrink:0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:white;cursor:pointer;font-size:13px;color:#ef4444;';
-      delBtn.onclick = async (e) => {
+      const deleteItem = document.createElement('button');
+      deleteItem.type = 'button';
+      deleteItem.className = 'toolbar-dropdown-item danger';
+      deleteItem.textContent = 'Delete';
+      deleteItem.setAttribute('role', 'menuitem');
+      deleteItem.onclick = async (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        if (!confirm(`Delete project "${project.name}" and all its files?`)) return;
+        closeAllLibraryRowMenus();
+        if (!(await confirmDialog({ title: 'Delete project', message: `Delete project "${project.name}" and all its files?`, confirmLabel: 'Delete', danger: true }))) return;
         try {
           const r = await fetch(`${API_BASE}/api/projects/${project.id}`, { method: 'DELETE' });
           if (!r.ok) throw new Error('Delete failed');
@@ -176,7 +209,20 @@ async function refreshDrawer(){
         }
         try { await refreshDrawer(); } catch(_) {}
       };
-      row.appendChild(delBtn);
+      menuPanel.appendChild(deleteItem);
+
+      menuBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const willOpen = menuPanel.hidden;
+        closeAllLibraryRowMenus();
+        menuPanel.hidden = !willOpen;
+        menuBtn.setAttribute('aria-expanded', String(willOpen));
+      };
+
+      menuWrap.appendChild(menuBtn);
+      menuWrap.appendChild(menuPanel);
+      row.appendChild(menuWrap);
 
       savedSec.appendChild(row);
     }
@@ -237,6 +283,22 @@ function closeSidebar(){
   if (toggle) toggle.style.display = '';
 }
 
+// Closes any open library row "more actions" menu (see refreshDrawer)
+// other than the one currently being opened/interacted with. A single
+// shared helper + shared listeners below, rather than each row wiring its
+// own document-level click/Escape listener (the way the toolbar's
+// Export/Detect Walls dropdowns do via wireDropdownMenu) — library rows
+// get torn down and rebuilt on every refreshDrawer() call (search,
+// delete, reopening the sidebar), so a listener added per row would never
+// get cleaned up and pile up on `document` across refreshes.
+function closeAllLibraryRowMenus(){
+  document.querySelectorAll('#libraryMount .toolbar-dropdown-panel').forEach((panel) => {
+    if (panel.hidden) return;
+    panel.hidden = true;
+    panel.previousElementSibling?.setAttribute('aria-expanded', 'false');
+  });
+}
+
 document.addEventListener('click', (e)=>{
 
   if(e.target.closest('[data-open-sidebar]')){
@@ -248,6 +310,14 @@ document.addEventListener('click', (e)=>{
 
     closeSidebar();
   }
+
+  if (!e.target.closest('#libraryMount .toolbar-dropdown')) {
+    closeAllLibraryRowMenus();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAllLibraryRowMenus();
 });
 
 // ======================================================
@@ -280,6 +350,7 @@ async function initApp(){
   const measureToggle = $('measureToggle');
   const drawRectBtn = $('drawRectBtn');
   const drawIrregBtn = $('drawIrregBtn');
+  const drawSelectBtn = $('drawSelectBtn');
   const undoShapeBtn = $('undoShapeBtn');
 
   const zoomInBtn = $('zoomInBtn');
@@ -307,10 +378,38 @@ async function initApp(){
   const measurementNextPageBtn = $('measurementNextPageBtn');
   const allPagesTotalContainer = $('allPagesTotalContainer');
   const downloadPdfBtn = $('downloadPdfBtn');
+  // Steps createDimBackgroundToggleBtn/dimBackgroundToggle's click handler
+  // cycle through -- declared up here (ahead of createDimBackgroundToggleBtn
+  // itself further down) because that button gets created eagerly below,
+  // and a const declared after its own first use would throw a
+  // temporal-dead-zone ReferenceError at load.
+  const DIM_BACKGROUND_STEPS = [
+    { key: 'full', label: 'BG: Full', opacity: '1' },
+    { key: 'dim', label: 'BG: Dim', opacity: '0.25' },
+    { key: 'off', label: 'BG: Off', opacity: '0.03' },
+  ];
   let savePdfBtn = $('savePdfBtn') || createSavePdfBtn();
+  // The live /erp/estimator page (src/app/erp/(shell)/estimator/page.tsx)
+  // hand-codes its own toolbar JSX and has never had this button in its
+  // markup, same situation savePdfBtn was already in above. Built here
+  // with plain JS for the same reason, so it doesn't depend on editing
+  // that React page.
+  let detectWallsMenuBtn = $('detectWallsMenuBtn') || createDetectWallsMenu();
+  // Small "Vector: N walls" / "Pixel guess: N walls" caption inside the
+  // dropdown panel so it's visible at a glance which method actually
+  // produced what's on screen for the current page.
+  let detectWallsMethodCaption = $('detectWallsMethodCaption');
+  let exportMenuBtn = $('exportMenuBtn') || createExportMenu();
+  let showLabelsToggle = $('showLabelsToggle') || createShowLabelsToggleBtn();
+  let dimBackgroundToggle = $('dimBackgroundToggle') || createDimBackgroundToggleBtn();
   let sovModal = null;
   let _sovRows = [];
   let _pdfMetadataSummary = null;
+  // Wall-detect worker's own debug stats (thresholds, filter counts, etc.),
+  // keyed by page number — kept only for whichever pages "Detect Walls" has
+  // actually been run on this session, purely for the annotations-export
+  // debugging aid (see exportPageAnnotations). Not persisted.
+  let _wallDetectDebugByPage = {};
   let _pageAggregateOverrides = {};
   let _projectAggregateOverrides = {};
   let _sovUndoStack = [];
@@ -424,20 +523,248 @@ async function initApp(){
     savePdfBtn
   });
 
+  // Finds the dedicated container page.tsx sets aside for a group of
+  // JS-injected toolbar buttons (see #saveToolsGroup/#betaToolsGroup/
+  // #viewToolsGroup there) so they render in a predictable spot, grouped
+  // into a pill alongside the other toolbar clusters instead of each
+  // landing as a bare button loose in the toolbar. Falls back to #toolbar
+  // itself when that container doesn't exist — true for the older
+  // standalone public/estimator/index.html, which predates this grouping
+  // and doesn't have it, so buttons still show up there, just ungrouped.
+  function getInjectedToolGroup(groupId) {
+    const toolbar = $('toolbar');
+    if (!toolbar) return null;
+    return document.getElementById(groupId) || toolbar;
+  }
+
+  // Not a debug tool like the ones below — a real save action, so it gets
+  // its own spot (#saveToolsGroup in page.tsx) styled to stand out (see
+  // #savePdfBtn in estimator-ui.css) rather than blending into the muted
+  // debug cluster.
   function createSavePdfBtn() {
     const existing = $('savePdfBtn');
     if (existing) return existing;
-    const toolbar = $('toolbar');
-    if (!toolbar) return null;
+    const group = getInjectedToolGroup('saveToolsGroup');
+    if (!group) return null;
     const btn = document.createElement('button');
     btn.id = 'savePdfBtn';
     btn.className = 'mini-btn';
     btn.textContent = 'Save';
-    if (zoomResetBtn && zoomResetBtn.parentElement === toolbar) {
-      toolbar.insertBefore(btn, zoomResetBtn.nextSibling);
-    } else {
-      toolbar.appendChild(btn);
+    btn.title = 'Save the current page as a PDF with annotations';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Shared open/close wiring for a "button toggles a floating menu panel"
+  // control — used by both the Export dropdown and the Detect Walls (beta)
+  // dropdown below, so the click/outside-click/Escape behavior only lives
+  // in one place. onItemClick receives the clicked .toolbar-dropdown-item
+  // element; the caller decides what each item actually does.
+  function wireDropdownMenu(btn, panel, onItemClick) {
+    if (!btn || !panel) return;
+
+    // #toolbar (this button's container) has overflow-x:auto so the
+    // whole toolbar can scroll as one line instead of wrapping to a
+    // second one — but setting overflow-x on an element makes the
+    // browser compute overflow-y as non-visible too, so this panel
+    // (position:absolute in .toolbar-dropdown-panel's default CSS,
+    // opening below the button) was getting clipped at #toolbar's own
+    // bottom edge instead of floating over the PDF preview underneath it.
+    // Switching it to position:fixed with coordinates computed here, at
+    // open time, escapes that: fixed positioning isn't confined by an
+    // ancestor's overflow unless that ancestor also has a
+    // transform/filter/perspective, which #toolbar doesn't. Only these
+    // two toolbar dropdowns (Export, Detect Walls) need this — the
+    // library row "more actions" menu uses this same panel class but
+    // isn't inside an overflow-clipping ancestor, so it's left on the
+    // CSS default (position:absolute).
+    function positionPanel() {
+      const rect = btn.getBoundingClientRect();
+      panel.style.position = 'fixed';
+      panel.style.top = `${rect.bottom + 6}px`;
+      panel.style.left = 'auto';
+      panel.style.right = `${Math.max(0, window.innerWidth - rect.right)}px`;
     }
+
+    function close() {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const isOpen = !panel.hidden;
+      if (isOpen) {
+        close();
+      } else {
+        positionPanel();
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    };
+
+    panel.querySelectorAll('.toolbar-dropdown-item').forEach((item) => {
+      item.onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        close();
+        await onItemClick(item);
+      };
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!panel.hidden && !btn.contains(e.target) && !panel.contains(e.target)) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+
+    // Now that it's fixed-positioned, nothing keeps it glued to the
+    // button if the page (or the toolbar's own horizontal scroller)
+    // moves out from under it — a plain position:absolute panel would've
+    // followed automatically. Simplest fix: just close it, same as
+    // clicking outside.
+    window.addEventListener('scroll', () => { if (!panel.hidden) close(); }, true);
+    window.addEventListener('resize', () => { if (!panel.hidden) close(); });
+  }
+
+  // Wall detection is experimental — vector data is solid when the
+  // backend found it, but the pixel guesser especially can be noisy, so
+  // it's marked "BETA" and tucked into its own flask-icon dropdown rather
+  // than a full-size button. Grouped in with the rest of the measurement
+  // tools (see #betaToolsGroup in page.tsx, nested inside that same
+  // .toolbar-group pill) rather than off on its own. Never auto-run on
+  // load, only ever from picking an item here (see
+  // [[wall-detection-manual-trigger-pref]] in project memory).
+  function createDetectWallsMenu() {
+    const existing = $('detectWallsMenuBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('betaToolsGroup');
+    if (!group) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'toolbar-dropdown';
+
+    const btn = document.createElement('button');
+    btn.id = 'detectWallsMenuBtn';
+    btn.type = 'button';
+    btn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+    btn.title = 'Wall detection (beta) — experimental, accuracy varies. Uses vector wall data when available, otherwise guesses from the page image.';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2v6a2 2 0 0 0 .24.96l5.98 10.95A2 2 0 0 1 18.5 23h-13a2 2 0 0 1-1.74-2.99l5.98-10.95A2 2 0 0 0 10 8V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+      <span class="beta-badge">Beta</span>
+      <svg class="toolbar-dropdown-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    `;
+
+    const panel = document.createElement('div');
+    panel.id = 'detectWallsMenuPanel';
+    panel.className = 'toolbar-dropdown-panel';
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+    panel.innerHTML = `
+      <button type="button" class="toolbar-dropdown-item" data-detect="auto" role="menuitem">Detect walls</button>
+      <button type="button" class="toolbar-dropdown-item" data-detect="pixel" role="menuitem">Try pixel instead</button>
+      <div id="detectWallsMethodCaption" class="detect-walls-method-caption"></div>
+    `;
+
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    group.appendChild(wrap);
+    return btn;
+  }
+
+  // Downloads a PNG snapshot of the current page with detected/vector
+  // lines, measurements, and polygons drawn on top — plus a burned-in
+  // debug caption when wall detection has run for that page this session
+  // (see drawWallDetectDebugCaption). Not for end users: this is a
+  // debugging aid for eyeballing wall-detection accuracy page by page
+  // across iterations, same reasoning as createDetectWallsMenu above for
+  // why it's built here rather than in the React page's markup.
+  //
+  // A single dropdown next to Save rather than two separate buttons
+  // ("Export" / "Lines Only") — a custom button + floating menu (see
+  // wireDropdownMenu above) instead of a native <select>, which can't be
+  // themed to match the rest of the toolbar and renders its option list
+  // with whatever the OS/browser feels like that day.
+  function createExportMenu() {
+    const existing = $('exportMenuBtn');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('saveToolsGroup');
+    if (!group) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'toolbar-dropdown';
+
+    const btn = document.createElement('button');
+    btn.id = 'exportMenuBtn';
+    btn.type = 'button';
+    btn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
+    btn.title = 'Export this page as a PNG, for debugging';
+    btn.setAttribute('aria-label', 'Export');
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      <svg class="toolbar-dropdown-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    `;
+
+    const panel = document.createElement('div');
+    panel.id = 'exportMenuPanel';
+    panel.className = 'toolbar-dropdown-panel';
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+    panel.innerHTML = `
+      <button type="button" class="toolbar-dropdown-item" data-export="full" role="menuitem">Full page</button>
+      <button type="button" class="toolbar-dropdown-item" data-export="lines" role="menuitem">Lines only</button>
+    `;
+
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    group.appendChild(wrap);
+    return btn;
+  }
+
+  // Toggles the length/area labels ("17 ft", "42 sq") the overlay draws
+  // next to every line/shape — on by default, but they sit right on top
+  // of the linework, which gets in the way while actively tracing more
+  // lines nearby (worst with the live label that follows your cursor
+  // while dragging a new measurement). Off just stops drawing them; the
+  // underlying measurements/lines and their values are untouched, this is
+  // purely a display toggle (see CanvasOverlay.setShowLabels).
+  function createShowLabelsToggleBtn() {
+    const existing = $('showLabelsToggle');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('viewToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'showLabelsToggle';
+    btn.className = 'mini-btn active';
+    btn.textContent = 'Labels On';
+    btn.title = 'Show/hide the length and area labels drawn on lines and shapes';
+    group.appendChild(btn);
+    return btn;
+  }
+
+  // Cycles the background PDF page's opacity (Full -> Dim -> Off -> Full)
+  // so already-drawn lines/measurements are easier to see against a busy
+  // floor plan without leaving the page or losing your annotations -- the
+  // overlay canvas sits above pdfCanvas and is untouched by this, this is
+  // purely a display toggle on the source image, same spirit as
+  // createShowLabelsToggleBtn above.
+  function createDimBackgroundToggleBtn() {
+    const existing = $('dimBackgroundToggle');
+    if (existing) return existing;
+    const group = getInjectedToolGroup('viewToolsGroup');
+    if (!group) return null;
+    const btn = document.createElement('button');
+    btn.id = 'dimBackgroundToggle';
+    btn.className = 'mini-btn';
+    btn.textContent = DIM_BACKGROUND_STEPS[0].label;
+    btn.dataset.dimStep = '0';
+    btn.title = 'Dim or hide the floor plan behind your drawn lines, to see your work more clearly';
+    group.appendChild(btn);
     return btn;
   }
 
@@ -458,6 +785,11 @@ async function initApp(){
   };
 
   let zoomAnchor = null;
+
+  // Tracks whether the user has deliberately zoomed (buttons, wheel,
+  // pinch). Once true, the auto-fit-to-width resize handler below backs
+  // off instead of overriding a zoom level they chose on purpose.
+  let _userAdjustedZoom = false;
 
   // ======================================================
   // DRAG / PAN
@@ -498,7 +830,12 @@ async function initApp(){
       removeMeasurementFromActiveWallSection(measurement);
       updateMeasurementList();
       window.__saveAnnotations?.();
-    }
+    },
+    // Keeps the Single/Double sided toolbar toggle showing the *selected*
+    // measurement's own state (and acting on it) rather than always just
+    // the global default for new measurements — see
+    // _syncDoubleSideToggleToSelection.
+    onSelectionChanged: () => _syncDoubleSideToggleToSelection()
   });
 
   overlay.attach();
@@ -541,7 +878,10 @@ async function initApp(){
     console.log('[restore] annotations projectId=', projectId);
     highlightsStore.clearAll();
     let restoredAnnotations = false;
-    let hydratedVectors = false;
+    // Whether this response gave us an analysis payload to cache for the
+    // "Detect Walls" button to use on click — NOT whether anything got
+    // drawn (that's restoredAnnotations, for actual saved user shapes).
+    let cachedVectorAnalysis = false;
     try {
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/annotations`, { cache: 'no-store' });
       console.log('[restore] annotations response status=', res.status);
@@ -556,15 +896,16 @@ async function initApp(){
           restoreWallMeasurementSectionValues(data.wall_measurements);
         }
         if (data.vector_annotations || data.analysis) {
-          await hydrateDetectedWallsFromResult(data);
-          hydratedVectors = true;
+          cacheAnalysisResult(data);
+          cachedVectorAnalysis = true;
         }
-        if (restoredAnnotations || hydratedVectors) {
+        if (restoredAnnotations || cachedVectorAnalysis) {
           overlay.redraw();
           updateMeasurementList();
-          if (!hydratedVectors) {
+          if (!cachedVectorAnalysis) {
             await loadProjectFigureAnalysis(projectId);
           }
+          refreshWallDetectMethodCaption();
           return;
         }
       }
@@ -578,16 +919,18 @@ async function initApp(){
       highlightsStore.deserialize(json);
       overlay.redraw();
       updateMeasurementList();
-      if (!hydratedVectors) {
-        console.log('[restore] no vector hydration from annotations, loading figure analysis');
+      if (!cachedVectorAnalysis) {
+        console.log('[restore] no cached analysis from annotations, loading figure analysis');
         await loadProjectFigureAnalysis(projectId);
       }
+      refreshWallDetectMethodCaption();
       return;
     }
 
     await loadProjectFigureAnalysis(projectId);
     overlay.redraw();
     updateMeasurementList();
+    refreshWallDetectMethodCaption();
   };
 
   if (downloadPdfBtn) {
@@ -1660,10 +2003,10 @@ async function initApp(){
     container.querySelectorAll('[data-wall-measurement-button]').forEach((button) => {
       if (button.dataset.boundLabel === 'true') return;
       button.dataset.boundLabel = 'true';
-      button.addEventListener('dblclick', () => {
+      button.addEventListener('dblclick', async () => {
         const section = button.dataset.wallMeasurementLabel;
         if (!section) return;
-        const nextLabel = window.prompt('Edit section name', wallMeasurementSectionLabels[section] || '');
+        const nextLabel = await textPrompt({ title: 'Edit section name', defaultValue: wallMeasurementSectionLabels[section] || '' });
         if (nextLabel == null) return;
         const trimmedLabel = nextLabel.trim();
         wallMeasurementSectionLabels[section] = trimmedLabel || 'Untitled';
@@ -1858,10 +2201,15 @@ async function initApp(){
   }
 
   function coerceLineCoordinates(rawLine = {}, pageWidth = 0, pageHeight = 0) {
-    const x1 = Number(rawLine.x1 ?? rawLine.x ?? rawLine.startX ?? rawLine.start?.x ?? rawLine.pt1?.x ?? rawLine.points?.[0]?.x ?? 0);
-    const y1 = Number(rawLine.y1 ?? rawLine.y ?? rawLine.startY ?? rawLine.start?.y ?? rawLine.pt1?.y ?? rawLine.points?.[0]?.y ?? 0);
-    const x2 = Number(rawLine.x2 ?? rawLine.x ?? rawLine.endX ?? rawLine.end?.x ?? rawLine.pt2?.x ?? rawLine.points?.[1]?.x ?? rawLine.points?.[2]?.x ?? 0);
-    const y2 = Number(rawLine.y2 ?? rawLine.y ?? rawLine.endY ?? rawLine.end?.y ?? rawLine.pt2?.y ?? rawLine.points?.[1]?.y ?? rawLine.points?.[2]?.y ?? 0);
+    // start/end can arrive as {x,y} objects (most producers) or as [x,y]
+    // coordinate pairs -- that's what the vector backend's analyze_vector_text
+    // emits ({"start": [x,y], "end": [x,y]}). Without the array fallbacks
+    // here, rawLine.start?.x on an array is undefined and every line
+    // silently collapses to (0,0)-(0,0).
+    const x1 = Number(rawLine.x1 ?? rawLine.x ?? rawLine.startX ?? rawLine.start?.x ?? rawLine.start?.[0] ?? rawLine.pt1?.x ?? rawLine.points?.[0]?.x ?? 0);
+    const y1 = Number(rawLine.y1 ?? rawLine.y ?? rawLine.startY ?? rawLine.start?.y ?? rawLine.start?.[1] ?? rawLine.pt1?.y ?? rawLine.points?.[0]?.y ?? 0);
+    const x2 = Number(rawLine.x2 ?? rawLine.x ?? rawLine.endX ?? rawLine.end?.x ?? rawLine.end?.[0] ?? rawLine.pt2?.x ?? rawLine.points?.[1]?.x ?? rawLine.points?.[2]?.x ?? 0);
+    const y2 = Number(rawLine.y2 ?? rawLine.y ?? rawLine.endY ?? rawLine.end?.y ?? rawLine.end?.[1] ?? rawLine.pt2?.y ?? rawLine.points?.[1]?.y ?? rawLine.points?.[2]?.y ?? 0);
 
     const normalize = (value, dimension) => {
       if (!Number.isFinite(value)) return 0;
@@ -1878,48 +2226,359 @@ async function initApp(){
     };
   }
 
-  async function hydrateDetectedWallsFromResult(result) {
-    if (!result) return;
-    if (!pdfDoc) {
-      // PDF not loaded yet — save for later hydration after file open
-      try { window.__pendingVectorAnalysis = result; } catch (_) {}
-      return;
+  // Runs the offline wall-finder worker (lib/walls/wallWorker.js) against
+  // the current page. For a raw image upload there's only ever one
+  // resolution to work with, so it reads straight off pdfCanvas. For a PDF
+  // page, it deliberately re-renders at a fixed, higher resolution instead
+  // of reusing whatever's on screen: thin wall lines get anti-aliased into
+  // near-nothing at a small on-screen zoom (23%, say), which starves the
+  // detector before it even runs, independent of anything the algorithm
+  // itself is doing right or wrong.
+  const WALL_DETECT_TARGET_LONG_SIDE = 2200;
+
+  async function detectWallsFromImage() {
+    let worker;
+    const finish = () => {
+      try { worker?.terminate(); } catch (_) {}
+    };
+
+    try {
+      let width, height, imageData;
+
+      if (pdfDoc) {
+        const page = await pdfDoc.getPage(currentPage);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const longSide = Math.max(baseViewport.width, baseViewport.height);
+        const detectScale = Math.max(1, WALL_DETECT_TARGET_LONG_SIDE / longSide);
+        const vp = page.getViewport({ scale: detectScale });
+
+        const off = document.createElement('canvas');
+        off.width = Math.ceil(vp.width);
+        off.height = Math.ceil(vp.height);
+        await page.render({ canvasContext: off.getContext('2d'), viewport: vp }).promise;
+
+        width = off.width;
+        height = off.height;
+        imageData = off.getContext('2d').getImageData(0, 0, width, height);
+      } else {
+        width = pdfCanvas.width;
+        height = pdfCanvas.height;
+        if (!width || !height) return;
+        imageData = pdfCanvas.getContext('2d').getImageData(0, 0, width, height);
+      }
+
+      await new Promise((resolve) => {
+        try {
+          // ?v= below: the worker is fetched as its own file, separately
+          // from the ?v= cache-bust on simple-app.js itself. Bump this
+          // alongside changes to wallWorker.js or the browser can keep
+          // running an old cached copy indefinitely, same trap simple-app.js
+          // already needed ESTIMATOR_ASSET_VERSION for.
+          worker = new Worker(new URL('./lib/walls/wallWorker.js?v=11', import.meta.url), { type: 'module' });
+
+          worker.onmessage = (e) => {
+            const msg = e.data || {};
+            if (msg.type !== 'walls') return;
+
+            console.log('[wall-detect] result', {
+              segments: (msg.segments || []).length,
+              debug: msg.debug,
+              error: msg.error,
+            });
+            _wallDetectDebugByPage[currentPage || 1] = msg.debug || null;
+
+            try {
+              const segments = Array.isArray(msg.segments) ? msg.segments : [];
+              if (segments.length) {
+                const normalized = segments.map((seg) => coerceLineCoordinates(seg, width, height));
+                highlightsStore.setLines(currentPage || 1, normalized);
+                overlay.redraw();
+                updateVectorLineInfo();
+                updateMeasurementList();
+                toast(
+                  `Guessed ${normalized.length} wall${normalized.length === 1 ? '' : 's'} from the image — check them against the plan`,
+                  'info'
+                );
+              } else {
+                toast('No straight walls found automatically on this image — trace manually below', 'info');
+              }
+            } catch (err) {
+              console.warn('wall detection hydration failed', err);
+            } finally {
+              finish();
+              resolve();
+            }
+          };
+
+          worker.onerror = (err) => {
+            console.warn('wall detection worker failed', err);
+            finish();
+            resolve();
+          };
+
+          worker.postMessage(
+            { type: 'build', width, height, data: imageData.data.buffer },
+            [imageData.data.buffer]
+          );
+        } catch (err) {
+          console.warn('wall detection setup failed', err);
+          finish();
+          resolve();
+        }
+      });
+    } catch (err) {
+      console.warn('wall detection setup failed', err);
+      finish();
+    }
+  }
+
+  // Renders one page (the source PDF page, or the raw uploaded image when
+  // there's no pdfDoc) plus everything the overlay draws on top of it —
+  // detected/vector wall lines, measurements, polygons — flattened onto a
+  // single canvas. Doesn't touch renderPageWithAnnotationsToCanvas above:
+  // that one's PDF-only and shared by the multi-page PDF export flow, this
+  // is specifically for the single-page debug image below and needs to
+  // work for a plain image upload too, which has no PDF page to re-render.
+  //
+  // includeSource: false skips drawing the plan itself (PDF page / image)
+  // entirely and just fills a plain white background before the overlay —
+  // for comparing detected-line positions run to run without the floor
+  // plan underneath competing for attention or shifting focus/zoom between
+  // screenshots.
+  async function renderAnnotatedPageToCanvas(pageNum, { includeSource = true } = {}) {
+    let width, height;
+    if (pdfDoc) {
+      if (includeSource) {
+        const rendered = await renderPageWithAnnotationsToCanvas(pageNum);
+        return rendered ? rendered.exportCanvas : null;
+      }
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1 });
+      width = Math.ceil(viewport.width);
+      height = Math.ceil(viewport.height);
+    } else {
+      if (!pdfCanvas || !pdfCanvas.width || !pdfCanvas.height) return null;
+      width = pdfCanvas.width;
+      height = pdfCanvas.height;
+      if (includeSource) {
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = width;
+        exportCanvas.height = height;
+        const ctx = exportCanvas.getContext('2d');
+        ctx.drawImage(pdfCanvas, 0, 0);
+        overlay.renderToContext(ctx, { width, height });
+        return exportCanvas;
+      }
     }
 
+    // includeSource === false, either case above falls through to here —
+    // same overlay-state save/swap/restore dance renderPageWithAnnotationsToCanvas
+    // does, just against a blank canvas instead of a rendered page.
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = width;
+    exportCanvas.height = height;
+    const ctx = exportCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    const prevPage = overlay.currentPage;
+    const prevActive = overlay.active;
+    const prevMeasurePreview = overlay._measurePreview;
+    const prevIrregularPreview = overlay._irregularPreview;
+    const prevHoverPoly = overlay.hoverPoly;
+    overlay.currentPage = pageNum;
+    overlay.active = false;
+    overlay._measurePreview = null;
+    overlay._irregularPreview = null;
+    overlay.hoverPoly = null;
+
+    overlay.renderToContext(ctx, { width, height });
+
+    overlay.currentPage = prevPage;
+    overlay.active = prevActive;
+    overlay._measurePreview = prevMeasurePreview;
+    overlay._irregularPreview = prevIrregularPreview;
+    overlay.hoverPoly = prevHoverPoly;
+
+    return exportCanvas;
+  }
+
+  // Draws a small dark caption box in the top-left with the wall-detect
+  // worker's own debug stats — see the call site for why this rides along
+  // in the image itself instead of a separate file.
+  function drawWallDetectDebugCaption(ctx, canvasWidth, debug) {
+    const fs = debug.filterStats || {};
+    const lines = [
+      `Detect Walls debug — ${new Date().toLocaleString()}`,
+      `kept ${fs.kept ?? '?'}  ·  filtered: stub ${fs.stub ?? 0}, curved ${fs.notStraight ?? 0}, too short ${fs.tooShort ?? 0}, title block ${fs.excludedTitleBlock ?? 0}`,
+      `minLen ${debug.minLenPx ?? '?'}px  ·  threshold ${debug.binThreshold ?? '?'} (otsu ${debug.otsuThreshold ?? '?'})  ·  downsample ${debug.downsampleScale ?? '?'}x`,
+    ];
+
+    ctx.save();
+    ctx.font = '13px monospace';
+    const padding = 8;
+    const lineHeight = 17;
+    const boxWidth = Math.min(canvasWidth - 16, Math.max(...lines.map((l) => ctx.measureText(l).width)) + padding * 2);
+    const boxHeight = lines.length * lineHeight + padding * 2;
+
+    ctx.fillStyle = 'rgba(15,23,42,0.82)';
+    ctx.fillRect(8, 8, boxWidth, boxHeight);
+
+    ctx.fillStyle = '#f8fafc';
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 8 + padding, 8 + padding + lineHeight * (i + 0.8));
+    });
+    ctx.restore();
+  }
+
+  // Downloads a PNG of one page with detected walls (and any other
+  // annotations) drawn on top, for eyeballing wall-detection accuracy
+  // page by page — e.g. saving one before and one after a wallWorker.js
+  // change to compare side by side. PNG rather than JPEG: this is thin
+  // linework, and JPEG's lossy compression visibly blurs/ghosts thin lines
+  // in a way that defeats the point of a debugging image.
+  //
+  // includeSource: false leaves the floor plan out entirely (see
+  // renderAnnotatedPageToCanvas) — just the lines on white, for comparing
+  // detected-line positions between runs without the plan itself pulling
+  // focus or shifting between screenshots.
+  async function exportPageAnnotations(pageNum, { includeSource = true } = {}) {
+    const page = pageNum || currentPage || 1;
+    const canvas = await renderAnnotatedPageToCanvas(page, { includeSource });
+    if (!canvas) throw new Error('Nothing loaded to export for this page.');
+
+    // When "Detect Walls" has been run on this page this session, burn its
+    // own debug stats into a corner of the image — segment count, the
+    // thresholds it used, how many candidate runs got filtered and why.
+    // Point of the export is judging detection accuracy over time, and
+    // having those numbers travel with the image (not a separate file to
+    // keep matched up) makes a run-to-run comparison much easier to reason
+    // about than the picture alone.
+    const debug = _wallDetectDebugByPage[page];
+    if (debug) drawWallDetectDebugCaption(canvas.getContext('2d'), canvas.width, debug);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Failed to render the page image.');
+
+    const projectPart = activeProjectId ? `${activeProjectId}-` : '';
+    const suffix = includeSource ? '' : '-linesonly';
+    await downloadBlob(blob, `annotations-${projectPart}page${page}${suffix}-${Date.now()}.png`);
+    toast(`Exported page ${page} as an image${includeSource ? '' : ' (lines only)'}`, 'success');
+  }
+
+  function getVectorPageEntries(result) {
     const source = result.analysis || result.result || result;
     const pages = Array.isArray(source.pages)
       ? source.pages
       : source.pages || source.vector_annotations || source;
-    const pageEntries = Array.isArray(pages)
+    return Array.isArray(pages)
       ? pages.map((value, idx) => ({ page: idx + 1, data: value }))
       : Object.keys(pages || {}).map((key) => ({ page: Number(key), data: pages[key] }));
+  }
 
-    for (const entry of pageEntries) {
-      const pageNum = Number(entry.page || 1);
-      const pageData = entry.data || {};
-      const lines = getVectorPayloadLines(pageData);
-      if (!Array.isArray(lines) || !lines.length) continue;
+  // Pure extraction: given a raw analysis payload (backend /figures
+  // response) and a page number, returns that page's normalized wall lines
+  // (or [] if the backend found none for it / the page isn't in the
+  // payload). No side effects — doesn't touch highlightsStore or redraw.
+  // Split out of the old auto-hydrating hydrateDetectedWallsFromResult so
+  // the "Detect Walls" click handler (runWallDetection) can pull just the
+  // current page on demand instead of every page drawing itself the moment
+  // analysis arrives.
+  async function getVectorLinesForPage(result, pageNum) {
+    if (!result) return [];
+    const entry = getVectorPageEntries(result).find((e) => Number(e.page || 1) === Number(pageNum));
+    if (!entry) return [];
+    const pageData = entry.data || {};
+    const lines = getVectorPayloadLines(pageData);
+    if (!Array.isArray(lines) || !lines.length) return [];
 
-      const pageViewport = await pdfDoc.getPage(pageNum).then((page) => page.getViewport({ scale: zoom })).catch(() => null);
-      const pageWidth = pageViewport?.width || pdfCanvas?.width || 0;
-      const pageHeight = pageViewport?.height || pdfCanvas?.height || 0;
-      const normalized = lines.map((line, idx) => coerceLineCoordinates(line, pageWidth, pageHeight));
-      highlightsStore.setLines(pageNum, normalized);
-      console.log(`[vector] loaded ${normalized.length} wall lines for page ${pageNum}`);
+    // The backend's line coordinates are in the PDF's fixed native point
+    // space (page.rect, sent per-page as size_points) -- NOT the on-screen
+    // pdf.js viewport. Normalizing against a zoomed viewport instead
+    // scatters every line across the page depending on whatever zoom level
+    // happened to be active. size_points is the divisor the backend
+    // actually intends.
+    const [sizePointsWidth, sizePointsHeight] = Array.isArray(pageData.size_points) ? pageData.size_points : [];
+    let pageWidth = Number(sizePointsWidth) || 0;
+    let pageHeight = Number(sizePointsHeight) || 0;
+    if (!pageWidth || !pageHeight) {
+      // Fallback for payloads without size_points (e.g. non-vector
+      // producers). scale: 1 matches native point space -- scale: zoom
+      // here would reintroduce the same bug for this fallback path.
+      const pageViewport = pdfDoc
+        ? await pdfDoc.getPage(pageNum).then((page) => page.getViewport({ scale: 1 })).catch(() => null)
+        : null;
+      pageWidth = pageWidth || pageViewport?.width || pdfCanvas?.width || 0;
+      pageHeight = pageHeight || pageViewport?.height || pdfCanvas?.height || 0;
     }
+    return lines.map((line) => coerceLineCoordinates(line, pageWidth, pageHeight));
+  }
 
-    overlay.redraw();
-    updateVectorLineInfo();
-    updateMeasurementList();
+  // Analysis results (vector lines + page metadata) fetched automatically
+  // in the background are only ever cached here — NOT drawn. Populating
+  // highlightsStore with wall lines is entirely gated behind a
+  // "Detect Walls" click now (see runWallDetection); nothing should draw
+  // walls on a page just because analysis happened to finish loading. See
+  // [[wall-detection-manual-trigger-pref]] in project memory.
+  function cacheAnalysisResult(result) {
+    if (!result) return;
+    try { window.__lastFetchedAnalysis = result; } catch (_) {}
 
+    // Extracted-measurements text panel is a separate feature from wall
+    // line drawing (it lists dimension text, not canvas overlay lines), so
+    // it's fine for this to stay automatic — it already has its own
+    // fallback to window.__lastFetchedAnalysis when highlightsStore is
+    // empty, so it renders something useful even before any click.
     const extractedContainer = document.getElementById('extractedMeasurementsContainer');
     if (extractedContainer) {
       renderExtractedWallMeasurements(extractedContainer);
     }
-
     if (_pdfMetadataSummary) {
       renderExtractedMeasurements(_pdfMetadataSummary);
     }
+  }
+
+  // Per-page record of which method last produced the walls shown, purely
+  // for the caption next to the buttons — not persisted across reloads.
+  let _wallDetectMethodByPage = {};
+
+  function refreshWallDetectMethodCaption() {
+    if (!detectWallsMethodCaption) return;
+    const info = _wallDetectMethodByPage[currentPage || 1];
+    if (!info) { detectWallsMethodCaption.textContent = ''; return; }
+    const label = info.method === 'vector' ? 'Vector' : 'Pixel guess';
+    detectWallsMethodCaption.textContent = `${label}: ${info.count} wall${info.count === 1 ? '' : 's'}`;
+  }
+
+  // Orchestrates the Detect Walls (beta) dropdown: vector-first, pixel
+  // fallback — see [[wall-detection-manual-trigger-pref]]. forcePixel is
+  // set by the "Try pixel instead" menu item, which bypasses the vector
+  // lookup entirely so the two methods can be compared by eye even when
+  // vector data exists for the page.
+  async function runWallDetection({ forcePixel = false } = {}) {
+    const pageNum = currentPage || 1;
+    if (!forcePixel) {
+      const vectorLines = await getVectorLinesForPage(window.__lastFetchedAnalysis, pageNum);
+      if (vectorLines.length) {
+        highlightsStore.setLines(pageNum, vectorLines);
+        overlay.redraw();
+        updateVectorLineInfo();
+        updateMeasurementList();
+        _wallDetectMethodByPage[pageNum] = { method: 'vector', count: vectorLines.length };
+        refreshWallDetectMethodCaption();
+        toast(
+          `Loaded ${vectorLines.length} vector wall line${vectorLines.length === 1 ? '' : 's'} for this page`,
+          'info'
+        );
+        return;
+      }
+    }
+    // No vector data for this page (or pixel explicitly requested) — fall
+    // back to the pixel-based guesser. detectWallsFromImage already writes
+    // to highlightsStore, redraws, and toasts its own result.
+    await detectWallsFromImage();
+    _wallDetectMethodByPage[pageNum] = { method: 'pixel', count: (highlightsStore.getLines(pageNum) || []).length };
+    refreshWallDetectMethodCaption();
   }
 
   async function fetchProjectFigures(projectId, options = {}) {
@@ -1984,14 +2643,15 @@ async function initApp(){
       console.warn('[analysis] no figures returned');
       return null;
     }
-    // Persist last fetched analysis for debug/fallback rendering
-    try { window.__lastFetchedAnalysis = figures.analysis || figures.result || figures; } catch (_) {}
     window.__lastFetchedFigures = figures;
     const analysisPayload = figures.analysis || figures.result || figures;
     console.log('[analysis] fetched figures', figures?.status, summarizeAnalysis(analysisPayload), figures);
     if (analysisPayload) {
-      await hydrateDetectedWallsFromResult(analysisPayload);
+      // Caches for the "Detect Walls" button to use on click — does not
+      // draw anything. See cacheAnalysisResult.
+      cacheAnalysisResult(analysisPayload);
     }
+    refreshWallDetectMethodCaption();
     return figures;
   }
 
@@ -2208,24 +2868,22 @@ async function initApp(){
     containerEl.innerHTML = '';
 
     if (!visibleRows.length) {
-      containerEl.innerHTML = '<div style="font-size:13px;color:#6b7280;">No schedule data available yet.</div>';
+      containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:10px;">No schedule data available yet.</div>';
       return;
     }
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'overflow:auto;border:1px solid #e5e7eb;border-radius:8px;';
+    wrapper.className = 'sov-table-wrapper';
 
     const table = document.createElement('table');
-    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+    table.className = 'sov-table';
 
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
-    headRow.style.cssText = 'background:#f9fafb;';
     const columns = getSovColumns();
     columns.forEach((column) => {
       const th = document.createElement('th');
       th.textContent = column.label;
-      th.style.cssText = 'padding:8px 10px;text-align:left;border-bottom:1px solid #e5e7eb;color:#111827;white-space:nowrap;';
       headRow.appendChild(th);
     });
     thead.appendChild(headRow);
@@ -2238,23 +2896,23 @@ async function initApp(){
         switch (column.key) {
           case 'page':
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
+              <td>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <button type="button" class="mini-btn" data-delete-sov-row="${row.page}" style="padding:2px 6px;min-width:auto;font-size:11px;line-height:1;">×</button>
+                  <button type="button" class="mini-btn icon-btn danger" data-delete-sov-row="${row.page}" title="Delete row" aria-label="Delete row">${TRASH_ICON_SVG}</button>
                   <span>${escapeHtml(row.page)}</span>
                 </div>
               </td>
             `;
           case 'description':
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-                <input type="text" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              <td>
+                <input type="text" class="mini-input" value="${escapeHtml(row.description)}" data-sov-description="${row.page}" style="width:100%;" />
               </td>
             `;
           default:
             return `
-              <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;">
-                <input type="text" value="${escapeHtml(formatSovCurrency(row[column.key]))}" data-sov-amount="${row.page}" data-sov-key="${column.key}" style="width:110px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;color:#111827;background:white;" />
+              <td>
+                <input type="text" class="mini-input" value="${escapeHtml(formatSovCurrency(row[column.key]))}" data-sov-amount="${row.page}" data-sov-key="${column.key}" style="width:110px;" />
               </td>
             `;
         }
@@ -2312,22 +2970,25 @@ async function initApp(){
     containerEl.appendChild(wrapper);
   }
 
+  // NOTE: this no longer touches #sovCard's own display — that panel now
+  // lives inside #changeOrderSovTabCard (see page.tsx) and is shown/hidden
+  // solely by _setChangeOrderSovTab, same as #changeOrderCard. This just
+  // populates #sovTableContainer; if there's no project loaded it's
+  // cleared to empty (the tab card itself is hidden at that point anyway,
+  // by the same code that hides #estimatorTabCard).
   function renderSovCard() {
-    const card = document.getElementById('sovCard');
     const container = document.getElementById('sovTableContainer');
     const undoBtn = document.getElementById('undoSovRowBtn');
     const addBtn = document.getElementById('addSovRowBtn');
-    if (!card || !container) return;
+    if (!container) return;
 
     if (!pdfDoc || !_loadedProjectData) {
-      card.style.display = 'none';
       container.innerHTML = '';
       return;
     }
 
     const rows = getSovPageRows();
     const visibleRows = rows.filter((row) => hasVisibleSovRow(row));
-    card.style.display = 'block';
     container.innerHTML = '';
 
     if (undoBtn) {
@@ -2389,12 +3050,52 @@ async function initApp(){
   window.__openSovModal = openSovModal;
 
   let __renderSeq = 0;
+  // The pdf.js render task currently in flight, if any — lets a newer
+  // renderPage() call cancel a superseded one instead of letting it run
+  // to completion (expensive full-page rasterization) only to be thrown
+  // away by the __renderSeq check. See renderPage().
+  let _activeRenderTask = null;
 
   // ======================================================
   // OVERLAY ALIGNMENT
   // ======================================================
 
+  // Keeps panOffset from ever sliding the page far enough to expose blank
+  // container background on an edge it doesn't need to — the "weird
+  // bounding that shows up when I move around" bug. #pdfWrapper sits
+  // flex-centered in #pdfContainer at rest (panOffset 0,0); on either
+  // axis where the wrapper is no bigger than the container, there's
+  // nothing legitimate to pan into, so that axis is locked at 0. Where
+  // the wrapper IS bigger (zoomed in past the box, or just a page taller
+  // than the fixed 600px height), panning is capped at exactly the point
+  // where the wrapper's own edge reaches the container's edge — beyond
+  // that there's nothing left to reveal but blank, so the container stays
+  // fully covered by content the whole time it's able to be.
+  function clampPanOffset(offset){
+    if (!pdfContainer || !pdfWrapper) return offset;
+
+    const containerWidth = pdfContainer.clientWidth;
+    const containerHeight = pdfContainer.clientHeight;
+    const wrapperWidth = pdfWrapper.offsetWidth;
+    const wrapperHeight = pdfWrapper.offsetHeight;
+
+    const maxX = Math.max(0, (wrapperWidth - containerWidth) / 2);
+    const maxY = Math.max(0, (wrapperHeight - containerHeight) / 2);
+
+    return {
+      x: Math.min(maxX, Math.max(-maxX, offset.x)),
+      y: Math.min(maxY, Math.max(-maxY, offset.y))
+    };
+  }
+
   function syncOverlayTransform(){
+
+    // Mutate the shared panOffset itself (not just a local copy) so the
+    // next drag's delta math (dragStart = clientX - panOffset.x, etc.)
+    // starts from the clamped value — otherwise the first move after
+    // hitting a bound would jump by however far past it the raw drag had
+    // gone.
+    panOffset = clampPanOffset(panOffset);
 
     const overlayCanvas =
       pdfWrapper.querySelector('canvas:not(#pdfCanvas)');
@@ -2429,7 +3130,7 @@ async function initApp(){
     if (lines.length === 0) {
       vectorLineInfo.textContent = '';
     } else {
-      vectorLineInfo.textContent = `Vector lines: ${lines.length}`;
+      vectorLineInfo.textContent = `Vector: ${lines.length}`;
       vectorLineInfo.style.color = '#047857';
     }
   }
@@ -3098,6 +3799,16 @@ async function initApp(){
 
     const seq = ++__renderSeq;
 
+    // A render from an earlier zoom/pan/page-change step is still in
+    // flight — it's about to be superseded by this one anyway (see the
+    // seq check below), so cancel it now rather than let pdf.js finish
+    // rasterizing the whole page just to throw the result away. Standard
+    // pdf.js API; its promise rejects (RenderingCancelledException),
+    // caught where that render's own await is, below.
+    if (_activeRenderTask) {
+      try { _activeRenderTask.cancel(); } catch (err) {}
+    }
+
     const page = await pdfDoc.getPage(currentPage);
 
     const vp = page.getViewport({
@@ -3109,10 +3820,21 @@ async function initApp(){
     sc.width = vp.width;
     sc.height = vp.height;
 
-    await page.render({
+    const renderTask = page.render({
       canvasContext: sc.getContext('2d'),
       viewport: vp
-    }).promise;
+    });
+    _activeRenderTask = renderTask;
+
+    try {
+      await renderTask.promise;
+    } catch (err) {
+      // Cancelled by a newer renderPage() call above, or any other render
+      // failure — either way, nothing more to do with this pass.
+      if (_activeRenderTask === renderTask) _activeRenderTask = null;
+      return;
+    }
+    if (_activeRenderTask === renderTask) _activeRenderTask = null;
 
     if (seq !== __renderSeq) return;
 
@@ -3154,7 +3876,7 @@ async function initApp(){
 
     updateZoomLabel();
     // update page UI
-    if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${pdfDoc.numPages}`;
+    if (pageInfo) pageInfo.textContent = `${currentPage} of ${pdfDoc.numPages}`;
     if (prevPageBtn) {
       prevPageBtn.disabled = currentPage <= 1;
       prevPageBtn.style.display = pdfDoc.numPages > 1 ? 'inline-block' : 'none';
@@ -3170,7 +3892,9 @@ async function initApp(){
     restorePageAggregateOverrides(activeProjectId || sessionStorage.getItem('estimator_last_project_id') || 'default');
     updateVectorLineInfo();
     updateMeasurementList();
+    refreshWallDetectMethodCaption();
   }
+
 
   function getMeasurementPixelLength(measurement) {
     if (!measurement || measurement.area != null || !Array.isArray(measurement.pts) || !measurement.pts.length) return 0;
@@ -3296,7 +4020,12 @@ async function initApp(){
         // hide page nav since there's only one "page"
         document.getElementById('prevPageBtn').style.display = 'none';
         document.getElementById('nextPageBtn').style.display = 'none';
-        document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+        document.getElementById('pageInfo').textContent = '1 of 1';
+
+        // Scanned/photographed plans have no vector data to read, so wall
+        // guessing runs from the pixels instead, on demand via the button
+        // below, not automatically on every upload.
+        refreshWallDetectMethodCaption();
       } else {
         const ab = await file.arrayBuffer();
         const lib = window.pdfjsLib;
@@ -3305,18 +4034,9 @@ async function initApp(){
         measurementViewPage = 1;
         zoom = 1;
         panOffset = { x: 0, y: 0 };
+        _userAdjustedZoom = false;
         await renderPage();
         _pdfMetadataSummary = await extractPdfMetadataFromFile(file);
-
-        // If vector analysis arrived before the PDF was loaded, hydrate it now
-        try {
-          if (window.__pendingVectorAnalysis) {
-            await hydrateDetectedWallsFromResult(window.__pendingVectorAnalysis);
-            window.__pendingVectorAnalysis = null;
-          }
-        } catch (e) {
-          console.warn('pending vector hydration failed', e);
-        }
 
         renderExtractedMeasurements(_pdfMetadataSummary);
       }
@@ -3348,6 +4068,19 @@ async function initApp(){
 
         mainContent.classList.remove('hidden');
         overlay.resizeToMatchCanvas();
+
+        // Only now is #pdfContainer actually laid out (it was display:none
+        // a moment ago, so measuring it earlier would read 0). If the page
+        // is wider than the now-visible container — typical on a phone —
+        // zoom out to fit it instead of leaving it spilling off the edge.
+        if (pdfDoc) {
+          const fitZoom = await computeFitZoom(pdfDoc, currentPage);
+          if (fitZoom < zoom) {
+            zoom = fitZoom;
+            await renderPage();
+            overlay.resizeToMatchCanvas();
+          }
+        }
       }
 
       // collapse upload zone, show file name
@@ -3442,6 +4175,10 @@ async function initApp(){
     document.getElementById('editProjectForm').style.display = 'none';
     const tabCard = document.getElementById('estimatorTabCard');
     if (tabCard) tabCard.style.display = 'none';
+    const changeOrderSovTabCard = document.getElementById('changeOrderSovTabCard');
+    if (changeOrderSovTabCard) changeOrderSovTabCard.style.display = 'none';
+    const scopeCommentsTabCard = document.getElementById('scopeCommentsTabCard');
+    if (scopeCommentsTabCard) scopeCommentsTabCard.style.display = 'none';
   }
 
   function showEditProjectForm() {
@@ -4519,7 +5256,7 @@ async function initApp(){
       const totTax = taxBase * (taxPct / 100);
       const totFinal = taxBase + totTax;
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Labor`, totSubtotal],
         [`Materials`, materialsForSummary],
@@ -4713,11 +5450,15 @@ async function initApp(){
     }
   }
 
+  // Shared trash icon for the delete buttons below (change order, crew
+  // member, and — via renderSovTable — SOV row), same stroke-icon
+  // language as the toolbar instead of a raw "×"/"Delete" text button.
+  const TRASH_ICON_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
   function _renderChangeOrders() {
     const container = document.getElementById('changeOrdersContainer');
     if (!container) return;
     container.innerHTML = '';
-    const iStyle = 'border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;font-size:12px;outline:none;';
     const coRoleDefs = [
       { label: '+ Cleaner', role: 'cleaner', rate: 42, color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
       { label: '+ Foreman', role: 'foreman', rate: 47, color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
@@ -4735,39 +5476,44 @@ async function initApp(){
     if (_changeOrders.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = 'No change orders yet. Click "+ Add" to create one.';
-      empty.style.cssText = 'padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:8px;';
+      empty.style.cssText = 'padding:20px;text-align:center;color:#9ca3af;font-size:12px;border:1px dashed #e5e7eb;border-radius:10px;';
       container.appendChild(empty);
       return;
     }
 
     _changeOrders.forEach((co, idx) => {
       const section = document.createElement('div');
-      section.style.cssText = 'margin-bottom:16px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;';
+      section.className = 'co-section';
 
       // Header: name input + delete
       const hdr = document.createElement('div');
-      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #e5e7eb;';
+      hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#f9fafb;border-bottom:1px solid #eef1f5;';
       const nameLabel = document.createElement('span');
       nameLabel.textContent = 'Name:';
-      nameLabel.style.cssText = 'font-size:12px;color:#6b7280;font-weight:500;margin-right:6px;white-space:nowrap;';
+      nameLabel.style.cssText = 'font-size:12px;color:#6b7280;font-weight:500;white-space:nowrap;';
       const nameInp = document.createElement('input');
       nameInp.type = 'text'; nameInp.value = co.name || `Change Order ${idx + 1}`; nameInp.placeholder = 'Change Order Name';
-      nameInp.style.cssText = 'font-weight:600;font-size:13px;color:#374151;border:1px solid #d1d5db;background:white;outline:none;flex:1;min-width:0;padding:3px 8px;border-radius:4px;';
+      nameInp.className = 'mini-input';
+      nameInp.style.cssText = 'font-weight:600;flex:1;min-width:0;';
       nameInp.addEventListener('input', () => { co.name = nameInp.value; });
       const delCOBtn = document.createElement('button');
-      delCOBtn.type = 'button'; delCOBtn.textContent = 'Delete';
-      delCOBtn.style.cssText = 'padding:3px 8px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:11px;cursor:pointer;flex-shrink:0;margin-left:8px;';
+      delCOBtn.type = 'button';
+      delCOBtn.className = 'mini-btn icon-btn danger';
+      delCOBtn.title = 'Delete change order';
+      delCOBtn.setAttribute('aria-label', 'Delete change order');
+      delCOBtn.innerHTML = TRASH_ICON_SVG;
       delCOBtn.onclick = () => { _changeOrders.splice(idx, 1); _renderChangeOrders(); };
       hdr.appendChild(nameLabel); hdr.appendChild(nameInp); hdr.appendChild(delCOBtn);
       section.appendChild(hdr);
 
-      // Add role buttons
+      // Add role buttons — full-pill "chips", still color-coded per role
       const addRow = document.createElement('div');
-      addRow.style.cssText = 'display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;';
+      addRow.style.cssText = 'display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid #eef1f5;';
       coRoleDefs.forEach(({ label, role, rate, color, bg, border }) => {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.textContent = label;
-        btn.style.cssText = `padding:3px 10px;border:1px solid ${border};border-radius:4px;background:${bg};color:${color};font-size:11px;cursor:pointer;`;
+        btn.className = 'co-role-chip';
+        btn.style.cssText = `color:${color};background:${bg};border-color:${border};`;
         btn.onclick = () => { co.crew.push({ role, name: '', rate, hours: 8, days: 1, _uid: Math.random().toString(36).slice(2) }); _renderChangeOrders(); };
         addRow.appendChild(btn);
       });
@@ -4776,50 +5522,55 @@ async function initApp(){
       // Crew table
       if (co.crew.length > 0) {
         const table = document.createElement('table');
+        table.className = 'co-crew-table';
         table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const thead = table.createTHead(); const hrow = thead.insertRow();
         ['Role', 'Name', 'Rate', 'Hrs', 'Days', 'Pay', ''].forEach((h, hi) => {
           const th = document.createElement('th'); th.textContent = h;
-          th.style.cssText = `text-align:${hi >= 4 ? 'right' : 'left'};padding:5px 10px;color:#6b7280;font-weight:500;background:#fafafa;font-size:11px;border-bottom:1px solid #e5e7eb;`;
+          th.style.textAlign = hi >= 4 ? 'right' : 'left';
           hrow.appendChild(th);
         });
         const tbody = table.createTBody();
         co.crew.forEach(member => {
-          const tr = tbody.insertRow(); tr.style.cssText = 'border-top:1px solid #f3f4f6;';
-          const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:5px 10px;';
+          const tr = tbody.insertRow();
+          const roleTd = tr.insertCell(); roleTd.style.cssText = 'padding:6px 10px;';
           const badge = document.createElement('span');
           badge.textContent = roleLabels[member.role] || member.role;
-          badge.style.cssText = `padding:2px 7px;border-radius:10px;${roleStyles[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:500;`;
+          badge.style.cssText = `padding:3px 9px;border-radius:999px;${roleStyles[member.role] || 'background:#f3f4f6;color:#374151;'};font-size:11px;font-weight:600;`;
           roleTd.appendChild(badge);
-          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:4px 10px;';
+          const nameTd = tr.insertCell(); nameTd.style.cssText = 'padding:6px 10px;';
           const nameI = document.createElement('input'); nameI.type = 'text'; nameI.placeholder = 'Name'; nameI.value = member.name || '';
-          nameI.style.cssText = iStyle + 'width:100px;'; nameI.addEventListener('input', () => { member.name = nameI.value.trim(); });
+          nameI.className = 'mini-input'; nameI.style.width = '100px';
+          nameI.addEventListener('input', () => { member.name = nameI.value.trim(); });
           nameTd.appendChild(nameI);
-          const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:4px 10px;';
+          const rateTd = tr.insertCell(); rateTd.style.cssText = 'padding:6px 10px;';
           const rw = document.createElement('div'); rw.style.cssText = 'display:flex;align-items:center;gap:4px;';
           const rateI = document.createElement('input'); rateI.type = 'number'; rateI.min = '0'; rateI.step = '0.01'; rateI.value = member.rate;
-          rateI.style.cssText = iStyle + 'width:64px;';
+          rateI.className = 'mini-input'; rateI.style.width = '64px';
           rateI.addEventListener('input', () => { member.rate = parseFloat(rateI.value) || 0; _updateOneChangeOrderCalc(co); });
-          const rl = document.createElement('span'); rl.textContent = '$/hr'; rl.style.cssText = 'font-size:11px;color:#6b7280;';
+          const rl = document.createElement('span'); rl.textContent = '$/hr'; rl.style.cssText = 'font-size:11px;color:#9ca3af;';
           rw.appendChild(rateI); rw.appendChild(rl); rateTd.appendChild(rw);
-          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:4px 10px;';
+          const hoursTd = tr.insertCell(); hoursTd.style.cssText = 'padding:6px 10px;';
           const hw = document.createElement('div'); hw.style.cssText = 'display:flex;align-items:center;gap:4px;';
           const hoursI = document.createElement('input'); hoursI.type = 'number'; hoursI.min = '0'; hoursI.max = '24'; hoursI.step = '0.5'; hoursI.value = member.hours ?? 8;
-          hoursI.style.cssText = iStyle + 'width:44px;';
+          hoursI.className = 'mini-input'; hoursI.style.width = '44px';
           hoursI.addEventListener('input', () => { member.hours = parseFloat(hoursI.value) || 0; _updateOneChangeOrderCalc(co); });
-          const hl = document.createElement('span'); hl.textContent = 'hrs'; hl.style.cssText = 'font-size:11px;color:#6b7280;';
+          const hl = document.createElement('span'); hl.textContent = 'hrs'; hl.style.cssText = 'font-size:11px;color:#9ca3af;';
           hw.appendChild(hoursI); hw.appendChild(hl); hoursTd.appendChild(hw);
-          const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:4px 10px;text-align:right;';
+          const daysTd = tr.insertCell(); daysTd.style.cssText = 'padding:6px 10px;text-align:right;';
           const daysI = document.createElement('input'); daysI.type = 'number'; daysI.min = '0'; daysI.step = '0.5'; daysI.value = member.days;
-          daysI.style.cssText = iStyle + 'width:56px;';
+          daysI.className = 'mini-input'; daysI.style.width = '56px';
           daysI.addEventListener('input', () => { member.days = parseFloat(daysI.value) || 0; _updateOneChangeOrderCalc(co); });
           daysTd.appendChild(daysI);
           const payTd = tr.insertCell(); payTd.id = `co_pay_${member._uid}`;
-          payTd.style.cssText = 'padding:5px 10px;text-align:right;color:#374151;font-weight:500;white-space:nowrap;';
+          payTd.style.cssText = 'padding:6px 10px;text-align:right;color:#374151;font-weight:600;white-space:nowrap;';
           payTd.textContent = fmt$((member.rate || 0) * (member.hours ?? 8) * (member.days || 0));
-          const delTd = tr.insertCell(); delTd.style.cssText = 'padding:4px 8px;text-align:right;';
-          const delMBtn = document.createElement('button'); delMBtn.type = 'button'; delMBtn.textContent = '×';
-          delMBtn.style.cssText = 'padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:white;color:#ef4444;font-size:13px;cursor:pointer;';
+          const delTd = tr.insertCell(); delTd.style.cssText = 'padding:6px 8px;text-align:right;';
+          const delMBtn = document.createElement('button'); delMBtn.type = 'button';
+          delMBtn.className = 'mini-btn icon-btn danger';
+          delMBtn.title = 'Remove crew member';
+          delMBtn.setAttribute('aria-label', 'Remove crew member');
+          delMBtn.innerHTML = TRASH_ICON_SVG;
           delMBtn.onclick = () => { co.crew.splice(co.crew.indexOf(member), 1); _renderChangeOrders(); };
           delTd.appendChild(delMBtn);
         });
@@ -4833,7 +5584,7 @@ async function initApp(){
 
       // Bottom: materials inputs + summary
       const bottom = document.createElement('div');
-      bottom.style.cssText = 'padding:12px;background:#fafafa;border-top:1px solid #e5e7eb;';
+      bottom.style.cssText = 'padding:12px;background:#fafbfc;border-top:1px solid #eef1f5;';
       const matRow = document.createElement('div'); matRow.style.cssText = 'display:flex;gap:16px;margin-bottom:10px;';
       const mkMat = (label, key) => {
         const wrap = document.createElement('div');
@@ -4841,7 +5592,7 @@ async function initApp(){
         lbl.style.cssText = 'display:block;font-size:10px;color:#6b7280;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;';
         const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.step = '0.01'; inp.placeholder = '0.00';
         inp.value = co[key] ?? ''; inp.id = `co_${co.id}_${key}`;
-        inp.style.cssText = 'width:120px;border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;outline:none;';
+        inp.className = 'mini-input'; inp.style.width = '120px';
         inp.addEventListener('input', () => { co[key] = parseFloat(inp.value) || 0; _updateOneChangeOrderCalc(co); });
         wrap.appendChild(lbl); wrap.appendChild(inp); return wrap;
       };
@@ -4873,7 +5624,24 @@ async function initApp(){
         materials: old.materials || 0, materials_gc: old.materials_gc || 0 }];
     }
     _renderChangeOrders();
-    card.style.display = '';
+    // Not this function's job to touch card.style.display — it's a tab
+    // panel now, and _setChangeOrderSovTab is the only thing that should
+    // set that (see its comment). This used to set it too; harmless since
+    // the one call site already runs right after _setChangeOrderSovTab
+    // sets the same panel visible, but redundant, so dropped.
+  }
+
+  // ======================================================
+  // MOBILE: SCROLLABLE TABLE WRAPPER
+  // ======================================================
+  // These phase/crew tables have a fixed set of nowrap columns, so on a
+  // narrow phone they'd otherwise squeeze/overlap. Wrap them so they
+  // scroll horizontally instead.
+  function _scrollX(el){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    wrap.appendChild(el);
+    return wrap;
   }
 
   function _renderPhaseTable() {
@@ -5025,7 +5793,7 @@ async function initApp(){
             delBtn.onclick = () => { const realIdx = _phaseCrews[pid].indexOf(member); if (realIdx !== -1) _phaseCrews[pid].splice(realIdx, 1); _renderPhaseTable(); };
             delTd.appendChild(delBtn);
           });
-          table.appendChild(tbody); body.appendChild(table);
+          table.appendChild(tbody); body.appendChild(_scrollX(table));
         }
         const footer = document.createElement('div');
         footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
@@ -5245,7 +6013,7 @@ async function initApp(){
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
-        section.appendChild(table);
+        section.appendChild(_scrollX(table));
       }
 
       const footer = document.createElement('div');
@@ -5385,7 +6153,7 @@ async function initApp(){
     if (summaryContainer) {
       summaryContainer.innerHTML = '';
       const grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;margin-top:8px;';
       [
         [`Labor`, totSubtotal],
         [`Materials`, materialsForPricing],
@@ -5717,7 +6485,7 @@ async function initApp(){
             delBtn.onclick = () => { const realIdx = _paintingPhaseCrews[pid].indexOf(member); if (realIdx !== -1) _paintingPhaseCrews[pid].splice(realIdx, 1); _renderPaintingPhaseTable(); };
             delTd.appendChild(delBtn);
           });
-          table.appendChild(tbody); body.appendChild(table);
+          table.appendChild(tbody); body.appendChild(_scrollX(table));
         }
         const footer = document.createElement('div');
         footer.style.cssText = 'display:flex;gap:16px;padding:6px 12px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;flex-wrap:wrap;';
@@ -5902,7 +6670,7 @@ async function initApp(){
           delTd.appendChild(delBtn);
         });
         table.appendChild(tbody);
-        section.appendChild(table);
+        section.appendChild(_scrollX(table));
       }
 
       const footer = document.createElement('div');
@@ -5972,6 +6740,51 @@ async function initApp(){
     if (tabAnalysis) tabAnalysis.className = activeTab === 'analysis' ? activeStyle : inactiveStyle;
     if (tabPainting) tabPainting.className = activeTab === 'painting' ? activeStyle : inactiveStyle;
 
+  }
+
+  // Mirrors _setEstimatorTab above, for the Change Orders / Schedule of
+  // Values tab card (see #changeOrderSovTabCard in page.tsx). This is the
+  // ONLY thing that should ever set #changeOrderCard/#sovCard's own
+  // display now that they're tab panels rather than independent cards —
+  // renderSovCard/showChangeOrderCard just populate content and leave
+  // display alone, same as showAnalysisCard/showPaintingCard already do
+  // for their panels.
+  function _setChangeOrderSovTab(activeTab) {
+    const coPanel  = document.getElementById('changeOrderCard');
+    const sovPanel = document.getElementById('sovCard');
+    const tabCO    = document.getElementById('tabChangeOrdersBtn');
+    const tabSov   = document.getElementById('tabSovBtn');
+    if (!coPanel || !sovPanel) return;
+
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
+
+    coPanel.style.display  = activeTab === 'changeOrders' ? 'block' : 'none';
+    sovPanel.style.display = activeTab === 'sov' ? 'block' : 'none';
+    if (tabCO) tabCO.className = activeTab === 'changeOrders' ? activeStyle : inactiveStyle;
+    if (tabSov) tabSov.className = activeTab === 'sov' ? activeStyle : inactiveStyle;
+  }
+
+  // Mirrors _setEstimatorTab/_setChangeOrderSovTab above, for the
+  // Scope/Comments tab card (see #scopeCommentsTabCard in page.tsx).
+  // Scope/Comments has no data of its own to (re)fetch on tab switch —
+  // the fields are just relocated pieces of the Cleaning/Painting forms,
+  // so switching tabs here is purely a display toggle, same as
+  // _setEstimatorTab.
+  function _setScopeCommentsTab(activeTab) {
+    const cleaningPanel = document.getElementById('scopeCommentsCleaningPanel');
+    const paintingPanel = document.getElementById('scopeCommentsPaintingPanel');
+    const tabCleaning    = document.getElementById('tabScopeCleaningBtn');
+    const tabPainting    = document.getElementById('tabScopePaintingBtn');
+    if (!cleaningPanel || !paintingPanel) return;
+
+    const activeStyle   = 'px-4 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 mr-2';
+    const inactiveStyle = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 mr-2';
+
+    cleaningPanel.style.display = activeTab === 'cleaning' ? 'block' : 'none';
+    paintingPanel.style.display = activeTab === 'painting' ? 'block' : 'none';
+    if (tabCleaning) tabCleaning.className = activeTab === 'cleaning' ? activeStyle : inactiveStyle;
+    if (tabPainting) tabPainting.className = activeTab === 'painting' ? activeStyle : inactiveStyle;
   }
 
   function _getAnalysisAreaValue(projData) {
@@ -6065,7 +6878,7 @@ async function initApp(){
             td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
-        breakdownDiv.appendChild(table);
+        breakdownDiv.appendChild(_scrollX(table));
 
         const totalPhaseMaterials = bd.phases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
         const savedMaterials = Number.isFinite(parseFloat(bd.materials)) ? parseFloat(bd.materials) : totalPhaseMaterials;
@@ -6078,7 +6891,7 @@ async function initApp(){
         const totTax = taxBase * ((bd.tax_pct || 0) / 100);
         const totFinal = taxBase + totTax;
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
@@ -6132,8 +6945,33 @@ async function initApp(){
     const tabCard = document.getElementById('estimatorTabCard');
     if (tabCard) tabCard.style.display = 'block';
     _setEstimatorTab('analysis');
+
+    const changeOrderSovTabCard = document.getElementById('changeOrderSovTabCard');
+    if (changeOrderSovTabCard) changeOrderSovTabCard.style.display = 'block';
+    _setChangeOrderSovTab('changeOrders');
     showChangeOrderCard(projData);
     renderSovCard();
+
+    const scopeCommentsTabCard = document.getElementById('scopeCommentsTabCard');
+    if (scopeCommentsTabCard) scopeCommentsTabCard.style.display = 'block';
+    _setScopeCommentsTab('cleaning');
+    // Scope/Comments now lives outside analysisEditForm, in its own
+    // always-visible section — so unlike before, it can't rely on
+    // showAnalysisEditForm's setVal calls to populate it, since that only
+    // runs once the user clicks into Cleaning's edit mode. Populate it
+    // here too, at load time, so it isn't just blank until then.
+    const cleaningScopeEl = document.getElementById('cleaningScopeInput');
+    if (cleaningScopeEl) cleaningScopeEl.value = projData.labor_breakdown?.scope ?? '';
+    const cleaningCommentsEl = document.getElementById('cleaningCommentsInput');
+    if (cleaningCommentsEl) cleaningCommentsEl.value = projData.labor_breakdown?.comments ?? '';
+    // Same reasoning for Painting's half of the section — showPaintingCard
+    // (which would otherwise set these) doesn't run until the user visits
+    // the Painting tab at least once, but this section is visible
+    // immediately, so populate its fields straight from projData here too.
+    const paintingScopeEl = document.getElementById('paintingScopeInput');
+    if (paintingScopeEl) paintingScopeEl.value = projData.painting_breakdown?.scope ?? '';
+    const paintingCommentsEl = document.getElementById('paintingCommentsInput');
+    if (paintingCommentsEl) paintingCommentsEl.value = projData.painting_breakdown?.comments ?? '';
   }
 
 
@@ -6248,7 +7086,7 @@ async function initApp(){
             td.style.cssText = `padding:5px 8px;text-align:${a};color:#374151;white-space:nowrap;`;
           });
         }
-        breakdownDiv.appendChild(table);
+        breakdownDiv.appendChild(_scrollX(table));
 
         const phaseMaterials = effectivePhases.reduce((sum, p) => sum + (parseFloat(p.materials) || 0), 0);
         const savedMaterials = Number.isFinite(parseFloat(bd?.materials))
@@ -6265,7 +7103,7 @@ async function initApp(){
           ? parseFloat(bd.final_price)
           : (bd?.phases ? taxBase + totTax : areaDerived?.finalSubtotal ?? (taxBase + totTax));
         const pricingDiv = document.createElement('div');
-        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
+        pricingDiv.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:12px;';
         [
           [`Labor`, subtotalWithDriver],
           [`Materials`, savedMaterials],
@@ -6431,7 +7269,7 @@ async function initApp(){
     const regenPhasesBtn = document.getElementById('regenPhasesBtn');
     if (regenPhasesBtn) regenPhasesBtn.onclick = () => {
       const area = parseFloat(document.getElementById('analysisTotalAreaInput')?.value) || 0;
-      if (!area) { alert('Please set Total Area first.'); return; }
+      if (!area) { toast('Please set Total Area first.', 'error'); return; }
       _autoGeneratePhases(area);
       _phasesLocked = true;
       _renderPhaseTable();
@@ -6629,6 +7467,7 @@ async function initApp(){
         _updateTransportCosts();
       });
     }
+    setVal('cleaningScopeInput', _loadedProjectData.labor_breakdown?.scope ?? '');
     setVal('cleaningCommentsInput', _loadedProjectData.labor_breakdown?.comments ?? '');
     _updateCrewCalcs();
 
@@ -6637,7 +7476,7 @@ async function initApp(){
     const taxZipLookupBtn = document.getElementById('taxZipLookupBtn');
     if (taxZipLookupBtn) taxZipLookupBtn.onclick = async () => {
       const zip = document.getElementById('taxZipInput')?.value?.trim();
-      if (!zip || zip.length !== 5) { alert('Enter a valid 5-digit ZIP'); return; }
+      if (!zip || zip.length !== 5) { toast('Enter a valid 5-digit ZIP', 'error'); return; }
       try {
         const r = await fetch(`${API_BASE}/api/projects/tax-rate?zip=${zip}`);
         const data = r.ok ? await r.json() : null;
@@ -6645,9 +7484,9 @@ async function initApp(){
           setVal('taxInput', parseFloat(data.combined_rate).toFixed(3));
           _updateCrewCalcs();
         } else {
-          alert('Could not find tax rate for this ZIP');
+          toast('Could not find tax rate for this ZIP', 'error');
         }
-      } catch { alert('Lookup failed'); }
+      } catch { toast('Lookup failed', 'error'); }
     };
 
     // Auto-fill tax rate from ZIP (TaxJar) or fallback to state hardcode
@@ -6718,6 +7557,32 @@ async function initApp(){
     }
   });
 
+  // Change Orders doesn't re-fetch on click (unlike Painting above) —
+  // it's already populated eagerly alongside Analysis (see
+  // showChangeOrderCard in showAnalysisCard), and re-running it here
+  // would stomp any in-progress edits made before hitting "Save All"
+  // with whatever was last saved. SOV re-renders on every visit since
+  // renderSovCard reads from live in-memory state rather than resetting
+  // it, so refreshing it is always safe and keeps it current.
+  document.getElementById('tabChangeOrdersBtn')?.addEventListener('click', () => _setChangeOrderSovTab('changeOrders'));
+  document.getElementById('tabSovBtn')?.addEventListener('click', () => {
+    _setChangeOrderSovTab('sov');
+    renderSovCard();
+  });
+
+  document.getElementById('tabScopeCleaningBtn')?.addEventListener('click', () => _setScopeCommentsTab('cleaning'));
+  document.getElementById('tabScopePaintingBtn')?.addEventListener('click', () => _setScopeCommentsTab('painting'));
+
+  // Scope/Comments' Save/Cancel just forward to that trade's real
+  // button (see the comment on #scopeCommentsTabCard in page.tsx for
+  // why) — #saveAnalysisBtn/#savePaintingBtn and their cancel
+  // counterparts already gather/reset every field for that trade by id,
+  // regardless of where in the DOM those fields actually render.
+  document.getElementById('scopeCleaningSaveBtn')?.addEventListener('click', () => document.getElementById('saveAnalysisBtn')?.click());
+  document.getElementById('scopeCleaningCancelBtn')?.addEventListener('click', () => document.getElementById('cancelAnalysisBtn')?.click());
+  document.getElementById('scopePaintingSaveBtn')?.addEventListener('click', () => document.getElementById('savePaintingBtn')?.click());
+  document.getElementById('scopePaintingCancelBtn')?.addEventListener('click', () => document.getElementById('cancelPaintingBtn')?.click());
+
 
   const editAnalysisBtn = document.getElementById('editAnalysisBtn');
   if (editAnalysisBtn) editAnalysisBtn.addEventListener('click', () => {
@@ -6749,6 +7614,7 @@ async function initApp(){
       setVal('paintingTollCostInput', bd.toll_cost ?? 0);
       setVal('paintingTotalAreaInput', bd.total_area ?? '');
       setVal('paintingAddressInput', bd.address ?? '');
+      setVal('paintingScopeInput', bd.scope ?? '');
       setVal('paintingCommentsInput', bd.comments ?? '');
       setVal('paintingBuildingTypeSelect', bd.building_type ?? 'Office / Commercial');
       setVal('paintingCoatsSelect', bd.paint_coats ?? 2);
@@ -6979,7 +7845,7 @@ async function initApp(){
   const paintingRegenPhasesBtn = document.getElementById('paintingRegenPhasesBtn');
   if (paintingRegenPhasesBtn) paintingRegenPhasesBtn.addEventListener('click', () => {
     const area = parseFloat(document.getElementById('paintingTotalAreaInput')?.value) || 0;
-    if (area <= 0) { alert('Enter a Total Area first'); return; }
+    if (area <= 0) { toast('Enter a Total Area first', 'error'); return; }
     _autoGeneratePaintingPhases(area);
     _paintingExpectedDaysManual = false;
     const derived = _getPaintingAreaDerivedValues(area);
@@ -7029,6 +7895,7 @@ async function initApp(){
     const materials = materialsInput && materialsInput.value !== ''
       ? (Number.isFinite(parseFloat(materialsInput.value)) ? parseFloat(materialsInput.value) : derived.materials)
       : derived.materials;
+    const scope = document.getElementById('paintingScopeInput')?.value?.trim() || '';
     const comments = document.getElementById('paintingCommentsInput')?.value?.trim() || '';
 
     const paintRates = _getPaintingRates();
@@ -7067,6 +7934,7 @@ async function initApp(){
       total_area: totalArea,
       expected_days: expectedDays,
       address,
+      scope,
       comments,
       primer_area_per_person: primerAreaPerPerson,
       interior_area_per_person: interiorAreaPerPerson,
@@ -7125,7 +7993,7 @@ async function initApp(){
       persistCostPerMileValue(costPerMile, activeProjectId, 'painting');
       showPaintingCard(_loadedProjectData);
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast('Save failed: ' + e.message, 'error');
     }
   });
 
@@ -7173,6 +8041,7 @@ async function initApp(){
       const totFinalPrice = taxBaseSave + totTaxSave;
 
       const pf = id => parseFloat(document.getElementById(id)?.value) || 0;
+      const scope = document.getElementById('cleaningScopeInput')?.value?.trim() || '';
       const comments = document.getElementById('cleaningCommentsInput')?.value?.trim() || '';
       const laborBreakdown = {
         cleaner_rate: rates.cleanerRate,
@@ -7186,6 +8055,7 @@ async function initApp(){
         building_type_multiplier: _getCleaningBuildingTypeMultiplier(buildingType),
         phases,
         change_orders: _changeOrders.map(co => ({ ...co })),
+        scope,
         comments,
       };
 
@@ -7306,8 +8176,32 @@ async function initApp(){
     return { x: 0, y: 0 };
   }
 
+  // On narrow (mobile) screens the container is often much narrower than a
+  // page rendered at its native scale, so start zoomed out just enough to
+  // show the whole page width instead of spilling off the edge. Desktop
+  // containers are already wide enough, so this never upscales past 100%.
+  async function computeFitZoom(doc, pageNum){
+    try {
+      if (!pdfContainer || !doc) return 1;
+      const page = await doc.getPage(pageNum);
+      const vp = page.getViewport({ scale: 1 });
+      const availableWidth = pdfContainer.clientWidth;
+      if (!availableWidth || !vp.width) return 1;
+      const fit = availableWidth / vp.width;
+      // No floor here (beyond a sane absolute minimum) — a full-size
+      // architectural sheet needs to shrink well past the 0.25 floor used
+      // for interactive pinch/wheel zoom (applyZoom) to actually fit a
+      // phone-width container. Never upscale past 100% though.
+      return Math.max(0.03, Math.min(1, fit));
+    } catch (err) {
+      return 1;
+    }
+  }
+
   async function applyZoom(nextZoom, anchor = null){
     if (!pdfDoc) return;
+
+    _userAdjustedZoom = true;
 
     const targetAnchor = getZoomAnchorPoint(anchor);
     const worldX = (targetAnchor.x - panOffset.x) / zoom;
@@ -7363,13 +8257,52 @@ async function initApp(){
     };
   }
 
+  wireDropdownMenu(detectWallsMenuBtn, $('detectWallsMenuPanel'), async (item) => {
+    if (detectWallsMenuBtn.disabled) return;
+    const forcePixel = item.dataset.detect === 'pixel';
+    detectWallsMenuBtn.disabled = true;
+    showGlobalLoading(forcePixel ? 'Guessing walls from image…' : 'Finding walls…');
+    try {
+      await runWallDetection({ forcePixel });
+    } finally {
+      hideGlobalLoading();
+      detectWallsMenuBtn.disabled = false;
+    }
+  });
+
+  wireDropdownMenu(exportMenuBtn, $('exportMenuPanel'), async (item) => {
+    if (exportMenuBtn.disabled) return;
+    const includeSource = item.dataset.export === 'full';
+    exportMenuBtn.disabled = true;
+    try {
+      await exportPageAnnotations(currentPage, { includeSource });
+    } catch (err) {
+      console.warn('export failed', err);
+      toast('Export failed', 'error');
+    } finally {
+      exportMenuBtn.disabled = false;
+    }
+  });
+
   // ======================================================
   // MOUSE WHEEL ZOOM
   // ======================================================
 
   if (pdfContainer){
 
-    pdfContainer.addEventListener('wheel', async (e)=>{
+    // A fast trackpad/mouse wheel can fire far more 'wheel' events per
+    // second than the (expensive — full PDF re-rasterization) zoom
+    // pipeline can keep up with, and unlike pinch-zoom below this had no
+    // throttling at all: every single tick used to kick off its own
+    // render immediately. Batches ticks to at most one applied zoom per
+    // animation frame instead — same net zoom amount for a given amount
+    // of scrolling (accumulated as a signed step count and applied in one
+    // shot), just far fewer actual re-renders during a fast scroll.
+    let wheelZoomStepsPending = 0;
+    let wheelRAFPending = false;
+    let pendingWheelAnchor = null;
+
+    pdfContainer.addEventListener('wheel', (e)=>{
 
       if (!pdfDoc) return;
 
@@ -7388,13 +8321,18 @@ async function initApp(){
       e.preventDefault();
 
       const rect = (pdfWrapper || pdfContainer)?.getBoundingClientRect();
-      const anchor = rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null;
+      if (rect) pendingWheelAnchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      wheelZoomStepsPending += e.deltaY < 0 ? 1 : -1;
 
-      if (e.deltaY < 0){
-        await zoomIn(anchor);
-      } else {
-        await zoomOut(anchor);
-      }
+      if (wheelRAFPending) return;
+      wheelRAFPending = true;
+      requestAnimationFrame(async () => {
+        wheelRAFPending = false;
+        const steps = wheelZoomStepsPending;
+        wheelZoomStepsPending = 0;
+        if (!steps) return;
+        await applyZoom(zoom + steps * 0.1, pendingWheelAnchor);
+      });
 
     }, { passive: false });
   }
@@ -7462,8 +8400,9 @@ async function initApp(){
         return;
       }
 
-      // do not start panning while measurement tools are active
-      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return;
+      // do not start panning while measurement tools (or the Select
+      // tool's box-select) are active
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect' || overlay.tool === 'select')) return;
 
       if (overlay && overlay._dragState) return;
 
@@ -7486,7 +8425,14 @@ async function initApp(){
 
     if (pdfContainer){
 
-      pdfContainer.style.cursor = 'grab';
+      // Don't blindly reset to 'grab' here -- this listener fires on every
+      // mouseup, including the one that ends drawing a measurement/rect
+      // line, not just the one that ends a pan. Stomping the cursor back
+      // to 'grab' unconditionally undid the crosshair the draw/measure
+      // toggle set, right after finishing the very first line (see
+      // isOn ? 'crosshair' : 'grab' below -- same condition, kept in sync).
+      const drawModeActive = overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect');
+      pdfContainer.style.cursor = drawModeActive ? 'crosshair' : 'grab';
     }
   });
 
@@ -7503,6 +8449,168 @@ async function initApp(){
 
     syncOverlayTransform();
   });
+
+  // ======================================================
+  // TOUCH: ONE-FINGER PAN + TWO-FINGER PINCH ZOOM
+  // ======================================================
+  // Mirrors the mouse pan/wheel-zoom behavior above so the PDF is
+  // navigable on phones and tablets, where there is no mouse.
+
+  if (pdfContainer){
+
+    let touchMode = null; // 'pan' | 'pinch'
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let pinchAnchor = { x: 0, y: 0 };
+    let pinchRAFPending = false;
+
+    const touchDistance = (t0, t1) =>
+      Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+
+    const touchMidpoint = (t0, t1) => {
+      const rect = (pdfWrapper || pdfContainer).getBoundingClientRect();
+      return {
+        x: (t0.clientX + t1.clientX) / 2 - rect.left,
+        y: (t0.clientY + t1.clientY) / 2 - rect.top
+      };
+    };
+
+    const shouldSkipTouch = (e) => {
+      if (e.target.closest('#toolbar') || e.target.closest('button')) return true;
+      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return true;
+      if (overlay && overlay._dragState) return true;
+      if (!pdfDoc) return true;
+      return false;
+    };
+
+    pdfContainer.addEventListener('touchstart', (e)=>{
+
+      if (shouldSkipTouch(e)) return;
+
+      if (e.touches.length === 1){
+
+        touchMode = 'pan';
+        isDragging = true;
+
+        const t = e.touches[0];
+        dragStart = {
+          x: t.clientX - panOffset.x,
+          y: t.clientY - panOffset.y
+        };
+
+      } else if (e.touches.length === 2){
+
+        e.preventDefault();
+
+        touchMode = 'pinch';
+        isDragging = false;
+
+        pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
+        pinchStartZoom = zoom;
+        pinchAnchor = touchMidpoint(e.touches[0], e.touches[1]);
+      }
+    }, { passive: false });
+
+    pdfContainer.addEventListener('touchmove', (e)=>{
+
+      if (!touchMode) return;
+      if (overlay && overlay._dragState) return;
+
+      if (touchMode === 'pan' && e.touches.length === 1){
+
+        e.preventDefault();
+
+        const t = e.touches[0];
+        panOffset.x = t.clientX - dragStart.x;
+        panOffset.y = t.clientY - dragStart.y;
+
+        syncOverlayTransform();
+
+      } else if (touchMode === 'pinch' && e.touches.length === 2){
+
+        e.preventDefault();
+
+        if (!pinchStartDist || pinchRAFPending) return;
+
+        const dist = touchDistance(e.touches[0], e.touches[1]);
+        const nextZoom = pinchStartZoom * (dist / pinchStartDist);
+
+        pinchRAFPending = true;
+        requestAnimationFrame(async ()=>{
+          pinchRAFPending = false;
+          await applyZoom(nextZoom, pinchAnchor);
+        });
+      }
+    }, { passive: false });
+
+    const endTouch = (e)=>{
+
+      if (e.touches.length === 0){
+
+        touchMode = null;
+        isDragging = false;
+        pdfContainer.style.cursor = 'grab';
+
+      } else if (e.touches.length === 1 && touchMode === 'pinch'){
+
+        // Lift one finger out of a pinch: keep panning with the other.
+        touchMode = 'pan';
+        isDragging = true;
+
+        const t = e.touches[0];
+        dragStart = {
+          x: t.clientX - panOffset.x,
+          y: t.clientY - panOffset.y
+        };
+      }
+    };
+
+    pdfContainer.addEventListener('touchend', endTouch);
+    pdfContainer.addEventListener('touchcancel', endTouch);
+  }
+
+  // ======================================================
+  // KEEP THE PAGE FIT TO ITS BOX WHEN THE BOX RESIZES
+  // ======================================================
+  // The initial fit-to-width in handleFile() only runs once, right when a
+  // file loads. If the box changes size afterward for any reason —
+  // rotating a phone, resizing the window, the "Measurements" sidebar
+  // opening (taking width away from #pdfPanel) or closing (giving it
+  // back) — the already-rendered page never re-fit. Watch the container
+  // itself (not just window resize) so any of those cases are covered.
+  // Re-fits in BOTH directions (shrink and grow) — it used to only ever
+  // shrink, which meant closing the Measurements sidebar freed up width
+  // that the page never grew back into, leaving a blank strip where the
+  // sidebar had been. Still never fights a zoom level the user picked on
+  // purpose (see _userAdjustedZoom).
+
+  if (pdfContainer && typeof ResizeObserver !== 'undefined'){
+
+    let fitResizeTimer = null;
+
+    const fitResizeObserver = new ResizeObserver(()=>{
+
+      if (!pdfDoc || _userAdjustedZoom) return;
+      if (mainContent && mainContent.classList.contains('hidden')) return;
+
+      clearTimeout(fitResizeTimer);
+
+      fitResizeTimer = setTimeout(async ()=>{
+
+        const fitZoom = await computeFitZoom(pdfDoc, currentPage);
+
+        // Small epsilon so trivial sub-pixel jitter doesn't re-render in a loop.
+        if (Math.abs(fitZoom - zoom) > 0.005){
+
+          zoom = fitZoom;
+          await renderPage();
+          overlay.resizeToMatchCanvas();
+        }
+      }, 150);
+    });
+
+    fitResizeObserver.observe(pdfContainer);
+  }
 
   // ======================================================
   // FILE INPUTS
@@ -7583,7 +8691,7 @@ async function initApp(){
       file.name
     );
 
-    if (!window.confirm(`Are you sure you want to upload "${file.name}"?`)) return;
+    if (!(await confirmDialog({ title: 'Upload file', message: `Are you sure you want to upload "${file.name}"?`, confirmLabel: 'Upload' }))) return;
 
     showGlobalLoading('Uploading file…');
     try {
@@ -7603,7 +8711,11 @@ async function initApp(){
         body: JSON.stringify({ name: projectName })
       });
       if (projectRes.status === 409) {
-        const openExisting = window.confirm(`A project named "${projectName}" already exists.\n\nWould you like to open the existing project?`);
+        const openExisting = await confirmDialog({
+          title: 'Project already exists',
+          message: `A project named "${projectName}" already exists.\n\nWould you like to open the existing project?`,
+          confirmLabel: 'Open existing',
+        });
         if (!openExisting) return;
         const listRes = await fetch(`${API_BASE}/api/projects`, { cache: 'no-store' });
         const listData = await listRes.json();
@@ -7685,7 +8797,10 @@ async function initApp(){
 
       try {
         if (analysis) {
-          await hydrateDetectedWallsFromResult(analysis);
+          // Caches for the "Detect Walls" button — doesn't draw anything;
+          // the just-uploaded PDF is loaded but no click has happened yet.
+          cacheAnalysisResult(analysis);
+          refreshWallDetectMethodCaption();
         }
       } catch (e) {
         console.warn('Failed to parse vector lines from backend result', e);
@@ -7776,6 +8891,7 @@ async function initApp(){
 
       if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
       if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+      if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
       if (pdfContainer) {
         pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
@@ -7792,6 +8908,7 @@ async function initApp(){
 
         if (measureToggle) measureToggle.classList.toggle('active', false);
         if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+        if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
         drawRectBtn.classList.toggle('active', isOn);
 
@@ -7811,11 +8928,35 @@ async function initApp(){
 
         if (measureToggle) measureToggle.classList.toggle('active', false);
         if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+        if (drawSelectBtn) drawSelectBtn.classList.toggle('active', false);
 
         drawIrregBtn.classList.toggle('active', isOn);
 
         overlay.setActive(isOn);
         overlay.setTool(isOn ? 'irregular' : 'area');
+
+        if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
+      };
+    }
+
+    // Select tool — box-select measurements (see the Select tool comments
+    // in CanvasOverlay.js). Mirrors the three tools above exactly: turns
+    // the others off, arms/disarms the overlay, same crosshair cursor.
+    if (drawSelectBtn) {
+      drawSelectBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isOn = !drawSelectBtn.classList.contains('active');
+
+        if (measureToggle) measureToggle.classList.toggle('active', false);
+        if (drawRectBtn) drawRectBtn.classList.toggle('active', false);
+        if (drawIrregBtn) drawIrregBtn.classList.toggle('active', false);
+
+        drawSelectBtn.classList.toggle('active', isOn);
+
+        overlay.setActive(isOn);
+        overlay.setTool(isOn ? 'select' : 'area');
 
         if (pdfContainer) pdfContainer.style.cursor = isOn ? 'crosshair' : 'grab';
       };
@@ -7832,10 +8973,13 @@ async function initApp(){
     }
 
   if (changeScaleBtn) {
-    changeScaleBtn.onclick = (e) => {
+    changeScaleBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const entry = window.prompt('Enter a real-world length (for example: "22 ft 10 in") or a scale expression (for example: "1/16 in = 1 ft").');
+      const entry = await textPrompt({
+        title: 'Change scale',
+        message: 'Enter a real-world length (for example: "22 ft 10 in") or a scale expression (for example: "1/16 in = 1 ft").',
+      });
       if (!entry || !entry.trim()) return;
 
       const measurements = highlightsStore.listMeasurements(currentPage) || [];
@@ -7856,14 +9000,72 @@ async function initApp(){
     };
   }
 
+  // Reflects whichever state is actually "in charge" of the button right
+  // now: the selected measurement(s)' own single/double-sided flag if
+  // anything's selected on canvas (one via a plain click, or several via
+  // the Select tool's box-select), otherwise the global default new
+  // measurements get created with. Called on click (after acting) and
+  // from onSelectionChanged (see createCanvasOverlay call) whenever
+  // selection changes, so selecting something else updates the button to
+  // match it.
+  function _syncDoubleSideToggleToSelection() {
+    if (!doubleSideToggle) return;
+    const selected = overlay.getSelectedLineMeasurements();
+    const isDouble = selected.length ? selected.every((m) => m.doubleSided) : overlay.doubleSided;
+    doubleSideToggle.classList.toggle('active', isDouble);
+    doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
+    doubleSideToggle.title = selected.length
+      ? (selected.length === 1
+        ? 'Toggle single/double-sided for the selected measurement'
+        : `Toggle single/double-sided for ${selected.length} selected measurements`)
+      : 'Toggle single/double-sided measurement';
+  }
+
   if (doubleSideToggle) {
     doubleSideToggle.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      // One or more measurements are selected on canvas — flip *their*
+      // flag instead of just the default for new ones. When they're not
+      // all in the same state, one click makes them all double-sided
+      // (matching everything to the "on" state, same as most bulk
+      // toggles) rather than leaving the mixed state ambiguous.
+      const selected = overlay.getSelectedLineMeasurements();
+      if (selected.length) {
+        const allDouble = selected.every((m) => m.doubleSided);
+        overlay.setSelectedMeasurementsDoubleSided(!allDouble);
+        _syncDoubleSideToggleToSelection();
+        return;
+      }
+
       const isDouble = !doubleSideToggle.classList.contains('active');
-      doubleSideToggle.classList.toggle('active', isDouble);
-      doubleSideToggle.textContent = isDouble ? 'Double sided' : 'Single sided';
       overlay.setDoubleSided(isDouble);
+      _syncDoubleSideToggleToSelection();
+    };
+  }
+
+  if (showLabelsToggle) {
+    showLabelsToggle.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const isOn = !showLabelsToggle.classList.contains('active');
+      showLabelsToggle.classList.toggle('active', isOn);
+      showLabelsToggle.textContent = isOn ? 'Labels On' : 'Labels Off';
+      overlay.setShowLabels(isOn);
+    };
+  }
+
+  if (dimBackgroundToggle && pdfCanvas) {
+    dimBackgroundToggle.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nextIndex = (Number(dimBackgroundToggle.dataset.dimStep || '0') + 1) % DIM_BACKGROUND_STEPS.length;
+      const step = DIM_BACKGROUND_STEPS[nextIndex];
+      dimBackgroundToggle.dataset.dimStep = String(nextIndex);
+      dimBackgroundToggle.textContent = step.label;
+      dimBackgroundToggle.classList.toggle('active', step.key !== 'full');
+      pdfCanvas.style.opacity = step.opacity;
     };
   }
 

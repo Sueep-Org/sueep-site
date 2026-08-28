@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConfirm, useToast } from "@/app/erp/components/ui";
 
 const STATUSES = [
   "APPLIED",
@@ -30,6 +31,8 @@ export type CandidateApplicationRow = {
 
 export function CandidateApplicationEditor({ initial }: { initial: CandidateApplicationRow }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [status, setStatus] = useState(initial.status);
   const [internalNotes, setInternalNotes] = useState(initial.internalNotes ?? "");
   const [paperwork, setPaperwork] = useState<PaperworkItem[]>(initial.paperwork ?? []);
@@ -60,14 +63,14 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
   }
 
   async function deletCandidate() {
-    if (!window.confirm("Delete this candidate? This cannot be undone.")) return;
+    if (!(await confirm({ message: "Delete this candidate? This cannot be undone." }))) return;
     setDeleting(true);
     setError(null);
     const res = await fetch(`/api/erp/candidates/${initial.id}`, { method: "DELETE" });
     setDeleting(false);
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(j.error || res.statusText);
+      toast(j.error || res.statusText, "error");
       return;
     }
     router.push("/erp/candidates");

@@ -6,6 +6,9 @@ import { CandidatePaperworkPanel } from "./CandidatePaperworkPanel";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { ContractSigningSection } from "@/app/erp/components/ContractSigningSection";
 import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
+import { SubcontractorInfoSection } from "./SubcontractorInfoSection";
+import { ConvertToContractorButton } from "./ConvertToContractorButton";
+import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,6 +35,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       paperworkUploadToken: true,
       paperworkUploadTokenExpiry: true,
       contracts: { orderBy: { createdAt: "asc" } },
+      contractor: { select: { id: true } },
     },
   });
   if (!row) notFound();
@@ -39,28 +43,71 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
 
   const responses = (row.responses ?? {}) as Record<string, string>;
-  const cleaningExp = responses.cleaningExperience;
-  const cleaningYears = responses.cleaningYears;
+  const location = responses.location;
+  // Experience has been recorded three different ways over time:
+  //  - Newest (applicants can check Cleaner and/or Painter): separate
+  //    cleaningExperience/cleaningYears and paintingExperience/paintingYears,
+  //    one pair per role actually checked.
+  //  - Middle era (a single active-role toggle, no multi-select): generic
+  //    experience/experienceYears meaning whichever single role
+  //    positionInterest says was selected — has to be labeled using
+  //    positionInterest, or a historical Painter's answer would misleadingly
+  //    show up under "Cleaning experience".
+  //  - Oldest (pre-role-choice, cleaning only): cleaningExperience/
+  //    cleaningYears, already compatible with the newest shape's names.
+  const hasNewShapeExperience = responses.cleaningExperience != null || responses.paintingExperience != null;
+  let cleaningExperience: string | undefined;
+  let cleaningExperienceYears: string | undefined;
+  let paintingExperience: string | undefined;
+  let paintingExperienceYears: string | undefined;
+  if (hasNewShapeExperience) {
+    cleaningExperience = responses.cleaningExperience;
+    cleaningExperienceYears = responses.cleaningYears;
+    paintingExperience = responses.paintingExperience;
+    paintingExperienceYears = responses.paintingYears;
+  } else if (row.positionInterest === "Painter") {
+    paintingExperience = responses.experience;
+    paintingExperienceYears = responses.experienceYears;
+  } else {
+    cleaningExperience = responses.experience;
+    cleaningExperienceYears = responses.experienceYears;
+  }
   const hasVehicle = responses.hasVehicle;
+  // Only asked of Supervisor applicants (they oversee both cleaning and
+  // painting crews), so these are undefined for Cleaner/Painter rows.
+  const supervisingYears = responses.supervisingYears;
+  const speaksEnglish = responses.speaksEnglish;
+  const speaksSpanish = responses.speaksSpanish;
+  const isSubcontractor = responses[SUBCONTRACTOR_GATE_FIELD] === "Yes";
 
-  const cleaningExpLabel =
-    cleaningExp === "yes"
-      ? `Yes${cleaningYears ? ` — ${cleaningYears} yr${Number(cleaningYears) !== 1 ? "s" : ""}` : ""}`
-      : cleaningExp === "no"
+  function formatExperience(exp: string | undefined, years: string | undefined): string {
+    return exp === "yes"
+      ? `Yes${years ? ` — ${years} yr${Number(years) !== 1 ? "s" : ""}` : ""}`
+      : exp === "no"
       ? "No"
       : "—";
+  }
+
+  function formatYesNo(val: string | undefined): string {
+    return val === "yes" ? "Yes" : val === "no" ? "No" : "—";
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
-          ← Candidates
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Applied{" "}
-          {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
+            ← Candidates
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Applied{" "}
+            {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
+          </p>
+        </div>
+        {/* Available regardless of how they answered the subcontractor
+            questionnaire gate question — staff can override manually. */}
+        <ConvertToContractorButton applicationId={row.id} existingContractorId={row.contractor?.id ?? null} />
       </div>
 
       <DetailTabs tabs={[
@@ -122,6 +169,10 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                   <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
                 </div>
                 <div>
+                  <dt className="text-pink-500">Location</dt>
+                  <dd className="mt-0.5 text-zinc-500">{location || "—"}</dd>
+                </div>
+                <div>
                   <dt className="text-pink-500">Position interest</dt>
                   <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "—"}</dd>
                 </div>
@@ -131,10 +182,50 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                     {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-pink-500">Cleaning experience</dt>
-                  <dd className="mt-0.5 text-zinc-500">{cleaningExpLabel}</dd>
-                </div>
+                {cleaningExperience !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Cleaning experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {formatExperience(cleaningExperience, cleaningExperienceYears)}
+                    </dd>
+                  </div>
+                )}
+                {paintingExperience !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Painting experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {formatExperience(paintingExperience, paintingExperienceYears)}
+                    </dd>
+                  </div>
+                )}
+                {cleaningExperience === undefined && paintingExperience === undefined && (
+                  <div>
+                    <dt className="text-pink-500">Experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">—</dd>
+                  </div>
+                )}
+                {supervisingYears !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Supervising experience</dt>
+                    <dd className="mt-0.5 text-zinc-500">
+                      {supervisingYears
+                        ? `${supervisingYears} yr${Number(supervisingYears) !== 1 ? "s" : ""}`
+                        : "—"}
+                    </dd>
+                  </div>
+                )}
+                {speaksEnglish !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Speaks English</dt>
+                    <dd className="mt-0.5 text-zinc-500">{formatYesNo(speaksEnglish)}</dd>
+                  </div>
+                )}
+                {speaksSpanish !== undefined && (
+                  <div>
+                    <dt className="text-pink-500">Speaks Spanish</dt>
+                    <dd className="mt-0.5 text-zinc-500">{formatYesNo(speaksSpanish)}</dd>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <dt className="text-pink-500">Additional comments</dt>
                   <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
@@ -144,6 +235,14 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             </>
           ),
         },
+        ...(isSubcontractor
+          ? [
+              {
+                label: "Subcontractor Info",
+                content: <SubcontractorInfoSection responses={responses} />,
+              },
+            ]
+          : []),
         {
           label: "Signing",
           content: (

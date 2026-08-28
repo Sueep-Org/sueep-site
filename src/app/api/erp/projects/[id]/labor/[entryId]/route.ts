@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
+import { syncSovPercentDone } from "@/lib/sovSync";
+import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
 
 type Ctx = { params: Promise<{ id: string; entryId: string }> };
 
@@ -26,11 +28,43 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!name) return NextResponse.json({ error: "workerName is required" }, { status: 400 });
     data.workerName = name;
   }
+  if (body.employeeId !== undefined) {
+    const empId = body.employeeId ? String(body.employeeId).trim() : "";
+    if (empId) {
+      const emp = await prisma.employee.findUnique({ where: { id: empId }, select: { id: true } });
+      if (!emp) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      data.employeeId = empId;
+    } else {
+      data.employeeId = null;
+    }
+  }
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() || null : null;
   if (body.hours !== undefined) {
     const h = Number(body.hours);
     if (!Number.isFinite(h) || h <= 0) return NextResponse.json({ error: "Invalid hours" }, { status: 400 });
     data.hours = h;
+  }
+  if (body.clockIn !== undefined) {
+    data.clockIn = typeof body.clockIn === "string" && /^\d{2}:\d{2}$/.test(body.clockIn) ? body.clockIn : null;
+  }
+  if (body.commuteHours !== undefined) {
+    if (body.commuteHours === null || body.commuteHours === "") {
+      data.commuteHours = null;
+    } else {
+      const c = Number(body.commuteHours);
+      const effectiveHours = body.hours !== undefined ? Number(body.hours) : existing.hours;
+      if (!Number.isFinite(c) || c < 0) return NextResponse.json({ error: "Invalid commuteHours" }, { status: 400 });
+      if (c > effectiveHours) return NextResponse.json({ error: "commuteHours cannot exceed hours" }, { status: 400 });
+      data.commuteHours = c;
+    }
+  }
+  if (body.transportationMethod !== undefined) {
+    const tm = body.transportationMethod ? String(body.transportationMethod).toUpperCase() : null;
+    if (!tm) return NextResponse.json({ error: "transportationMethod is required" }, { status: 400 });
+    if (!TRANSPORTATION_METHODS.includes(tm as (typeof TRANSPORTATION_METHODS)[number])) {
+      return NextResponse.json({ error: "Invalid transportationMethod" }, { status: 400 });
+    }
+    data.transportationMethod = tm;
   }
   if (body.hourlyRate !== undefined) {
     const rate = typeof body.hourlyRate === "string"
@@ -48,9 +82,34 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.qualityNotes !== undefined) {
     data.qualityNotes = body.qualityNotes ? String(body.qualityNotes).trim() || null : null;
   }
+  let sovItemIds: string[] | undefined;
+  if (body.sovItemIds !== undefined) {
+    sovItemIds = Array.isArray(body.sovItemIds)
+      ? [...new Set(body.sovItemIds.map((v) => String(v).trim()).filter(Boolean))]
+      : [];
+    if (sovItemIds.length > 0) {
+      const found = await prisma.projectSOVItem.findMany({ where: { id: { in: sovItemIds }, sov: { projectId: id } }, select: { id: true } });
+      if (found.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    }
+    data.sovItems = { set: sovItemIds.map((sovId) => ({ id: sovId })) };
+  }
 
   try {
-    const entry = await prisma.laborEntry.update({ where: { id: entryId }, data: data as object });
+    const entry = await prisma.laborEntry.update({
+      where: { id: entryId },
+      data: data as object,
+      include: { sovItems: { select: { id: true } }, employee: { select: { firstName: true, lastName: true } } },
+    });
+    if (sovItemIds !== undefined) {
+      const sovCompletedIds = new Set(
+        Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
+      );
+      const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
+      if (idsToComplete.length > 0) {
+        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
+      }
+      await syncSovPercentDone(id);
+    }
     return NextResponse.json(entry);
   } catch {
     return NextResponse.json({ error: "Update failed" }, { status: 500 });

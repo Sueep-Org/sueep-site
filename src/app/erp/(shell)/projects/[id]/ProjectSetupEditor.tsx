@@ -1,17 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 
 type PipelineOption = { id: string; label: string };
 type Employee = { id: string; firstName: string; lastName: string };
+type ErpSupervisor = { id: string; email: string; displayName: string };
 
 type Props = {
   projectId: string;
@@ -21,11 +21,12 @@ type Props = {
   isManual: boolean;
   pipelineOptions: PipelineOption[];
   supervisor: string | null;
+  supervisorUserId: string | null;
   employees: Employee[];
+  erpSupervisors: ErpSupervisor[];
   projectDateIso: string | null;
   projectEndDateIso: string | null;
-  description: string | null;
-  showServiceType: boolean;
+  hasActiveChangeOrder?: boolean;
 };
 
 function toInputDate(iso: string | null): string {
@@ -44,47 +45,68 @@ export function ProjectSetupEditor({
   isManual,
   pipelineOptions,
   supervisor,
+  supervisorUserId,
   employees,
+  erpSupervisors,
   projectDateIso,
   projectEndDateIso,
-  description,
-  showServiceType,
+  hasActiveChangeOrder = false,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const currentLifecycle = useMemo(() => deriveProjectLifecycle(status, projectDateIso), [status, projectDateIso]);
+  const currentLifecycle = useMemo(
+    () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder),
+    [status, projectDateIso, hasActiveChangeOrder]
+  );
   const [lifecycle, setLifecycle] = useState<ProjectLifecycle>(currentLifecycle);
   const [startDate, setStartDate] = useState(toInputDate(projectDateIso));
   const [endDate, setEndDate] = useState(toInputDate(projectEndDateIso));
 
-  // Supervisor
-  const employeeNames = employees.map((e) => `${e.firstName} ${e.lastName}`.trim());
-  const isKnownSupervisor = supervisor ? employeeNames.includes(supervisor) : false;
-  const [supervisorSelected, setSupervisorSelected] = useState(isKnownSupervisor ? (supervisor ?? "") : "__other__");
-  const [supervisorCustom, setSupervisorCustom] = useState(isKnownSupervisor ? "" : (supervisor ?? ""));
-
-  // Service type
-  const isKnownServiceType = description ? (SERVICE_TYPE_OPTIONS as readonly string[]).includes(description) : false;
-  const [serviceTypeSelected, setServiceTypeSelected] = useState(
-    description && isKnownServiceType ? description : description ? "__other__" : "",
+  // Supervisor — searchable combobox
+  // Dedupe by normalized name: duplicate Employee rows for the same person
+  // (e.g. two profiles created for the same hire) would otherwise show up
+  // as repeated entries in this list.
+  const employeeNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const e of employees) {
+      const name = `${e.firstName} ${e.lastName}`.trim();
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+    return names;
+  }, [employees]);
+  const [supervisorValue, setSupervisorValue] = useState(supervisor ?? "");
+  const [supervisorQuery, setSupervisorQuery] = useState(supervisor ?? "");
+  const [showSupervisorDropdown, setShowSupervisorDropdown] = useState(false);
+  const supervisorBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filteredEmployees = employeeNames.filter((name) =>
+    name.toLowerCase().includes(supervisorQuery.toLowerCase())
   );
-  const [serviceTypeCustom, setServiceTypeCustom] = useState(description && !isKnownServiceType ? description : "");
+
+  // ERP supervisor link
+  const [selectedSupervisorUserId, setSelectedSupervisorUserId] = useState(supervisorUserId ?? "");
+
 
   function handleLifecycleChange(next: ProjectLifecycle) {
     setLifecycle(next);
+    if (startDate) return;
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const current = startDate ? new Date(startDate) : null;
 
-    if (next === "UPCOMING") {
-      if (!current || current.getTime() <= today.getTime()) setStartDate(toIsoDate(tomorrow));
-    } else if (next === "ACTIVE") {
-      if (!current) setStartDate(toIsoDate(today));
-      else if (current.getTime() > today.getTime()) setStartDate(toIsoDate(today));
+    if (next === "COMPLETED") {
+      if (!endDate) setEndDate(toIsoDate(today));
+    } else if (next === "UPCOMING") {
+      setStartDate(toIsoDate(tomorrow));
+    } else {
+      setStartDate(toIsoDate(today));
     }
   }
 
@@ -95,41 +117,44 @@ export function ProjectSetupEditor({
     const fd = new FormData(e.currentTarget);
     const nextSegment = String(fd.get("segment") || segment);
     const nextPipelineId = isManual ? (String(fd.get("pipelineId") || "").trim() || null) : undefined;
-    const supervisorValue = supervisorSelected === "__other__" ? supervisorCustom.trim() : supervisorSelected;
-    if (!supervisorValue) { setError("Project Manager is required"); return; }
+    if (!supervisorValue.trim()) { setError("Project Manager is required"); return; }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const current = startDate ? new Date(startDate) : null;
 
-    let nextStatus = "ACTIVE";
+    // The dropdown only ever offers Upcoming/WIP/Completed — it can't
+    // represent ON_HOLD or ARCHIVED (currentLifecycle can be either, since
+    // deriveProjectLifecycle reports them distinctly even though there's no
+    // matching <option>). So status is only ever included in the payload
+    // when the user actually changed the dropdown; left untouched, a save
+    // here can no longer silently flip an ON_HOLD or ARCHIVED project into
+    // ACTIVE/COMPLETE just because some other field on the form changed.
+    const lifecycleChanged = lifecycle !== currentLifecycle;
+    const nextStatus = lifecycle === "COMPLETED" ? "COMPLETE" : "ACTIVE";
+    // An end date is required to mark a project complete — the day it was
+    // actually finished, not just whatever day someone happened to save
+    // this form (the completion-digest email groups by that date). The API
+    // enforces this too; checking here just avoids a round-trip.
+    if (lifecycleChanged && nextStatus === "COMPLETE" && !endDate) {
+      setError("End date is required to mark this project complete.");
+      return;
+    }
     let nextProjectDate: string | null = startDate || null;
-    if (lifecycle === "COMPLETED") {
-      nextStatus = "COMPLETE";
-    } else if (lifecycle === "UPCOMING") {
-      nextStatus = "ACTIVE";
-      if (!current || current.getTime() <= today.getTime()) nextProjectDate = toIsoDate(tomorrow);
-    } else {
-      nextStatus = "ACTIVE";
-      if (!current) nextProjectDate = toIsoDate(today);
-      else if (current.getTime() > today.getTime()) nextProjectDate = toIsoDate(today);
+    if (!nextProjectDate) {
+      nextProjectDate = lifecycle === "UPCOMING" ? toIsoDate(tomorrow) : toIsoDate(today);
     }
 
-    const serviceTypeValue = showServiceType
-      ? (serviceTypeSelected === "__other__" ? serviceTypeCustom.trim() : serviceTypeSelected) || null
-      : undefined;
-
     const payload: Record<string, unknown> = {
-      status: nextStatus,
       segment: nextSegment,
       projectDate: nextProjectDate,
       projectEndDate: endDate || null,
-      supervisor: supervisorValue,
+      supervisor: supervisorValue.trim(),
+      supervisorUserId: selectedSupervisorUserId || null,
     };
+    if (lifecycleChanged) payload.status = nextStatus;
     if (nextPipelineId !== undefined) payload.hubspotPipelineId = nextPipelineId;
-    if (serviceTypeValue !== undefined) payload.description = serviceTypeValue;
 
     setLoading(true);
     try {
@@ -171,7 +196,7 @@ export function ProjectSetupEditor({
           <div>
             <label className={label} htmlFor="ps-segment">Segment</label>
             <select id="ps-segment" name="segment" className={input} defaultValue={segment}>
-              {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+              {PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE" || segment === "REAL_ESTATE").map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
@@ -193,28 +218,62 @@ export function ProjectSetupEditor({
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Manager</h3>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={label} htmlFor="ps-pm">Project Manager</label>
-            <select id="ps-pm" className={input} value={supervisorSelected} onChange={(e) => setSupervisorSelected(e.target.value)}>
-              {employeeNames.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-              <option value="__other__">Other…</option>
-            </select>
-          </div>
-          {supervisorSelected === "__other__" && (
+          {erpSupervisors.length > 0 && (
             <div>
-              <label className={label} htmlFor="ps-pm-custom">Name</label>
-              <input
-                id="ps-pm-custom"
-                type="text"
+              <label className={label} htmlFor="ps-supervisor-user">Assigned Supervisor (ERP)</label>
+              <select
+                id="ps-supervisor-user"
                 className={input}
-                value={supervisorCustom}
-                onChange={(e) => setSupervisorCustom(e.target.value)}
-                placeholder="Full name"
-              />
+                value={selectedSupervisorUserId}
+                onChange={(e) => {
+                  setSelectedSupervisorUserId(e.target.value);
+                }}
+              >
+                <option value="">— Unassigned —</option>
+                {erpSupervisors.map((s) => (
+                  <option key={s.id} value={s.id}>{s.displayName} ({s.email})</option>
+                ))}
+              </select>
             </div>
           )}
+          <div className="relative">
+            <label className={label} htmlFor="ps-pm">Project Manager</label>
+            <input
+              id="ps-pm"
+              type="text"
+              className={input}
+              value={supervisorQuery}
+              placeholder="Search employees…"
+              autoComplete="off"
+              onChange={(e) => {
+                setSupervisorQuery(e.target.value);
+                setSupervisorValue(e.target.value);
+                setShowSupervisorDropdown(true);
+              }}
+              onFocus={() => setShowSupervisorDropdown(true)}
+              onBlur={() => {
+                supervisorBlurTimeout.current = setTimeout(() => setShowSupervisorDropdown(false), 150);
+              }}
+            />
+            {showSupervisorDropdown && filteredEmployees.length > 0 && (
+              <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg text-sm">
+                {filteredEmployees.map((name) => (
+                  <li
+                    key={name}
+                    className="cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700"
+                    onMouseDown={() => {
+                      if (supervisorBlurTimeout.current) clearTimeout(supervisorBlurTimeout.current);
+                      setSupervisorValue(name);
+                      setSupervisorQuery(name);
+                      setShowSupervisorDropdown(false);
+                    }}
+                  >
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 
@@ -232,7 +291,7 @@ export function ProjectSetupEditor({
             />
           </div>
           <div>
-            <label className={label} htmlFor="ps-end">Target end</label>
+            <label className={label} htmlFor="ps-end">End date</label>
             <input
               id="ps-end"
               type="date"
@@ -243,37 +302,6 @@ export function ProjectSetupEditor({
           </div>
         </div>
       </div>
-
-      {showServiceType && (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Work Type</h3>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={label} htmlFor="ps-st">Type</label>
-              <select id="ps-st" className={input} value={serviceTypeSelected} onChange={(e) => setServiceTypeSelected(e.target.value)}>
-                <option value="">— None —</option>
-                {SERVICE_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-                <option value="__other__">Other…</option>
-              </select>
-            </div>
-            {serviceTypeSelected === "__other__" && (
-              <div>
-                <label className={label} htmlFor="ps-st-custom">Custom</label>
-                <input
-                  id="ps-st-custom"
-                  type="text"
-                  className={input}
-                  value={serviceTypeCustom}
-                  onChange={(e) => setServiceTypeCustom(e.target.value)}
-                  placeholder="Describe the work"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
 

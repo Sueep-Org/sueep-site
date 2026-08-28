@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyErpJwtEdge } from "@/lib/erpSessionEdge";
 import { erpSessionCookieName } from "@/lib/erpSession";
+import { estimatorSessionCookieName } from "@/lib/estimatorSession";
 
 function isAppSubdomain(host: string): boolean {
   if (host === "app.sueep.com" || host.startsWith("app.sueep.com:")) return true;
@@ -52,6 +53,30 @@ export async function middleware(request: NextRequest) {
   const allowLoginApi = pathname === "/api/erp/auth/login" && request.method === "POST";
   // DocuSeal webhook — called by DocuSeal's servers, no ERP session cookie
   const allowDocusealWebhook = pathname === "/api/erp/webhooks/docuseal" && request.method === "POST";
+  const isEstimatorPath = logical === "/estimator" || logical.startsWith("/estimator/");
+  const isEstimatorApi = pathname === "/api/estimator" || pathname.startsWith("/api/estimator/");
+
+  if (isEstimatorPath || isEstimatorApi) {
+    // Allow static assets to pass through (e.g. /estimator/simple-app.js)
+    if (hasStaticExtension(pathname)) {
+      // do nothing; let static file serve
+    } else {
+      const isEstimatorPublicPath = logical === "/estimator/login" || logical === "/estimator/signup" || logical === "/estimator/forgot-password";
+      const isEstimatorAuthApi = pathname.startsWith("/api/estimator/auth/");
+      const needsEstimatorAuth = isEstimatorApi ? !isEstimatorAuthApi : !isEstimatorPublicPath;
+      if (needsEstimatorAuth) {
+        const token = request.cookies.get(estimatorSessionCookieName)?.value;
+        const secret = process.env.ESTIMATOR_SESSION_SECRET || "";
+        // Use the estimator edge verifier (not the ERP verifier)
+        const ok = token && secret ? await (await import("@/lib/estimatorSessionEdge")).verifyEstimatorJwtEdge(token, secret) : false;
+        if (!ok) {
+          if (isEstimatorApi) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+          return NextResponse.redirect(new URL("/estimator/login", request.url));
+        }
+      }
+    }
+  }
+
   const needsErpAuth =
     (logical.startsWith("/erp") && !logical.startsWith("/erp/login")) ||
     (pathname.startsWith("/api/erp/") && !allowLoginApi && !allowDocusealWebhook);
@@ -59,14 +84,25 @@ export async function middleware(request: NextRequest) {
   if (needsErpAuth) {
     const token = request.cookies.get(erpSessionCookieName)?.value;
     const secret = process.env.ERP_SESSION_SECRET || "";
-    const ok = token && secret ? await verifyErpJwtEdge(token, secret) : false;
-    if (!ok) {
+    const session = token && secret ? await verifyErpJwtEdge(token, secret) : null;
+    if (!session) {
       if (pathname.startsWith("/api/erp/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       const loginPath = isAppSubdomain(host) ? "/login" : "/erp/login";
       return NextResponse.redirect(new URL(loginPath, request.url));
     }
+
+    // Attach role/uid headers for server components and API routes
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-erp-role", session.role);
+    requestHeaders.set("x-erp-uid", session.uid);
+    requestHeaders.set("x-erp-email", session.email);
+
+    const rw = rewriteUrlIfNeeded(request);
+    const nextOpts = { request: { headers: requestHeaders } };
+    if (rw) return NextResponse.rewrite(rw, nextOpts);
+    return NextResponse.next(nextOpts);
   }
 
   const rw = rewriteUrlIfNeeded(request);

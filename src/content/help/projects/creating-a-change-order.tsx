@@ -1,4 +1,4 @@
-import { H2, P, Steps, Step, Img, SkipTo, A } from "@/app/erp/components/help/HelpComponents";
+import { H2, P, Steps, Step, Img, ImgPlaceholder, SkipTo, A } from "@/app/erp/components/help/HelpComponents";
 
 export function CreatingAChangeOrder() {
   return (
@@ -33,7 +33,7 @@ export function CreatingAChangeOrder() {
                 <Img src="/help/change_order/new_project_2.png" alt="New Projects form" />
                 Fill out your change order information
                 <Img src="/help/change_order/new_project_3.png" alt="Change Order form" />
-                Upon creation this is the email notification your chosen recipient (default Sergio and David) will get.
+                Upon creation this is the email notification your chosen recipient (default Sergio, David, and Nick) will get.
                 <Img src="/help/change_order/new_project_4.png" alt="Email" />
             </Step>
             </div>
@@ -61,18 +61,32 @@ export function CreatingAChangeOrder() {
 
 
             <Step n={6} title="Details Page Overview">
-                Below is an overview of the details tab. Click “Save Changes” after edits, otherwise nothing will save.
-                <Img src="/help/change_order/details_1.png" alt="Details Tab" />                
-                Billing tab
-                <Img src="/help/change_order/details_2.png" alt="Billing tab" />
-                Laborers tab
-                <Img src="/help/change_order/details_3.png" alt="laborers tab" />
+                Below is an overview of the details tab. Click &ldquo;Save changes&rdquo; after edits, otherwise nothing will save.
+                <Img src="/help/change_order/details_1.png" alt="Details tab" />
+                Once labor has been logged against it, a <strong>Mark complete</strong> button appears here, and the start date auto-sets to the first day labor was logged.
+                <br /><br />
+                Costs tab: this is where you update all estimated and actual costs. The actual cost of labor and materials is pulled from their corresponding logs.
+                <Img src="/help/change_order/details_1.5.png" alt="Costs tab" />
+                Laborers tab: where you add <A href="/erp/help/workers/labor-logs">labor entries</A>.
+                <Img src="/help/change_order/details_3.png" alt="Laborers tab" />
                 Laborers table
-                <Img src="/help/change_order/details_4.png" alt="labor table" />
-                Contracts tab: for more on contracts navigate to <A href="/erp/help/contracts/uploading-a-contract">Contract Signing</A> tutorial
-                <Img src="/help/change_order/details_5.png" alt="contracts tab" />
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
+                <Img src="/help/change_order/details_4.png" alt="Laborers table" />
+                Contractors tab: log contractors on the change order the same way you would on a project. See <A href="/erp/help/workers/logging-contractors">Assigning Contractors to Projects</A>.
+                <ImgPlaceholder label="Contractors tab on a change order" size="sm" />
+                Materials tab: this is where you update the <A href="/erp/help/projects/material-logs">material logs</A>.
+                <Img src="/help/change_order/details_4.5.png" alt="Materials tab" />
+                Safety Checklist tab: daily safety check history for the change order, same as a project&apos;s own Safety Checklist tab.
+                <br /><br />
+                Notify tab: email selected employees about this change order directly from here.
+                <br /><br />
+                Signing tab: for more on contracts, see the <A href="/erp/help/contracts/uploading-a-contract">Uploading a Contract</A> tutorial.
+                <Img src="/help/change_order/details_5.png" alt="Signing tab" />
+                <strong>That&apos;s all! For any more information check out the other help center articles or message the tech dev team!</strong>
+            </Step>
 
+            <Step n={7} title="Importing change orders from the Estimator">
+                Instead of creating a change order from scratch, you can pull one in from the AI Estimator tool. From a project&apos;s Change Orders tab, next to <strong>Start change order</strong>, click <strong>Import from Estimator</strong>, pick the estimate it came from, select which change orders to bring in, and import them.
+                <Img src="/help/change_order/details_6.png" alt="Signing tab" />
             </Step>
         </Steps>
     </>

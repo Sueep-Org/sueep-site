@@ -11,8 +11,7 @@ function collectAllDealStageIds(cfg: HubSpotPipelineStageMap): string[] {
     }
   };
   add(cfg.postConstruction.stages);
-  add(cfg.janitorial.stages);
-  add(cfg.residential.stages);
+  // Janitorial pipeline excluded — units are now managed via the external PM form, not HubSpot sync
   return [...ids];
 }
 
@@ -36,7 +35,7 @@ export async function searchDealsInConfiguredStages(
   const stageIds = collectAllDealStageIds(cfg);
   if (stageIds.length === 0) return [];
 
-  const baseProperties = ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed"];
+  const baseProperties = ["dealname", "amount", "pipeline", "dealstage", "closedate", "hs_is_closed", "hubspot_owner_id"];
   const properties = [...new Set([...baseProperties, ...extraProperties.filter(Boolean)])];
 
   const res = await hubspotFetch("/crm/v3/objects/deals/search", {
@@ -61,6 +60,56 @@ export async function searchDealsInConfiguredStages(
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`HubSpot search failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as { results?: HubSpotDealRecord[] };
+  return data.results ?? [];
+}
+
+/** The janitorial pipeline stages worth surfacing when creating a new
+ * building from a deal — from "Walkthrough" through "Signed", i.e. a deal
+ * that's live/in-flight but not yet turned into recurring work. Excludes
+ * early lead stages and "Not Awarded"/"Recurring Complete Turns". */
+function collectJanitorialBuildingSearchStageIds(cfg: HubSpotPipelineStageMap): string[] {
+  const s = cfg.janitorial.stages;
+  return [s.walkthrough, s.proposal, s.activeTurnovers, s.quoteApproved, s.workInProgress]
+    .map((id) => id?.trim())
+    .filter((id): id is string => Boolean(id));
+}
+
+/**
+ * Free-text search for janitorial-pipeline deals in Walkthrough/Proposal/
+ * Active Turnovers/Awarded/Signed — used when creating a new Building from
+ * the New Project wizard, so the building can be named + linked from the
+ * matching deal instead of typed in blind.
+ */
+export async function searchJanitorialDealsForBuildingCreation(query: string, limit = 10): Promise<HubSpotDealRecord[]> {
+  const cfg = parseHubSpotPipelineStageMap();
+  if (!cfg) {
+    throw new Error("HUBSPOT_PIPELINE_STAGE_MAP is not set");
+  }
+  const stageIds = collectJanitorialBuildingSearchStageIds(cfg);
+
+  const res = await hubspotFetch("/crm/v3/objects/deals/search", {
+    method: "POST",
+    body: JSON.stringify({
+      query,
+      filterGroups: [
+        {
+          filters: [
+            { propertyName: "pipeline", operator: "EQ", value: cfg.janitorial.pipelineId },
+            ...(stageIds.length > 0 ? [{ propertyName: "dealstage", operator: "IN", values: stageIds }] : []),
+          ],
+        },
+      ],
+      properties: ["dealname"],
+      limit,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HubSpot janitorial deal search failed: ${res.status} ${text}`);
   }
 
   const data = (await res.json()) as { results?: HubSpotDealRecord[] };

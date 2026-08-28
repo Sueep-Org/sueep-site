@@ -1,0 +1,382 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
+
+type Props = {
+  buildingId: string;
+  existingUnitNumbers?: string[];
+};
+
+const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+const LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
+};
+
+const checkboxRow = "flex items-center gap-2 text-sm text-gray-700";
+const checkboxInput = "h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500";
+const label = labelClass.default;
+const input = inputClass.md;
+
+/**
+ * Deliberately minimal next to UnitScopeEditor (the PM-facing Layout tab
+ * editor): no pricing package, no rate figures anywhere, no "Other work"
+ * dollar amount. Scope answers alone are enough — the building's existing
+ * pricing package prices the unit automatically once created.
+ */
+export function AddUnitForm({ buildingId, existingUnitNumbers = [] }: Props) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [unitNumber, setUnitNumber] = useState("");
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
+  const [isCommonArea, setIsCommonArea] = useState(false);
+  const [isPartialTurn, setIsPartialTurn] = useState(false);
+  const [partialTurnLayout, setPartialTurnLayout] = useState("");
+  const [bedrooms, setBedrooms] = useState("1");
+  const [bathrooms, setBathrooms] = useState("1");
+  const [sqft, setSqft] = useState("");
+  const [unitQuality, setUnitQuality] = useState("");
+  const [fullClean, setFullClean] = useState(false);
+  const [fullPaint, setFullPaint] = useState(false);
+  const [touchUpPaint, setTouchUpPaint] = useState(false);
+  const [carpetCleaning, setCarpetCleaning] = useState(false);
+  const [materialsAdditional, setMaterialsAdditional] = useState(false);
+  const [ceilingPaint, setCeilingPaint] = useState(false);
+  const [compounding, setCompounding] = useState(false);
+  const [otherWork, setOtherWork] = useState(false);
+  const [otherDescription, setOtherDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() {
+    setUnitNumber("");
+    setIsCommonArea(false);
+    setIsPartialTurn(false);
+    setPartialTurnLayout("");
+    setBedrooms("1");
+    setBathrooms("1");
+    setSqft("");
+    setUnitQuality("");
+    setFullClean(false);
+    setFullPaint(false);
+    setTouchUpPaint(false);
+    setCarpetCleaning(false);
+    setMaterialsAdditional(false);
+    setCeilingPaint(false);
+    setCompounding(false);
+    setOtherWork(false);
+    setOtherDescription("");
+    setStartDate("");
+    setError("");
+    setDuplicateWarning(false);
+  }
+
+  function isDuplicateUnitNumber(value: string) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return false;
+    return existingUnitNumbers.some((n) => n.trim().toLowerCase() === trimmed);
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    if (!startDate) {
+      setError("Start date is required.");
+      return;
+    }
+    if (!duplicateWarning && isDuplicateUnitNumber(unitNumber)) {
+      setDuplicateWarning(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/erp/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          segment: "JANITORIAL_TURNOVER_REQUESTS",
+          buildingId,
+          unitScopes: [
+            {
+              unitNumber: unitNumber.trim() || undefined,
+              isCommonArea,
+              isPartialTurn,
+              partialTurnLayout: isPartialTurn ? partialTurnLayout || null : null,
+              bedrooms: isCommonArea ? null : Number(bedrooms) || 1,
+              bathrooms: isCommonArea ? null : Number(bathrooms) || 1,
+              sqft: sqft.trim() ? Number(sqft) : null,
+              unitQuality: unitQuality || null,
+              fullClean,
+              fullPaint,
+              touchUpPaint,
+              carpetCleaning,
+              materialsAdditional,
+              ceilingPaint,
+              compounding,
+              otherWork,
+              otherDescription: otherWork ? otherDescription.trim() || null : null,
+              startDate,
+            },
+          ],
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error || "Failed to add unit");
+        return;
+      }
+      reset();
+      setOpen(false);
+      router.refresh();
+    } catch {
+      setError("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500"
+      >
+        + Add unit
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">New unit</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            reset();
+          }}
+          className="text-xs font-medium text-gray-500 hover:text-gray-700"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div>
+        <label className={label} htmlFor="au-unit-number">Unit identifier</label>
+        <input
+          id="au-unit-number"
+          type="text"
+          value={unitNumber}
+          onChange={(e) => {
+            setUnitNumber(e.target.value);
+            setDuplicateWarning(false);
+          }}
+          placeholder="e.g. 4B"
+          className={input}
+        />
+      </div>
+
+      {duplicateWarning ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <p>Unit &quot;{unitNumber.trim()}&quot; already exists on this building. Continue anyway?</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDuplicateWarning(false)}
+              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+            >
+              Continue anyway
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <label className={checkboxRow}>
+        <input
+          type="checkbox"
+          checked={isCommonArea}
+          onChange={(e) => {
+            setIsCommonArea(e.target.checked);
+            if (e.target.checked) {
+              setIsPartialTurn(false);
+              setPartialTurnLayout("");
+            }
+          }}
+          className={checkboxInput}
+        />
+        This is a common area, not a residential unit
+      </label>
+
+      {!isCommonArea && (
+        <label className={checkboxRow}>
+          <input
+            type="checkbox"
+            checked={isPartialTurn}
+            onChange={(e) => {
+              setIsPartialTurn(e.target.checked);
+              if (!e.target.checked) setPartialTurnLayout("");
+            }}
+            className={checkboxInput}
+          />
+          This is a partial turn
+        </label>
+      )}
+
+      {isPartialTurn && !isCommonArea && (
+        <div>
+          <label className={label} htmlFor="au-partial-layout">Price as</label>
+          <select
+            id="au-partial-layout"
+            value={partialTurnLayout}
+            onChange={(e) => setPartialTurnLayout(e.target.value)}
+            className={input}
+          >
+            <option value="">Select a layout...</option>
+            {PARTIAL_TURN_LAYOUT_OPTIONS.map((l) => (
+              <option key={l} value={l}>{LAYOUT_LABELS[l] ?? l}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {!isCommonArea && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={label} htmlFor="au-bedrooms">Bedrooms</label>
+            <input
+              id="au-bedrooms"
+              type="number"
+              min={0}
+              value={bedrooms}
+              onChange={(e) => setBedrooms(e.target.value)}
+              className={input}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="au-bathrooms">Bathrooms</label>
+            <input
+              id="au-bathrooms"
+              type="number"
+              min={0}
+              value={bathrooms}
+              onChange={(e) => setBathrooms(e.target.value)}
+              className={input}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={label} htmlFor="au-sqft">Square footage</label>
+          <input
+            id="au-sqft"
+            type="number"
+            min={0}
+            value={sqft}
+            onChange={(e) => setSqft(e.target.value)}
+            placeholder="Optional"
+            className={input}
+          />
+        </div>
+        <div>
+          <label className={label} htmlFor="au-quality">Unit condition</label>
+          <select id="au-quality" value={unitQuality} onChange={(e) => setUnitQuality(e.target.value)} className={input}>
+            <option value="">Not specified</option>
+            <option value="GOOD">Good</option>
+            <option value="FAIR">Fair</option>
+            <option value="POOR">Poor</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className={label} htmlFor="au-start-date">Start date</label>
+        <input
+          id="au-start-date"
+          type="date"
+          required
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className={input}
+        />
+      </div>
+
+      <div>
+        <p className={label}>Scope of work</p>
+        <div className="mt-1.5 space-y-1.5">
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={fullClean} onChange={(e) => setFullClean(e.target.checked)} className={checkboxInput} />
+            Full clean
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={fullPaint} onChange={(e) => setFullPaint(e.target.checked)} className={checkboxInput} />
+            Full paint
+          </label>
+          {!fullPaint && (
+            <label className={checkboxRow}>
+              <input type="checkbox" checked={touchUpPaint} onChange={(e) => setTouchUpPaint(e.target.checked)} className={checkboxInput} />
+              Touch-up paint
+            </label>
+          )}
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={carpetCleaning} onChange={(e) => setCarpetCleaning(e.target.checked)} className={checkboxInput} />
+            Carpet cleaning
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={materialsAdditional} onChange={(e) => setMaterialsAdditional(e.target.checked)} className={checkboxInput} />
+            Additional materials
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={ceilingPaint} onChange={(e) => setCeilingPaint(e.target.checked)} className={checkboxInput} />
+            Ceiling paint
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={compounding} onChange={(e) => setCompounding(e.target.checked)} className={checkboxInput} />
+            Compounding
+          </label>
+          <label className={checkboxRow}>
+            <input type="checkbox" checked={otherWork} onChange={(e) => setOtherWork(e.target.checked)} className={checkboxInput} />
+            Other work
+          </label>
+          {otherWork && (
+            <input
+              type="text"
+              value={otherDescription}
+              onChange={(e) => setOtherDescription(e.target.value)}
+              placeholder="Describe the other work needed"
+              className={input}
+            />
+          )}
+        </div>
+      </div>
+
+      {error ? <p className="text-xs text-red-500">{error}</p> : null}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+      >
+        {saving ? "Adding…" : "Add unit"}
+      </button>
+    </form>
+  );
+}

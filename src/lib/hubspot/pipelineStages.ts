@@ -1,13 +1,11 @@
 /**
- * Maps your three HubSpot deal pipelines + stages into ERP segment + lifecycle phase.
+ * Maps your HubSpot deal pipelines + stages into ERP segment + lifecycle phase.
  *
  * Pipelines:
- * - Post-construction + Janitorial → ERP segment COMMERCIAL
- * - Residential → ERP segment RESIDENTIAL
+ * - Post-construction + Janitorial → ERP segment COMMERCIAL_CLEANING
  *
  * Stages (your naming):
  * - Commercial: Quote approved = awarded, Work in progress, Work completed
- * - Residential: Confirmed (= awarded), WIP, Work completed
  * - Janitorial: Omit `workCompleted` (empty string) to sync only active stages (e.g. Awarded + Signed as WIP);
  *   deals that leave those stages are marked COMPLETE on the next sync.
  *
@@ -16,7 +14,7 @@
  * or inspect a deal’s `pipeline` / `dealstage` property values in the API.
  */
 
-export type ErpSegment = "COMMERCIAL" | "RESIDENTIAL";
+export type ErpSegment = "COMMERCIAL";
 
 /** Awarded/confirmed & WIP should appear on Schedule/Gantt; completed = done in ERP. */
 export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "OTHER";
@@ -24,10 +22,21 @@ export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "
 export type HubSpotPipelineStageMap = {
   /** Post-construction pipeline object id (string from HubSpot) */
   postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
-  /** Janitorial pipeline */
-  janitorial: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string } };
-  /** Residential pipeline — "Confirmed" plays the same role as commercial "Quote approved" */
-  residential: { pipelineId: string; stages: { confirmed: string; workInProgress: string; workCompleted: string } };
+  /** Janitorial pipeline. quoteApproved/workInProgress map to this
+   * pipeline's actual "Awarded"/"Signed" stages; walkthrough/proposal/
+   * activeTurnovers are additional stages surfaced only when searching for
+   * a deal to name/link a new Building from (see searchJanitorialDealsForBuildingCreation) — not used for Project sync. */
+  janitorial: {
+    pipelineId: string;
+    stages: {
+      quoteApproved: string;
+      workInProgress: string;
+      workCompleted: string;
+      walkthrough?: string;
+      proposal?: string;
+      activeTurnovers?: string;
+    };
+  };
 };
 
 export function parseHubSpotPipelineStageMap(): HubSpotPipelineStageMap | null {
@@ -43,7 +52,7 @@ export function parseHubSpotPipelineStageMap(): HubSpotPipelineStageMap | null {
 
 /**
  * Given a deal’s `pipeline` + `dealstage` ids, returns ERP segment and lifecycle phase.
- * Returns null if pipeline isn’t one of the three configured pipelines.
+ * Returns null if pipeline isn’t one of the configured pipelines.
  */
 export function classifyHubSpotDealStage(
   pipelineId: string | null | undefined,
@@ -57,14 +66,6 @@ export function classifyHubSpotDealStage(
     const c = configured?.trim();
     return Boolean(c) && dealStageId === c;
   };
-
-  if (pipelineId === cfg.residential.pipelineId) {
-    const { confirmed, workInProgress, workCompleted } = cfg.residential.stages;
-    if (matches(confirmed)) return { segment: "RESIDENTIAL", phase: "AWARDED" };
-    if (matches(workInProgress)) return { segment: "RESIDENTIAL", phase: "WIP" };
-    if (matches(workCompleted)) return { segment: "RESIDENTIAL", phase: "COMPLETED" };
-    return { segment: "RESIDENTIAL", phase: "OTHER" };
-  }
 
   if (pipelineId === cfg.postConstruction.pipelineId) {
     const { quoteApproved, workInProgress, workCompleted, billing } = cfg.postConstruction.stages;

@@ -1,73 +1,126 @@
-import { Callout, H2, H3, P, UL, LI, Steps, Step, Img, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, Steps, Step, Img, A } from "@/app/erp/components/help/HelpComponents";
 
 export function ProjectsOverview() {
-    return(
-        <>
-         <H2>Overview</H2>
-        <P>
-            This is an overview of the projects section of the ERP. We will go into detail on the projects table and filtering and projects details page.
-        </P>
-        <H2>Steps</H2>
-        <Steps>
-            <Step n={1} title="Projects Table">
-                The first thing under the projects tab is the projects table. This table mimics the table from the previous PM dashboard with all the same informational columns.
-                <Img src="/help/projects_overview/projects_overview_1.png" alt="Projects Table" />
-                At the top we can see 5 different tabs which filter the projects by their segment.
-                <Img src="/help/projects_overview/projects_overview_2.png" alt="Projects Table" />
-                On the top right we have a search bar where we can search projects by their names
-                <Img src="/help/projects_overview/projects_overview_3.png" alt="Projects Table" />
-                We also have a status selector which filters projects by their lifecycle. The text of the project name corresponds to its status. The colors and corresponding lifecycle are shown below.
-                <Img src="/help/projects_overview/projects_overview_4.png" alt="Projects Table" />
-                Clicking on a projects row will bring down a drop down of the projects labor logs. For more on labor logs visit that labor logs tutorial.
-                <br></br>
-                You will also see a projects change orders here and click on that brings down its corresponding labor logs.
-                <Img src="/help/projects_overview/projects_overview_5.png" alt="Projects Table" />
-            </Step>
-            <Step n={1} title="Projects Details">
-                When you click on the title of a project it will bring you to the project details page.
-                <br></br><br></br>
-                You will land on the <strong>Details</strong> tab. On this tab you can create and edit <strong>work orders </strong> 
-                which involve the projects name, address, start date, end date, service type, and main points of contact as well as any comments to the PM.
-                <Img src="/help/projects_overview/details_1.png" alt="Projects Table" />
-                Make sure after any edits you click save! You can then send work orders to employees in our system to inform them of projects and link them to the projects page. Please note if they do not have an ERP login they can only view the email.
-                <Img src="/help/projects_overview/details_2.png" alt="Projects Table" />
-                Next you can navigate to the <strong>Setup</strong> tab.
-                <br></br><br></br>
-                On this tab you can edit the projects lifecycle (upcoming, WIP, billing, and complete). You can also edit its segment, PM, start date, end date, and work type.
-                <br></br><br></br>
-                Make sure to save after any editing or it will not save!!
-                <Img src="/help/projects_overview/details_3.png" alt="Projects Table" />
-                Next you can navigate to the <strong>Money</strong> tab.
-                <br></br><br></br>
-                On this page you can edit contract value, the percent done, the percent invoiced, and the billing status.
-                <br></br><br></br>
-                You can also edit the estimated and actual costs on the project. The actual cost will be calculated based on the project labor logs and material costs.
-                <Img src="/help/projects_overview/details_4.png" alt="Projects Table" />
-                Next you can navigate to the <strong>Labor</strong> tab.
-                <br></br><br></br>
-                This is where you can log labor entries as well as view and sort your labor logs.
-                For more information on labor entries view the corresponding userflow tutorial.
-                <Img src="/help/projects_overview/details_5.png" alt="Projects Table" />
-                Next we can navigate to the <strong>Contractors</strong> tab.
-                <br></br><br></br>
-                Here we can log contractors registered in our system. They follow a similar logging process to laborers.
-                <Img src="/help/projects_overview/details_6.png" alt="Projects Table" />
-                Next we can navigate to the <strong>Materials</strong> tab.
-                <br></br><br></br>
-                Here we can log materials registered in our system. They follow a similar logging process to laborers.
-                <Img src="/help/projects_overview/details_7.png" alt="Projects Table" />
-                Next we can navigate to the <strong>Checklist</strong> tab.
-                <br></br><br></br>
-                Here we can add items to a daily checklist. 
-                <Callout type="warning">This feature is still a work in progress!!</Callout>
-                <Img src="/help/projects_overview/details_8.png" alt="Projects Table" />
-                Finally we can navigate to the <strong>Change Orders</strong> tab.
-                <br></br><br></br>
-                For more information on change orders view the <A href="/erp/help/projects/creating-a-change-order">change orders</A> tutorial page.
-                <br></br><br></br>
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
-            </Step>
-        </Steps>
-        </>
-    )
+  return (
+    <>
+      <H2>Overview</H2>
+      <P>
+        This is an overview of the Projects section of the ERP. It covers the projects table, its
+        filters, and the project details page, tab by tab.
+      </P>
+      <Steps>
+        <Step n={1} title="Projects table">
+          The first thing under Projects is the table listing every project.
+          <Img src="/help/projects_overview/projects_overview_1.png" alt="Projects table" />
+          At the top there are 5 tabs that filter the table by segment: All, Post-Const,
+          Janitorial, Real Estate, and Manual.
+          <Img src="/help/projects_overview/projects_overview_2.png" alt="Segment filter tabs" />
+          On the top right there&apos;s a search bar where you can search projects by name.
+          <Img src="/help/projects_overview/projects_overview_3.png" alt="Project search bar" />
+          There&apos;s also a status filter for a project&apos;s stage: Upcoming, WIP, Billing, or
+          Completed. A project&apos;s row is colored to match its current stage.
+          <Img src="/help/projects_overview/projects_overview_4.png" alt="Status filter" />
+          Clicking a project&apos;s row expands it to show its recent labor logs. See{" "}
+          <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A> for more. A project&apos;s
+          change orders expand the same way, showing their own labor logs.
+          <Img src="/help/projects_overview/projects_overview_5.png" alt="Expanded project row" />
+        </Step>
+
+        <Step n={2} title="Overview tab">
+          Clicking a project&apos;s title opens its details page, landing on the{" "}
+          <strong>Overview</strong> tab.
+          <Img src="/help/projects_overview/details_5.5.png" alt="Expanded project row" />
+          This tab combines what used to be two separate tabs. It has the project&apos;s work
+          order fields (name, address, service type, main points of contact, and any notes to the
+          PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed), segment, PM,
+          supervisor, and start/end dates.
+          <Callout type="warning">Remember to save after editing, either section.</Callout>
+          You can also send the work order to employees in the system from here, to notify them of
+          the project and link them to its page. If someone doesn&apos;t have an ERP login, they
+          can only view the email, not the linked page.
+        </Step>
+
+        <Step n={3} title="Layout tab (turnover units only)">
+          Projects tied to a janitorial turnover request get an extra <strong>Layout</strong> tab,
+          for editing the unit&apos;s scope of work, bedrooms, bathrooms, square footage, and which
+          services are included (clean, paint, carpet cleaning, and so on). This scope is what
+          drives the unit&apos;s price against the building&apos;s pricing package. Click{" "}
+          <strong>Save</strong> when you&apos;re done.
+          <Img src="/help/turnover/turnover_3.png" alt="Material Log" />
+          See <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A> for
+          more on how this scope feeds into pricing.
+        </Step>
+
+        <Step n={4} title="Financials tab">
+          Next is the <strong>Financials</strong> tab, where you can edit contract value, percent
+          done, percent invoiced, and billing status, plus estimated and actual costs. Actual labor
+          and material costs are calculated from the project&apos;s own logs rather than typed in
+          by hand.
+          <Img src="/help/projects_overview/financials.png" alt="Expanded project row" />
+          Below that is the project&apos;s <strong>Schedule of Values</strong>, a line-item
+          breakdown used to track what&apos;s been billed against the contract.
+        </Step>
+
+        <Step n={5} title="Labor, Contractors, and Materials tabs">
+          <UL>
+            <LI>
+              <strong>Labor:</strong> log labor entries, and view/sort existing ones. See{" "}
+              <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A> for the full
+              workflow, including the safety-check and quality-checklist rules that can block an
+              entry from being saved.
+            </LI>
+            <LI>
+              <strong>Contractors:</strong> log contractors registered in the system, following a
+              similar process to laborers. See{" "}
+              <A href="/erp/help/workers/logging-contractors">Assigning Contractors to
+              Projects</A>.
+            </LI>
+            <LI>
+              <strong>Materials:</strong> log materials bought for the project. See{" "}
+              <A href="/erp/help/projects/material-logs">Logging Materials</A>.
+            </LI>
+          </UL>
+        </Step>
+
+        <Step n={6} title="Checklist tab">
+          For janitorial turnover units, this tab is the unit&apos;s full quality checklist,
+          tracking what&apos;s been completed before the unit can be marked done. Other project
+          types get a simpler generic checklist.
+          <Img src="/help/turnover/turnover_4.png" alt="Material Log" />
+        </Step>
+
+        <Step n={7} title="Other tabs you may see">
+          Depending on the project&apos;s segment, a few more tabs can show up:
+          <UL>
+            <LI>
+              <strong>Pricing Package</strong> (turnover and real estate): the pricing terms tied
+              to the building or unit.
+            </LI>
+            <LI>
+              <strong>Safety Checklist</strong> (post-construction): daily safety check history for
+              the project.
+            </LI>
+            <LI>
+              <strong>Signing</strong>: upload and send the project&apos;s contract for
+              e-signature. See <A href="/erp/help/contracts/uploading-a-contract">Uploading a
+              Contract</A>.
+            </LI>
+            <LI>
+              <strong>Quality Checks</strong>: quality checks logged against this project, with
+              photo evidence and a supervisor signature. Every project type gets this tab{" "}
+              <strong>except</strong> janitorial turnover units, see{" "}
+              <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A> for
+              how quality checks work for those instead.
+            </LI>
+          </UL>
+        </Step>
+
+        <Step n={8} title="Change Orders tab">
+          Finally, the <strong>Change Orders</strong> tab lists change orders on the project. See{" "}
+          <A href="/erp/help/projects/creating-a-change-order">Creating a Change Order</A> for how
+          to create and manage them.
+        </Step>
+      </Steps>
+    </>
+  );
 }

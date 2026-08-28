@@ -42,6 +42,7 @@ export async function POST(req: Request) {
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
   const notes = body.notes != null ? String(body.notes).trim() : null;
+  const costCents = body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null;
 
   try {
     const assignment = await prisma.contractorAssignment.create({
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
         startDate,
         endDate,
         notes: notes || null,
+        costCents: costCents ?? null,
       },
     });
     return NextResponse.json(assignment);

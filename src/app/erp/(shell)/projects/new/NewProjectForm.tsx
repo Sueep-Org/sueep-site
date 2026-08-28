@@ -3,12 +3,21 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
-import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+// Real estate is no longer a segment new projects can be created under.
+// It's only still selectable on existing real-estate projects' own setup editor.
+const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
+import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
+import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
+
+const input = inputClass.md;
+const label = labelClass.default;
 
 const fallbackJobTitles = [
   "Blumberg Homes — 2323 Jefferson",
@@ -20,39 +29,28 @@ const fallbackJobTitles = [
 const checkboxLabel = "ml-2 text-sm text-gray-700";
 const sectionHeader = "text-sm font-semibold text-gray-900";
 
-const TOUCH_UP_PAINT_CENTS = 12500;
-const ADDITIONAL_MATERIALS_CENTS = 8500;
-const CARPET_WITH_CLEAN_CENTS = 8000;
-const PRICING_FIELD_LABELS = {
-  fullClean: "Full clean",
-  fullPaint: "Full paint",
-  touchUpPaint: "Touch-up paint",
-  additionalMaterials: "Additional materials",
-  carpetCleaning: "Carpet cleaning",
-} as const;
-const UNIT_FEATURE_OPTIONS = [
-  { value: "studio", label: "Studio", bedrooms: 0, bathrooms: 1 },
-  { value: "1/1", label: "1/1", bedrooms: 1, bathrooms: 1 },
-  { value: "2/1", label: "2/1", bedrooms: 2, bathrooms: 1 },
-  { value: "2/2", label: "2/2", bedrooms: 2, bathrooms: 2 },
-  { value: "3/2", label: "3/2", bedrooms: 3, bathrooms: 2 },
-  { value: "3/1", label: "3/1", bedrooms: 3, bathrooms: 1 },
-] as const;
+const BEDROOM_OPTIONS = ["Studio", "1", "2", "3", "4+"] as const;
+const BATHROOM_OPTIONS = ["1", "2", "3+"] as const;
+const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
+const PARTIAL_TURN_LAYOUT_LABELS: Record<string, string> = {
+  "studio": "Studio",
+  "1/1": "1BR/1BA",
+  "2/1": "2BR/1BA",
+  "2/2": "2BR/2BA",
+  "3/1": "3BR/1BA",
+  "3/2": "3BR/2BA",
+  "3/3": "3BR/3BA",
+};
 const UNIT_QUALITY_OPTIONS = [
-  "Vacant",
-  "Occupied",
-  "Light wear",
-  "Heavy dust",
-  "Needs trash-out",
-
-  
-  "Needs maintenance",
+  { value: "GOOD", label: "Good" },
+  { value: "FAIR", label: "Fair" },
+  { value: "POOR", label: "Poor" },
 ] as const;
 const BUILDING_ADDRESS_OPTIONS = [
   "751 Vandenburg Rd, King of Prussia, PA 19406 (Park Square)",
   "580 S Goddard Blvd, King of Prussia, PA 19406 (The Smith)",
   "140 Valley Green Ln, King of Prussia, PA 19406 (The George)",
-  "3000 Emily Lane Bulrington NJ 08016 (J Centra Burlington)",
+  "3000 Emily Lane Burlington NJ 08016 (J Centra Burlington)",
   "3029 W Glenwood Ave (Equinox)",
   "200 University Dr, Schuylkill Haven, PA, 17972 (Nittany Apartments)",
   "456 N. 5th Street, Philadelphia, PA 19123 (The Block at SONO)",
@@ -60,15 +58,9 @@ const BUILDING_ADDRESS_OPTIONS = [
 ] as const;
 const ADD_NEW_BUILDING_VALUE = "__add_new_building__";
 const ADD_NEW_ADDRESS_VALUE = "__add_new_address__";
-const GEOTRACKING_CHECK_MODE_OPTIONS = [
-  "Clock in and clock out",
-  "Clock in only",
-  "Continuous during scheduled shift",
-] as const;
 
-type UnitFeatureValue = (typeof UNIT_FEATURE_OPTIONS)[number]["value"];
-type PricingField = keyof typeof PRICING_FIELD_LABELS;
-type PricePackageValues = Record<PricingField, string>;
+type BedroomValue = (typeof BEDROOM_OPTIONS)[number];
+type BathroomValue = (typeof BATHROOM_OPTIONS)[number];
 type UnitScope = {
   id: string;
   unitNumber: string;
@@ -77,7 +69,13 @@ type UnitScope = {
   paintDate: string;
   cleanDate: string;
   moveOutDate: string;
-  features: UnitFeatureValue;
+  moveInDate: string;
+  bedrooms: BedroomValue;
+  bathrooms: BathroomValue;
+  isCommonArea: boolean;
+  isPartialTurn: boolean;
+  partialTurnLayout: string;
+  sqft: string;
   unitQuality: string;
   fullPaint: boolean;
   touchUpPaint: boolean;
@@ -85,6 +83,12 @@ type UnitScope = {
   materialsAdditional: boolean;
   fullClean: boolean;
   carpetCleaning: boolean;
+  compounding: boolean;
+  otherWork: boolean;
+  otherDescription: string;
+  otherPrice: string;
+  /** Covered by the building's flat monthly recurring contract — skips per-unit pricing-package pricing. */
+  recurringContractUnit: boolean;
 };
 
 function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(2)}`): UnitScope {
@@ -96,7 +100,13 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     paintDate: "",
     cleanDate: "",
     moveOutDate: "",
-    features: "1/1",
+    moveInDate: "",
+    bedrooms: "1",
+    bathrooms: "1",
+    isCommonArea: false,
+    isPartialTurn: false,
+    partialTurnLayout: "",
+    sqft: "",
     unitQuality: "",
     fullPaint: false,
     touchUpPaint: false,
@@ -104,6 +114,11 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     materialsAdditional: false,
     fullClean: false,
     carpetCleaning: false,
+    compounding: false,
+    otherWork: false,
+    otherDescription: "",
+    otherPrice: "",
+    recurringContractUnit: false,
   };
 }
 
@@ -114,14 +129,37 @@ function normalizeBeds(value?: number | null): 1 | 2 | 3 {
   return beds === 2 ? 2 : 1;
 }
 
+function bedroomsToNumber(value: BedroomValue): number {
+  if (value === "Studio") return 0;
+  if (value === "4+") return 4;
+  return Number(value) || 1;
+}
+
+function bathroomsToNumber(value: BathroomValue): number {
+  if (value === "3+") return 3;
+  return Number(value) || 1;
+}
+
+function describeUnit(unit: Pick<UnitScope, "isCommonArea" | "bedrooms" | "bathrooms" | "sqft">): string {
+  const base = unit.isCommonArea
+    ? "Common Area"
+    : unit.bedrooms === "Studio"
+      ? "Studio"
+      : `${unit.bedrooms} bed / ${unit.bathrooms} bath`;
+  return unit.sqft.trim() ? `${base}, ${unit.sqft.trim()} sq ft` : base;
+}
+
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     cents / 100
   );
 }
 
-function centsToDollarInput(cents: number) {
-  return (cents / 100).toFixed(2);
+/** computeTurnoverPricing's breakdown lines are "<description>: <$amount>" sentences — split for a two-column display instead of one run-on string. */
+function splitBreakdownLine(line: string): { text: string; amount: string | null } {
+  const idx = line.lastIndexOf(":");
+  if (idx === -1) return { text: line, amount: null };
+  return { text: line.slice(0, idx).trim(), amount: line.slice(idx + 1).trim() };
 }
 
 function dollarsToCents(value: string) {
@@ -131,18 +169,16 @@ function dollarsToCents(value: string) {
   return Math.round(parsed * 100);
 }
 
-function getUnitFeature(value: UnitFeatureValue) {
-  return UNIT_FEATURE_OPTIONS.find((option) => option.value === value) ?? UNIT_FEATURE_OPTIONS[0];
-}
+const UNIT_QUALITY_LABELS: Record<string, string> = { GOOD: "Good", FAIR: "Fair", POOR: "Poor" };
 
 function unitScopeSummary(unit: UnitScope) {
-  const feature = getUnitFeature(unit.features);
   const dateRange =
     unit.startDate || unit.endDate
       ? `, dates: ${unit.startDate || "TBD"} to ${unit.endDate || "TBD"}`
       : "";
   const scheduledDates = [
     unit.moveOutDate ? `move-out: ${unit.moveOutDate}` : null,
+    unit.moveInDate ? `move-in: ${unit.moveInDate}` : null,
     unit.paintDate ? `paint: ${unit.paintDate}` : null,
     unit.cleanDate ? `clean: ${unit.cleanDate}` : null,
   ].filter(Boolean);
@@ -153,11 +189,14 @@ function unitScopeSummary(unit: UnitScope) {
     unit.lightWallTouchUps ? "light wall touch-ups" : null,
     unit.materialsAdditional ? "additional materials" : null,
     unit.carpetCleaning ? "carpet cleaning" : null,
+    unit.compounding ? "compounding" : null,
+    unit.otherWork ? `other: ${unit.otherDescription.trim() || "unspecified"}` : null,
   ].filter(Boolean);
 
-  return `${unit.unitNumber || "Unit"} (${feature.label}${dateRange}${
+  const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : "Unit");
+  return `${unitLabel} (${describeUnit(unit)}${dateRange}${
     scheduledDates.length ? `, ${scheduledDates.join(", ")}` : ""
-  })${unit.unitQuality ? ` - ${unit.unitQuality}` : ""}: ${
+  })${unit.unitQuality ? ` - ${UNIT_QUALITY_LABELS[unit.unitQuality] ?? unit.unitQuality}` : ""}: ${
     services.length ? services.join(", ") : "no scope selected"
   }`;
 }
@@ -178,6 +217,13 @@ interface BuildingOption {
   pmName?: string | null;
   pmEmail?: string | null;
   pmPhone?: string | null;
+  pricingPackage?: unknown;
+  recurringContract?: {
+    id: string;
+    status: string;
+    units: { id: string; unitNumber: string }[];
+  } | null;
+  existingUnitNumbers?: string[];
 }
 
 interface ScheduleBuildingOption {
@@ -190,6 +236,11 @@ interface ScheduleBuildingOption {
 interface ProjectOption {
   id: string;
   jobTitle: string;
+  segment?: string | null;
+  hubspotPipelineId?: string | null;
+  /** This project's Labor rates override (see Project.laborRateCard) — used
+   * to price a change order being created for it here. */
+  laborRateCard?: unknown;
 }
 
 interface EmployeeOption {
@@ -211,6 +262,12 @@ interface NewProjectFormProps {
   submitEndpoint?: string;
   successMessage?: string;
   submitLabel?: string;
+  /** Pre-fill and lock the SUEEP PM name and email fields */
+  lockedSueepPm?: { name: string; email: string };
+  /** Hide the "Add new building / address" options — only allow existing buildings */
+  disableNewBuilding?: boolean;
+  /** Arbitrary extra fields merged into the submission payload */
+  payloadExtra?: Record<string, unknown>;
 }
 
 function normalizeBuildingName(value: string) {
@@ -290,6 +347,77 @@ function ProjectSearchDropdown({
                 className={`cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700 ${p.id === value ? "font-medium text-pink-700" : "text-gray-900"}`}
               >
                 {p.jobTitle}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PmSearchDropdown({
+  employees,
+  value,
+  onSelect,
+  onClear,
+}: {
+  employees: EmployeeOption[];
+  value: string;
+  onSelect: (employee: EmployeeOption) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? employees.filter((e) =>
+        `${e.firstName} ${e.lastName}`.toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        autoComplete="off"
+        className={input}
+        placeholder={value || "Search by name…"}
+        value={open ? query : value}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onClear(); }}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">No employees found</li>
+          ) : (
+            filtered.map((emp) => (
+              <li
+                key={emp.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(emp);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-gray-900 hover:bg-pink-50 hover:text-pink-700"
+              >
+                <span>{emp.firstName} {emp.lastName}</span>
+                {emp.email && <span className="text-xs text-gray-400">{emp.email}</span>}
               </li>
             ))
           )}
@@ -479,12 +607,17 @@ export function NewProjectForm({
   submitEndpoint = "/api/erp/projects",
   successMessage,
   submitLabel = "Create project",
+  lockedSueepPm,
+  disableNewBuilding = false,
+  payloadExtra,
 }: NewProjectFormProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [segment, setSegment] = useState(initialSegment);
+  const [currentStep, setCurrentStep] = useState(1);
 
   // Change order state
   const [coProjectId, setCoProjectId] = useState("");
@@ -493,13 +626,22 @@ export function NewProjectForm({
   const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
   const [coRequestedBy, setCoRequestedBy] = useState("");
   const [coComments, setCoComments] = useState("");
+  // "Pricing" block — see ChangeOrderLaborEstimator.
+  const [coEstCleanerCount, setCoEstCleanerCount] = useState("");
+  const [coEstSupervisorCount, setCoEstSupervisorCount] = useState("");
+  const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
+  const [coContractValue, setCoContractValue] = useState("");
+  const [coEstLabor, setCoEstLabor] = useState("");
+  const coLaborRates = coProjectId
+    ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
+    : null;
 
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {
     const ids: string[] = [];
     for (const e of notifiableEmployees) {
       const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio") ids.push(e.id);
+      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio" || e.firstName.toLowerCase() === "nick") ids.push(e.id);
     }
     return ids;
   }, [notifiableEmployees]);
@@ -512,6 +654,7 @@ export function NewProjectForm({
   const [jobTitle, setJobTitle] = useState("");
   const [customJobTitle, setCustomJobTitle] = useState("");
   const [buildings, setBuildings] = useState<BuildingOption[]>(initialBuildings);
+  const [buildingsLoading, setBuildingsLoading] = useState(initialBuildings.length === 0);
   const [scheduleBuildings, setScheduleBuildings] = useState<ScheduleBuildingOption[]>(initialScheduleBuildings);
   const [scheduleBuildingsLoading, setScheduleBuildingsLoading] = useState(initialScheduleBuildings.length === 0);
   const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
@@ -522,6 +665,46 @@ export function NewProjectForm({
   const requestType = "TURNOVER";
   const [buildingName, setBuildingName] = useState("");
   const [buildingAddress, setBuildingAddress] = useState("");
+  const [dealQuery, setDealQuery] = useState("");
+  const [dealCandidates, setDealCandidates] = useState<{ id: string; name: string }[]>([]);
+  const [dealSearchLoading, setDealSearchLoading] = useState(false);
+  const [dealSearchError, setDealSearchError] = useState("");
+  const [hasSearchedDeal, setHasSearchedDeal] = useState(false);
+  const [selectedDealId, setSelectedDealId] = useState("");
+
+  async function searchJanitorialDeal(query: string) {
+    setDealSearchLoading(true);
+    setDealSearchError("");
+    try {
+      const res = await fetch(`/api/erp/hubspot/janitorial-deal-search?q=${encodeURIComponent(query)}`);
+      const data = (await res.json()) as { results?: { id: string; name: string }[]; error?: string };
+      if (!res.ok) {
+        setDealSearchError(data.error || "Could not search HubSpot.");
+        return;
+      }
+      setDealCandidates(data.results ?? []);
+    } catch {
+      setDealSearchError("Network error searching HubSpot.");
+    } finally {
+      setDealSearchLoading(false);
+      setHasSearchedDeal(true);
+    }
+  }
+
+  function selectJanitorialDeal(deal: { id: string; name: string }) {
+    setBuildingName(parseBuildingNameFromDealName(deal.name));
+    const address = parseAddressFromDealName(deal.name);
+    if (address) setBuildingAddress(address);
+    setSelectedDealId(deal.id);
+  }
+
+  function resetDealSearchState() {
+    setDealQuery("");
+    setDealCandidates([]);
+    setDealSearchError("");
+    setHasSearchedDeal(false);
+    setSelectedDealId("");
+  }
   const [supervisorName, setSupervisorName] = useState(() => {
     const david = employees.find(
       (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
@@ -531,14 +714,30 @@ export function NewProjectForm({
   const [pmName, setPmName] = useState("");
   const [pmEmail, setPmEmail] = useState("");
   const [pmPhone, setPmPhone] = useState("");
-  const [sueepPmName, setSueepPmName] = useState("");
-  const [sueepPmEmail, setSueepPmEmail] = useState("");
+  const [sueepPmName, setSueepPmName] = useState(() => {
+    if (lockedSueepPm?.name) return lockedSueepPm.name;
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david ? `${david.firstName} ${david.lastName}` : "";
+  });
+  const [sueepPmEmail, setSueepPmEmail] = useState(() => {
+    if (lockedSueepPm?.email) return lockedSueepPm.email;
+    const david = employees.find(
+      (e) => `${e.firstName} ${e.lastName}`.toLowerCase() === "david rodriguez"
+    );
+    return david?.email ?? "";
+  });
   const [unitScopes, setUnitScopes] = useState<UnitScope[]>(() => [createUnitScope("unit-1")]);
 
   const descriptionValue = serviceType === "__other__" ? customType.trim() : serviceType;
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const isMultiStep = lockedSegment && isTurnover;
   const isChangeOrder = segment === "CHANGE_ORDER";
+  const isChildWorkRequest = isChangeOrder;
+  const childWorkRequestProjects = allProjects;
+  const childRequestNoun = "change order";
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -574,17 +773,21 @@ export function NewProjectForm({
   useEffect(() => {
     if (!allowErpDataFetch) return;
     let mounted = true;
+    setBuildingsLoading(initialBuildings.length === 0);
     fetch("/api/erp/buildings")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
         if (!mounted) return;
         if (Array.isArray(data)) setBuildings(data);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (mounted) setBuildingsLoading(false);
+      });
     return () => {
       mounted = false;
     };
-  }, [allowErpDataFetch]);
+  }, [allowErpDataFetch, initialBuildings.length]);
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -615,22 +818,44 @@ export function NewProjectForm({
   const finalJobTitle = isCustomJob ? customJobTitle.trim() : jobTitle;
 
   const unitCount = Math.max(1, unitScopes.length);
-  const firstUnitFeature = getUnitFeature(unitScopes[0]?.features ?? "1/1");
-  const normalizedBeds = normalizeBeds(firstUnitFeature.bedrooms);
-  const normalizedBathrooms = firstUnitFeature.bathrooms;
-  const pricingPackage = useMemo(() => getTurnoverPricingPackage(buildingName), [buildingName]);
-  const defaultPricePackageValues = useMemo<PricePackageValues>(
-    () => ({
-      fullClean: centsToDollarInput(pricingPackage.cleaningRates[normalizedBeds] * 100),
-      fullPaint: centsToDollarInput(pricingPackage.paintingRates[normalizedBeds] * 100),
-      touchUpPaint: centsToDollarInput(TOUCH_UP_PAINT_CENTS),
-      additionalMaterials: centsToDollarInput(ADDITIONAL_MATERIALS_CENTS),
-      carpetCleaning: centsToDollarInput(CARPET_WITH_CLEAN_CENTS),
-    }),
-    [normalizedBeds, pricingPackage]
+  const normalizedBeds = normalizeBeds(bedroomsToNumber(unitScopes[0]?.bedrooms ?? "1"));
+  const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
+  const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
+  const pricingPackage = useMemo(
+    () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
+    [buildingName, selectedBuilding]
   );
-  const [pricePackageValues, setPricePackageValues] = useState<PricePackageValues>(() => defaultPricePackageValues);
-  const [pricePackageTouched, setPricePackageTouched] = useState(false);
+  const activeRecurringContractUnits = useMemo(
+    () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
+    [selectedBuilding]
+  );
+  // existingUnitNumbers (from GET /api/erp/buildings) is sourced purely from
+  // TurnoverRequest rows — a recurring-contract unit only shows up there
+  // once its first monthly period has actually generated a project (see
+  // recurringContracts.ts). Folding activeRecurringContractUnits in here
+  // too means a brand-new recurring unit (enrolled but not yet generated)
+  // still trips the duplicate warning instead of silently allowing a
+  // second, redundant one-off unit with the same identifier.
+  const existingBuildingUnitNumbers = useMemo(
+    () =>
+      new Set([
+        ...(selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase()),
+        ...Array.from(activeRecurringContractUnits).map((n) => n.trim().toLowerCase()),
+      ]),
+    [selectedBuilding, activeRecurringContractUnits]
+  );
+  const [confirmedDuplicateUnitIds, setConfirmedDuplicateUnitIds] = useState<Set<string>>(new Set());
+
+  /** True if this unit's identifier already exists on the selected building
+   * (including an active recurring-contract unit not yet generated into a
+   * TurnoverRequest), or collides with another unit being added in this
+   * same submission. */
+  function isDuplicateUnitNumber(unitId: string, value: string): boolean {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return false;
+    if (existingBuildingUnitNumbers.has(trimmed)) return true;
+    return unitScopes.some((u) => u.id !== unitId && u.unitNumber.trim().toLowerCase() === trimmed);
+  }
   const addressOptions = useMemo(() => {
     return Array.from(
       new Set(
@@ -646,13 +871,15 @@ export function NewProjectForm({
     ).sort((a, b) => a.localeCompare(b));
   }, [buildings, scheduleBuildings, buildingAddress]);
 
-  useEffect(() => {
-    if (!pricePackageTouched) {
-      setPricePackageValues(defaultPricePackageValues);
-    }
-  }, [defaultPricePackageValues, pricePackageTouched]);
-
   function updateUnitScope(id: string, patch: Partial<UnitScope>) {
+    if ("unitNumber" in patch) {
+      setConfirmedDuplicateUnitIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
     setUnitScopes((prev) =>
       prev.map((unit) => {
         if (unit.id !== id) return unit;
@@ -661,6 +888,15 @@ export function NewProjectForm({
         if (patch.touchUpPaint) next.fullPaint = false;
         if (unit.fullPaint && patch.touchUpPaint) next.touchUpPaint = false;
         if (unit.touchUpPaint && patch.fullPaint) next.fullPaint = false;
+        if (patch.isCommonArea) {
+          next.isPartialTurn = false;
+          next.partialTurnLayout = "";
+        }
+        if (patch.isPartialTurn) {
+          next.isCommonArea = false;
+        } else if (patch.isPartialTurn === false) {
+          next.partialTurnLayout = "";
+        }
         return next;
       })
     );
@@ -672,6 +908,42 @@ export function NewProjectForm({
 
   function removeUnitScope(id: string) {
     setUnitScopes((prev) => (prev.length <= 1 ? prev : prev.filter((unit) => unit.id !== id)));
+    setConfirmedDuplicateUnitIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function confirmDuplicateUnit(id: string) {
+    setConfirmedDuplicateUnitIds((prev) => new Set(prev).add(id));
+  }
+
+  function applySelectedBuilding(id: string) {
+    if (id === ADD_NEW_BUILDING_VALUE) {
+      setIsAddingBuilding(true);
+      setBuildingProjectId(id);
+      setBuildingName("");
+      setBuildingAddress("");
+      setIsAddingAddress(true);
+      setPmName("");
+      setPmEmail("");
+      setPmPhone("");
+      resetDealSearchState();
+      return;
+    }
+
+    const building = buildings.find((b) => b.id === id);
+    setIsAddingBuilding(false);
+    setIsAddingAddress(false);
+    setBuildingProjectId(id);
+    setBuildingName(building?.name ?? "");
+    setBuildingAddress(building?.address ?? "");
+    setPmName(building?.pmName ?? "");
+    setPmEmail(building?.pmEmail ?? "");
+    setPmPhone(building?.pmPhone ?? "");
+    resetDealSearchState();
   }
 
   function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
@@ -684,6 +956,7 @@ export function NewProjectForm({
       setPmName("");
       setPmEmail("");
       setPmPhone("");
+      resetDealSearchState();
       return;
     }
 
@@ -700,56 +973,82 @@ export function NewProjectForm({
     setPmName("");
     setPmEmail(matchedBuilding?.pmEmail || "");
     setPmPhone(matchedBuilding?.pmPhone || "");
+    resetDealSearchState();
+  }
+
+  function validateStep(step: number): string {
+    if (step === 1) {
+      if (!buildingProjectId) return "Please select a building.";
+      if (!buildingAddress.trim()) return "Please select or enter a building address.";
+      if (!pmName.trim()) return "PM name is required.";
+      if (!pmEmail.trim()) return "PM email is required.";
+      if (!pmPhone.trim()) return "PM phone is required.";
+    }
+    if (step === 2) {
+      if (unitScopes.some((unit) => !unit.startDate)) return "Start date is required for every unit.";
+      const unresolvedDuplicate = unitScopes.some(
+        (unit) => isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id)
+      );
+      if (unresolvedDuplicate) return "Confirm the duplicate unit number warning above before continuing.";
+    }
+    if (step === 3) {
+      if (!sueepPmName.trim()) return "SUEEP PM name is required.";
+      if (!sueepPmEmail.trim()) return "SUEEP PM email is required.";
+    }
+    return "";
   }
 
   const packagePricing = useMemo(() => {
     let totalPrice = 0;
     const breakdown: string[] = [];
-    const pricePackageCents = {
-      fullClean: dollarsToCents(pricePackageValues.fullClean),
-      fullPaint: dollarsToCents(pricePackageValues.fullPaint),
-      touchUpPaint: dollarsToCents(pricePackageValues.touchUpPaint),
-      additionalMaterials: dollarsToCents(pricePackageValues.additionalMaterials),
-      carpetCleaning: dollarsToCents(pricePackageValues.carpetCleaning),
-    };
+    const perUnit: { id: string; label: string; description: string; lines: string[]; subtotal: number }[] = [];
 
     unitScopes.forEach((unit, index) => {
-      const feature = getUnitFeature(unit.features);
-      const unitLines: string[] = [];
+      const unitLabel = unit.unitNumber || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`);
+      const lines: string[] = [];
       let unitTotal = 0;
 
-      if (unit.fullClean) {
-        unitTotal += pricePackageCents.fullClean;
-        unitLines.push(`full clean ${formatUsd(pricePackageCents.fullClean)}`);
+      if (unit.recurringContractUnit) {
+        lines.push("covered by recurring contract — no charge");
+      } else {
+        const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning || unit.compounding;
+        if (hasPricedService) {
+          const unitPricing = computeTurnoverPricing({
+            requestType: "TURNOVER",
+            buildingName,
+            pricingPackage,
+            bedrooms: unit.isCommonArea ? null : bedroomsToNumber(unit.bedrooms),
+            bathrooms: unit.isCommonArea ? null : bathroomsToNumber(unit.bathrooms),
+            isCommonArea: unit.isCommonArea,
+            isPartialTurn: unit.isPartialTurn,
+            partialTurnLayout: unit.partialTurnLayout,
+            fullPaint: unit.fullPaint,
+            touchUpPaint: unit.touchUpPaint && !unit.fullPaint ? 1 : 0,
+            fullClean: unit.fullClean,
+            carpetCleaning: unit.carpetCleaning,
+            materialsAdditional: unit.materialsAdditional,
+            ceilingPaint: false,
+            compounding: unit.compounding ? 1 : 0,
+          });
+          lines.push(...unitPricing.breakdown);
+          unitTotal += unitPricing.priceCents;
+        }
+
+        if (unit.lightWallTouchUps) {
+          lines.push("Light wall touch-ups: not priced");
+        }
       }
 
-      if (unit.fullPaint) {
-        unitTotal += pricePackageCents.fullPaint;
-        unitLines.push(`full paint ${formatUsd(pricePackageCents.fullPaint)}`);
-      } else if (unit.touchUpPaint) {
-        unitTotal += pricePackageCents.touchUpPaint;
-        unitLines.push(`touch-up paint ${formatUsd(pricePackageCents.touchUpPaint)}`);
-      }
-
-      if (unit.materialsAdditional) {
-        unitTotal += pricePackageCents.additionalMaterials;
-        unitLines.push(`additional materials ${formatUsd(pricePackageCents.additionalMaterials)}`);
-      }
-
-      if (unit.carpetCleaning) {
-        unitTotal += pricePackageCents.carpetCleaning;
-        unitLines.push(`carpet cleaning ${formatUsd(pricePackageCents.carpetCleaning)}`);
-      }
-
-      if (unit.lightWallTouchUps) {
-        unitLines.push("light wall touch-ups not priced");
+      if (unit.otherWork) {
+        const otherCents = dollarsToCents(unit.otherPrice || "0");
+        unitTotal += otherCents;
+        lines.push(`${unit.otherDescription.trim() || "Other"}: ${formatUsd(otherCents)}`);
       }
 
       totalPrice += unitTotal;
-      if (unitLines.length > 0) {
-        breakdown.push(
-          `${unit.unitNumber || `Unit ${index + 1}`} (${feature.label}): ${unitLines.join(" + ")} = ${formatUsd(unitTotal)}`
-        );
+      if (lines.length > 0) {
+        perUnit.push({ id: unit.id, label: unitLabel, description: describeUnit(unit), lines, subtotal: unitTotal });
+        breakdown.push(`${unitLabel} (${describeUnit(unit)}): ${lines.join(" | ")} = ${formatUsd(unitTotal)}`);
       }
     });
 
@@ -762,10 +1061,10 @@ export function NewProjectForm({
       totalPriceLabel: formatUsd(totalPrice),
       totalPrice,
       breakdown,
-      pricePackageCents,
+      perUnit,
       unitCount,
     };
-  }, [pricePackageValues, unitScopes, unitCount]);
+  }, [unitScopes, unitCount, buildingName, pricingPackage]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -783,10 +1082,18 @@ export function NewProjectForm({
           status: coStatus,
           requestedBy: coRequestedBy.trim() || undefined,
           description: coComments.trim() || undefined,
+          estLaborers: coEstCleanerCount.trim() || undefined,
+          estSupervisors: coEstSupervisorCount.trim() || undefined,
+          noCrewRequired: coNoCrewRequired,
+          // No hours input anymore — every change order estimate assumes a
+          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
+          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
+          contractValue: coContractValue.trim() || undefined,
+          estLabor: coEstLabor.trim() || undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok) { setError(data.error || "Failed to create change order"); setLoading(false); return; }
+      if (!res.ok) { setError(data.error || `Failed to create ${childRequestNoun}`); setLoading(false); return; }
 
       if (data.id && notifyEmployeeIds.length > 0) {
         try {
@@ -811,20 +1118,31 @@ export function NewProjectForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    if (isMultiStep) {
+      const stepError = validateStep(currentStep);
+      if (stepError) { setError(stepError); return; }
+    }
+    const unresolvedDuplicate = unitScopes.some(
+      (unit) => isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id)
+    );
+    if (unresolvedDuplicate) {
+      setError("One or more unit numbers already exist on this building. Confirm each duplicate warning above to continue.");
+      return;
+    }
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const unitDetails = unitScopes.map(unitScopeSummary);
-    const selectedBuilding = scheduleBuildings.find((building) => building.id === buildingProjectId);
     const turnoverUnitLabel = unitScopes
-      .map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`)
+      .map((unit, index) => unit.unitNumber.trim() || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`))
       .join(", ");
-    const generatedTurnoverTitle = `${buildingName.trim() || selectedBuilding?.jobTitle || "Janitorial turnover"}${
+    const generatedTurnoverTitle = `${buildingName.trim() || "Janitorial turnover"}${
       turnoverUnitLabel ? ` - ${turnoverUnitLabel}` : ""
     }`;
     const turnoverScheduleDates = unitScopes.flatMap((unit) => [
       unit.startDate,
       unit.endDate,
       unit.moveOutDate,
+      unit.moveInDate,
       unit.paintDate,
       unit.cleanDate,
     ]);
@@ -838,7 +1156,7 @@ export function NewProjectForm({
     const geotrackingNotes = String(fd.get("geotrackingNotes") || "").trim();
     const turnoverDescription = [
       isTurnover ? null : descriptionValue,
-      isTurnover ? `Property: ${buildingName.trim() || selectedBuilding?.jobTitle || "Unspecified"}` : null,
+      isTurnover ? `Property: ${buildingName.trim() || "Unspecified"}` : null,
       isTurnover && buildingAddress.trim() ? `Address: ${buildingAddress.trim()}` : null,
       isTurnover && pmName.trim() ? `Property Manager/Maintenance Manager: ${pmName.trim()}` : null,
       isTurnover && pmEmail.trim() ? `Manager Email: ${pmEmail.trim()}` : null,
@@ -846,16 +1164,8 @@ export function NewProjectForm({
       isTurnover && sueepPmName.trim() ? `SUEEP PM: ${sueepPmName.trim()}` : null,
       isTurnover && sueepPmEmail.trim() ? `SUEEP PM Email: ${sueepPmEmail.trim()}` : null,
       isTurnover && unitDetails.length ? `Units: ${unitDetails.join(" | ")}` : null,
-      isTurnover
-        ? `Price Package: ${PRICING_FIELD_LABELS.fullClean} ${formatUsd(packagePricing.pricePackageCents.fullClean)} | ${PRICING_FIELD_LABELS.fullPaint} ${formatUsd(packagePricing.pricePackageCents.fullPaint)} | ${PRICING_FIELD_LABELS.touchUpPaint} ${formatUsd(packagePricing.pricePackageCents.touchUpPaint)} | ${PRICING_FIELD_LABELS.additionalMaterials} ${formatUsd(packagePricing.pricePackageCents.additionalMaterials)} | ${PRICING_FIELD_LABELS.carpetCleaning} ${formatUsd(packagePricing.pricePackageCents.carpetCleaning)}`
-        : null,
       isTurnover && packagePricing.totalPrice > 0 ? `Estimated Turnover Total: ${packagePricing.totalPriceLabel}` : null,
       isTurnover && packagePricing.breakdown.length ? `Pricing Breakdown: ${packagePricing.breakdown.join(" | ")}` : null,
-      isTurnover ? `Geotracking: ${geotrackingEnabled ? "Enabled" : "Disabled"}` : null,
-      isTurnover && geotrackingEnabled && geotrackingLocation ? `Expected Worker Location: ${geotrackingLocation}` : null,
-      isTurnover && geotrackingEnabled && geofenceRadiusFeet ? `Geofence Radius: ${geofenceRadiusFeet} ft` : null,
-      isTurnover && geotrackingEnabled && geotrackingCheckMode ? `Location Checks: ${geotrackingCheckMode}` : null,
-      isTurnover && geotrackingEnabled && geotrackingNotes ? `Geotracking Notes: ${geotrackingNotes}` : null,
       isTurnover && turnoverComments ? `Comments: ${turnoverComments}` : null,
     ]
       .filter(Boolean)
@@ -884,14 +1194,16 @@ export function NewProjectForm({
       buildingProjectId: isAddingBuilding ? undefined : buildingProjectId || undefined,
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
+      buildingHubspotDealId: isAddingBuilding ? selectedDealId || undefined : undefined,
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
       sueepPmName: sueepPmName.trim() || undefined,
       sueepPmEmail: sueepPmEmail.trim() || undefined,
-      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || `Unit ${index + 1}`).join(", ") || undefined,
-      unitQuality: unitScopes.map((unit) => unit.unitQuality.trim()).filter(Boolean).join("; ") || undefined,
+      unitNumbers: unitScopes.map((unit, index) => unit.unitNumber.trim() || (unit.isCommonArea ? "Common Area" : `Unit ${index + 1}`)).join(", ") || undefined,
+      unitQuality: unitScopes.map((unit) => (unit.unitQuality ? UNIT_QUALITY_LABELS[unit.unitQuality] ?? unit.unitQuality : "")).filter(Boolean).join("; ") || undefined,
       moveOutDates: unitScopes.map((unit) => unit.moveOutDate).filter(Boolean).join(", ") || undefined,
+      moveInDates: unitScopes.map((unit) => unit.moveInDate).filter(Boolean).join(", ") || undefined,
       paintDates: unitScopes.map((unit) => unit.paintDate).filter(Boolean).join(", ") || undefined,
       cleanDates: unitScopes.map((unit) => unit.cleanDate).filter(Boolean).join(", ") || undefined,
       bedrooms: normalizedBeds || undefined,
@@ -913,9 +1225,9 @@ export function NewProjectForm({
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
         totalPrice: packagePricing.totalPrice,
-        pricePackageCents: packagePricing.pricePackageCents,
-        pricePackageDollars: pricePackageValues,
       },
+      ...(isTurnover && notifyEmployeeIds.length > 0 ? { notifyEmployeeIds } : {}),
+      ...payloadExtra,
     };
 
     try {
@@ -924,7 +1236,7 @@ export function NewProjectForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as { id?: string; error?: string };
+      const data = (await res.json()) as { id?: string; projectId?: string; error?: string };
       if (!res.ok) {
         setError(data.error || "Failed to create");
         setLoading(false);
@@ -933,7 +1245,7 @@ export function NewProjectForm({
       if (successMessage) {
         setSubmitted(true);
       } else if (isTurnover) {
-        router.push("/erp/turnover-requests");
+        router.push(data.projectId ? `/erp/projects/${data.projectId}` : "/erp/projects");
       } else {
         router.push("/erp/projects");
       }
@@ -944,13 +1256,13 @@ export function NewProjectForm({
     }
   }
 
-  if (isChangeOrder) {
+  if (isChildWorkRequest) {
     return (
       <form onSubmit={onSubmitChangeOrder} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
         <div>
           <label className={label} htmlFor="co-segment">Segment</label>
           <select id="co-segment" className={input} value={segment} onChange={(e) => setSegment(e.target.value)}>
-            {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+            {CREATABLE_SEGMENT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -959,7 +1271,7 @@ export function NewProjectForm({
         <div>
           <label className={label}>Project *</label>
           <ProjectSearchDropdown
-            projects={allProjects}
+            projects={childWorkRequestProjects}
             value={coProjectId}
             onChange={setCoProjectId}
           />
@@ -1006,6 +1318,21 @@ export function NewProjectForm({
           </div>
         </div>
 
+        <ChangeOrderLaborEstimator
+          pricingRates={coLaborRates}
+          cleanerCount={coEstCleanerCount}
+          onCleanerCountChange={setCoEstCleanerCount}
+          supervisorCount={coEstSupervisorCount}
+          onSupervisorCountChange={setCoEstSupervisorCount}
+          noCrewRequired={coNoCrewRequired}
+          onNoCrewRequiredChange={setCoNoCrewRequired}
+          contractValue={coContractValue}
+          onContractValueChange={setCoContractValue}
+          estLabor={coEstLabor}
+          onEstLaborChange={setCoEstLabor}
+          disabled={loading}
+        />
+
         {notifiableEmployees.length > 0 && (
           <div>
             <label className={label}>Notify employees</label>
@@ -1024,7 +1351,7 @@ export function NewProjectForm({
         )}
         <div className="flex gap-3">
           <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto">
-            {loading ? "Saving…" : "Create change order"}
+            {loading ? "Saving…" : `Create ${childRequestNoun}`}
           </button>
         </div>
       </form>
@@ -1032,7 +1359,7 @@ export function NewProjectForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
+    <form ref={formRef} onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
       {submitted && successMessage ? (
         <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">
           {successMessage}
@@ -1052,7 +1379,7 @@ export function NewProjectForm({
                 value={segment}
                 onChange={(e) => setSegment(e.target.value)}
               >
-                {PROJECT_SEGMENT_OPTIONS.map((opt) => (
+                {CREATABLE_SEGMENT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -1077,12 +1404,13 @@ export function NewProjectForm({
           <>
             <div className="min-w-0">
               <label className={label} htmlFor="projectDate">
-                Start date
+                Start date *
               </label>
               <input
                 id="projectDate"
                 name="projectDate"
                 type="date"
+                required
                 className={input}
               />
             </div>
@@ -1103,71 +1431,112 @@ export function NewProjectForm({
 
       {isTurnover ? (
         <div className="space-y-5 rounded-lg border border-pink-200 bg-white p-4 sm:p-5">
-          <div className="space-y-2">
+          {isMultiStep && (
+            <div className="flex items-center gap-1.5 border-b border-pink-100 pb-3">
+              {(["Property Info", "Units & Scope", "Review & Submit"] as const).map((stepLabel, i) => {
+                const s = i + 1;
+                const done = s < currentStep;
+                const active = s === currentStep;
+                return (
+                  <div key={s} className="flex items-center gap-1.5">
+                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${done ? "bg-pink-600 text-white" : active ? "bg-pink-600 text-white ring-2 ring-pink-200" : "bg-gray-200 text-gray-500"}`}>
+                      {done ? "✓" : s}
+                    </div>
+                    {active && <span className="text-xs font-medium text-pink-700">{stepLabel}</span>}
+                    {s < 3 && <div className={`h-px w-4 shrink-0 ${done ? "bg-pink-400" : "bg-gray-200"}`} />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className={isMultiStep && currentStep !== 1 ? "hidden" : "space-y-2"}>
             <p className={sectionHeader}>Step 1 - Property and Property Manager/Maintenance Manager Info</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="min-w-0">
                 <label className={label} htmlFor="buildingProjectId">
                   Building
                 </label>
-                <select
+                <SearchableSelect
                   id="buildingProjectId"
-                  name="buildingProjectId"
-                  required
-                  className={input}
                   value={buildingProjectId}
-                  disabled={scheduleBuildingsLoading}
-                  onChange={(e) => {
-                    const selected = e.currentTarget.selectedOptions[0];
-                    applySelectedScheduleBuilding(e.target.value, {
-                      jobTitle: selected?.dataset.name,
-                      description: selected?.dataset.description,
-                      supervisor: selected?.dataset.supervisor,
-                      address: selected?.dataset.address,
-                    });
-                  }}
-                >
-                  <option value="">{scheduleBuildingsLoading ? "Loading janitorial schedule..." : "Select a scheduled building..."}</option>
-                  {!scheduleBuildingsLoading && scheduleBuildings.length === 0 ? (
-                    <option value="" disabled>
-                      No janitorial schedule buildings found
-                    </option>
-                  ) : null}
-                  {scheduleBuildings.map((building) => {
-                    const matchedBuilding = buildings.find(
-                      (savedBuilding) => normalizeBuildingName(savedBuilding.name) === normalizeBuildingName(building.jobTitle)
-                    );
-                    const address = extractAddressFromScheduleProject(building) || matchedBuilding?.address || "";
-                    return (
-                    <option
-                      key={building.id}
-                      value={building.id}
-                      data-name={building.jobTitle}
-                      data-description={building.description || ""}
-                      data-supervisor={building.supervisor || ""}
-                      data-address={address}
-                    >
-                      {building.jobTitle}
-                    </option>
-                    );
-                  })}
-                  <option value={ADD_NEW_BUILDING_VALUE}>Add new building...</option>
-                </select>
-                {scheduleBuildingsError ? <p className="mt-1 text-xs text-red-500">{scheduleBuildingsError}</p> : null}
+                  onChange={applySelectedBuilding}
+                  disabled={buildingsLoading}
+                  placeholder="Search buildings…"
+                  allLabel={buildingsLoading ? "Loading buildings..." : !buildingsLoading && buildings.length === 0 ? "No buildings found" : "Select a building..."}
+                  options={[
+                    ...buildings.map((building) => ({ value: building.id, label: building.name })),
+                    ...(!disableNewBuilding ? [{ value: ADD_NEW_BUILDING_VALUE, label: "Add new building..." }] : []),
+                  ]}
+                  className="mt-1"
+                />
                 {isAddingBuilding ? (
-                  <div className="mt-2">
-                    <label className={label} htmlFor="newBuildingName">
-                      New building name
-                    </label>
-                    <input
-                      id="newBuildingName"
-                      name="newBuildingName"
-                      required
-                      className={input}
-                      value={buildingName}
-                      onChange={(e) => setBuildingName(e.target.value)}
-                      placeholder="Type the building name"
-                    />
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label className={label}>Find building from a HubSpot deal</label>
+                      <div className="mt-1 flex gap-2">
+                        <input
+                          value={dealQuery}
+                          onChange={(e) => setDealQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void searchJanitorialDeal(dealQuery);
+                            }
+                          }}
+                          placeholder="Search deals by name…"
+                          className={input}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => searchJanitorialDeal(dealQuery)}
+                          disabled={dealSearchLoading || !dealQuery.trim()}
+                          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {dealSearchLoading ? "Searching…" : "Search"}
+                        </button>
+                      </div>
+
+                      {dealSearchError && <p className="mt-1 text-xs text-red-600">{dealSearchError}</p>}
+
+                      {hasSearchedDeal && !dealSearchLoading && dealCandidates.length === 0 && !dealSearchError && (
+                        <p className="mt-1 text-xs text-gray-400">No matching deals found — enter the building name manually below.</p>
+                      )}
+
+                      {dealCandidates.length > 0 && (
+                        <div className="mt-1.5 space-y-1 rounded-md border border-gray-200 p-1.5">
+                          {dealCandidates.map((deal) => (
+                            <button
+                              key={deal.id}
+                              type="button"
+                              onClick={() => selectJanitorialDeal(deal)}
+                              className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs ${
+                                selectedDealId === deal.id ? "bg-pink-50 font-medium text-pink-700" : "text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <span className="truncate" title={deal.name}>{deal.name}</span>
+                              {selectedDealId === deal.id && <span className="shrink-0 text-pink-600">✓ Selected</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={label} htmlFor="newBuildingName">
+                        New building name
+                      </label>
+                      <input
+                        id="newBuildingName"
+                        name="newBuildingName"
+                        required
+                        className={input}
+                        value={buildingName}
+                        onChange={(e) => {
+                          setBuildingName(e.target.value);
+                          setSelectedDealId("");
+                        }}
+                        placeholder="Or type the building name manually"
+                      />
+                    </div>
                   </div>
                 ) : null}
                 <input type="hidden" name="buildingName" value={buildingName} />
@@ -1203,7 +1572,7 @@ export function NewProjectForm({
                       {address}
                     </option>
                   ))}
-                  <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>
+                  {!disableNewBuilding && <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>}
                 </select>
                 {isAddingAddress ? (
                   <div className="mt-2">
@@ -1267,9 +1636,9 @@ export function NewProjectForm({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className={isMultiStep && currentStep !== 2 ? "hidden" : "space-y-3"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className={sectionHeader}>Step 2 — Units & independent scope</p>
+              <p className={sectionHeader}>Step 2 — Units & scope</p>
               <button
                 type="button"
                 onClick={addUnitScope}
@@ -1278,29 +1647,43 @@ export function NewProjectForm({
                 Add unit
               </button>
             </div>
-            <div className="space-y-3">
+            <div className={isMultiStep ? "flex flex-col gap-4 lg:flex-row lg:items-start" : "space-y-3"}>
+            <div className={isMultiStep ? "min-w-0 flex-1 space-y-3" : "space-y-3"}>
               {unitScopes.map((unit, index) => (
                 <div key={unit.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_120px_1.5fr_auto]">
+                  <div className={isMultiStep ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" : "grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_140px_140px_1.5fr_auto]"}>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`unit-${unit.id}`}>
-                        Unit number
+                        {unit.isCommonArea ? "Title" : "Unit number"}
                       </label>
                       <input
                         id={`unit-${unit.id}`}
                         className={input}
                         value={unit.unitNumber}
                         onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
-                        placeholder={`Unit ${index + 1}`}
+                        placeholder={unit.isCommonArea ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
                       />
+                      {isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id) ? (
+                        <div className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                          <p>This unit number already exists on this building. Continue anyway?</p>
+                          <button
+                            type="button"
+                            onClick={() => confirmDuplicateUnit(unit.id)}
+                            className="mt-1 rounded border border-amber-300 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"
+                          >
+                            Continue anyway
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`start-date-${unit.id}`}>
-                        Start date
+                        Start date *
                       </label>
                       <input
                         id={`start-date-${unit.id}`}
                         type="date"
+                        required
                         className={input}
                         value={unit.startDate}
                         onChange={(e) => updateUnitScope(unit.id, { startDate: e.target.value })}
@@ -1318,24 +1701,7 @@ export function NewProjectForm({
                         onChange={(e) => updateUnitScope(unit.id, { endDate: e.target.value })}
                       />
                     </div>
-                    <div className="min-w-0">
-                      <label className={label} htmlFor={`features-${unit.id}`}>
-                        Features
-                      </label>
-                      <select
-                        id={`features-${unit.id}`}
-                        className={input}
-                        value={unit.features}
-                        onChange={(e) => updateUnitScope(unit.id, { features: e.target.value as UnitFeatureValue })}
-                      >
-                        {UNIT_FEATURE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="min-w-0 md:col-span-2 xl:col-span-1">
+                    <div className={isMultiStep ? "min-w-0 sm:col-span-2 lg:col-span-1" : "min-w-0 md:col-span-2 xl:col-span-1"}>
                       <label className={label} htmlFor={`quality-${unit.id}`}>
                         Unit quality
                       </label>
@@ -1347,23 +1713,120 @@ export function NewProjectForm({
                       >
                         <option value="">Select quality...</option>
                         {UNIT_QUALITY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className={isMultiStep ? "flex items-end sm:col-span-2 lg:col-span-1" : "flex items-end md:col-span-2 xl:col-span-1"}>
+                      <button
+                        type="button"
+                        onClick={() => removeUnitScope(unit.id)}
+                        disabled={unitScopes.length <= 1}
+                        className={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40 ${isMultiStep ? "lg:w-auto" : "xl:w-auto"}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`bedrooms-${unit.id}`}>
+                        Bedrooms
+                      </label>
+                      <select
+                        id={`bedrooms-${unit.id}`}
+                        className={input}
+                        value={unit.bedrooms}
+                        disabled={unit.isCommonArea}
+                        onChange={(e) => updateUnitScope(unit.id, { bedrooms: e.target.value as BedroomValue })}
+                      >
+                        {BEDROOM_OPTIONS.map((option) => (
                           <option key={option} value={option}>
                             {option}
                           </option>
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-end md:col-span-2 xl:col-span-1">
-                      <button
-                        type="button"
-                        onClick={() => removeUnitScope(unit.id)}
-                        disabled={unitScopes.length <= 1}
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-pink-300 disabled:opacity-40 xl:w-auto"
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`bathrooms-${unit.id}`}>
+                        Bathrooms
+                      </label>
+                      <select
+                        id={`bathrooms-${unit.id}`}
+                        className={input}
+                        value={unit.bathrooms}
+                        disabled={unit.isCommonArea}
+                        onChange={(e) => updateUnitScope(unit.id, { bathrooms: e.target.value as BathroomValue })}
                       >
-                        Remove
-                      </button>
+                        {BATHROOM_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`sqft-${unit.id}`}>
+                        Square footage
+                      </label>
+                      <input
+                        id={`sqft-${unit.id}`}
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        className={input}
+                        value={unit.sqft}
+                        onChange={(e) => updateUnitScope(unit.id, { sqft: e.target.value })}
+                        placeholder="e.g. 850"
+                      />
+                    </div>
+                    <div className="flex items-end pb-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={unit.isCommonArea}
+                          onChange={(e) => updateUnitScope(unit.id, { isCommonArea: e.target.checked })}
+                          className="h-4 w-4 text-pink-600"
+                        />
+                        <span className={checkboxLabel}>Common area</span>
+                      </label>
                     </div>
                   </div>
+                  {!unit.isCommonArea && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="flex items-center">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={unit.isPartialTurn}
+                            onChange={(e) => updateUnitScope(unit.id, { isPartialTurn: e.target.checked })}
+                            className="h-4 w-4 text-pink-600"
+                          />
+                          <span className={checkboxLabel}>Partial turn</span>
+                        </label>
+                      </div>
+                      {unit.isPartialTurn && (
+                        <div className="min-w-0">
+                          <label className={label} htmlFor={`partial-turn-layout-${unit.id}`}>
+                            Price as
+                          </label>
+                          <select
+                            id={`partial-turn-layout-${unit.id}`}
+                            className={input}
+                            value={unit.partialTurnLayout}
+                            onChange={(e) => updateUnitScope(unit.id, { partialTurnLayout: e.target.value })}
+                          >
+                            <option value="">Select a layout...</option>
+                            {PARTIAL_TURN_LAYOUT_OPTIONS.map((l) => (
+                              <option key={l} value={l}>{PARTIAL_TURN_LAYOUT_LABELS[l] ?? l}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     <div className="min-w-0">
                       <label className={label} htmlFor={`move-out-date-${unit.id}`}>
@@ -1375,6 +1838,18 @@ export function NewProjectForm({
                         className={input}
                         value={unit.moveOutDate}
                         onChange={(e) => updateUnitScope(unit.id, { moveOutDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label className={label} htmlFor={`move-in-date-${unit.id}`}>
+                        Move-in date (optional)
+                      </label>
+                      <input
+                        id={`move-in-date-${unit.id}`}
+                        type="date"
+                        className={input}
+                        value={unit.moveInDate}
+                        onChange={(e) => updateUnitScope(unit.id, { moveInDate: e.target.value })}
                       />
                     </div>
                     <div className="min-w-0">
@@ -1409,185 +1884,213 @@ export function NewProjectForm({
                       { key: "touchUpPaint", text: "Touch-up paint", disabled: unit.fullPaint },
                       { key: "materialsAdditional", text: "Additional materials" },
                       { key: "carpetCleaning", text: "Carpet cleaning" },
+                      { key: "compounding", text: "Compounding" },
+                      { key: "otherWork", text: "Other" },
                     ].map(({ key, text, disabled }) => (
                       <label key={key} className={`flex min-w-0 items-center rounded-md border border-gray-200 bg-white px-3 py-2 ${disabled ? "opacity-50" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(unit[key as keyof UnitScope])}
                           disabled={disabled}
-                          onChange={(e) => updateUnitScope(unit.id, { [key]: e.target.checked } as Partial<UnitScope>)}
+                          onChange={(e) =>
+                            updateUnitScope(unit.id, {
+                              [key]: e.target.checked,
+                              ...(key === "otherWork" && !e.target.checked ? { otherDescription: "", otherPrice: "" } : {}),
+                            } as Partial<UnitScope>)
+                          }
                           className="h-4 w-4 text-pink-600"
                         />
                         <span className={`${checkboxLabel} break-words`}>{text}</span>
                       </label>
                     ))}
                   </div>
+                  {selectedBuilding?.recurringContract?.status === "ACTIVE" && (
+                    <label className="mt-3 flex min-w-0 items-center rounded-md border border-pink-200 bg-pink-50 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={unit.recurringContractUnit}
+                        onChange={(e) => updateUnitScope(unit.id, { recurringContractUnit: e.target.checked })}
+                        className="h-4 w-4 text-pink-600"
+                      />
+                      <span className={`${checkboxLabel} break-words`}>
+                        Part of this building&apos;s recurring contract — covered by the flat monthly rate, no per-unit charge
+                        {unit.unitNumber.trim() &&
+                        Array.from(activeRecurringContractUnits).some((n) => n.trim().toLowerCase() === unit.unitNumber.trim().toLowerCase())
+                          ? " (already enrolled)"
+                          : ""}
+                      </span>
+                    </label>
+                  )}
+                  {unit.otherWork && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <label className={label} htmlFor={`other-description-${unit.id}`}>
+                          Describe the other work
+                        </label>
+                        <input
+                          id={`other-description-${unit.id}`}
+                          className={input}
+                          value={unit.otherDescription}
+                          onChange={(e) => updateUnitScope(unit.id, { otherDescription: e.target.value })}
+                          placeholder="e.g. Window cleaning"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <label className={label} htmlFor={`other-price-${unit.id}`}>
+                          Price ($)
+                        </label>
+                        <input
+                          id={`other-price-${unit.id}`}
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className={input}
+                          value={unit.otherPrice}
+                          onChange={(e) => updateUnitScope(unit.id, { otherPrice: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className={sectionHeader}>Step 3 - Price package</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setPricePackageValues(defaultPricePackageValues);
-                  setPricePackageTouched(false);
-                }}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:bg-pink-50"
-              >
-                Reset prices
-              </button>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {(Object.keys(PRICING_FIELD_LABELS) as PricingField[]).map((field) => (
-                  <div key={field} className="min-w-0">
-                    <label className={label} htmlFor={`price-${field}`}>
-                      {PRICING_FIELD_LABELS[field]}
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                        $
-                      </span>
-                      <input
-                        id={`price-${field}`}
-                        name={`pricePackage-${field}`}
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        inputMode="decimal"
-                        className={`${input} pl-7`}
-                        value={pricePackageValues[field]}
-                        onChange={(e) => {
-                          setPricePackageTouched(true);
-                          setPricePackageValues((prev) => ({ ...prev, [field]: e.target.value }));
-                        }}
-                      />
-                    </div>
+            {isMultiStep && (
+              <div className="space-y-4 lg:w-72 lg:shrink-0">
+                <div className="sticky top-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                    <p className="text-sm font-semibold text-gray-900">{lockedSueepPm ? "Unit Summary" : "Order summary"}</p>
+                    {!lockedSueepPm && selectedBuilding && (
+                      <a
+                        href={`/erp/buildings/${selectedBuilding.id}?tab=${encodeURIComponent("Pricing Package")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-pink-600 hover:underline"
+                      >
+                        Edit pricing package
+                      </a>
+                    )}
                   </div>
-                ))}
+                  <div className="divide-y divide-gray-50 px-4">
+                    {packagePricing.perUnit.length === 0 ? (
+                      <p className="py-4 text-xs italic text-gray-400">Select services to see {lockedSueepPm ? "a summary" : "pricing"}.</p>
+                    ) : (
+                      packagePricing.perUnit.map((unit) => (
+                        <div key={unit.id} className="py-3">
+                          <p className="mb-2 text-xs font-semibold text-gray-700">
+                            {unit.label}{" "}
+                            <span className="font-normal text-gray-400">({unit.description})</span>
+                          </p>
+                          <div className="space-y-1.5">
+                            {unit.lines.map((line) => {
+                              if (lockedSueepPm) return <div key={line} className="text-xs text-gray-500">{splitBreakdownLine(line).text}</div>;
+                              const { text, amount } = splitBreakdownLine(line);
+                              return (
+                                <div key={line} className="flex justify-between gap-2 text-xs">
+                                  <span className="text-gray-500">{text}</span>
+                                  <span className="shrink-0 tabular-nums text-gray-600">{amount ?? ""}</span>
+                                </div>
+                              );
+                            })}
+                            {!lockedSueepPm && unit.lines.length > 1 && (
+                              <div className="flex justify-between border-t border-gray-100 pt-1.5">
+                                <span className="text-xs font-medium text-gray-600">Subtotal</span>
+                                <span className="text-xs font-medium tabular-nums text-gray-700">{formatUsd(unit.subtotal)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {!lockedSueepPm && (
+                    <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3">
+                      <span className="text-sm font-semibold text-gray-700">Estimated total</span>
+                      <span className="text-lg font-bold tabular-nums text-gray-900">{packagePricing.totalPriceLabel}</span>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
             </div>
           </div>
 
+          <div className={isMultiStep && currentStep !== 3 ? "hidden" : "space-y-5"}>
           <div className="space-y-3">
-            <p className={sectionHeader}>Step 4 - Geotracking</p>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <label className="flex items-start rounded-md border border-gray-200 bg-white px-3 py-2">
-                <input
-                  type="checkbox"
-                  name="geotrackingEnabled"
-                  className="mt-0.5 h-4 w-4 text-pink-600"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Track worker location for this turnover
-                </span>
-              </label>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                <div className="min-w-0 sm:col-span-2">
-                  <label className={label} htmlFor="geotrackingLocation">
-                    Expected worker location
-                  </label>
-                  <input
-                    id="geotrackingLocation"
-                    name="geotrackingLocation"
-                    className={input}
-                    value={buildingAddress}
-                    readOnly
-                    placeholder="Select a building address"
-                  />
-                </div>
+            <p className={sectionHeader}>{lockedSueepPm ? "Step 3 - Review & Submit" : "Step 4 - Estimated total"}</p>
+            {!lockedSueepPm && (
+              <>
                 <div className="min-w-0">
-                  <label className={label} htmlFor="geofenceRadiusFeet">
-                    Geofence radius (ft)
+                  <label className={label} htmlFor="sueepPmName">
+                    SUEEP PM
                   </label>
-                  <input
-                    id="geofenceRadiusFeet"
-                    name="geofenceRadiusFeet"
-                    type="number"
-                    min={50}
-                    step={50}
-                    className={input}
-                    defaultValue="300"
+                  <PmSearchDropdown
+                    employees={notifiableEmployees}
+                    value={sueepPmName}
+                    onSelect={(emp) => {
+                      setSueepPmName(`${emp.firstName} ${emp.lastName}`.trim());
+                      setSueepPmEmail(emp.email ?? "");
+                    }}
+                    onClear={() => { setSueepPmName(""); setSueepPmEmail(""); }}
                   />
+                  {sueepPmEmail && <p className="mt-1 text-xs text-gray-500">{sueepPmEmail}</p>}
                 </div>
-                <div className="min-w-0">
-                  <label className={label} htmlFor="geotrackingCheckMode">
-                    Location checks
-                  </label>
-                  <select
-                    id="geotrackingCheckMode"
-                    name="geotrackingCheckMode"
-                    className={input}
-                    defaultValue={GEOTRACKING_CHECK_MODE_OPTIONS[0]}
-                  >
-                    {GEOTRACKING_CHECK_MODE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
+                    {selectedBuilding && (
+                      <a
+                        href={`/erp/buildings/${selectedBuilding.id}?tab=${encodeURIComponent("Pricing Package")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-pink-600 hover:underline"
+                      >
+                        Edit pricing package
+                      </a>
+                    )}
+                  </div>
+                  <div className="mt-3 border-t border-gray-200 pt-3">
+                    <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
+                    {packagePricing.perUnit.length === 0 ? (
+                      <p className="mt-2 text-sm italic text-gray-400">No priceable work selected yet.</p>
+                    ) : (
+                      <div className="mt-2 divide-y divide-gray-200">
+                        {packagePricing.perUnit.map((unit) => (
+                          <div key={unit.id} className="py-2 first:pt-0 last:pb-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              {unit.label} <span className="font-normal text-gray-400">({unit.description})</span>
+                            </p>
+                            <div className="mt-1 space-y-0.5">
+                              {unit.lines.map((line) => {
+                                const { text, amount } = splitBreakdownLine(line);
+                                return (
+                                  <div key={line} className="flex justify-between gap-2 text-sm text-gray-600">
+                                    <span>{text}</span>
+                                    <span className="shrink-0 tabular-nums">{amount ?? ""}</span>
+                                  </div>
+                                );
+                              })}
+                              {unit.lines.length > 1 && (
+                                <div className="flex justify-between border-t border-gray-200 pt-1 text-sm font-medium text-gray-700">
+                                  <span>Subtotal</span>
+                                  <span className="tabular-nums">{formatUsd(unit.subtotal)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0 sm:col-span-2">
-                  <label className={label} htmlFor="geotrackingNotes">
-                    Tracking notes
-                  </label>
-                  <input
-                    id="geotrackingNotes"
-                    name="geotrackingNotes"
-                    className={input}
-                    placeholder="Gate, entrance, or access notes for verifying the worker location"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className={sectionHeader}>Step 5 - Estimated total</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
-                <label className={label} htmlFor="sueepPmName">
-                  SUEEP PM name
-                </label>
-                <input
-                  id="sueepPmName"
-                  name="sueepPmName"
-                  required
-                  className={input}
-                  value={sueepPmName}
-                  onChange={(e) => setSueepPmName(e.target.value)}
-                />
-              </div>
-              <div className="min-w-0">
-                <label className={label} htmlFor="sueepPmEmail">
-                  SUEEP PM email
-                </label>
-                <input
-                  id="sueepPmEmail"
-                  name="sueepPmEmail"
-                  type="email"
-                  required
-                  className={input}
-                  value={sueepPmEmail}
-                  onChange={(e) => setSueepPmEmail(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
-              <p className="text-sm text-gray-700">Estimated total: <span className="font-semibold text-gray-900 text-lg">{packagePricing.totalPriceLabel}</span></p>
-              <div className="mt-3 border-t border-gray-200 pt-3">
-                <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
-                <ul className="mt-2 space-y-1 text-sm text-gray-700">
-                  {packagePricing.breakdown.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+              </>
+            )}
+            {lockedSueepPm && (
+              <input type="hidden" name="sueepPmName" value={sueepPmName} />
+            )}
+            {lockedSueepPm && (
+              <input type="hidden" name="sueepPmEmail" value={sueepPmEmail} />
+            )}
           </div>
 
           <div className="space-y-3">
@@ -1602,8 +2105,22 @@ export function NewProjectForm({
                 rows={3}
                 className={input}
                 placeholder="Access notes, special instructions, timing details, or anything the PM should know"
+                defaultValue="Scope and expectations have been reviewed with the Project Supervisor and production team to ensure delivery of a move-in ready unit. Any conditions or services identified outside of the approved turnover scope will be documented and communicated for authorization prior to proceeding. Once completion of Unit, sign off by Property Management is needed."
               />
             </div>
+          </div>
+
+          {notifiableEmployees.length > 0 && (
+            <div className="space-y-3">
+              <p className={sectionHeader}>Notify employees</p>
+              <p className="text-xs text-gray-600">Select additional team members to notify about this turnover</p>
+              <NotifyMultiSelect
+                employees={notifiableEmployees}
+                selectedIds={notifyEmployeeIds}
+                onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+              />
+            </div>
+          )}
           </div>
 
         </div>
@@ -1730,6 +2247,12 @@ export function NewProjectForm({
                 <input id="contractValue" name="contractValue" className={input} placeholder="0.00" />
               </div>
               <div>
+                <label className={label} htmlFor="estLabor">
+                  Est. labor
+                </label>
+                <input id="estLabor" name="estLabor" className={input} />
+              </div>
+              <div>
                 <label className={label} htmlFor="estMaterial">
                   Est. material
                 </label>
@@ -1740,12 +2263,6 @@ export function NewProjectForm({
                   Est. travel
                 </label>
                 <input id="estTravel" name="estTravel" className={input} />
-              </div>
-              <div>
-                <label className={label} htmlFor="estLabor">
-                  Est. labor
-                </label>
-                <input id="estLabor" name="estLabor" className={input} />
               </div>
               <div>
                 <label className={label} htmlFor="actualLabor">
@@ -1781,15 +2298,58 @@ export function NewProjectForm({
           {error}
         </p>
       ) : null}
-      <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
-        >
-          {loading ? "Saving…" : submitLabel}
-        </button>
-      </div>
+      {!(isMultiStep && submitted) && (
+        <div className="flex gap-3">
+          {isMultiStep ? (
+            <>
+              {currentStep > 1 && (
+                <button
+                  type="button"
+                  onClick={() => { setError(""); setCurrentStep((s) => s - 1); }}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Back
+                </button>
+              )}
+              {currentStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (err) { setError(err); return; }
+                    setError("");
+                    setCurrentStep((s) => s + 1);
+                  }}
+                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (err) { setError(err); return; }
+                    formRef.current?.requestSubmit();
+                  }}
+                  className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
+                >
+                  {loading ? "Saving…" : submitLabel}
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
+            >
+              {loading ? "Saving…" : submitLabel}
+            </button>
+          )}
+        </div>
+      )}
     </form>
   );
 }

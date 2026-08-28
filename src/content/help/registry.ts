@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { ErpRole } from "@/lib/erpSession";
 import { UploadingAContract } from "./contracts/uploading-a-contract";
 import { CreatingAProject } from "./projects/creating-a-project";
 import { HubSpotSync } from "./projects/hubspot-sync";
@@ -9,6 +10,13 @@ import { ProjectsOverview } from "./projects/projects-overview";
 import { InputtingLaborLogs } from "./workers/labor-logs";
 import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
+import { AddingContractors } from "./workers/adding-contractors";
+import { LoggingContractors } from "./workers/logging-contractors";
+import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
+import { CompensationOverview } from "./compensation/compensation-overview";
+import { QualityChecks } from "./projects/quality-checks";
+import { BillingOverview } from "./billing/billing-overview";
+import { BuildingsOverview } from "./buildings/buildings-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -17,16 +25,19 @@ export type ArticleEntry = {
   description: string;
   order: number;
   component: ComponentType;
+  /** If set, only users whose role appears in this list can see this article. */
+  roles?: ErpRole[];
 };
 
 export const registry: ArticleEntry[] = [
   {
     slug: "contracts/uploading-a-contract",
     title: "Uploading a Contract",
-    category: "Contracts",
+    category: "Projects",
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
-    order: 1,
+    order: 6,
     component: UploadingAContract,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/creating-a-project",
@@ -35,55 +46,61 @@ export const registry: ArticleEntry[] = [
     description: "How to manually create a new project in the ERP.",
     order: 1,
     component: CreatingAProject,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/hubspot-sync",
     title: "HubSpot Sync",
     category: "Projects",
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
-    order: 6,
+    order: 7,
     component: HubSpotSync,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "turnover/creating-a-request",
     title: "Creating a Turnover Request",
-    category: "Turnover",
+    category: "Projects",
     description: "How to create and manage a turnover or regular cleaning request.",
-    order: 1,
+    order: 2,
     component: CreatingATurnoverRequest,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "sops/onboarding-new-employee",
     title: "Onboarding a New Employee",
-    category: "SOPs",
+    category: "Workers",
     description: "Standard process for onboarding a new employee into the ERP.",
-    order: 1,
+    order: 2,
     component: OnboardingNewEmployee,
+    roles: ["ADMIN"],
   },
   {
     slug: "projects/creating-a-change-order",
     title: "Creating a Change Order",
     category: "Projects",
     description: "How to create a change order for a post-construction project in the ERP",
-    order: 2,
+    order: 3,
     component: CreatingAChangeOrder,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
   },
   {
     slug: "projects/projects-overview",
     title: "Projects Overview",
     category: "Projects",
     description: "Overview of the projects table, project details page, and editing projects.",
-    order: 3,
+    order: 4,
     component: ProjectsOverview,
-
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
   },
   {
     slug: "workers/labor-logs",
     title: "Inputting Labor Logs",
     category: "Workers",
     description: "How to enter, edit, and sort through labor logs on projects and change orders.",
-    order: 2,
+    order: 3,
     component: InputtingLaborLogs,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"],
   },
   {
     slug: "workers/adding-employees",
@@ -92,6 +109,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter employees into the system and manage their documentation",
     order: 1,
     component: AddingEmployees,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
   },
   {
     slug: "projects/material-logs",
@@ -100,5 +118,67 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 5,
     component: MaterialsLog,
-  }
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+  },
+  {
+    slug: "workers/adding-contractors",
+    title: "Adding Contractors",
+    category: "Workers",
+    description: "How to register contractors in our system to be added onto projects",
+    order: 4,
+    component: AddingContractors,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+  },
+  {
+    slug: "workers/logging-contractors",
+    title: "Assigning Contractors to Projects",
+    category: "Workers",
+    description: "How to log contractors on projects much like you add laborers",
+    order: 5,
+    component: LoggingContractors,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+  },
+  {
+    slug: "schedule/calendar-overview",
+    title: "Using the Schedule Calendar",
+    category: "Schedule",
+    description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",
+    order: 1,
+    component: ScheduleCalendarOverview,
+  },
+  {
+    slug: "compensation/compensation-overview",
+    title: "Compensation Overview",
+    category: "Compensation",
+    description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",
+    order: 1,
+    component: CompensationOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "projects/quality-checks",
+    title: "Quality Checks",
+    category: "Projects",
+    description: "How to create, view, and edit quality checks from a project's Quality Checks tab.",
+    order: 8,
+    component: QualityChecks,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION", "SUPERVISOR"],
+  },
+  {
+    slug: "billing/billing-overview",
+    title: "Billing Overview",
+    category: "Billing",
+    description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring, and resolve items in Needs Review.",
+    order: 1,
+    component: BillingOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "buildings/buildings-overview",
+    title: "Buildings Overview",
+    category: "Buildings",
+    description: "How to add a building, manage its units, log hours, set its pricing package, and set up a recurring contract.",
+    order: 1,
+    component: BuildingsOverview,
+  },
 ];

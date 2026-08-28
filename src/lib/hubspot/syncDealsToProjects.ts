@@ -21,6 +21,36 @@ function parseHubSpotDate(value: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+async function allSovItemsPaid(projectId: string): Promise<boolean> {
+  const sov = await prisma.projectSOV.findUnique({
+    where: { projectId },
+    select: { items: { select: { billingStatus: true } } },
+  });
+  return !!sov && sov.items.length > 0 && sov.items.every((i) => i.billingStatus === "PAID");
+}
+
+/**
+ * A deal leaving the Billing stage for Work Completed means the invoice is
+ * paid — but only trust that signal outright for post-construction deals
+ * (the only pipeline with a Billing stage today). For anything else, only
+ * mark paid once the project's own SOV confirms every line item is paid,
+ * rather than assuming from the HubSpot stage alone.
+ */
+async function resolveCompletionBillingStatus(
+  phase: DealLifecyclePhase,
+  previousBillingStatus: string | null,
+  pipelineId: string | null,
+  projectId: string
+): Promise<string | null> {
+  if (phase !== "COMPLETED" || previousBillingStatus !== "BILLING") return null;
+  const cfg = parseHubSpotPipelineStageMap();
+  const isPostConstruction = !!cfg && pipelineId === cfg.postConstruction.pipelineId;
+  if (isPostConstruction || (await allSovItemsPaid(projectId))) {
+    return "INVOICE_PAID";
+  }
+  return null;
+}
+
 export type SyncDealResult = {
   hubspotDealId: string;
   projectId: string;
@@ -28,6 +58,23 @@ export type SyncDealResult = {
   segment: string;
   phase: DealLifecyclePhase;
 };
+
+type OwnerRecord = { id: string; email: string; firstName: string; lastName: string };
+
+async function fetchAllOwners(): Promise<Map<string, OwnerRecord>> {
+  const map = new Map<string, OwnerRecord>();
+  try {
+    const res = await hubspotFetch("/crm/v3/owners?limit=100");
+    if (!res.ok) return map;
+    const data = (await res.json()) as { results?: OwnerRecord[] };
+    for (const o of data.results ?? []) {
+      map.set(o.id, o);
+    }
+  } catch {
+    // non-fatal — owner info stays blank if unavailable
+  }
+  return map;
+}
 
 async function isDealClosedLost(dealId: string): Promise<boolean> {
   try {
@@ -50,14 +97,15 @@ async function isDealClosedLost(dealId: string): Promise<boolean> {
 export async function syncHubSpotDealsToProjects(): Promise<{
   synced: SyncDealResult[];
   errors: string[];
-  reconciledJanitorial?: Array<{ hubspotDealId: string; projectId: string }>;
   removedLostDeals?: string[];
 }> {
   const startDateProperty = process.env.HUBSPOT_PROJECT_START_DATE_PROPERTY?.trim() || null;
   const endDateProperty = process.env.HUBSPOT_PROJECT_END_DATE_PROPERTY?.trim() || null;
   const extraProperties = [startDateProperty, endDateProperty].filter((p): p is string => Boolean(p));
-  const deals = await searchDealsInConfiguredStages(200, extraProperties);
-  const cfg = parseHubSpotPipelineStageMap();
+  const [deals, owners] = await Promise.all([
+    searchDealsInConfiguredStages(200, extraProperties),
+    fetchAllOwners(),
+  ]);
   const seenDealIds = new Set(deals.map((d) => d.id));
   const synced: SyncDealResult[] = [];
   const errors: string[] = [];
@@ -78,11 +126,17 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       continue;
     }
 
-    const { segment, phase } = classified;
-    const projectSegment = segment === "COMMERCIAL" ? "COMMERCIAL_CLEANING" : "RESIDENTIAL_PAINTING";
+    const { phase } = classified;
+    const projectSegment = "COMMERCIAL_CLEANING";
     const status = erpStatusFromPhase(phase);
     const contractValueCents =
       amountRaw && !Number.isNaN(Number(amountRaw)) ? Math.round(Number(amountRaw) * 100) : undefined;
+
+    const ownerIdRaw = prop(deal, "hubspot_owner_id");
+    const owner = ownerIdRaw ? owners.get(ownerIdRaw) : null;
+    const hubspotOwnerId = ownerIdRaw ?? undefined;
+    const hubspotOwnerName = owner ? `${owner.firstName} ${owner.lastName}`.trim() || owner.email : undefined;
+    const hubspotOwnerEmail = owner?.email ?? undefined;
 
     let syncedProjectId: string | null = null;
     try {
@@ -94,17 +148,34 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       const projectDate = parseHubSpotDate(startRaw ?? closeRaw);
       const projectEndDate = parseHubSpotDate(endRaw ?? closeRaw);
       if (existing) {
+        const completionBillingStatus = await resolveCompletionBillingStatus(
+          phase,
+          existing.billingStatus,
+          pipelineId,
+          existing.id
+        );
         await prisma.project.update({
           where: { id: existing.id },
           data: {
-            ...(existing.supervisor ? {} : { supervisor: "UNASSIGNED PM" }),
+            // No placeholder written when there's no supervisor yet — a
+            // fake "UNASSIGNED PM" name here used to leak as a real PM name
+            // anywhere Project.supervisor is displayed (pm-view, digest
+            // emails) and pass any "is a PM assigned" truthy check.
+            // Leaving it unset (null/absent) lets those checks work.
             segment: projectSegment,
             status,
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             projectDate,
             projectEndDate,
-            ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
+            ...(hubspotOwnerId !== undefined ? { hubspotOwnerId } : {}),
+            ...(hubspotOwnerName !== undefined ? { hubspotOwnerName } : {}),
+            ...(hubspotOwnerEmail !== undefined ? { hubspotOwnerEmail } : {}),
+            ...(completionBillingStatus
+              ? { billingStatus: completionBillingStatus }
+              : phase === "BILLING"
+                ? { billingStatus: "BILLING" }
+                : {}),
           },
         });
         syncedProjectId = existing.id;
@@ -112,7 +183,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           hubspotDealId: deal.id,
           projectId: existing.id,
           action: "updated",
-          segment,
+          segment: projectSegment,
           phase,
         });
       } else {
@@ -122,12 +193,15 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             jobTitle: name,
-            supervisor: "UNASSIGNED PM",
+            supervisor: null,
             segment: projectSegment,
             status,
             contractValueCents: contractValueCents ?? null,
             projectDate,
             projectEndDate,
+            hubspotOwnerId: hubspotOwnerId ?? null,
+            hubspotOwnerName: hubspotOwnerName ?? null,
+            hubspotOwnerEmail: hubspotOwnerEmail ?? null,
             ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
           },
         });
@@ -136,7 +210,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
           hubspotDealId: deal.id,
           projectId: created.id,
           action: "created",
-          segment,
+          segment: projectSegment,
           phase,
         });
       }
@@ -158,41 +232,20 @@ export async function syncHubSpotDealsToProjects(): Promise<{
     }
   }
 
-  const reconciledJanitorial: Array<{ hubspotDealId: string; projectId: string }> = [];
-  const janitorialId = cfg?.janitorial.pipelineId;
-  const janitorialNoCompleted = cfg && !cfg.janitorial.stages.workCompleted?.trim();
-  if (janitorialId && janitorialNoCompleted) {
-    const orphans = await prisma.project.findMany({
-      where: {
-        hubspotPipelineId: janitorialId,
-        hubspotDealId: { not: null },
-        status: "ACTIVE",
-      },
-      select: { id: true, hubspotDealId: true },
-    });
-    for (const row of orphans) {
-      const hid = row.hubspotDealId;
-      if (!hid || seenDealIds.has(hid)) continue;
-      await prisma.project.update({
-        where: { id: row.id },
-        data: { status: "COMPLETE" },
-      });
-      reconciledJanitorial.push({ hubspotDealId: hid, projectId: row.id });
-    }
-  }
-
   // Remove projects whose HubSpot deal is now closed-lost (no longer in any active stage)
   const removedLostDeals: string[] = [];
   const orphanedProjects = await prisma.project.findMany({
     where: {
       hubspotDealId: { not: null },
       NOT: { hubspotDealId: { in: [...seenDealIds] } },
+      // Real estate deals are no longer fetched from HubSpot at all, so their projects
+      // would always look "orphaned" here. Exclude them so this cleanup never touches them.
+      segment: { not: "REAL_ESTATE" },
     },
     select: { id: true, hubspotDealId: true },
   });
   for (const project of orphanedProjects) {
     const hid = project.hubspotDealId!;
-    if (reconciledJanitorial.some((r) => r.projectId === project.id)) continue;
     const lost = await isDealClosedLost(hid);
     if (lost) {
       try {
@@ -207,7 +260,6 @@ export async function syncHubSpotDealsToProjects(): Promise<{
   return {
     synced,
     errors,
-    ...(reconciledJanitorial.length > 0 ? { reconciledJanitorial } : {}),
     ...(removedLostDeals.length > 0 ? { removedLostDeals } : {}),
     ...(contactScopesError ? { contactScopesError } : {}),
   };

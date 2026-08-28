@@ -1,6 +1,8 @@
 "use client";
 
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
+import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 
 function getDetailLine(description: string | null, label: string) {
   const prefix = `${label}:`;
@@ -13,62 +15,114 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-function isCleanupRow(row: ProjectTableRow) {
-  const title = row.jobTitle.trim().toLowerCase();
-  const pm = (row.supervisor || "").trim().toLowerCase();
-
-  return title.includes("test") || pm.includes("jeff");
-}
-
-function janitorialRowTitle(row: ProjectTableRow) {
-  const units = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
-  const unitScope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
-  const firstUnit = units.split(",")[0]?.replace(/^\s*\d+\s+unit[s]?\s*\([^)]*\)\s*-\s*/i, "").trim();
-
-  if (unitScope) return unitScope;
-  if (firstUnit) return firstUnit;
-
-  const unitFromTitle = row.jobTitle.match(/\bUnit\b.+$/i)?.[0]?.trim();
-  if (unitFromTitle) return unitFromTitle;
-
-  return row.jobTitle;
-}
-
 function janitorialBuildingTitle(row: ProjectTableRow) {
-  return getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || row.jobTitle;
+  return row.buildingName || getDetailLine(row.description, "Property") || row.jobTitle.split(/\s+-\s+/)[0]?.trim() || row.jobTitle;
 }
 
 function janitorialBuildingHref(row: ProjectTableRow) {
-  return row.buildingId ? `/erp/buildings/${row.buildingId}` : null;
+  return row.buildingId ? `/erp/buildings/${row.buildingId}?from=projects` : null;
 }
 
-function janitorialRowDescription(row: ProjectTableRow) {
-  const description = row.description?.trim();
-  const firstLine = description?.split(/\r?\n/).find((line) => line.trim())?.trim();
+function unitsFromDescription(row: ProjectTableRow) {
+  const units = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
+  if (!units) return "";
 
-  if (!firstLine) return null;
-  if (/^(property|address|units|unit numbers|price package|estimated turnover total|pricing breakdown):/i.test(firstLine)) {
-    return null;
+  return units
+    .split(/\s+\|\s+/)
+    .map((unit) => unit.match(/^\s*([^(|]+)/)?.[1]?.trim() || "")
+    .filter(Boolean)
+    .join(", ");
+}
+
+function unitTitleFromJobTitle(row: ProjectTableRow) {
+  const title = row.jobTitle.trim();
+  if (!/^Unit\b/i.test(title)) return "";
+
+  return title.replace(/\s+-\s+Turnover request$/i, "").trim();
+}
+
+/** Building-wide (non-per-unit) janitorial projects, like Nittany's separate
+ * "Turn Cleaning" and "Touch Up" contracts, distinguish themselves by the
+ * trailing " - <service>" segment on the jobTitle rather than a unit number
+ * — use that instead of the generic "1 unit" filler so sibling projects
+ * under the same building group read as distinct rows. */
+function serviceLabelFromJobTitle(row: ProjectTableRow) {
+  const parts = row.jobTitle.trim().split(/\s+-\s+/);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 1].trim();
+}
+
+function janitorialRowTitle(row: ProjectTableRow) {
+  const rawUnits = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers");
+  const units = unitsFromDescription(row);
+  if (units) {
+    if (rawUnits && rawUnits.toLowerCase().includes("(common area")) return units;
+    return formatUnitDisplay(units);
   }
 
-  return firstLine;
+  return unitTitleFromJobTitle(row) || serviceLabelFromJobTitle(row) || "1 unit";
 }
 
-export function JanitorialProjectsExpandableTable({ rows }: { rows: ProjectTableRow[] }) {
-  const visibleRows = rows
-    .filter((row) => !isCleanupRow(row))
+function janitorialRowDescription(_row: ProjectTableRow) {
+  return null;
+}
+
+// WIP (active) first, then upcoming, then completed — matches the order
+// David works units in: finish what's in progress, then what's coming up,
+// with wrapped-up units sorted to the bottom out of the way.
+function lifecycleRank(row: ProjectTableRow): number {
+  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders));
+  if (lifecycle === "ACTIVE") return 0;
+  if (lifecycle === "UPCOMING") return 1;
+  return 2;
+}
+
+export function JanitorialProjectsExpandableTable({
+  rows,
+  canSeeFinancials = true,
+  canSeeMarginOnly = false,
+}: {
+  rows: ProjectTableRow[];
+  canSeeFinancials?: boolean;
+  canSeeMarginOnly?: boolean;
+}) {
+  // Legacy: projects created before one-per-unit architecture may have multiple units in
+  // description — expand those into separate display rows for backward compatibility.
+  const expandedRows = rows.flatMap((row) => {
+    const units = unitsFromDescription(row);
+    if (!units) return [row];
+    const unitList = units.split(", ");
+    if (unitList.length <= 1) return [row];
+    const rawLine = getDetailLine(row.description, "Units") || getDetailLine(row.description, "Unit Numbers") || "";
+    const rawEntries = rawLine.split(/\s+\|\s+/);
+    return unitList.map((unit, index) => {
+      const isCommonArea = (rawEntries[index] || "").toLowerCase().includes("(common area");
+      return {
+        ...row,
+        id: `${row.id}-unit-${index}`,
+        jobTitle: `${row.jobTitle} - ${unit}`,
+        description: `Units: ${unit}${isCommonArea ? " (Common Area)" : ""}\n${row.description || ""}`,
+      };
+    });
+  });
+
+  const visibleRows = expandedRows
     .sort((a, b) => {
-      const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b));
+      const buildingCompare = janitorialBuildingTitle(a).localeCompare(janitorialBuildingTitle(b), undefined, { numeric: true });
       if (buildingCompare !== 0) return buildingCompare;
 
-      return janitorialRowTitle(a).localeCompare(janitorialRowTitle(b));
+      const rankCompare = lifecycleRank(a) - lifecycleRank(b);
+      if (rankCompare !== 0) return rankCompare;
+
+      return janitorialRowTitle(a).localeCompare(janitorialRowTitle(b), undefined, { numeric: true });
     });
 
   return (
     <ProjectsExpandableTable
       rows={visibleRows}
       janitorialPipelineId={null}
-      janitorialDetailMode="team"
+      canSeeFinancials={canSeeFinancials}
+      canSeeMarginOnly={canSeeMarginOnly}
       groupTitleForRow={janitorialBuildingTitle}
       groupHrefForRow={janitorialBuildingHref}
       collapsibleGroups

@@ -1,0 +1,1 @@
+export const CONTRACTOR_LABOR_PAGE_SIZE = 25;

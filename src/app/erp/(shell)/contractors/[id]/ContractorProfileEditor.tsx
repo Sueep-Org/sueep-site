@@ -2,22 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const label = labelClass.default;
 
 type Props = {
   contractorId: string;
   initial: {
     name: string;
     email: string | null;
+    role: string | null;
     status: string;
   };
 };
 
 export function ContractorProfileEditor({ contractorId, initial }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +40,7 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
         body: JSON.stringify({
           name: fd.get("name"),
           email: fd.get("email") || null,
+          role: fd.get("role") || null,
           status: fd.get("status"),
         }),
       });
@@ -55,28 +59,25 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Permanently delete this contractor? This cannot be undone.")) return;
+    if (!(await confirm({ message: "Permanently delete this contractor? This cannot be undone." }))) return;
     setDeleting(true);
-    setError("");
     try {
       const res = await fetch(`/api/erp/contractors/${contractorId}`, { method: "DELETE" });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Delete failed");
+        toast(data.error ?? "Delete failed", "error");
         setDeleting(false);
         return;
       }
       router.push("/erp/contractors");
     } catch {
-      setError("Network error");
+      toast("Network error", "error");
       setDeleting(false);
     }
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 className="text-sm font-semibold text-gray-800">General information</h2>
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={label} htmlFor="name">
@@ -99,6 +100,18 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
               name="email"
               type="email"
               defaultValue={initial.email ?? ""}
+              className={input}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="role">
+              Role
+            </label>
+            <input
+              id="role"
+              name="role"
+              placeholder="e.g. Cleaner, Painter"
+              defaultValue={initial.role ?? ""}
               className={input}
             />
           </div>
@@ -132,6 +145,5 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
           </button>
         </div>
       </form>
-    </section>
   );
 }

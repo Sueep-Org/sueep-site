@@ -3,8 +3,9 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
-import { deriveProjectLifecycle } from "@/lib/erp/projectLifecycle";
-import { projectSegmentLabel } from "@/lib/erp/projectSegments";
+import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
+import { getDescLine as getDescriptionLine } from "@/lib/erp/descLine";
+import { Modal, Button } from "@/app/erp/components/ui";
 
 type LaborRowBase = {
   id: string;
@@ -13,10 +14,23 @@ type LaborRowBase = {
   role: string | null;
   name: string;
   hours: number;
+  commuteHours?: number | null;
   hourlyRateCents: number;
   description: string | null;
-  qualityRating: string | null;
   qualityNotes: string | null;
+};
+
+type ContractorEntryRow = {
+  name: string;
+  role: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  costCents: number | null;
+  notes: string | null;
+  /** SOV line item(s) this contractor's work covers — regular project-level
+   * contractor assignments only, change-order ones have no SOV link, so
+   * this is always empty for a CO's contractor rows. */
+  sovItems: { id: string; description: string; scheduledValueCents: number }[];
 };
 
 export type UnitQualityCheckRow = {
@@ -34,6 +48,8 @@ export type ProjectTableRow = {
   jobTitle: string;
   description: string | null;
   buildingId?: string | null;
+  buildingName?: string | null;
+  buildingAddress?: string | null;
   segment: string;
   status: string;
   projectDate: string | null;
@@ -58,10 +74,12 @@ export type ProjectTableRow = {
   miles: number;
   hubspotPipelineId: string | null;
   unitQualityChecks: UnitQualityCheckRow[];
+  contractorEntries: ContractorEntryRow[];
   changeOrders: {
     id: string;
     title: string;
-    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING";
+    status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED";
+    startDate: string | null;
     billingStatus: string | null;
     percentInvoiced: number;
     estimatedCostCents: number | null;
@@ -81,33 +99,126 @@ export type ProjectTableRow = {
     laborers: LaborRowBase[];
     laborCostCents: number;
     materialCostCents: number;
+    contractorCostCents: number;
+    contractorEntries: ContractorEntryRow[];
   }[];
 };
 
-export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING", string> = {
+export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "VOID" | "BILLING" | "COMPLETED", string> = {
   DRAFT: "bg-gray-200 text-gray-600",
   SUBMITTED: "bg-blue-100 text-blue-700",
   APPROVED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-600",
   VOID: "bg-gray-100 text-gray-500",
   BILLING: "bg-purple-100 text-purple-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING"): { row: string; detail: string; sticky: string; titleLink: string } {
+export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING" | "ON_HOLD"): { row: string; detail: string; sticky: string; titleLink: string } {
   if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-gray-500 hover:underline" };
   if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-purple-600 hover:underline" };
+  if (state === "ON_HOLD") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-amber-600 hover:underline" };
   return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-emerald-600 hover:underline" };
 }
 
 type LaborRow = LaborRowBase;
 
+// Dates here (CO/contractor start-end, labor workDate) are stored as UTC
+// midnight standing for a calendar day with no real timezone attached, same
+// convention as the schedule calendar (see src/lib/erp/schedule.ts). Reading
+// them back with local getters instead of UTC ones rolls the date back a day
+// for anyone west of UTC (confirmed: a CO started 5/22 rendered as 5/21 in
+// Eastern) — has to stay UTC to match how it was stored.
 function fmtDate(iso: string) {
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${String(d.getUTCFullYear()).slice(-2)}`;
 }
 
 export function EmptyValue() {
   return <span className="text-gray-400">-</span>;
+}
+
+/** Sueep PM assigned to a unit — same derivation the row-level PM cell uses
+ * (Project.supervisor, falling back to a "SUEEP PM:" description line for
+ * older turnover projects that predate the dedicated field). */
+function sueepPmForRow(row: ProjectTableRow): string | null {
+  if (row.segment !== "JANITORIAL_TURNOVER_REQUESTS") return row.supervisor;
+  return row.supervisor || getDescriptionLine(row.description, "SUEEP PM");
+}
+
+/** Building-level PM label: every unit's assigned Sueep PM, deduped and
+ * joined — "David" if all units share one PM, "David, Sarah" if units in
+ * the building are split across PMs, null if none are assigned yet. */
+function groupSueepPmLabel(groupRows: ProjectTableRow[]): string | null {
+  const names = Array.from(
+    new Set(
+      groupRows
+        .map((row) => sueepPmForRow(row)?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  );
+  return names.length > 0 ? names.join(", ") : null;
+}
+
+function projectActualCostCents(project: ProjectTableRow) {
+  return (project.actualLaborCents ?? 0) + (project.actualMaterialCents ?? 0);
+}
+
+function projectMarginCents(project: ProjectTableRow) {
+  if (project.contractValueCents == null) return null;
+  return project.contractValueCents - projectActualCostCents(project);
+}
+
+function marginClass(value: number | null) {
+  if (value == null) return "text-gray-400";
+  if (value < 0) return "text-red-600";
+  return "text-emerald-700";
+}
+
+function marginPercent(project: ProjectTableRow) {
+  const margin = projectMarginCents(project);
+  if (margin == null || !project.contractValueCents) return null;
+  return `${Math.round((margin / project.contractValueCents) * 100)}%`;
+}
+
+/** Flags a negative margin right at the name, so it can't be scanned past —
+ * a project actively losing money shouldn't look the same as a healthy one
+ * until you happen to notice the margin column. */
+function MarginWarningIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="mr-1 inline h-3.5 w-3.5 shrink-0 align-text-bottom text-red-500"
+      aria-label="Negative margin"
+    >
+      <path
+        fillRule="evenodd"
+        d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.169 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function sumProjects(rows: ProjectTableRow[], selector: (row: ProjectTableRow) => number | null | undefined) {
+  return rows.reduce((sum, row) => sum + (selector(row) ?? 0), 0);
+}
+
+/** Job/building titles and PM names are often "Name - extra detail - company"
+ * (e.g. "The Gio Apartments - 2630 W Girard Ave... - Cushman & Wakefield") —
+ * in these narrow columns, cut at the first " - " separator rather than
+ * letting CSS ellipsis chop it mid-word wherever it happens to overflow.
+ * Requires spaces around the hyphen so it doesn't false-match a hyphen
+ * that's actually part of the name itself, like a street range ("20-30 W
+ * Allens Ln") or a unit range ("2000-2039"). Only shortens text that
+ * actually has a " - " to cut at; anything else is left for the `truncate`
+ * class to ellipsis normally. */
+function truncateAtHyphen(text: string): string {
+  const idx = text.indexOf(" - ");
+  if (idx === -1) return text;
+  const before = text.slice(0, idx).trim();
+  return before || text;
 }
 
 function getDetailLine(description: string | null, label: string) {
@@ -121,98 +232,19 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-export function TurnoverPricingSummary({
-  project,
-  showPropertyTitle = true,
-  showUnitsSummary = true,
-}: {
-  project: ProjectTableRow;
-  showPropertyTitle?: boolean;
-  showUnitsSummary?: boolean;
-}) {
-  const property = getDetailLine(project.description, "Property");
-  const units = getDetailLine(project.description, "Units");
-  const total = getDetailLine(project.description, "Estimated Turnover Total");
-  const standardBreakdown = getDetailLine(project.description, "Pricing Breakdown");
-  const specialPackage = getDetailLine(project.description, "Special Pricing Package");
-  const breakdownLines = standardBreakdown ? standardBreakdown.split(/\s+\|\s+/).filter(Boolean) : [];
-
-  return (
-    <div className="overflow-x-auto bg-white px-3 py-2">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Turnover pricing</p>
-          {showPropertyTitle ? <p className="mt-1 text-sm font-semibold text-slate-900">{property || project.jobTitle}</p> : null}
-          {showUnitsSummary && units ? <p className="mt-0.5 max-w-5xl text-xs text-slate-500">{units}</p> : null}
-        </div>
-        <div className="text-left sm:text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{total || centsToDollars(project.contractValueCents)}</p>
-        </div>
-      </div>
-
-      {breakdownLines.length > 0 ? (
-        <table className="w-full table-fixed text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              <th className="w-[24%] pb-1.5 pr-3 text-left font-semibold">Unit</th>
-              <th className="w-[56%] pb-1.5 pr-3 text-left font-semibold">Pricing</th>
-              <th className="w-[20%] pb-1.5 text-right font-semibold">Line Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {breakdownLines.map((line, index) => {
-              const [unitPart, rest = ""] = line.split(": ");
-              const totalMatch = rest.match(/=\s*([^=]+)$/);
-              const lineTotal = totalMatch?.[1]?.trim() || "-";
-              const pricing = totalMatch ? rest.replace(/\s*=\s*[^=]+$/, "").trim() : rest;
-
-              return (
-                <tr key={`${unitPart}-${index}`} className="text-slate-900">
-                  <td className="py-1 pr-3 align-top font-medium">{unitPart || `Unit ${index + 1}`}</td>
-                  <td className="py-1 pr-3 align-top text-slate-600">{pricing || line}</td>
-                  <td className="py-1 text-right align-top font-medium tabular-nums">{lineTotal}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : (
-        <p className="border-t border-gray-100 pt-2 text-xs text-slate-500">
-          No turnover pricing breakdown is saved on this project yet.
-        </p>
-      )}
-
-      {specialPackage ? (
-        <div className="mt-3 border-t border-gray-100 pt-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Special pricing package</p>
-          <p className="mt-1 whitespace-pre-line text-xs text-slate-700">{specialPackage}</p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function getTurnoverDropdownTitle(project: ProjectTableRow) {
-  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-
-  if (units) {
-    const scope = units.match(/\)\s*-\s*(.+)$/)?.[1]?.trim();
-    if (scope) return scope;
-  }
-
-  return "Turnover";
-}
-
 function getJanitorialBuildingName(project: ProjectTableRow) {
   return getDetailLine(project.description, "Property") || project.jobTitle.split(/\s+-\s+Unit\b/i)[0]?.trim() || project.jobTitle;
 }
 
-function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow }) {
+function JanitorialProjectDropdownDetail({ project, showFinancials = true }: { project: ProjectTableRow; showFinancials?: boolean }) {
   const building = getJanitorialBuildingName(project);
-  const address = getDetailLine(project.description, "Address");
+  // Building.address is the real source of truth; description only ever
+  // has an "Address:" line for old HubSpot-import projects, never for
+  // units created through the current turnover flow (see
+  // ProjectWorkOrderNotifier.tsx for the same fix on the unit detail page).
+  const address = project.buildingAddress || getDetailLine(project.description, "Address");
   const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-  const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}` : null;
+  const buildingHref = project.buildingId ? `/erp/buildings/${project.buildingId}?from=projects` : null;
 
   return (
     <div className="space-y-2">
@@ -235,79 +267,116 @@ function JanitorialProjectDropdownDetail({ project }: { project: ProjectTableRow
       </div>
       <div className="overflow-x-auto bg-white px-3 py-2">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-        <LaborTable entries={project.laborEntries} />
+        <LaborTable entries={project.laborEntries} showFinancials={showFinancials} />
       </div>
     </div>
   );
 }
 
-function JanitorialTurnoverDetail({ project }: { project: ProjectTableRow }) {
-  const units = getDetailLine(project.description, "Units") || getDetailLine(project.description, "Unit Numbers");
-  const comments = getDetailLine(project.description, "Comments") || getDetailLine(project.description, "Notes");
-  const geotracking = getDetailLine(project.description, "Geotracking");
-  const expectedLocation = getDetailLine(project.description, "Expected Worker Location");
-  const geofenceRadius = getDetailLine(project.description, "Geofence Radius");
-  const locationChecks = getDetailLine(project.description, "Location Checks");
-  const geotrackingNotes = getDetailLine(project.description, "Geotracking Notes");
+function ProjectLaborLogPanel({ project, className = "overflow-x-auto bg-white px-3 py-2", showFinancials = true }: { project: ProjectTableRow; className?: string; showFinancials?: boolean }) {
+  return (
+    <div className={className}>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Labor log</p>
+      <LaborTable entries={project.laborEntries} showFinancials={showFinancials} />
+      <ContractorTable entries={project.contractorEntries} showSov />
+    </div>
+  );
+}
 
+/** `showSov` swaps the Notes column for SOV / SOV Value / Margin — only
+ * regular project-level contractor assignments carry an SOV link today
+ * (change-order ones don't), so callers showing CO contractor rows should
+ * leave this off and keep the plain Notes column. */
+function ContractorTable({ entries, showSov = false }: { entries: ContractorEntryRow[]; showSov?: boolean }) {
+  if (entries.length === 0) return null;
   return (
     <>
-      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
-        <LaborTable entries={project.laborEntries} />
-      </div>
-
-      <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white">
-        <TurnoverPricingSummary project={project} />
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Turnover scope</p>
-          <p className="mt-1 text-xs text-gray-700 line-clamp-3">
-            {comments || units || <span className="text-gray-400">No turnover notes</span>}
-          </p>
-        </div>
-
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
-          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-gray-400">Contract</span>
-            <span className="font-medium text-gray-800">{centsToDollars(project.contractValueCents)}</span>
-            <span className="text-gray-400">Start</span>
-            <span className="font-medium text-gray-800">{project.projectDate ? fmtDate(project.projectDate) : "-"}</span>
-            <span className="text-gray-400">Est. hours</span>
-            <span className="font-medium text-gray-800">{project.estHours ?? "-"}</span>
-          </div>
-        </div>
-
-        <div className="rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Geotracking</p>
-          <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-            <span className="text-gray-400">Status</span>
-            <span className="font-medium text-gray-800">{geotracking || "Disabled"}</span>
-            <span className="text-gray-400">Location</span>
-            <span className="font-medium text-gray-800">{expectedLocation || "-"}</span>
-            <span className="text-gray-400">Radius</span>
-            <span className="font-medium text-gray-800">{geofenceRadius || "-"}</span>
-            <span className="text-gray-400">Checks</span>
-            <span className="font-medium text-gray-800">{locationChecks || "-"}</span>
-          </div>
-          {geotrackingNotes ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{geotrackingNotes}</p> : null}
-        </div>
-
-        <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-          <p className="mt-1 text-sm font-semibold text-gray-800">{project.supervisor || "-"}</p>
-          <Link
-            href={`/erp/projects/${project.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
-          >
-            Full details {"->"}
-          </Link>
-        </div>
-      </div>
+      <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contractors</p>
+      <table className="w-full table-fixed text-xs">
+        <colgroup>
+          <col className="w-[14%]" />
+          <col className="w-[13%]" />
+          <col className="w-[11%]" />
+          <col className="w-[11%]" />
+          {showSov ? (
+            <>
+              <col className="w-[20%]" />
+              <col className="w-[11%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+            </>
+          ) : (
+            <>
+              <col className="w-[13%]" />
+              <col className="w-[27%]" />
+            </>
+          )}
+        </colgroup>
+        <thead>
+          <tr className="border-b border-gray-200 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Role</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">Start</th>
+            <th className="pb-1.5 pr-3 text-left font-semibold">End</th>
+            {showSov ? (
+              <>
+                <th className="pb-1.5 pr-3 text-left font-semibold">SOV</th>
+                <th className="pb-1.5 pr-3 text-right font-semibold">SOV Value</th>
+                <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
+                <th className="pb-1.5 text-right font-semibold">Margin</th>
+              </>
+            ) : (
+              <>
+                <th className="pb-1.5 pr-3 text-right font-semibold">Cost</th>
+                <th className="pb-1.5 text-left font-semibold">Notes</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {entries.map((c, i) => {
+            const sovValueCents = c.sovItems.reduce((s, item) => s + item.scheduledValueCents, 0);
+            const margin = c.sovItems.length > 0 && c.costCents != null ? sovValueCents - c.costCents : null;
+            const marginPct = margin != null && sovValueCents !== 0 ? Math.round((margin / sovValueCents) * 100) : null;
+            return (
+              <tr key={i} className="text-slate-900">
+                <td className="py-1 pr-3 truncate font-medium">{c.name}</td>
+                <td className="py-1 pr-3 truncate">{c.role ?? "Contractor"}</td>
+                <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.startDate ? fmtDate(c.startDate) : <EmptyValue />}</td>
+                <td className="py-1 pr-3 tabular-nums whitespace-nowrap">{c.endDate ? fmtDate(c.endDate) : <EmptyValue />}</td>
+                {showSov ? (
+                  <>
+                    <td className="py-1 pr-3 truncate" title={c.sovItems.map((s) => s.description).join(", ")}>
+                      {c.sovItems.length > 0 ? c.sovItems.map((s) => s.description).join(", ") : <EmptyValue />}
+                    </td>
+                    <td className="py-1 pr-3 text-right tabular-nums">
+                      {c.sovItems.length > 0 ? centsToDollars(sovValueCents) : <EmptyValue />}
+                    </td>
+                    <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
+                    <td className={`py-1 text-right font-medium tabular-nums ${marginClass(margin)}`}>
+                      {margin != null ? (
+                        <>
+                          {centsToDollars(margin)}
+                          {marginPct != null ? (
+                            <span className="ml-1 font-normal text-slate-400">({marginPct}%)</span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <EmptyValue />
+                      )}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="py-1 pr-3 text-right tabular-nums">{c.costCents != null ? centsToDollars(c.costCents) : <EmptyValue />}</td>
+                    <td className="py-1 truncate text-slate-500">{c.notes ?? <EmptyValue />}</td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </>
   );
 }
@@ -318,15 +387,17 @@ function SubRowTitleCell({
   statusClass,
   href,
   title,
+  date,
 }: {
   badge?: string;
   status: string;
   statusClass: string;
   href: string;
   title: string;
+  date?: string | null;
 }) {
   return (
-    <td className="w-[420px] min-w-[420px] bg-gray-50 px-3 py-1.5">
+    <td className="w-[280px] min-w-[280px] bg-gray-50 px-3 py-1.5">
       <div className="flex items-center gap-2 pl-4">
         <span className="shrink-0 text-gray-300">&gt;</span>
         {badge ? (
@@ -341,41 +412,18 @@ function SubRowTitleCell({
           href={href}
           onClick={(e) => e.stopPropagation()}
           className="truncate text-sm font-medium text-gray-700 hover:underline"
+          title={title}
         >
-          {title}
+          {truncateAtHyphen(title)}
         </Link>
+        {date ? <span className="shrink-0 text-[11px] font-normal text-gray-400">{fmtDate(date)}</span> : null}
       </div>
     </td>
   );
 }
 
-const QUALITY_OPTIONS = [
-  { value: "", label: "—", score: null },
-  { value: "POOR", label: "Poor", score: 1 },
-  { value: "FAIR", label: "Fair", score: 2 },
-  { value: "GOOD", label: "Good", score: 3 },
-  { value: "EXCELLENT", label: "Excellent", score: 4 },
-];
-
-const QUALITY_SCORE: Record<string, number> = {
-  POOR: 1,
-  FAIR: 2,
-  GOOD: 3,
-  EXCELLENT: 4,
-};
-
-const QUALITY_COLORS: Record<string, string> = {
-  EXCELLENT: "text-emerald-600",
-  GOOD: "text-gray-800",
-  FAIR: "text-gray-500",
-  POOR: "text-red-400",
-};
-
-export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[]; initialVisible?: number }) {
+export function LaborTable({ entries, initialVisible = 5, showFinancials = true }: { entries: LaborRow[]; initialVisible?: number; showFinancials?: boolean }) {
   const [showAll, setShowAll] = useState(false);
-  const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
-    Object.fromEntries(entries.map((e) => [e.id, e.qualityRating ?? ""]))
-  );
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(entries.map((e) => [e.id, e.qualityNotes ?? ""]))
   );
@@ -385,15 +433,6 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
 
   const visibleEntries = showAll ? entries : entries.slice(0, initialVisible);
   const hiddenCount = Math.max(entries.length - visibleEntries.length, 0);
-
-  function handleQualityChange(entry: LaborRow, value: string) {
-    setQualityMap((prev) => ({ ...prev, [entry.id]: value }));
-    fetch(entry.updatePath, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qualityRating: value || null }),
-    }).catch(() => {});
-  }
 
   function handleNotesSave() {
     if (!popup) return;
@@ -413,12 +452,12 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
         <table className="w-full table-fixed text-xs">
           <colgroup>
             <col className="w-[9%]" />
-            <col className="w-[20%]" />
-            <col className="w-[21%]" />
-            <col className="w-[8%]" />
-            <col className="w-[10%]" />
-            <col className="w-[10%]" />
-            <col className="w-[16%]" />
+            <col className="w-[18%]" />
+            <col className={showFinancials ? "w-[19%]" : "w-[27%]"} />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            {showFinancials && <col className="w-[10%]" />}
+            <col className={showFinancials ? "w-[24%]" : "w-[26%]"} />
             <col className="w-[6%]" />
           </colgroup>
           <thead>
@@ -427,15 +466,14 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
               <th className="pb-1.5 pr-3 text-left font-semibold">Job Title</th>
               <th className="pb-1.5 pr-3 text-left font-semibold">Name</th>
               <th className="pb-1.5 pr-3 text-right font-semibold">Hours</th>
-              <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>
+              <th className="pb-1.5 pr-3 text-right font-semibold">Commute</th>
+              {showFinancials && <th className="pb-1.5 pr-3 text-right font-semibold">Rate/hr</th>}
               <th className="pb-1.5 pr-3 text-left font-semibold">Description</th>
-              <th className="pb-1.5 pr-3 text-left font-semibold">Quality</th>
               <th className="pb-1.5 text-left font-semibold">Notes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visibleEntries.map((e, i) => {
-              const quality = qualityMap[e.id] ?? "";
               const notes = notesMap[e.id] ?? "";
               return (
                 <tr key={`${e.date}-${e.name}-${i}`} className="text-slate-900">
@@ -443,34 +481,16 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
                   <td className="py-1 pr-3 truncate">{e.role ?? <EmptyValue />}</td>
                   <td className="py-1 pr-3 truncate font-medium">{e.name}</td>
                   <td className="py-1 pr-3 text-right tabular-nums">{e.hours.toFixed(2)}</td>
-                  <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>
-                  <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
-                  <td className="py-1 pr-3">
-                    <div className="flex items-center gap-1">
-                      {quality ? (
-                        <span className={`shrink-0 text-xs font-bold tabular-nums ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
-                          {QUALITY_SCORE[quality]}
-                        </span>
-                      ) : null}
-                      <select
-                        value={quality}
-                        onChange={(ev) => { ev.stopPropagation(); handleQualityChange(e, ev.target.value); }}
-                        onClick={(ev) => ev.stopPropagation()}
-                        className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-300 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                      >
-                        {QUALITY_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.score != null ? `${opt.score} – ${opt.label}` : opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <td className="py-1 pr-3 text-right tabular-nums text-slate-500">
+                    {e.commuteHours != null ? `${Math.round(e.commuteHours * 60)} min` : <EmptyValue />}
                   </td>
+                  {showFinancials && <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap">{centsToDollars(e.hourlyRateCents)}</td>}
+                  <td className="py-1 pr-3 truncate text-slate-500">{e.description ?? <EmptyValue />}</td>
                   <td className="py-1">
                     <button
                       type="button"
                       onClick={(ev) => { ev.stopPropagation(); setPopup({ id: e.id, updatePath: e.updatePath, draft: notes }); }}
-                      title={notes || "Add quality notes"}
+                      title={notes || "Add notes"}
                       className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
@@ -503,43 +523,25 @@ export function LaborTable({ entries, initialVisible = 5 }: { entries: LaborRow[
         ) : null}
       </div>
 
-      {popup ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setPopup(null)}
-        >
-          <div
-            className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-            onClick={(ev) => ev.stopPropagation()}
-          >
-            <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
-            <textarea
-              autoFocus
-              rows={4}
-              value={popup.draft}
-              onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
-              placeholder="Add notes about work quality..."
-              className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
-            />
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPopup(null)}
-                className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleNotesSave}
-                className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
-              >
-                Save
-              </button>
-            </div>
-          </div>
+      <Modal open={!!popup} onClose={() => setPopup(null)}>
+        <h3 className="mb-3 text-sm font-semibold text-gray-800">Notes</h3>
+        <textarea
+          autoFocus
+          rows={4}
+          value={popup?.draft ?? ""}
+          onChange={(ev) => setPopup((p) => p ? { ...p, draft: ev.target.value } : null)}
+          placeholder="Add notes..."
+          className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+        />
+        <div className="mt-3 flex justify-end gap-2">
+          <Button variant="ghost" size="xs" onClick={() => setPopup(null)}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="xs" onClick={handleNotesSave}>
+            Save
+          </Button>
         </div>
-      ) : null}
+      </Modal>
     </>
   );
 }
@@ -567,30 +569,40 @@ function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string 
 export function ProjectsExpandableTable({
   rows,
   janitorialPipelineId,
+  canSeeFinancials = true,
+  canSeeMarginOnly = false,
   janitorialDetailMode = "pricing",
   groupTitleForRow,
   groupHrefForRow,
   collapsibleGroups = false,
+  groupsDefaultOpen = false,
   rowTitleForRow,
   rowDescriptionForRow,
 }: {
   rows: ProjectTableRow[];
   janitorialPipelineId: string | null;
+  canSeeFinancials?: boolean;
+  /** SUPERVISOR: hide every dollar figure (contract/cost/labor/material) but
+   * still show a Margin % column, so contract value can't be derived from
+   * cost + margin. No-op when canSeeFinancials is true. */
+  canSeeMarginOnly?: boolean;
   janitorialDetailMode?: "pricing" | "team";
   groupTitleForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   groupHrefForRow?: (row: ProjectTableRow, index: number, rows: ProjectTableRow[]) => string | null;
   collapsibleGroups?: boolean;
+  groupsDefaultOpen?: boolean;
   rowTitleForRow?: (row: ProjectTableRow) => string;
   rowDescriptionForRow?: (row: ProjectTableRow) => string | null;
 }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [openCoIds, setOpenCoIds] = useState<string[]>([]);
-  const [openTurnoverIds, setOpenTurnoverIds] = useState<string[]>([]);
   const [openGroupTitles, setOpenGroupTitles] = useState<string[]>([]);
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
-  const openTurnoverSet = useMemo(() => new Set(openTurnoverIds), [openTurnoverIds]);
   const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
+  // Financial columns: Contract, Act Cost, Margin, Est/Act Labor, Est/Act Material (7 columns);
+  // margin-only mode adds just the one Margin % column instead.
+  const colCount = 7 + (canSeeFinancials ? 7 : canSeeMarginOnly ? 1 : 0);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -601,28 +613,32 @@ export function ProjectsExpandableTable({
     setOpenCoIds((prev) => (prev.includes(coId) ? prev.filter((x) => x !== coId) : [...prev, coId]));
   }
 
-  function toggleTurnover(projectId: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    setOpenTurnoverIds((prev) => (prev.includes(projectId) ? prev.filter((x) => x !== projectId) : [...prev, projectId]));
-  }
-
   function toggleGroup(title: string) {
     setOpenGroupTitles((prev) => (prev.includes(title) ? prev.filter((x) => x !== title) : [...prev, title]));
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-[1600px] text-left text-sm">
-        <thead className="border-b border-gray-300 text-xs uppercase">
+    <div className="overflow-auto rounded-lg border border-gray-200 max-h-[calc(100vh-8rem)]">
+      <table className={`w-full text-left text-sm ${canSeeFinancials ? "min-w-[1600px]" : "min-w-[820px]"}`}>
+        <thead className="sticky top-0 z-10 border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
-            <th className="w-[420px] min-w-[420px] px-3 py-2 font-semibold">Job</th>
-            <th className="w-[220px] min-w-[220px] px-3 py-2 font-semibold">PM</th>
-            <th className="px-3 py-2 font-semibold">Segment</th>
-            <th className="px-3 py-2 font-semibold">Contract</th>
-            <th className="px-3 py-2 font-semibold">Est. Material</th>
-            <th className="px-3 py-2 font-semibold">Act. Material</th>
-            <th className="px-3 py-2 font-semibold">Est. Labor</th>
-            <th className="px-3 py-2 font-semibold">Act. Labor</th>
+            <th className="w-[280px] min-w-[280px] px-3 py-2 font-semibold">Job</th>
+            <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">PM</th>
+            {canSeeFinancials && (
+              <th className="px-3 py-2 font-semibold" title="Base contract value plus non-void/rejected change orders">
+                Contract
+              </th>
+            )}
+            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Cost</th>}
+            {canSeeFinancials ? (
+              <th className="px-3 py-2 font-semibold">Margin</th>
+            ) : canSeeMarginOnly ? (
+              <th className="px-3 py-2 font-semibold">Margin %</th>
+            ) : null}
+            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Labor</th>}
+            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Labor</th>}
+            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Est. Material</th>}
+            {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Material</th>}
             <th className="px-3 py-2 font-semibold">Est. Hours</th>
             <th className="px-3 py-2 font-semibold">Act. Hours</th>
             <th className="px-3 py-2 font-semibold">Progress</th>
@@ -635,22 +651,41 @@ export function ProjectsExpandableTable({
             const currentGroupTitle = groupTitleForRow?.(p, i, rows) || null;
             const previousGroupTitle = i > 0 ? groupTitleForRow?.(rows[i - 1], i - 1, rows) || null : null;
             const groupTitle = currentGroupTitle !== previousGroupTitle ? currentGroupTitle : null;
-            const groupIsOpen = currentGroupTitle ? openGroupSet.has(currentGroupTitle) : true;
+            const groupIsOpen = currentGroupTitle
+              ? groupsDefaultOpen
+                ? !openGroupSet.has(currentGroupTitle)
+                : openGroupSet.has(currentGroupTitle)
+              : true;
             const rowIsVisible = !collapsibleGroups || !currentGroupTitle || groupIsOpen;
+            const groupRows = groupTitle ? rows.filter((row, index) => groupTitleForRow?.(row, index, rows) === groupTitle) : [];
             const groupCount = groupTitle
-              ? rows.filter((row, index) => groupTitleForRow?.(row, index, rows) === groupTitle).length
+              ? groupRows.length
               : 0;
+            const groupPm = groupTitle ? groupSueepPmLabel(groupRows) : null;
+            const groupContract = groupTitle ? sumProjects(groupRows, (row) => row.contractValueCents) : 0;
+            const groupEstLabor = groupTitle ? sumProjects(groupRows, (row) => row.estLaborCents) : 0;
+            const groupActualLabor = groupTitle ? sumProjects(groupRows, (row) => row.actualLaborCents) : 0;
+            const groupActualMaterial = groupTitle ? sumProjects(groupRows, (row) => row.actualMaterialCents) : 0;
+            const groupActualHours = groupTitle ? sumProjects(groupRows, (row) => row.actualHours) : 0;
+            const groupActualCost = groupActualLabor + groupActualMaterial;
+            const groupMargin = groupTitle && groupRows.some((row) => row.contractValueCents != null) ? groupContract - groupActualCost : null;
+            const groupMarginPct = groupMargin != null && groupContract ? `${Math.round((groupMargin / groupContract) * 100)}%` : null;
             const isOpen = openSet.has(p.id);
-            const isJanitorialRow = janitorialDetailMode === "team" || isJanitorialProject(p, janitorialPipelineId);
-            const showTurnoverDropdown = isJanitorialRow;
-            const isTurnoverOpen = openTurnoverSet.has(p.id);
-            const state = deriveProjectLifecycle(p.status, p.projectDate);
+            const state = deriveProjectLifecycle(p.status, p.projectDate, hasActiveChangeOrder(p.changeOrders));
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
-            const turnoverDropdownTitle = getTurnoverDropdownTitle(p);
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;
+            // Only the raw jobTitle fallback needs hyphen-truncation (it's the
+            // long "Name - detail - company" string). A custom rowTitleForRow
+            // (e.g. janitorial unit labels like "BLDG 1 - Unit 405") is already
+            // a short, deliberately-formatted label — truncating it at its own
+            // internal hyphen would wrongly cut off the unit number.
+            const displayRowTitle = rowTitleForRow ? rowTitle : truncateAtHyphen(rowTitle);
             const rowDescription = rowDescriptionForRow ? rowDescriptionForRow(p) : p.description;
             const groupHref = groupTitle ? groupHrefForRow?.(p, i, rows) || null : null;
+            const actualCost = projectActualCostCents(p);
+            const margin = projectMarginCents(p);
+            const marginPct = marginPercent(p);
             return (
               <Fragment key={p.id}>
                 {groupTitle ? (
@@ -661,40 +696,65 @@ export function ProjectsExpandableTable({
                     }}
                     aria-expanded={collapsibleGroups ? groupIsOpen : undefined}
                   >
-                    <td className="w-[420px] min-w-[420px] px-3 py-2">
+                    <td className="w-[280px] min-w-[280px] px-3 py-2">
+                      {groupActualCost !== 0 && groupMargin != null && groupMargin < 0 ? <MarginWarningIcon /> : null}
                       {groupHref ? (
                         <Link
                           href={groupHref}
                           onClick={(e) => e.stopPropagation()}
-                          className="font-medium text-emerald-600 hover:underline"
+                          className="block truncate font-medium text-emerald-600 hover:underline"
+                          title={groupTitle}
                         >
-                          {groupTitle}
+                          {truncateAtHyphen(groupTitle)}
                         </Link>
                       ) : (
-                        <span className="font-medium text-emerald-600">
-                          {groupTitle}
+                        <span className="block truncate font-medium text-emerald-600" title={groupTitle}>
+                          {truncateAtHyphen(groupTitle)}
                         </span>
                       )}
                       <p className="mt-0.5 text-xs text-gray-500">
                         {groupCount} unit{groupCount !== 1 ? "s" : ""}
                       </p>
                     </td>
-                    <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-400">
-                      -
+                    <td className="w-[130px] min-w-[130px] truncate px-3 py-2 text-gray-900" title={groupPm ?? undefined}>
+                      {groupPm ?? <span className="text-gray-400">-</span>}
                     </td>
-                    <td className="px-3 py-2 text-gray-900">
-                      Building
-                    </td>
-                    {Array.from({ length: 9 }).map((_, emptyIndex) => (
-                      <td
-                        key={emptyIndex}
-                        className="px-3 py-2 text-gray-400"
-                      >
-                        -
+                    {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualCost)}</td>}
+                    {canSeeFinancials ? (
+                      <td className={`px-3 py-2 font-medium ${groupActualCost === 0 ? "text-gray-400" : marginClass(groupMargin)}`}>
+                        {groupActualCost === 0 || groupMargin == null ? (
+                          "-"
+                        ) : (
+                          <>
+                            {centsToDollars(groupMargin)}
+                            {groupMarginPct ? <span className="ml-1 text-xs font-normal text-gray-500">({groupMarginPct})</span> : null}
+                          </>
+                        )}
                       </td>
-                    ))}
-                    <td className="px-3 py-2 font-semibold text-emerald-600">
-                      {collapsibleGroups ? (groupIsOpen ? "v" : ">") : "-"}
+                    ) : canSeeMarginOnly ? (
+                      <td className={`px-3 py-2 font-medium ${groupActualCost === 0 ? "text-gray-400" : marginClass(groupMargin)}`}>
+                        {groupActualCost === 0 || groupMarginPct == null ? "-" : groupMarginPct}
+                      </td>
+                    ) : null}
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupEstLabor)}</td>}
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualLabor)}</td>}
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-400">-</td>}
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualMaterial)}</td>}
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-900">{groupActualHours.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-400">-</td>
+                    <td className="px-3 py-2 text-gray-400">
+                      {collapsibleGroups ? (
+                        <svg
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className={`h-4 w-4 transition-transform ${groupIsOpen ? "rotate-180" : ""}`}
+                        >
+                          <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                        </svg>
+                      ) : "-"}
                     </td>
                   </tr>
                 ) : null}
@@ -707,25 +767,67 @@ export function ProjectsExpandableTable({
                   aria-expanded={isOpen}
                   title={isOpen ? "Collapse" : "Expand"}
                 >
-                  <td className="w-[420px] min-w-[420px] px-3 py-2">
-                    <Link
-                      href={`/erp/projects/${p.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`font-medium ${styles.titleLink}`}
-                    >
-                      {rowTitle}
-                    </Link>
-                    {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
+                  <td className="w-[280px] min-w-[280px] px-3 py-2">
+                    <div className={`flex items-center gap-1.5 ${currentGroupTitle ? "pl-4" : ""}`}>
+                      {currentGroupTitle && (
+                        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-gray-400">
+                          <path d="M3 2 L3 10 Q3 13 6 13 L11 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M9 11 L12 13 L9 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                      {actualCost !== 0 && margin != null && margin < 0 ? <MarginWarningIcon /> : null}
+                      <div className="min-w-0">
+                        <Link
+                          href={`/erp/projects/${p.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`block truncate font-medium ${styles.titleLink}`}
+                          title={rowTitle}
+                        >
+                          {displayRowTitle}
+                        </Link>
+                        {rowDescription ? <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">{rowDescription}</p> : null}
+                      </div>
+                    </div>
                   </td>
-                  <td className="w-[220px] min-w-[220px] px-3 py-2 text-gray-900">
-                    {p.supervisor || <span className="text-gray-400">Unassigned</span>}
+                  <td className="w-[130px] min-w-[130px] px-3 py-2 text-gray-900">
+                    {(() => {
+                      const isTurnover = p.segment === "JANITORIAL_TURNOVER_REQUESTS";
+                      const sueepPm = sueepPmForRow(p);
+                      const pm = isTurnover ? getDescriptionLine(p.description, "Property Manager/Maintenance Manager") : null;
+                      return (
+                        <>
+                          {sueepPm ? (
+                            <span className="block truncate" title={sueepPm}>{truncateAtHyphen(sueepPm)}</span>
+                          ) : (
+                            <span className="text-gray-400">Unassigned</span>
+                          )}
+                          {pm ? <p className="truncate text-xs text-gray-500" title={pm}>{truncateAtHyphen(pm)}</p> : null}
+                        </>
+                      );
+                    })()}
                   </td>
-                  <td className="px-3 py-2 text-gray-900">{projectSegmentLabel(p.segment)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estMaterialCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualMaterialCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estLaborCents)}</td>
-                  <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualLaborCents)}</td>
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(actualCost)}</td>}
+                  {canSeeFinancials ? (
+                    <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
+                      {actualCost === 0 || margin == null ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <>
+                          {centsToDollars(margin)}
+                          {marginPct ? <span className="ml-1 text-xs font-normal text-gray-500">({marginPct})</span> : null}
+                        </>
+                      )}
+                    </td>
+                  ) : canSeeMarginOnly ? (
+                    <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
+                      {actualCost === 0 || marginPct == null ? <span className="text-gray-400">-</span> : marginPct}
+                    </td>
+                  ) : null}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estLaborCents)}</td>}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualLaborCents)}</td>}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.estMaterialCents)}</td>}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.actualMaterialCents)}</td>}
                   <td className="px-3 py-2 text-gray-900">{p.estHours ?? <span className="text-gray-400">-</span>}</td>
                   <td className="px-3 py-2 text-gray-900">{p.actualHours.toFixed(2)}</td>
                   <td className="px-3 py-2 text-gray-900">{p.percentDone}%</td>
@@ -739,68 +841,29 @@ export function ProjectsExpandableTable({
                   <>
                     {/* Project detail */}
                     <tr className={styles.detail}>
-                      <td colSpan={13} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
+                      <td colSpan={colCount} className="px-4 py-2 pb-3" onClick={(e) => e.stopPropagation()}>
                         {janitorialDetailMode === "pricing" && isJanitorialProject(p, janitorialPipelineId) ? (
-                          <TurnoverPricingSummary project={p} />
+                          <ProjectLaborLogPanel project={p} showFinancials={canSeeFinancials} />
                         ) : janitorialDetailMode === "team" ? (
-                          <JanitorialProjectDropdownDetail project={p} />
+                          <JanitorialProjectDropdownDetail project={p} showFinancials={canSeeFinancials} />
                         ) : (
-                          <div className="overflow-x-auto bg-white px-3 py-2">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Team</p>
-                            <LaborTable entries={p.laborEntries} />
-                          </div>
+                          <ProjectLaborLogPanel project={p} showFinancials={canSeeFinancials} />
                         )}
                       </td>
                     </tr>
 
-                    {showTurnoverDropdown ? (
-                      <>
-                        <tr
-                          className="cursor-pointer bg-gray-50 hover:bg-gray-100"
-                          onClick={(e) => toggleTurnover(p.id, e)}
-                          aria-expanded={isTurnoverOpen}
-                        >
-                          <SubRowTitleCell
-                            status="APPROVED"
-                            statusClass={CO_STATUS_COLORS.APPROVED}
-                            href={`/erp/projects/${p.id}`}
-                            title={turnoverDropdownTitle}
-                          />
-                          <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
-                            {p.supervisor || <span className="text-gray-400">-</span>}
-                          </td>
-                          <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
-                            Turnover
-                          </td>
-                          <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                            {centsToDollars(p.contractValueCents)}
-                          </td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-400">-</td>
-                          <td className="px-3 py-1.5 text-gray-900">{p.percentDone}%</td>
-                          <td className="px-3 py-1.5 text-gray-900">
-                            {p.percentInvoiced > 0 ? `${p.percentInvoiced}%` : <span className="text-gray-400">-</span>}
-                          </td>
-                          <td className="px-3 py-1.5">{billingBadge(p.billingStatus)}</td>
-                        </tr>
-
-                        {isTurnoverOpen ? (
-                          <tr onClick={(e) => e.stopPropagation()}>
-                            <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
-                              <JanitorialTurnoverDetail project={p} />
-                            </td>
-                          </tr>
-                        ) : null}
-                      </>
-                    ) : null}
-
                     {/* Change order rows - inline in the same table, same columns */}
                     {p.changeOrders.map((co) => {
                       const isCoOpen = openCoSet.has(co.id);
+                      const coActualLabor =
+                        (co.laborCostCents > 0 ? co.laborCostCents : (co.actualLaborCents ?? 0)) + co.contractorCostCents;
+                      const coActualMaterial = co.materialCostCents > 0 ? co.materialCostCents : (co.actualMaterialCents ?? 0);
+                      const coActualCost = coActualLabor + coActualMaterial;
+                      const coMargin = co.contractValueCents == null ? null : co.contractValueCents - coActualCost;
+                      const coMarginPercent =
+                        coMargin != null && co.contractValueCents
+                          ? `${Math.round((coMargin / co.contractValueCents) * 100)}%`
+                          : null;
                       return (
                         <Fragment key={co.id}>
                           <tr
@@ -815,35 +878,65 @@ export function ProjectsExpandableTable({
                               statusClass={CO_STATUS_COLORS[co.status]}
                               href={`/erp/projects/${p.id}/change-orders/${co.id}`}
                               title={co.title}
+                              date={co.startDate}
                             />
-                            {/* PM -> Requested by */}
-                            <td className="w-[220px] min-w-[220px] px-3 py-1.5 text-sm text-gray-700">
-                              {co.requestedBy || <span className="text-gray-400">-</span>}
-                            </td>
-                            {/* Segment -> "Change Order" label */}
-                            <td className="px-3 py-1.5 text-sm font-medium text-gray-500">
-                              Change Order
+                            {/* PM */}
+                            <td className="w-[130px] min-w-[130px] truncate px-3 py-1.5 text-sm text-gray-700" title={co.supervisor ?? undefined}>
+                              {co.supervisor ? truncateAtHyphen(co.supervisor) : <span className="text-gray-400">-</span>}
                             </td>
                             {/* Contract -> contract value */}
-                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.contractValueCents)}
-                            </td>
-                            {/* Est. Material */}
-                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.estMaterialCents)}
-                            </td>
-                            {/* Act. Material — from materials log */}
-                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}
-                            </td>
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(co.contractValueCents)}
+                              </td>
+                            )}
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(coActualCost)}
+                              </td>
+                            )}
+                            {canSeeFinancials ? (
+                              <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${coActualCost === 0 ? "text-gray-400" : marginClass(coMargin)}`}>
+                                {coActualCost === 0 || coMargin == null ? (
+                                  <span className="text-gray-400">-</span>
+                                ) : (
+                                  <>
+                                    {centsToDollars(coMargin)}
+                                    {coMarginPercent ? (
+                                      <span className="ml-1 text-xs font-normal text-gray-500">({coMarginPercent})</span>
+                                    ) : null}
+                                  </>
+                                )}
+                              </td>
+                            ) : canSeeMarginOnly ? (
+                              <td className={`px-3 py-1.5 text-sm font-medium tabular-nums ${coActualCost === 0 ? "text-gray-400" : marginClass(coMargin)}`}>
+                                {coActualCost === 0 || coMarginPercent == null ? <span className="text-gray-400">-</span> : coMarginPercent}
+                              </td>
+                            ) : null}
                             {/* Est. Labor */}
-                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.estLaborCents)}
-                            </td>
-                            {/* Act. Labor — from laborers log */}
-                            <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                              {centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}
-                            </td>
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(co.estLaborCents)}
+                              </td>
+                            )}
+                            {/* Act. Labor — from laborers log + contractor cost */}
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(coActualLabor)}
+                              </td>
+                            )}
+                            {/* Est. Material */}
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(co.estMaterialCents)}
+                              </td>
+                            )}
+                            {/* Act. Material — from materials log */}
+                            {canSeeFinancials && (
+                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
+                                {centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}
+                              </td>
+                            )}
                             {/* Est. Hours */}
                             <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.estHours != null ? co.estHours : <span className="text-gray-400">-</span>}
@@ -862,74 +955,17 @@ export function ProjectsExpandableTable({
                           {/* Expanded CO detail */}
                           {isCoOpen ? (
                             <tr onClick={(e) => e.stopPropagation()}>
-                              <td colSpan={13} className="bg-gray-50 px-6 py-2 pb-3">
-                                <div className="mb-2 overflow-x-auto rounded border border-gray-200 bg-white px-3 py-2">
-                                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Laborers</p>
-                                  <LaborTable entries={co.laborers} />
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-3">
+                              <td colSpan={colCount} className="bg-gray-50 px-6 py-2 pb-3 space-y-2">
+                                {co.description && (
                                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                                     <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Comments</p>
-                                    <p className="mt-1 text-xs text-gray-700 line-clamp-3">
-                                      {co.description || <span className="text-gray-400">No comments</span>}
-                                    </p>
+                                    <p className="mt-1 text-xs text-gray-700">{co.description}</p>
                                   </div>
-
-                                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cost / Schedule</p>
-                                    <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                      <span className="text-gray-400">Contract</span>
-                                      <span className="font-medium text-gray-800">{centsToDollars(co.contractValueCents)}</span>
-                                      <span className="text-gray-400">Est. cost</span>
-                                      <span className="font-medium text-gray-800">{centsToDollars(co.estimatedCostCents)}</span>
-                                      <span className="text-gray-400">Schedule</span>
-                                      <span className="font-medium text-gray-800">
-                                        {co.estimatedDays != null ? `${co.estimatedDays} day${co.estimatedDays !== 1 ? "s" : ""}` : "-"}
-                                      </span>
-                                      <span className="text-gray-400">Requested by</span>
-                                      <span className="font-medium text-gray-800">{co.requestedBy || "-"}</span>
-                                    </div>
-                                    <div className="mt-2 grid grid-cols-2 gap-x-4 border-t border-gray-100 pt-2">
-                                      <div>
-                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Estimated</p>
-                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                          <span className="text-gray-400">Labor</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estLaborCents)}</span>
-                                          <span className="text-gray-400">Material</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estMaterialCents)}</span>
-                                          <span className="text-gray-400">Travel</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.estTravelCents)}</span>
-                                          <span className="text-gray-400">Hours</span>
-                                          <span className="font-medium text-gray-800">{co.estHours ?? "-"}</span>
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Actual</p>
-                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-                                          <span className="text-gray-400">Labor</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.laborCostCents > 0 ? co.laborCostCents : co.actualLaborCents)}</span>
-                                          <span className="text-gray-400">Material</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.materialCostCents > 0 ? co.materialCostCents : co.actualMaterialCents)}</span>
-                                          <span className="text-gray-400">Travel</span>
-                                          <span className="font-medium text-gray-800">{centsToDollars(co.actualTravelCents)}</span>
-                                          <span className="text-gray-400">Hours</span>
-                                          <span className="font-medium text-gray-800">{co.actualHours ?? "-"}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex flex-col rounded border border-gray-200 bg-white px-3 py-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Supervisor</p>
-                                    <p className="mt-1 text-sm font-semibold text-gray-800">{co.supervisor || "-"}</p>
-                                    <Link
-                                      href={`/erp/projects/${p.id}/change-orders/${co.id}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="mt-auto pt-2 text-xs font-medium text-gray-600 hover:underline"
-                                    >
-                                      Full details {"->"}
-                                    </Link>
-                                  </div>
+                                )}
+                                <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Labor log</p>
+                                  <LaborTable entries={co.laborers} showFinancials={canSeeFinancials} />
+                                  <ContractorTable entries={co.contractorEntries} />
                                 </div>
                               </td>
                             </tr>

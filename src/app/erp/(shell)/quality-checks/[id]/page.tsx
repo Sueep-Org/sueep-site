@@ -20,6 +20,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
     include: {
       turnoverRequest: { include: { building: true } },
       project: { select: { id: true, jobTitle: true } },
+      sovItems: { select: { id: true, description: true } },
     },
   });
 
@@ -29,11 +30,19 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
     ? check.turnoverRequest.building.name
     : check.project?.jobTitle ?? "Unknown";
 
+  // No standalone company-wide quality-checks list anymore — back link goes
+  // to the owning project's own Quality Checks tab when there is one, since
+  // that's the only place this check is actually reachable from.
+  const backHref = check.projectId
+    ? `/erp/projects/${check.projectId}?tab=${encodeURIComponent("Quality Checks")}`
+    : "/erp/projects";
+  const backLabel = check.projectId ? "← Back to project" : "← Projects";
+
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/erp/quality-checks" className="text-xs text-gray-500 hover:underline">
-          ← Quality checks
+        <Link href={backHref} className="text-xs text-gray-500 hover:underline">
+          {backLabel}
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">Quality check for {displayName}</h1>
         <p className="mt-1 text-sm text-gray-600">Review supervisor signoff, approval, and evidence photos.</p>
@@ -52,6 +61,8 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
               pmApproval: check.pmApproval,
               evidencePhotos: normalizeEvidencePhotos(check.evidencePhotos),
               notes: check.notes,
+              sovItemIds: check.sovItems.map((s) => s.id),
+              scopeDescription: check.scopeDescription,
             }}
           />
         </div>
@@ -69,6 +80,23 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
                   : (check.project?.jobTitle ?? "—")}
               </dd>
             </div>
+            {check.sovItems.length > 0 ? (
+              <div>
+                <dt className="font-semibold text-gray-600">SOV item(s)</dt>
+                <dd>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {check.sovItems.map((s) => (
+                      <li key={s.id}>{s.description}</li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            ) : check.scopeDescription ? (
+              <div>
+                <dt className="font-semibold text-gray-600">Scope</dt>
+                <dd className="whitespace-pre-wrap">{check.scopeDescription}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="font-semibold text-gray-600">Supervisor</dt>
               <dd>{check.supervisorName}</dd>

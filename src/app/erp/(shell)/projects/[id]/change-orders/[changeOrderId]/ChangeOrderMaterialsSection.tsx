@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type CoMaterialRow = {
   id: string;
@@ -14,11 +15,9 @@ export type CoMaterialRow = {
   notes: string | null;
 };
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
 
 const categoryLabel: Record<string, string> = {
   CLEANING_PRODUCTS: "Cleaning products",

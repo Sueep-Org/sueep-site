@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TurnoverRequestSelect } from "@/app/erp/(shell)/labor-assignments/TurnoverRequestSelect";
+import { TurnoverRequestSelect } from "./TurnoverRequestSelect";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 import { SignaturePadInput } from "./SignaturePadInput";
+import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
 type Props = {
   checkId: string;
@@ -17,6 +18,8 @@ type Props = {
     pmApproval: boolean;
     evidencePhotos: string[];
     notes: string | null;
+    sovItemIds: string[];
+    scopeDescription: string | null;
   };
 };
 
@@ -29,9 +32,26 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
   const [newEvidenceFiles, setNewEvidenceFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [notes, setNotes] = useState(initial.notes ?? "");
+  const [sovItems, setSovItems] = useState<SOVItemOption[]>([]);
+  const [sovPicks, setSovPicks] = useState<string[]>(initial.sovItemIds);
+  const [scopeDescription, setScopeDescription] = useState(initial.scopeDescription ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // SOV items only apply on a Post-Construction project — turnover-linked
+  // checks (and a project with no SOV items configured yet) fall back to
+  // the free-text scopeDescription field instead.
+  const usesSovPicker = Boolean(initial.projectId) && sovItems.length > 0;
+
+  // Turnover-linked checks have no SOV to tag against.
+  useEffect(() => {
+    if (!initial.projectId) return;
+    fetch(`/api/erp/projects/${initial.projectId}/sov`)
+      .then((r) => r.json())
+      .then((data: { items?: SOVItemOption[] }) => setSovItems(data.items ?? []))
+      .catch(() => setSovItems([]));
+  }, [initial.projectId]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -62,6 +82,8 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
       pmApproval,
       evidencePhotos: [...evidencePhotos, ...uploadedEvidence],
       notes: notes || null,
+      sovItemIds: usesSovPicker ? sovPicks : [],
+      scopeDescription: usesSovPicker ? null : scopeDescription.trim() || null,
     };
 
     try {
@@ -98,6 +120,33 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
             <div className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
               {initial.projectName ?? "—"}
             </div>
+          </div>
+        )}
+
+        {usesSovPicker ? (
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-600">SOV item(s)</label>
+            <p className="text-xs text-gray-500">Tag the scope this check covers, if any.</p>
+            <SOVMultiCombobox sovItems={sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-gray-600" htmlFor="qc-edit-scope">
+              Scope
+            </label>
+            <p className="text-xs text-gray-500">
+              {initial.turnoverRequestId
+                ? "Turnover requests don't have SOV items — briefly describe what this check covers."
+                : "No SOV items on this project yet — briefly describe what this check covers."}
+            </p>
+            <textarea
+              id="qc-edit-scope"
+              value={scopeDescription}
+              onChange={(e) => setScopeDescription(e.target.value)}
+              rows={2}
+              placeholder="e.g. Kitchen paint touch-up, unit 4B"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+            />
           </div>
         )}
 

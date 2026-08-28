@@ -36,9 +36,17 @@ export type WorkOrderRecord = {
 
 type Props = {
   projectId: string;
+  segment?: string | null;
   // Fallback defaults (used only if no saved record exists)
   jobTitle: string;
   description: string | null;
+  // The linked Building's address (Project.building.address) — the real
+  // source of truth for a turnover unit's site address. Description text
+  // only ever gets an "Address:" line from the legacy/HubSpot-import
+  // format, never from the current in-app turnover creation flow, so
+  // parsing description alone left this field blank for every unit created
+  // through the normal "New Turnover" form.
+  buildingAddress: string | null;
   projectDateIso: string | null;
   contacts: ContactRow[];
   employees: EmployeeRow[];
@@ -183,17 +191,39 @@ function EmployeeSearchDropdown({
 
 export function ProjectWorkOrderNotifier({
   projectId,
+  segment,
   jobTitle,
   description,
+  buildingAddress,
   projectDateIso,
   contacts,
   employees,
   savedRecord,
 }: Props) {
+  const isRealEstate = segment === "REAL_ESTATE";
+
   // Derive fallback values from project fields (used when no saved record exists)
-  const fallbackAddress = useMemo(() => getDetailLine(description, "Address"), [description]);
+  const fallbackAddress = useMemo(() => {
+    if (isRealEstate) return getDetailLine(description, "Property");
+    // Building.address is the real source of truth for a turnover unit;
+    // only fall back to parsing description (old HubSpot-import format) if
+    // the unit somehow has no linked building.
+    return buildingAddress || getDetailLine(description, "Address");
+  }, [description, isRealEstate, buildingAddress]);
+
   const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
-  const fallbackContacts = useMemo(() => formatContacts(contacts), [contacts]);
+
+  const fallbackContacts = useMemo(() => {
+    if (isRealEstate) {
+      const agentName = getDetailLine(description, "Agent");
+      const agentEmail = getDetailLine(description, "Agent Email");
+      const agentPhone = getDetailLine(description, "Agent Phone");
+      if (agentName) {
+        return [agentName, "Agent", agentEmail, agentPhone].filter(Boolean).join(" · ");
+      }
+    }
+    return formatContacts(contacts);
+  }, [contacts, description, isRealEstate]);
   // Keep as YYYY-MM-DD for the date picker — no formatting
   const fallbackStartDate = projectDateIso ? projectDateIso.slice(0, 10) : null;
 
@@ -307,7 +337,7 @@ export function ProjectWorkOrderNotifier({
   return (
     <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Work Order</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Job Brief</h2>
         {lastSentToName && lastSentAt && (
           <span className="text-xs text-gray-400">
             Last sent to <span className="font-medium text-gray-600">{lastSentToName}</span>{" "}
@@ -316,7 +346,7 @@ export function ProjectWorkOrderNotifier({
         )}
       </div>
 
-      {/* Work order fields */}
+      {/* Job brief fields */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls} htmlFor="wo-project-name">Project Name</label>
@@ -373,30 +403,32 @@ export function ProjectWorkOrderNotifier({
           )}
         </div>
 
-        <div>
-          <label className={labelCls} htmlFor="wo-service-type">Service Type</label>
-          <select
-            id="wo-service-type"
-            className={inputCls}
-            value={serviceTypeSelected}
-            onChange={(e) => setServiceTypeSelected(e.target.value)}
-          >
-            <option value="">— None —</option>
-            {SERVICE_TYPE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-            <option value="__other__">Other…</option>
-          </select>
-          {serviceTypeSelected === "__other__" && (
-            <input
-              type="text"
+        {!isRealEstate && (
+          <div>
+            <label className={labelCls} htmlFor="wo-service-type">Service Type</label>
+            <select
+              id="wo-service-type"
               className={inputCls}
-              value={serviceTypeCustom}
-              onChange={(e) => setServiceTypeCustom(e.target.value)}
-              placeholder="Describe the work"
-            />
-          )}
-        </div>
+              value={serviceTypeSelected}
+              onChange={(e) => setServiceTypeSelected(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {SERVICE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+              <option value="__other__">Other…</option>
+            </select>
+            {serviceTypeSelected === "__other__" && (
+              <input
+                type="text"
+                className={inputCls}
+                value={serviceTypeCustom}
+                onChange={(e) => setServiceTypeCustom(e.target.value)}
+                placeholder="Describe the work"
+              />
+            )}
+          </div>
+        )}
 
         <div className="sm:col-span-2">
           <label className={labelCls} htmlFor="wo-contacts">Main Point of Contacts</label>
@@ -450,14 +482,14 @@ export function ProjectWorkOrderNotifier({
           </div>
           <div className="flex flex-col gap-2">
             {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
-            {sendSuccess && <p className="text-xs text-green-600">Work order sent.</p>}
+            {sendSuccess && <p className="text-xs text-green-600">Job brief sent.</p>}
             <button
               type="button"
               onClick={onSend}
               disabled={sending || !selectedEmployeeId}
               className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
-              {sending ? "Sending…" : "Send Work Order"}
+              {sending ? "Sending…" : "Send Job Brief"}
             </button>
           </div>
         </div>

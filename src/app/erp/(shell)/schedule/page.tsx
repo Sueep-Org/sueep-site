@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import type { ScheduleProject } from "@/lib/erp/schedule";
+import {
+  contractorAssignmentDayKeys,
+  dayKey,
+  type ScheduleChangeOrder,
+  type ScheduleCoDayAssignment,
+  type ScheduleCoWorkerAssignment,
+  type ScheduleDayAssignment,
+  type ScheduleProject,
+  type ScheduleSovRequest,
+  type ScheduleWorkerAssignment,
+} from "@/lib/erp/schedule";
+import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
+import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
-import { LaborTracker } from "./LaborTracker";
-import { WorkerTimeline } from "./WorkerTimeline";
-import { AddLaborEntryForm } from "./AddLaborEntryForm";
-import { LocationTracker } from "./LocationTracker";
-import { CollapsibleSection } from "./CollapsibleSection";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -15,9 +22,38 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Change orders in these statuses never happened (or won't) — keep them off the calendar.
+const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
+
 export default async function SchedulePage() {
-  const [projectRows, laborEntryRows] = await Promise.all([
+  const auth = await getErpAuth();
+  const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
+
+  const [
+    projectRows,
+    supervisorUsers,
+    projectManagerUsers,
+    laborEntryRows,
+    changeOrderRows,
+    coLaborerRows,
+    sovRequestRows,
+    dayAssignmentRows,
+    workerAssignmentRows,
+    employeeRows,
+    contractorRows,
+    coDayAssignmentRows,
+    coWorkerAssignmentRows,
+    contractorAssignmentRows,
+    coContractorAssignmentRows,
+  ] = await Promise.all([
     prisma.project.findMany({
+      // Excludes a recurring contract's own billing placeholder — it has
+      // recurringContractPeriodId set with turnoverRequestId null (see the
+      // doc comment on Project.recurringContractPeriodId), spans the whole
+      // month, and never legitimately gets a supervisor or logged labor, so
+      // it has no business on a day-by-day calendar. Its per-unit child
+      // projects (both fields set) are real schedulable work and stay.
+      where: { NOT: { recurringContractPeriodId: { not: null }, turnoverRequestId: null } },
       orderBy: [{ projectDate: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
@@ -28,75 +64,541 @@ export default async function SchedulePage() {
         projectEndDate: true,
         createdAt: true,
         percentDone: true,
+        supervisorUserId: true,
+        sov: { select: { items: { select: { id: true, description: true, completed: true } } } },
+        turnoverRequest: {
+          select: {
+            fullClean: true,
+            fullPaint: true,
+            touchUpPaint: true,
+            carpetCleaning: true,
+            ceilingPaint: true,
+            materialsAdditional: true,
+            compounding: true,
+            otherWork: true,
+            completedScopeItems: true,
+            buildingId: true,
+            building: { select: { name: true } },
+          },
+        },
       },
     }),
+    prisma.erpUser.findMany({
+      where: { role: "SUPERVISOR" },
+      select: { id: true, email: true },
+      orderBy: { email: "asc" },
+    }),
+    // PMs, for the rare "no supervisor, only PM" day assignment, same shape
+    // as supervisorUsers, resolved to display names the same way below.
+    prisma.erpUser.findMany({
+      where: { role: "PROJECT_MANAGER" },
+      select: { id: true, email: true },
+      orderBy: { email: "asc" },
+    }),
     prisma.laborEntry.findMany({
-      orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
       select: {
-        id: true,
         projectId: true,
         workDate: true,
         workerName: true,
-        role: true,
         hours: true,
-        hourlyRateCents: true,
+        employeeId: true,
+        clockIn: true,
         taskDescription: true,
+        sovItems: { select: { id: true, description: true } },
       },
+    }),
+    prisma.projectChangeOrder.findMany({
+      where: { status: { notIn: CO_STATUS_EXCLUDED } },
+      select: {
+        id: true,
+        projectId: true,
+        title: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        requestedDate: true,
+        supervisorUserId: true,
+      },
+    }),
+    prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
+    prisma.projectSovScheduleRequest.findMany({
+      select: { id: true, projectId: true, requestedBy: true, requestedDate: true, sovItem: { select: { description: true } } },
+    }),
+    prisma.projectDayAssignment.findMany({
+      select: {
+        id: true,
+        projectId: true,
+        date: true,
+        supervisorUserId: true,
+        projectManagerUserId: true,
+        supervisorContractorId: true,
+        startTime: true,
+        endTime: true,
+        seriesId: true,
+        scopeItems: true,
+        sovItems: { select: { id: true } },
+        changeOrders: { select: { id: true } },
+        comment: true,
+      },
+    }),
+    prisma.projectWorkerDayAssignment.findMany({
+      select: {
+        id: true,
+        projectId: true,
+        employeeId: true,
+        contractorId: true,
+        date: true,
+        seriesId: true,
+        assignedSovItemId: true,
+        assignedScopeItem: true,
+      },
+    }),
+    prisma.employee.findMany({
+      where: { status: { not: "INACTIVE" } },
+      select: { id: true, firstName: true, lastName: true, email: true },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+    prisma.contractor.findMany({
+      where: { status: { not: "INACTIVE" } },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.changeOrderDayAssignment.findMany({
+      select: {
+        id: true,
+        changeOrderId: true,
+        date: true,
+        supervisorUserId: true,
+        projectManagerUserId: true,
+        supervisorContractorId: true,
+        startTime: true,
+        endTime: true,
+        comment: true,
+      },
+    }),
+    prisma.changeOrderWorkerDayAssignment.findMany({
+      select: { id: true, changeOrderId: true, employeeId: true, contractorId: true, date: true },
+    }),
+    // Contractor engagements count toward "confirmed" work on the calendar
+    // the same way LaborEntry does for employees — see
+    // contractorAssignmentDayKeys's doc comment for why. Building-only rows
+    // (projectId null) aren't schedulable here, hence the filter.
+    prisma.contractorAssignment.findMany({
+      where: { projectId: { not: null } },
+      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
+    }),
+    prisma.changeOrderContractorAssignment.findMany({
+      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
     }),
   ]);
 
-  const projects: ScheduleProject[] = projectRows.map((r) => ({
+  const workerAssignments: ScheduleWorkerAssignment[] = workerAssignmentRows.map((a) => ({
+    id: a.id,
+    projectId: a.projectId,
+    employeeId: a.employeeId,
+    contractorId: a.contractorId,
+    dateKey: dayKey(a.date),
+    seriesId: a.seriesId,
+    assignedSovItemId: a.assignedSovItemId,
+    assignedScopeItem: a.assignedScopeItem,
+  }));
+
+  const employees = employeeRows.map((e) => ({
+    id: e.id,
+    displayName: `${e.firstName} ${e.lastName}`.trim(),
+    email: e.email,
+  }));
+  const employeeNameById = new Map(employees.map((e) => [e.id, e.displayName]));
+
+  const contractors = contractorRows.map((c) => ({ id: c.id, displayName: c.name, email: c.email }));
+  const contractorNameById = new Map(contractors.map((c) => [c.id, c.displayName]));
+
+  // Planned (not-yet-logged) worker names per project/day — surfaced in the
+  // chip tooltip alongside actual logged hours/workers when a chip already
+  // exists for that day (confirmed or planned-supervisor).
+  const plannedWorkersByProject = new Map<string, Map<string, string[]>>();
+  for (const a of workerAssignmentRows) {
+    const byDay = plannedWorkersByProject.get(a.projectId) ?? new Map<string, string[]>();
+    const list = byDay.get(dayKey(a.date)) ?? [];
+    const name = a.employeeId ? employeeNameById.get(a.employeeId) : a.contractorId ? contractorNameById.get(a.contractorId) : null;
+    if (name) list.push(name);
+    byDay.set(dayKey(a.date), list);
+    plannedWorkersByProject.set(a.projectId, byDay);
+  }
+
+  const dayAssignments: ScheduleDayAssignment[] = dayAssignmentRows.map((a) => ({
+    id: a.id,
+    projectId: a.projectId,
+    dateKey: dayKey(a.date),
+    supervisorUserId: a.supervisorUserId,
+    projectManagerUserId: a.projectManagerUserId,
+    supervisorContractorId: a.supervisorContractorId,
+    startTime: a.startTime,
+    endTime: a.endTime,
+    seriesId: a.seriesId,
+    sovItemIds: a.sovItems.map((s) => s.id),
+    scopeItems: a.scopeItems,
+    changeOrderIds: a.changeOrders.map((co) => co.id),
+    comment: a.comment,
+  }));
+
+  // Calendar day cells are driven by actual logged work, not a project's full
+  // start/end span — a project spanning two weeks isn't worked every day.
+  const workDayKeysByProject = new Map<string, Set<string>>();
+  // Per-project, per-day breakdown of hours/workers — powers the richer
+  // tooltip on confirmed calendar chips.
+  const laborSummaryByProject = new Map<string, Map<string, { hours: number; workers: Set<string> }>>();
+  // Per-project, per-day list of individual LaborEntry rows (worker, hours,
+  // clock-in, and what scope of work they logged) — powers the read-only
+  // labor detail card. Kept separate from the aggregate above since a
+  // calendar day can have several workers each with their own hours/
+  // clock-in/scope, not just a combined total. Scope is whatever's actually
+  // on the LaborEntry itself: sovItems for Post-Construction work,
+  // taskDescription for everything else (on a turnover job this is picked
+  // from the same TURNOVER_SCOPE_OPTIONS vocabulary, see ProjectLaborSection).
+  // A contractor engagement (below) also lands here, as a synthetic 0-hour
+  // "contractorOnly" row — the detail card is supposed to be the click-
+  // through counterpart of the aggregate tooltip above, and the aggregate
+  // already folds a confirmed contractor into its worker list, so leaving
+  // them out here just because there's no shift-level hours to show made
+  // the two disagree (tooltip says "Nelson", detail card shows nothing).
+  type LaborDetailEntry = {
+    workerName: string;
+    hours: number;
+    clockIn: string | null;
+    taskDescription: string | null;
+    sovItemDescriptions: string[];
+    contractorOnly?: boolean;
+  };
+  const laborEntriesByProject = new Map<string, Map<string, LaborDetailEntry[]>>();
+  for (const le of laborEntryRows) {
+    const k = dayKey(le.workDate);
+    const set = workDayKeysByProject.get(le.projectId) ?? new Set<string>();
+    set.add(k);
+    workDayKeysByProject.set(le.projectId, set);
+
+    const byDay = laborSummaryByProject.get(le.projectId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+    const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+    entry.hours += le.hours;
+    if (le.workerName) entry.workers.add(le.workerName);
+    byDay.set(k, entry);
+    laborSummaryByProject.set(le.projectId, byDay);
+
+    const entriesByDay = laborEntriesByProject.get(le.projectId) ?? new Map<string, LaborDetailEntry[]>();
+    const entries = entriesByDay.get(k) ?? [];
+    entries.push({
+      workerName: le.workerName,
+      hours: le.hours,
+      clockIn: le.clockIn,
+      taskDescription: le.taskDescription,
+      sovItemDescriptions: le.sovItems.map((s) => s.description),
+    });
+    entriesByDay.set(k, entries);
+    laborEntriesByProject.set(le.projectId, entriesByDay);
+  }
+
+  // Contractor engagements confirm a day the same way LaborEntry does for
+  // employees, just without per-day hours to add — see
+  // contractorAssignmentDayKeys's doc comment.
+  for (const ca of contractorAssignmentRows) {
+    if (!ca.projectId) continue;
+    const contractorName = contractorNameById.get(ca.contractorId);
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+      const set = workDayKeysByProject.get(ca.projectId) ?? new Set<string>();
+      set.add(k);
+      workDayKeysByProject.set(ca.projectId, set);
+
+      if (!contractorName) continue;
+      const byDay = laborSummaryByProject.get(ca.projectId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+      const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+      entry.workers.add(contractorName);
+      byDay.set(k, entry);
+      laborSummaryByProject.set(ca.projectId, byDay);
+
+      const entriesByDay = laborEntriesByProject.get(ca.projectId) ?? new Map<string, LaborDetailEntry[]>();
+      const entries = entriesByDay.get(k) ?? [];
+      entries.push({
+        workerName: contractorName,
+        hours: 0,
+        clockIn: null,
+        taskDescription: null,
+        sovItemDescriptions: [],
+        contractorOnly: true,
+      });
+      entriesByDay.set(k, entries);
+      laborEntriesByProject.set(ca.projectId, entriesByDay);
+    }
+  }
+
+  const workDayKeysByChangeOrder = new Map<string, Set<string>>();
+  // Per-change-order, per-day breakdown of hours/workers — same tooltip data
+  // as projects, sourced from ProjectChangeOrderLaborer instead of LaborEntry.
+  const laborSummaryByChangeOrder = new Map<string, Map<string, { hours: number; workers: Set<string> }>>();
+  for (const cl of coLaborerRows) {
+    const k = dayKey(cl.workDate);
+    const set = workDayKeysByChangeOrder.get(cl.changeOrderId) ?? new Set<string>();
+    set.add(k);
+    workDayKeysByChangeOrder.set(cl.changeOrderId, set);
+
+    const byDay = laborSummaryByChangeOrder.get(cl.changeOrderId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+    const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+    entry.hours += cl.hours;
+    if (cl.name) entry.workers.add(cl.name);
+    byDay.set(k, entry);
+    laborSummaryByChangeOrder.set(cl.changeOrderId, byDay);
+  }
+
+  // Same as the project-level contractorAssignmentRows merge above, for a
+  // contractor engaged directly on a change order.
+  for (const ca of coContractorAssignmentRows) {
+    const contractorName = contractorNameById.get(ca.contractorId);
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+      const set = workDayKeysByChangeOrder.get(ca.changeOrderId) ?? new Set<string>();
+      set.add(k);
+      workDayKeysByChangeOrder.set(ca.changeOrderId, set);
+
+      if (!contractorName) continue;
+      const byDay = laborSummaryByChangeOrder.get(ca.changeOrderId) ?? new Map<string, { hours: number; workers: Set<string> }>();
+      const entry = byDay.get(k) ?? { hours: 0, workers: new Set<string>() };
+      entry.workers.add(contractorName);
+      byDay.set(k, entry);
+      laborSummaryByChangeOrder.set(ca.changeOrderId, byDay);
+    }
+  }
+
+  // Days explicitly planned for a CO via a ProjectDayAssignment (see
+  // ProjectDayAssignment.changeOrders) — lets it show up on days between its
+  // start and end that aren't otherwise its scheduled date or a logged day.
+  const plannedDaysByChangeOrder = new Map<string, Set<string>>();
+  for (const a of dayAssignmentRows) {
+    const k = dayKey(a.date);
+    for (const co of a.changeOrders) {
+      const set = plannedDaysByChangeOrder.get(co.id) ?? new Set<string>();
+      set.add(k);
+      plannedDaysByChangeOrder.set(co.id, set);
+    }
+  }
+
+  // Days explicitly planned for a CO via its own ChangeOrderDayAssignment
+  // (a supervisor/PM assigned directly to the CO, not just tagged onto a
+  // project day) — same idea as plannedDaysByChangeOrder above, different
+  // source table.
+  const ownPlannedDaysByChangeOrder = new Map<string, Set<string>>();
+  for (const a of coDayAssignmentRows) {
+    const k = dayKey(a.date);
+    const set = ownPlannedDaysByChangeOrder.get(a.changeOrderId) ?? new Set<string>();
+    set.add(k);
+    ownPlannedDaysByChangeOrder.set(a.changeOrderId, set);
+  }
+
+  // Open COs per project, for the day-assignment modal's CO picker.
+  const changeOrdersByProject = new Map<string, { id: string; title: string }[]>();
+  for (const co of changeOrderRows) {
+    const list = changeOrdersByProject.get(co.projectId) ?? [];
+    list.push({ id: co.id, title: co.title });
+    changeOrdersByProject.set(co.projectId, list);
+  }
+
+  const changeOrders: ScheduleChangeOrder[] = changeOrderRows
+    .map((co) => {
+      const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
+      // startDate is the real scheduled date once set; requestedDate is only
+      // a placeholder fallback for COs from before startDate was required.
+      const scheduledDate = co.startDate ?? co.requestedDate;
+      if (scheduledDate) days.add(dayKey(scheduledDate));
+      const scheduledDateKey = scheduledDate ? dayKey(scheduledDate) : null;
+      const scheduledEndDateKey = co.endDate ? dayKey(co.endDate) : null;
+      if (co.endDate) days.add(dayKey(co.endDate));
+      for (const k of plannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
+      for (const k of ownPlannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
+      const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
+      for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
+        laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
+      }
+      return {
+        id: co.id,
+        projectId: co.projectId,
+        title: co.title,
+        status: co.status,
+        workDayKeys: Array.from(days),
+        laborByDay,
+        scheduledDateKey,
+        scheduledEndDateKey: scheduledEndDateKey !== scheduledDateKey ? scheduledEndDateKey : null,
+        supervisorUserId: co.supervisorUserId,
+      };
+    })
+    .filter((co) => co.workDayKeys.length > 0);
+
+  const coDayAssignments: ScheduleCoDayAssignment[] = coDayAssignmentRows.map((a) => ({
+    id: a.id,
+    changeOrderId: a.changeOrderId,
+    dateKey: dayKey(a.date),
+    supervisorUserId: a.supervisorUserId,
+    projectManagerUserId: a.projectManagerUserId,
+    supervisorContractorId: a.supervisorContractorId,
+    startTime: a.startTime,
+    endTime: a.endTime,
+    comment: a.comment,
+  }));
+
+  const coWorkerAssignments: ScheduleCoWorkerAssignment[] = coWorkerAssignmentRows.map((a) => ({
+    id: a.id,
+    changeOrderId: a.changeOrderId,
+    employeeId: a.employeeId,
+    contractorId: a.contractorId,
+    dateKey: dayKey(a.date),
+  }));
+
+  const sovRequests: ScheduleSovRequest[] = sovRequestRows.map((r) => ({
     id: r.id,
-    jobTitle: r.jobTitle,
-    segment: r.segment,
-    status: r.status,
-    projectDate: r.projectDate ? r.projectDate.toISOString() : null,
-    projectEndDate: r.projectEndDate ? r.projectEndDate.toISOString() : null,
-    createdAt: r.createdAt.toISOString(),
-    percentDone: r.percentDone,
+    projectId: r.projectId,
+    title: r.sovItem.description,
+    requestedBy: r.requestedBy,
+    workDayKeys: [dayKey(r.requestedDate)],
   }));
 
-  const laborEntries = laborEntryRows.map((le) => ({
-    id: le.id,
-    projectId: le.projectId,
-    workDate: le.workDate.toISOString(),
-    workerName: le.workerName,
-    role: le.role,
-    hours: le.hours,
-    hourlyRateCents: le.hourlyRateCents,
-    taskDescription: le.taskDescription,
+  // Resolve display names for ERP supervisors and PMs from employee records,
+  // same as the per-project setup editor does.
+  const scheduleErpEmails = [...supervisorUsers, ...projectManagerUsers].map((u) => u.email);
+  const scheduleEmployees = await prisma.employee.findMany({
+    where: { email: { in: scheduleErpEmails, mode: "insensitive" } },
+    select: { email: true, firstName: true, lastName: true },
+  });
+  const employeeNameByEmail = new Map(
+    scheduleEmployees
+      .filter((e): e is typeof e & { email: string } => e.email != null)
+      .map((e) => [e.email.toLowerCase(), `${e.firstName} ${e.lastName}`.trim()]),
+  );
+  const supervisors = supervisorUsers.map((u) => ({
+    id: u.id,
+    displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
+  }));
+  const projectManagers = projectManagerUsers.map((u) => ({
+    id: u.id,
+    displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
   }));
 
-  const projectsForTracking = projectRows.map((p) => ({
-    id: p.id,
-    jobTitle: p.jobTitle,
-  }));
+  const projects: ScheduleProject[] = projectRows.map((r) => {
+    const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
+    for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
+      laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
+    }
+    const laborEntriesByDay: Record<
+      string,
+      { workerName: string; hours: number; clockIn: string | null; taskDescription: string | null; sovItemDescriptions: string[] }[]
+    > = {};
+    for (const [k, entries] of laborEntriesByProject.get(r.id) ?? []) {
+      laborEntriesByDay[k] = entries;
+    }
+    const plannedWorkersByDay: Record<string, string[]> = {};
+    for (const [k, names] of plannedWorkersByProject.get(r.id) ?? []) {
+      plannedWorkersByDay[k] = names;
+    }
+    return {
+      id: r.id,
+      jobTitle: r.jobTitle,
+      segment: r.segment,
+      status: r.status,
+      projectDate: r.projectDate ? r.projectDate.toISOString() : null,
+      projectEndDate: r.projectEndDate ? r.projectEndDate.toISOString() : null,
+      createdAt: r.createdAt.toISOString(),
+      percentDone: r.percentDone,
+      supervisorUserId: r.supervisorUserId,
+      workDayKeys: Array.from(workDayKeysByProject.get(r.id) ?? []),
+      laborByDay,
+      laborEntriesByDay,
+      plannedWorkersByDay,
+      sovItems: r.sov?.items ?? [],
+      contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
+      completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
+      changeOrders: changeOrdersByProject.get(r.id) ?? [],
+      buildingId: r.turnoverRequest?.buildingId ?? null,
+      buildingName: r.turnoverRequest?.building?.name ?? null,
+    };
+  });
+
+  // Supervisors only see projects they're assigned to (project-level or a
+  // specific day) or have personally logged labor on — everyone else (PM,
+  // admin, etc.) sees the full calendar.
+  let visibleProjects = projects;
+  let visibleChangeOrders = changeOrders;
+  let visibleSovRequests = sovRequests;
+  let visibleDayAssignments = dayAssignments;
+  let visibleWorkerAssignments = workerAssignments;
+  let visibleCoDayAssignments = coDayAssignments;
+  let visibleCoWorkerAssignments = coWorkerAssignments;
+  if (auth?.role === "SUPERVISOR") {
+    // auth.uid is the Firebase UID (from the session token), not the
+    // ErpUser.id that Project.supervisorUserId / ProjectDayAssignment.supervisorUserId
+    // actually reference — has to be resolved first, same as the dashboard does.
+    const [supervisorErpUser, supervisorEmployee] = await Promise.all([
+      auth.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : null,
+      prisma.employee.findFirst({
+        where: { email: { equals: auth.email, mode: "insensitive" } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    ]);
+    const supervisorFullName = supervisorEmployee
+      ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim().toLowerCase()
+      : null;
+
+    const allowedProjectIds = new Set<string>();
+    if (supervisorErpUser) {
+      for (const p of projects) {
+        if (p.supervisorUserId === supervisorErpUser.id) allowedProjectIds.add(p.id);
+      }
+      for (const a of dayAssignments) {
+        if (a.supervisorUserId === supervisorErpUser.id) allowedProjectIds.add(a.projectId);
+      }
+      // Same rule for a CO's own day assignment — being assigned to just
+      // the CO (not the parent project) still surfaces that project on the
+      // supervisor's calendar.
+      const projectIdByChangeOrderId = new Map(changeOrders.map((co) => [co.id, co.projectId]));
+      for (const a of coDayAssignments) {
+        if (a.supervisorUserId !== supervisorErpUser.id) continue;
+        const pid = projectIdByChangeOrderId.get(a.changeOrderId);
+        if (pid) allowedProjectIds.add(pid);
+      }
+    }
+    for (const le of laborEntryRows) {
+      const matchesEmployee = supervisorEmployee != null && le.employeeId === supervisorEmployee.id;
+      const matchesName = supervisorFullName != null && le.workerName.trim().toLowerCase() === supervisorFullName;
+      if (matchesEmployee || matchesName) allowedProjectIds.add(le.projectId);
+    }
+
+    visibleProjects = projects.filter((p) => allowedProjectIds.has(p.id));
+    visibleChangeOrders = changeOrders.filter((co) => allowedProjectIds.has(co.projectId));
+    visibleSovRequests = sovRequests.filter((r) => allowedProjectIds.has(r.projectId));
+    visibleDayAssignments = dayAssignments.filter((a) => allowedProjectIds.has(a.projectId));
+    visibleWorkerAssignments = workerAssignments.filter((a) => allowedProjectIds.has(a.projectId));
+    const visibleChangeOrderIds = new Set(visibleChangeOrders.map((co) => co.id));
+    visibleCoDayAssignments = coDayAssignments.filter((a) => visibleChangeOrderIds.has(a.changeOrderId));
+    visibleCoWorkerAssignments = coWorkerAssignments.filter((a) => visibleChangeOrderIds.has(a.changeOrderId));
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-pink-600">Schedule & Labor</h1>
-          <p className="mt-1 text-sm text-gray-500">Project timelines, worker schedules, and labor hours.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <LocationTracker autoStart={true} />
-          <AddLaborEntryForm projectId="new" projectTitle="Quick Log" allProjects={projectsForTracking} />
+          <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
         </div>
       </div>
 
-      <hr className="border-pink-200" />
-
       {/* Project Schedule */}
-      <SchedulePlanner projects={projects} />
-
-      <CollapsibleSection title="Labor Tracking" description="Worker hours, costs, and project labor allocation.">
-        <LaborTracker laborEntries={laborEntries} projects={projectsForTracking} />
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Worker Timeline" description="Worker assignments over the next 14 days.">
-        <WorkerTimeline laborEntries={laborEntries} projects={projectsForTracking} daysToShow={14} />
-      </CollapsibleSection>
+      <SchedulePlanner
+        projects={visibleProjects}
+        supervisors={supervisors}
+        projectManagers={projectManagers}
+        changeOrders={visibleChangeOrders}
+        sovRequests={visibleSovRequests}
+        initialDayAssignments={visibleDayAssignments}
+        canFilterBySupervisor={canFilterBySupervisor}
+        employees={employees}
+        contractors={contractors}
+        initialWorkerAssignments={visibleWorkerAssignments}
+        initialCoDayAssignments={visibleCoDayAssignments}
+        initialCoWorkerAssignments={visibleCoWorkerAssignments}
+      />
     </div>
   );
 }

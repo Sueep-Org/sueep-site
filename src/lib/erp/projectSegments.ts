@@ -1,9 +1,9 @@
 export const PROJECT_SEGMENTS = [
     "COMMERCIAL_PAINTING",
     "COMMERCIAL_CLEANING",
-    "RESIDENTIAL_PAINTING",
     "CHANGE_ORDER",
     "JANITORIAL_TURNOVER_REQUESTS",
+    "REAL_ESTATE",
     "OTHER",
   ] as const;
   
@@ -11,15 +11,14 @@ export const PROJECT_SEGMENTS = [
   
   const LEGACY_SEGMENT_MAP: Record<string, ProjectSegment> = {
     COMMERCIAL: "COMMERCIAL_CLEANING",
-    RESIDENTIAL: "RESIDENTIAL_PAINTING",
   };
   
   const SEGMENT_LABELS: Record<ProjectSegment, string> = {
     COMMERCIAL_PAINTING: "Commercial painting",
     COMMERCIAL_CLEANING: "Commercial cleaning",
-    RESIDENTIAL_PAINTING: "Residential painting",
     CHANGE_ORDER: "Change order",
     JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
+    REAL_ESTATE: "Real estate",
     OTHER: "Other",
   };
   
@@ -38,4 +37,22 @@ export const PROJECT_SEGMENTS = [
   export function projectSegmentLabel(raw: string | null | undefined): string {
     const normalized = normalizeProjectSegment(raw);
     return SEGMENT_LABELS[normalized];
+  }
+
+  // Groups the finer-grained segments above into the four buckets the
+  // Schedule calendar (and the day-assignment modal) actually cares about —
+  // painting/cleaning are both "Post-construction" for scheduling purposes.
+  export type CalendarSegmentGroup = "POST_CONSTRUCTION" | "JANITORIAL_TURNOVER_REQUESTS" | "REAL_ESTATE" | "OTHER";
+
+  const SEGMENT_TO_CALENDAR_GROUP: Record<ProjectSegment, CalendarSegmentGroup> = {
+    COMMERCIAL_PAINTING: "POST_CONSTRUCTION",
+    COMMERCIAL_CLEANING: "POST_CONSTRUCTION",
+    CHANGE_ORDER: "OTHER",
+    JANITORIAL_TURNOVER_REQUESTS: "JANITORIAL_TURNOVER_REQUESTS",
+    REAL_ESTATE: "REAL_ESTATE",
+    OTHER: "OTHER",
+  };
+
+  export function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
+    return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
   }

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
 
 export type ChangeOrderLaborerRow = {
   id: string;
@@ -11,10 +12,14 @@ export type ChangeOrderLaborerRow = {
   role: string | null;
   workDate: string;
   hours: number;
+  clockIn: string | null;
+  regHours: number;
+  otHours: number;
   hourlyRateCents: number;
   taskDescription: string | null;
   qualityRating: string | null;
   qualityNotes: string | null;
+  completed: boolean;
 };
 
 const QUALITY_OPTIONS = [
@@ -43,15 +48,27 @@ export type ChangeOrderLaborerEmployeeOption = {
 
 const OTHER_VALUE = "__other__";
 
-const input =
-  "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const editInput =
-  "w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
-const label = "block text-xs font-medium text-gray-600";
+function calcHours(clockIn: string, clockOut: string): number {
+  if (!clockIn || !clockOut) return 0;
+  const [inH, inM] = clockIn.split(":").map(Number);
+  const [outH, outM] = clockOut.split(":").map(Number);
+  const diff = outH * 60 + outM - (inH * 60 + inM);
+  return diff > 0 ? Math.round(diff) / 60 : 0;
+}
 
-function lineCostCents(hours: number, rateCents: number): number {
-  if (!Number.isFinite(hours)) return 0;
-  return Math.round(hours * rateCents);
+function hoursToClockOut(clockIn: string, hours: number): string {
+  const [h, m] = clockIn.split(":").map(Number);
+  const total = h * 60 + m + Math.round(hours * 60);
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+const input = inputClass.md;
+const editInput = inputClass.sm;
+const label = labelClass.default;
+
+function lineCostCents(regHours: number, otHours: number, rateCents: number): number {
+  if (!Number.isFinite(regHours) || !Number.isFinite(otHours)) return 0;
+  return Math.round(regHours * rateCents + otHours * rateCents * 1.5);
 }
 
 function employeeLabel(e: ChangeOrderLaborerEmployeeOption): string {
@@ -131,32 +148,48 @@ function EmployeeCombobox({
   );
 }
 
+// Reuse same cutoff as ProjectLaborSection
+const SAFETY_CUTOFF = "2026-06-18";
+
 export function ChangeOrderLaborersSection({
   projectId,
   changeOrderId,
   initialLaborers,
   employees,
+  canEdit = true,
+  showFinancials = true,
+  safetyPassedKeys = [],
+  hasApprovedCheckToday,
 }: {
   projectId: string;
   changeOrderId: string;
   initialLaborers: ChangeOrderLaborerRow[];
   employees: ChangeOrderLaborerEmployeeOption[];
+  canEdit?: boolean;
+  showFinancials?: boolean;
+  safetyPassedKeys?: string[];
+  hasApprovedCheckToday?: boolean;
 }) {
   const router = useRouter();
+  const passedKeySet = new Set(safetyPassedKeys);
   const [laborers, setLaborers] = useState(initialLaborers);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [employeePick, setEmployeePick] = useState<string>("");
   const [hourlyRateStr, setHourlyRateStr] = useState("");
   const [roleStr, setRoleStr] = useState("");
+  const [clockInStr, setClockInStr] = useState("08:00");
+  const [clockOutStr, setClockOutStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editFields, setEditFields] = useState({ workDate: "", name: "", role: "", hours: "", hourlyRate: "", taskDescription: "" });
+  const [editFields, setEditFields] = useState({ workDate: "", name: "", role: "", clockIn: "", clockOut: "", hourlyRate: "", taskDescription: "" });
   const [qualityMap, setQualityMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityRating ?? ""]))
   );
   const [notesMap, setNotesMap] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialLaborers.map((l) => [l.id, l.qualityNotes ?? ""]))
   );
+  const [markCompleteOnAdd, setMarkCompleteOnAdd] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [qualityPopup, setQualityPopup] = useState<{ id: string; draft: string } | null>(null);
 
   useEffect(() => {
@@ -204,11 +237,15 @@ export function ChangeOrderLaborersSection({
       setError('Choose an employee from the list, or "Other" if they are not in the roster.');
       return;
     }
+    const hours = calcHours(clockInStr, clockOutStr);
+    if (hours <= 0) {
+      setError("Clock-out must be after clock-in.");
+      return;
+    }
     setLoading(true);
     const form = e.currentTarget;
     const fd = new FormData(form);
     const workDate = String(fd.get("workDate") || "");
-    const hours = Number(fd.get("hours"));
     const hourlyRate = hourlyRateStr.replace(/[$,]/g, "") || String(fd.get("hourlyRate") || "").replace(/[$,]/g, "");
     const taskDescription = String(fd.get("taskDescription") || "").trim();
     const workerName = employeePick === OTHER_VALUE ? String(fd.get("workerName") || "").trim() : undefined;
@@ -229,6 +266,7 @@ export function ChangeOrderLaborersSection({
           workDate,
           role: roleStr.trim() || undefined,
           hours,
+          clockIn: clockInStr || undefined,
           hourlyRate: Number(hourlyRate),
           taskDescription: taskDescription || undefined,
         }),
@@ -243,16 +281,23 @@ export function ChangeOrderLaborersSection({
         role: data.role ?? null,
         workDate: data.workDate ?? workDate,
         hours: data.hours ?? hours,
+        clockIn: data.clockIn ?? clockInStr,
+        regHours: data.hours ?? hours,
+        otHours: 0,
         hourlyRateCents: data.hourlyRateCents ?? Math.round(Number(hourlyRate) * 100),
         taskDescription: data.taskDescription ?? null,
         qualityRating: null,
         qualityNotes: null,
+        completed: markCompleteOnAdd,
       };
       setLaborers((prev) => [row, ...prev]);
       form.reset();
       setEmployeePick("");
       setHourlyRateStr("");
       setRoleStr("");
+      setClockInStr("08:00");
+      setClockOutStr("");
+      setMarkCompleteOnAdd(false);
       router.refresh();
     } catch {
       setError("Network error");
@@ -263,17 +308,20 @@ export function ChangeOrderLaborersSection({
 
   function startEdit(l: ChangeOrderLaborerRow) {
     setEditingId(l.id);
+    const defaultIn = l.clockIn || "08:00";
     setEditFields({
       workDate: new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       name: l.name,
       role: l.role ?? "",
-      hours: String(l.hours),
+      clockIn: defaultIn,
+      clockOut: hoursToClockOut(defaultIn, l.hours),
       hourlyRate: (l.hourlyRateCents / 100).toFixed(2),
       taskDescription: l.taskDescription ?? "",
     });
   }
 
   async function onSaveEdit(entryId: string) {
+    const hours = calcHours(editFields.clockIn, editFields.clockOut);
     const res = await fetch(`/api/erp/change-order-laborers/${entryId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -281,7 +329,8 @@ export function ChangeOrderLaborersSection({
         workDate: editFields.workDate,
         name: editFields.name,
         role: editFields.role || null,
-        hours: Number(editFields.hours),
+        hours,
+        clockIn: editFields.clockIn || null,
         hourlyRate: editFields.hourlyRate,
         taskDescription: editFields.taskDescription || null,
       }),
@@ -291,7 +340,7 @@ export function ChangeOrderLaborersSection({
       setLaborers((prev) =>
         prev.map((l) =>
           l.id === entryId
-            ? { ...l, workDate: updated.workDate ?? l.workDate, name: updated.name ?? l.name, role: updated.role ?? null, hours: updated.hours ?? l.hours, hourlyRateCents: updated.hourlyRateCents ?? l.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
+            ? { ...l, workDate: updated.workDate ?? l.workDate, name: updated.name ?? l.name, role: updated.role ?? null, hours: updated.hours ?? l.hours, clockIn: updated.clockIn ?? null, hourlyRateCents: updated.hourlyRateCents ?? l.hourlyRateCents, taskDescription: updated.taskDescription ?? null }
             : l,
         ),
       );
@@ -323,7 +372,7 @@ export function ChangeOrderLaborersSection({
     }
   }
 
-  const totalCents = laborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
+  const totalCents = laborers.reduce((s, l) => s + lineCostCents(l.regHours, l.otHours, l.hourlyRateCents), 0);
 
   let visibleLaborers = laborers.filter((l) => {
     if (filterDate) {
@@ -344,13 +393,33 @@ export function ChangeOrderLaborersSection({
     );
   }
 
-  const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.hours, l.hourlyRateCents), 0);
+  const filteredTotalCents = visibleLaborers.reduce((s, l) => s + lineCostCents(l.regHours, l.otHours, l.hourlyRateCents), 0);
+
+  const colCount = 9 + (showFinancials ? 2 : 0) + (canEdit ? 1 : 0);
 
   return (
     <>
     <div className="space-y-6">
-      <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+      {hasApprovedCheckToday === false && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white">!</span>
+          <p className="text-sm text-amber-800">
+            Today&apos;s safety checklist has not been approved. Complete and approve the Safety Checklist before logging labor.
+          </p>
+        </div>
+      )}
+
+      {canEdit && showAddForm && <form onSubmit={onAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Add labor entry</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddForm(false)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Close
+          </button>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
           Pick the employee from your roster so hours link to the right person and bill rates stay consistent. Use
           &ldquo;Other&rdquo; only when the worker is not in the list.
@@ -375,8 +444,20 @@ export function ChangeOrderLaborersSection({
             <input id="col-role" name="role" className={input} placeholder="PM, Cleaner…" value={roleStr} onChange={(e) => setRoleStr(e.target.value)} />
           </div>
           <div>
-            <label className={label} htmlFor="col-hours">Hours *</label>
-            <input id="col-hours" name="hours" type="number" min={0.25} step={0.25} required className={input} />
+            <label className={label} htmlFor="col-clock-in">Clock in *</label>
+            <input id="col-clock-in" type="time" required className={input} value={clockInStr} onChange={(e) => setClockInStr(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="col-clock-out">Clock out *</label>
+            <input id="col-clock-out" type="time" required className={input} value={clockOutStr} onChange={(e) => setClockOutStr(e.target.value)} />
+          </div>
+          <div>
+            <p className={label}>Hours</p>
+            <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
+              {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
+                ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
+                : <span className="text-gray-400">—</span>}
+            </p>
           </div>
           <div>
             <label className={label} htmlFor="col-rate">Hourly rate (USD) *</label>
@@ -388,28 +469,54 @@ export function ChangeOrderLaborersSection({
           </div>
         </div>
         {error ? <p className="mt-3 text-sm text-red-400" role="alert">{error}</p> : null}
-        <button type="submit" disabled={loading} className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
-          {loading ? "Adding…" : "Add entry"}
-        </button>
-      </form>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+            {loading ? "Adding…" : "Add entry"}
+          </button>
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              checked={markCompleteOnAdd}
+              onChange={(e) => setMarkCompleteOnAdd(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+            />
+            Mark entry as complete
+          </label>
+        </div>
+      </form>}
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labor log</h2>
-          <p className="text-sm text-gray-700">
-            {filterDate || filterLaborer ? (
-              <>
-                Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
-                <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
-              </>
-            ) : (
-              <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
+          <div className="flex flex-wrap items-center gap-3">
+            {showFinancials && (
+              <p className="text-sm text-gray-700">
+                {filterDate || filterLaborer ? (
+                  <>
+                    Showing: <span className="font-semibold text-gray-900">{centsToDollars(filteredTotalCents)}</span>
+                    <span className="ml-1 text-xs text-gray-400">(total: {centsToDollars(totalCents)})</span>
+                  </>
+                ) : (
+                  <>Sum of lines: <span className="font-semibold text-gray-900">{centsToDollars(totalCents)}</span></>
+                )}
+              </p>
             )}
-          </p>
+            {canEdit && !showAddForm && (
+              <button
+                type="button"
+                onClick={() => setShowAddForm(true)}
+                aria-label="Add labor entry"
+                title="Add labor entry"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pink-600 text-lg font-semibold leading-none text-white shadow hover:bg-pink-500"
+              >
+                +
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[140px]">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
             <label className={label} htmlFor="co-filter-date">Filter by date</label>
             <input
               id="co-filter-date"
@@ -419,7 +526,7 @@ export function ChangeOrderLaborersSection({
               onChange={(e) => setFilterDate(e.target.value)}
             />
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div>
             <label className={label} htmlFor="co-filter-laborer">Filter by laborer</label>
             <input
               id="co-filter-laborer"
@@ -431,11 +538,11 @@ export function ChangeOrderLaborersSection({
             />
           </div>
           {(filterDate || filterLaborer) && (
-            <div className="flex items-end">
+            <div className="flex sm:items-end">
               <button
                 type="button"
                 onClick={() => { setFilterDate(""); setFilterLaborer(""); }}
-                className="mb-0.5 rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100"
+                className="rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 sm:mb-0.5"
               >
                 Clear
               </button>
@@ -459,18 +566,19 @@ export function ChangeOrderLaborersSection({
                 </th>
                 <th className="py-2 pr-2 font-medium">Role</th>
                 <th className="py-2 pr-2 font-medium">Hours</th>
-                <th className="py-2 pr-2 font-medium">Rate</th>
-                <th className="py-2 pr-2 font-medium">Line $</th>
+                <th className="py-2 pr-2 font-medium text-amber-600">OT Hrs</th>
+                {showFinancials && <th className="py-2 pr-2 font-medium">Rate</th>}
+                {showFinancials && <th className="py-2 pr-2 font-medium">Line $</th>}
                 <th className="py-2 pr-2 font-medium">Task</th>
                 <th className="py-2 pr-2 font-medium">Quality</th>
                 <th className="py-2 pr-2 font-medium">Notes</th>
-                <th className="py-2" />
+                {canEdit && <th className="py-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleLaborers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-6 text-center text-gray-500">
+                  <td colSpan={colCount} className="py-6 text-center text-gray-500">
                     {filterDate || filterLaborer ? "No entries match the filters." : "No labor entries yet."}
                   </td>
                 </tr>
@@ -478,6 +586,13 @@ export function ChangeOrderLaborersSection({
                 visibleLaborers.map((l) => {
                   const quality = qualityMap[l.id] ?? "";
                   const notes = notesMap[l.id] ?? "";
+                  const dateStr = new Date(l.workDate).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+                  const needsSafetyCheck = dateStr >= SAFETY_CUTOFF;
+                  const hasSafety = needsSafetyCheck && (
+                    (l.employeeId && passedKeySet.has(`emp:${l.employeeId}:${dateStr}`)) ||
+                    passedKeySet.has(`name:${l.name.toLowerCase()}:${dateStr}`)
+                  );
+                  const missingSafety = needsSafetyCheck && !hasSafety;
                   return editingId === l.id ? (
                     <tr key={l.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
@@ -490,12 +605,24 @@ export function ChangeOrderLaborersSection({
                         <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="number" min={0.25} step={0.25} className={editInput} value={editFields.hours} onChange={(e) => setEditFields((f) => ({ ...f, hours: e.target.value }))} />
+                        <div className="flex items-center gap-1">
+                          <input type="time" className={editInput} value={editFields.clockIn} onChange={(e) => setEditFields((f) => ({ ...f, clockIn: e.target.value }))} />
+                          <span className="text-gray-400 text-xs">–</span>
+                          <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
+                          <span className="ml-1 shrink-0 text-xs text-gray-500">
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                          </span>
+                        </div>
                       </td>
-                      <td className="py-1 pr-2">
-                        <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
-                      </td>
-                      <td className="py-1 pr-2 text-gray-800">{centsToDollars(lineCostCents(Number(editFields.hours), Number(editFields.hourlyRate) * 100))}</td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
+                      {showFinancials && (
+                        <td className="py-1 pr-2">
+                          <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
+                        </td>
+                      )}
+                      {showFinancials && (
+                        <td className="py-1 pr-2 text-gray-800 text-xs">{centsToDollars(lineCostCents(calcHours(editFields.clockIn, editFields.clockOut), 0, Number(editFields.hourlyRate) * 100))}<span className="ml-1 text-gray-400">(est.)</span></td>
+                      )}
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
                       </td>
@@ -528,37 +655,62 @@ export function ChangeOrderLaborersSection({
                   ) : (
                     <tr key={l.id}>
                       <td className="py-2 pr-2 text-gray-600">{new Date(l.workDate).toLocaleDateString("en-US", { timeZone: "America/New_York" })}</td>
-                      <td className="py-2 pr-2 text-gray-900">{l.name}</td>
+                      <td className="py-2 pr-2 text-gray-900">
+                        <span className="flex items-center gap-1.5">
+                          {l.name}
+                          {missingSafety && (
+                            <span
+                              title="No passing safety check for this worker on this date"
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-white"
+                            >!</span>
+                          )}
+                        </span>
+                      </td>
                       <td className="py-2 pr-2 text-gray-500">{l.role || "—"}</td>
                       <td className="py-2 pr-2 text-gray-700">{l.hours}</td>
-                      <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>
-                      <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.hours, l.hourlyRateCents))}</td>
+                      <td className="py-2 pr-2">
+                        {l.otHours > 0
+                          ? <span className="font-medium text-amber-600">{l.otHours.toFixed(2)}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>}
+                      {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.regHours, l.otHours, l.hourlyRateCents))}</td>}
                       <td className="py-2 pr-2 text-gray-500">{l.taskDescription || "—"}</td>
                       <td className="py-2 pr-2">
-                        <select
-                          value={quality}
-                          onChange={(e) => handleQualityChange(l.id, e.target.value)}
-                          className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
-                        >
-                          {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                        {canEdit ? (
+                          <select
+                            value={quality}
+                            onChange={(e) => handleQualityChange(l.id, e.target.value)}
+                            className={`w-full rounded border border-gray-200 bg-white px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400 ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}
+                          >
+                            {QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <span className={`text-xs ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
+                            {QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? "—"}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
-                        <button
-                          type="button"
-                          onClick={() => setQualityPopup({ id: l.id, draft: notes })}
-                          title={notes || "Add quality notes"}
-                          className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                            <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
-                          </svg>
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setQualityPopup({ id: l.id, draft: notes })}
+                            title={notes || "Add quality notes"}
+                            className={`rounded p-0.5 transition-colors ${notes ? "text-pink-500 hover:text-pink-700" : "text-gray-300 hover:text-gray-500"}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.683 1.82a.75.75 0 0 0 .953.953l1.82-.683a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM3.5 6.75c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v5c0 .138.112.25.25.25h5a.25.25 0 0 0 .25-.25v-1a.75.75 0 0 1 1.5 0v1A1.75 1.75 0 0 1 10.25 13.5h-5A1.75 1.75 0 0 1 3.5 11.75v-5Z" />
+                            </svg>
+                          </button>
+                        )}
                       </td>
-                      <td className="py-2 text-right whitespace-nowrap">
-                        <button type="button" onClick={() => startEdit(l)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
-                        <button type="button" onClick={() => onRemove(l.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Remove</button>
-                      </td>
+                      {canEdit && (
+                        <td className="py-2 text-right whitespace-nowrap">
+                          <button type="button" onClick={() => startEdit(l)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
+                          <button type="button" onClick={() => onRemove(l.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Remove</button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -569,43 +721,25 @@ export function ChangeOrderLaborersSection({
       </div>
     </div>
 
-    {qualityPopup ? (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        onClick={() => setQualityPopup(null)}
-      >
-        <div
-          className="w-80 rounded-xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
-          <textarea
-            autoFocus
-            rows={4}
-            value={qualityPopup.draft}
-            onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
-            placeholder="Add notes about work quality..."
-            className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
-          />
-          <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setQualityPopup(null)}
-              className="rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleQualityNotesSave}
-              className="rounded-lg bg-[#E73C6E] px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700"
-            >
-              Save
-            </button>
-          </div>
-        </div>
+    <Modal open={!!qualityPopup} onClose={() => setQualityPopup(null)}>
+      <h3 className="mb-3 text-sm font-semibold text-gray-800">Quality Notes</h3>
+      <textarea
+        autoFocus
+        rows={4}
+        value={qualityPopup?.draft ?? ""}
+        onChange={(e) => setQualityPopup((p) => p ? { ...p, draft: e.target.value } : null)}
+        placeholder="Add notes about work quality..."
+        className="w-full resize-none rounded-lg border border-gray-200 p-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-400"
+      />
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="ghost" size="xs" onClick={() => setQualityPopup(null)}>
+          Cancel
+        </Button>
+        <Button variant="primary" size="xs" onClick={handleQualityNotesSave}>
+          Save
+        </Button>
       </div>
-    ) : null}
+    </Modal>
     </>
   );
 }

@@ -14,6 +14,8 @@ const BILLING_OPTIONS = [
   { value: "INVOICE_PAID", label: "Invoice Paid" },
 ];
 
+const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
+
 type Props = {
   projectId: string;
   contractValueCents: number | null;
@@ -25,9 +27,22 @@ type Props = {
   estLaborCents: number | null;
   actualLaborCents: number | null;
   actualMaterialCents: number | null;
+  actualTravelCents: number | null;
   estHours: number | null;
   actualHours: number | null;
+  contractorCostCents: number;
+  laborCentsFromLogs: number;
+  hoursFromLogs: number;
+  estimatedDays: number | null;
+  daysFromLogs: number;
+  /** Sum of contractValueCents across non-void/rejected change orders — display only, never written back to contractValueCents. */
+  qualifyingCoContractValueCents: number;
+  qualifyingCoCount: number;
 };
+
+function formatCurrency(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
 
 function centsToInput(cents: number | null): string {
   if (cents == null) return "";
@@ -45,9 +60,18 @@ export function ProjectFinancialsEditor({
   estLaborCents,
   actualLaborCents,
   actualMaterialCents,
+  actualTravelCents,
   estHours,
   actualHours,
+  contractorCostCents,
+  laborCentsFromLogs,
+  hoursFromLogs,
+  estimatedDays,
+  daysFromLogs,
+  qualifyingCoContractValueCents,
+  qualifyingCoCount,
 }: Props) {
+  const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
   const [contractValue, setContractValue] = useState(centsToInput(contractValueCents));
   const [pctDone, setPctDone] = useState(percentDone === 0 ? "" : String(percentDone));
@@ -58,10 +82,169 @@ export function ProjectFinancialsEditor({
   const [estLab, setEstLab] = useState(centsToInput(estLaborCents));
   const [actLab, setActLab] = useState(centsToInput(actualLaborCents));
   const [actMat, setActMat] = useState(centsToInput(actualMaterialCents));
+  const [actTravel, setActTravel] = useState(centsToInput(actualTravelCents));
   const [estHrs, setEstHrs] = useState(estHours != null ? String(estHours) : "");
   const [actHrs, setActHrs] = useState(actualHours != null ? String(actualHours) : "");
+  const [estDays, setEstDays] = useState(estimatedDays != null ? String(estimatedDays) : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Estimator import modal
+  const [estModalOpen, setEstModalOpen] = useState(false);
+  const [estProjects, setEstProjects] = useState<{ id: string; name: string }[]>([]);
+  const [estModalLoading, setEstModalLoading] = useState(false);
+  const [estModalError, setEstModalError] = useState("");
+
+  async function openEstimatorImport() {
+    const anonId = localStorage.getItem("ai_estimator_anon_id");
+    if (!anonId) {
+      setEstModalError("Open the AI Estimator page at least once to link your account.");
+      setEstModalOpen(true);
+      return;
+    }
+    setEstModalOpen(true);
+    setEstModalLoading(true);
+    setEstModalError("");
+    try {
+      const res = await fetch(`${ESTIMATOR_API}/api/projects`, {
+        headers: { "x-anon-id": anonId },
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load projects");
+      const data = (await res.json()) as { projects?: { id: string; name: string }[] };
+      setEstProjects(data.projects ?? []);
+      if ((data.projects ?? []).length === 0) setEstModalError("No estimator projects found.");
+    } catch {
+      setEstModalError("Could not connect to the estimator. Try again.");
+    } finally {
+      setEstModalLoading(false);
+    }
+  }
+
+  async function importEstimatorProject(estId: string) {
+    const anonId = localStorage.getItem("ai_estimator_anon_id")!;
+    setEstModalLoading(true);
+    setEstModalError("");
+    try {
+      const projRes = await fetch(`${ESTIMATOR_API}/api/projects/${estId}`, {
+        headers: { "x-anon-id": anonId }, cache: "no-store",
+      });
+      if (!projRes.ok) throw new Error("Failed to load project");
+
+      const proj = (await projRes.json()) as {
+        labor?: number;
+        quote?: number;
+        labor_breakdown?: {
+          cleaner_rate?: number;
+          foreman_rate?: number;
+          phases?: { persons?: number; days?: number }[];
+        };
+      };
+
+      // Labor and contract value
+      if (proj.labor != null) setEstLab(proj.labor.toFixed(2));
+      if (proj.quote != null) setContractValue(proj.quote.toFixed(2));
+
+      // Materials — recalculate from phases (5% of labor per phase)
+      const lb = proj.labor_breakdown;
+      if (lb) {
+        const cleanerRate = lb.cleaner_rate ?? 0;
+        const foremanRate = lb.foreman_rate ?? 0;
+        let totalMaterials = 0;
+        for (const phase of lb.phases ?? []) {
+          const laborCost = (phase.persons ?? 0) * (phase.days ?? 0) * cleanerRate * 8
+            + (phase.days ?? 0) * foremanRate;
+          totalMaterials += laborCost * 0.05;
+        }
+        if (totalMaterials > 0) setEstMat(totalMaterials.toFixed(2));
+      }
+
+      // SOV items — from the estimator's own "Schedule of Values" feature,
+      // which bills each phase separately (rough/final/touch up). That
+      // feature never saves to the estimator's server; it's computed
+      // client-side and stored in this browser's localStorage under
+      // sov_rows_<estimatorProjectId>. Since the estimator UI is served from
+      // this same app/origin, we can read it directly. Each row already
+      // carries the per-phase dollar amounts the estimator computed (or the
+      // user manually overrode), so we import one SOV item per non-zero
+      // phase per page — e.g. "Floor 1: Rough", "Floor 1: Final",
+      // "Floor 1: Touch up" — so each phase can be billed independently.
+      let sovNote = "";
+      const sovRowsJson = localStorage.getItem(`sov_rows_${estId}`);
+      const PHASE_LABELS: Record<"rough" | "final" | "touchup", string> = {
+        rough: "Rough",
+        final: "Final",
+        touchup: "Touch up",
+      };
+      if (!sovRowsJson) {
+        sovNote = "SOV not imported: no Schedule of Values found in this browser for that estimator project. The SOV only exists on the device/browser where it was set up.";
+      } else {
+        let parsedRows: {
+          page?: number;
+          description?: string;
+          rough?: number | null;
+          final?: number | null;
+          touchup?: number | null;
+          deleted?: boolean;
+        }[] = [];
+        try {
+          parsedRows = JSON.parse(sovRowsJson);
+        } catch {
+          parsedRows = [];
+        }
+
+        const sovItems: { description: string; scheduledValueCents: number; order: number }[] = [];
+        for (const row of parsedRows) {
+          if (row.deleted || row.page == null) continue;
+          const desc = row.description?.trim() || `Page ${row.page}`;
+          for (const key of Object.keys(PHASE_LABELS) as (keyof typeof PHASE_LABELS)[]) {
+            const amount = Number(row[key]);
+            if (!Number.isFinite(amount) || amount <= 0) continue;
+            sovItems.push({
+              description: `${desc}: ${PHASE_LABELS[key]}`,
+              scheduledValueCents: Math.round(amount * 100),
+              order: sovItems.length,
+            });
+          }
+        }
+
+        if (sovItems.length === 0) {
+          sovNote = "SOV not imported: no rough/final/touch up amounts found for that estimator project in this browser.";
+        } else {
+          // Overwrite: clear out any SOV items already on this project before
+          // creating the freshly imported ones, so re-importing (or importing
+          // a different estimator project) doesn't just pile up duplicates.
+          const existingSovRes = await fetch(`/api/erp/projects/${projectId}/sov`, { cache: "no-store" });
+          const existingSov = existingSovRes.ok
+            ? ((await existingSovRes.json()) as { items?: { id: string }[] })
+            : { items: [] };
+          await Promise.all(
+            (existingSov.items ?? []).map((item) =>
+              fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, { method: "DELETE" })
+            )
+          );
+
+          await Promise.all(
+            sovItems.map((item) =>
+              fetch(`/api/erp/projects/${projectId}/sov/items`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(item),
+              })
+            )
+          );
+        }
+      }
+
+      setEstModalOpen(false);
+      setError(sovNote);
+      router.refresh();
+    } catch {
+      setEstModalError("Could not load that project. Try again.");
+    } finally {
+      setEstModalLoading(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -81,8 +264,10 @@ export function ProjectFinancialsEditor({
           estLabor: estLab === "" ? null : Number(estLab),
           actualLabor: actLab === "" ? null : Number(actLab),
           actualMaterial: actMat === "" ? null : Number(actMat),
+          actualTravel: actTravel === "" ? null : Number(actTravel),
           estHours: estHrs === "" ? null : Number(estHrs),
           actualHours: actHrs === "" ? null : Number(actHrs),
+          estimatedDays: estDays === "" ? null : Number(estDays),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -96,86 +281,201 @@ export function ProjectFinancialsEditor({
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-6">
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contract &amp; Progress</h3>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <label className={labelCls} htmlFor="fin-contract">Contract value ($)</label>
-            <input id="fin-contract" type="number" min={0} step={0.01} className={inputCls} value={contractValue} onChange={(e) => setContractValue(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-pct-done">% Done</label>
-            <input id="fin-pct-done" type="number" min={0} max={100} step={1} className={inputCls} value={pctDone} onChange={(e) => setPctDone(e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-pct-invoiced">% Invoiced</label>
-            <input id="fin-pct-invoiced" type="number" min={0} max={100} step={1} className={inputCls} value={pctInvoiced} onChange={(e) => setPctInvoiced(e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="fin-bill-status">Billing status</label>
-            <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => setBillStatus(e.target.value)}>
-              {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+    <>
+      {/* Estimator import modal */}
+      {estModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">Import from AI Estimator</h3>
+              <button
+                type="button"
+                onClick={() => setEstModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-gray-500">
+              Select a project to pull est. labor, materials, contract value, and SOV (one line per page per phase —
+              Rough, Final, Touch up — only works if this browser was used to set up the SOV in the estimator).
+            </p>
+            {estModalLoading ? (
+              <p className="py-4 text-center text-sm text-gray-400">Loading…</p>
+            ) : estModalError ? (
+              <p className="text-xs text-red-500">{estModalError}</p>
+            ) : (
+              <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200">
+                {estProjects.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => importEstimatorProject(p.id)}
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-800 hover:bg-yellow-50 hover:text-yellow-900"
+                    >
+                      {p.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
-      <div>
-        <div className="grid grid-cols-2 gap-6">
-          {/* Estimated column */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Estimated</h3>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls} htmlFor="fin-est-lab">Labor ($)</label>
-                <input id="fin-est-lab" type="number" min={0} step={0.01} className={inputCls} value={estLab} onChange={(e) => setEstLab(e.target.value)} placeholder="0.00" />
+      <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-6">
+
+        {/* Import banner */}
+        <div className="flex items-center justify-between rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2">
+          <p className="text-xs text-yellow-800">Pull est. labor &amp; contract value from the AI Estimator</p>
+          <button
+            type="button"
+            onClick={openEstimatorImport}
+            className="ml-3 shrink-0 rounded-md bg-yellow-400 px-3 py-1 text-xs font-semibold text-yellow-900 hover:bg-yellow-300 active:bg-yellow-500"
+          >
+            Import from Estimator
+          </button>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contract &amp; Progress</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className={labelCls} htmlFor="fin-contract">Contract value ($)</label>
+              <input id="fin-contract" type="number" min={0} step={0.01} className={inputCls} value={contractValue} onChange={(e) => setContractValue(e.target.value)} placeholder="0.00" />
+              {qualifyingCoCount > 0 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  + {formatCurrency(qualifyingCoContractValueCents)} across {qualifyingCoCount} change order{qualifyingCoCount === 1 ? "" : "s"}
+                  {" → "}
+                  <span className="font-medium text-gray-600">
+                    {formatCurrency((Number(contractValue || 0) * 100) + qualifyingCoContractValueCents)} total
+                  </span>
+                </p>
+              )}
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="fin-pct-done">% Done</label>
+              <input id="fin-pct-done" type="number" min={0} max={100} step={1} className={inputCls} value={pctDone} onChange={(e) => setPctDone(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="fin-pct-invoiced">% Invoiced</label>
+              <input id="fin-pct-invoiced" type="number" min={0} max={100} step={1} className={inputCls} value={pctInvoiced} onChange={(e) => setPctInvoiced(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="fin-bill-status">Billing status</label>
+              <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => setBillStatus(e.target.value)}>
+                {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Estimated column */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Estimated</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-lab">Labor ($)</label>
+                  <input id="fin-est-lab" type="number" min={0} step={0.01} className={inputCls} value={estLab} onChange={(e) => setEstLab(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-mat">Material ($)</label>
+                  <input id="fin-est-mat" type="number" min={0} step={0.01} className={inputCls} value={estMat} onChange={(e) => setEstMat(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-travel">Travel ($)</label>
+                  <input id="fin-est-travel" type="number" min={0} step={0.01} className={inputCls} value={estTravel} onChange={(e) => setEstTravel(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-hrs">Hours</label>
+                  <input id="fin-est-hrs" type="number" min={0} step={0.5} className={inputCls} value={estHrs} onChange={(e) => setEstHrs(e.target.value)} placeholder="0" />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-est-days">Days</label>
+                  <input id="fin-est-days" type="number" min={0} step={1} className={inputCls} value={estDays} onChange={(e) => setEstDays(e.target.value)} placeholder="0" />
+                </div>
               </div>
-              <div>
-                <label className={labelCls} htmlFor="fin-est-mat">Material ($)</label>
-                <input id="fin-est-mat" type="number" min={0} step={0.01} className={inputCls} value={estMat} onChange={(e) => setEstMat(e.target.value)} placeholder="0.00" />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="fin-est-travel">Travel ($)</label>
-                <input id="fin-est-travel" type="number" min={0} step={0.01} className={inputCls} value={estTravel} onChange={(e) => setEstTravel(e.target.value)} placeholder="0.00" />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="fin-est-hrs">Hours</label>
-                <input id="fin-est-hrs" type="number" min={0} step={0.5} className={inputCls} value={estHrs} onChange={(e) => setEstHrs(e.target.value)} placeholder="0" />
+            </div>
+
+            {/* Actual column */}
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>Employee labor ($)</label>
+                  {hasLaborLogs ? (
+                    <>
+                      <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                        {(laborCentsFromLogs / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
+                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                    </>
+                  )}
+                </div>
+                {contractorCostCents > 0 && (
+                  <div>
+                    <label className={labelCls}>Contractor costs ($)</label>
+                    <div className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-700 tabular-nums">
+                      {(contractorCostCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-400">From contractor assignments</p>
+                  </div>
+                )}
+                {contractorCostCents > 0 && (
+                  <div>
+                    <label className={labelCls}>Total labor ($)</label>
+                    <div className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 tabular-nums">
+                      {(((hasLaborLogs ? laborCentsFromLogs : (Number(actLab) || 0) * 100) + contractorCostCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-400">Employee + contractors</p>
+                  </div>
+                )}
+                <div>
+                  <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
+                  <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="fin-act-travel">Travel ($)</label>
+                  <input id="fin-act-travel" type="number" min={0} step={0.01} className={inputCls} value={actTravel} onChange={(e) => setActTravel(e.target.value)} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className={labelCls}>Hours</label>
+                  {hasLaborLogs ? (
+                    <>
+                      <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                        {hoursFromLogs.toFixed(2)}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
+                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <label className={labelCls}>Days</label>
+                  <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                    {daysFromLogs}
+                  </div>
+                  <p className="mt-0.5 text-xs text-emerald-600">Distinct dates with a work log</p>
+                </div>
               </div>
             </div>
           </div>
-
-          {/* Actual column */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Actual</h3>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls} htmlFor="fin-act-lab">Labor ($)</label>
-                <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
-                <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
-              </div>
-              <div className="invisible">
-                <label className={labelCls}>Travel ($)</label>
-                <input type="number" className={inputCls} disabled tabIndex={-1} />
-              </div>
-              <div>
-                <label className={labelCls} htmlFor="fin-act-hrs">Hours</label>
-                <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
 
-      {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
-      <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50">
-        {loading ? "Saving…" : "Save"}
-      </button>
-    </form>
+        {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
+        <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+          {loading ? "Saving…" : "Save"}
+        </button>
+      </form>
+    </>
   );
 }

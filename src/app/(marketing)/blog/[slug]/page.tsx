@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getAllSlugs, type PaintingBlogPost } from "../posts";
+import { MarketingNav } from "../../components/MarketingNav";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sueep.com";
 
@@ -87,6 +88,7 @@ export default async function BlogPostPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd(post)) }}
       />
       <main className="bg-white text-gray-900 min-h-screen">
+        <MarketingNav />
         <article className="max-w-3xl mx-auto px-5 py-10 md:py-14">
           <nav className="text-sm text-gray-500 mb-8" aria-label="Breadcrumb">
             <ol className="flex flex-wrap items-center gap-2">

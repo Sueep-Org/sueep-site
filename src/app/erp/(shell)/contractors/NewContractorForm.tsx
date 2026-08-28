@@ -24,6 +24,7 @@ export function NewContractorForm({ title }: Props) {
         body: JSON.stringify({
           name: fd.get("name"),
           email: fd.get("email") || undefined,
+          role: fd.get("role") || undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -70,6 +71,11 @@ export function NewContractorForm({ title }: Props) {
               name="email"
               type="email"
               placeholder="Email"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 sm:col-span-2"
+            />
+            <input
+              name="role"
+              placeholder="Role (e.g. Cleaner, Painter)"
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 sm:col-span-2"
             />
           </div>

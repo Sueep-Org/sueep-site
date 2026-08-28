@@ -21,10 +21,11 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
 
   const email = body.email ? String(body.email).trim().toLowerCase() : null;
+  const role = body.role ? String(body.role).trim() || null : null;
 
   try {
     const contractor = await prisma.contractor.create({
-      data: { name, email, status: "ACTIVE" },
+      data: { name, email, role, status: "ACTIVE" },
     });
     return NextResponse.json(contractor, { status: 201 });
   } catch (e) {

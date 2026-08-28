@@ -173,6 +173,19 @@ export class HighlightsStore {
 
   getLines(page){ this._ensure(page); return this._pageToLines.get(page); }
 
+  // Removes one line (detected or manually drawn) by id — the per-line
+  // counterpart to clearLines below, for the alt+click / Delete-key removal
+  // in CanvasOverlay. `__id` is checked too since a couple of call sites
+  // key proposed/legacy line-ish rows off that field instead of `id`.
+  removeLine(page, id){
+    this._ensure(page);
+    const arr = this._pageToLines.get(page);
+    const idx = arr.findIndex((ln) => ln.id === id || ln.__id === id);
+    if (idx < 0) return false;
+    arr.splice(idx, 1);
+    return true;
+  }
+
   clearLines(page){ this._ensure(page); this._pageToLines.set(page, []); }
   
   // Return all stored vector lines grouped by page as [{ page, lines }] for easy consumption

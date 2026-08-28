@@ -32,9 +32,28 @@ export function A({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-export function Img({ src, alt }: { src: string; alt?: string }) {
+export function Img({ src, alt, size = "full" }: { src: string; alt?: string; size?: "full" | "sm" }) {
+  const width = size === "sm" ? "max-w-xs w-full" : "w-full";
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt ?? ""} className="my-4 w-full rounded-xl border border-gray-200 shadow-sm" />;
+  return <img src={src} alt={alt ?? ""} className={`my-4 ${width} rounded-xl border border-gray-200 shadow-sm`} />;
+}
+
+/** Stand-in for a screenshot that hasn't been taken yet. A real Img should
+ * replace this once one's available, rather than pointing Img at a file that
+ * doesn't exist. */
+export function ImgPlaceholder({ label, size = "full" }: { label: string; size?: "full" | "sm" }) {
+  const width = size === "sm" ? "max-w-xs w-full" : "w-full";
+  return (
+    <div
+      className={`my-4 flex ${width} flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center`}
+    >
+      <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M4 8h.01M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" />
+      </svg>
+      <p className="text-xs font-semibold text-gray-500">Screenshot needed</p>
+      <p className="text-xs text-gray-400">{label}</p>
+    </div>
+  );
 }
 
 export function Table({ children }: { children: React.ReactNode }) {

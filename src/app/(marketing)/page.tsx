@@ -3,20 +3,11 @@ import ContactForm from "./components/ContactForm";
 import PartnersCarousel from "./components/PartnersCarousel";
 import { MarketingNav } from "./components/MarketingNav";
 
-const HOME_NAV_LINKS = [
-  { label: "About", href: "#about", anchor: true as const },
-  { label: "Services", href: "#services", anchor: true as const },
-  { label: "Projects", href: "#projects", anchor: true as const },
-  { label: "Contact", href: "#contact", anchor: true as const },
-  { label: "Referral program", href: "/referral", subtle: true },
-  { label: "Careers", href: "/careers", subtle: true },
-  { label: "Blog", href: "/blog", subtle: true },
-];
 
 export default function Home() {
   return (
     <main className="bg-white text-gray-900">
-      <MarketingNav links={HOME_NAV_LINKS} cta={{ label: "Request a Quote", href: "#contact" }} />
+      <MarketingNav cta={{ label: "Request a Quote", href: "#contact" }} />
 
       {/* Hero */}
       <section className="relative h-[80vh] flex items-center justify-center text-center">
@@ -147,7 +138,7 @@ export default function Home() {
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">2 Bala Plaza, Suite 300<br />Bala Cynwyd, PA 19004</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">(267) 217-3596</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">contact@sueep.com</p>
-            <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • MD • NY</p>
+            <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • NY</p>
           </div>
         </div>
       </section>
@@ -178,14 +169,10 @@ export default function Home() {
           <div className="mt-4 flex justify-between items-center">
           <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-end">
-            <Link href="/referral" className="text-gray-500 hover:text-white text-xs sm:text-sm">
-              Referral program
-            </Link>
             <Link href="/blog" className="text-gray-500 hover:text-white text-xs sm:text-sm">
               Blog
             </Link>
-            <a href="#" className="hover:text-white">Privacy</a>
-            <a href="#" className="hover:text-white">Terms</a>
+            <Link href="/privacy" className="hover:text-white">Privacy</Link>
             <a href="#contact" className="hover:text-white">Contact</a>
             </div>
           </div>

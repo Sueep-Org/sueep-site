@@ -1,0 +1,151 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+
+const JANITORIAL_SEGMENTS = [
+  "JANITORIAL_TURNOVER_REQUESTS",
+  "COMMERCIAL_CLEANING",
+];
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const startParam = searchParams.get("start");
+  const endParam = searchParams.get("end");
+  const q = searchParams.get("q")?.trim() || "";
+
+  if (!q && (!startParam || !endParam)) {
+    return NextResponse.json(
+      { error: "start and end query params required (YYYY-MM-DD)" },
+      { status: 400 },
+    );
+  }
+
+  let start: Date | null = null;
+  let end: Date | null = null;
+  if (!q) {
+    start = new Date(`${startParam}T00:00:00Z`);
+    end = new Date(`${endParam}T23:59:59.999Z`);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
+  }
+
+  const cfg = parseHubSpotPipelineStageMap();
+  const janitorialPipelineId = cfg?.janitorial.pipelineId ?? null;
+  const postConstructionPipelineId = cfg?.postConstruction.pipelineId ?? null;
+
+  const janitorialFilter = [
+    ...(janitorialPipelineId ? [{ hubspotPipelineId: janitorialPipelineId }] : []),
+    { segment: { in: JANITORIAL_SEGMENTS } },
+  ];
+
+  const projects = await prisma.project.findMany({
+    where: {
+      status: "COMPLETE",
+      AND: [
+        { OR: janitorialFilter },
+        // COMMERCIAL_CLEANING is shared between the janitorial pipeline and
+        // post-construction cleaning jobs — segment alone can't tell them
+        // apart, so explicitly exclude anything actually synced from the
+        // post-construction pipeline even if its segment matches. Written as
+        // an explicit "null or not-equal" OR rather than `NOT: {
+        // hubspotPipelineId: postConstructionPipelineId }` — that block-level
+        // NOT compiles to a plain SQL `<>`, which per SQL's null semantics
+        // silently drops every row where hubspotPipelineId IS NULL (i.e.
+        // every project never synced from HubSpot at all) instead of
+        // keeping them. That wiped every manually-created janitorial unit
+        // (an entire building's worth, confirmed: Avery Philly Apartments)
+        // out of this list regardless of date range.
+        ...(postConstructionPipelineId
+          ? [{ OR: [{ hubspotPipelineId: null }, { hubspotPipelineId: { not: postConstructionPipelineId } }] }]
+          : []),
+        // Searching bypasses the date range entirely (that's the point of a
+        // search), it doesn't bypass "is this actually billing-eligible."
+        q
+          ? {
+              OR: [
+                { jobTitle: { contains: q, mode: "insensitive" as const } },
+                { building: { name: { contains: q, mode: "insensitive" as const } } },
+                { turnoverRequest: { unitNumber: { contains: q, mode: "insensitive" as const } } },
+                { turnoverRequest: { building: { name: { contains: q, mode: "insensitive" as const } } } },
+              ],
+            }
+          : {
+              // Same three-tier fallback as the displayed/exported date
+              // below (turnoverCompletedAt, then projectEndDate, then
+              // updatedAt) so this filter and that value can never disagree
+              // about which day a unit counts as completed on.
+              OR: [
+                { turnoverCompletedAt: { gte: start!, lte: end! } },
+                { turnoverCompletedAt: null, projectEndDate: { gte: start!, lte: end! } },
+                { turnoverCompletedAt: null, projectEndDate: null, updatedAt: { gte: start!, lte: end! } },
+              ],
+            },
+      ],
+    },
+    include: {
+      building: { select: { id: true, name: true } },
+      turnoverRequest: {
+        select: {
+          id: true,
+          unitNumber: true,
+          bedrooms: true,
+          bathrooms: true,
+          priceCents: true,
+          approvedPriceCents: true,
+          billingStatus: true,
+          building: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: [{ buildingId: "asc" }, { jobTitle: "asc" }],
+  });
+
+  type UnitRow = {
+    projectId: string;
+    turnoverRequestId: string | null;
+    jobTitle: string;
+    unitNumber: string | null;
+    bedrooms: number | null;
+    bathrooms: number | null;
+    completedAt: string;
+    contractCents: number;
+    billingStatus: string;
+  };
+
+  type BuildingRow = {
+    buildingId: string;
+    buildingName: string;
+    units: UnitRow[];
+  };
+
+  const buildingMap = new Map<string, BuildingRow>();
+
+  for (const project of projects) {
+    const buildingId = project.building?.id ?? project.turnoverRequest?.building?.id ?? project.buildingId ?? `project:${project.id}`;
+    const buildingName = project.building?.name ?? project.turnoverRequest?.building?.name ?? project.jobTitle;
+
+    if (!buildingMap.has(buildingId)) {
+      buildingMap.set(buildingId, { buildingId, buildingName, units: [] });
+    }
+
+    const tr = project.turnoverRequest;
+    const contractCents =
+      tr?.approvedPriceCents ?? tr?.priceCents ?? project.contractValueCents ?? 0;
+
+    buildingMap.get(buildingId)!.units.push({
+      projectId: project.id,
+      turnoverRequestId: tr?.id ?? null,
+      jobTitle: project.jobTitle,
+      unitNumber: tr?.unitNumber ?? null,
+      bedrooms: tr?.bedrooms ?? null,
+      bathrooms: tr?.bathrooms ?? null,
+      completedAt: (project.turnoverCompletedAt ?? project.projectEndDate ?? project.updatedAt).toISOString(),
+      contractCents,
+      billingStatus: tr?.billingStatus ?? project.billingStatus ?? "NOT_BILLED",
+    });
+  }
+
+  const rows = Array.from(buildingMap.values());
+  return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
+}

@@ -55,13 +55,43 @@ export async function POST(req: Request) {
   const statusRaw = String(body.status || "ACTIVE").toUpperCase();
   const status = STATUSES.includes(statusRaw as (typeof STATUSES)[number]) ? statusRaw : "ACTIVE";
 
+  // Same-name guard: email uniqueness (the P2002 catch below) only catches
+  // duplicates when both profiles have an email on file. Name collisions
+  // slip through otherwise (see the "Martha Rios" duplicate-profile issue),
+  // so check for one explicitly and let the caller confirm before creating
+  // a second profile for the same person.
+  const confirmDuplicate = body.confirmDuplicate === true;
+  if (!confirmDuplicate) {
+    const existingByName = await prisma.employee.findFirst({
+      where: { firstName: { equals: firstName, mode: "insensitive" }, lastName: { equals: lastName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existingByName) {
+      return NextResponse.json(
+        { error: `An employee named ${firstName} ${lastName} already exists`, existingEmployeeId: existingByName.id, duplicateName: true },
+        { status: 409 }
+      );
+    }
+  }
+
   const hireDate = parseDate(body.hireDate);
   if (body.hireDate !== undefined && hireDate === undefined) {
     return NextResponse.json({ error: "Invalid hireDate" }, { status: 400 });
   }
+  const payTypeRaw = String(body.payType || "HOURLY").toUpperCase();
+  const payType = payTypeRaw === "SALARY" ? "SALARY" : "HOURLY";
+
   const hourlyPayCents = parseHourlyPayCents(body.hourlyPay);
   if (body.hourlyPay !== undefined && hourlyPayCents === undefined) {
     return NextResponse.json({ error: "Invalid hourlyPay" }, { status: 400 });
+  }
+  const annualSalaryCents = parseHourlyPayCents(body.annualSalary);
+  if (body.annualSalary !== undefined && annualSalaryCents === undefined) {
+    return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
+  }
+  const offshoreMonthlyRateCents = parseHourlyPayCents(body.offshoreMonthlyRate);
+  if (body.offshoreMonthlyRate !== undefined && offshoreMonthlyRateCents === undefined) {
+    return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
   }
 
   try {
@@ -72,11 +102,15 @@ export async function POST(req: Request) {
         email: body.email ? String(body.email).trim().toLowerCase() : null,
         phone: body.phone ? String(body.phone).trim() : null,
         role: body.role ? String(body.role).trim() : null,
+        payType,
         hourlyPayCents: hourlyPayCents ?? null,
+        annualSalaryCents: annualSalaryCents ?? null,
         defaultProject: body.defaultProject ? String(body.defaultProject).trim() : null,
         status,
         hireDate: hireDate ?? null,
         notes: body.notes ? String(body.notes).trim() : null,
+        isOffshore: Boolean(body.isOffshore),
+        offshoreMonthlyRateCents: offshoreMonthlyRateCents ?? null,
       },
     });
     return NextResponse.json(employee);

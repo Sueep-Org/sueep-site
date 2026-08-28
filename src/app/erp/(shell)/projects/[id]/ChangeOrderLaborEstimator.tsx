@@ -1,0 +1,219 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { centsToDollars } from "@/lib/erp/money";
+import {
+  computeChangeOrderLaborEstimate,
+  deriveChangeOrderSupervisorCount,
+  ACTUAL_CHANGE_ORDER_LABOR_COST_RATES,
+  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
+  type ResolvedChangeOrderLaborRates,
+} from "@/lib/changeOrderLaborRates";
+
+const input = inputClass.md;
+const label = labelClass.default;
+
+type Props = {
+  /** Billing rate (project's Labor rates, falls back to
+   * DEFAULT_CHANGE_ORDER_LABOR_RATES) — drives the price/contract value
+   * calculation. Null while unknown (e.g. no project picked yet). */
+  pricingRates: ResolvedChangeOrderLaborRates | null;
+  cleanerCount: string;
+  onCleanerCountChange: (v: string) => void;
+  supervisorCount: string;
+  onSupervisorCountChange: (v: string) => void;
+  contractValue: string;
+  onContractValueChange: (v: string) => void;
+  estLabor: string;
+  onEstLaborChange: (v: string) => void;
+  /** Marks this CO as not needing a crew at all — material-only, a price
+   * adjustment, subcontracted-only work, etc. Distinguishes "genuinely no
+   * crew" from "crew size just hasn't been filled in yet" (see
+   * ProjectChangeOrder.noCrewRequired). Optional so callers that don't want
+   * this affordance (e.g. the read-only supervisor request form) can omit it. */
+  noCrewRequired?: boolean;
+  onNoCrewRequiredChange?: (v: boolean) => void;
+  disabled?: boolean;
+};
+
+/** "# cleaners / # supervisors" (hours are never entered — every estimate
+ * assumes a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour day per person, see
+ * that constant) → two different calculated numbers: a price (this
+ * project's billing rate, has margin built in) and a labor cost
+ * (ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, the real wage we pay) — plus the
+ * manual price fields either can fill, which stay editable on their own so
+ * a calculated number is always just a starting point, never a lock-in.
+ * Used on both change order create forms and the CO detail page's Costs
+ * tab, so the math and the fields stay identical everywhere a CO gets
+ * priced. */
+export function ChangeOrderLaborEstimator({
+  pricingRates,
+  cleanerCount,
+  onCleanerCountChange,
+  supervisorCount,
+  onSupervisorCountChange,
+  contractValue,
+  onContractValueChange,
+  estLabor,
+  onEstLaborChange,
+  noCrewRequired = false,
+  onNoCrewRequiredChange,
+  disabled,
+}: Props) {
+  const crewDisabled = disabled || noCrewRequired;
+
+  function handleNoCrewRequiredChange(checked: boolean) {
+    onNoCrewRequiredChange?.(checked);
+    // Checking it means there's genuinely no crew to size — clear whatever
+    // was typed rather than leaving a stale count sitting behind a disabled
+    // input, which would look like it's still in effect.
+    if (checked) {
+      onCleanerCountChange("");
+      onSupervisorCountChange("");
+    }
+  }
+  const counts = {
+    cleanerCount: Number(cleanerCount) || 0,
+    supervisorCount: Number(supervisorCount) || 0,
+    hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS,
+  };
+  const priceEstimate = pricingRates ? computeChangeOrderLaborEstimate(counts, pricingRates) : null;
+  const costEstimate = computeChangeOrderLaborEstimate(counts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+
+  function useCalculatedNumbers() {
+    if (priceEstimate) onContractValueChange((priceEstimate.totalCents / 100).toFixed(2));
+    onEstLaborChange((costEstimate.totalCents / 100).toFixed(2));
+  }
+
+  // Auto-fills # of supervisors from # of cleaners (a crew always needs at
+  // least one — see deriveChangeOrderSupervisorCount), but only until
+  // someone actually edits the supervisor field themselves — after that it's
+  // theirs to manage, no more overwriting on every cleaner-count keystroke.
+  const supervisorTouchedRef = useRef(false);
+  useEffect(() => {
+    if (supervisorTouchedRef.current) return;
+    const derived = deriveChangeOrderSupervisorCount(Number(cleanerCount) || 0);
+    const derivedStr = derived > 0 ? String(derived) : "";
+    if (supervisorCount !== derivedStr) onSupervisorCountChange(derivedStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanerCount]);
+
+  function handleSupervisorCountChange(v: string) {
+    supervisorTouchedRef.current = true;
+    onSupervisorCountChange(v);
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pricing</h3>
+
+      {onNoCrewRequiredChange ? (
+        <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={noCrewRequired}
+            disabled={disabled}
+            onChange={(e) => handleNoCrewRequiredChange(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+          />
+          No crew required (material-only, price adjustment, subcontracted, etc.)
+        </label>
+      ) : null}
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className={label} htmlFor="co-est-cleaner-count"># of cleaners</label>
+          <input
+            id="co-est-cleaner-count"
+            type="number"
+            min={0}
+            step={1}
+            className={input}
+            placeholder="0"
+            value={cleanerCount}
+            disabled={crewDisabled}
+            onChange={(e) => onCleanerCountChange(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className={label} htmlFor="co-est-supervisor-count"># of supervisors</label>
+          <input
+            id="co-est-supervisor-count"
+            type="number"
+            min={0}
+            step={1}
+            className={input}
+            placeholder="0"
+            value={supervisorCount}
+            disabled={crewDisabled}
+            onChange={(e) => handleSupervisorCountChange(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-gray-400">Auto-filled from crew size, adjust if needed.</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2">
+        <div className="text-sm text-gray-700">
+          <div>
+            Price: <span className="font-semibold text-gray-900">{priceEstimate ? centsToDollars(priceEstimate.totalCents) : "—"}</span>
+            {pricingRates ? (
+              <span className="ml-1 text-xs text-gray-400">
+                ({centsToDollars(pricingRates.cleanerHourlyRateCents)}/hr cleaner, {centsToDollars(pricingRates.foremanHourlyRateCents)}/hr
+                supervisor)
+              </span>
+            ) : (
+              <span className="ml-1 text-xs text-gray-400">(select a project to calculate)</span>
+            )}
+          </div>
+          <div>
+            Labor cost: <span className="font-semibold text-gray-900">{centsToDollars(costEstimate.totalCents)}</span>
+            <span className="ml-1 text-xs text-gray-400">
+              ({centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.cleanerHourlyRateCents)}/hr cleaner,{" "}
+              {centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.foremanHourlyRateCents)}/hr supervisor — actual pay)
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={disabled || (!priceEstimate && costEstimate.totalCents === 0)}
+          onClick={useCalculatedNumbers}
+          className="rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs font-semibold text-pink-700 hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Use these numbers
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className={label} htmlFor="co-contract-value">Price / contract value ($)</label>
+          <input
+            id="co-contract-value"
+            type="number"
+            min={0}
+            step="0.01"
+            className={input}
+            placeholder="0.00"
+            value={contractValue}
+            disabled={disabled}
+            onChange={(e) => onContractValueChange(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className={label} htmlFor="co-est-labor">Est. labor ($)</label>
+          <input
+            id="co-est-labor"
+            type="number"
+            min={0}
+            step="0.01"
+            className={input}
+            placeholder="0.00"
+            value={estLabor}
+            disabled={disabled}
+            onChange={(e) => onEstLaborChange(e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

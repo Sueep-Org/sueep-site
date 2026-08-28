@@ -14,6 +14,7 @@ export async function GET() {
     include: {
       turnoverRequest: { include: { building: true } },
       project: { select: { id: true, jobTitle: true } },
+      sovItems: { select: { id: true, description: true } },
     },
   });
   return NextResponse.json(checks);
@@ -44,6 +45,24 @@ export async function POST(req: Request) {
   const evidencePhotos = parseStringArray(body.evidencePhotos);
   const notes = body.notes != null ? String(body.notes).trim() : null;
 
+  // SOV items only make sense on a Post-Construction project — turnover
+  // requests have no SOV, so this is silently ignored when only
+  // turnoverRequestId is set rather than erroring.
+  const sovItemIds = parseStringArray(body.sovItemIds);
+  if (projectId && sovItemIds.length > 0) {
+    const found = await prisma.projectSOVItem.findMany({
+      where: { id: { in: sovItemIds }, sov: { projectId } },
+      select: { id: true },
+    });
+    if (found.length !== sovItemIds.length) {
+      return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+    }
+  }
+
+  // Free-text fallback for turnover checks (no SOV concept at all) or a
+  // project with no SOV items configured yet.
+  const scopeDescription = body.scopeDescription != null ? String(body.scopeDescription).trim() : null;
+
   try {
     const check = await prisma.qualityCheck.create({
       data: {
@@ -54,6 +73,8 @@ export async function POST(req: Request) {
         pmApproval,
         evidencePhotos: evidencePhotos.length > 0 ? evidencePhotos : undefined,
         notes: notes || null,
+        sovItems: projectId && sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+        scopeDescription: scopeDescription || null,
       },
     });
 
