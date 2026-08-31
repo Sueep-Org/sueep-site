@@ -322,6 +322,12 @@ export default function EstimatorPage() {
                     Project
                   </div>
                   <div
+                    id="loadedProjectLastEdited"
+                    className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500"
+                  >
+                    Last edited: —
+                  </div>
+                  <div
                     id="loadedProjectName"
                     className="text-lg font-semibold text-gray-900"
                   ></div>
