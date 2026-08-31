@@ -50,7 +50,14 @@ function rewriteUrlIfNeeded(request: NextRequest): URL | null {
 export async function middleware(request: NextRequest) {
   const host = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
+  const isEstimatorRoute = pathname === "/estimator" || pathname.startsWith("/estimator/");
   const logical = logicalErpPath(pathname, host);
+
+  if (isEstimatorRoute && !isAppSubdomain(host)) {
+    const redirectUrl = new URL(request.url);
+    redirectUrl.host = process.env.NODE_ENV === "development" ? "app.localhost:3000" : "app.sueep.com";
+    return NextResponse.redirect(redirectUrl);
+  }
 
   const allowLoginApi = pathname === "/api/erp/auth/login" && request.method === "POST";
   // DocuSeal webhook — called by DocuSeal's servers, no ERP session cookie
