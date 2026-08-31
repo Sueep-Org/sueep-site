@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 // Small stroke-style icon wrapper for toolbar buttons — one consistent
 // line-icon language (uniform size/weight, currentColor so hover/active
@@ -74,7 +75,28 @@ function confirmLeaveDialog(message: string): Promise<boolean> {
 }
 
 export default function EstimatorPage() {
+  const router = useRouter();
   const loaded = useRef(false);
+
+  useEffect(() => {
+    const checkErpSession = async () => {
+      try {
+        const res = await fetch("/api/erp/auth/verify", { cache: "no-store" });
+        if (res.ok) return;
+      } catch {
+        // Fall through to the redirect below.
+      }
+
+      const host = window.location.hostname;
+      const appHost =
+        host === "app.sueep.com" ||
+        (process.env.NODE_ENV === "development" &&
+          host.startsWith("app.localhost"));
+      router.replace(appHost ? "/login" : "/erp/login");
+    };
+
+    checkErpSession();
+  }, [router]);
 
   // Restore last project on soft navigation back (not on hard refresh)
   useEffect(() => {
