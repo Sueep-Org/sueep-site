@@ -39,6 +39,7 @@ function rewriteUrlIfNeeded(request: NextRequest): URL | null {
   if (!isAppSubdomain(host)) return null;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
   if (hasStaticExtension(pathname)) return null;
+  if (pathname === "/estimator" || pathname.startsWith("/estimator/")) return null;
   const logical = logicalErpPath(pathname, host);
   if (logical === pathname) return null;
   const u = request.nextUrl.clone();
