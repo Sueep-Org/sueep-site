@@ -33,7 +33,7 @@ export function EstimatorProfileMenu() {
   );
 
   return (
-    <div className="relative z-20">
+    <div className="relative z-20 ml-2">
       <button
         type="button"
         aria-label="Open profile menu"
@@ -43,7 +43,7 @@ export function EstimatorProfileMenu() {
         {avatar}
       </button>
       {open ? (
-        <div className="absolute right-0 top-11 z-10 w-64 rounded-lg border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="absolute right-2 top-11 z-10 w-64 rounded-lg border border-slate-200 bg-white p-4 shadow-lg">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-pink-600 text-xs font-semibold text-white">
               {avatar}
