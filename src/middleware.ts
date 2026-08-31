@@ -26,6 +26,7 @@ function logicalErpPath(pathname: string, host: string): string {
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return pathname;
   if (hasStaticExtension(pathname)) return pathname;
   if (isPublicAppPath(pathname)) return pathname;
+  if (pathname === "/estimator" || pathname.startsWith("/estimator/")) return pathname;
   if (pathname === "/" || pathname === "") return "/erp";
   if (pathname === "/login") return "/erp/login";
   if (!pathname.startsWith("/erp")) return `/erp${pathname}`;
@@ -38,6 +39,7 @@ function rewriteUrlIfNeeded(request: NextRequest): URL | null {
   if (!isAppSubdomain(host)) return null;
   if (pathname.startsWith("/_next") || pathname.startsWith("/api/")) return null;
   if (hasStaticExtension(pathname)) return null;
+  if (pathname === "/estimator" || pathname.startsWith("/estimator/")) return null;
   const logical = logicalErpPath(pathname, host);
   if (logical === pathname) return null;
   const u = request.nextUrl.clone();
