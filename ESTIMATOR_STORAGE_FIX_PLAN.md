@@ -287,13 +287,29 @@ production.
     which URL the browser hits and nothing else, filtering is still inert.
   - 4b. Run the legacy backfill (below) so existing users don't get
     walled off the moment enforcement turns on.
-  - 4c. Flip `ENFORCE_COMPANY_SCOPING` on. **Not done yet, deliberately.**
-    This is the one moment with real user-facing risk, plan to test with a
-    second throwaway company account side-by-side with Sueep first, and
-    keep the flag as a fast rollback if something's wrong. Needs an actual
-    deploy of the `aiestimator-api` changes too, everything in Phase 3/4a
-    is still sitting locally uncommitted on that repo's
-    `vector-wall-detection-fixes` branch.
+  - 4c. Flip `ENFORCE_COMPANY_SCOPING` on in production. **Not done yet,
+    deliberately** — needs an actual deploy of `aiestimator-api` first, and
+    the user doesn't want to merge to `main` on either repo until the whole
+    thing is reviewed. Both repos are pushed to their own branches
+    (`sueep-site`: `estimator-emma`; `aiestimator-api`:
+    `estimator-company-storage`), neither merged.
+
+    **Verified locally instead, 2026-08-31, without deploying or merging
+    anything**: ran `aiestimator-api` locally (`python run.py`) with
+    `ENFORCE_COMPANY_SCOPING=true` and a matching
+    `ESTIMATOR_INTERNAL_SECRET`, pointed a local `sueep-site` dev server at
+    it via `ESTIMATOR_API_BASE=http://localhost:8000`, created a real
+    throwaway second company ("Isolation Test Co") alongside real Sueep
+    sessions, and confirmed with actual HTTP requests through the proxy:
+    each company's project list shows only its own projects (Sueep: 46
+    including the test one; Test Co: 1), fetching the other company's
+    project by ID 404s, and a cross-company DELETE attempt also 404s
+    without deleting anything (confirmed the target project still existed
+    right after). All test data (2 throwaway projects, the throwaway
+    company, the throwaway user) deleted afterward — production DB is back
+    to exactly 1 company (Sueep) and 45 projects, same as before the test.
+    This is real evidence Phase 4c will work correctly once deployed, not
+    just code review confidence.
 
 **Phase 5 — legacy backfill. Fully done 2026-08-31, both sides.** The
 `sueep-site` half used the real Phase 1 UI rather than a migration script:
