@@ -265,28 +265,47 @@ one, since flipping it before the proxy exists would 401 every request in
 production.
 
 **Phase 4 — cutover.**
-  - 4a. Build the `sueep-site` proxy route (`/api/estimator/proxy/*`),
-    point `config.js`'s `API_BASE` at it. Flag still off, so this just
-    changes which URL the browser hits, filtering still inert. Verify
-    requests are reaching the backend with the right headers.
+  - **4a. Built and verified 2026-08-31.** `/api/estimator/proxy/[...path]/route.ts`
+    in `sueep-site`: reads the session, 401s with no session, 403s with no
+    `companyId`, then forwards to `aiestimator-api` (`ESTIMATOR_API_BASE`,
+    defaults to the production Azure host) with `x-estimator-company-id` +
+    `x-estimator-internal-secret` attached server-side, streaming the
+    request/response bodies both ways (so large blueprint uploads and the
+    file-download endpoint both still work without buffering the whole
+    thing in memory). `public/estimator/config.js`'s `API_BASE` now just
+    points at this same-origin path instead of guessing local-vs-prod from
+    the hostname. New env var `ESTIMATOR_INTERNAL_SECRET` generated and set
+    in `.env.local`/`.env.example`, must match the same value in
+    `aiestimator-api`'s environment (no shared `.env` between the two
+    repos, that has to be set independently on each side, and in Azure App
+    Service's Application Settings for production, not a file). Verified
+    live end to end: no-session request 401s, a minted session with no
+    `companyId` would 403 (not separately re-tested, follows directly from
+    the same check Phase 1 already exercised), and a real authenticated
+    request round-tripped through the proxy to the live backend and back
+    with real project data. Flag still off throughout, so this changed
+    which URL the browser hits and nothing else, filtering is still inert.
   - 4b. Run the legacy backfill (below) so existing users don't get
     walled off the moment enforcement turns on.
-  - 4c. Flip `ENFORCE_COMPANY_SCOPING` on. This is the one moment with real
-    user-facing risk, plan to test with two throwaway company accounts
-    side-by-side first, and keep the flag as a fast rollback if something's
-    wrong.
+  - 4c. Flip `ENFORCE_COMPANY_SCOPING` on. **Not done yet, deliberately.**
+    This is the one moment with real user-facing risk, plan to test with a
+    second throwaway company account side-by-side with Sueep first, and
+    keep the flag as a fast rollback if something's wrong. Needs an actual
+    deploy of the `aiestimator-api` changes too, everything in Phase 3/4a
+    is still sitting locally uncommitted on that repo's
+    `vector-wall-detection-fixes` branch.
 
-**Phase 5 — legacy backfill** (runs as part of 4b, called out separately
-since it touches both databases). The `sueep-site` half is already done,
-ahead of schedule, using the real Phase 1 UI rather than a migration
-script: a dedicated `estimating@sueep.com` account created the "Sueep"
-company for real through `/estimator/company/setup` (id
-`cmthly0iz0003d9jdx7g1b4u7`, OWNER), and the two pre-existing companyless
-accounts (`emma@sueep.com`, `namrata@sueep.com`) were folded in as MEMBERs
-via a direct one-row-each DB update, 2026-08-31. That id is now fixed and
-is what `aiestimator-api`'s migration needs to reuse literally when Phase 3
-lands, so every `Project` currently at `user_prefix = "anon"` gets
-`company_id = 'cmthly0iz0003d9jdx7g1b4u7'`.
+**Phase 5 — legacy backfill. Fully done 2026-08-31, both sides.** The
+`sueep-site` half used the real Phase 1 UI rather than a migration script:
+a dedicated `estimating@sueep.com` account created the "Sueep" company for
+real through `/estimator/company/setup` (id `cmthly0iz0003d9jdx7g1b4u7`,
+OWNER), and the two pre-existing companyless accounts (`emma@sueep.com`,
+`namrata@sueep.com`) were folded in as MEMBERs via a direct one-row-each DB
+update. The `aiestimator-api` half: `UPDATE projects SET company_id =
+'cmthly0iz0003d9jdx7g1b4u7' WHERE company_id IS NULL` against the live
+Azure Postgres, all 45 existing projects (previously all `user_prefix =
+"anon"`) now belong to Sueep. Confirmed 0 rows left null before flipping
+enforcement.
 
 **Phase 6 — cleanup.** Once enforcement has been on and stable: delete
 `get_user_prefix()`, Easy Auth references, the legacy `/api/files/*`
