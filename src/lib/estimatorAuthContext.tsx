@@ -5,11 +5,20 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { usePathname, useRouter } from "next/navigation";
 import { estimatorAuth } from "@/lib/estimatorFirebase";
 
-type EstimatorUser = { id: string; email: string; displayName: string | null };
+type EstimatorUser = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  companyId: string | null;
+};
 type EstimatorAuthContextValue = {
   user: EstimatorUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  /** Re-pulls the current user from the server, e.g. after creating/joining
+   * a company, so the in-memory user.companyId catches up without a full
+   * page reload. */
+  refreshUser: () => Promise<void>;
 };
 const EstimatorAuthContext = createContext<
   EstimatorAuthContextValue | undefined
@@ -58,14 +67,31 @@ export function EstimatorAuthProvider({
       "/estimator/signup",
       "/estimator/forgot-password",
     ].includes(pathname);
+    const isCompanySetupPath = pathname === "/estimator/company/setup";
 
-    if (!loading && user && isEstimatorPublicPath) {
-      router.replace("/estimator");
+    if (loading) return;
+
+    if (user && isEstimatorPublicPath) {
+      router.replace(user.companyId ? "/estimator" : "/estimator/company/setup");
       return;
     }
 
-    if (!loading && !user && !isEstimatorPublicPath) {
+    if (!user && !isEstimatorPublicPath) {
       router.replace("/estimator/login");
+      return;
+    }
+
+    // Logged in but not attached to a company yet (brand new signup, or a
+    // removed member) — gate everything behind setting that up first,
+    // except the setup page itself.
+    if (user && !user.companyId && !isCompanySetupPath && !isEstimatorPublicPath) {
+      router.replace("/estimator/company/setup");
+      return;
+    }
+
+    // Already has a company, no reason to linger on the setup page.
+    if (user && user.companyId && isCompanySetupPath) {
+      router.replace("/estimator");
     }
   }, [loading, pathname, router, user]);
 
@@ -76,8 +102,20 @@ export function EstimatorAuthProvider({
     router.replace("/estimator/login");
   }
 
+  async function refreshUser() {
+    try {
+      const response = await fetch("/api/estimator/auth/me");
+      if (!response.ok) return;
+      const { user: refreshed } = (await response.json()) as { user: EstimatorUser };
+      setUser(refreshed);
+    } catch {
+      // Leave the current user state as-is, whatever triggered the refresh
+      // can surface its own error.
+    }
+  }
+
   return (
-    <EstimatorAuthContext.Provider value={{ user, loading, signOut }}>
+    <EstimatorAuthContext.Provider value={{ user, loading, signOut, refreshUser }}>
       {children}
     </EstimatorAuthContext.Provider>
   );

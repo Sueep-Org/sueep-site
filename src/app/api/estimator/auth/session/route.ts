@@ -21,8 +21,11 @@ export async function POST(request: Request) {
       create: { firebaseUid: decoded.uid, email: decoded.email, displayName: decoded.name || null, lastLoginAt: now },
       update: { email: decoded.email, displayName: decoded.name || null, lastLoginAt: now },
     });
-    const token = await createEstimatorSessionToken(user.id, user.firebaseUid);
-    const response = NextResponse.json({ ok: true, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    const token = await createEstimatorSessionToken(user.id, user.firebaseUid, user.companyId);
+    const response = NextResponse.json({
+      ok: true,
+      user: { id: user.id, email: user.email, displayName: user.displayName, companyId: user.companyId },
+    });
     response.cookies.set(estimatorSessionCookieName, token, estimatorSessionCookieOptions(60 * 60 * 24 * 7));
     return response;
   } catch (error) {

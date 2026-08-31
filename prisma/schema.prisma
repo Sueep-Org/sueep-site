@@ -171,6 +171,30 @@ model Project {
   @@index([recurringContractPeriodId])
 }
 
+/// One company per estimator account. Every user under a company shares
+/// full access to that company's projects/files (enforced on the
+/// aiestimator-api side, see ESTIMATOR_STORAGE_FIX_PLAN.md) — companyId
+/// here is just the identity that gets forwarded, not itself a permissions
+/// boundary between users of the same company.
+model Company {
+  id         String   @id @default(cuid())
+  name       String
+  /// Short shareable code teammates use to join this company at signup.
+  /// Not the same thing as an access token: it only ever grants MEMBER,
+  /// never OWNER, and isn't secret-rotated on use.
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+
+  estimatorUsers EstimatorUser[]
+}
+
+enum EstimatorUserRole {
+  /// Created the company. Can view/remove other members. Exactly one
+  /// per company by convention (set at creation), not a DB constraint.
+  OWNER
+  MEMBER
+}
+
 model EstimatorUser {
   id          String    @id @default(cuid())
   firebaseUid String    @unique
@@ -178,6 +202,13 @@ model EstimatorUser {
   displayName String?
   createdAt   DateTime  @default(now())
   lastLoginAt DateTime?
+
+  /// Nullable: null means "not in a company yet" (bad/missing invite code
+  /// at signup, or removed by an owner later), which routes the user to
+  /// the companyless "join a company" gate instead of the estimator tool.
+  companyId String?
+  company   Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  role      EstimatorUserRole @default(MEMBER)
 
   /// Profile photo, stored directly in the DB rather than an external
   /// object store, same pattern as EmployeeDocument.fileData (see
@@ -190,6 +221,7 @@ model EstimatorUser {
   settings EstimatorUserSettings?
 
   @@index([email])
+  @@index([companyId])
 }
 
 /// Per-user overrides for the estimator's crew wage defaults and default

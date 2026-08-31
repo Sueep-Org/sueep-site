@@ -10,8 +10,8 @@ function getSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export async function createEstimatorSessionToken(userId: string, firebaseUid: string) {
-  return new SignJWT({ scope: "estimator", userId, firebaseUid })
+export async function createEstimatorSessionToken(userId: string, firebaseUid: string, companyId: string | null) {
+  return new SignJWT({ scope: "estimator", userId, firebaseUid, companyId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -23,7 +23,12 @@ export async function verifyEstimatorSessionToken(token: string) {
   if (payload.scope !== "estimator" || typeof payload.userId !== "string" || typeof payload.firebaseUid !== "string") {
     throw new Error("Invalid estimator session");
   }
-  return { userId: payload.userId, firebaseUid: payload.firebaseUid };
+  // companyId is a later addition (Phase 2 of ESTIMATOR_STORAGE_FIX_PLAN.md)
+  // — tokens minted before that point won't have it. Treat that as "unknown
+  // for now" rather than rejecting the whole session; it self-heals on the
+  // next login, when the token is re-minted from the DB row.
+  const companyId = typeof payload.companyId === "string" ? payload.companyId : null;
+  return { userId: payload.userId, firebaseUid: payload.firebaseUid, companyId };
 }
 
 export function estimatorSessionCookieOptions(maxAge: number) {
