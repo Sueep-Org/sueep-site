@@ -4145,6 +4145,28 @@ async function initApp(){
 
   let _loadedProjectData = null; // cache for edit form
 
+  function formatLastEditedLabel(value) {
+    if (!value) return 'Last edited: —';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Last edited: —';
+    return `Last edited: ${new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date)}`;
+  }
+
+  function syncLoadedProjectLastEdited(project) {
+    const lastEditedEl = document.getElementById('loadedProjectLastEdited');
+    if (!lastEditedEl || !project) return;
+    lastEditedEl.textContent = formatLastEditedLabel(
+      project.updatedAt || project.updated_at || project.lastEdited || project.last_edited,
+    );
+  }
+
   function showProjectLoadedCard(projData, blueprintFilename) {
     _loadedProjectData = projData;
     // Normalize stored driving distance to miles for consistent display/calculation
@@ -4161,6 +4183,7 @@ async function initApp(){
     window.__estimatorProjectLoaded = true;
 
     const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+    syncLoadedProjectLastEdited(projData);
     setText('loadedProjectName', projData.name);
     setText('loadedProjectAddress', projData.address);
     setText('loadedPdfName', blueprintFilename);
@@ -7976,6 +7999,7 @@ async function initApp(){
       const updated = await res.json();
       _loadedProjectData = { ..._loadedProjectData, ...updated };
       if (_loadedProjectData) {
+        syncLoadedProjectLastEdited(_loadedProjectData);
         _loadedProjectData.total_area = totalArea > 0 ? totalArea : _loadedProjectData.total_area;
         _loadedProjectData.painting_breakdown = {
           ...(_loadedProjectData.painting_breakdown || {}),
@@ -8108,6 +8132,7 @@ async function initApp(){
         if (!r.ok) throw new Error('Save failed');
         const updated = await r.json();
         _loadedProjectData = { ..._loadedProjectData, ...updated };
+        syncLoadedProjectLastEdited(_loadedProjectData);
         _loadedProjectData.labor_breakdown = { ...(_loadedProjectData.labor_breakdown || {}), ...laborBreakdown };
         _loadedProjectData.labor = laborTotalSave;
         _loadedProjectData.quote = totFinalPrice;
@@ -8155,6 +8180,7 @@ async function initApp(){
       if (!r.ok) throw new Error('Save failed');
       const updated = await r.json();
       _loadedProjectData = { ..._loadedProjectData, ...updated };
+      syncLoadedProjectLastEdited(_loadedProjectData);
       toast('Change orders saved', 'info');
     } catch (e) { toast(e.message, 'error'); }
     finally { saveCOBtn.textContent = 'Save All'; saveCOBtn.disabled = false; }

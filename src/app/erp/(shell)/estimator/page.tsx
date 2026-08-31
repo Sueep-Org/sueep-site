@@ -59,8 +59,12 @@ function confirmLeaveDialog(message: string): Promise<boolean> {
       backdrop.remove();
       resolve(value);
     }
-    panel.querySelector("[data-leave-cancel]")?.addEventListener("click", () => finish(false));
-    panel.querySelector("[data-leave-confirm]")?.addEventListener("click", () => finish(true));
+    panel
+      .querySelector("[data-leave-cancel]")
+      ?.addEventListener("click", () => finish(false));
+    panel
+      .querySelector("[data-leave-confirm]")
+      ?.addEventListener("click", () => finish(true));
     backdrop.addEventListener("click", (e) => {
       if (e.target === backdrop) finish(false);
     });
@@ -283,6 +287,12 @@ export default function EstimatorPage() {
                     Project
                   </div>
                   <div
+                    id="loadedProjectLastEdited"
+                    className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500"
+                  >
+                    Last edited: —
+                  </div>
+                  <div
                     id="loadedProjectName"
                     className="text-lg font-semibold text-gray-900"
                   ></div>
@@ -423,7 +433,11 @@ export default function EstimatorPage() {
                       <path d="M3 3v5h5" />
                     </Icon>
                   </button>
-                  <button id="doubleSideToggle" className="mini-btn" title="Toggle single/double-sided measurement">
+                  <button
+                    id="doubleSideToggle"
+                    className="mini-btn"
+                    title="Toggle single/double-sided measurement"
+                  >
                     Single sided
                   </button>
                   <button
@@ -466,7 +480,14 @@ export default function EstimatorPage() {
                     aria-label="Box-select measurements"
                   >
                     <Icon>
-                      <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="3 3" />
+                      <rect
+                        x="4"
+                        y="4"
+                        width="16"
+                        height="16"
+                        rx="2"
+                        strokeDasharray="3 3"
+                      />
                     </Icon>
                   </button>
                   <div id="betaToolsGroup" />
@@ -476,19 +497,33 @@ export default function EstimatorPage() {
 
                 {/* Zoom controls */}
                 <div className="zoom-group">
-                  <button id="zoomOutBtn" className="mini-btn icon-btn" title="Zoom out" aria-label="Zoom out">
+                  <button
+                    id="zoomOutBtn"
+                    className="mini-btn icon-btn"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
                     <Icon>
                       <path d="M5 12h14" />
                     </Icon>
                   </button>
                   <div id="zoomLabel">100%</div>
-                  <button id="zoomInBtn" className="mini-btn icon-btn" title="Zoom in" aria-label="Zoom in">
+                  <button
+                    id="zoomInBtn"
+                    className="mini-btn icon-btn"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
                     <Icon>
                       <path d="M12 5v14" />
                       <path d="M5 12h14" />
                     </Icon>
                   </button>
-                  <button id="zoomResetBtn" className="mini-btn" title="Reset zoom">
+                  <button
+                    id="zoomResetBtn"
+                    className="mini-btn"
+                    title="Reset zoom"
+                  >
                     Reset
                   </button>
                 </div>
@@ -520,13 +555,21 @@ export default function EstimatorPage() {
                   >
                     <div
                       id="pageInfo"
-                      style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       1 of 1
                     </div>
                     <div
                       id="vectorLineInfo"
-                      style={{ fontSize: "10px", color: "#9ca3af", whiteSpace: "nowrap" }}
+                      style={{
+                        fontSize: "10px",
+                        color: "#9ca3af",
+                        whiteSpace: "nowrap",
+                      }}
                     />
                   </div>
                   <button
@@ -683,7 +726,13 @@ export default function EstimatorPage() {
                             className="measurement-column-swatch"
                             style={{ background: "#3b82f6" }}
                           />
-                          <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
+                          <h4
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              color: "#374151",
+                            }}
+                          >
                             Line Measurements
                           </h4>
                         </div>
@@ -707,7 +756,13 @@ export default function EstimatorPage() {
                             className="measurement-column-swatch"
                             style={{ background: "#10b981" }}
                           />
-                          <h4 style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>
+                          <h4
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              color: "#374151",
+                            }}
+                          >
                             Surface Area
                           </h4>
                         </div>
