@@ -412,14 +412,19 @@
 
 /* One consistent accent for every "this tool/view is on" state, instead
    of a different pastel per button — reads as a single coherent system
-   rather than a handful of unrelated highlight colors. */
+   rather than a handful of unrelated highlight colors. #toggleSidebarBtn
+   (the Measurements panel toggle) belongs in this same list — it already
+   sets the .active class when the panel is open (see simple-app.js), it
+   just had no matching CSS rule, so toggling it never actually looked any
+   different from off, unlike every other toggle here. */
 #measureToggle.active,
 #drawRectBtn.active,
 #drawIrregBtn.active,
 #drawSelectBtn.active,
 #doubleSideToggle.active,
 #showLabelsToggle.active,
-#dimBackgroundToggle.active {
+#dimBackgroundToggle.active,
+#toggleSidebarBtn.active {
     background: #f0fdf4;
     border-color: #bbf7d0;
     color: #16a34a;
@@ -431,7 +436,8 @@
 #drawSelectBtn.active:hover,
 #doubleSideToggle.active:hover,
 #showLabelsToggle.active:hover,
-#dimBackgroundToggle.active:hover {
+#dimBackgroundToggle.active:hover,
+#toggleSidebarBtn.active:hover {
     background: #dcfce7;
 }
 
@@ -668,7 +674,7 @@
 }
 
 .sidebar-close-btn {
-    border: 1px solid #d1d5db;
+    border: none;
     border-radius: 6px;
     padding: 4px 10px;
     background: white;

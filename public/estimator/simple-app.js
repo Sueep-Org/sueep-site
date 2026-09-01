@@ -747,7 +747,7 @@ async function initApp(){
     btn.id = 'exportMenuBtn';
     btn.type = 'button';
     btn.className = 'mini-btn icon-btn toolbar-dropdown-btn';
-    btn.title = 'Export this page as a PNG, for debugging';
+    btn.title = 'Export this page as an image, or the whole project as a PDF';
     btn.setAttribute('aria-label', 'Export');
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', 'false');
@@ -764,6 +764,7 @@ async function initApp(){
     panel.innerHTML = `
       <button type="button" class="toolbar-dropdown-item" data-export="full" role="menuitem">Full page</button>
       <button type="button" class="toolbar-dropdown-item" data-export="lines" role="menuitem">Lines only</button>
+      <button type="button" class="toolbar-dropdown-item" data-export="pdf" role="menuitem">Full PDF (with SOV)</button>
     `;
 
     wrap.appendChild(btn);
@@ -880,8 +881,29 @@ async function initApp(){
     // Keeps the Single/Double sided toolbar toggle showing the *selected*
     // measurement's own state (and acting on it) rather than always just
     // the global default for new measurements — see
-    // _syncDoubleSideToggleToSelection.
-    onSelectionChanged: () => _syncDoubleSideToggleToSelection()
+    // _syncDoubleSideToggleToSelection. Also drives the floating trash
+    // button (#selectionActionBar) — no Delete/Backspace key on touch, same
+    // reasoning as #chainActionBar for ending a chain — and re-tints the
+    // measurements sidebar rows themselves (see selectedIds in
+    // updateMeasurementList).
+    onSelectionChanged: () => {
+      _syncDoubleSideToggleToSelection();
+      updateMeasurementList();
+      const active = overlay.hasDeletableSelection();
+      const bar = document.getElementById('selectionActionBar');
+      if (!bar) return;
+      bar.classList.toggle('hidden', !active);
+      bar.style.display = active ? 'flex' : 'none';
+    },
+    // Shows/hides the floating Done/Cancel pill (#chainActionBar) for an
+    // in-progress measure chain or irregular shape — see hasActiveChain()/
+    // finishActiveChain()/cancelActiveChain() in CanvasOverlay.
+    onChainStateChanged: (active) => {
+      const bar = document.getElementById('chainActionBar');
+      if (!bar) return;
+      bar.classList.toggle('hidden', !active);
+      bar.style.display = active ? 'flex' : 'none';
+    }
   });
 
   overlay.attach();
@@ -903,9 +925,13 @@ async function initApp(){
     overlay._syncShapeUndoButton?.();
   }
 
-  // Per-project annotation persistence via API (with localStorage fallback)
+  // Per-project annotation persistence via API (with localStorage fallback).
+  // Returns whether the server-side save actually succeeded (the
+  // localStorage copy happens either way, as a fallback, but callers like
+  // the toolbar Save button want to know if THIS actually round-tripped
+  // before telling the user it saved).
   window.__saveAnnotations = async function(extraState = {}) {
-    if (!activeProjectId) return;
+    if (!activeProjectId) return false;
     const json = highlightsStore.serialize();
     try { localStorage.setItem(`annotations_${activeProjectId}`, json); } catch(_) {}
     try {
@@ -913,12 +939,20 @@ async function initApp(){
         annotations: JSON.parse(json),
         ...extraState,
       };
-      await fetch(`${API_BASE}/api/projects/${activeProjectId}/annotations`, {
+      const res = await fetch(`${API_BASE}/api/projects/${activeProjectId}/annotations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-    } catch(_) {}
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data) syncLoadedProjectLastEdited(data);
+        return true;
+      }
+      return false;
+    } catch(_) {
+      return false;
+    }
   };
   window.__restoreAnnotations = async function(projectId) {
     console.log('[restore] annotations projectId=', projectId);
@@ -984,8 +1018,29 @@ async function initApp(){
     downloadPdfBtn.addEventListener('click', exportCurrentPageWithAnnotations);
   }
 
+  // Persists the project (annotations — measurements/lines/shapes; scale;
+  // everything highlightsStore tracks) instead of generating/downloading a
+  // PDF, which is what this button used to do (see exportAllPagesWithAnnotations,
+  // now moved to the Export dropdown as "Full PDF (with SOV)" instead —
+  // this button is "save my work", not "give me a file"). Updates the
+  // "Last edited" line via __saveAnnotations -> syncLoadedProjectLastEdited.
   if (savePdfBtn) {
-    savePdfBtn.addEventListener('click', exportAllPagesWithAnnotations);
+    savePdfBtn.addEventListener('click', async () => {
+      if (!activeProjectId) {
+        toast('Open or create a project first', 'info');
+        return;
+      }
+      const originalText = savePdfBtn.textContent;
+      savePdfBtn.disabled = true;
+      savePdfBtn.textContent = 'Saving…';
+      try {
+        const ok = await window.__saveAnnotations();
+        toast(ok ? 'Project saved' : 'Save failed — check your connection', ok ? 'success' : 'error');
+      } finally {
+        savePdfBtn.disabled = false;
+        savePdfBtn.textContent = originalText;
+      }
+    });
   }
 
   function formatSovCurrency(value) {
@@ -3465,12 +3520,16 @@ async function initApp(){
     await downloadBlob(blob, `annotated-${Date.now()}.pdf`);
   }
 
+  // Called from the Export dropdown ("Full PDF (with SOV)") — moved here
+  // from the toolbar's Save button, which now just persists the project
+  // (see __saveAnnotations) instead of generating a file. The caller
+  // (wireDropdownMenu callback below) already disables exportMenuBtn for
+  // the duration; that button is icon-only (no text to swap to "Saving…"
+  // the way savePdfBtn used to), so this toasts instead for feedback on
+  // an operation that can take a few seconds.
   async function exportAllPagesWithAnnotations(){
-    if (!pdfDoc || !savePdfBtn) return;
-
-    const originalSaveText = savePdfBtn.textContent;
-    savePdfBtn.disabled = true;
-    savePdfBtn.textContent = 'Saving…';
+    if (!pdfDoc) return;
+    toast('Generating PDF…', 'info');
 
     try {
       await exportWithPdfLib();
@@ -3570,9 +3629,6 @@ async function initApp(){
     } catch (error) {
       console.error('PDF export failed', error);
       toast('Unable to save annotated PDF.', 'error');
-    } finally {
-      savePdfBtn.disabled = false;
-      savePdfBtn.textContent = originalSaveText;
     }
   }
 
@@ -3643,11 +3699,16 @@ async function initApp(){
       if (!lineMeasurements.length) {
         measurementListLeft.innerHTML = 'No measurements';
       } else {
+        // Tints whichever row(s) match the current canvas selection (single
+        // click or box-select) — same green the canvas itself highlights a
+        // selected measurement with, so the list and the drawing agree.
+        const selectedIds = overlay.getSelectedMeasurementIds();
         measurementListLeft.innerHTML = lineMeasurements.map(m => {
           const label = m.label || `${(m.inches || 0).toFixed(1)} in`;
           const badge = m.doubleSided ? ' <span style="color:#0284c7;font-weight:600;">(2x)</span>' : '';
+          const tint = selectedIds.has(m.id) ? 'background:rgba(22,163,74,0.14);border-radius:6px;' : '';
           return `
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;${tint}">
               <span style="font-size:11px;">${label}${badge}</span>
               <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
             </div>
@@ -3674,10 +3735,12 @@ async function initApp(){
       if (!areaMeasurements.length) {
         measurementListRight.innerHTML = '<span style="color:#999;font-size:11px;">No surface areas</span>';
       } else {
+        const selectedAreaIds = overlay.getSelectedMeasurementIds();
         measurementListRight.innerHTML = areaMeasurements.map(m => {
           const label = m.areaLabel || `${(m.area || 0).toFixed(2)} sq`;
+          const tint = selectedAreaIds.has(m.id) ? 'background:rgba(22,163,74,0.14);border-radius:6px;' : '';
           return `
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e5e7eb;${tint}">
               <span style="font-size:11px;">${label}</span>
               <button class="mini-btn" data-measurement-id="${m.id}" style="padding:2px 4px;min-width:auto;font-size:10px;">X</button>
             </div>
@@ -4183,26 +4246,38 @@ async function initApp(){
 
   let _loadedProjectData = null; // cache for edit form
 
-  function formatLastEditedLabel(value) {
+  function formatLastEditedLabel(value, editorName) {
     if (!value) return 'Last edited: —';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Last edited: —';
-    return `Last edited: ${new Intl.DateTimeFormat('en-US', {
+    const when = new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
-    }).format(date)}`;
+    }).format(date);
+    return editorName ? `Last edited: ${when} by ${editorName}` : `Last edited: ${when}`;
   }
 
+  // Called after every save path that can change what's shown here —
+  // annotations (measurements/lines/shapes, autosaves on every edit),
+  // Analysis tab Save, Painting tab Save — not just on initial project
+  // load, so "Last edited" reflects whichever of those actually ran most
+  // recently, not just whenever the project was first opened. Also
+  // updates _loadedProjectData in place so later re-syncs (e.g. switching
+  // tabs) don't regress to a stale cached value.
   function syncLoadedProjectLastEdited(project) {
     const lastEditedEl = document.getElementById('loadedProjectLastEdited');
-    if (!lastEditedEl || !project) return;
-    lastEditedEl.textContent = formatLastEditedLabel(
-      project.updatedAt || project.updated_at || project.lastEdited || project.last_edited,
-    );
+    if (!project) return;
+    const updatedAt = project.updatedAt || project.updated_at || project.lastEdited || project.last_edited;
+    const editorName = project.updatedByName || project.updated_by_name || project.updatedByEmail || project.updated_by_email || null;
+    if (_loadedProjectData) {
+      if (updatedAt) _loadedProjectData.updated_at = updatedAt;
+      if (editorName) _loadedProjectData.updated_by_name = editorName;
+    }
+    if (lastEditedEl) lastEditedEl.textContent = formatLastEditedLabel(updatedAt, editorName);
   }
 
   function showProjectLoadedCard(projData, blueprintFilename) {
@@ -8350,10 +8425,17 @@ async function initApp(){
 
   wireDropdownMenu(exportMenuBtn, $('exportMenuPanel'), async (item) => {
     if (exportMenuBtn.disabled) return;
-    const includeSource = item.dataset.export === 'full';
     exportMenuBtn.disabled = true;
     try {
-      await exportPageAnnotations(currentPage, { includeSource });
+      if (item.dataset.export === 'pdf') {
+        // Moved here from the toolbar's Save button, which now just
+        // persists the project instead of generating/downloading a file —
+        // see exportAllPagesWithAnnotations.
+        await exportAllPagesWithAnnotations();
+      } else {
+        const includeSource = item.dataset.export === 'full';
+        await exportPageAnnotations(currentPage, { includeSource });
+      }
     } catch (err) {
       console.warn('export failed', err);
       toast('Export failed', 'error');
@@ -8384,9 +8466,14 @@ async function initApp(){
 
       if (!pdfDoc) return;
 
-      // prevent zoom while drawing or while a measurement tool is active
+      // prevent zoom while actively dragging a rect, or mid-drag on any
+      // other draw tool that still uses one. 'measure' is deliberately
+      // left out here -- it's a click-to-place point chain now (no drag),
+      // so there's no gesture for a wheel-zoom to interrupt, and blocking
+      // zoom for the tool's whole armed duration made it impossible to
+      // zoom in/out while tracing a wall outline bigger than one screen.
       try {
-        if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) {
+        if (overlay && overlay.active && overlay.tool === 'rect') {
           e.preventDefault();
           return;
         }
@@ -8553,9 +8640,16 @@ async function initApp(){
       };
     };
 
-    const shouldSkipTouch = (e) => {
+    // 'rect' still drags to draw, so touch is fully reserved for it, same
+    // as before. 'measure' is a click-to-place point chain now -- a
+    // single finger is reserved (so a stray touch near a chain point
+    // doesn't nudge the view via panning instead of placing the point),
+    // but two-finger pinch-zoom is allowed, same as the wheel handler
+    // above -- there's no drag gesture left for it to interrupt.
+    const shouldSkipTouch = (e, touchCount) => {
       if (e.target.closest('#toolbar') || e.target.closest('button')) return true;
-      if (overlay && overlay.active && (overlay.tool === 'measure' || overlay.tool === 'rect')) return true;
+      if (overlay && overlay.active && overlay.tool === 'rect') return true;
+      if (overlay && overlay.active && overlay.tool === 'measure' && touchCount === 1) return true;
       if (overlay && overlay._dragState) return true;
       if (!pdfDoc) return true;
       return false;
@@ -8563,7 +8657,7 @@ async function initApp(){
 
     pdfContainer.addEventListener('touchstart', (e)=>{
 
-      if (shouldSkipTouch(e)) return;
+      if (shouldSkipTouch(e, e.touches.length)) return;
 
       if (e.touches.length === 1){
 
@@ -9040,6 +9134,37 @@ async function initApp(){
       };
     }
 
+    // Floating Done/Cancel for an in-progress measure chain or irregular
+    // shape (see onChainStateChanged above, which shows/hides #chainActionBar).
+    const chainDoneBtn = $('chainDoneBtn');
+    if (chainDoneBtn) {
+      chainDoneBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        overlay.finishActiveChain();
+      };
+    }
+
+    const chainCancelBtn = $('chainCancelBtn');
+    if (chainCancelBtn) {
+      chainCancelBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        overlay.cancelActiveChain();
+      };
+    }
+
+    // Floating trash button for a selected line/measurement (see
+    // onSelectionChanged above, which shows/hides #selectionActionBar).
+    const selectionDeleteBtn = $('selectionDeleteBtn');
+    if (selectionDeleteBtn) {
+      selectionDeleteBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        overlay.deleteActiveSelection();
+      };
+    }
+
     const toggleSidebarBtn = $('toggleSidebarBtn');
     if (toggleSidebarBtn) {
       toggleSidebarBtn.onclick = () => {
@@ -9048,6 +9173,17 @@ async function initApp(){
         sidebar.style.display = isHidden ? '' : 'none';
         toggleSidebarBtn.classList.toggle('active', isHidden);
       };
+      // The sidebar starts visible (no display:none in the markup), but
+      // the button's 'active' class only ever got set reactively inside
+      // the click handler above -- nothing synced it to that starting
+      // state, so the tint didn't show until the first hide-then-show
+      // round trip. Derive it from the sidebar's actual current state
+      // instead of assuming/hardcoding "starts open", so this stays
+      // correct even if that default ever changes.
+      const initialSidebar = document.getElementById('measurementSidebar');
+      if (initialSidebar) {
+        toggleSidebarBtn.classList.toggle('active', initialSidebar.style.display !== 'none');
+      }
     }
 
   if (changeScaleBtn) {

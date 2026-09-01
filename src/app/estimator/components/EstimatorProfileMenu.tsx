@@ -56,14 +56,14 @@ export function EstimatorProfileMenu() {
           <Link
             href="/estimator/settings"
             onClick={() => setOpen(false)}
-            className="mt-4 block w-full rounded-md border border-slate-300 px-3 py-2 text-left text-sm hover:bg-slate-50"
+            className="mt-4 block w-full rounded-md bg-slate-100 px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
           >
             Settings
           </Link>
           <button
             type="button"
             onClick={signOut}
-            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-left text-sm hover:bg-slate-50"
+            className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-green-700"
           >
             Sign out
           </button>

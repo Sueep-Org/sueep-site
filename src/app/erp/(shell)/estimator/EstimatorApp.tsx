@@ -179,7 +179,7 @@ export default function EstimatorApp({
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "skip-restore-41";
+    const ESTIMATOR_ASSET_VERSION = "save-persists-last-edited-58";
 
     // Update the existing <link>'s href in place if one's already there
     // from an earlier mount (soft-navigating back to this page within the
@@ -315,6 +315,123 @@ export default function EstimatorApp({
         </div>
       </div>
       <style>{`@keyframes globalLoadingSpin { to { transform: rotate(360deg); } }`}</style>
+      {/* Floating Done/Cancel for an in-progress measure chain or
+          irregular-area shape — shown/hidden via CanvasOverlay's
+          onChainStateChanged callback (simple-app.js). Exists because
+          there's no reliable double-tap-to-end on touch; also works as a
+          visible alternative to double-click on desktop. Fixed at the
+          bottom center so it's reachable regardless of pan/zoom/scroll. */}
+      <div
+        id="chainActionBar"
+        className="hidden"
+        style={{
+          position: "fixed",
+          left: "50%",
+          bottom: "24px",
+          transform: "translateX(-50%)",
+          zIndex: 2147483000,
+          display: "none",
+          alignItems: "center",
+          gap: "0.5rem",
+          padding: "0.5rem",
+          background: "white",
+          borderRadius: "9999px",
+          boxShadow: "0 12px 30px rgba(0,0,0,0.22)",
+        }}
+      >
+        <button
+          type="button"
+          id="chainCancelBtn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            padding: "0.5rem 1rem",
+            borderRadius: "9999px",
+            border: "none",
+            background: "#f3f4f6",
+            color: "#374151",
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          ✕ Cancel
+        </button>
+        <button
+          type="button"
+          id="chainDoneBtn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            padding: "0.5rem 1.25rem",
+            borderRadius: "9999px",
+            border: "none",
+            background: "#16a34a",
+            color: "white",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ✓ Done
+        </button>
+      </div>
+      {/* Floating trash button for a selected line/measurement (single
+          click, or multi via the Select tool's box-select / Ctrl+click) —
+          same reasoning as #chainActionBar above: Delete/Backspace has no
+          touch equivalent, so this is the only way to delete a selection
+          on mobile. Shown/hidden via CanvasOverlay's onSelectionChanged
+          callback (simple-app.js), same bottom-center spot as the chain
+          bar — the two are never relevant at the same time (drawing a
+          chain clears any existing selection, and vice versa), so no
+          layering concern in practice. */}
+      <div
+        id="selectionActionBar"
+        className="hidden"
+        style={{
+          position: "fixed",
+          left: "50%",
+          bottom: "24px",
+          transform: "translateX(-50%)",
+          zIndex: 2147483000,
+          display: "none",
+          padding: "0.5rem",
+          background: "white",
+          borderRadius: "9999px",
+          boxShadow: "0 12px 30px rgba(0,0,0,0.22)",
+        }}
+      >
+        <button
+          type="button"
+          id="selectionDeleteBtn"
+          aria-label="Delete selected"
+          title="Delete selected"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            padding: "0.5rem 1.25rem",
+            borderRadius: "9999px",
+            border: "none",
+            background: "#ef4444",
+            color: "white",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Icon size={16}>
+            <path d="M3 6h18" />
+            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </Icon>
+          Delete
+        </button>
+      </div>
       {/* SIDEBAR TOGGLE — hidden in the standalone /estimator context,
           where the header's own "Library" button (also [data-open-sidebar])
           already does this job; see the document-level click listener in

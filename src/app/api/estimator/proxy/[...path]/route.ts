@@ -42,6 +42,14 @@ async function handleProxy(request: Request, path: string[]) {
   if (contentType) headers.set("content-type", contentType);
   headers.set("x-estimator-internal-secret", secret);
   headers.set("x-estimator-company-id", user.companyId);
+  // Who's making this request — used to attribute "last edited by" on
+  // save (see get_authenticated_user_identity in aiestimator-api). Same
+  // trust model as company-id above: set here server-side from the
+  // verified session, never anything the client sends. encodeURIComponent
+  // because a display name can contain characters outside the Latin-1
+  // range a raw HTTP header value allows; the backend decodes it back.
+  if (user.displayName) headers.set("x-estimator-user-name", encodeURIComponent(user.displayName));
+  headers.set("x-estimator-user-email", user.email);
 
   const hasBody = !["GET", "HEAD"].includes(request.method);
   const init: RequestInit & { duplex?: "half" } = {
