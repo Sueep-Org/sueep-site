@@ -12,5 +12,5 @@ export default function StandaloneEstimatorPage() {
     );
   }
 
-  return <EstimatorApp />;
+  return <EstimatorApp hideFloatingLibraryToggle />;
 }

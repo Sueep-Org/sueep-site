@@ -74,7 +74,16 @@ function confirmLeaveDialog(message: string): Promise<boolean> {
   });
 }
 
-export default function EstimatorPage() {
+export default function EstimatorPage({
+  // True when rendered under src/app/estimator/layout.tsx, which already
+  // puts a "Library" button in its header (see [data-open-sidebar] there).
+  // False in the /erp/estimator ERP-shell context, which has no such
+  // header, so the floating hamburger is still that route's only way to
+  // open the sidebar.
+  hideFloatingLibraryToggle = false,
+}: {
+  hideFloatingLibraryToggle?: boolean;
+}) {
   const router = useRouter();
   const loaded = useRef(false);
 
@@ -98,7 +107,16 @@ export default function EstimatorPage() {
     checkErpSession();
   }, [router]);
 
-  // Restore last project on soft navigation back (not on hard refresh)
+  // Restore last project on soft navigation back (not on hard refresh).
+  // This call is a no-op on a fresh page load -- window.__restoreLastProject
+  // isn't defined yet at this point, the script is still loading -- it only
+  // does anything on a soft nav back within an already-loaded tab. Either
+  // way, the "estimator_skip_restore" flag (see HomeLogoLink.tsx) is
+  // checked once, centrally, inside restoreLastProject() itself in
+  // simple-app.js, not here, since that function is also called
+  // unconditionally from the bottom of that script once it finishes
+  // loading -- the actual trigger on a fresh load -- and a flag check here
+  // would just race with (and lose to) that one.
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
     const isSoftNav = sessionStorage.getItem("estimator_visited");
@@ -161,7 +179,7 @@ export default function EstimatorPage() {
     // pipeline, so without a version query a browser (or even just this
     // one that never got a hard refresh) can keep serving a stale cached
     // copy indefinitely.
-    const ESTIMATOR_ASSET_VERSION = "toolbar-icons-40";
+    const ESTIMATOR_ASSET_VERSION = "skip-restore-41";
 
     // Update the existing <link>'s href in place if one's already there
     // from an earlier mount (soft-navigating back to this page within the
@@ -231,6 +249,19 @@ export default function EstimatorPage() {
           `/estimator/simple-app.js?v=${ESTIMATOR_ASSET_VERSION}`,
           { type: "module" },
         );
+
+        // Landed here via the header's Library button from a page that
+        // doesn't have the sidebar itself (e.g. /estimator/settings) — see
+        // LibraryButton.tsx. Open it now that the canvas (and this script)
+        // actually exist, then drop the param so a refresh/back-nav
+        // doesn't reopen it.
+        if (new URLSearchParams(window.location.search).get("openLibrary")) {
+          const w = window as unknown as { __estimatorOpenLibrary?: () => void };
+          w.__estimatorOpenLibrary?.();
+          const url = new URL(window.location.href);
+          url.searchParams.delete("openLibrary");
+          window.history.replaceState({}, "", url);
+        }
       } catch (e) {
         console.error("[estimator] script load error", e);
       }
@@ -239,45 +270,60 @@ export default function EstimatorPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
+      {/* Centered modern overlay (was a dark sliding-stripe bar pinned to
+          the top edge) — id/text-id are unchanged, so showGlobalLoading()/
+          hideGlobalLoading() in simple-app.js (they just toggle "hidden"
+          and set this text) keep working with no JS changes. */}
       <div
         id="globalLoadingBar"
         className="hidden"
         style={{
           position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
+          inset: 0,
           zIndex: 2147483647,
           display: "none",
           alignItems: "center",
-          gap: "0.75rem",
-          height: "40px",
-          padding: "0 1rem",
-          background: "rgba(15, 23, 42, 0.98)",
-          color: "white",
-          fontSize: "13px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
+          justifyContent: "center",
+          background: "rgba(15, 23, 42, 0.35)",
         }}
       >
         <div
-          id="globalLoadingBarIndicator"
           style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            width: "100%",
-            height: "3px",
-            background: "linear-gradient(90deg, #4ade80, #a78bfa, #4ade80)",
-            animation: "globalLoadingBar 1.5s linear infinite",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            padding: "1rem 1.5rem",
+            background: "white",
+            borderRadius: "0.75rem",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
           }}
-        ></div>
-        <span id="globalLoadingBarText">Loading…</span>
+        >
+          <span
+            style={{
+              width: 20,
+              height: 20,
+              flexShrink: 0,
+              borderRadius: "9999px",
+              border: "3px solid #dcfce7",
+              borderTopColor: "#16a34a",
+              animation: "globalLoadingSpin 0.8s linear infinite",
+            }}
+          />
+          <span id="globalLoadingBarText" style={{ fontSize: 14, fontWeight: 500, color: "#1e293b" }}>
+            Loading…
+          </span>
+        </div>
       </div>
-      <style>{`@keyframes globalLoadingBar {0% { transform: translateX(-100%);}50% { transform: translateX(0);}100% { transform: translateX(100%);}}`}</style>
-      {/* SIDEBAR TOGGLE */}
-      <button className="sidebar-toggle" data-open-sidebar>
-        ☰
-      </button>
+      <style>{`@keyframes globalLoadingSpin { to { transform: rotate(360deg); } }`}</style>
+      {/* SIDEBAR TOGGLE — hidden in the standalone /estimator context,
+          where the header's own "Library" button (also [data-open-sidebar])
+          already does this job; see the document-level click listener in
+          simple-app.js for why any such element anywhere on the page works. */}
+      {!hideFloatingLibraryToggle && (
+        <button className="sidebar-toggle" data-open-sidebar>
+          ☰
+        </button>
+      )}
 
       {/* SIDEBAR */}
       <div id="sidebarRoot">
@@ -315,22 +361,24 @@ export default function EstimatorPage() {
                   eyebrow above the name, same label convention the
                   Analysis card below uses for its fields, so the project
                   name reads as this page's title rather than just another
-                  line of text. */}
+                  line of text. Last edited sits under the name, not above
+                  it, since the name is the thing this block is actually
+                  about. */}
               <div className="flex items-start justify-between gap-3 mb-1">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-gray-400 mb-0.5">
                     Project
                   </div>
                   <div
-                    id="loadedProjectLastEdited"
-                    className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500"
-                  >
-                    Last edited: —
-                  </div>
-                  <div
                     id="loadedProjectName"
                     className="text-lg font-semibold text-gray-900"
                   ></div>
+                  <div
+                    id="loadedProjectLastEdited"
+                    className="mt-1 text-[11px] font-medium uppercase tracking-wide text-slate-500"
+                  >
+                    Last edited: —
+                  </div>
                 </div>
                 <button
                   id="editProjectBtn"

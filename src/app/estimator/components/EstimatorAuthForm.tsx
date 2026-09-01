@@ -43,7 +43,7 @@ export function EstimatorAuthForm({ mode }: { mode: Mode }) {
       {mode !== "reset" ? <input aria-label="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "signup" ? "new-password" : "current-password"} className="w-full rounded-md border border-slate-300 px-3 py-2" minLength={6} required /> : null}
       {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-700" role="status">{message}</p> : null}
-      <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-3 py-2 font-medium text-white disabled:opacity-50">{loading ? "Working..." : mode === "signup" ? "Create estimator account" : mode === "reset" ? "Send reset email" : "Sign in"}</button>
+      <button type="submit" disabled={loading} className="w-full rounded-md bg-green-600 px-3 py-2 font-bold text-white disabled:opacity-50">{loading ? "Working..." : mode === "signup" ? "Create estimator account" : mode === "reset" ? "Send reset email" : "Sign in"}</button>
     </form>
   );
 }
