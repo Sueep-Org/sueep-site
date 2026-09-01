@@ -50,30 +50,28 @@ const EMPTY_FORM: FormState = {
   officeAddress: "",
 };
 
-// Same look as #globalLoadingBar in the actual estimator toolbar
-// (public/estimator-ui.css / src/app/erp/(shell)/estimator/page.tsx): a
-// dark bar with a green/purple/green stripe sliding along its bottom edge.
-// Not wired to that one (this page and the estimator tool aren't connected
-// yet), just matching the style so loading states feel like one product.
+// A green spinner + label instead of a dark sliding bar: `fixed` covers the
+// whole page behind a soft white scrim (used before the page has anything
+// else to show), the inline form just centers it in the space a card
+// section would otherwise occupy.
 function EstimatorLoadingBar({ text = "Loading…", fixed = false }: { text?: string; fixed?: boolean }) {
+  const spinner = (
+    <span className="h-5 w-5 flex-shrink-0 animate-spin rounded-full border-2 border-green-100 border-t-green-600" />
+  );
+  if (fixed) {
+    return (
+      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-white/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-lg">
+          {spinner}
+          <span className="text-sm font-medium text-slate-700">{text}</span>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div
-      className={
-        fixed
-          ? "fixed left-0 right-0 top-0 z-[2147483647] flex h-10 items-center gap-3 overflow-hidden px-4 text-[13px] text-white shadow-[0_2px_10px_rgba(0,0,0,0.25)]"
-          : "relative flex h-10 items-center gap-3 overflow-hidden rounded-lg px-4 text-[13px] text-white"
-      }
-      style={{ background: "rgba(15, 23, 42, 0.98)" }}
-    >
-      <style>{`@keyframes estimatorLoadingBarSlide {0% { transform: translateX(-100%); } 50% { transform: translateX(0); } 100% { transform: translateX(100%); }}`}</style>
-      <span>{text}</span>
-      <div
-        className="absolute bottom-0 left-0 h-[3px] w-full"
-        style={{
-          background: "linear-gradient(90deg, #4ade80, #a78bfa, #4ade80)",
-          animation: "estimatorLoadingBarSlide 1.5s linear infinite",
-        }}
-      />
+    <div className="flex items-center justify-center gap-3 py-6 text-sm font-medium text-slate-500">
+      {spinner}
+      {text}
     </div>
   );
 }
@@ -200,7 +198,7 @@ function AvatarEditor({ initials }: { initials: string }) {
     <Card>
       <div className="flex items-center gap-5 p-7">
         <label className="group relative flex-shrink-0 cursor-pointer">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-pink-600 text-xl font-semibold text-white shadow-md ring-4 ring-white">
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-green-600 text-xl font-semibold text-white shadow-md ring-4 ring-white">
             {hasAvatar !== false ? (
               <img
                 key={avatarKey}
@@ -397,8 +395,16 @@ function CompanySection() {
   );
 }
 
+type SettingsTab = "profile" | "company";
+
+const TABS: { key: SettingsTab; label: string }[] = [
+  { key: "profile", label: "Profile & Defaults" },
+  { key: "company", label: "Company" },
+];
+
 export default function EstimatorSettingsPage() {
   const { user, loading: authLoading } = useEstimatorAuth();
+  const [tab, setTab] = useState<SettingsTab>("profile");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -469,7 +475,7 @@ export default function EstimatorSettingsPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-10">
-      <Link href="/estimator" className="text-sm text-pink-700 hover:underline">
+      <Link href="/estimator" className="text-sm text-green-700 hover:underline">
         ← Back to estimator
       </Link>
 
@@ -483,89 +489,116 @@ export default function EstimatorSettingsPage() {
         </div>
       </div>
 
+      {/* TAB BAR — same underline treatment as the estimator's own
+          Cleaning/Painting tabs (src/app/erp/(shell)/estimator/page.tsx),
+          so per-user settings (profile, rates, dispatch) and shared
+          company settings (invite code, members) read as two distinct
+          scopes instead of one long scroll of everything at once. */}
+      <div className="mt-6 flex items-center gap-1 border-b border-slate-200">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={
+              tab === key
+                ? "border-b-2 border-green-600 px-3 py-2 text-sm font-medium text-green-700"
+                : "border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="mt-6 space-y-6">
-        <CompanySection />
-        <AvatarEditor initials={initials} />
+        {tab === "profile" ? (
+          <>
+            <AvatarEditor initials={initials} />
 
-        <form onSubmit={handleSave}>
-          <Card>
-            {loading ? (
-              <div className="p-7">
-                <EstimatorLoadingBar text="Loading…" />
-              </div>
-            ) : (
-              <>
-                <section className="p-7">
-                  <SectionHeading
-                    title="Crew rates"
-                    description="Starting hourly rate used when you add a crew member to a new estimate. You can still edit any member's rate on the estimate itself."
-                  />
+            <form onSubmit={handleSave}>
+              <Card>
+                {loading ? (
+                  <div className="p-7">
+                    <EstimatorLoadingBar text="Loading…" />
+                  </div>
+                ) : (
+                  <>
+                    <section className="p-7">
+                      <SectionHeading
+                        title="Crew rates"
+                        description="Starting hourly rate used when you add a crew member to a new estimate. You can still edit any member's rate on the estimate itself."
+                      />
 
-                  <div className="mt-4 divide-y divide-slate-100">
-                    {RATE_FIELDS.map(({ key, label }) => (
-                      <label
-                        key={key}
-                        className="flex items-center justify-between gap-4 rounded-lg px-2 py-2.5 transition-colors first:pt-0 last:pb-0 hover:bg-slate-50"
+                      <div className="mt-4 divide-y divide-slate-100">
+                        {RATE_FIELDS.map(({ key, label }) => (
+                          <label
+                            key={key}
+                            className="flex items-center justify-between gap-4 rounded-lg px-2 py-2.5 transition-colors first:pt-0 last:pb-0 hover:bg-slate-50"
+                          >
+                            <span className="text-sm text-slate-700">{label}</span>
+                            <div className="flex w-32 flex-shrink-0 items-center rounded-lg border border-slate-300 bg-white transition-colors focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-100">
+                              <span className="pl-3 text-sm text-slate-400">$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={form[key]}
+                                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                                className="w-full border-0 bg-transparent px-2 py-2 text-right text-sm text-slate-900 focus:outline-none focus:ring-0"
+                              />
+                              <span className="pr-3 text-xs text-slate-400">/hr</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+
+                    <div className="border-t border-slate-100" />
+
+                    <section className="p-7">
+                      <SectionHeading
+                        title="Default dispatch address"
+                        description="Starting point for travel and mileage calculations on new estimates."
+                      />
+
+                      <input
+                        type="text"
+                        value={form.officeAddress}
+                        onChange={(e) => setForm((f) => ({ ...f, officeAddress: e.target.value }))}
+                        className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100"
+                      />
+                    </section>
+
+                    <div className="flex items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/80 px-7 py-4">
+                      <div className="min-h-[1.25rem] text-sm">
+                        {error ? (
+                          <span className="text-red-600">{error}</span>
+                        ) : savedAt ? (
+                          <span className="inline-flex items-center gap-1.5 font-medium text-green-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                            Saved
+                          </span>
+                        ) : isDefault ? (
+                          <span className="text-slate-400">Using the built-in defaults</span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="flex-shrink-0 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
                       >
-                        <span className="text-sm text-slate-700">{label}</span>
-                        <div className="flex w-32 flex-shrink-0 items-center rounded-lg border border-slate-300 bg-white transition-colors focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-100">
-                          <span className="pl-3 text-sm text-slate-400">$</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={form[key]}
-                            onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                            className="w-full border-0 bg-transparent px-2 py-2 text-right text-sm text-slate-900 focus:outline-none focus:ring-0"
-                          />
-                          <span className="pr-3 text-xs text-slate-400">/hr</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-
-                <div className="border-t border-slate-100" />
-
-                <section className="p-7">
-                  <SectionHeading
-                    title="Default dispatch address"
-                    description="Starting point for travel and mileage calculations on new estimates."
-                  />
-
-                  <input
-                    type="text"
-                    value={form.officeAddress}
-                    onChange={(e) => setForm((f) => ({ ...f, officeAddress: e.target.value }))}
-                    className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-100"
-                  />
-                </section>
-
-                <div className="flex items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/80 px-7 py-4">
-                  <div className="min-h-[1.25rem] text-sm">
-                    {error ? (
-                      <span className="text-red-600">{error}</span>
-                    ) : savedAt ? (
-                      <span className="inline-flex items-center gap-1.5 font-medium text-green-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        Saved
-                      </span>
-                    ) : isDefault ? (
-                      <span className="text-slate-400">Using the built-in defaults</span>
-                    ) : null}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-shrink-0 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {saving ? "Saving..." : "Save settings"}
-                  </button>
-                </div>
-              </>
-            )}
-          </Card>
-        </form>
+                        {saving ? "Saving..." : "Save settings"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </Card>
+            </form>
+          </>
+        ) : (
+          <CompanySection />
+        )}
       </div>
     </main>
   );

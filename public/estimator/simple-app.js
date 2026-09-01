@@ -293,7 +293,14 @@ async function ensureDrawer(){
 
 function openSidebar(){
 
-  const root = document.getElementById('sidebarRoot') || sidebarRoot;
+  // Always re-query live, rather than falling back to the module-level
+  // `sidebarRoot` captured at script-load time: on a page that doesn't
+  // have #sidebarRoot at all (e.g. /estimator/settings, reached via
+  // client-side nav after this script already loaded once on /estimator),
+  // that stale fallback used to point at a detached DOM node from the
+  // earlier page instead of correctly finding nothing, so this silently
+  // "succeeded" against an invisible node instead of no-oping.
+  const root = document.getElementById('sidebarRoot');
   if (!root) return;
 
   root.dataset.open = 'true';
@@ -306,7 +313,7 @@ function openSidebar(){
 
 function closeSidebar(){
 
-  const root = document.getElementById('sidebarRoot') || sidebarRoot;
+  const root = document.getElementById('sidebarRoot');
   if (!root) return;
 
   root.dataset.open = 'false';
@@ -314,6 +321,13 @@ function closeSidebar(){
   const toggle = document.querySelector('.sidebar-toggle');
   if (toggle) toggle.style.display = '';
 }
+
+// Exposed so pages that don't have #sidebarRoot at all (the estimator
+// header lives on every /estimator/* route, but the sidebar markup only
+// exists on the canvas page itself) can navigate there and then open it,
+// instead of a [data-open-sidebar] click just doing nothing. See
+// LibraryButton.tsx.
+window.__estimatorOpenLibrary = openSidebar;
 
 // Closes any open library row "more actions" menu (see refreshDrawer)
 // other than the one currently being opened/interacted with. A single
@@ -9179,6 +9193,17 @@ async function initApp(){
   let _restoring = false;
   async function restoreLastProject() {
     if (_restoring) return;
+    // Set by HomeLogoLink.tsx right before navigating, so clicking the logo
+    // always lands on a clean home page instead of reopening whatever was
+    // last open. Checked here, centrally, rather than by each of this
+    // function's two callers (the React effect above, and the unconditional
+    // call at the bottom of this script once it finishes loading) — those
+    // fire at different, racing times, so whichever read+cleared the flag
+    // first would make the other one blind to it.
+    if (sessionStorage.getItem('estimator_skip_restore') === '1') {
+      sessionStorage.removeItem('estimator_skip_restore');
+      return;
+    }
     _restoring = true;
     const lastId = sessionStorage.getItem('estimator_last_project_id');
     if (!lastId) { _restoring = false; return; }

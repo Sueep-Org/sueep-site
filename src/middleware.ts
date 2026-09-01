@@ -53,7 +53,13 @@ export async function middleware(request: NextRequest) {
   const isEstimatorRoute = pathname === "/estimator" || pathname.startsWith("/estimator/");
   const logical = logicalErpPath(pathname, host);
 
-  if (isEstimatorRoute && !isAppSubdomain(host)) {
+  // Static assets under /estimator/* (scripts, CSS, images) must not
+  // bounce to the app subdomain: Next's image optimizer does a
+  // server-to-server self-fetch for local <Image> sources using whatever
+  // host the original request came in on, and a redirect there just fails
+  // ("isn't a valid image, received null") instead of following through.
+  // The page itself still redirects below.
+  if (isEstimatorRoute && !isAppSubdomain(host) && !hasStaticExtension(pathname)) {
     const redirectUrl = new URL(request.url);
     redirectUrl.host = process.env.NODE_ENV === "development" ? "app.localhost:3000" : "app.sueep.com";
     return NextResponse.redirect(redirectUrl);
