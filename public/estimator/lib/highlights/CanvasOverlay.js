@@ -13,8 +13,37 @@ function snapMeasurementEndpoint(start, end) {
   return end;
 }
 
+// Point-alignment ("smart guide") snapping: independent of the local
+// angle-snap above, which only ever compares a segment to its own start
+// point. This instead checks a point against every *other* point already
+// placed in the current in-progress shape, so e.g. a corner can land
+// exactly below an earlier, non-adjacent corner. Returns null if nothing
+// nearby on either axis; otherwise the snapped point plus whichever
+// candidate point(s) supplied the match, for drawing a guide line through.
+const ALIGNMENT_SNAP_PX = 6;
+
+function findAlignmentSnap(point, candidates, thresholdPx) {
+  let matchX = null, matchXDist = Infinity;
+  let matchY = null, matchYDist = Infinity;
+
+  for (const c of candidates) {
+    const dx = Math.abs(point.x - c.x);
+    const dy = Math.abs(point.y - c.y);
+    if (dx <= thresholdPx && dx < matchXDist) { matchXDist = dx; matchX = c; }
+    if (dy <= thresholdPx && dy < matchYDist) { matchYDist = dy; matchY = c; }
+  }
+
+  if (!matchX && !matchY) return null;
+  return {
+    x: matchX ? matchX.x : point.x,
+    y: matchY ? matchY.y : point.y,
+    guideX: matchX,
+    guideY: matchY
+  };
+}
+
 export class CanvasOverlay {
-  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved, onSelectionChanged }) {
+  constructor({ wrapperEl, canvasEl, store, onMeasurementsChanged, onLineMeasurementCreated, onLineMeasurementRemoved, onSelectionChanged, onChainStateChanged }) {
     this.wrapperEl = wrapperEl;
     this.canvasEl = canvasEl;
     this.store = store;
@@ -28,6 +57,13 @@ export class CanvasOverlay {
     // call redraw() right after changing it.
     this.onSelectionChanged = onSelectionChanged || null;
     this._lastNotifiedSelectionKey = null;
+    // Fired with true/false whenever an in-progress measure chain or
+    // irregular shape starts/ends/gets cancelled — drives the floating
+    // Done/Cancel affordance (mobile has no double-click to end a chain).
+    // Same "check in redraw(), only fire on actual change" pattern as
+    // onSelectionChanged above.
+    this.onChainStateChanged = onChainStateChanged || null;
+    this._lastNotifiedChainActive = false;
 
     this.overlay = null;
     this.ctx = null;
@@ -69,10 +105,28 @@ export class CanvasOverlay {
     // linework they're labeling, which gets in the way while actively
     // tracing more lines nearby. See setShowLabels below.
     this.showLabels = true;
-    // drag-to-measure state
+    // drag-to-measure state — still used by the 'rect' tool (drag corner to
+    // corner). The 'measure' tool no longer drags; see _measureChainStart.
     this._isDraggingMeasure = false;
     this._measureStart = null; // {x,y}
     this._measurePreview = null; // {x1,y1,x2,y2}
+    // click-to-place point chain (measure tool): the point the *next*
+    // segment will start from, or null when no chain is in progress. Each
+    // click commits a real segment immediately (see _handleMeasureChainClick)
+    // rather than batching points like the irregular tool does, so all we
+    // need to remember is where we left off, plus which measurement ids
+    // belong to this chain (for undo-mid-chain, see undoLastShapeAction).
+    this._measureChainStart = null; // {x,y}
+    this._measureChainSegmentIds = [];
+    // Every vertex placed so far in the current chain, including the
+    // current _measureChainStart as its last entry — kept only as
+    // candidates for the alignment snap above (findAlignmentSnap), not the
+    // source of truth for chain position (that's still _measureChainStart).
+    this._measureChainPoints = [];
+    // The point-alignment guide currently being previewed, if any — set in
+    // _onPointerMove, drawn in renderToContext. {x, y} in pixel space,
+    // either may be null depending on which axis (if any) matched.
+    this._alignmentGuide = null;
     this._pendingPolygonPoints = [];
     this._irregularPreview = null;
     this._copiedMeasurement = null;
@@ -81,6 +135,13 @@ export class CanvasOverlay {
     this._shapeUndoStack = [];
     this._suppressNextClick = false;
     this._lastClickedCopyTarget = null;
+  }
+
+  // Zoom-scaled pixel threshold for the point-alignment snap — same
+  // Math.max(base, base*zoom) pattern used for hit-testing thresholds
+  // elsewhere in this file.
+  _alignmentThreshold() {
+    return Math.max(ALIGNMENT_SNAP_PX, ALIGNMENT_SNAP_PX * (this.zoom || 1));
   }
 
   attach() {
@@ -121,6 +182,10 @@ export class CanvasOverlay {
       this._measurePreview = null;
       this._isDraggingMeasure = false;
       this._measureStart = null;
+      this._measureChainStart = null;
+      this._measureChainSegmentIds = [];
+      this._measureChainPoints = [];
+      this._alignmentGuide = null;
     }
   }
 
@@ -132,6 +197,10 @@ export class CanvasOverlay {
     this._irregularPreview = null;
     this._isDraggingMeasure = false;
     this._measureStart = null;
+    this._measureChainStart = null;
+    this._measureChainSegmentIds = [];
+    this._measureChainPoints = [];
+    this._alignmentGuide = null;
     this.redraw();
   }
 
@@ -146,12 +215,26 @@ export class CanvasOverlay {
   }
 
   setCurrentPage(p) {
+    // renderPage() in simple-app.js calls this on *every* zoom change too,
+    // not just real page navigation — it's also how zoom/pdf-space info
+    // gets refreshed on the overlay. Only clear an in-progress chain when
+    // the page has actually changed, so zooming mid-chain doesn't cancel
+    // it out from under you. (Coordinates themselves are kept correct
+    // across the resize this triggers — see resizeToMatchCanvas.)
+    const pageChanged = p !== this.currentPage;
     this.currentPage = p;
     this.hoverPoly = null;
     this._measurePreview = null;
-    this._irregularPreview = null;
     this._isDraggingMeasure = false;
     this._measureStart = null;
+    if (pageChanged) {
+      this._irregularPreview = null;
+      this._measureChainStart = null;
+      this._measureChainSegmentIds = [];
+      this._measureChainPoints = [];
+      this._alignmentGuide = null;
+      this._pendingPolygonPoints = [];
+    }
     this._hoverLineId = null;
     this._hoverMeasurementId = null;
     this._selectedMeasurementId = null;
@@ -184,7 +267,36 @@ export class CanvasOverlay {
 
     if (action.type === 'add') {
       if (action.measurementId) {
+        // If this was the most recently committed segment of an active
+        // measure chain, look up its own start point before removing it,
+        // so the chain can be re-armed there afterward — otherwise the
+        // next click would continue from a point whose incoming wall just
+        // disappeared, drawing a disconnected segment instead of
+        // retracing the one you undid.
+        const chainIds = this._measureChainSegmentIds;
+        const isActiveChainTip = this.tool === 'measure' &&
+          chainIds.length > 0 &&
+          chainIds[chainIds.length - 1] === action.measurementId;
+        let chainRewindTo = null;
+        if (isActiveChainTip) {
+          const measurement = (this.store.listMeasurements(page) || []).find((m) => m.id === action.measurementId);
+          const seg = measurement?.pts?.[0];
+          const w = this.overlay?.width || 0;
+          const h = this.overlay?.height || 0;
+          if (seg && w && h) chainRewindTo = { x: seg.x1 * w, y: seg.y1 * h };
+        }
+
         this.store.removeMeasurement(page, action.measurementId);
+
+        if (isActiveChainTip) {
+          chainIds.pop();
+          this._measureChainPoints.pop();
+          // Null if the lookup above failed for any reason -- ends the
+          // chain safely rather than leaving it pointing at a stale point.
+          this._measureChainStart = chainRewindTo;
+          this._measurePreview = null;
+          this._alignmentGuide = null;
+        }
       }
       if (action.polygonId) {
         this.store.removePolygon(page, action.polygonId);
@@ -342,6 +454,9 @@ export class CanvasOverlay {
         : 'Click a line to calibrate scale';
       drawHint(ctx, 10, 30, hint);
     }
+    if (this._alignmentGuide) {
+      drawAlignmentGuide(ctx, this._alignmentGuide, w, h);
+    }
     if (this._measurePreview) {
       const p = this._measurePreview;
       if (this.tool === 'measure') {
@@ -373,6 +488,17 @@ export class CanvasOverlay {
 
     if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
       drawIrregularPath(ctx, this._pendingPolygonPoints, this._irregularPreview);
+    }
+
+    // Vertex dots — every already-placed point in the current in-progress
+    // chain/shape, drawn last so they sit on top of the lines/guide behind
+    // them, for precisely seeing where a corner actually landed before
+    // committing the next segment.
+    if (this.tool === 'measure' && this._measureChainPoints.length > 0) {
+      drawVertexDots(ctx, this._measureChainPoints, this.zoom);
+    }
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      drawVertexDots(ctx, this._pendingPolygonPoints, this.zoom);
     }
   }
 
@@ -690,12 +816,122 @@ export class CanvasOverlay {
     toast(target.type === 'line' ? 'Line copied' : 'Measurement copied', 'info');
   };
 
+  // Discards the current dangling (not-yet-finished) point/segment of an
+  // in-progress chain or shape without touching anything already
+  // committed. Shared by Escape (_onWindowKeyDown) and the mobile Cancel
+  // button (see LibraryButton-style floating UI in EstimatorApp.tsx).
+  // Returns whether there was anything to cancel.
+  cancelActiveChain() {
+    if (this.tool === 'measure' && this._measureChainStart) {
+      this._measureChainStart = null;
+      this._measureChainSegmentIds = [];
+      this._measureChainPoints = [];
+      this._measurePreview = null;
+      this._alignmentGuide = null;
+      this.redraw();
+      return true;
+    }
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      this._pendingPolygonPoints = [];
+      this._irregularPreview = null;
+      this._alignmentGuide = null;
+      this.redraw();
+      return true;
+    }
+    return false;
+  }
+
+  // Ends an in-progress chain/shape the same way double-click does. Shared
+  // by _onDoubleClick and the mobile Done button. For 'measure' this is
+  // identical to cancelActiveChain() — each segment is already committed
+  // as its own measurement the moment it's placed (see
+  // _handleMeasureChainClick), so "finish" just means "stop dangling a new
+  // one", there's no separate shape left to save. For 'irregular',
+  // _finalizeIrregularPolygon() safely no-ops (discards) on <3 points, so
+  // no separate guard is needed here either. Returns whether there was
+  // anything to finish.
+  finishActiveChain() {
+    if (this.tool === 'measure' && this._measureChainStart) {
+      return this.cancelActiveChain();
+    }
+    if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
+      this._finalizeIrregularPolygon();
+      return true;
+    }
+    return false;
+  }
+
+  // Whether Delete/Backspace (or the mobile trash button, see
+  // deleteActiveSelection) would do anything right now — lines selected
+  // (single click, or multi via Ctrl/Cmd+click), or measurements selected
+  // (single click, or multi via the Select tool's box-select).
+  hasDeletableSelection() {
+    return this._selectedLineIds.size > 0 ||
+      this._selectedMeasurementIds.size > 0 ||
+      Boolean(this._selectedMeasurementId);
+  }
+
+  // Deletes whatever's currently selected — shared by the Delete/Backspace
+  // handler below and the mobile trash button (no keyboard there, same
+  // reasoning as finishActiveChain/cancelActiveChain existing for the
+  // no-double-click problem). Returns whether anything was deleted.
+  deleteActiveSelection() {
+    if (!this.hasDeletableSelection()) return false;
+
+    let removedLines = 0;
+    let removedMeasurements = 0;
+
+    if (this._selectedLineIds.size > 0) {
+      removedLines = this._selectedLineIds.size;
+      for (const id of this._selectedLineIds) this.store.removeLine(this.currentPage, id);
+      this._selectedLineIds.clear();
+    }
+
+    const hasSelectedMeasurements = this._selectedMeasurementIds.size > 0 || Boolean(this._selectedMeasurementId);
+    if (hasSelectedMeasurements) {
+      const ids = this._selectedMeasurementIds.size > 0
+        ? Array.from(this._selectedMeasurementIds)
+        : [this._selectedMeasurementId];
+      const measurements = this.store.listMeasurements(this.currentPage) || [];
+      for (const id of ids) {
+        const measurement = measurements.find((entry) => entry.id === id);
+        if (!measurement) continue;
+        this.onLineMeasurementRemoved?.(measurement);
+        this.store.removeMeasurement(this.currentPage, id);
+        removedMeasurements += 1;
+      }
+      this._selectedMeasurementId = null;
+      this._selectedMeasurementIds = new Set();
+      this._selectedPolygonId = null;
+    }
+
+    this.onMeasurementsChanged?.();
+
+    const parts = [];
+    if (removedLines) parts.push(`${removedLines} line${removedLines === 1 ? '' : 's'}`);
+    if (removedMeasurements) parts.push(`${removedMeasurements} measurement${removedMeasurements === 1 ? '' : 's'}`);
+    if (parts.length) toast(`${parts.join(' and ')} removed`, 'info');
+
+    this.redraw();
+    return true;
+  }
+
   _onWindowKeyDown = (event) => {
     if (!this.overlay) return;
 
     const target = event.target;
     const tagName = target?.tagName?.toLowerCase();
     if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return;
+
+    // Cancel an in-progress point chain (measure or irregular) without
+    // touching anything already committed — only the dangling, not-yet-
+    // finished segment/point goes away.
+    if (event.key === 'Escape') {
+      if (this.cancelActiveChain()) {
+        event.preventDefault();
+        return;
+      }
+    }
 
     const isCopy = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'c';
     const isPaste = (event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 'v';
@@ -704,49 +940,14 @@ export class CanvasOverlay {
     // selected — lines multi-selected via Ctrl/Cmd+click, or measurements
     // selected (one via a plain click, or several via the Select tool's
     // box-select) — so a whole batch can be cleared in one go.
-    const hasSelectedMeasurements = this._selectedMeasurementIds.size > 0 || Boolean(this._selectedMeasurementId);
-    const isDelete = (event.key === 'Delete' || event.key === 'Backspace') &&
-      (this._selectedLineIds.size > 0 || hasSelectedMeasurements);
+    const isDelete = (event.key === 'Delete' || event.key === 'Backspace') && this.hasDeletableSelection();
     if (!isCopy && !isPaste && !isDelete) return;
 
     event.preventDefault();
     event.stopPropagation();
 
     if (isDelete) {
-      let removedLines = 0;
-      let removedMeasurements = 0;
-
-      if (this._selectedLineIds.size > 0) {
-        removedLines = this._selectedLineIds.size;
-        for (const id of this._selectedLineIds) this.store.removeLine(this.currentPage, id);
-        this._selectedLineIds.clear();
-      }
-
-      if (hasSelectedMeasurements) {
-        const ids = this._selectedMeasurementIds.size > 0
-          ? Array.from(this._selectedMeasurementIds)
-          : [this._selectedMeasurementId];
-        const measurements = this.store.listMeasurements(this.currentPage) || [];
-        for (const id of ids) {
-          const measurement = measurements.find((entry) => entry.id === id);
-          if (!measurement) continue;
-          this.onLineMeasurementRemoved?.(measurement);
-          this.store.removeMeasurement(this.currentPage, id);
-          removedMeasurements += 1;
-        }
-        this._selectedMeasurementId = null;
-        this._selectedMeasurementIds = new Set();
-        this._selectedPolygonId = null;
-      }
-
-      this.onMeasurementsChanged?.();
-
-      const parts = [];
-      if (removedLines) parts.push(`${removedLines} line${removedLines === 1 ? '' : 's'}`);
-      if (removedMeasurements) parts.push(`${removedMeasurements} measurement${removedMeasurements === 1 ? '' : 's'}`);
-      if (parts.length) toast(`${parts.join(' and ')} removed`, 'info');
-
-      this.redraw();
+      this.deleteActiveSelection();
       return;
     }
 
@@ -998,17 +1199,55 @@ export class CanvasOverlay {
         return;
       }
 
-      if ((this.tool === 'measure' || this.tool === 'rect') && this._isDraggingMeasure && this._measureStart) {
-        const end = this.tool === 'measure'
-          ? snapMeasurementEndpoint(this._measureStart, { x, y })
-          : { x, y };
-        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: end.x, y2: end.y };
+      if (this.tool === 'rect' && this._isDraggingMeasure && this._measureStart) {
+        this._measurePreview = { x1: this._measureStart.x, y1: this._measureStart.y, x2: x, y2: y };
+        this.redraw();
+        return;
+      }
+
+      // Live rubber-band from the last placed point to the cursor — not
+      // gated on _isDraggingMeasure, since placing a chain point is a
+      // click, not a drag; the mouse button is up between points. Holding
+      // Shift bypasses both the horizontal/vertical auto-snap and the
+      // point-alignment guide below, for a fully free-angle/free-position
+      // segment — mirrored in _handleMeasureChainClick so what's previewed
+      // here matches what actually gets committed on click.
+      if (this.tool === 'measure' && this._measureChainStart) {
+        let end = e.shiftKey ? { x, y } : snapMeasurementEndpoint(this._measureChainStart, { x, y });
+        this._alignmentGuide = null;
+        if (!e.shiftKey) {
+          // Excludes the chain's own start point (last entry) — that
+          // axis is already covered by the angle-snap above; aligning
+          // with yourself isn't a useful guide.
+          const candidates = this._measureChainPoints.slice(0, -1);
+          const snap = findAlignmentSnap(end, candidates, this._alignmentThreshold());
+          if (snap) {
+            end = { x: snap.x, y: snap.y };
+            this._alignmentGuide = { x: snap.guideX?.x ?? null, y: snap.guideY?.y ?? null };
+          }
+        }
+        this._measurePreview = { x1: this._measureChainStart.x, y1: this._measureChainStart.y, x2: end.x, y2: end.y };
         this.redraw();
         return;
       }
 
       if (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0) {
-        this._irregularPreview = { x1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].x, y1: this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1].y, x2: x, y2: y };
+        const last = this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1];
+        // Same treatment as the measure chain: straight (snapped to
+        // horizontal/vertical) by default, Shift bypasses it for a free
+        // angle — and, same as measure, also bypasses the alignment guide
+        // below, one consistent "hold Shift for exact freehand" rule.
+        let end = e.shiftKey ? { x, y } : snapMeasurementEndpoint(last, { x, y });
+        this._alignmentGuide = null;
+        if (!e.shiftKey) {
+          const candidates = this._pendingPolygonPoints.slice(0, -1);
+          const snap = findAlignmentSnap(end, candidates, this._alignmentThreshold());
+          if (snap) {
+            end = { x: snap.x, y: snap.y };
+            this._alignmentGuide = { x: snap.guideX?.x ?? null, y: snap.guideY?.y ?? null };
+          }
+        }
+        this._irregularPreview = { x1: last.x, y1: last.y, x2: end.x, y2: end.y };
         this.redraw();
         return;
       }
@@ -1077,6 +1316,16 @@ export class CanvasOverlay {
 
     // In irregular mode while actively adding points, never intercept for drag
     const isAddingIrregPoints = this.tool === 'irregular' && this._pendingPolygonPoints.length > 0;
+    // Same idea for an active measure chain: a plain pointerdown always
+    // continues the chain, even if it lands right on top of an earlier
+    // point/wall (exactly what closing a shape looks like) — never grabs
+    // it to drag instead. This runs *before* the click event, so without
+    // it, the equivalent chain-priority check in _onClick never even gets
+    // reached: a target found here sets _suppressNextClick, which the top
+    // of _onClick honors. A modifier key (Alt/Ctrl/Cmd) still falls
+    // through to the normal grab/select behavior.
+    const isContinuingMeasureChain = this.tool === 'measure' && Boolean(this._measureChainStart) &&
+      !e.altKey && !e.ctrlKey && !e.metaKey;
 
     // Always allow drag/select on existing shapes, regardless of drawing
     // mode -- but use the tighter (strict) hit radius while a draw tool is
@@ -1084,7 +1333,7 @@ export class CanvasOverlay {
     // instead of grabbing it. Normal (generous) radius otherwise, so
     // repositioning something you already drew stays easy.
     const drawToolArmed = this.active && (this.tool === 'measure' || this.tool === 'rect');
-    if (!isAddingIrregPoints) {
+    if (!isAddingIrregPoints && !isContinuingMeasureChain) {
       const target = this._findCopyTargetAtPoint(x, y, drawToolArmed);
       if (target) {
         e.preventDefault();
@@ -1164,9 +1413,11 @@ export class CanvasOverlay {
       return;
     }
 
-    // Start drawing (only if drawing mode is active)
+    // Start drawing (only if drawing mode is active). 'measure' is handled
+    // in _onClick instead — see _handleMeasureChainClick — since it's a
+    // click-to-place point chain now, not a drag.
     if (!this.active) return;
-    if (this.tool !== 'measure' && this.tool !== 'rect') return;
+    if (this.tool !== 'rect') return;
 
     this._isDraggingMeasure = true;
     this._measureStart = { x, y };
@@ -1273,7 +1524,7 @@ export class CanvasOverlay {
     }
 
     if (!this.active) return;
-    if ((this.tool !== 'measure' && this.tool !== 'rect')) return;
+    if (this.tool !== 'rect') return;
 
     if (!this._isDraggingMeasure || !this._measureStart) return;
 
@@ -1282,72 +1533,13 @@ export class CanvasOverlay {
     const y = e.clientY - rect.top;
 
     const start = this._measureStart;
-    const end = this.tool === 'measure'
-      ? snapMeasurementEndpoint(start, { x, y })
-      : { x, y };
+    const end = { x, y };
 
     // reset preview state
     this._isDraggingMeasure = false;
     this._measureStart = null;
     this._measurePreview = null;
     try { if (this.overlay.releasePointerCapture) this.overlay.releasePointerCapture(e.pointerId); } catch (err) {}
-
-    if (this.tool === 'measure') {
-      const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
-      if (pixelLength <= 2) { this.redraw(); return; }
-
-      let scaleFactor = this.store.getScale(this.currentPage)?.factor;
-      if (!scaleFactor) {
-        const entry = await textPrompt({
-          title: 'Set page scale',
-          message: 'Examples: "1/16 in = 1 ft" or "3 ft". Leave blank to measure in raw inches.',
-        });
-        if (entry && entry.trim()) {
-          const parsed = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
-          if (!parsed || !(parsed > 0)) {
-            toast('Could not parse scale — saving in raw inches', 'info');
-          } else {
-            scaleFactor = parsed;
-            this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
-            toast('Scale saved for this page', 'success');
-          }
-        }
-      }
-
-      // compute the real-world inches for this drawn line in a zoom-independent way
-      const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
-      const rawInches = pageLengthPoints / 72;
-      let realInchesForLine = scaleFactor ? (pageLengthPoints * scaleFactor) : rawInches;
-      if (this.doubleSided) {
-        realInchesForLine *= 2;
-      }
-
-      // store measurement record (normalized coordinates)
-      const label = formatInches(realInchesForLine);
-      const measurementId = `drag-${Date.now()}`;
-      const measurement = {
-        id: measurementId,
-        inches: realInchesForLine,
-        label,
-        at: Date.now(),
-        doubleSided: this.doubleSided,
-        pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
-      };
-      this.onLineMeasurementCreated?.(measurement);
-      this.store.addMeasurement(this.currentPage, measurement);
-
-      this._pushShapeUndo({
-        type: 'add',
-        page: this.currentPage,
-        measurementId,
-        polygonId: null
-      });
-      this.onMeasurementsChanged?.();
-      toast(`Measured: ${label}`, 'success');
-
-      this.redraw();
-      return;
-    }
 
     if (this.tool === 'rect') {
       const pixelWidth = Math.abs(end.x - start.x);
@@ -1402,6 +1594,111 @@ export class CanvasOverlay {
       this.redraw();
       return;
     }
+  };
+
+  // Commits one straight segment as its own measurement record — this is
+  // the same logic that used to live inline in _onPointerUp's 'measure'
+  // branch (drag-release), now shared by _handleMeasureChainClick since a
+  // chain is just this same commit run once per click instead of once per
+  // drag. Returns the new measurement's id, or null if the segment was
+  // discarded (too short — most commonly the phantom second click of a
+  // double-click pair ending a chain, see _handleMeasureChainClick).
+  async _commitMeasureSegment(start, end) {
+    const pixelLength = Math.hypot(end.x - start.x, end.y - start.y) || 0;
+    if (pixelLength <= 2) return null;
+
+    let scaleFactor = this.store.getScale(this.currentPage)?.factor;
+    if (!scaleFactor) {
+      const entry = await textPrompt({
+        title: 'Set page scale',
+        message: 'Examples: "1/16 in = 1 ft" or "3 ft". Leave blank to measure in raw inches.',
+      });
+      if (entry && entry.trim()) {
+        const parsed = computeScaleFactorFromExpression(entry.trim(), pixelLength, this._pxPerPt);
+        if (!parsed || !(parsed > 0)) {
+          toast('Could not parse scale — saving in raw inches', 'info');
+        } else {
+          scaleFactor = parsed;
+          this.store.setScale(this.currentPage, { factor: scaleFactor, unit: 'in' });
+          toast('Scale saved for this page', 'success');
+        }
+      }
+    }
+
+    // compute the real-world inches for this drawn line in a zoom-independent way
+    const pageLengthPoints = toPagePoints(pixelLength, this._pxPerPt);
+    const rawInches = pageLengthPoints / 72;
+    let realInchesForLine = scaleFactor ? (pageLengthPoints * scaleFactor) : rawInches;
+    if (this.doubleSided) {
+      realInchesForLine *= 2;
+    }
+
+    // store measurement record (normalized coordinates)
+    const label = formatInches(realInchesForLine);
+    const measurementId = `drag-${Date.now()}`;
+    const measurement = {
+      id: measurementId,
+      inches: realInchesForLine,
+      label,
+      at: Date.now(),
+      doubleSided: this.doubleSided,
+      pts: [{ x1: start.x / this.overlay.width, y1: start.y / this.overlay.height, x2: end.x / this.overlay.width, y2: end.y / this.overlay.height }]
+    };
+    this.onLineMeasurementCreated?.(measurement);
+    this.store.addMeasurement(this.currentPage, measurement);
+
+    this._pushShapeUndo({
+      type: 'add',
+      page: this.currentPage,
+      measurementId,
+      polygonId: null
+    });
+    this.onMeasurementsChanged?.();
+    toast(`Measured: ${label}`, 'success');
+
+    return measurementId;
+  }
+
+  // Click-to-place point chain for the 'measure' tool. First click arms the
+  // chain (no segment yet); every click after that commits the segment
+  // behind it via _commitMeasureSegment and arms the next one from there.
+  // Called from _onClick once it's determined the click wasn't on an
+  // existing line/measurement (see the bottom of _onClick). bypassSnap
+  // mirrors the Shift key at click time — see the preview branch in
+  // _onPointerMove, which shows the same unsnapped angle before you click.
+  _handleMeasureChainClick = async (x, y, bypassSnap = false) => {
+    if (!this._measureChainStart) {
+      this._measureChainStart = { x, y };
+      this._measureChainSegmentIds = [];
+      this._measureChainPoints = [{ x, y }];
+      this.redraw();
+      return;
+    }
+
+    const start = this._measureChainStart;
+    let end = bypassSnap ? { x, y } : snapMeasurementEndpoint(start, { x, y });
+    if (!bypassSnap) {
+      const candidates = this._measureChainPoints.slice(0, -1);
+      const snap = findAlignmentSnap(end, candidates, this._alignmentThreshold());
+      if (snap) end = { x: snap.x, y: snap.y };
+    }
+    this._measurePreview = null;
+    this._alignmentGuide = null;
+
+    const measurementId = await this._commitMeasureSegment(start, end);
+    if (!measurementId) {
+      // Too short to count — most likely the phantom second click of a
+      // double-click ending the chain (see _onDoubleClick). Leave the
+      // pending start exactly where it is rather than letting it drift to
+      // this discarded point.
+      this.redraw();
+      return;
+    }
+
+    this._measureChainStart = end;
+    this._measureChainSegmentIds.push(measurementId);
+    this._measureChainPoints.push(end);
+    this.redraw();
   };
 
   _onPointerCancel = (e) => {
@@ -1581,6 +1878,15 @@ export class CanvasOverlay {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // End an in-progress measure chain BEFORE the delete-lookup below —
+    // a double-click's first click (see _onClick) already committed the
+    // final segment ending exactly at this point, so _findMeasurementAtPoint
+    // would otherwise find that segment we just placed and delete it.
+    if (this.tool === 'measure' && this._measureChainStart) {
+      this.finishActiveChain();
+      return;
+    }
+
     const targetMeasurement = this._findMeasurementAtPoint(x, y);
     if (targetMeasurement) {
       this.onLineMeasurementRemoved?.(targetMeasurement);
@@ -1592,7 +1898,7 @@ export class CanvasOverlay {
     }
 
     if (this.tool === 'irregular' && this._pendingPolygonPoints.length >= 3) {
-      this._finalizeIrregularPolygon();
+      this.finishActiveChain();
     }
   };
 
@@ -1600,6 +1906,7 @@ export class CanvasOverlay {
     if (this._pendingPolygonPoints.length < 3) {
       this._pendingPolygonPoints = [];
       this._irregularPreview = null;
+      this._alignmentGuide = null;
       this.redraw();
       return;
     }
@@ -1611,6 +1918,7 @@ export class CanvasOverlay {
     if (pixelArea <= 4) {
       this._pendingPolygonPoints = [];
       this._irregularPreview = null;
+      this._alignmentGuide = null;
       this.redraw();
       return;
     }
@@ -1644,6 +1952,7 @@ export class CanvasOverlay {
 
     this._pendingPolygonPoints = [];
     this._irregularPreview = null;
+    this._alignmentGuide = null;
     this.redraw();
   };
 
@@ -1680,9 +1989,31 @@ export class CanvasOverlay {
         return;
       }
 
-      this._pendingPolygonPoints.push({ x, y });
+      const last = this._pendingPolygonPoints[this._pendingPolygonPoints.length - 1];
+      let point = e.shiftKey ? { x, y } : snapMeasurementEndpoint(last, { x, y });
+      if (!e.shiftKey) {
+        const candidates = this._pendingPolygonPoints.slice(0, -1);
+        const snap = findAlignmentSnap(point, candidates, this._alignmentThreshold());
+        if (snap) point = { x: snap.x, y: snap.y };
+      }
+
+      this._pendingPolygonPoints.push(point);
       this._irregularPreview = null;
+      this._alignmentGuide = null;
       this.redraw();
+      return;
+    }
+
+    // While a measure chain is active, a plain click always continues it —
+    // never falls into the "select/calibrate whatever's nearby" behavior
+    // below. Without this, clicking back near an earlier point in the same
+    // chain to close a shape (the closing point is, by definition, right
+    // on top of that earlier wall) got swallowed as a select instead of
+    // committing the closing segment, silently dropping it; a modifier
+    // key (Alt/Ctrl/Cmd) still falls through, so deleting/multi-selecting
+    // some other shape still works even with a chain armed.
+    if (this.tool === 'measure' && this._measureChainStart && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      await this._handleMeasureChainClick(x, y, e.shiftKey);
       return;
     }
 
@@ -1748,7 +2079,12 @@ export class CanvasOverlay {
       }
     }
 
-    if (!nearest || nearestDist > Math.max(8, 8 * (this.zoom || 1))) return;
+    if (!nearest || nearestDist > Math.max(8, 8 * (this.zoom || 1))) {
+      // Nothing nearby to select/calibrate — on empty canvas, the 'measure'
+      // tool places (or continues) a point chain instead.
+      if (this.tool === 'measure') await this._handleMeasureChainClick(x, y, e.shiftKey);
+      return;
+    }
 
     const id = nearest.id || nearest.__id;
 
@@ -1827,9 +2163,26 @@ export class CanvasOverlay {
   };
 
   resizeToMatchCanvas() {
+    // Committed shapes store normalized (0-1) coordinates, so they render
+    // correctly at any canvas size automatically. In-progress chain/preview
+    // state doesn't — it's tracked in raw pixels (see _measureChainStart
+    // etc.), which is what makes the alignment-snap and hit-test thresholds
+    // elsewhere simple to reason about in screen-pixel terms. That means a
+    // resize (zoom changes the PDF canvas's actual pixel dimensions, not
+    // just a CSS scale — see renderPage() in simple-app.js) would otherwise
+    // leave those points pointing at the wrong spot on the page. Rescale
+    // them by the same ratio the canvas itself just changed by.
+    const prevWidth = this.overlay.width;
+    const prevHeight = this.overlay.height;
+
     // match backing store size (pixels)
     this.overlay.width = this.canvasEl.width;
     this.overlay.height = this.canvasEl.height;
+
+    if (prevWidth > 0 && prevHeight > 0 && (prevWidth !== this.overlay.width || prevHeight !== this.overlay.height)) {
+      this._rescalePendingPixelState(this.overlay.width / prevWidth, this.overlay.height / prevHeight);
+    }
+
     // match CSS size so the overlay covers the visible canvas
     // use width/height attributes (not clientWidth) to avoid 0 when parent is display:none
     try {
@@ -1844,6 +2197,29 @@ export class CanvasOverlay {
     this.redraw();
   }
 
+  // Re-projects every point of live, not-yet-committed drawing state by
+  // (sx, sy) — called from resizeToMatchCanvas right after the canvas
+  // itself changes size, so an in-progress measure chain or freeform area
+  // shape stays pinned to the same spot on the page across a zoom change
+  // instead of drifting. Committed measurements/polygons don't need this —
+  // they're normalized (0-1) already.
+  _rescalePendingPixelState(sx, sy) {
+    const scalePoint = (p) => { p.x *= sx; p.y *= sy; };
+    const scaleSeg = (s) => { s.x1 *= sx; s.y1 *= sy; s.x2 *= sx; s.y2 *= sy; };
+
+    if (this._measureChainStart) scalePoint(this._measureChainStart);
+    for (const p of this._measureChainPoints) scalePoint(p);
+    if (this._measurePreview) scaleSeg(this._measurePreview);
+
+    for (const p of this._pendingPolygonPoints) scalePoint(p);
+    if (this._irregularPreview) scaleSeg(this._irregularPreview);
+
+    if (this._alignmentGuide) {
+      if (this._alignmentGuide.x != null) this._alignmentGuide.x *= sx;
+      if (this._alignmentGuide.y != null) this._alignmentGuide.y *= sy;
+    }
+  }
+
   clear() {
     this.ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
   }
@@ -1852,19 +2228,37 @@ export class CanvasOverlay {
     if (!this.ctx) return;
 
     this._notifySelectionChangeIfNeeded();
+    this._notifyChainStateChangeIfNeeded();
 
     this.clear();
     this.renderToContext(this.ctx, { width: this.overlay.width, height: this.overlay.height });
   }
 
+  // Whether there's an in-progress chain/shape that a "Done" or "Cancel"
+  // action would apply to right now.
+  hasActiveChain() {
+    return (this.tool === 'measure' && Boolean(this._measureChainStart)) ||
+      (this.tool === 'irregular' && this._pendingPolygonPoints.length > 0);
+  }
+
+  _notifyChainStateChangeIfNeeded() {
+    const active = this.hasActiveChain();
+    if (active === this._lastNotifiedChainActive) return;
+    this._lastNotifiedChainActive = active;
+    this.onChainStateChanged?.(active);
+  }
+
   // redraw() runs on every selection change (and plenty of other things —
   // zoom, pan, drag) so this only actually fires onSelectionChanged when
-  // the selected measurement/polygon id has changed since the last check,
-  // rather than needing a dedicated call at every one of the several
-  // places selection gets set (_onPointerDown, _pasteMeasurement,
-  // _onContextMenu, ...).
+  // the selected measurement/polygon/line id(s) have changed since the
+  // last check, rather than needing a dedicated call at every one of the
+  // several places selection gets set (_onPointerDown, _pasteMeasurement,
+  // _onContextMenu, ...). Includes _selectedLineIds (line-only selections,
+  // e.g. Ctrl/Cmd+click on detected vector lines) so consumers driven off
+  // this — the mobile trash button as well as the existing Single/Double
+  // sided toolbar sync — react to those too, not just measurement selection.
   _notifySelectionChangeIfNeeded() {
-    const key = `${this._selectedMeasurementId || ''}|${this._selectedPolygonId || ''}|${Array.from(this._selectedMeasurementIds).sort().join(',')}`;
+    const key = `${this._selectedMeasurementId || ''}|${this._selectedPolygonId || ''}|${Array.from(this._selectedMeasurementIds).sort().join(',')}|${Array.from(this._selectedLineIds).sort().join(',')}`;
     if (key === this._lastNotifiedSelectionKey) return;
     this._lastNotifiedSelectionKey = key;
     this.onSelectionChanged?.();
@@ -1886,6 +2280,19 @@ export class CanvasOverlay {
     return ids
       .map((id) => measurements.find((entry) => entry.id === id))
       .filter((measurement) => measurement && !this._isAreaMeasurement(measurement));
+  }
+
+  // Every currently-selected measurement id, line *or* area — single click
+  // (_selectedMeasurementId) or box-select (_selectedMeasurementIds), both
+  // of which already cover either kind (see _onClick/_onPointerDown).
+  // Unlike getSelectedLineMeasurements above, this isn't filtered to lines
+  // only — used by the measurements sidebar (simple-app.js) to tint
+  // whichever row(s) match what's selected on the canvas, same green the
+  // canvas itself uses for a selected shape.
+  getSelectedMeasurementIds() {
+    const ids = new Set(this._selectedMeasurementIds);
+    if (this._selectedMeasurementId) ids.add(this._selectedMeasurementId);
+    return ids;
   }
 
   // Sets every selected line measurement's single/double-sided flag after
@@ -2130,6 +2537,57 @@ function drawIrregularPath(ctx, points, preview) {
   ctx.lineWidth = 2.5;
   ctx.setLineDash([6, 4]);
   ctx.stroke();
+  ctx.restore();
+}
+
+// Small filled dot at each already-placed point of an in-progress chain
+// (measure) or shape (irregular) — same green as the preview line/path,
+// with a white ring so it stays visible over dark PDF content too.
+function drawVertexDots(ctx, points, zoom = 1) {
+  if (!points || !points.length) return;
+  // Floor is the *design* size, not a fallback — 4 * zoom alone shrank
+  // below usably-visible at anything under 1x zoom (zoom can go down to
+  // 0.25), since the canvas itself has fewer actual pixels at low zoom,
+  // not just a smaller CSS display size. Capped on the other end so it
+  // doesn't balloon at max zoom (5x).
+  const radius = Math.min(12, Math.max(6, 4 * (zoom || 1)));
+  ctx.save();
+  for (const p of points) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(22,163,74,0.95)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Point-alignment ("smart guide") indicator — a thin line spanning the
+// full canvas at the matched x and/or y, so it reads as "this new point
+// lines up with that one" rather than an unexplained cursor stick. A
+// distinct magenta rather than the green used for measurement lines/
+// preview segments, so it doesn't get lost in the same-colored linework
+// it's meant to stand out against.
+function drawAlignmentGuide(ctx, guide, width, height) {
+  if (!guide || (guide.x == null && guide.y == null)) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(217, 70, 239, 0.85)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  if (guide.x != null) {
+    ctx.beginPath();
+    ctx.moveTo(guide.x, 0);
+    ctx.lineTo(guide.x, height);
+    ctx.stroke();
+  }
+  if (guide.y != null) {
+    ctx.beginPath();
+    ctx.moveTo(0, guide.y);
+    ctx.lineTo(width, guide.y);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
