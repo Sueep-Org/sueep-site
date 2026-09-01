@@ -250,6 +250,153 @@ function AvatarEditor({ initials }: { initials: string }) {
   );
 }
 
+type CompanyMember = { id: string; email: string; displayName: string | null; role: "OWNER" | "MEMBER" };
+type CompanyResponse = {
+  company: { id: string; name: string; inviteCode: string } | null;
+  role?: "OWNER" | "MEMBER";
+  members?: CompanyMember[] | null;
+};
+
+// Invite code for everyone, member list + remove for the owner only (the
+// API enforces this too, this just avoids showing a section that would
+// 403 on load for a regular member). No window.confirm here, it throws
+// "not supported" in this Next.js-hosted environment (see the estimator
+// tool's own confirmLeaveDialog) — removal is a two-click inline confirm
+// instead of a modal.
+function CompanySection() {
+  const [data, setData] = useState<CompanyResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/estimator/company");
+        if (!res.ok) throw new Error(`Failed to load company (${res.status})`);
+        setData(await res.json());
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load company");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function handleRemove(id: string) {
+    setRemovingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/estimator/company/members/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Failed to remove member (${res.status})`);
+      }
+      setData((prev) =>
+        prev ? { ...prev, members: prev.members?.filter((m) => m.id !== id) ?? null } : prev,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove member");
+    } finally {
+      setConfirmingId(null);
+      setRemovingId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <div className="p-7">
+          <EstimatorLoadingBar text="Loading company…" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (!data?.company) return null; // shouldn't happen once past the setup gate, fail quiet rather than show a broken card
+  const company = data.company;
+
+  return (
+    <Card>
+      <section className="p-7">
+        <SectionHeading
+          title="Company"
+          description="Everyone in your company shares access to the same projects and files."
+        />
+        <p className="mt-3 text-sm text-slate-700">{company.name}</p>
+
+        <div className="mt-4">
+          <span className="text-xs font-medium text-slate-500">Invite code</span>
+          <div className="mt-1.5 flex items-center justify-between gap-3 rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5">
+            <span className="font-mono text-sm tracking-widest text-slate-900">{company.inviteCode}</span>
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard.writeText(company.inviteCode);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </div>
+
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+
+        {data.role === "OWNER" && data.members ? (
+          <div className="mt-5">
+            <span className="text-xs font-medium text-slate-500">Members</span>
+            <div className="mt-1.5 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {data.members.map((member) => (
+                <div key={member.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-slate-900">{member.displayName || member.email}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {member.email} · {member.role === "OWNER" ? "Owner" : "Member"}
+                    </p>
+                  </div>
+                  {member.role === "OWNER" ? null : confirmingId === member.id ? (
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(member.id)}
+                        disabled={removingId === member.id}
+                        className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {removingId === member.id ? "Removing..." : "Confirm remove"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingId(member.id)}
+                      className="flex-shrink-0 text-xs font-medium text-red-500 hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </Card>
+  );
+}
+
 export default function EstimatorSettingsPage() {
   const { user, loading: authLoading } = useEstimatorAuth();
   const [loading, setLoading] = useState(true);
@@ -332,11 +479,12 @@ export default function EstimatorSettingsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Estimator settings</h1>
-          <p className="text-sm text-slate-500">Applies only to your own account.</p>
+          <p className="text-sm text-slate-500">Crew rates and your profile apply only to your own account. Company info below is shared.</p>
         </div>
       </div>
 
       <div className="mt-6 space-y-6">
+        <CompanySection />
         <AvatarEditor initials={initials} />
 
         <form onSubmit={handleSave}>

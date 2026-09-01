@@ -1,24 +1,16 @@
 // =========================
-// ENV-AWARE BACKEND (FIXED)
+// BACKEND (via the sueep-site proxy)
 // =========================
 
-// Auto-switch between local + production
-const hostname = location.hostname.toLowerCase();
-const isLocal =
-  hostname === "localhost" ||
-  hostname === "127.0.0.1" ||
-  hostname === "0.0.0.0" ||
-  hostname.endsWith(".localhost") ||
-  hostname.endsWith(".local") ||
-  hostname.startsWith("192.168.") ||
-  hostname.startsWith("10.") ||
-  hostname.startsWith("172.");
-
-export const API_BASE = isLocal
-  ? "http://localhost:8000"
-  : "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
-
-console.log("API_BASE =", API_BASE);
+// Used to call aiestimator-api directly, cross-origin, with no auth on the
+// request at all (see ESTIMATOR_STORAGE_FIX_PLAN.md in sueep-site). Now a
+// same-origin path into sueep-site's own /api/estimator/proxy/[...path]
+// route, which forwards to the real backend server-side, attaching the
+// caller's company identity there instead of trusting anything the browser
+// sends. Which actual backend it forwards to (local vs production) is a
+// server-side env var now (ESTIMATOR_API_BASE), not something this file
+// needs to guess from the hostname anymore.
+export const API_BASE = "/api/estimator/proxy";
 
 // =========================
 // ACTIVE ENDPOINTS (MATCH BACKEND)
