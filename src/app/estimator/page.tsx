@@ -1,6 +1,6 @@
 "use client";
 
-import EstimatorApp from "@/app/erp/(shell)/estimator/page";
+import EstimatorApp from "@/app/erp/(shell)/estimator/EstimatorApp";
 import { useEstimatorAuth } from "@/lib/estimatorAuthContext";
 
 export default function StandaloneEstimatorPage() {
