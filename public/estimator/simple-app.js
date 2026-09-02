@@ -908,6 +908,8 @@ async function initApp(){
 
   overlay.attach();
 
+  try { window.__estimatorOverlay = overlay; } catch (_) {}
+
   overlay.setActive(false);
 
   overlay.setTool('area');
