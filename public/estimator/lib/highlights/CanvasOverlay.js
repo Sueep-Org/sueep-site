@@ -217,10 +217,12 @@ export class CanvasOverlay {
   setCurrentPage(p) {
     // renderPage() in simple-app.js calls this on *every* zoom change too,
     // not just real page navigation — it's also how zoom/pdf-space info
-    // gets refreshed on the overlay. Only clear an in-progress chain when
-    // the page has actually changed, so zooming mid-chain doesn't cancel
-    // it out from under you. (Coordinates themselves are kept correct
-    // across the resize this triggers — see resizeToMatchCanvas.)
+    // gets refreshed on the overlay. Only clear an in-progress chain (or a
+    // just-made selection — see below) when the page has actually changed,
+    // so zooming/resizing mid-chain or right after selecting something
+    // doesn't cancel it out from under you. (Coordinates themselves are
+    // kept correct across the resize this triggers — see
+    // resizeToMatchCanvas.)
     const pageChanged = p !== this.currentPage;
     this.currentPage = p;
     this.hoverPoly = null;
@@ -234,12 +236,12 @@ export class CanvasOverlay {
       this._measureChainPoints = [];
       this._alignmentGuide = null;
       this._pendingPolygonPoints = [];
+      this._hoverLineId = null;
+      this._hoverMeasurementId = null;
+      this._selectedMeasurementId = null;
+      this._selectedPolygonId = null;
+      this._selectedLineIds.clear();
     }
-    this._hoverLineId = null;
-    this._hoverMeasurementId = null;
-    this._selectedMeasurementId = null;
-    this._selectedPolygonId = null;
-    this._selectedLineIds.clear();
     this.redraw();
   }
 
@@ -1866,10 +1868,21 @@ export class CanvasOverlay {
       return areaInteriorHits[0].m;
     }
 
+    // Whichever is actually nearer to the click wins — a wall line drawn
+    // right along an area shape's edge (the normal workflow) used to always
+    // beat the area out here regardless of distance, since this previously
+    // checked line-in-range first unconditionally. Compare distances
+    // instead so clicking closer to the SA shape's edge than to the wall's
+    // selects the SA shape.
     const hitThreshold = Math.max(12, 12 * (this.zoom || 1));
-    return nearestLineMeasurement && nearestLineMeasurementDist <= hitThreshold
-      ? nearestLineMeasurement
-      : (nearestAreaMeasurement && nearestAreaMeasurementDist <= hitThreshold ? nearestAreaMeasurement : null);
+    const lineInRange = nearestLineMeasurement && nearestLineMeasurementDist <= hitThreshold;
+    const areaInRange = nearestAreaMeasurement && nearestAreaMeasurementDist <= hitThreshold;
+    if (lineInRange && areaInRange) {
+      return nearestLineMeasurementDist <= nearestAreaMeasurementDist ? nearestLineMeasurement : nearestAreaMeasurement;
+    }
+    if (lineInRange) return nearestLineMeasurement;
+    if (areaInRange) return nearestAreaMeasurement;
+    return null;
   }
 
   _onDoubleClick = (e) => {
