@@ -186,6 +186,80 @@ model Company {
   createdAt  DateTime @default(now())
 
   estimatorUsers EstimatorUser[]
+
+  // --- Paywall (see estimator-paywall-plan.md) ---
+  // Billing is company-wide, not per-seat: one subscription covers every
+  // EstimatorUser on this company, up to seatLimit. planTier/seatLimit
+  // default a brand-new company to FREE/5 with no Stripe involvement at
+  // all until they actually upgrade.
+
+  /// FREE | PRO. Kept as a plain string rather than an enum so a future
+  /// third tier doesn't need a migration, just a new accepted value.
+  planTier   String @default("FREE")
+  /// Piramid's own company (Sueep) is exempt from the paywall entirely,
+  /// always full access, no seat cap, no Stripe subscription needed.
+  /// Deliberately a separate flag rather than a 3rd planTier value:
+  /// "internal" isn't a pricing tier a customer could ever be on, it's a
+  /// different axis (who's paying vs. who's exempt), so mixing it into
+  /// planTier would make every planTier === "PRO" check need to also
+  /// remember to check for this. isCompanyPaid()/effectiveSeatLimit() are
+  /// the only two places that need to know about it instead.
+  isInternal Boolean @default(false)
+  /// Members beyond this on a FREE company aren't really relevant (FREE is
+  /// 1 seat by construction), this only starts to matter once planTier is
+  /// PRO. Stored rather than hardcoded so a one-off larger deal doesn't
+  /// need a code change, just a row edit.
+  seatLimit  Int    @default(5)
+  /// Free companies get 1 blueprint upload, once, lifetime — not a monthly
+  /// allowance, and not a per-page cap (a free company's one upload can be
+  /// any size up to the system-wide 150-page file limit, same limit every
+  /// company gets). Compared against a constant, not stored here, so the
+  /// actual limit only exists in one place in code. Named "uploads" not
+  /// "pages": the free gate is at the /blueprint request itself, which
+  /// the proxy already sees — the per-page analysis loop runs later, in a
+  /// background task inside aiestimator-api, out of the proxy's view, so
+  /// gating per-page instead of per-upload would need a change over there
+  /// too. Decided against that; see estimator-paywall-plan.md §8.
+  freeTrialUploadsUsed Int @default(0)
+
+  /// Null until the company has ever started a Checkout session. Stripe's
+  /// own bookkeeping, mirrored here so entitlement checks (is this company
+  /// paid?) never need a live Stripe API call on the request path.
+  stripeCustomerId         String?   @unique
+  stripeSubscriptionId     String?   @unique
+  /// Mirrors Stripe's own subscription status strings (active, past_due,
+  /// canceled, ...) rather than a narrower enum, so a status Stripe adds
+  /// later doesn't need a migration to represent.
+  stripeSubscriptionStatus String?
+  /// "month" | "six_month" | "year" — which of the 3 Prices they're on.
+  stripeBillingInterval    String?
+  currentPeriodEnd         DateTime?
+
+  usageEvents EstimatorUsageEvent[]
+}
+
+/// One row per billable/limitable action, e.g. a page processed or (once
+/// built) a chatbot conversation started. Deliberately generic — "how many
+/// of kind X has company/user Y done, in window Z" is the same question for
+/// today's lifetime page-trial limit and the future monthly chat limit,
+/// just a different filter, so one table covers both instead of each limit
+/// growing its own bespoke counter. See estimator-paywall-plan.md §4.
+model EstimatorUsageEvent {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Not a relation to EstimatorUser on purpose: this log should outlive a
+  /// user being removed from the company (their historical usage still
+  /// counts against what the company was billed for), so it's a plain id,
+  /// not a FK that would need an onDelete decision.
+  userId    String
+  /// PAGE_PROCESSED today; CHAT_CONVERSATION reserved for when the chatbot
+  /// ships (see the paywall plan, Phase 6 — not built yet).
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@index([companyId, kind, createdAt])
+  @@index([userId, kind, createdAt])
 }
 
 enum EstimatorUserRole {

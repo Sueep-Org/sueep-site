@@ -528,6 +528,22 @@
     line-height: 1.3;
 }
 
+/* Free-company state of the Detect Walls button — set client-side in
+   simple-app.js after checking /api/estimator/billing/status. This is a
+   hint, not the gate (the proxy's 402 on /figures is, plus the click
+   handler showing the paywall modal instead of running detection), worst
+   case here is a stale/wrong visual, never a bypass. Dims the icon and
+   swaps the badge to the same amber "locked" color used in the paywall
+   modal, rather than the neutral beta-badge amber above, so it reads as
+   "you can't" rather than "this is experimental." */
+.beta-locked {
+    opacity: .6;
+}
+.beta-locked .beta-badge {
+    color: #d97706;
+    background: #fffbeb;
+}
+
 /* LIBRARY SIDEBAR (see refreshDrawer/renderDrawerSkeleton in
    simple-app.js) */
 

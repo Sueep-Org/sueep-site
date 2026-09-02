@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEstimatorUserFromSession } from "@/lib/estimatorAuthServer";
 import { findCompanyByInviteCode } from "@/lib/estimatorCompany";
+import { effectiveSeatLimit } from "@/lib/estimatorBilling";
 
 // Joins the current user to a company by invite code, as a MEMBER (this
 // endpoint never grants OWNER, that only happens at creation). Only valid
@@ -22,6 +23,18 @@ export async function POST(request: Request) {
 
   const company = await findCompanyByInviteCode(body.inviteCode);
   if (!company) return NextResponse.json({ error: "That invite code doesn't match a company" }, { status: 404 });
+
+  const seatLimit = effectiveSeatLimit(company);
+  const memberCount = await prisma.estimatorUser.count({ where: { companyId: company.id } });
+  if (memberCount >= seatLimit) {
+    return NextResponse.json(
+      {
+        error: `This company is at its ${seatLimit}-seat limit. Ask the owner to remove someone or upgrade to Pro for more seats.`,
+        code: "SEAT_LIMIT_REACHED",
+      },
+      { status: 403 },
+    );
+  }
 
   await prisma.estimatorUser.update({
     where: { id: user.id },

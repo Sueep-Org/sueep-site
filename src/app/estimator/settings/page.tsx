@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEstimatorAuth } from "@/lib/estimatorAuthContext";
 
 type SettingsResponse = {
@@ -395,16 +396,185 @@ function CompanySection() {
   );
 }
 
-type SettingsTab = "profile" | "company";
+type BillingStatus = {
+  planTier: "FREE" | "PRO";
+  isPaid: boolean;
+  isInternal: boolean;
+  isOwner: boolean;
+  seats: { used: number; limit: number };
+  freeTrial: { used: number; limit: number };
+  billing: { interval: "month" | "six_month" | "year" | null; status: string | null; currentPeriodEnd: string | null };
+};
+
+const INTERVAL_LABEL: Record<string, string> = { month: "monthly", six_month: "every 6 months", year: "yearly" };
+
+// Plan pill + seat meter + free-trial state, plus the one action that
+// matters (Upgrade or Manage billing). Deliberately doesn't rebuild the
+// Free-vs-Pro comparison here — that lives once, on /estimator/upgrade —
+// this just links out to it, same as CompanySection links nowhere and
+// just shows state, keeping each tab a single reason to change.
+function BillingSection() {
+  const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/estimator/billing/status");
+        if (!res.ok) throw new Error(`Failed to load billing status (${res.status})`);
+        setStatus(await res.json());
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load billing status");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function handleManageBilling() {
+    setOpening(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/estimator/billing/portal", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Failed to open billing portal (${res.status})`);
+      window.location.href = data.url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to open billing portal");
+      setOpening(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <div className="p-7">
+          <EstimatorLoadingBar text="Loading billing…" />
+        </div>
+      </Card>
+    );
+  }
+  if (!status) {
+    return (
+      <Card>
+        <div className="p-7 text-sm text-red-600">{error || "Failed to load billing status"}</div>
+      </Card>
+    );
+  }
+
+  // Internal (Piramid's own Sueep account) has no numeric seat cap at all
+  // (effectiveSeatLimit returns Infinity server-side) — the meter reads
+  // "unlimited" instead of a fraction, since "4 of Infinity" isn't
+  // something to show anyone.
+  const seatPct = status.isInternal
+    ? 100
+    : Math.min(100, Math.round((status.seats.used / status.seats.limit) * 100));
+
+  return (
+    <Card>
+      <section className="p-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <span
+              className={
+                status.isPaid
+                  ? "inline-flex items-center gap-1.5 rounded-full border border-green-100 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700"
+                  : "inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500"
+              }
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${status.isPaid ? "bg-green-500" : "bg-slate-400"}`} />
+              {status.isInternal ? "Internal account" : status.isPaid ? "Pro plan" : "Free plan"}
+            </span>
+            <p className="mt-2 text-sm text-slate-700">
+              {status.isInternal
+                ? "Piramid's own account, full access, no billing."
+                : status.isPaid
+                  ? `Billed ${status.billing.interval ? INTERVAL_LABEL[status.billing.interval] : ""}`
+                  : `${status.freeTrial.used} of ${status.freeTrial.limit} free upload${status.freeTrial.limit === 1 ? "" : "s"} used`}
+            </p>
+          </div>
+
+          {/* Internal accounts get no button at all: there's no real Stripe
+              subscription behind them for "Manage billing" to open, and
+              they already have everything "Upgrade to Pro" would grant. */}
+          {status.isOwner && !status.isInternal ? (
+            status.isPaid ? (
+              <button
+                type="button"
+                onClick={handleManageBilling}
+                disabled={opening}
+                className="flex-shrink-0 rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {opening ? "Opening…" : "Manage billing"}
+              </button>
+            ) : (
+              <Link
+                href="/estimator/upgrade"
+                className="flex-shrink-0 rounded-lg bg-green-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700"
+              >
+                Upgrade to Pro
+              </Link>
+            )
+          ) : null}
+        </div>
+
+        <div className="mt-5">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>Seats used</span>
+            <span className="font-medium text-slate-700">
+              {status.isInternal ? `${status.seats.used}, unlimited` : `${status.seats.used} of ${status.seats.limit}`}
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+            <div className="h-full rounded-full bg-green-500" style={{ width: `${seatPct}%` }} />
+          </div>
+        </div>
+
+        {status.isPaid && status.billing.currentPeriodEnd ? (
+          <p className="mt-4 text-xs text-slate-400">
+            Renews {new Date(status.billing.currentPeriodEnd).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        ) : !status.isOwner && !status.isInternal ? (
+          <p className="mt-4 text-xs text-slate-400">Only your company&apos;s owner can manage billing.</p>
+        ) : null}
+
+        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      </section>
+    </Card>
+  );
+}
+
+type SettingsTab = "profile" | "company" | "billing";
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: "profile", label: "Profile & Defaults" },
   { key: "company", label: "Company" },
+  { key: "billing", label: "Billing" },
 ];
 
+// useSearchParams() (for the ?tab=billing deep link from Stripe's
+// return_url) requires a Suspense boundary in a static-prerendered build,
+// even though nothing here actually needs to render before it resolves —
+// dev mode doesn't enforce this, `next build` does. Wrapping is cheaper
+// than restructuring the whole page around it.
 export default function EstimatorSettingsPage() {
+  return (
+    <Suspense>
+      <EstimatorSettingsPageInner />
+    </Suspense>
+  );
+}
+
+function EstimatorSettingsPageInner() {
   const { user, loading: authLoading } = useEstimatorAuth();
-  const [tab, setTab] = useState<SettingsTab>("profile");
+  const searchParams = useSearchParams();
+  // Deep-linked from the Stripe Checkout/Portal return_url
+  // (/estimator/settings?tab=billing) as well as the tab bar itself.
+  const initialTab = searchParams.get("tab") === "billing" ? "billing" : "profile";
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -596,8 +766,10 @@ export default function EstimatorSettingsPage() {
               </Card>
             </form>
           </>
-        ) : (
+        ) : tab === "company" ? (
           <CompanySection />
+        ) : (
+          <BillingSection />
         )}
       </div>
     </main>

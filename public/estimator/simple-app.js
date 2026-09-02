@@ -6,6 +6,8 @@ import { listFiles, downloadSas, humanSize, humanDate } from './lib/library.js';
 import { toast } from './lib/toast.js';
 import { textPrompt } from './lib/textPrompt.js';
 import { confirmDialog } from './lib/confirmDialog.js';
+import { handlePaywallResponse, showPaywallModal } from './lib/paywallModal.js';
+import { isProCompany } from './lib/billingStatus.js';
 
 import {
   saveFromProcessing,
@@ -441,6 +443,20 @@ async function initApp(){
   // with plain JS for the same reason, so it doesn't depend on editing
   // that React page.
   let detectWallsMenuBtn = $('detectWallsMenuBtn') || createDetectWallsMenu();
+  // Visual lock for free companies — a hint before they click, not the
+  // gate itself (that's the click handler below, and the proxy's 402
+  // underneath that). Async because the plan check is a fetch; the button
+  // starts in its normal unlocked-looking state and flips to locked once
+  // this resolves, rather than blocking render on it.
+  if (detectWallsMenuBtn) {
+    isProCompany().then((isPro) => {
+      if (isPro || !detectWallsMenuBtn.isConnected) return;
+      detectWallsMenuBtn.classList.add('beta-locked');
+      detectWallsMenuBtn.title = 'Beta features (wall detection, extracted measurements) are a Pro feature — upgrade to unlock.';
+      const badge = detectWallsMenuBtn.querySelector('.beta-badge');
+      if (badge) badge.textContent = 'Pro';
+    });
+  }
   // Small "Vector: N walls" / "Pixel guess: N walls" caption inside the
   // dropdown panel so it's visible at a glance which method actually
   // produced what's on screen for the current page.
@@ -2694,6 +2710,18 @@ async function initApp(){
       try {
         const res = await fetch(`${API_BASE}/api/projects/${projectId}/figures`, { cache: 'no-store' });
         console.log('[figures] attempt', attempt + 1, 'status=', res.status);
+        // Beta features are locked outright for free companies (not just
+        // capped), so this is a hard block, not a "not ready yet" — no
+        // point burning the retry loop's 30 attempts / ~45s on something
+        // that will never turn ready. No paywall modal here on purpose:
+        // this function is called automatically in the background (project
+        // load, right after every upload, see callers above) — popping a
+        // full-screen modal on a passive fetch nobody asked for is exactly
+        // the bug this comment used to cause (a stuck-looking gray
+        // backdrop blocking pan/zoom on the canvas underneath it). The
+        // modal belongs on deliberate user actions only, like the Detect
+        // Walls button, which already gates itself before calling this.
+        if (res.status === 402) return null;
         if (!res.ok) {
           console.warn('[figures] unexpected status', res.status);
           await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -8414,6 +8442,16 @@ async function initApp(){
 
   wireDropdownMenu(detectWallsMenuBtn, $('detectWallsMenuPanel'), async (item) => {
     if (detectWallsMenuBtn.disabled) return;
+    // Wall detection has a client-only fallback path (the pixel guesser,
+    // wallWorker.js) with no backend call to gate — the vector path is
+    // covered by /figures' 402, but this one isn't, so it's checked here
+    // instead. Accepted gap: a technically savvy free user could still
+    // bypass this specific check via devtools; see
+    // estimator-paywall-plan.md §8.
+    if (!(await isProCompany())) {
+      showPaywallModal('BETA_LOCKED');
+      return;
+    }
     const forcePixel = item.dataset.detect === 'pixel';
     detectWallsMenuBtn.disabled = true;
     showGlobalLoading(forcePixel ? 'Guessing walls from image…' : 'Finding walls…');
@@ -8946,6 +8984,12 @@ async function initApp(){
         `${API_BASE}/api/projects/${projectId}/blueprint`,
         { method: 'POST', body: formData }
       );
+      // Free trial's used up — the proxy already refused this upload
+      // server-side (see src/app/api/estimator/proxy/[...path]/route.ts);
+      // this just turns that 402 into the paywall modal instead of the
+      // generic "Backend upload failed" toast the catch block below would
+      // otherwise show.
+      if (await handlePaywallResponse(res)) return;
       const data = await res.json();
 
       console.log('==============================');

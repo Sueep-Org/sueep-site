@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getEstimatorUserFromSession } from "@/lib/estimatorAuthServer";
+import {
+  FREE_TRIAL_UPLOAD_LIMIT,
+  USAGE_KIND,
+  isBlueprintUploadRequest,
+  isCompanyPaid,
+  isFiguresRequest,
+} from "@/lib/estimatorBilling";
 
 // Same-origin stand-in for aiestimator-api. The browser used to call that
 // Azure host directly, cross-origin, with no auth on the request at all
@@ -27,6 +35,35 @@ async function handleProxy(request: Request, path: string[]) {
   const user = await getEstimatorUserFromSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!user.companyId) return NextResponse.json({ error: "Not part of a company yet" }, { status: 403 });
+
+  // Paywall gate, see estimator-paywall-plan.md §8 for why this lives here
+  // (the proxy) rather than in aiestimator-api itself: it's the one place
+  // that already resolves the caller's company on every request. Only
+  // loads the Company row when the request actually hits a gated route, so
+  // the common case (everything else) stays a zero-extra-query passthrough
+  // like it always was.
+  const isBlueprintUpload = isBlueprintUploadRequest(request.method, path);
+  const isFigures = isFiguresRequest(request.method, path);
+  let trackUploadOnSuccess = false;
+
+  if (isBlueprintUpload || isFigures) {
+    const company = await prisma.company.findUnique({ where: { id: user.companyId } });
+    if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+
+    if (isBlueprintUpload && !isCompanyPaid(company) && company.freeTrialUploadsUsed >= FREE_TRIAL_UPLOAD_LIMIT) {
+      return NextResponse.json(
+        { error: "You've used your free upload. Upgrade to Pro to keep going.", code: "FREE_TRIAL_EXHAUSTED" },
+        { status: 402 },
+      );
+    }
+    if (isFigures && !isCompanyPaid(company)) {
+      return NextResponse.json(
+        { error: "Extracted measurements are a Pro feature.", code: "BETA_LOCKED" },
+        { status: 402 },
+      );
+    }
+    trackUploadOnSuccess = isBlueprintUpload && !isCompanyPaid(company);
+  }
 
   const secret = process.env.ESTIMATOR_INTERNAL_SECRET;
   if (!secret) {
@@ -68,6 +105,29 @@ async function handleProxy(request: Request, path: string[]) {
   } catch (error) {
     console.error("Estimator API proxy request failed", error);
     return NextResponse.json({ error: "Estimator API is unreachable" }, { status: 502 });
+  }
+
+  // Only counts the free trial once the upload actually succeeded, a
+  // rejected/failed upload (bad file, backend error) shouldn't burn a free
+  // company's one shot. Checking .ok reads the status only, doesn't touch
+  // the body, so this doesn't interfere with streaming it through below.
+  if (trackUploadOnSuccess && upstream.ok) {
+    try {
+      await prisma.$transaction([
+        prisma.company.update({
+          where: { id: user.companyId },
+          data: { freeTrialUploadsUsed: { increment: 1 } },
+        }),
+        prisma.estimatorUsageEvent.create({
+          data: { companyId: user.companyId, userId: user.id, kind: USAGE_KIND.BLUEPRINT_UPLOADED },
+        }),
+      ]);
+    } catch (error) {
+      // Don't fail the response over this, the upload itself succeeded
+      // and the user should see that. Worst case here is a free company
+      // gets one extra upload before this is noticed, not a lost paywall.
+      console.error("Failed to record free-trial upload usage", error);
+    }
   }
 
   const responseHeaders = new Headers();
