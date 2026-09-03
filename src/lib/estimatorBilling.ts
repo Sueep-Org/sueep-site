@@ -131,3 +131,27 @@ export function effectiveSeatLimit(company: Pick<Company, "planTier" | "seatLimi
 export function planTierFromSubscriptionStatus(status: Stripe.Subscription.Status): "FREE" | "PRO" {
   return status === "active" || status === "trialing" || status === "past_due" ? "PRO" : "FREE";
 }
+
+/** Stripe moved `current_period_end`/`current_period_start` off
+ * `Subscription` and onto each `SubscriptionItem` in a later API version
+ * (the "Basil" release). Which shape a given `Subscription` object has
+ * depends on what API version *produced* it, not on this SDK: a fresh
+ * `stripe.subscriptions.retrieve()` call uses the SDK's pinned version
+ * (still has the top-level field as of `stripe` 17.7.0), but a raw
+ * webhook payload (`event.data.object`) is shaped by whatever API
+ * version the sending webhook endpoint/CLI is configured with, which can
+ * be newer. Reads the newer per-item field to make sync work for both,
+ * regardless of which one produced this particular subscription object.
+ * Falls back to null (rather than throwing on `NaN * 1000`) if neither
+ * shape has it, so a company that IS live-Pro never gets its
+ * `currentPeriodEnd` silently corrupted to "Invalid Date". */
+export function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): Date | null {
+  const topLevel = subscription.current_period_end;
+  if (typeof topLevel === "number") return new Date(topLevel * 1000);
+
+  const itemLevel = (subscription.items.data[0] as unknown as { current_period_end?: number })
+    ?.current_period_end;
+  if (typeof itemLevel === "number") return new Date(itemLevel * 1000);
+
+  return null;
+}

@@ -234,6 +234,15 @@ model Company {
   /// "month" | "six_month" | "year" — which of the 3 Prices they're on.
   stripeBillingInterval    String?
   currentPeriodEnd         DateTime?
+  /// True once the owner has canceled through the Stripe portal. Stripe's
+  /// default portal cancellation is "cancel at period end", not
+  /// immediate: status stays "active" and access stays Pro (see
+  /// planTierFromSubscriptionStatus) right up through currentPeriodEnd,
+  /// only customer.subscription.deleted actually flips planTier to FREE.
+  /// Needed so the billing tab can say "Ends" instead of "Renews" during
+  /// that window — without this flag the two are indistinguishable from
+  /// currentPeriodEnd alone.
+  stripeCancelAtPeriodEnd  Boolean   @default(false)
 
   usageEvents EstimatorUsageEvent[]
 }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { billingIntervalFromRecurring, planTierFromSubscriptionStatus } from "@/lib/estimatorBilling";
+import {
+  billingIntervalFromRecurring,
+  planTierFromSubscriptionStatus,
+  subscriptionCurrentPeriodEnd,
+} from "@/lib/estimatorBilling";
 
 export const runtime = "nodejs";
 
@@ -108,7 +112,7 @@ async function handleEstimatorSubscriptionCanceled(subscription: Stripe.Subscrip
   // reuses the existing Stripe customer instead of minting a new one.
   await prisma.company.update({
     where: { id: company.id },
-    data: { planTier: "FREE", stripeSubscriptionStatus: "canceled", currentPeriodEnd: null },
+    data: { planTier: "FREE", stripeSubscriptionStatus: "canceled", currentPeriodEnd: null, stripeCancelAtPeriodEnd: false },
   });
   console.log(`Estimator subscription canceled, company ${company.id} downgraded to Free`);
 }
@@ -123,7 +127,12 @@ async function syncCompanyFromSubscription(companyId: string, customerId: string
       stripeSubscriptionId: subscription.id,
       stripeSubscriptionStatus: subscription.status,
       stripeBillingInterval: billingIntervalFromRecurring(price?.recurring) ?? undefined,
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
+      // Stripe portal cancellation defaults to "at period end" — status
+      // stays active and access stays Pro right up through
+      // currentPeriodEnd, this is the only signal that a cancellation is
+      // already scheduled during that window (see schema.prisma).
+      stripeCancelAtPeriodEnd: subscription.cancel_at_period_end,
     },
   });
 }

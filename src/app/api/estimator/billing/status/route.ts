@@ -42,6 +42,10 @@ export async function GET() {
       interval: company.stripeBillingInterval,
       status: company.stripeSubscriptionStatus,
       currentPeriodEnd: company.currentPeriodEnd,
+      // Portal cancellation defaults to "at period end" — still Pro,
+      // still shows a currentPeriodEnd, but it won't auto-renew. The
+      // billing tab needs this to say "Ends" instead of "Renews".
+      cancelAtPeriodEnd: company.stripeCancelAtPeriodEnd,
     },
   });
 }

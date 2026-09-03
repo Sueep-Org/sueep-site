@@ -403,7 +403,12 @@ type BillingStatus = {
   isOwner: boolean;
   seats: { used: number; limit: number };
   freeTrial: { used: number; limit: number };
-  billing: { interval: "month" | "six_month" | "year" | null; status: string | null; currentPeriodEnd: string | null };
+  billing: {
+    interval: "month" | "six_month" | "year" | null;
+    status: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+  };
 };
 
 const INTERVAL_LABEL: Record<string, string> = { month: "monthly", six_month: "every 6 months", year: "yearly" };
@@ -535,7 +540,9 @@ function BillingSection() {
 
         {status.isPaid && status.billing.currentPeriodEnd ? (
           <p className="mt-4 text-xs text-slate-400">
-            Renews {new Date(status.billing.currentPeriodEnd).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+            {status.billing.cancelAtPeriodEnd ? "Ends" : "Renews"}{" "}
+            {new Date(status.billing.currentPeriodEnd).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+            {status.billing.cancelAtPeriodEnd ? " — subscription is canceled, access continues until then" : ""}
           </p>
         ) : !status.isOwner && !status.isInternal ? (
           <p className="mt-4 text-xs text-slate-400">Only your company&apos;s owner can manage billing.</p>
