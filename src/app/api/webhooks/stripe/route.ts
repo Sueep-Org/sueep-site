@@ -7,6 +7,13 @@ export const runtime = "nodejs";
 // Stripe requires the raw body for signature verification — disable body parsing
 export const dynamic = "force-dynamic";
 
+// Used to handle both this repo's own real_estate_turnover billing and the
+// estimator's subscription billing in one endpoint. The estimator side
+// (and everything it needed -- customer.subscription.updated/deleted,
+// Company/EstimatorUser, @/lib/estimatorBilling) moved out with the rest
+// of the estimator during the Piramid split-out (see the migration plan);
+// piramid.ai has its own webhook endpoint and its own Stripe event
+// handling now. Only the real_estate_turnover branch is this repo's own.
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -33,25 +40,22 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const projectId = session.metadata?.projectId;
     const service = session.metadata?.service;
 
-    if (service !== "real_estate_turnover" || !projectId) {
-      return NextResponse.json({ ok: true });
-    }
-
-    try {
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          billingStatus: "BILLING",
-          percentInvoiced: 50,
-        },
-      });
-      console.log(`Stripe deposit confirmed — project ${projectId} billing status updated to BILLING (50%)`);
-    } catch (e) {
-      console.error(`Stripe webhook: failed to update project ${projectId}:`, e);
-      // Return 200 so Stripe doesn't retry — log the error for manual resolution
+    if (service === "real_estate_turnover") {
+      const projectId = session.metadata?.projectId;
+      if (projectId) {
+        try {
+          await prisma.project.update({
+            where: { id: projectId },
+            data: { billingStatus: "BILLING", percentInvoiced: 50 },
+          });
+          console.log(`Stripe deposit confirmed — project ${projectId} billing status updated to BILLING (50%)`);
+        } catch (e) {
+          console.error(`Stripe webhook: failed to update project ${projectId}:`, e);
+          // Return 200 so Stripe doesn't retry — log the error for manual resolution
+        }
+      }
     }
   }
 
