@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import {
-  billingIntervalFromRecurring,
-  planTierFromSubscriptionStatus,
-  subscriptionCurrentPeriodEnd,
-} from "@/lib/estimatorBilling";
 
 export const runtime = "nodejs";
 
 // Stripe requires the raw body for signature verification — disable body parsing
 export const dynamic = "force-dynamic";
 
+// Used to handle both this repo's own real_estate_turnover billing and the
+// estimator's subscription billing in one endpoint. The estimator side
+// (and everything it needed -- customer.subscription.updated/deleted,
+// Company/EstimatorUser, @/lib/estimatorBilling) moved out with the rest
+// of the estimator during the Piramid split-out (see the migration plan);
+// piramid.ai has its own webhook endpoint and its own Stripe event
+// handling now. Only the real_estate_turnover branch is this repo's own.
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -54,85 +56,8 @@ export async function POST(req: Request) {
           // Return 200 so Stripe doesn't retry — log the error for manual resolution
         }
       }
-    } else if (service === "estimator_subscription") {
-      await handleEstimatorCheckoutCompleted(session, new Stripe(secret));
     }
-  } else if (event.type === "customer.subscription.updated") {
-    await handleEstimatorSubscriptionSync(event.data.object as Stripe.Subscription);
-  } else if (event.type === "customer.subscription.deleted") {
-    await handleEstimatorSubscriptionCanceled(event.data.object as Stripe.Subscription);
   }
 
   return NextResponse.json({ ok: true });
-}
-
-// Fetches the subscription directly rather than trusting whatever the
-// checkout.session.completed payload happens to include for `subscription`
-// (often just an ID, not expanded), this way period end / status / price
-// are correct immediately, not "correct once the next event happens to
-// arrive."
-async function handleEstimatorCheckoutCompleted(session: Stripe.Checkout.Session, stripe: Stripe) {
-  const companyId = session.metadata?.companyId;
-  const subscriptionId =
-    typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
-  const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
-  if (!companyId || !subscriptionId || !customerId) {
-    console.error("estimator webhook: checkout.session.completed missing companyId/subscription/customer");
-    return;
-  }
-
-  try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    await syncCompanyFromSubscription(companyId, customerId, subscription);
-    console.log(`Estimator subscription started, company ${companyId} now on Pro`);
-  } catch (e) {
-    console.error(`estimator webhook: failed to sync company ${companyId} after checkout:`, e);
-  }
-}
-
-// customer.subscription.updated fires for plan changes, renewals, and
-// every step of Stripe's own failed-payment retry schedule, this is what
-// keeps planTier/status/currentPeriodEnd honest on an ongoing basis, not
-// just at initial signup.
-async function handleEstimatorSubscriptionSync(subscription: Stripe.Subscription) {
-  const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-  const company = await prisma.company.findUnique({ where: { stripeCustomerId: customerId } });
-  if (!company) return; // not an estimator subscription (e.g. unrelated Stripe activity on this account)
-
-  await syncCompanyFromSubscription(company.id, customerId, subscription);
-}
-
-async function handleEstimatorSubscriptionCanceled(subscription: Stripe.Subscription) {
-  const company = await prisma.company.findUnique({ where: { stripeSubscriptionId: subscription.id } });
-  if (!company) return;
-
-  // freeTrialUploadsUsed is left untouched on purpose, canceling doesn't
-  // re-grant the free upload (plan §2/§8). stripeCustomerId/subscriptionId
-  // stay on the row too, both as a history trail and so a resubscribe
-  // reuses the existing Stripe customer instead of minting a new one.
-  await prisma.company.update({
-    where: { id: company.id },
-    data: { planTier: "FREE", stripeSubscriptionStatus: "canceled", currentPeriodEnd: null, stripeCancelAtPeriodEnd: false },
-  });
-  console.log(`Estimator subscription canceled, company ${company.id} downgraded to Free`);
-}
-
-async function syncCompanyFromSubscription(companyId: string, customerId: string, subscription: Stripe.Subscription) {
-  const price = subscription.items.data[0]?.price;
-  await prisma.company.update({
-    where: { id: companyId },
-    data: {
-      planTier: planTierFromSubscriptionStatus(subscription.status),
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
-      stripeSubscriptionStatus: subscription.status,
-      stripeBillingInterval: billingIntervalFromRecurring(price?.recurring) ?? undefined,
-      currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
-      // Stripe portal cancellation defaults to "at period end" — status
-      // stays active and access stays Pro right up through
-      // currentPeriodEnd, this is the only signal that a cancellation is
-      // already scheduled during that window (see schema.prisma).
-      stripeCancelAtPeriodEnd: subscription.cancel_at_period_end,
-    },
-  });
 }

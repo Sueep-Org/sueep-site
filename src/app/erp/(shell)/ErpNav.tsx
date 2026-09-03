@@ -475,8 +475,14 @@ const teamExtraItems: NavItem[] = [
   },
 ];
 
+// Points at the standalone Piramid app now (see the migration plan's
+// Phase 9/10), not this repo's own /estimator -- that route, along with
+// everything else estimator-specific in this repo, is being removed as
+// part of that same cleanup. Was already treated as an external, new-tab
+// link before this (see isExternalEstimator below) since a teammate had
+// already split it out from the embedded ERP shell.
 const estimatorItem: NavItem = {
-  href: "/estimator",
+  href: "https://piramid.ai/estimator",
   label: "Estimator",
   roles: PM_EST,
   icon: RulerIcon,
@@ -508,7 +514,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       pathname.startsWith(item.href + "/") &&
       item.href !== "/erp/projects/new");
   const Icon = item.icon;
-  const isExternalEstimator = item.href === "/estimator";
+  const isExternalEstimator = item.href.startsWith("http");
   return (
     <Link
       href={item.href}
@@ -547,7 +553,7 @@ function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
     pathname === item.href ||
     (item.href !== "/erp" && pathname.startsWith(item.href + "/"));
   const Icon = item.icon;
-  const isExternalEstimator = item.href === "/estimator";
+  const isExternalEstimator = item.href.startsWith("http");
   return (
     <div className="group relative flex justify-center">
       <Link
