@@ -10,7 +10,6 @@ type Props = {
   contractorId: string;
   initial: {
     contractorFullName: string | null;
-    phone: string | null;
     address: string | null;
     dateOfBirth: string | null;
   };
@@ -39,7 +38,6 @@ export function ContractorContactInfoSection({ contractorId, initial }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           contractorFullName: fd.get("contractorFullName") || null,
-          phone: fd.get("phone") || null,
           address: fd.get("address") || null,
           dateOfBirth: fd.get("dateOfBirth") || null,
         }),
@@ -67,12 +65,6 @@ export function ContractorContactInfoSection({ contractorId, initial }: Props) {
               Full legal name
             </label>
             <input id="contractorFullName" name="contractorFullName" defaultValue={initial.contractorFullName ?? ""} className={input} />
-          </div>
-          <div>
-            <label className={label} htmlFor="phone">
-              Phone
-            </label>
-            <input id="phone" name="phone" defaultValue={initial.phone ?? ""} className={input} />
           </div>
           <div className="sm:col-span-2">
             <label className={label} htmlFor="address">

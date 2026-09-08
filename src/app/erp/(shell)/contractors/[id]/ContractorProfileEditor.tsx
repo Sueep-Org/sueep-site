@@ -12,6 +12,7 @@ type Props = {
   initial: {
     name: string;
     email: string | null;
+    phone: string | null;
     role: string | null;
     status: string;
   };
@@ -40,6 +41,7 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
         body: JSON.stringify({
           name: fd.get("name"),
           email: fd.get("email") || null,
+          phone: fd.get("phone") || null,
           role: fd.get("role") || null,
           status: fd.get("status"),
         }),
@@ -100,6 +102,17 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
               name="email"
               type="email"
               defaultValue={initial.email ?? ""}
+              className={input}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="phone">
+              Phone
+            </label>
+            <input
+              id="phone"
+              name="phone"
+              defaultValue={initial.phone ?? ""}
               className={input}
             />
           </div>

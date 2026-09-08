@@ -290,6 +290,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   initial={{
                     name: contractor.name,
                     email: contractor.email,
+                    phone: contractor.phone,
                     role: contractor.role,
                     status: contractor.status,
                   }}
@@ -347,7 +348,6 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   contractorId={contractor.id}
                   initial={{
                     contractorFullName: contractor.contractorFullName,
-                    phone: contractor.phone,
                     address: contractor.address,
                     dateOfBirth: contractor.dateOfBirth,
                   }}

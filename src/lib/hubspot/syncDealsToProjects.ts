@@ -166,8 +166,16 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             status,
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
-            projectDate,
-            projectEndDate,
+            // Once a project has a start date, the ERP schedule owns it —
+            // it may have since been dragged to a different day on the
+            // Schedule page or edited on the Setup tab, and re-syncing here
+            // (triggered by any HubSpot webhook on any deal, see
+            // handleHubSpotWebhookEvents) used to silently stomp that
+            // reschedule back to whatever HubSpot still had. Only ever
+            // pulled from HubSpot for the date's first value, same as
+            // `existing.projectEndDate ?? projectEndDate` below.
+            projectDate: existing.projectDate ?? projectDate,
+            projectEndDate: existing.projectEndDate ?? projectEndDate,
             ...(hubspotOwnerId !== undefined ? { hubspotOwnerId } : {}),
             ...(hubspotOwnerName !== undefined ? { hubspotOwnerName } : {}),
             ...(hubspotOwnerEmail !== undefined ? { hubspotOwnerEmail } : {}),
