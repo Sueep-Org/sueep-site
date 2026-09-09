@@ -44,6 +44,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         docusealTemplateId: true,
         signingStatus: true,
         customerEmail: true,
+        docusealSubmissionId: true,
         signedAt: true,
         signedDocumentUrl: true,
       },
@@ -219,6 +220,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     docusealTemplateId: c.docusealTemplateId,
     signingStatus: c.signingStatus,
     customerEmail: c.customerEmail,
+    docusealSubmissionId: c.docusealSubmissionId,
     signedAt: c.signedAt?.toISOString() ?? null,
     signedDocumentUrl: c.signedDocumentUrl,
   }));

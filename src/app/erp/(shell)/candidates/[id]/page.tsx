@@ -254,6 +254,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 docusealTemplateId: c.docusealTemplateId,
                 signingStatus: c.signingStatus,
                 signerEmail: c.signerEmail,
+                docusealSubmissionId: c.docusealSubmissionId,
                 signedAt: c.signedAt?.toISOString() ?? null,
                 signedDocumentUrl: c.signedDocumentUrl,
               }))}
