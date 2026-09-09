@@ -9,6 +9,7 @@ export type ContractItem = {
   docusealTemplateId: number | null;
   signingStatus: string | null;
   signerEmail: string | null;
+  docusealSubmissionId: number | null;
   signedAt: string | null;
   signedDocumentUrl: string | null;
 };
@@ -57,6 +58,16 @@ function ContractRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {contract.docusealSubmissionId && (
+            <a
+              href={`https://docuseal.com/submissions/${contract.docusealSubmissionId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-pink-600 hover:underline"
+            >
+              View in DocuSeal →
+            </a>
+          )}
           {contract.signingStatus === "SIGNED" && contract.signedDocumentUrl && (
             contract.signedDocumentUrl.startsWith("data:") ? (
               <a
@@ -154,6 +165,7 @@ export function ContractSigningSection({
           docusealTemplateId: null,
           signingStatus: "SIGNED",
           signerEmail: null,
+          docusealSubmissionId: null,
           signedAt: presignedDate || new Date().toISOString().slice(0, 10),
           signedDocumentUrl: null,
         },
@@ -191,6 +203,7 @@ export function ContractSigningSection({
           docusealTemplateId: data.templateId ?? null,
           signingStatus: "UPLOADED",
           signerEmail: null,
+          docusealSubmissionId: null,
           signedAt: null,
           signedDocumentUrl: null,
         },
