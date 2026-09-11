@@ -109,6 +109,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (cents === undefined) return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
     data.offshoreMonthlyRateCents = cents;
   }
+  if (body.isJanitorialContract !== undefined) data.isJanitorialContract = Boolean(body.isJanitorialContract);
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;

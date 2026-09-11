@@ -15,7 +15,7 @@ export function AddingEmployees() {
                 <br></br><br></br>
                 On this tab you will find the table of all employees currently in the ERP. Employees are either added manually or are imported from the candidates tab once they are onboarded (see <A href="/erp/help/sops/onboarding-new-employee">Onboarding a New Employee</A>).
                 <Img src="/help/employees/employee_1.png" alt="Employees tab" />
-                From this tab you can search employees by name or default project. You can also filter employees by compliance.
+                From this tab you can search employees by name. The filter icon also lets you narrow the table by status (Active / Inactive), compliance, background check, and pay type (Hourly / Salary / Offshore / Janitorial Contract).
                 <Callout type="info">Background check status isn&apos;t part of compliance. Compliance only counts required documents on file.</Callout>
                 We can also add new employees from this page in the top right corner.
             </Step>
@@ -23,7 +23,7 @@ export function AddingEmployees() {
             <Step n={2} title= "Adding a new employee">
                 When you click the <strong>Add employee</strong> button the following form will pop up.
                 <Img src="/help/employees/employee_2.png" alt="Employees form" />
-                Here you can fill out information about the new employee, including whether they&apos;re paid hourly or salary, and whether they&apos;re an offshore employee with a fixed monthly rate. You can edit all this information later.
+                Here you can fill out information about the new employee, including their pay type: <strong>Hourly</strong>, <strong>Salary</strong>, <strong>Offshore</strong> (a fixed monthly rate instead of hourly), or <strong>Janitorial Contract</strong> (an hourly employee paid a flat 40 hours/week at their rate, minus any vacation logged for them, regardless of hours logged on projects). You can edit all this information later.
                 <Callout type="info">Please note employees can also be added through the candidate onboarding process. See <A href="/erp/help/sops/onboarding-new-employee">Onboarding a New Employee</A> for that flow.</Callout>
                 Once you hit <strong>Save employee</strong> you will be redirected to that new employee&apos;s detail page.
             </Step>

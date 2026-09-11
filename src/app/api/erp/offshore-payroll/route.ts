@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { getErpAuth, canSeePayroll } from "@/lib/erpAuth";
 
 function firstOfMonth(iso: string): Date | null {
   const d = new Date(`${iso}-01T00:00:00Z`);
@@ -9,7 +9,7 @@ function firstOfMonth(iso: string): Date | null {
 
 export async function GET(req: Request) {
   const auth = await getErpAuth();
-  if (!auth || !canSeeFinancials(auth.role)) {
+  if (!auth || !canSeePayroll(auth.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

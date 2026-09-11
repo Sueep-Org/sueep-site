@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canEditPayInfo, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
@@ -49,7 +49,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "SALES" || auth?.role === "ESTIMATION";
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
-  const canSeeCommission = auth ? canEditPayInfo(auth.role) : false;
+  // Commission owner assignment — semantically canSeeFinancials, not
+  // canEditPayInfo (same role set today, but this is about commission
+  // visibility, not compensation fields, so it shouldn't move if the two
+  // predicates ever diverge again).
+  const canSeeCommission = auth ? canSeeFinancials(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
     prisma.project.findUnique({

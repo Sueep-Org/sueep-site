@@ -22,9 +22,18 @@ export function canSeeFinancials(role: ErpRole): boolean {
 }
 
 /** Gates pay-info fields (bank account, salary/rate, commission) for both
- * Employee and Contractor, same pattern as canViewSsn. */
+ * Employee and Contractor, same pattern as canViewSsn. Finance keeps this —
+ * they can still set/edit pay rates, they just can't see Payroll or
+ * Offshore Payroll (see canSeePayroll below). */
 export function canEditPayInfo(role: ErpRole): boolean {
   return role === "ADMIN" || role === "FINANCE" || role === "PROJECT_MANAGER" || role === "SALES";
+}
+
+/** Payroll + Offshore Payroll specifically (as opposed to canSeeFinancials,
+ * which still includes FINANCE for Commission/Reimbursements) — FINANCE is
+ * excluded here since they shouldn't see payroll or offshore payroll. */
+export function canSeePayroll(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES";
 }
 
 export function canManageUsers(role: ErpRole): boolean {

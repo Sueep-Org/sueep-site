@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, canSeePayroll } from "@/lib/erpAuth";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import { bidBonusCentsForCount, mondayOf, type BidBonusRow } from "@/lib/erp/bidBonus";
@@ -385,14 +385,23 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     paidAt: r.paidAt ? r.paidAt.toISOString() : null,
   }));
 
+  // Finance keeps this page (for Commission/Reimbursements) but loses the
+  // Payroll and Offshore Payroll tabs specifically — canSeePayroll excludes
+  // FINANCE, distinct from the canSeeFinancials guard above the page.
+  const showPayrollTabs = canSeePayroll(auth.role);
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-gray-900">Compensation</h1>
       <DetailTabs
         paramName="view"
         tabs={[
-          { label: "Payroll", content: <PayrollView /> },
-          { label: "Offshore Payroll", content: <OffshorePayrollView /> },
+          ...(showPayrollTabs
+            ? [
+                { label: "Payroll", content: <PayrollView /> },
+                { label: "Offshore Payroll", content: <OffshorePayrollView /> },
+              ]
+            : []),
           {
             label: "Commission",
             children: [

@@ -5,19 +5,26 @@ export function CompensationOverview() {
     <>
       <H2>Overview</H2>
       <P>
-        The Compensation page (<strong>ERP → Compensation</strong>) is where Admins, PMs, and
-        Finance manage everything related to pay: hourly/salary payroll, offshore fixed-rate
-        payroll, sales commission, bid bonuses, and reimbursements. It has four top-level tabs:{" "}
-        <strong>Payroll</strong>, <strong>Offshore Payroll</strong>, <strong>Commission</strong>{" "}
-        (with Sales and Bids sub-tabs), and <strong>Reimbursements</strong>.
+        The Compensation page (<strong>ERP → Compensation</strong>) is where pay is managed:
+        hourly/salary/janitorial-contract payroll, offshore fixed-rate payroll, sales commission,
+        bid bonuses, and reimbursements. It has four top-level tabs: <strong>Payroll</strong>,{" "}
+        <strong>Offshore Payroll</strong>, <strong>Commission</strong> (with Sales and Bids
+        sub-tabs), and <strong>Reimbursements</strong>.
       </P>
+      <Callout type="warning">
+        Finance can access this page, but only sees the <strong>Commission</strong> and{" "}
+        <strong>Reimbursements</strong> tabs — <strong>Payroll</strong> and{" "}
+        <strong>Offshore Payroll</strong> are hidden for that role. Finance can still view and
+        edit pay rates on an employee&apos;s own profile (Employees page); it&apos;s just the
+        payroll totals themselves that are restricted.
+      </Callout>
       <Img src="/help/compensation/compensation_1.png" alt="Compensation page tabs" />
 
       <H2>Steps</H2>
       <Steps>
         <Step n={1} title="Payroll tab">
-          Shows every hourly and salaried employee&apos;s pay for a two-week (biweekly) pay period,
-          computed automatically from logged labor. Nothing here is entered manually.
+          Shows every hourly, salaried, and janitorial-contract employee&apos;s pay for a two-week
+          (biweekly) pay period.
           <Img src="/help/compensation/compensation_2.png" alt="Payroll tab" />
           <UL>
             <LI>
@@ -25,12 +32,18 @@ export function CompensationOverview() {
               shows the current date range.
             </LI>
             <LI>
-              The <strong>All / Hourly / Salary / Contractors</strong> toggle filters which pay
-              types show, and the search box filters by employee name.
+              The <strong>All / Hourly / Salary / Janitorial Contract / Contractors</strong>{" "}
+              toggle filters which pay types show, and the search box filters by employee name.
             </LI>
             <LI>
-              Each row shows regular hours, overtime hours (highlighted if any), total hours,
-              rate, gross pay, and which projects the pay came from.
+              Hourly rows are computed automatically from logged labor, with regular and overtime
+              hours split at 40/week. <strong>Salary</strong> rows are always the employee&apos;s
+              annual salary ÷ 26, paid every period regardless of logged hours — logged hours
+              still show for reference but never change the pay amount.{" "}
+              <strong>Janitorial Contract</strong> rows are always 40 hours × the employee&apos;s
+              hourly rate, per week in the period, minus any vacation logged for them that
+              period (any hours they log on a project are for job-costing only and don&apos;t
+              affect this).
             </LI>
           </UL>
           <Callout type="info">

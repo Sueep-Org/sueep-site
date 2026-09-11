@@ -33,7 +33,11 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Contractor assignments", roles: PM_UP },
   { label: "View financials (contract value, costs)", roles: FINANCE_UP },
   { label: "Employees", roles: FINANCE_UP },
-  { label: "Payroll export", roles: FINANCE_UP },
+  // Payroll/Offshore Payroll are the one place Finance is cut out of
+  // FINANCE_UP — everything else on this page still uses FINANCE_UP.
+  { label: "Payroll", roles: PM_UP },
+  { label: "Offshore Payroll", roles: PM_UP },
+  { label: "Commission & reimbursements", roles: FINANCE_UP },
   { label: "Project billing", roles: FINANCE_UP },
   { label: "Candidates", roles: FINANCE_UP },
   { label: "Contractor verification", roles: FINANCE_UP },

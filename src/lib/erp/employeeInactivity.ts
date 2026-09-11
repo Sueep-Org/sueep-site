@@ -26,11 +26,15 @@ export type FlagInactiveEmployeesResult = {
  * employee back to Active automatically the moment they log labor again (a
  * manual Inactive is never auto-reversed).
  *
- * Salary and offshore employees are skipped entirely — they're not paid
- * per logged shift (salary) or tracked via LaborEntry at all (offshore, paid
- * a fixed monthly rate via the Offshore Payroll tab), so "no recent labor
- * log" isn't a meaningful signal for either and would misflag people who are
- * actually still working.
+ * Salary, Offshore, and Janitorial Contract employees are skipped entirely —
+ * they're not paid per logged shift: Salary and Janitorial Contract are both
+ * paid a fixed amount regardless of logged hours, and Offshore is paid a
+ * fixed monthly rate via the Offshore Payroll tab and isn't tracked via
+ * LaborEntry at all. "No recent labor log" isn't a meaningful signal for any
+ * of them and would misflag people who are actually still working. (Note:
+ * Janitorial Contract is still payType HOURLY under the hood, so it needs
+ * its own explicit exclusion here — the payType check alone doesn't catch
+ * it.)
  *
  * No notification email — the profile page's own "Auto-flagged inactive on
  * [date]" note (see EmployeeProfileEditor) and the Employees list's Activity
@@ -40,7 +44,7 @@ export async function flagInactiveEmployees(): Promise<FlagInactiveEmployeesResu
   const cutoff = monthsAgo(INACTIVITY_THRESHOLD_MONTHS);
 
   const activeEmployees = await prisma.employee.findMany({
-    where: { status: "ACTIVE", isOffshore: false, payType: { not: "SALARY" } },
+    where: { status: "ACTIVE", isOffshore: false, isJanitorialContract: false, payType: { not: "SALARY" } },
     select: { id: true, firstName: true, lastName: true },
   });
   if (activeEmployees.length === 0) {

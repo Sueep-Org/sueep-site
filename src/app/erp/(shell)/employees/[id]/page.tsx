@@ -165,7 +165,11 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     workDate: e.workDate.toISOString(),
     role: e.role,
     hours: e.hours,
-    hourlyRateCents: e.hourlyRateCents,
+    // Zeroed (not just visually hidden) when the viewer can't see pay info —
+    // canSeePay only gates the Rate/Cost columns in EmployeeLaborSection's
+    // JSX, it doesn't stop the real value from being serialized into the
+    // page's props otherwise. Same reasoning as the initial prop above.
+    hourlyRateCents: canSeePay ? e.hourlyRateCents : 0,
     taskDescription: e.taskDescription,
   }));
 
@@ -209,15 +213,23 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 dateOfBirth: employee.dateOfBirth,
                 role: employee.role,
                 payType: employee.payType,
-                hourlyPayCents: employee.hourlyPayCents,
-                annualSalaryCents: employee.annualSalaryCents,
+                // Stripped to null (not just visually hidden) when the
+                // viewer can't see pay info — canSeePay only controls
+                // whether EmployeeProfileEditor renders these fields, it
+                // doesn't stop them from being serialized into the page's
+                // props otherwise, so the real values would still ship to
+                // a SUPERVISOR/ESTIMATION/EMPLOYEE-role browser even with
+                // the fields hidden.
+                hourlyPayCents: canSeePay ? employee.hourlyPayCents : null,
+                annualSalaryCents: canSeePay ? employee.annualSalaryCents : null,
                 status: employee.status,
                 statusSource: employee.statusSource,
                 statusChangedAt: employee.statusChangedAt ? employee.statusChangedAt.toISOString() : null,
                 hireDate: employee.hireDate ? employee.hireDate.toISOString() : null,
                 notes: employee.notes,
                 isOffshore: employee.isOffshore,
-                offshoreMonthlyRateCents: employee.offshoreMonthlyRateCents,
+                offshoreMonthlyRateCents: canSeePay ? employee.offshoreMonthlyRateCents : null,
+                isJanitorialContract: employee.isJanitorialContract,
               }}
             />
           ),

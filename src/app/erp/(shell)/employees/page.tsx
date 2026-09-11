@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   evaluateEmployeeCompliance,
@@ -6,6 +7,7 @@ import {
   activityStatusLabel,
   type BackgroundCheckStatus,
 } from "@/lib/erp/employees";
+import { getErpAuth, canSeeFinancials, canEditPayInfo } from "@/lib/erpAuth";
 import { NewEmployeeForm } from "./NewEmployeeForm";
 import { EmployeesFilterBar } from "./EmployeesFilterBar";
 
@@ -34,14 +36,16 @@ function parseRequiredDocuments(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string");
 }
 
-type PayMode = "HOURLY" | "SALARY" | "OFFSHORE";
+type PayMode = "HOURLY" | "SALARY" | "OFFSHORE" | "JANITORIAL";
 
-// isOffshore is a separate boolean from payType (HOURLY/SALARY) in the
-// schema, but the ERP always presents/filters them as one combined
-// three-way choice — same derivation EmployeeProfileEditor/NewEmployeeForm
-// use for the pay-type toggle on the employee forms themselves.
-function payModeOf(e: { payType: string; isOffshore: boolean }): PayMode {
+// isOffshore/isJanitorialContract are separate booleans from payType
+// (HOURLY/SALARY) in the schema, but the ERP always presents/filters them as
+// one combined choice — same derivation EmployeeProfileEditor/NewEmployeeForm
+// use for the pay-type toggle on the employee forms themselves. Checked
+// before the payType fallback, same precedence as OFFSHORE.
+function payModeOf(e: { payType: string; isOffshore: boolean; isJanitorialContract: boolean }): PayMode {
   if (e.isOffshore) return "OFFSHORE";
+  if (e.isJanitorialContract) return "JANITORIAL";
   return e.payType === "SALARY" ? "SALARY" : "HOURLY";
 }
 
@@ -50,6 +54,7 @@ function payModeOf(e: { payType: string; isOffshore: boolean }): PayMode {
 // of a repeated pile of ternaries.
 function employeesHref(params: {
   name?: string;
+  status?: string;
   compliance?: string;
   backgroundCheck?: string;
   payType?: string;
@@ -58,6 +63,7 @@ function employeesHref(params: {
 }): string {
   const sp = new URLSearchParams();
   if (params.name) sp.set("name", params.name);
+  if (params.status) sp.set("status", params.status);
   if (params.compliance) sp.set("compliance", params.compliance);
   if (params.backgroundCheck) sp.set("backgroundCheck", params.backgroundCheck);
   if (params.payType) sp.set("payType", params.payType);
@@ -71,21 +77,43 @@ const PAY_MODE_OPTIONS: { value: PayMode; label: string }[] = [
   { value: "HOURLY", label: "Hourly" },
   { value: "SALARY", label: "Salary" },
   { value: "OFFSHORE", label: "Offshore" },
+  { value: "JANITORIAL", label: "Janitorial" },
+];
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "INACTIVE", label: "Inactive" },
 ];
 
 export default async function EmployeesPage({ searchParams }: PageProps) {
+  // This page had no auth guard at all before — reachable and fully
+  // rendered (including the Hourly pay column) for any authenticated ERP
+  // session regardless of role. canSeeFinancials matches the role set the
+  // nav already restricts the Employees link to (FINANCE_UP).
+  const auth = await getErpAuth();
+  if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
+  const canSeePay = canEditPayInfo(auth.role);
+
   const qp = await searchParams;
   const nameFilter = firstValue(qp.name).trim().toLowerCase();
+  const statusRaw = firstValue(qp.status).trim().toUpperCase();
+  const statusFilter = statusRaw === "ACTIVE" || statusRaw === "INACTIVE" ? statusRaw : "";
   const complianceFilter = firstValue(qp.compliance).trim().toUpperCase();
   const backgroundCheckFilter = firstValue(qp.backgroundCheck).trim().toUpperCase();
   const payTypeRaw = firstValue(qp.payType).trim().toUpperCase();
-  const payTypeFilter = payTypeRaw === "HOURLY" || payTypeRaw === "SALARY" || payTypeRaw === "OFFSHORE" ? payTypeRaw : "";
+  const payTypeFilter =
+    payTypeRaw === "HOURLY" || payTypeRaw === "SALARY" || payTypeRaw === "OFFSHORE" || payTypeRaw === "JANITORIAL"
+      ? payTypeRaw
+      : "";
   const sortByRaw = firstValue(qp.sortBy);
   const sortDirRaw = firstValue(qp.sortDir).toLowerCase();
   // Defaults to grouping Active before Inactive (each group alphabetical,
   // see the sort comparator below) rather than a flat alphabetical list.
+  // Sorting by hourlyPay when the viewer can't see pay is a minor side
+  // channel (row order would still leak relative pay), so it's excluded
+  // from the valid values entirely rather than just hiding the column.
   const sortBy =
-    sortByRaw === "hourlyPay" || sortByRaw === "name"
+    (sortByRaw === "hourlyPay" && canSeePay) || sortByRaw === "name"
       ? sortByRaw
       : "activityStatus";
   const sortDir = sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : "asc";
@@ -96,6 +124,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
 
   const rows = employees
     .filter((e) => (nameFilter ? `${e.firstName} ${e.lastName}`.toLowerCase().includes(nameFilter) : true))
+    .filter((e) => (statusFilter ? e.status === statusFilter : true))
     .map((e) => {
       const requiredDocs = parseRequiredDocuments(e.requiredDocuments);
       const compliance = evaluateEmployeeCompliance(e.status, requiredDocs, e.documents);
@@ -111,6 +140,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   // silently drops whatever else is currently applied.
   const currentParams = {
     name: nameFilter,
+    status: statusFilter,
     compliance: complianceFilter,
     backgroundCheck: backgroundCheckFilter,
     payType: payTypeFilter,
@@ -158,6 +188,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
             {/* Preserve every other active filter/sort when this form
                 submits on its own (e.g. pressing Enter), same reasoning as
                 the hidden fields inside EmployeesFilterBar's popover form. */}
+            <input type="hidden" name="status" value={statusFilter} />
             <input type="hidden" name="compliance" value={complianceFilter} />
             <input type="hidden" name="backgroundCheck" value={backgroundCheckFilter} />
             <input type="hidden" name="payType" value={payTypeFilter} />
@@ -167,6 +198,8 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
           <div className="flex items-center gap-2">
             <EmployeesFilterBar
               nameFilter={nameFilter}
+              statusFilter={statusFilter}
+              statusOptions={STATUS_OPTIONS}
               complianceFilter={complianceFilter}
               backgroundCheckFilter={backgroundCheckFilter}
               payTypeFilter={payTypeFilter}
@@ -190,11 +223,13 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                   </Link>
                 </th>
                 <th className="px-3 py-2 font-semibold">Role</th>
-                <th className="px-3 py-2 font-semibold">
-                  <Link href={employeesHref({ ...currentParams, sortBy: "hourlyPay", sortDir: sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
-                    Hourly pay
-                  </Link>
-                </th>
+                {canSeePay && (
+                  <th className="px-3 py-2 font-semibold">
+                    <Link href={employeesHref({ ...currentParams, sortBy: "hourlyPay", sortDir: sortBy === "hourlyPay" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
+                      Hourly pay
+                    </Link>
+                  </th>
+                )}
                 <th className="px-3 py-2 font-semibold">
                   <Link href={employeesHref({ ...currentParams, sortBy: "activityStatus", sortDir: sortBy === "activityStatus" && sortDir === "asc" ? "desc" : "asc" })} className="hover:text-gray-500">
                     Activity status
@@ -206,7 +241,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                  <td colSpan={canSeePay ? 5 : 4} className="px-3 py-8 text-center text-gray-500">
                     No employees added yet.
                   </td>
                 </tr>
@@ -219,7 +254,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
-                    <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>
+                    {canSeePay && <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>}
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${activityStatusBadgeClasses(r.status)}`}>
                         {activityStatusLabel(r.status, r.statusSource)}
