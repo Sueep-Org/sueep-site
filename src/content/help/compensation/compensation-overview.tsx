@@ -12,9 +12,9 @@ export function CompensationOverview() {
         sub-tabs), and <strong>Reimbursements</strong>.
       </P>
       <Callout type="warning">
-        Finance can access this page, but only sees the <strong>Commission</strong> and{" "}
+        Finance and Sales can access this page, but only see the <strong>Commission</strong> and{" "}
         <strong>Reimbursements</strong> tabs — <strong>Payroll</strong> and{" "}
-        <strong>Offshore Payroll</strong> are hidden for that role. Finance can still view and
+        <strong>Offshore Payroll</strong> are hidden for both roles. Finance can still view and
         edit pay rates on an employee&apos;s own profile (Employees page); it&apos;s just the
         payroll totals themselves that are restricted.
       </Callout>

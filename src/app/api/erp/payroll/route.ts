@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   // This route previously had no auth/role check at all — any authenticated
   // ERP session (any role) could fetch full payroll data, including every
   // employee's hourlyRateCents/grossPayCents. canSeePayroll excludes FINANCE
-  // specifically, matching the /erp/payroll page's tab split.
+  // and SALES specifically, matching the /erp/payroll page's tab split.
   const auth = await getErpAuth();
   if (!auth || !canSeePayroll(auth.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

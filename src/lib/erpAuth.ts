@@ -30,10 +30,11 @@ export function canEditPayInfo(role: ErpRole): boolean {
 }
 
 /** Payroll + Offshore Payroll specifically (as opposed to canSeeFinancials,
- * which still includes FINANCE for Commission/Reimbursements) — FINANCE is
- * excluded here since they shouldn't see payroll or offshore payroll. */
+ * which still includes FINANCE and SALES for Commission/Reimbursements) —
+ * FINANCE and SALES are both excluded here since neither should see payroll
+ * or offshore payroll. */
 export function canSeePayroll(role: ErpRole): boolean {
-  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES";
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
 
 export function canManageUsers(role: ErpRole): boolean {

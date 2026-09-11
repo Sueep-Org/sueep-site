@@ -385,9 +385,9 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     paidAt: r.paidAt ? r.paidAt.toISOString() : null,
   }));
 
-  // Finance keeps this page (for Commission/Reimbursements) but loses the
-  // Payroll and Offshore Payroll tabs specifically — canSeePayroll excludes
-  // FINANCE, distinct from the canSeeFinancials guard above the page.
+  // Finance and Sales keep this page (for Commission/Reimbursements) but
+  // lose the Payroll and Offshore Payroll tabs specifically — canSeePayroll
+  // excludes both, distinct from the canSeeFinancials guard above the page.
   const showPayrollTabs = canSeePayroll(auth.role);
 
   return (

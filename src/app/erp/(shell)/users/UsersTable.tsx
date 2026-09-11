@@ -21,6 +21,9 @@ const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES"];
 const FINANCE_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
 const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"];
 const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
+// Payroll + Offshore Payroll specifically — same set as canSeePayroll in
+// src/lib/erpAuth.ts, narrower than every other FINANCE_UP/PM_UP row.
+const PAYROLL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER"];
 
 const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Dashboard", roles: ALL_ROLES },
@@ -33,10 +36,10 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Contractor assignments", roles: PM_UP },
   { label: "View financials (contract value, costs)", roles: FINANCE_UP },
   { label: "Employees", roles: FINANCE_UP },
-  // Payroll/Offshore Payroll are the one place Finance is cut out of
-  // FINANCE_UP — everything else on this page still uses FINANCE_UP.
-  { label: "Payroll", roles: PM_UP },
-  { label: "Offshore Payroll", roles: PM_UP },
+  // Payroll/Offshore Payroll are the one place Finance AND Sales are both
+  // cut out — everything else on this page still uses FINANCE_UP/PM_UP.
+  { label: "Payroll", roles: PAYROLL_ROLES },
+  { label: "Offshore Payroll", roles: PAYROLL_ROLES },
   { label: "Commission & reimbursements", roles: FINANCE_UP },
   { label: "Project billing", roles: FINANCE_UP },
   { label: "Candidates", roles: FINANCE_UP },
