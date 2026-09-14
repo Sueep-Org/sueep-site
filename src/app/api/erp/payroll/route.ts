@@ -73,7 +73,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  const [entries, changeOrderEntries, contractorAssignments] = await Promise.all([
+  const [entries, changeOrderEntries, contractorAssignments, coContractorAssignments] = await Promise.all([
     prisma.laborEntry.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
       include: {
@@ -111,6 +111,27 @@ export async function GET(req: Request) {
       include: {
         contractor: { select: { id: true, name: true } },
         project: { select: { jobTitle: true } },
+      },
+    }),
+    // A contractor's work lives in two tables, same split as Employee's
+    // LaborEntry vs ProjectChangeOrderLaborer (see contractors/[id]/page.tsx
+    // for the same split): ContractorAssignment for project/building-level
+    // work, ChangeOrderContractorAssignment for CO work. Payroll previously
+    // only queried the former, so any contractor cost billed through a
+    // change order never made it into a payroll run at all.
+    prisma.changeOrderContractorAssignment.findMany({
+      where: {
+        costCents: { not: null },
+        OR: [
+          { startDate: { gte: periodStart, lte: periodEnd } },
+          { endDate: { gte: periodStart, lte: periodEnd } },
+          { AND: [{ startDate: { lte: periodStart } }, { endDate: { gte: periodEnd } }] },
+          { AND: [{ startDate: null }, { endDate: null }, { assignedDate: { gte: periodStart, lte: periodEnd } }] },
+        ],
+      },
+      include: {
+        contractor: { select: { id: true, name: true } },
+        changeOrder: { select: { project: { select: { jobTitle: true } } } },
       },
     }),
   ]);
@@ -344,6 +365,16 @@ export async function GET(req: Request) {
     const c = contractorMap.get(key)!;
     c.costCents += a.costCents ?? 0;
     if (a.project?.jobTitle) c.projects.add(a.project.jobTitle);
+  }
+
+  for (const a of coContractorAssignments) {
+    const key = a.contractorId;
+    if (!contractorMap.has(key)) {
+      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set() });
+    }
+    const c = contractorMap.get(key)!;
+    c.costCents += a.costCents ?? 0;
+    if (a.changeOrder.project?.jobTitle) c.projects.add(a.changeOrder.project.jobTitle);
   }
 
   const contractorRows = Array.from(contractorMap.values()).map((c) => ({
