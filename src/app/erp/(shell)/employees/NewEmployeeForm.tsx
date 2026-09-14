@@ -24,9 +24,11 @@ export function NewEmployeeForm() {
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [open]);
-  // Offshore is presented as a 3rd Pay Type option (matching the employee
-  // detail page), but stays the separate isOffshore flag underneath.
-  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">("HOURLY");
+  // Offshore/Janitorial Contract are presented as extra Pay Type options
+  // (matching the employee detail page), but stay the separate isOffshore/
+  // isJanitorialContract flags underneath — Janitorial Contract is still
+  // payType HOURLY, just flagged for the fixed-40-hrs/week payroll calc.
+  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE" | "JANITORIAL">("HOURLY");
 
   const pendingPayload = useRef<Record<string, unknown> | null>(null);
 
@@ -76,9 +78,10 @@ export function NewEmployeeForm() {
       notes: fd.get("notes") || undefined,
       isOffshore: payMode === "OFFSHORE",
       offshoreMonthlyRate: payMode === "OFFSHORE" ? (fd.get("offshoreMonthlyRate") || undefined) : undefined,
+      isJanitorialContract: payMode === "JANITORIAL",
     };
     if (payMode !== "OFFSHORE") {
-      payload.payType = payMode;
+      payload.payType = payMode === "JANITORIAL" ? "HOURLY" : payMode;
       payload.hourlyPay = fd.get("hourlyPay") || undefined;
       payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || undefined) : undefined;
     }
@@ -146,8 +149,15 @@ export function NewEmployeeForm() {
                 >
                   Offshore
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPayMode("JANITORIAL")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "JANITORIAL" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Janitorial
+                </button>
               </div>
-              {payMode === "HOURLY" ? (
+              {payMode === "HOURLY" || payMode === "JANITORIAL" ? (
                 <input name="hourlyPay" type="number" min="0" step="0.01" placeholder="Hourly pay (e.g. 18.75)" className={inputCls} />
               ) : payMode === "SALARY" ? (
                 <input name="annualSalary" type="number" min="0" step="0.01" placeholder="Annual salary (e.g. 50000)" className={inputCls} />

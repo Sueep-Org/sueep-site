@@ -30,6 +30,7 @@ type Props = {
     notes: string | null;
     isOffshore: boolean;
     offshoreMonthlyRateCents: number | null;
+    isJanitorialContract: boolean;
   };
 };
 
@@ -41,13 +42,20 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
-  // UI-only grouping: Offshore is shown as a third Pay Type option, but under
-  // the hood it's still the separate isOffshore flag. payType/hourlyPay/
-  // annualSalary are left completely untouched (omitted from the PATCH
-  // payload) whenever Offshore is selected, so switching into/out of it
-  // never overwrites whatever those fields already held.
-  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE">(
-    initial.isOffshore ? "OFFSHORE" : initial.payType === "SALARY" ? "SALARY" : "HOURLY"
+  // UI-only grouping: Offshore/Janitorial Contract are shown as extra Pay
+  // Type options, but under the hood they're the separate isOffshore/
+  // isJanitorialContract flags. payType/hourlyPay/annualSalary are left
+  // completely untouched (omitted from the PATCH payload) whenever Offshore
+  // is selected, so switching into/out of it never overwrites whatever
+  // those fields already held. Janitorial Contract stays payType HOURLY.
+  const [payMode, setPayMode] = useState<"HOURLY" | "SALARY" | "OFFSHORE" | "JANITORIAL">(
+    initial.isOffshore
+      ? "OFFSHORE"
+      : initial.isJanitorialContract
+        ? "JANITORIAL"
+        : initial.payType === "SALARY"
+          ? "SALARY"
+          : "HOURLY"
   );
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -70,13 +78,14 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
       notes: fd.get("notes") || null,
       isOffshore: payMode === "OFFSHORE",
       offshoreMonthlyRate: payMode === "OFFSHORE" ? (fd.get("offshoreMonthlyRate") || null) : null,
+      isJanitorialContract: payMode === "JANITORIAL",
     };
-    // payType/hourlyPay/annualSalary are only sent for Hourly/Salary. For
-    // Offshore they're left out of the payload entirely so the PATCH
-    // endpoint (which skips any field not present in the body) leaves
-    // whatever those already held untouched.
+    // payType/hourlyPay/annualSalary are only sent for Hourly/Salary/
+    // Janitorial. For Offshore they're left out of the payload entirely so
+    // the PATCH endpoint (which skips any field not present in the body)
+    // leaves whatever those already held untouched.
     if (payMode !== "OFFSHORE") {
-      payload.payType = payMode;
+      payload.payType = payMode === "JANITORIAL" ? "HOURLY" : payMode;
       payload.hourlyPay = fd.get("hourlyPay") || null;
       payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || null) : null;
     }
@@ -196,12 +205,19 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
                 >
                   Offshore
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPayMode("JANITORIAL")}
+                  className={`flex-1 py-2 text-center font-medium transition-colors ${payMode === "JANITORIAL" ? "bg-pink-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Janitorial
+                </button>
               </div>
             </div>
           )}
           {canSeePay && (
             <div>
-              {payMode === "HOURLY" ? (
+              {payMode === "HOURLY" || payMode === "JANITORIAL" ? (
                 <>
                   <label className={label} htmlFor="hourlyPay">Hourly pay</label>
                   <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 18.75" />
@@ -228,6 +244,11 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
           {canSeePay && payMode === "OFFSHORE" && (
             <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
               Paid a fixed amount every month via the Offshore Payroll tab, not tied to logged hours.
+            </p>
+          )}
+          {canSeePay && payMode === "JANITORIAL" && (
+            <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
+              Paid a flat 40 hrs/week at the hourly rate above, minus any vacation logged for them, regardless of hours logged on projects.
             </p>
           )}
           <div>

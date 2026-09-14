@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { OptionCombobox } from "@/app/erp/components/OptionCombobox";
 
 type PayModeOption = { value: string; label: string; href: string };
+type StatusOption = { value: string; label: string };
 
 type Props = {
   nameFilter: string;
+  statusFilter: string;
+  statusOptions: StatusOption[];
   complianceFilter: string;
   backgroundCheckFilter: string;
   payTypeFilter: string;
@@ -20,6 +24,8 @@ const labelCls = "block text-[11px] font-semibold uppercase tracking-wide text-g
 
 export function EmployeesFilterBar({
   nameFilter,
+  statusFilter,
+  statusOptions,
   complianceFilter,
   backgroundCheckFilter,
   payTypeFilter,
@@ -28,8 +34,17 @@ export function EmployeesFilterBar({
   sortDir,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState(statusFilter);
   const ref = useRef<HTMLDivElement>(null);
-  const filtersActive = Boolean(nameFilter || complianceFilter || backgroundCheckFilter || payTypeFilter);
+  const filtersActive = Boolean(nameFilter || statusFilter || complianceFilter || backgroundCheckFilter || payTypeFilter);
+
+  // The popover's own form submits on Apply, but OptionCombobox isn't a
+  // native <input>/<select> with a `name` the form can serialize on its
+  // own — so its current pick is tracked here and sent as a hidden field,
+  // same idea as the other filters' hidden fields below.
+  useEffect(() => {
+    setPendingStatus(statusFilter);
+  }, [statusFilter, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,14 +79,28 @@ export function EmployeesFilterBar({
                 the header) — preserved here as a hidden field so clicking
                 Apply doesn't silently clear whatever name search is active. */}
             <input type="hidden" name="name" value={nameFilter} />
+            <input type="hidden" name="status" value={pendingStatus} />
+            <div>
+              <label className={labelCls}>Status</label>
+              <OptionCombobox
+                options={statusOptions}
+                value={pendingStatus}
+                onChange={setPendingStatus}
+                allLabel="All"
+                placeholder="Active, Inactive…"
+              />
+            </div>
             <div>
               <label className={labelCls} htmlFor="complianceFilter">Compliance</label>
+              {/* "Inactive" used to live here as a workaround (compliance is
+                  forced to INACTIVE for any non-active employee) — now that
+                  Status above is a real filter on its own, this only covers
+                  genuine compliance states. */}
               <select id="complianceFilter" name="compliance" defaultValue={complianceFilter} className={inputCls}>
                 <option value="">All</option>
                 <option value="COMPLIANT">Compliant</option>
                 <option value="NON_COMPLIANT">Non-compliant</option>
                 <option value="NOT_CONFIGURED">Not configured</option>
-                <option value="INACTIVE">Inactive</option>
               </select>
             </div>
             <div>

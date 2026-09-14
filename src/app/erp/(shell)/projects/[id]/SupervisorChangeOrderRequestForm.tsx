@@ -38,16 +38,22 @@ const STATUS_COLORS: Record<SupervisorChangeOrderRow["status"], string> = {
 };
 
 /** Finds the standing "notify on a new CO" recipients (Sergio, Nick, David
- * Rodriguez), same matching rule as the PM-facing change order form's
- * default selection, so supervisors always reach the same people without
- * being handed a full employee picker (they don't need one, and it'd be one
- * more place to accidentally expose the employee list/financials). */
+ * Rodriguez, Jennifer Cortes-Loya), same matching rule as the PM-facing
+ * change order form's default selection, so supervisors always reach the
+ * same people without being handed a full employee picker (they don't need
+ * one, and it'd be one more place to accidentally expose the employee
+ * list/financials). */
 function resolveDefaultNotifyIds(employees: EmployeeNotifyOption[]): string[] {
   const ids: string[] = [];
   for (const e of employees) {
     if (!e.email) continue;
     const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-    if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio" || e.firstName.toLowerCase() === "nick") {
+    if (
+      name === "david rodriguez" ||
+      name === "jennifer cortes-loya" ||
+      e.firstName.toLowerCase() === "sergio" ||
+      e.firstName.toLowerCase() === "nick"
+    ) {
       ids.push(e.id);
     }
   }

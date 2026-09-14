@@ -20,6 +20,26 @@ export function timeOffEntryDays(entry: { startDate: Date; endDate: Date; type: 
   return entry.type === "HALF_DAY" ? days * 0.5 : days;
 }
 
+/** Hours-per-day convention for converting a day-based time-off entry into
+ * hours, used by Janitorial Contract payroll (their fixed 40 hrs/week is
+ * reduced by logged vacation, but EmployeeTimeOff is stored as calendar
+ * days, not hours). */
+const HOURS_PER_DAY = 8;
+
+/** Same entry as timeOffEntryDays(), converted to hours (day × 8, HALF_DAY ×
+ * 4), optionally clipped to [clipStart, clipEnd] first so an entry that only
+ * partially overlaps a pay period only counts the overlapping portion. */
+export function timeOffEntryHours(
+  entry: { startDate: Date; endDate: Date; type: string },
+  range?: { clipStart?: Date; clipEnd?: Date }
+): number {
+  const start = range?.clipStart && range.clipStart > entry.startDate ? range.clipStart : entry.startDate;
+  const end = range?.clipEnd && range.clipEnd < entry.endDate ? range.clipEnd : entry.endDate;
+  if (end < start) return 0;
+  const days = timeOffEntryDays({ startDate: start, endDate: end, type: entry.type });
+  return days * HOURS_PER_DAY;
+}
+
 /** Sums an employee's non-UNPAID time-off days already on file for the
  * given calendar year (keyed by each entry's own startDate year, same
  * grouping EmployeeTimeOffSection's "this year" total already uses).

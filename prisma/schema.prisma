@@ -1294,6 +1294,12 @@ model Employee {
   /// Fixed monthly pay in cents, only used when isOffshore is true.
   offshoreMonthlyRateCents Int?
 
+  /// Still an hourly employee (payType stays HOURLY, hourlyPayCents is their
+  /// rate) but paid a flat 40 hrs/week minus logged vacation, independent of
+  /// any LaborEntry hours they log on projects — same independent-flag
+  /// pattern as isOffshore rather than a payType value.
+  isJanitorialContract Boolean @default(false)
+
   defaultProject  String?
   /// ACTIVE | INACTIVE
   status          String    @default("ACTIVE")

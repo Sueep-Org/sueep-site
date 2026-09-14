@@ -16,7 +16,7 @@ type PayrollRow = {
   projects: string;
 };
 
-type PayFilter = "all" | "hourly" | "salary" | "contractor";
+type PayFilter = "all" | "hourly" | "salary" | "janitorial" | "contractor";
 
 type PayrollResponse = {
   periodStart: string;
@@ -260,8 +260,9 @@ export function PayrollView() {
   }
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
-    if (payFilter === "hourly") return !r.isContractor && r.payType !== "SALARY";
+    if (payFilter === "hourly") return !r.isContractor && r.payType !== "SALARY" && r.payType !== "JANITORIAL";
     if (payFilter === "salary") return !r.isContractor && r.payType === "SALARY";
+    if (payFilter === "janitorial") return !r.isContractor && r.payType === "JANITORIAL";
     if (payFilter === "contractor") return r.isContractor;
     return true;
   }).filter((r) => {
@@ -272,7 +273,12 @@ export function PayrollView() {
 
   function downloadCsv() {
     if (!data) return;
-    const suffix = payFilter === "hourly" ? "-hourly" : payFilter === "salary" ? "-salary" : payFilter === "contractor" ? "-contractors" : "";
+    const suffix =
+      payFilter === "hourly" ? "-hourly"
+      : payFilter === "salary" ? "-salary"
+      : payFilter === "janitorial" ? "-janitorial"
+      : payFilter === "contractor" ? "-contractors"
+      : "";
     const csv = buildCsv(filteredRows, data.periodStart, data.periodEnd);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -335,7 +341,7 @@ export function PayrollView() {
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 w-56"
           />
           <div className="flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
-            {([["all", "All"], ["hourly", "Hourly"], ["salary", "Salary"], ["contractor", "Contractors"]] as [PayFilter, string][]).map(([f, label]) => (
+            {([["all", "All"], ["hourly", "Hourly"], ["salary", "Salary"], ["janitorial", "Janitorial Contract"], ["contractor", "Contractors"]] as [PayFilter, string][]).map(([f, label]) => (
               <button
                 key={f}
                 type="button"

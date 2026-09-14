@@ -111,6 +111,7 @@ export async function POST(req: Request) {
         notes: body.notes ? String(body.notes).trim() : null,
         isOffshore: Boolean(body.isOffshore),
         offshoreMonthlyRateCents: offshoreMonthlyRateCents ?? null,
+        isJanitorialContract: Boolean(body.isJanitorialContract),
       },
     });
     return NextResponse.json(employee);

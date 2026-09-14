@@ -4,12 +4,13 @@ import { getDescLine } from "@/lib/erp/descLine";
 import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 import { formatLongDate } from "@/lib/erp/schedule";
 
-// David Rodriguez, Project Manager (david@sueep.com) — stopgap recipient when
-// a rescheduled project has no day-assignment-level PM and its freeform
+// David Rodriguez and Jennifer Cortes-Loya, Project Managers
+// (david@sueep.com, jennifer@sueep.com), stopgap recipients when a
+// rescheduled project has no day-assignment-level PM and its freeform
 // Project.supervisor name doesn't resolve to a real employee. Project has no
 // reliable, always-populated "project manager" relation to fall back on
 // otherwise (supervisorUserId is the *supervisor*, not a PM).
-const FALLBACK_PM_EMAIL = "david@sueep.com";
+const FALLBACK_PM_EMAILS = ["david@sueep.com", "jennifer@sueep.com"];
 
 /**
  * Emails the project's supervisor and PM whenever a project's schedule
@@ -24,7 +25,7 @@ const FALLBACK_PM_EMAIL = "david@sueep.com";
  * projects that predate that field, a "SUEEP PM:" line in the description —
  * against an Employee record via the same findEmployeeEmailByName lookup
  * every other PM-resolution chain uses (createLaborEntry.ts), and finally
- * to FALLBACK_PM_EMAIL if that doesn't resolve either — a reschedule should
+ * to FALLBACK_PM_EMAILS if that doesn't resolve either — a reschedule should
  * always reach *someone* who can act on it.
  */
 export async function notifyProjectRescheduled(params: {
@@ -65,8 +66,8 @@ export async function notifyProjectRescheduled(params: {
   } else {
     const pmName = projectManagerName?.trim() || getDescLine(projectDescription ?? null, "SUEEP PM");
     const resolvedPmEmail = pmName ? await findEmployeeEmailByName(pmName) : null;
-    const fallbackEmail = resolvedPmEmail ?? FALLBACK_PM_EMAIL;
-    recipients.set(fallbackEmail.toLowerCase(), fallbackEmail);
+    const fallbackEmails = resolvedPmEmail ? [resolvedPmEmail] : FALLBACK_PM_EMAILS;
+    for (const email of fallbackEmails) recipients.set(email.toLowerCase(), email);
   }
 
   if (recipients.size === 0) return;

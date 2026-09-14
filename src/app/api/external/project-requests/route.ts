@@ -282,6 +282,7 @@ export async function POST(req: Request) {
   // Default Sueep PM as fallback/CC
   const sueepEmail = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
   if (!recipients.includes(sueepEmail)) recipients.push(sueepEmail);
+  if (!recipients.includes("jennifer@sueep.com")) recipients.push("jennifer@sueep.com");
 
   // Estimating always CC'd
   const estimatingEmail = "estimating@sueep.com";
