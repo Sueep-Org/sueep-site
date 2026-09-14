@@ -69,15 +69,22 @@ async function notifyPmIfMarginWorsened(projectId: string, priorHours: number, n
   // assigned via the schedule/calendar-invite flow for on-site coverage, so
   // it's only used here as a last-resort fallback.
   let recipient: string | null = null;
+  let usedDefaultFallback = false;
   const pmName = project.supervisor?.trim() || getDescLine(project.description, "SUEEP PM");
   if (pmName) recipient = await findEmployeeEmailByName(pmName);
   if (!recipient) recipient = project.supervisorUser?.email ?? null;
-  if (!recipient) recipient = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
+  if (!recipient) {
+    recipient = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
+    usedDefaultFallback = true;
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   try {
     await sendEmail({
       to: recipient,
+      // Jennifer is always cc'd alongside David when this falls all the way
+      // back to the hardcoded default (i.e. no real PM could be resolved).
+      cc: usedDefaultFallback ? ["jennifer@sueep.com"] : undefined,
       subject: `Margin alert: ${project.jobTitle}`,
       html: buildTurnoverMarginAlertEmail({
         jobTitle: project.jobTitle,

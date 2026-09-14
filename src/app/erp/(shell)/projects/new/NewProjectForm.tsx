@@ -641,7 +641,13 @@ export function NewProjectForm({
     const ids: string[] = [];
     for (const e of notifiableEmployees) {
       const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-      if (name === "david rodriguez" || e.firstName.toLowerCase() === "sergio" || e.firstName.toLowerCase() === "nick") ids.push(e.id);
+      if (
+        name === "david rodriguez" ||
+        name === "jennifer cortes-loya" ||
+        e.firstName.toLowerCase() === "sergio" ||
+        e.firstName.toLowerCase() === "nick"
+      )
+        ids.push(e.id);
     }
     return ids;
   }, [notifiableEmployees]);

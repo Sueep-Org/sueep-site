@@ -73,6 +73,7 @@ export async function notifyJanitorialTurnoverCreated(params: {
     isExternal ? (stringValue(body.pmEmail) || building.pmEmail || "") : "",
     stringValue(body.sueepPmEmail),
     "david@sueep.com",
+    "jennifer@sueep.com",
     ...employeeEmails,
   ]);
   if (recipients.length === 0) return;

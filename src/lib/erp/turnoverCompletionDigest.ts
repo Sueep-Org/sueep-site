@@ -37,19 +37,21 @@ function daysAgo(today: Date, date: Date): number {
 /** Same PM-resolution fallback chain used for the turnover margin alert:
  * the project's supervisor name (or a legacy "SUEEP PM:" description line)
  * → Employee lookup by name → the assigned ERP login's email → a fixed
- * default. Kept here rather than inlined so every completed unit in a
- * building's digest resolves its PM the same, already-battle-tested way. */
-async function resolveSueepPmEmail(project: {
+ * default pair (David, Jennifer) when nothing else resolves. Kept here
+ * rather than inlined so every completed unit in a building's digest
+ * resolves its PM the same, already-battle-tested way. Returns an array
+ * since the fallback case names two recipients rather than one. */
+async function resolveSueepPmEmails(project: {
   supervisor: string | null;
   description: string | null;
   supervisorUser: { email: string } | null;
-}): Promise<string> {
+}): Promise<string[]> {
   const pmName = project.supervisor?.trim() || getDescLine(project.description, "SUEEP PM");
   let recipient: string | null = null;
   if (pmName) recipient = await findEmployeeEmailByName(pmName);
   if (!recipient) recipient = project.supervisorUser?.email ?? null;
-  if (!recipient) recipient = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
-  return recipient;
+  if (recipient) return [recipient];
+  return [(process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim(), "jennifer@sueep.com"];
 }
 
 export type TurnoverCompletionDigestResult = {
@@ -147,7 +149,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
       // goes on cc instead (see sendEmail call below) so it's visible.
       const pmEmails = new Set<string>();
       for (const p of projects) {
-        pmEmails.add(await resolveSueepPmEmail(p));
+        for (const email of await resolveSueepPmEmails(p)) pmEmails.add(email);
       }
 
       // Any other still-open turnover job at this same building with a
