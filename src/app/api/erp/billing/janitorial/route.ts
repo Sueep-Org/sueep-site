@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 
 const JANITORIAL_SEGMENTS = [
   "JANITORIAL_TURNOVER_REQUESTS",
@@ -95,6 +96,14 @@ export async function GET(req: Request) {
           approvedPriceCents: true,
           billingStatus: true,
           building: { select: { id: true, name: true } },
+          fullClean: true,
+          fullPaint: true,
+          touchUpPaint: true,
+          carpetCleaning: true,
+          ceilingPaint: true,
+          materialsAdditional: true,
+          compounding: true,
+          otherWork: true,
         },
       },
     },
@@ -111,6 +120,7 @@ export async function GET(req: Request) {
     completedAt: string;
     contractCents: number;
     billingStatus: string;
+    scope: string;
   };
 
   type BuildingRow = {
@@ -132,6 +142,9 @@ export async function GET(req: Request) {
     const tr = project.turnoverRequest;
     const contractCents =
       tr?.approvedPriceCents ?? tr?.priceCents ?? project.contractValueCents ?? 0;
+    const scope = tr
+      ? contractedTurnoverScope(tr).map(turnoverScopeLabel).join(", ")
+      : "";
 
     buildingMap.get(buildingId)!.units.push({
       projectId: project.id,
@@ -143,6 +156,7 @@ export async function GET(req: Request) {
       completedAt: (project.turnoverCompletedAt ?? project.projectEndDate ?? project.updatedAt).toISOString(),
       contractCents,
       billingStatus: tr?.billingStatus ?? project.billingStatus ?? "NOT_BILLED",
+      scope,
     });
   }
 
