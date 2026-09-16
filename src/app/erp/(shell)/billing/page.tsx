@@ -319,6 +319,7 @@ type JanUnitRow = {
   completedAt: string;
   contractCents: number;
   billingStatus: string;
+  scope: string;
 };
 
 type JanBuildingRow = {
@@ -335,7 +336,7 @@ type JanResponse = {
 
 function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Building", "Unit", "Beds/Baths", "Completed", "Contract Amount", "Billing Status"].map(escape).join(",");
+  const headers = ["Building", "Unit", "Beds/Baths", "Scope", "Completed", "Contract Amount", "Billing Status"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const building of rows) {
     for (const unit of building.units) {
@@ -344,6 +345,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
         escape(building.buildingName),
         escape(formatUnitDisplay(unit.unitNumber) ?? unit.jobTitle),
         escape(bedbath),
+        escape(unit.scope),
         escape(unit.completedAt.slice(0, 10)),
         escape((unit.contractCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus),
@@ -351,7 +353,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
     }
   }
   const total = rows.flatMap((r) => r.units).reduce((s, u) => s + u.contractCents, 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
