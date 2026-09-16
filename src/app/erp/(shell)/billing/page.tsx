@@ -309,6 +309,15 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
 
 // ── Janitorial ────────────────────────────────────────────────────────────────
 
+type JanCORow = {
+  id: string;
+  projectId: string;
+  title: string;
+  contractValueCents: number;
+  billingStatus: string;
+  completedAt: string;
+};
+
 type JanUnitRow = {
   projectId: string;
   turnoverRequestId: string | null;
@@ -320,6 +329,7 @@ type JanUnitRow = {
   contractCents: number;
   billingStatus: string;
   scope: string;
+  changeOrders: JanCORow[];
 };
 
 type JanBuildingRow = {
@@ -341,19 +351,32 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
   for (const building of rows) {
     for (const unit of building.units) {
       const bedbath = [unit.bedrooms != null ? `${unit.bedrooms}bd` : null, unit.bathrooms != null ? `${unit.bathrooms}ba` : null].filter(Boolean).join("/") || "—";
+      const unitLabel = formatUnitDisplay(unit.unitNumber) ?? unit.jobTitle;
       dataRows.push([
         escape(building.buildingName),
-        escape(formatUnitDisplay(unit.unitNumber) ?? unit.jobTitle),
+        escape(unitLabel),
         escape(bedbath),
         escape(unit.scope),
         escape(unit.completedAt.slice(0, 10)),
         escape((unit.contractCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus),
       ].join(","));
+      for (const co of (unit.changeOrders ?? [])) {
+        dataRows.push([
+          escape(building.buildingName),
+          escape(`${unitLabel} — CO: ${co.title}`),
+          escape(bedbath),
+          escape(""),
+          escape(co.completedAt.slice(0, 10)),
+          escape((co.contractValueCents / 100).toFixed(2)),
+          escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
+        ].join(","));
+      }
     }
   }
-  const total = rows.flatMap((r) => r.units).reduce((s, u) => s + u.contractCents, 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
+  const unitTotal = rows.flatMap((r) => r.units).reduce((s, u) => s + u.contractCents, 0);
+  const coTotal = rows.flatMap((r) => r.units).flatMap((u) => u.changeOrders ?? []).reduce((s, c) => s + c.contractValueCents, 0);
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(""), escape(((unitTotal + coTotal) / 100).toFixed(2)), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -377,7 +400,39 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
   }, [start, end, search]);
 
   const allUnits = data?.rows.flatMap((r) => r.units) ?? [];
-  const totalCents = allUnits.reduce((s, u) => s + u.contractCents, 0);
+  const allCOs = allUnits.flatMap((u) => u.changeOrders ?? []);
+  const totalCents = allUnits.reduce((s, u) => s + u.contractCents, 0)
+    + allCOs.reduce((s, c) => s + c.contractValueCents, 0);
+
+  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string) {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) => ({
+          ...row,
+          units: row.units.map((u) =>
+            u.projectId !== projectId ? u : {
+              ...u,
+              changeOrders: u.changeOrders.map((co) =>
+                co.id === coId ? { ...co, billingStatus } : co,
+              ),
+            },
+          ),
+        })),
+      };
+    });
+    try {
+      await fetch(`/api/erp/projects/${projectId}/change-orders/${coId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ billingStatus }),
+      });
+    } catch {
+      fetch(billingUrl("/api/erp/billing/janitorial", start, end, search))
+        .then((r) => r.json()).then((d: JanResponse) => setData(d)).catch(() => {});
+    }
+  }
 
   async function updateBillingStatus(unit: JanUnitRow, billingStatus: string) {
     setData((prev) => {
@@ -462,47 +517,80 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
               ) : !data || data.rows.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
               ) : (
-                data.rows.map((building) =>
-                  building.units.map((unit, idx) => (
-                    <tr key={unit.projectId} className="border-t border-gray-100 hover:bg-gray-50">
+                data.rows.map((building) => {
+                  const buildingRows = building.units.flatMap((unit) => [
+                    { type: "unit" as const, unit },
+                    ...unit.changeOrders.map((co) => ({ type: "co" as const, unit, co })),
+                  ]);
+                  return buildingRows.map((row, idx) => (
+                    <tr
+                      key={row.type === "unit" ? row.unit.projectId : row.co.id}
+                      className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}
+                    >
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {idx === 0 ? building.buildingName : <span className="text-gray-300 select-none">↳</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
-                        <Link href={`/erp/projects/${unit.projectId}`} className="hover:text-pink-600 hover:underline">
-                          {formatUnitDisplay(unit.unitNumber) || unit.jobTitle}
-                        </Link>
+                        {row.type === "unit" ? (
+                          <Link href={`/erp/projects/${row.unit.projectId}`} className="hover:text-pink-600 hover:underline">
+                            {formatUnitDisplay(row.unit.unitNumber) || row.unit.jobTitle}
+                          </Link>
+                        ) : (
+                          <span className="flex items-center gap-1.5 pl-4">
+                            <span className="text-gray-300 select-none">↳</span>
+                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-600">CO</span>
+                            <Link href={`/erp/projects/${row.co.projectId}/change-orders/${row.co.id}`} className="hover:text-pink-600 hover:underline">
+                              {row.co.title}
+                            </Link>
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
-                        {[unit.bedrooms != null ? `${unit.bedrooms} bd` : null, unit.bathrooms != null ? `${unit.bathrooms} ba` : null].filter(Boolean).join(" / ") || "—"}
+                        {[row.unit.bedrooms != null ? `${row.unit.bedrooms} bd` : null, row.unit.bathrooms != null ? `${row.unit.bathrooms} ba` : null].filter(Boolean).join(" / ") || "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs tabular-nums">
-                        {new Date(unit.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
+                        {new Date(row.type === "unit" ? row.unit.completedAt : row.co.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
-                        {unit.contractCents > 0 ? fmt(unit.contractCents) : <span className="text-gray-400">—</span>}
+                        {row.type === "unit"
+                          ? (row.unit.contractCents > 0 ? fmt(row.unit.contractCents) : <span className="text-gray-400">—</span>)
+                          : fmt(row.co.contractValueCents)}
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={unit.billingStatus}
-                          onChange={(e) => updateBillingStatus(unit, e.target.value)}
-                          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(unit.billingStatus)}`}
-                        >
-                          {BILLING_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                        {row.type === "unit" ? (
+                          <select
+                            value={row.unit.billingStatus}
+                            onChange={(e) => updateBillingStatus(row.unit, e.target.value)}
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.unit.billingStatus)}`}
+                          >
+                            {BILLING_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select
+                            value={row.co.billingStatus}
+                            onChange={(e) => updateCOBillingStatus(row.co.projectId, row.co.id, e.target.value)}
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.co.billingStatus)}`}
+                          >
+                            {BILLING_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     </tr>
-                  ))
-                )
+                  ));
+                })
               )}
             </tbody>
             {data && data.rows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={4}>
-                    Total — {allUnits.length} unit{allUnits.length !== 1 ? "s" : ""} across {data.rows.length} building{data.rows.length !== 1 ? "s" : ""}
+                    Total — {allUnits.length} unit{allUnits.length !== 1 ? "s" : ""}
+                    {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
+                    {" "}across {data.rows.length} building{data.rows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
                   <td className="px-4 py-3" />
