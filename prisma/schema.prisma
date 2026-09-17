@@ -1374,6 +1374,7 @@ model Employee {
   commissionProjects           Project[]                        @relation("ProjectCommissionOwner")
   createdProjects              Project[]                        @relation("ProjectCreatedBy")
   reimbursements               Reimbursement[]
+  commissionPayouts            CommissionPayout[]
   recurringContractCommissions RecurringContract[]
   buildingCommissions          Building[]                       @relation("BuildingCommissionOwner")
   offshorePayrollPayments      OffshorePayrollPayment[]
@@ -1547,6 +1548,28 @@ model Reimbursement {
   /// Set once Finance has paid the employee back
   paidAt DateTime?
 
+  @@index([employeeId])
+  @@index([paidAt])
+}
+
+model CommissionPayout {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  amountCents Int
+  paidAt      DateTime
+
+  /// "PROJECT" | "RECURRING_PERIOD" — what generated this payout.
+  sourceType String
+  sourceId   String
+  /// Snapshotted job title / building+month, so the breakdown still reads
+  /// sensibly if the source project or period is later deleted.
+  sourceLabel String
+
+  @@unique([sourceType, sourceId])
   @@index([employeeId])
   @@index([paidAt])
 }

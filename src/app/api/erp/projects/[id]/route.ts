@@ -7,6 +7,7 @@ import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate"
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
+import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import type { ErpRole } from "@/lib/erpSession";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
@@ -340,6 +341,51 @@ export async function PATCH(req: Request, ctx: Ctx) {
         }
       } else {
         console.log(`Skipped reschedule notification for project ${id}: ${dayAssignmentCount} day assignments, ambiguous which moved`);
+      }
+    }
+
+    // A payout for payroll to pick up mirrors the commissionPaidAt toggle
+    // above: created (or refreshed) with the commissionCents the client had
+    // on screen when it flipped the switch, since that's the actual amount
+    // being paid out right now — recomputing it later could disagree if
+    // other deals for the same rep/year change in the meantime. Change
+    // orders never get their own payout: their value is already folded into
+    // the parent project's combined commissionCents (see CommissionDealRow),
+    // and they're always toggled paid in lockstep with this project by the
+    // Commission tab.
+    if (body.commissionPaid !== undefined) {
+      if (body.commissionPaid) {
+        const commissionCents = Number(body.commissionCents);
+        if (Number.isFinite(commissionCents) && commissionCents > 0) {
+          const [employees, erpUsers] = await Promise.all([
+            prisma.employee.findMany({ select: { id: true, email: true, firstName: true, lastName: true } }),
+            prisma.erpUser.findMany({ select: { email: true } }),
+          ]);
+          const erpUserEmails = new Set(erpUsers.map((u) => u.email.toLowerCase()));
+          const eligibleEmployees = employees.filter((e) => e.email && erpUserEmails.has(e.email.toLowerCase()));
+          const ownerId = resolveCommissionEmployeeId(project, eligibleEmployees);
+          if (ownerId) {
+            await prisma.commissionPayout.upsert({
+              where: { sourceType_sourceId: { sourceType: "PROJECT", sourceId: project.id } },
+              create: {
+                employeeId: ownerId,
+                amountCents: commissionCents,
+                paidAt: project.commissionPaidAt ?? new Date(),
+                sourceType: "PROJECT",
+                sourceId: project.id,
+                sourceLabel: project.jobTitle,
+              },
+              update: {
+                employeeId: ownerId,
+                amountCents: commissionCents,
+                paidAt: project.commissionPaidAt ?? new Date(),
+                sourceLabel: project.jobTitle,
+              },
+            });
+          }
+        }
+      } else {
+        await prisma.commissionPayout.deleteMany({ where: { sourceType: "PROJECT", sourceId: project.id } });
       }
     }
 
