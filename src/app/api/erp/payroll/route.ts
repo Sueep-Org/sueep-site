@@ -392,7 +392,65 @@ export async function GET(req: Request) {
     entries: [],
   }));
 
-  const rows = [...employeeRows, ...contractorRows].sort(
+  // ── Commission earned this period ───────────────────────────────────────
+  // Keyed by paidAt (when the deal/period was marked paid), not by the
+  // underlying deal's own date — a rep gets credited in whichever pay period
+  // Finance actually marked their commission paid in, matching how their
+  // base pay is period-bound too.
+  const commissionPayouts = await prisma.commissionPayout.findMany({
+    where: { paidAt: { gte: periodStart, lte: periodEnd } },
+    select: { employeeId: true, amountCents: true, sourceLabel: true },
+  });
+  const commissionByEmployee = new Map<string, { totalCents: number; breakdown: { label: string; amountCents: number }[] }>();
+  for (const payout of commissionPayouts) {
+    const entry = commissionByEmployee.get(payout.employeeId) ?? { totalCents: 0, breakdown: [] };
+    entry.totalCents += payout.amountCents;
+    entry.breakdown.push({ label: payout.sourceLabel, amountCents: payout.amountCents });
+    commissionByEmployee.set(payout.employeeId, entry);
+  }
+
+  const rowsWithCommission = [...employeeRows, ...contractorRows].map((row) => {
+    const commission = row.employeeId ? commissionByEmployee.get(row.employeeId) : undefined;
+    return {
+      ...row,
+      commissionCents: commission?.totalCents ?? 0,
+      commissionBreakdown: commission?.breakdown ?? [],
+    };
+  });
+
+  // A rep who earned commission this period but has no other payroll
+  // activity (e.g. SALES with no logged hours) still needs a row, otherwise
+  // their commission has nowhere to show up in Payroll — same reasoning as
+  // the zero-hour salary rows above.
+  const rowedEmployeeIds = new Set(rowsWithCommission.map((r) => r.employeeId).filter((id): id is string => !!id));
+  const commissionOnlyIds = Array.from(commissionByEmployee.keys()).filter((id) => !rowedEmployeeIds.has(id));
+  const commissionOnlyEmployees = commissionOnlyIds.length
+    ? await prisma.employee.findMany({
+        where: { id: { in: commissionOnlyIds } },
+        select: { id: true, firstName: true, lastName: true, payType: true, hourlyPayCents: true },
+      })
+    : [];
+  const commissionOnlyRows = commissionOnlyEmployees.map((e) => {
+    const commission = commissionByEmployee.get(e.id)!;
+    return {
+      isContractor: false as const,
+      employeeId: e.id,
+      name: `${e.firstName} ${e.lastName}`.trim(),
+      lastName: e.lastName,
+      payType: e.payType,
+      hourlyRateCents: e.hourlyPayCents ?? 0,
+      totalHours: 0,
+      regHours: 0,
+      otHours: 0,
+      grossPayCents: 0,
+      projects: "—",
+      entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
+      commissionCents: commission.totalCents,
+      commissionBreakdown: commission.breakdown,
+    };
+  });
+
+  const rows = [...rowsWithCommission, ...commissionOnlyRows].sort(
     (a, b) => a.lastName.localeCompare(b.lastName) || a.name.localeCompare(b.name)
   );
 

@@ -642,7 +642,7 @@ export function CommissionByRep({
         fetch(`/api/erp/projects/${row.projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ commissionPaid: paid }),
+          body: JSON.stringify({ commissionPaid: paid, commissionCents: row.commissionCents }),
         }),
         ...row.includedChangeOrders.map((co) =>
           fetch(`/api/erp/projects/${row.projectId}/change-orders/${co.id}`, {
@@ -675,7 +675,7 @@ export function CommissionByRep({
       const res = await fetch(`/api/erp/buildings/${row.buildingId}/recurring-contract/periods/${row.periodId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commissionPaid: paid }),
+        body: JSON.stringify({ commissionPaid: paid, commissionCents: row.commissionCents }),
       });
       if (!res.ok) throw new Error("Failed to update");
     } catch {

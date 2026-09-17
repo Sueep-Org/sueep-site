@@ -14,6 +14,8 @@ type PayrollRow = {
   otHours: number;
   grossPayCents: number;
   projects: string;
+  commissionCents: number;
+  commissionBreakdown: { label: string; amountCents: number }[];
 };
 
 type PayFilter = "all" | "hourly" | "salary" | "janitorial" | "contractor";
@@ -67,6 +69,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     "Total Hours",
     "Hourly Rate",
     "Gross Pay",
+    "Commission",
+    "Total",
     "Projects",
   ];
 
@@ -80,6 +84,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     escape(fmtHours(r.totalHours)),
     escape((r.hourlyRateCents / 100).toFixed(2)),
     escape((r.grossPayCents / 100).toFixed(2)),
+    escape((r.commissionCents / 100).toFixed(2)),
+    escape(((r.grossPayCents + r.commissionCents) / 100).toFixed(2)),
     escape(r.projects),
   ].join(","));
 
@@ -290,6 +296,7 @@ export function PayrollView() {
   }
 
   const totalGross = filteredRows.reduce((s, r) => s + r.grossPayCents, 0);
+  const totalCommission = filteredRows.reduce((s, r) => s + r.commissionCents, 0);
   const totalHours = filteredRows.reduce((s, r) => s + r.totalHours, 0);
 
   return (
@@ -418,7 +425,28 @@ export function PayrollView() {
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
                       {row.isContractor ? <span className="text-xs text-gray-400">Flat fee</span> : `${fmt(row.hourlyRateCents)}/hr`}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">{fmt(row.grossPayCents)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
+                      {fmt(row.grossPayCents)}
+                      {row.commissionCents > 0 ? (
+                        <>
+                          {" + "}
+                          {fmt(row.commissionCents)} commission
+                          <details className="mt-0.5 text-left">
+                            <summary className="cursor-pointer text-[10px] font-medium text-blue-600 hover:underline">
+                              breakdown
+                            </summary>
+                            <ul className="mt-1 space-y-0.5 text-[10px] font-normal text-gray-500">
+                              {row.commissionBreakdown.map((b, idx) => (
+                                <li key={idx} className="flex justify-between gap-2">
+                                  <span className="truncate">{b.label}</span>
+                                  <span className="tabular-nums">{fmt(b.amountCents)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{row.projects}</td>
                   </tr>
                 ))
@@ -432,7 +460,10 @@ export function PayrollView() {
                   <td className="px-4 py-3 text-right tabular-nums text-amber-600">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0)) || "—"}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtHours(totalHours)}</td>
                   <td className="px-4 py-3" />
-                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalGross)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {fmt(totalGross)}
+                    {totalCommission > 0 ? ` + ${fmt(totalCommission)} commission` : ""}
+                  </td>
                   <td className="px-4 py-3" />
                 </tr>
               </tfoot>
