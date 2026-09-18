@@ -64,6 +64,9 @@ type PostConProjectRow = {
   projectId: string;
   jobTitle: string;
   projectBillingStatus: string | null;
+  // Only meaningful when items/changeOrders are both empty — the
+  // whole-project fallback amount for a project with no SOV/CO detail.
+  contractValueCents: number | null;
   items: SOVItemRow[];
   changeOrders: CORow[];
 };
@@ -97,10 +100,22 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
         escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
       ].join(","));
     }
+    if (project.items.length === 0 && (project.changeOrders ?? []).length === 0 && project.contractValueCents != null) {
+      dataRows.push([
+        escape(project.jobTitle),
+        escape(""),
+        escape("Project Total"),
+        escape((project.contractValueCents / 100).toFixed(2)),
+        escape(BILLING_OPTIONS.find((o) => o.value === project.projectBillingStatus)?.label ?? project.projectBillingStatus ?? "Not Billed"),
+      ].join(","));
+    }
   }
   const sovTotal = rows.flatMap((r) => r.items).reduce((s, i) => s + i.scheduledValueCents, 0);
   const coTotal = rows.flatMap((r) => r.changeOrders ?? []).reduce((s, c) => s + c.contractValueCents, 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal) / 100).toFixed(2)), escape("")].join(","));
+  const wholeProjectTotal = rows
+    .filter((r) => r.items.length === 0 && (r.changeOrders ?? []).length === 0)
+    .reduce((s, r) => s + (r.contractValueCents ?? 0), 0);
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal + wholeProjectTotal) / 100).toFixed(2)), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -125,8 +140,10 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
 
   const allItems = data?.rows.flatMap((r) => r.items) ?? [];
   const allCOs = data?.rows.flatMap((r) => r.changeOrders ?? []) ?? [];
+  const wholeProjectRows = data?.rows.filter((r) => r.items.length === 0 && (r.changeOrders ?? []).length === 0) ?? [];
   const totalCents = allItems.reduce((s, i) => s + i.scheduledValueCents, 0)
-    + allCOs.reduce((s, c) => s + c.contractValueCents, 0);
+    + allCOs.reduce((s, c) => s + c.contractValueCents, 0)
+    + wholeProjectRows.reduce((s, r) => s + (r.contractValueCents ?? 0), 0);
 
   async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string) {
     setData((prev) => {
@@ -145,6 +162,28 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
     });
     try {
       await fetch(`/api/erp/projects/${projectId}/change-orders/${coId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ billingStatus }),
+      });
+    } catch {
+      fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
+        .then((r) => r.json()).then((d: PostConResponse) => setData(d)).catch(() => {});
+    }
+  }
+
+  async function updateProjectBillingStatus(projectId: string, billingStatus: string) {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) =>
+          row.projectId !== projectId ? row : { ...row, projectBillingStatus: billingStatus },
+        ),
+      };
+    });
+    try {
+      await fetch(`/api/erp/projects/${projectId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ billingStatus }),
@@ -235,6 +274,32 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                     ...project.items.map((item) => ({ type: "sov" as const, item })),
                     ...(project.changeOrders ?? []).map((co) => ({ type: "co" as const, co })),
                   ];
+                  if (allProjectRows.length === 0 && project.contractValueCents != null) {
+                    return (
+                      <tr key={project.projectId} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
+                            {project.jobTitle}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">—</td>
+                        <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                          {fmt(project.contractValueCents)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={project.projectBillingStatus ?? "NOT_BILLED"}
+                            onChange={(e) => updateProjectBillingStatus(project.projectId, e.target.value)}
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(project.projectBillingStatus ?? "NOT_BILLED")}`}
+                          >
+                            {BILLING_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  }
                   return allProjectRows.map((row, idx) => (
                     <tr key={row.type === "sov" ? row.item.id : row.co.id} className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}>
                       <td className="px-4 py-3 font-medium text-gray-900">
@@ -293,6 +358,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                   <td className="px-4 py-3" colSpan={2}>
                     Total — {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
+                    {wholeProjectRows.length > 0 ? ` + ${wholeProjectRows.length} project total${wholeProjectRows.length !== 1 ? "s" : ""}` : ""}
                     {" "}across {data.rows.length} project{data.rows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>

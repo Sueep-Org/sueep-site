@@ -103,6 +103,9 @@ export async function GET(req: Request) {
     projectId: string;
     jobTitle: string;
     projectBillingStatus: string | null;
+    // Only meaningful when items/changeOrders are both empty — the
+    // whole-project fallback amount for a project with no SOV/CO detail.
+    contractValueCents: number | null;
     items: SOVItemRow[];
     changeOrders: CORow[];
   };
@@ -116,6 +119,7 @@ export async function GET(req: Request) {
         projectId: project.id,
         jobTitle: project.jobTitle,
         projectBillingStatus: project.billingStatus,
+        contractValueCents: null,
         items: [],
         changeOrders: [],
       });
@@ -135,6 +139,7 @@ export async function GET(req: Request) {
         projectId: project.id,
         jobTitle: project.jobTitle,
         projectBillingStatus: project.billingStatus,
+        contractValueCents: null,
         items: [],
         changeOrders: [],
       });
@@ -146,6 +151,43 @@ export async function GET(req: Request) {
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: co.billingStatus ?? "NOT_BILLED",
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
+    });
+  }
+
+  // A completed post-construction project with no SOV items and no billable
+  // change order is otherwise invisible here (there's no item/CO to hang a
+  // row on), even though it may still have a real contract value waiting to
+  // be billed. Fall back to a single whole-project row using the project's
+  // own fields — same "no line-item detail, fall back to the project
+  // itself" pattern the janitorial billing tab already uses for units with
+  // no turnover request (see buildUnitRow in the janitorial billing route).
+  const wholeProjects = await prisma.project.findMany({
+    where: {
+      status: "COMPLETE",
+      ...(postConPipelineId ? { hubspotPipelineId: postConPipelineId } : {}),
+      ...(q
+        ? { jobTitle: { contains: q, mode: "insensitive" } }
+        : {
+            OR: [
+              { projectEndDate: { gte: start!, lte: end! } },
+              { projectEndDate: null, updatedAt: { gte: start!, lte: end! } },
+            ],
+          }),
+    },
+    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true },
+  });
+
+  for (const project of wholeProjects) {
+    // Already has real SOV items/COs from above — those are the source of
+    // truth for this project, no fallback row needed alongside them.
+    if (projectMap.has(project.id)) continue;
+    projectMap.set(project.id, {
+      projectId: project.id,
+      jobTitle: project.jobTitle,
+      projectBillingStatus: project.billingStatus,
+      contractValueCents: project.contractValueCents,
+      items: [],
+      changeOrders: [],
     });
   }
 
