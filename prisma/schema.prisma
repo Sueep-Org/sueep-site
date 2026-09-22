@@ -1788,6 +1788,12 @@ model CandidateApplication {
   /// Arbitrary fields keyed by future form labels or Google Form column IDs.
   responses Json?
 
+  /// Set when step 2 of the public /careers form (subcontractor questionnaire
+  /// + additional notes) is submitted. Null means they only ever finished
+  /// step 1 (the base application) — still a callable candidate, just never
+  /// got to the (fully optional) rest of the form.
+  applicationCompletedAt DateTime?
+
   /// APPLIED | INTERVIEWING | ONBOARDING | DENIED
   status String @default("APPLIED")
 
@@ -1820,6 +1826,39 @@ model CandidateApplication {
   questionnaireToken       String?   @unique
   questionnaireSentAt      DateTime?
   questionnaireCompletedAt DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+}
+
+model FranchiseInquiry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  cityState String
+
+  /// Captured in Contact Information (step 1), alongside the fields above, so
+  /// it's on file even if the rest of the form is never finished.
+  agreedToContact Boolean @default(false)
+
+  /// Market selected from the public form's dropdown (e.g. "Tampa, FL", "Other").
+  market String?
+
+  /// NEW | CONTACTED | QUALIFIED | NOT_A_FIT
+  status String @default("NEW")
+
+  internalNotes String?
+
+  /// Every other form answer, keyed by field name: marketPreference, launchTimeline,
+  /// currentOccupation, ownsBusiness, previousFranchise, experienceAreas, backgroundText,
+  /// interests, involvement, goalsText, additionalInfo.
+  responses Json?
 
   @@index([status])
   @@index([createdAt])

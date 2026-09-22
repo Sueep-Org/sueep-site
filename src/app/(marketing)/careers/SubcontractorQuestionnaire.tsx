@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   SUBCONTRACTOR_QUESTIONNAIRE,
   SUBCONTRACTOR_GATE_FIELD,
@@ -96,14 +95,20 @@ function FieldInput({ field }: { field: SubField }) {
   );
 }
 
-/** Rendered inline inside the /careers <form> (same POST, same submit
- * button). It's just more fields under the same names, not a separate
- * submission. Nothing here is "required" at the HTML level: subcontractors
- * vary in what they can answer up front, and gating submission on 80 fields
- * would just push people to abandon the application. */
-export function SubcontractorQuestionnaire() {
-  const [isSubcontractor, setIsSubcontractor] = useState<"" | "yes" | "no">("");
-
+/** The gate question only ("Are you applying as a subcontractor?"), rendered
+ * in step 1 of CareersApplicationForm alongside the rest of the base
+ * application, controlled from there since step 2 needs the answer to decide
+ * what to show. Deliberately just the question, nothing expands here: the
+ * actual ~70-field questionnaire (SubcontractorQuestionnaireFields below)
+ * only ever renders after "Next", so filling it out never happens before the
+ * base application is already saved. */
+export function SubcontractorGateQuestion({
+  value,
+  onChange,
+}: {
+  value: "" | "yes" | "no";
+  onChange: (value: "yes" | "no") => void;
+}) {
   return (
     <div className="border-t border-gray-200 pt-6">
       <label className={labelClass}>Are you applying as a subcontractor (a company, not an individual)?</label>
@@ -114,8 +119,8 @@ export function SubcontractorQuestionnaire() {
             name={SUBCONTRACTOR_GATE_FIELD}
             value="Yes"
             className="accent-[#E73C6E]"
-            checked={isSubcontractor === "yes"}
-            onChange={() => setIsSubcontractor("yes")}
+            checked={value === "yes"}
+            onChange={() => onChange("yes")}
           />
           Yes
         </label>
@@ -125,35 +130,44 @@ export function SubcontractorQuestionnaire() {
             name={SUBCONTRACTOR_GATE_FIELD}
             value="No"
             className="accent-[#E73C6E]"
-            checked={isSubcontractor === "no"}
-            onChange={() => setIsSubcontractor("no")}
+            checked={value === "no"}
+            onChange={() => onChange("no")}
           />
           No
         </label>
       </div>
+    </div>
+  );
+}
 
-      {isSubcontractor === "yes" && (
-        <div className="mt-6 space-y-8">
-          <p className="text-sm text-gray-600">
-            Since you&apos;re applying as a subcontractor, we need some information about your company below.
-          </p>
-          {SUBCONTRACTOR_QUESTIONNAIRE.map((section) => (
-            <div key={section.id}>
-              <h3 className="text-base font-semibold text-gray-900 mb-3">{section.title}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {section.fields.map((field) => (
-                  <div
-                    key={field.key}
-                    className={field.type === "checkboxGroup" || field.type === "textarea" ? "sm:col-span-2" : ""}
-                  >
-                    <FieldInput field={field} />
-                  </div>
-                ))}
+/** The actual subcontractor questionnaire fields (company info, experience,
+ * services, workforce, safety, insurance, licensing, financial, equipment,
+ * quality), rendered in step 2 of CareersApplicationForm, only once "Next"
+ * has been clicked and only when the gate question above was answered "Yes".
+ * Nothing here is "required" at the HTML level: subcontractors vary in what
+ * they can answer up front, and gating submission on 80 fields would just
+ * push people to abandon the application. */
+export function SubcontractorQuestionnaireFields() {
+  return (
+    <div className="space-y-8">
+      <p className="text-sm text-gray-600">
+        Since you&apos;re applying as a subcontractor, we need some information about your company below.
+      </p>
+      {SUBCONTRACTOR_QUESTIONNAIRE.map((section) => (
+        <div key={section.id}>
+          <h3 className="text-base font-semibold text-gray-900 mb-3">{section.title}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {section.fields.map((field) => (
+              <div
+                key={field.key}
+                className={field.type === "checkboxGroup" || field.type === "textarea" ? "sm:col-span-2" : ""}
+              >
+                <FieldInput field={field} />
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

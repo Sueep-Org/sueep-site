@@ -41,6 +41,11 @@ export function canManageUsers(role: ErpRole): boolean {
   return role === "ADMIN";
 }
 
+/** Franchise inquiries (from the public /franchise form) are PM/ADMIN-only for now. */
+export function canSeeFranchiseInquiries(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
 export function canAddLaborLogs(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "SUPERVISOR";
 }

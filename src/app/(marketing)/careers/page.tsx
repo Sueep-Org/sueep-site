@@ -2,9 +2,7 @@ import Script from "next/script";
 import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
 import { CareersPixelEvents } from "./CareersPixelEvents";
-import { SubcontractorQuestionnaire } from "./SubcontractorQuestionnaire";
-import { RoleAndExperienceFields } from "./RoleAndExperienceFields";
-
+import { CareersApplicationForm } from "./CareersApplicationForm";
 
 export const metadata = {
   title: "Careers & Join Sueep | Sueep",
@@ -17,36 +15,16 @@ export const metadata = {
 export default async function CareersPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ submitted?: string; role?: string; roles?: string }>;
+  searchParams?: Promise<{ role?: string }>;
 }) {
   const sp = (searchParams ? await searchParams : undefined) ?? {};
-  const submitted = sp.submitted;
-  const showSuccess = submitted === "1";
-  const showError = submitted === "0";
-  const showDuplicate = submitted === "duplicate";
-  // `role` (singular) still drives the hero tab/pixel page-view tracking —
-  // ad campaigns already link to /careers?role=painter for the dedicated
-  // pixel, so that stays untouched. `roles` (plural, comma-separated) is the
-  // newer, more precise signal: the API route sends it back on both the
-  // validation-error redirect (to restore exact checkbox state) and the
-  // success redirect (to reflect what was actually submitted, for pixel
-  // Lead-tracking). When present it overrides the singular default below.
+  // `role` still drives the hero tab, the default-checked position, and pixel
+  // page-view tracking — ad campaigns link to /careers?role=painter for the
+  // dedicated pixel, so this stays untouched by the step split below.
   const role = sp.role === "painter" ? "painter" : sp.role === "supervisor" ? "supervisor" : "cleaner";
   const isPainter = role === "painter";
   const isSupervisor = role === "supervisor";
   const roleWord = isPainter ? "painting" : isSupervisor ? "supervisor" : "cleaning";
-
-  const rolesList = sp.roles ? sp.roles.split(",").map((r) => r.trim().toLowerCase()) : null;
-  const defaultCleaner = rolesList ? rolesList.includes("cleaner") : role === "cleaner";
-  const defaultPainter = rolesList ? rolesList.includes("painter") : isPainter;
-  const defaultSupervisor = rolesList ? rolesList.includes("supervisor") : isSupervisor;
-  const submittedRoles = showSuccess
-    ? { cleaner: defaultCleaner, painter: defaultPainter, supervisor: defaultSupervisor }
-    : undefined;
-
-  const inputClass =
-    "w-full rounded-lg border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/40 focus:border-[#E73C6E]";
-  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
 
   const primaryCtaClass =
     "inline-flex justify-center items-center px-6 py-3.5 rounded-lg bg-[#E73C6E] text-white text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity min-h-[48px] w-full text-center";
@@ -56,32 +34,8 @@ export default async function CareersPage({
       <Script id="hs-do-not-track" strategy="beforeInteractive">
         {`window._hsq = window._hsq || []; window._hsq.push(['doNotTrack']);`}
       </Script>
-      {showSuccess && (
-        <div className="bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-4 py-3 text-center text-sm font-medium">
-          Thanks — we received your application. Our team will review it and reach out if there&apos;s a next step.
-        </div>
-      )}
-      {showError && (
-        <div className="bg-red-50 border-b border-red-200 text-red-900 px-4 py-3 text-center text-sm font-medium">
-          Something went wrong. Please check required fields and try again, or email{" "}
-          <a href="mailto:contact@sueep.com" className="underline font-medium">
-            contact@sueep.com
-          </a>
-          .
-        </div>
-      )}
-      {showDuplicate && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-3 text-center text-sm font-medium">
-          We already have an application on file for this email. If there was an issue with your application, please
-          contact us at{" "}
-          <a href="mailto:contact@sueep.com" className="underline font-medium">
-            contact@sueep.com
-          </a>
-          .
-        </div>
-      )}
 
-      <CareersPixelEvents submitted={showSuccess} role={role} submittedRoles={submittedRoles} />
+      <CareersPixelEvents role={role} />
       {isPainter && (
         <noscript>
           <img
@@ -151,114 +105,11 @@ export default async function CareersPage({
             internal hiring system.
           </p>
 
-          <form
-            method="post"
-            action="/api/candidate-applications"
-            className="mt-8 grid grid-cols-1 gap-4 bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm"
-            autoComplete="on"
-          >
-            <input type="text" name="_honey" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-
-            <div>
-              <label htmlFor="fullName" className={labelClass}>
-                Full name <span className="text-red-500">*</span>
-              </label>
-              <input id="fullName" name="fullName" type="text" required className={inputClass} placeholder="Your name" />
-            </div>
-
-            <div>
-              <label htmlFor="email" className={labelClass}>
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className={inputClass}
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="phone" className={labelClass}>
-                Phone
-              </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
-                className={inputClass}
-                placeholder="Best number to reach you"
-                autoComplete="tel"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="location" className={labelClass}>
-                Location <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="location"
-                name="location"
-                type="text"
-                required
-                className={inputClass}
-                placeholder="City, State (e.g. Philadelphia, PA)"
-                autoComplete="address-level2"
-              />
-            </div>
-
-            <RoleAndExperienceFields
-              defaultCleaner={defaultCleaner}
-              defaultPainter={defaultPainter}
-              defaultSupervisor={defaultSupervisor}
-            />
-
-            <div>
-              <label className={labelClass}>
-                Do you have a vehicle? <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-6 mt-1">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="hasVehicle" value="yes" required className="accent-[#E73C6E]" />
-                  Yes
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="radio" name="hasVehicle" value="no" required className="accent-[#E73C6E]" />
-                  No
-                </label>
-              </div>
-            </div>
-
-            <SubcontractorQuestionnaire />
-
-            <div>
-              <label htmlFor="additionalNotes" className={labelClass}>
-                Additional comments
-              </label>
-              <textarea
-                id="additionalNotes"
-                name="additionalNotes"
-                rows={4}
-                className={`${inputClass} resize-y min-h-[100px]`}
-                placeholder="Anything else you'd like us to know…"
-              />
-            </div>
-
-            <p className="text-xs text-gray-500 leading-relaxed">
-              By submitting, you agree we may contact you about opportunities at Sueep. We use your information only for
-              hiring and onboarding.
-            </p>
-
-            <button
-              type="submit"
-              className="mt-2 inline-flex justify-center items-center px-6 py-3.5 rounded-lg bg-[#E73C6E] text-white text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity min-h-[48px]"
-            >
-              Submit application
-            </button>
-          </form>
+          <CareersApplicationForm
+            defaultCleaner={role === "cleaner"}
+            defaultPainter={isPainter}
+            defaultSupervisor={isSupervisor}
+          />
 
           <p className="mt-8 text-center text-sm text-gray-600">
             Prefer email?{" "}

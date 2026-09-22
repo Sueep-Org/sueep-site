@@ -20,18 +20,40 @@ const SITEWIDE_PIXEL_ID = "2075712983059747";
 // marketing page visitor.
 const PAINTER_PIXEL_ID = "248346263857750";
 
-export function CareersPixelEvents({
-  submitted,
-  role,
-  submittedRoles,
-}: {
-  submitted: boolean;
-  role: "cleaner" | "painter" | "supervisor";
-  /** Which role(s) were actually checked on a successful submission — may
-   * differ from `role` (the landing/page-view role) now that applicants can
-   * select more than one. Only meaningful when `submitted` is true. */
-  submittedRoles?: { cleaner: boolean; painter: boolean; supervisor: boolean };
-}) {
+type SubmittedRoles = { cleaner: boolean; painter: boolean; supervisor: boolean };
+
+/** Fires the ad-platform "Lead" conversion. Called from CareersApplicationForm
+ * as soon as step 1 (the base application: name/contact/role/experience/
+ * vehicle) is saved, not after step 2 (the optional subcontractor
+ * questionnaire) completes — that's the moment we actually have a callable
+ * candidate on file, same reasoning as why step 1 saves to the ERP
+ * immediately instead of waiting for a final submit. */
+export function fireCareersLeadPixels(roles: SubmittedRoles) {
+  if (!window.fbq) return;
+
+  // Both can fire since an applicant may check more than one box — no longer
+  // mutually exclusive like the page-view effect below. `init` is called
+  // again here (not just relying on the page-view effect) since a visitor
+  // who landed on the generic/cleaner URL but then also checked Painter
+  // would never otherwise have inited that pixel.
+  if (roles.painter) {
+    window.fbq("init", PAINTER_PIXEL_ID);
+    window.fbq("trackSingle", PAINTER_PIXEL_ID, "Lead", {
+      content_name: "Painter Application",
+      content_category: "Careers",
+    });
+  }
+  // Supervisor has no dedicated ad pixel yet, so it's folded into the
+  // sitewide Lead alongside Cleaner.
+  if (roles.cleaner || roles.supervisor) {
+    window.fbq("trackSingle", SITEWIDE_PIXEL_ID, "Lead", {
+      content_name: "Job Application",
+      content_category: "Careers",
+    });
+  }
+}
+
+export function CareersPixelEvents({ role }: { role: "cleaner" | "painter" | "supervisor" }) {
   const isPainter = role === "painter";
 
   useEffect(() => {
@@ -57,31 +79,6 @@ export function CareersPixelEvents({
       content_category: "Job Application",
     });
   }, [isPainter]);
-
-  useEffect(() => {
-    if (!submitted || !window.fbq || !submittedRoles) return;
-
-    // Both can fire now that an applicant may check more than one box —
-    // no longer mutually exclusive like the page-view effect above. `init`
-    // is called again here (not just relying on the page-view effect above)
-    // since a visitor who landed on the generic/cleaner URL but then also
-    // checked Painter would never otherwise have inited that pixel.
-    if (submittedRoles.painter) {
-      window.fbq("init", PAINTER_PIXEL_ID);
-      window.fbq("trackSingle", PAINTER_PIXEL_ID, "Lead", {
-        content_name: "Painter Application",
-        content_category: "Careers",
-      });
-    }
-    // Supervisor has no dedicated ad pixel yet, so it's folded into the
-    // sitewide Lead alongside Cleaner.
-    if (submittedRoles.cleaner || submittedRoles.supervisor) {
-      window.fbq("trackSingle", SITEWIDE_PIXEL_ID, "Lead", {
-        content_name: "Job Application",
-        content_category: "Careers",
-      });
-    }
-  }, [submitted, submittedRoles]);
 
   return null;
 }

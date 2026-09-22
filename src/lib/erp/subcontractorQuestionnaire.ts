@@ -54,7 +54,6 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
       { key: "website", label: "Website", type: "text", optional: true },
       { key: "yearBusinessStarted", label: "Year Business Started", type: "number" },
       { key: "numberOfEmployees", label: "Number of Employees", type: "number" },
-      { key: "numberOfFieldSupervisors", label: "Number of Field Supervisors", type: "number" },
       { key: "numberOfCrews", label: "Number of Crews", type: "number" },
       { key: "serviceArea", label: "Service Area (States/Cities)", type: "text" },
       { key: "unionStatus", label: "Union or Non-Union?", type: "select", options: ["Union", "Non-Union"] },
@@ -66,11 +65,9 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
     title: "Company Experience",
     fields: [
       { key: "yearsCommercialPainting", label: "Years performing commercial painting", type: "number" },
-      { key: "yearsResidentialPainting", label: "Years performing residential painting", type: "number" },
       { key: "largestProjectCompleted", label: "Largest project completed", type: "text" },
       { key: "largestActiveWorkforceManaged", label: "Largest active workforce managed", type: "text" },
       { key: "averageProjectSize", label: "Average project size", type: "text" },
-      { key: "typicalContractSize", label: "Typical contract size", type: "text" },
       { key: "annualRevenue", label: "Annual revenue", type: "text" },
       { key: "projectsCompletedLastYear", label: "Number of projects completed last year", type: "number" },
       {
@@ -113,7 +110,6 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
       { key: "largestCrewAvailable", label: "Largest crew available", type: "number" },
       { key: "manpowerWithin48Hours", label: "Can you provide manpower within 48 hours?", type: "yesno" },
       { key: "employeesSpeakEnglish", label: "Do employees speak English?", type: "yesno" },
-      { key: "supervisorsSpeakEnglish", label: "Do supervisors speak English?", type: "yesno" },
     ],
   },
   {
@@ -126,7 +122,6 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
       { key: "ppeWorn", label: "Do employees wear PPE?", type: "yesno" },
       { key: "oshaViolations5yr", label: "Have you had any OSHA violations within the last 5 years?", type: "yesno" },
       { key: "oshaViolationsExplain", label: "If yes, explain", type: "textarea", optional: true },
-      { key: "emr", label: "Experience Modification Rate (EMR)", type: "text" },
       { key: "recordableIncidentRate", label: "Recordable Incident Rate (if known)", type: "text", optional: true },
     ],
   },
@@ -139,10 +134,6 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
       { key: "commercialAuto", label: "Commercial Auto", type: "text" },
       { key: "umbrellaLiability", label: "Umbrella Liability", type: "text" },
       { key: "professionalLiability", label: "Professional Liability (if applicable)", type: "text", optional: true },
-      { key: "insuranceAgentName", label: "Insurance Agent Name", type: "text" },
-      { key: "insuranceAgentEmail", label: "Insurance Agent Email", type: "text" },
-      { key: "insuranceAgentPhone", label: "Insurance Agent Phone", type: "text" },
-      { key: "policyExpirationDates", label: "Policy Expiration Dates", type: "text" },
     ],
   },
   {
@@ -151,19 +142,7 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
     fields: [
       { key: "stateContractorLicenseNumbers", label: "State Contractor License Number(s)", type: "text" },
       { key: "licenseClassification", label: "License Classification", type: "text" },
-      { key: "licenseExpirationDate", label: "Expiration Date", type: "text" },
       { key: "statesLicensedIn", label: "States Licensed In", type: "text" },
-    ],
-  },
-  {
-    id: "financial",
-    title: "Financial Stability",
-    fields: [
-      { key: "everFiledBankruptcy", label: "Have you ever filed bankruptcy?", type: "yesno" },
-      { key: "pendingLitigation", label: "Any pending litigation?", type: "yesno" },
-      { key: "liensAgainstCompany", label: "Any liens against your company?", type: "yesno" },
-      { key: "canFinancePayroll", label: "Can you finance payroll for 30–60 days?", type: "yesno" },
-      { key: "averageMonthlyPayroll", label: "Average monthly payroll", type: "text" },
     ],
   },
   {
@@ -189,8 +168,6 @@ export const SUBCONTRACTOR_QUESTIONNAIRE: SubSection[] = [
       { key: "dedicatedSuperintendent", label: "Do you have a dedicated superintendent?", type: "yesno" },
       { key: "completePunchLists", label: "Do you complete punch lists?", type: "yesno" },
       { key: "internalQualityInspections", label: "Do you perform internal quality inspections?", type: "yesno" },
-      { key: "whoSignsOffWork", label: "Who signs off completed work?", type: "text" },
-      { key: "warrantyCallsHandled", label: "How are warranty calls handled?", type: "textarea" },
     ],
   },
 ];
@@ -209,7 +186,6 @@ const CONTRACTOR_MANUAL_EXCLUDED_FIELDS = new Set([
   "businessAddress", // -> Contractor.address (Personal information section)
   "mailingAddress", // -> Contractor.address (Personal information section)
   "workersCompensation", // -> structured Insurance & Workers Comp section
-  "policyExpirationDates", // -> workersCompExpiresAt in the Insurance & Workers Comp section
 ]);
 
 /** The compliance-critical subset staff can manually enter on a Contractor

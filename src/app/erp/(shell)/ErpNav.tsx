@@ -20,6 +20,7 @@ const ALL: AllRoles = [
 ];
 const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
 const FINANCE_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
+const PM_ADMIN: AllRoles = ["ADMIN", "PROJECT_MANAGER"];
 
 // Small outline icon set, same 24x24/stroke-based convention already used
 // for the hamburger/X/chevron icons elsewhere in this file — one per nav
@@ -305,6 +306,24 @@ function BriefcaseIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
+function StoreIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 9.75l1.06-4.24a1.5 1.5 0 011.456-1.135h11.468a1.5 1.5 0 011.456 1.135l1.06 4.24M3.75 9.75a2.25 2.25 0 004.5 0 2.25 2.25 0 004.5 0 2.25 2.25 0 004.5 0 2.25 2.25 0 004.5 0M3.75 9.75V19.5a.75.75 0 00.75.75h4.5v-6a1.5 1.5 0 011.5-1.5h1.5a1.5 1.5 0 011.5 1.5v6h4.5a.75.75 0 00.75-.75V9.75"
+      />
+    </svg>
+  );
+}
 function IdCardIcon({ className = iconCls }: IconProps) {
   return (
     <svg
@@ -463,6 +482,12 @@ const employmentGroupItems: NavItem[] = [
     label: "Contractors",
     roles: FINANCE_UP,
     icon: BriefcaseIcon,
+  },
+  {
+    href: "/erp/franchise",
+    label: "Franchise Inquiries",
+    roles: PM_ADMIN,
+    icon: StoreIcon,
   },
 ];
 

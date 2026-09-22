@@ -1,0 +1,47 @@
+"use client";
+
+import { useState, useTransition } from "react";
+
+const STATUSES = [
+  { value: "NEW", label: "New", cls: "bg-blue-100 text-blue-700" },
+  { value: "CONTACTED", label: "Contacted", cls: "bg-purple-100 text-purple-700" },
+  { value: "QUALIFIED", label: "Qualified", cls: "bg-emerald-100 text-emerald-700" },
+  { value: "NOT_A_FIT", label: "Not a Fit", cls: "bg-red-100 text-red-600" },
+];
+
+export function FranchiseStatusSelect({ id, initialStatus }: { id: string; initialStatus: string }) {
+  const [status, setStatus] = useState(initialStatus);
+  const [, startTransition] = useTransition();
+
+  const current = STATUSES.find((s) => s.value === status) ?? {
+    value: status,
+    label: status,
+    cls: "bg-gray-100 text-gray-500",
+  };
+
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const next = e.target.value;
+    setStatus(next);
+    startTransition(async () => {
+      await fetch(`/api/erp/franchise/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+    });
+  }
+
+  return (
+    <select
+      value={status}
+      onChange={handleChange}
+      className={`rounded-full px-2 py-0.5 text-[11px] font-medium border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-offset-1 ${current.cls}`}
+    >
+      {STATUSES.map((s) => (
+        <option key={s.value} value={s.value}>
+          {s.label}
+        </option>
+      ))}
+    </select>
+  );
+}

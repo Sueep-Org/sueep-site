@@ -28,6 +28,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       positionInterest: true,
       additionalNotes: true,
       responses: true,
+      applicationCompletedAt: true,
       status: true,
       internalNotes: true,
       paperwork: true,
@@ -99,11 +100,24 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
             ← Candidates
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-gray-900">{row.fullName}</h1>
+          <h1 className="mt-2 flex items-center gap-2 text-2xl font-semibold text-gray-900">
+            {row.fullName}
+            {row.applicationCompletedAt == null && (
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Incomplete
+              </span>
+            )}
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
             Applied{" "}
             {new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(row.createdAt)}
           </p>
+          {row.applicationCompletedAt == null && (
+            <p className="mt-2 max-w-xl text-sm text-amber-700">
+              They gave us their base application but never got to the last step (subcontractor questionnaire and
+              additional notes, if applicable). Use what is below to reach out.
+            </p>
+          )}
         </div>
         {/* Available regardless of how they answered the subcontractor
             questionnaire gate question — staff can override manually. */}

@@ -8,6 +8,7 @@ const SITE_LINKS = [
   { label: "Home", href: "/" },
   { label: "Requests", href: "/turnover-requests" },
   { label: "Careers", href: "/careers" },
+  { label: "Franchise", href: "/franchise" },
   { label: "Privacy", href: "/privacy" },
 ] as const;
 
