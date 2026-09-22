@@ -15,7 +15,7 @@ export function AddingEmployees() {
                 <br></br><br></br>
                 On this tab you will find the table of all employees currently in the ERP. Employees are either added manually or are imported from the candidates tab once they are onboarded (see <A href="/erp/help/sops/onboarding-new-employee">Onboarding a New Employee</A>).
                 <Img src="/help/employees/employee_1.png" alt="Employees tab" />
-                From this tab you can search employees by name. The filter icon also lets you narrow the table by status (Active / Inactive), compliance, background check, and pay type (Hourly / Salary / Offshore / Janitorial Contract).
+                From this tab you can search employees by name. The filter icon also lets you narrow the table by status (Active / Inactive), compliance, background check, pay type (Hourly / Salary / Offshore / Janitorial Contract), role (a checklist of every role currently in use, e.g. Cleaner, Painter), and worked-between dates (only employees with at least one logged labor entry in that date range) — useful for pulling an active-employee report for a specific period.
                 <Callout type="info">Background check status isn&apos;t part of compliance. Compliance only counts required documents on file.</Callout>
                 We can also add new employees from this page in the top right corner.
             </Step>

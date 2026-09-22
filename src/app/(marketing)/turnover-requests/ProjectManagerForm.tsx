@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveChangeOrderSupervisorCount } from "@/lib/changeOrderLaborRates";
+import { SignaturePadInput } from "@/components/SignaturePad";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -97,10 +98,19 @@ export function ProjectManagerForm({ onBack }: Props) {
   // the contract gets sent for signature later once Sueep prices it.
   const willSign = requestType === "change-order" && !coNoCrewRequired && coPriceCents != null;
   const [contractPdfUrl, setContractPdfUrl] = useState("");
-  const [contractDownloaded, setContractDownloaded] = useState(false);
   const [signingLoading, setSigningLoading] = useState(false);
-  const [signedFile, setSignedFile] = useState<File | null>(null);
-  const signedFileRef = useRef<HTMLInputElement>(null);
+  const [signaturePngDataUrl, setSignaturePngDataUrl] = useState("");
+  const [signaturePrintedName, setSignaturePrintedName] = useState("");
+  // The requester has to actually open the fully rendered, signed contract
+  // (signature stamped in) before they're allowed to submit — a plain
+  // "I agree" checkbox next to a signature pad lets someone sign without
+  // ever seeing what the signature actually landed on. Cleared any time the
+  // signature or printed name changes, so a re-drawn signature has to be
+  // re-confirmed against a fresh preview.
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState("");
+  const [signedPreviewLoading, setSignedPreviewLoading] = useState(false);
+  const [signedPreviewError, setSignedPreviewError] = useState("");
+  const [hasViewedSignedContract, setHasViewedSignedContract] = useState(false);
 
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
@@ -171,6 +181,57 @@ export function ProjectManagerForm({ onBack }: Props) {
     }
   }
 
+  /** Any edit to the signature or printed name invalidates whatever signed
+   * preview was already confirmed — it no longer reflects what would
+   * actually be submitted. */
+  function invalidateSignedPreview() {
+    if (signedPreviewUrl) URL.revokeObjectURL(signedPreviewUrl);
+    setSignedPreviewUrl("");
+    setSignedPreviewError("");
+    setHasViewedSignedContract(false);
+  }
+
+  async function handlePreviewSigned() {
+    if (!signaturePngDataUrl) { setError("Please draw your signature."); return; }
+    if (!signaturePrintedName.trim()) { setError("Please enter your printed name."); return; }
+    setError("");
+    setSignedPreviewError("");
+    setSignedPreviewLoading(true);
+    try {
+      const res = await fetch("/api/co-request-contract-pdf", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          coTitle: coTitle.trim(),
+          coDescription: coDescription.trim() || undefined,
+          coEstimatedStartDate: coEstimatedStartDate || undefined,
+          coCleanerCount: coCleanerCount.trim() || undefined,
+          clientCompany: clientCompany.trim(),
+          clientAddress: clientAddress.trim(),
+          requesterName: requesterName.trim(),
+          requesterEmail: requesterEmail.trim(),
+          signaturePngDataUrl,
+          signaturePrintedName: signaturePrintedName.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setSignedPreviewError(data.error || "Could not prepare the signed contract. Please try again.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setSignedPreviewUrl(url);
+      setHasViewedSignedContract(true);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      setSignedPreviewError("Network error preparing the signed contract. Please try again.");
+    } finally {
+      setSignedPreviewLoading(false);
+    }
+  }
+
   function handleBack() {
     setError("");
     if (step === 1) { onBack(); return; }
@@ -178,9 +239,8 @@ export function ProjectManagerForm({ onBack }: Props) {
     if (step === 4) {
       if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
       setContractPdfUrl("");
-      setContractDownloaded(false);
-      setSignedFile(null);
-      if (signedFileRef.current) signedFileRef.current.value = "";
+      setSignaturePngDataUrl("");
+      invalidateSignedPreview();
     }
     setStep((s) => s - 1);
   }
@@ -214,48 +274,39 @@ export function ProjectManagerForm({ onBack }: Props) {
   }
 
   /** Actually creates the request (and, for a signed CO, attaches the
-   * uploaded contract). Called directly for SOV/unpriced-CO requests, or
-   * after the signed PDF is uploaded for a priced CO (see
-   * handleUploadSigned). */
-  async function submitRequest(signedContract?: File) {
-    let res: Response;
-    if (signedContract) {
-      const fd = new FormData();
-      fd.append("type", requestType ?? "");
-      fd.append("projectId", selectedProjectId);
-      fd.append("requesterName", requesterName.trim());
-      fd.append("requesterEmail", requesterEmail.trim());
-      if (coTitle.trim()) fd.append("coTitle", coTitle.trim());
-      if (coDescription.trim()) fd.append("coDescription", coDescription.trim());
-      if (coEstimatedStartDate) fd.append("coEstimatedStartDate", coEstimatedStartDate);
-      if (coEstimatedEndDate) fd.append("coEstimatedEndDate", coEstimatedEndDate);
-      // Supervisor count isn't sent, the server derives it from
-      // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
-      if (coCleanerCount.trim()) fd.append("coCleanerCount", coCleanerCount.trim());
-      fd.append("coNoCrewRequired", String(coNoCrewRequired));
-      fd.append("signedContract", signedContract);
-      res = await fetch("/api/external/project-requests", { method: "POST", body: fd });
-    } else {
-      res = await fetch("/api/external/project-requests", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: requestType,
-          projectId: selectedProjectId,
-          requesterName: requesterName.trim(),
-          requesterEmail: requesterEmail.trim(),
-          coTitle: coTitle.trim() || undefined,
-          coDescription: coDescription.trim() || undefined,
-          coEstimatedStartDate: coEstimatedStartDate || undefined,
-          coEstimatedEndDate: coEstimatedEndDate || undefined,
-          coCleanerCount: coCleanerCount.trim() || undefined,
-          coNoCrewRequired,
-          sovItemId: selectedSovId || undefined,
-          desiredDate: desiredDate || undefined,
-          comments: comments.trim() || undefined,
-        }),
-      });
-    }
+   * signed contract). Called directly for SOV/unpriced-CO requests, or once
+   * the requester has drawn their signature for a priced CO (see
+   * handleSubmitSigned). */
+  async function submitRequest(signature?: { pngDataUrl: string; printedName: string }) {
+    const res = await fetch("/api/external/project-requests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: requestType,
+        projectId: selectedProjectId,
+        requesterName: requesterName.trim(),
+        requesterEmail: requesterEmail.trim(),
+        coTitle: coTitle.trim() || undefined,
+        coDescription: coDescription.trim() || undefined,
+        coEstimatedStartDate: coEstimatedStartDate || undefined,
+        coEstimatedEndDate: coEstimatedEndDate || undefined,
+        // Supervisor count isn't sent, the server derives it from
+        // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
+        coCleanerCount: coCleanerCount.trim() || undefined,
+        coNoCrewRequired,
+        sovItemId: selectedSovId || undefined,
+        desiredDate: desiredDate || undefined,
+        comments: comments.trim() || undefined,
+        ...(signature
+          ? {
+              clientCompany: clientCompany.trim(),
+              clientAddress: clientAddress.trim(),
+              signaturePngDataUrl: signature.pngDataUrl,
+              signaturePrintedName: signature.printedName.trim(),
+            }
+          : {}),
+      }),
+    });
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) { setError(data.error || "Submission failed. Please try again."); return false; }
     setSubmitted(true);
@@ -294,8 +345,9 @@ export function ProjectManagerForm({ onBack }: Props) {
         }
         const blob = await res.blob();
         setContractPdfUrl(URL.createObjectURL(blob));
-        setContractDownloaded(false);
-        setSignedFile(null);
+        setSignaturePngDataUrl("");
+        setSignaturePrintedName(requesterName.trim());
+        invalidateSignedPreview();
         setStep(4);
       } catch {
         setError("Network error preparing contract. Please try again.");
@@ -315,12 +367,13 @@ export function ProjectManagerForm({ onBack }: Props) {
     }
   }
 
-  async function handleUploadSigned() {
-    if (!signedFile) { setError("Please upload your signed contract PDF."); return; }
+  async function handleSubmitSigned() {
+    if (!signaturePngDataUrl) { setError("Please draw your signature."); return; }
+    if (!signaturePrintedName.trim()) { setError("Please enter your printed name."); return; }
     setError("");
     setLoading(true);
     try {
-      const ok = await submitRequest(signedFile);
+      const ok = await submitRequest({ pngDataUrl: signaturePngDataUrl, printedName: signaturePrintedName });
       if (!ok) return;
     } catch {
       setError("Network error. Please try again.");
@@ -359,7 +412,8 @@ export function ProjectManagerForm({ onBack }: Props) {
             setSelectedSovId(""); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
             if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
-            setContractPdfUrl(""); setContractDownloaded(false); setSignedFile(null);
+            setContractPdfUrl(""); setSignaturePngDataUrl(""); setSignaturePrintedName("");
+            invalidateSignedPreview();
           }}
           className="rounded-md border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
         >
@@ -593,42 +647,74 @@ export function ProjectManagerForm({ onBack }: Props) {
           </>
         )}
 
-        {/* Step 4, Download & Sign (priced change orders only) */}
+        {/* Step 4, Sign Contract (priced change orders only) */}
         {step === 4 && (
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-              <p className="text-sm font-medium text-blue-900">Almost done, download and sign the change order below.</p>
+              <p className="text-sm font-medium text-blue-900">Almost done, review and sign the change order below.</p>
               <p className="mt-1 text-xs text-blue-700">
                 {coTitle} - {coPriceCents != null ? centsToDollars(coPriceCents) : ""}
               </p>
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-800">1. Download your contract</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Open it, fill in the signature, printed name, and date at the bottom, and save it.
-              </p>
+              <p className="text-sm font-medium text-gray-800">1. Review your contract</p>
+              <p className="mt-1 text-xs text-gray-500">Open it to check the details before signing.</p>
               <a
                 href={contractPdfUrl}
-                download={`${coTitle.trim() || "change-order"}.pdf`}
-                onClick={() => setContractDownloaded(true)}
-                className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Download contract PDF
+                View contract PDF
               </a>
-              {contractDownloaded && <span className="ml-3 text-xs font-medium text-green-600">Downloaded ✓</span>}
             </div>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-800">2. Upload your signed contract</p>
-              <p className="mt-1 text-xs text-gray-500">Upload the signed PDF, then submit your request.</p>
-              <input
-                ref={signedFileRef}
-                type="file"
-                accept="application/pdf"
-                className="mt-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 file:shadow-sm hover:file:bg-gray-100"
-                onChange={(e) => { setSignedFile(e.target.files?.[0] ?? null); setError(""); }}
-              />
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-sm font-medium text-gray-800">2. Sign</p>
+              <div>
+                <label className={label} htmlFor="co-signature-printed-name">Printed name *</label>
+                <input
+                  id="co-signature-printed-name"
+                  className={input}
+                  value={signaturePrintedName}
+                  onChange={(e) => { setSignaturePrintedName(e.target.value); setError(""); invalidateSignedPreview(); }}
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div>
+                <label className={label}>Signature *</label>
+                <div className="mt-1">
+                  <SignaturePadInput
+                    value={signaturePngDataUrl}
+                    onChange={(v) => { setSignaturePngDataUrl(v); setError(""); invalidateSignedPreview(); }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <p className="text-sm font-medium text-gray-800">3. Confirm your signed contract</p>
+              <p className="text-xs text-gray-500">
+                Open the contract with your signature applied and make sure it looks right before submitting.
+              </p>
+              <button
+                type="button"
+                disabled={signedPreviewLoading || !signaturePngDataUrl || !signaturePrintedName.trim()}
+                onClick={() => { void handlePreviewSigned(); }}
+                className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {signedPreviewLoading ? "Preparing…" : hasViewedSignedContract ? "View signed contract again" : "View signed contract"}
+              </button>
+              {signedPreviewError && <p className="text-xs text-red-500" role="alert">{signedPreviewError}</p>}
+              {hasViewedSignedContract && !signedPreviewError && (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-green-700">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                  </svg>
+                  Confirmed — this is what will be submitted.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -757,11 +843,11 @@ export function ProjectManagerForm({ onBack }: Props) {
         {step === 4 && (
           <button
             type="button"
-            disabled={loading || !signedFile}
-            onClick={() => { void handleUploadSigned(); }}
+            disabled={loading || !signaturePngDataUrl || !signaturePrintedName.trim() || !hasViewedSignedContract}
+            onClick={() => { void handleSubmitSigned(); }}
             className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {loading ? "Submitting…" : "Submit signed contract"}
+            {loading ? "Submitting…" : "Sign & submit"}
           </button>
         )}
       </div>

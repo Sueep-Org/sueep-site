@@ -25,6 +25,13 @@ export function ChangeOrderBillingEditor({ projectId, changeOrderId, percentInvo
   const router = useRouter();
   const [pct, setPct] = useState(percentInvoiced === 0 ? "" : String(percentInvoiced));
   const [status, setStatus] = useState(billingStatus ?? "");
+  // This dropdown uses a different vocabulary (BILLING/INACTIVE/INVOICE_PAID)
+  // than the one the Billing review page writes (NOT_BILLED/BILLED/PAID), so
+  // its seeded initial value often can't even be displayed correctly. Only
+  // send billingStatus on submit if the user actually touched this field —
+  // otherwise saving this form to update % invoiced silently reverts
+  // whatever billing status was set elsewhere since this page loaded.
+  const [statusTouched, setStatusTouched] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -38,7 +45,7 @@ export function ChangeOrderBillingEditor({ projectId, changeOrderId, percentInvo
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           percentInvoiced: pct === "" ? 0 : Number(pct),
-          billingStatus: status || null,
+          ...(statusTouched ? { billingStatus: status || null } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -82,7 +89,7 @@ export function ChangeOrderBillingEditor({ projectId, changeOrderId, percentInvo
             id="co-billing-status"
             className={inputCls}
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => { setStatus(e.target.value); setStatusTouched(true); }}
           >
             {BILLING_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

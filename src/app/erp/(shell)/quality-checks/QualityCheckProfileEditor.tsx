@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TurnoverRequestSelect } from "./TurnoverRequestSelect";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
-import { SignaturePadInput } from "./SignaturePadInput";
+import { SignaturePadInput } from "@/components/SignaturePad";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
 type Props = {

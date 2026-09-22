@@ -38,7 +38,13 @@ export function OptionCombobox({
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      // composedPath() (the path at dispatch time), not contains(e.target) —
+      // selecting an option unmounts the <li> as part of the same mousedown,
+      // so by the time this document-level listener runs, e.target has
+      // already been removed from the tree and .contains() would wrongly
+      // report it as "outside", closing the dropdown a second, harmless time
+      // here but also tripping the parent popover's own outside-click check.
+      if (containerRef.current && !e.composedPath().includes(containerRef.current)) {
         setOpen(false);
         setQuery("");
       }

@@ -77,6 +77,14 @@ export function ProjectFinancialsEditor({
   const [pctDone, setPctDone] = useState(percentDone === 0 ? "" : String(percentDone));
   const [pctInvoiced, setPctInvoiced] = useState(percentInvoiced === 0 ? "" : String(percentInvoiced));
   const [billStatus, setBillStatus] = useState(billingStatus ?? "");
+  // This dropdown uses a different vocabulary (BILLING/INACTIVE/INVOICE_PAID)
+  // than the one the Billing review page writes (NOT_BILLED/BILLED/PAID), so
+  // its seeded initial value often can't even be displayed correctly. Only
+  // send billingStatus on submit if the user actually touched this field —
+  // otherwise saving this form for an unrelated reason (e.g. correcting
+  // contract value for commission) silently reverts whatever billing status
+  // was set elsewhere since this page loaded.
+  const [billStatusTouched, setBillStatusTouched] = useState(false);
   const [estMat, setEstMat] = useState(centsToInput(estMaterialCents));
   const [estTravel, setEstTravel] = useState(centsToInput(estTravelCents));
   const [estLab, setEstLab] = useState(centsToInput(estLaborCents));
@@ -258,7 +266,7 @@ export function ProjectFinancialsEditor({
           contractValue: contractValue === "" ? null : Number(contractValue),
           percentDone: pctDone === "" ? 0 : Number(pctDone),
           percentInvoiced: pctInvoiced === "" ? 0 : Number(pctInvoiced),
-          billingStatus: billStatus || null,
+          ...(billStatusTouched ? { billingStatus: billStatus || null } : {}),
           estMaterial: estMat === "" ? null : Number(estMat),
           estTravel: estTravel === "" ? null : Number(estTravel),
           estLabor: estLab === "" ? null : Number(estLab),
@@ -363,7 +371,7 @@ export function ProjectFinancialsEditor({
             </div>
             <div>
               <label className={labelCls} htmlFor="fin-bill-status">Billing status</label>
-              <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => setBillStatus(e.target.value)}>
+              <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => { setBillStatus(e.target.value); setBillStatusTouched(true); }}>
                 {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>

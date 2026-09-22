@@ -6,6 +6,7 @@ import { OptionCombobox } from "@/app/erp/components/OptionCombobox";
 
 type PayModeOption = { value: string; label: string; href: string };
 type StatusOption = { value: string; label: string };
+type RoleOption = { value: string; label: string; count: number };
 
 type Props = {
   nameFilter: string;
@@ -15,6 +16,10 @@ type Props = {
   backgroundCheckFilter: string;
   payTypeFilter: string;
   payModeOptions: PayModeOption[];
+  roleFilter: string[];
+  roleOptions: RoleOption[];
+  workedFrom: string;
+  workedTo: string;
   sortBy: string;
   sortDir: string;
 };
@@ -30,13 +35,24 @@ export function EmployeesFilterBar({
   backgroundCheckFilter,
   payTypeFilter,
   payModeOptions,
+  roleFilter,
+  roleOptions,
+  workedFrom,
+  workedTo,
   sortBy,
   sortDir,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(statusFilter);
+  const [roleQuery, setRoleQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const filtersActive = Boolean(nameFilter || statusFilter || complianceFilter || backgroundCheckFilter || payTypeFilter);
+  const filtersActive = Boolean(
+    nameFilter || statusFilter || complianceFilter || backgroundCheckFilter || payTypeFilter ||
+      roleFilter.length > 0 || workedFrom || workedTo
+  );
+  const visibleRoleOptions = roleQuery.trim()
+    ? roleOptions.filter((o) => o.label.toLowerCase().includes(roleQuery.trim().toLowerCase()))
+    : roleOptions;
 
   // The popover's own form submits on Apply, but OptionCombobox isn't a
   // native <input>/<select> with a `name` the form can serialize on its
@@ -44,12 +60,19 @@ export function EmployeesFilterBar({
   // same idea as the other filters' hidden fields below.
   useEffect(() => {
     setPendingStatus(statusFilter);
+    setRoleQuery("");
   }, [statusFilter, open]);
 
   useEffect(() => {
     if (!open) return;
     function onMouseDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      // See the matching comment in OptionCombobox: picking a Status option
+      // removes that <li> from the DOM as part of the same click, so
+      // e.target is already detached by the time this fires — contains()
+      // would read that as an outside click and close this whole popover
+      // before Apply is reachable. composedPath() is captured at dispatch
+      // time, so it still reflects where the click actually happened.
+      if (ref.current && !e.composedPath().includes(ref.current)) setOpen(false);
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
@@ -73,7 +96,7 @@ export function EmployeesFilterBar({
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+        <div className="absolute right-0 z-20 mt-2 max-h-[85vh] w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
           <form className="space-y-3">
             {/* Search by name lives outside this popover (always visible in
                 the header) — preserved here as a hidden field so clicking
@@ -112,6 +135,47 @@ export function EmployeesFilterBar({
                 <option value="PENDING">Pending</option>
                 <option value="NOT_DONE">Not done</option>
               </select>
+            </div>
+            <div>
+              <label className={labelCls}>Worked between</label>
+              <div className="mt-1 flex items-center gap-2">
+                <input type="date" name="workedFrom" defaultValue={workedFrom} className={`${inputCls} min-w-0 flex-1`} />
+                <span className="text-xs text-gray-400">to</span>
+                <input type="date" name="workedTo" defaultValue={workedTo} className={`${inputCls} min-w-0 flex-1`} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Role</label>
+              {/* Native checkboxes (not another OptionCombobox) — the
+                  outside-click popover pattern above already needed a fix
+                  once for closing on its own selection, so a plain always-
+                  visible checklist with a local search filter sidesteps
+                  that whole class of bug for a multi-select. */}
+              <input
+                type="text"
+                value={roleQuery}
+                onChange={(e) => setRoleQuery(e.target.value)}
+                placeholder="Search roles…"
+                className={inputCls}
+              />
+              <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-300 bg-white p-2">
+                {visibleRoleOptions.length === 0 ? (
+                  <p className="px-1 py-1 text-xs text-gray-400">No matching roles</p>
+                ) : (
+                  visibleRoleOptions.map((opt) => (
+                    <label key={opt.value} className="flex items-center gap-2 rounded px-1 py-0.5 text-sm text-gray-700 hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        name="role"
+                        value={opt.value}
+                        defaultChecked={roleFilter.includes(opt.value)}
+                      />
+                      {opt.label}
+                      <span className="text-xs text-gray-400">({opt.count})</span>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
             <div>
               <p className={labelCls}>Pay type</p>
