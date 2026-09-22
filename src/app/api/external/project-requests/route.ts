@@ -8,10 +8,12 @@ import {
   hasCustomChangeOrderLaborRate,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
+import { generateChangeOrderContractPdf } from "@/lib/contracts/buildChangeOrderContractPdf";
+import { embedChangeOrderSignature } from "@/lib/contracts/fillChangeOrderPdf";
 
 export const runtime = "nodejs";
 
-const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_SIGNATURE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — a drawn canvas signature, not a scanned file
 
 type Body = {
   type: "change-order" | "sov-schedule";
@@ -34,6 +36,17 @@ type Body = {
   // (material-only, price adjustment, subcontracted work, etc.) — see
   // ProjectChangeOrder.noCrewRequired.
   coNoCrewRequired?: boolean;
+  // Priced-CO signing fields — sent together once the requester draws their
+  // signature on the "Sign Contract" step (see ProjectManagerForm +
+  // SignaturePadInput). clientCompany/clientAddress feed the contract PDF
+  // the same way they do for the unsigned preview
+  // (/api/co-request-contract-pdf). signaturePngDataUrl is a canvas-drawn
+  // image, never typed text, so the PDF's "signature" field can't just be
+  // filled in with plain text (see embedChangeOrderSignature).
+  clientCompany?: string;
+  clientAddress?: string;
+  signaturePngDataUrl?: string;
+  signaturePrintedName?: string;
   // SOV fields
   sovItemId?: string;
   desiredDate?: string;
@@ -41,58 +54,11 @@ type Body = {
 };
 
 export async function POST(req: Request) {
-  // The priced-CO path submits multipart/form-data — it carries the
-  // requester's signed contract PDF alongside the same fields the JSON path
-  // sends (see ProjectManagerForm's "Download & Sign" step, which downloads
-  // a prefilled PDF from /api/co-request-contract-pdf and uploads the
-  // signed copy back here). Every other request type still posts plain
-  // JSON.
-  const contentType = req.headers.get("content-type") ?? "";
   let body: Body;
-  let signedContractFile: File | null = null;
-
-  if (contentType.includes("multipart/form-data")) {
-    let fd: FormData;
-    try {
-      fd = await req.formData();
-    } catch {
-      return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
-    }
-    const field = (name: string) => {
-      const v = fd.get(name);
-      return typeof v === "string" ? v : undefined;
-    };
-    body = {
-      type: (field("type") as Body["type"]) ?? "change-order",
-      projectId: field("projectId") ?? "",
-      requesterName: field("requesterName") ?? "",
-      requesterEmail: field("requesterEmail") ?? "",
-      coTitle: field("coTitle"),
-      coDescription: field("coDescription"),
-      coEstimatedStartDate: field("coEstimatedStartDate"),
-      coEstimatedEndDate: field("coEstimatedEndDate"),
-      coCleanerCount: field("coCleanerCount"),
-      coNoCrewRequired: field("coNoCrewRequired") === "true",
-      sovItemId: field("sovItemId"),
-      desiredDate: field("desiredDate"),
-      comments: field("comments"),
-    };
-    const file = fd.get("signedContract");
-    if (file instanceof File && file.size > 0) {
-      if (file.type !== "application/pdf") {
-        return NextResponse.json({ error: "Signed contract must be a PDF" }, { status: 415 });
-      }
-      if (file.size > MAX_CONTRACT_FILE_BYTES) {
-        return NextResponse.json({ error: "Signed contract must be 10 MB or smaller" }, { status: 413 });
-      }
-      signedContractFile = file;
-    }
-  } else {
-    try {
-      body = (await req.json()) as Body;
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+  try {
+    body = (await req.json()) as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const { type, projectId, requesterEmail, requesterName } = body;
@@ -116,6 +82,20 @@ export async function POST(req: Request) {
   if (type === "sov-schedule" && !body.desiredDate) {
     return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
   }
+  if (type === "change-order" && body.signaturePngDataUrl) {
+    if (!body.signaturePngDataUrl.startsWith("data:image/png;base64,")) {
+      return NextResponse.json({ error: "Signature must be a PNG image" }, { status: 400 });
+    }
+    if (body.signaturePngDataUrl.length > MAX_SIGNATURE_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Signature image is too large" }, { status: 413 });
+    }
+    if (!body.signaturePrintedName?.trim()) {
+      return NextResponse.json({ error: "Printed name is required to sign" }, { status: 400 });
+    }
+    if (!body.clientCompany?.trim() || !body.clientAddress?.trim()) {
+      return NextResponse.json({ error: "Client company and address are required to sign" }, { status: 400 });
+    }
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -132,6 +112,10 @@ export async function POST(req: Request) {
 
   // Create a change order record when type is change-order
   let changeOrderId: string | null = null;
+  // Set below once the signed contract PDF is generated, so the requester's
+  // confirmation email can attach it — the whole reason they went through
+  // the "review, then sign" flow was to see and keep this document.
+  let signedContractAttachment: { filename: string; content: Buffer } | null = null;
   // Recomputed server-side against the project's real rate — never trust a
   // client-sent total. Stays null (no price stored at all) for any project
   // that hasn't had a real Labor rate set (see hasCustomChangeOrderLaborRate),
@@ -178,28 +162,47 @@ export async function POST(req: Request) {
     });
     changeOrderId = co.id;
 
-    // Requester downloaded the prefilled contract, signed it themselves, and
-    // uploaded the signed copy right back (see /api/co-request-contract-pdf
-    // + ProjectManagerForm's "Download & Sign" step). Store it the same way
-    // the ERP's own "Already signed? Upload it here" path does — as a base64
-    // data URL — non-fatal on failure since the CO itself is already created
-    // and notified regardless.
-    if (signedContractFile) {
+    // The requester drew their signature in the browser (see
+    // SignaturePadInput + ProjectManagerForm's "Sign Contract" step) rather
+    // than typing into a PDF form field. Regenerate the same contract PDF
+    // (mirrors /api/co-request-contract-pdf) and stamp that signature image
+    // onto it server-side. Store it the same way the ERP's own "Already
+    // signed? Upload it here" path does, as a base64 data URL, non-fatal on
+    // failure since the CO itself is already created and notified regardless.
+    if (body.signaturePngDataUrl) {
       try {
-        const bytes = Buffer.from(await signedContractFile.arrayBuffer());
-        const signedDocumentUrl = `data:application/pdf;base64,${bytes.toString("base64")}`;
+        const contract = await generateChangeOrderContractPdf({
+          projectId,
+          coTitle: body.coTitle!.trim(),
+          coDescription: body.coDescription?.trim() || undefined,
+          coEstimatedStartDate: body.coEstimatedStartDate,
+          coCleanerCount: body.coCleanerCount,
+          clientCompany: body.clientCompany!.trim(),
+          clientAddress: body.clientAddress!.trim(),
+          requesterName: requesterName.trim(),
+          requesterEmail: requesterEmail.trim(),
+        });
+        if (!contract.ok) throw new Error(contract.error);
+        const signedBytes = await embedChangeOrderSignature(contract.pdfBytes, {
+          signaturePngDataUrl: body.signaturePngDataUrl,
+          printedName: body.signaturePrintedName!.trim(),
+          signatureDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        });
+        const signedDocumentUrl = `data:application/pdf;base64,${Buffer.from(signedBytes).toString("base64")}`;
+        const contractFilename = `${body.coTitle!.trim().replace(/[^\w\- ]+/g, "").trim() || "change-order"}.pdf`;
         await prisma.changeOrderContract.create({
           data: {
             changeOrderId,
-            contractPdfFilename: signedContractFile.name,
+            contractPdfFilename: contractFilename,
             signingStatus: "SIGNED",
             customerEmail: requesterEmail.trim(),
             signedAt: new Date(),
             signedDocumentUrl,
           },
         });
+        signedContractAttachment = { filename: contractFilename, content: Buffer.from(signedBytes) };
       } catch (err) {
-        console.error("Failed to store signed ChangeOrderContract (non-fatal):", err);
+        console.error("Failed to generate/store signed ChangeOrderContract (non-fatal):", err);
       }
     }
   }
@@ -329,11 +332,14 @@ export async function POST(req: Request) {
         replyTo: requesterEmail.trim(),
       }).catch((err) => console.error(`Failed to send to ${to}:`, err))
     ),
-    // Confirmation to the requester — no ERP link
+    // Confirmation to the requester — no ERP link. Carries their own copy of
+    // the signed contract when this request was signed (see
+    // signedContractAttachment above) — otherwise they'd never get one.
     sendEmail({
       to: requesterEmail.trim(),
       subject: `Your request was received — ${project.jobTitle}`,
       html: confirmationHtml,
+      ...(signedContractAttachment ? { attachments: [signedContractAttachment] } : {}),
     }).catch((err) => console.error("Failed to send requester confirmation:", err)),
   ]);
 

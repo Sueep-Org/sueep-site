@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
-import { SignaturePadInput } from "./SignaturePadInput";
+import { SignaturePadInput } from "@/components/SignaturePad";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 
 type ProjectOption = { id: string; jobTitle: string };

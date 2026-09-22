@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { UNIT_CHECKLIST_SECTIONS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import type { ChecklistSection } from "@/lib/erp/unitTurnoverChecklistTemplate";
-import { SignaturePadInput } from "@/app/erp/(shell)/quality-checks/SignaturePadInput";
+import { SignaturePadInput } from "@/components/SignaturePad";
 
 type SectionPhotos = Record<string, { before: string[]; after: string[] }>;
 
