@@ -5,24 +5,6 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const KNOWN_BODY_KEYS = new Set([
-  "fullName",
-  "email",
-  "phone",
-  "location",
-  "roles",
-  "cleaningExperience",
-  "cleaningYears",
-  "paintingExperience",
-  "paintingYears",
-  "supervisingYears",
-  "speaksEnglish",
-  "speaksSpanish",
-  "hasVehicle",
-  "additionalNotes",
-  "_honey",
-]);
-
 type Roles = { cleaner: boolean; painter: boolean; supervisor: boolean };
 
 function normalizeRoles(raw: string[]): Roles {
@@ -42,17 +24,14 @@ function positionInterestFromRoles(roles: Roles): string {
   return parts.length > 0 ? parts.join(", ") : "Cleaner";
 }
 
-function rolesParam(roles: Roles): string {
-  const list: string[] = [];
-  if (roles.cleaner) list.push("cleaner");
-  if (roles.painter) list.push("painter");
-  if (roles.supervisor) list.push("supervisor");
-  return list.join(",");
-}
-
 /**
  * POST /api/candidate-applications
- * Public intake from /careers. Persists to ERP DB only.
+ * Public intake from /careers, step 1 of 2. Creates the ERP record from the
+ * base application (name, contact info, role, experience, vehicle) as soon as
+ * the visitor clicks "Next", so a callable candidate exists even if they
+ * never finish the subcontractor questionnaire. That questionnaire (and
+ * additional notes) is added on completion via
+ * PATCH /api/candidate-applications/[id].
  */
 export async function POST(req: NextRequest) {
   try {
@@ -74,9 +53,7 @@ export async function POST(req: NextRequest) {
     let speaksEnglish = "";
     let speaksSpanish = "";
     let hasVehicle = "";
-    let additionalNotes = "";
     let honey = "";
-    const extraResponses: Record<string, unknown> = {};
 
     if (contentType.includes("application/json")) {
       const body = (await req.json()) as Record<string, unknown>;
@@ -93,13 +70,7 @@ export async function POST(req: NextRequest) {
       speaksEnglish = String(body.speaksEnglish || "").trim();
       speaksSpanish = String(body.speaksSpanish || "").trim();
       hasVehicle = String(body.hasVehicle || "").trim();
-      additionalNotes = String(body.additionalNotes || "").trim();
       honey = String(body._honey || "");
-      for (const [k, v] of Object.entries(body)) {
-        if (KNOWN_BODY_KEYS.has(k)) continue;
-        if (v === undefined || v === null || v === "") continue;
-        extraResponses[k] = v;
-      }
     } else if (isFormPost) {
       const form = await req.formData();
       fullName = String(form.get("fullName") || "").trim();
@@ -115,33 +86,17 @@ export async function POST(req: NextRequest) {
       speaksEnglish = String(form.get("speaksEnglish") || "").trim();
       speaksSpanish = String(form.get("speaksSpanish") || "").trim();
       hasVehicle = String(form.get("hasVehicle") || "").trim();
-      additionalNotes = String(form.get("additionalNotes") || "").trim();
       honey = String(form.get("_honey") || "");
-      // Same generic passthrough as the JSON branch below: any field the
-      // form sends that isn't one of the names above (e.g. every sub_*
-      // subcontractor-questionnaire field) lands in `responses` as-is,
-      // rather than being silently dropped. A checkbox group repeats the
-      // same name for each checked box, form.getAll collects all of them.
-      for (const key of new Set(form.keys())) {
-        if (KNOWN_BODY_KEYS.has(key)) continue;
-        const values = form.getAll(key).filter((v): v is string => typeof v === "string" && v.trim() !== "");
-        if (values.length === 0) continue;
-        extraResponses[key] = values.length > 1 ? values : values[0];
-      }
     } else {
       return NextResponse.json({ error: "Unsupported content type" }, { status: 415 });
     }
 
     if (honey) {
-      if (isFormPost) {
-        return NextResponse.redirect(new URL("/careers?submitted=1", req.url), { status: 303 });
-      }
       return NextResponse.json({ ok: true, skipped: true });
     }
 
     const roles = normalizeRoles(rolesRaw);
     const positionInterest = positionInterestFromRoles(roles);
-    const rolesQs = rolesParam(roles);
 
     const isValid =
       fullName &&
@@ -150,11 +105,6 @@ export async function POST(req: NextRequest) {
       (roles.cleaner || roles.painter || roles.supervisor);
 
     if (!isValid) {
-      if (isFormPost) {
-        const url = new URL("/careers?submitted=0", req.url);
-        if (rolesQs) url.searchParams.set("roles", rolesQs);
-        return NextResponse.redirect(url, { status: 303 });
-      }
       return NextResponse.json(
         { error: "fullName, a valid email, and at least one role are required" },
         { status: 400 }
@@ -171,11 +121,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      if (isFormPost) {
-        const url = new URL("/careers?submitted=duplicate", req.url);
-        if (rolesQs) url.searchParams.set("roles", rolesQs);
-        return NextResponse.redirect(url, { status: 303 });
-      }
       return NextResponse.json(
         {
           error:
@@ -185,7 +130,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const formResponses: Record<string, unknown> = {
+    const responses: Record<string, unknown> = {
       ...(location ? { location } : {}),
       ...(cleaningExperience ? { cleaningExperience } : {}),
       ...(cleaningYears ? { cleaningYears } : {}),
@@ -195,7 +140,6 @@ export async function POST(req: NextRequest) {
       ...(speaksEnglish ? { speaksEnglish } : {}),
       ...(speaksSpanish ? { speaksSpanish } : {}),
       ...(hasVehicle ? { hasVehicle } : {}),
-      ...extraResponses,
     };
 
     const row = await prisma.candidateApplication.create({
@@ -205,29 +149,14 @@ export async function POST(req: NextRequest) {
         phone: phone || null,
         positionInterest,
         status: "APPLIED",
-        additionalNotes: additionalNotes || null,
-        ...(Object.keys(formResponses).length > 0
-          ? { responses: formResponses as Prisma.InputJsonValue }
-          : {}),
+        ...(Object.keys(responses).length > 0 ? { responses: responses as Prisma.InputJsonValue } : {}),
       },
+      select: { id: true },
     });
 
-    if (isFormPost) {
-      const url = new URL("/careers?submitted=1", req.url);
-      if (rolesQs) url.searchParams.set("roles", rolesQs);
-      return NextResponse.redirect(url, { status: 303 });
-    }
     return NextResponse.json({ ok: true, id: row.id });
   } catch (e) {
     console.error("/api/candidate-applications error", e);
-    const fallbackUrl = new URL("/careers?submitted=0", req.url);
-    const contentType = req.headers.get("content-type") || "";
-    const isFormPost =
-      contentType.includes("application/x-www-form-urlencoded") ||
-      contentType.includes("multipart/form-data");
-    if (isFormPost) {
-      return NextResponse.redirect(fallbackUrl, { status: 303 });
-    }
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

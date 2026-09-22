@@ -136,6 +136,11 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     <Link href={`/erp/candidates/${c.id}`} className="text-gray-800 hover:underline">
                       {c.fullName}
                     </Link>
+                    {c.applicationCompletedAt == null && (
+                      <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        Incomplete
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-700">
                     <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a>
