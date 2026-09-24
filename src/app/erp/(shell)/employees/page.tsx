@@ -5,11 +5,18 @@ import {
   evaluateEmployeeCompliance,
   activityStatusBadgeClasses,
   activityStatusLabel,
+  complianceLabel,
+  backgroundCheckLabel,
   type BackgroundCheckStatus,
 } from "@/lib/erp/employees";
 import { getErpAuth, canSeeFinancials, canEditPayInfo } from "@/lib/erpAuth";
 import { NewEmployeeForm } from "./NewEmployeeForm";
 import { EmployeesFilterBar } from "./EmployeesFilterBar";
+import { DownloadEmployeesCsvButton, type EmployeeCsvRow } from "./DownloadEmployeesCsvButton";
+
+function centsToDollars(cents: number | null): string {
+  return cents == null ? "" : (cents / 100).toFixed(2);
+}
 
 function normalizeBackgroundCheckStatus(status: string | null): BackgroundCheckStatus {
   return status === "PASSED" || status === "FAILED" || status === "PENDING" ? status : "NOT_DONE";
@@ -241,6 +248,29 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
     return an.localeCompare(bn);
   });
 
+  // Same filtered + sorted rows the table shows, so the download matches
+  // exactly what's on screen. Pay fields are left out entirely (not just
+  // blanked) when the viewer can't see pay.
+  const csvRows: EmployeeCsvRow[] = rows.map((r) => ({
+    firstName: r.firstName,
+    lastName: r.lastName,
+    role: r.role ?? "",
+    payType: PAY_MODE_OPTIONS.find((o) => o.value === r.payMode)?.label ?? r.payMode,
+    ...(canSeePay
+      ? {
+          hourlyPay: centsToDollars(r.hourlyPayCents),
+          annualSalary: centsToDollars(r.annualSalaryCents),
+          offshoreMonthlyRate: centsToDollars(r.offshoreMonthlyRateCents),
+        }
+      : {}),
+    activityStatus: activityStatusLabel(r.status, r.statusSource),
+    compliance: complianceLabel(r.compliance),
+    backgroundCheck: backgroundCheckLabel(r.backgroundCheck),
+    hireDate: r.hireDate ? r.hireDate.toISOString().slice(0, 10) : "",
+    email: r.email ?? "",
+    phone: r.phone ?? "",
+  }));
+
   const payModeOptions = PAY_MODE_OPTIONS.map((opt) => ({
     value: opt.value,
     label: opt.label,
@@ -291,6 +321,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
               sortBy={sortBy}
               sortDir={sortDir}
             />
+            <DownloadEmployeesCsvButton rows={csvRows} includePay={canSeePay} />
             <NewEmployeeForm />
           </div>
         </div>
