@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canViewSsn, canEditPayInfo } from "@/lib/erpAuth";
-import { CONTRACTOR_MANUAL_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
+import { CONTRACTOR_MANUAL_SECTIONS, CONTRACTOR_PROFILE_EXTRA_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
 import { backgroundCheckLabel } from "@/lib/erp/employees";
 import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
@@ -52,21 +52,27 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
   const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
 
-  // Company profile / Insurance / Licensing each read from whichever of
-  // these is available: the linked application's answers (read-only, see
-  // ContractorApplicationLinkSection) or Contractor.manualApplicationInfo
-  // (editable) when nothing is linked — never both, so no section duplicates
-  // what another already shows.
+  // Company profile / Insurance / Licensing are always editable. A value
+  // saved on the contractor (Contractor.manualApplicationInfo) wins; any
+  // field never edited here falls back to the linked application's answer,
+  // so linking an application pre-fills these sections without locking them
+  // and without ever changing the original application.
   const linkedResponses = contractor.candidateApplication
     ? ((contractor.candidateApplication.responses ?? {}) as Record<string, unknown>)
     : null;
   const manualInfo = (contractor.manualApplicationInfo ?? {}) as Record<string, unknown>;
   function manualValuesFor(sectionId: string): Record<string, string> {
-    const fields = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === sectionId)?.fields ?? [];
+    const fields = [...CONTRACTOR_MANUAL_SECTIONS, ...CONTRACTOR_PROFILE_EXTRA_SECTIONS].find((s) => s.id === sectionId)?.fields ?? [];
     const out: Record<string, string> = {};
     for (const field of fields) {
-      const v = manualInfo[subFieldName(field.key)];
-      out[subFieldName(field.key)] = typeof v === "string" ? v : "";
+      const name = subFieldName(field.key);
+      const manual = manualInfo[name];
+      if (typeof manual === "string") {
+        out[name] = manual;
+        continue;
+      }
+      const linked = linkedResponses?.[name];
+      out[name] = linked == null ? "" : Array.isArray(linked) ? linked.join(", ") : String(linked);
     }
     return out;
   }
@@ -79,7 +85,6 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   // rest stays collapsed so both tabs are scannable instead of a wall of
   // always-expanded forms.
   function questionnaireSectionStatus(sectionId: string, fields: typeof companyFields) {
-    if (linkedResponses) return { status: "From application", tone: "complete" as const, defaultOpen: false };
     const filled = fields.filter((f) => manualValuesFor(sectionId)[subFieldName(f.key)]).length;
     if (fields.length === 0) return { status: "Nothing to fill in", tone: "neutral" as const, defaultOpen: false };
     if (filled === 0) return { status: "Not set yet", tone: "empty" as const, defaultOpen: true };
@@ -321,10 +326,25 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   contractorId={contractor.id}
                   title="Company profile"
                   fields={companyFields}
-                  linkedResponses={linkedResponses}
-                  manualInitial={manualValuesFor("company")}
+                  fromApplication={!!linkedResponses}
+                  initialValues={manualValuesFor("company")}
                 />
               </CollapsibleSection>
+
+              {CONTRACTOR_PROFILE_EXTRA_SECTIONS.map((section) => {
+                const info = questionnaireSectionStatus(section.id, section.fields);
+                return (
+                  <CollapsibleSection key={section.id} title={section.title} status={info.status} tone={info.tone} defaultOpen={false}>
+                    <ContractorQuestionnaireCard
+                      contractorId={contractor.id}
+                      title={section.title}
+                      fields={section.fields}
+                      fromApplication={!!linkedResponses}
+                      initialValues={manualValuesFor(section.id)}
+                    />
+                  </CollapsibleSection>
+                );
+              })}
             </div>
           ),
         },
@@ -384,8 +404,8 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   }}
                   workersCompDoc={contractor.documents[0] ?? null}
                   questionnaireFields={insuranceQuestionnaireFields}
-                  linkedResponses={linkedResponses}
-                  manualInitial={manualValuesFor("insurance")}
+                  fromApplication={!!linkedResponses}
+                  initialValues={manualValuesFor("insurance")}
                 />
               </CollapsibleSection>
 
@@ -394,8 +414,8 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   contractorId={contractor.id}
                   title="Licensing"
                   fields={licensingFields}
-                  linkedResponses={linkedResponses}
-                  manualInitial={manualValuesFor("licensing")}
+                  fromApplication={!!linkedResponses}
+                  initialValues={manualValuesFor("licensing")}
                 />
               </CollapsibleSection>
 

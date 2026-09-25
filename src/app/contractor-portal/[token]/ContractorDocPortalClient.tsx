@@ -29,8 +29,9 @@ export function ContractorDocPortalClient({ token, name, paperwork: initial }: P
         method: "POST",
         body: fd,
       });
-      const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      // A rejection from the hosting layer (e.g. 413) is plain text, not JSON.
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(res.status === 413 ? "File too large (max 4 MB)" : json.error ?? "Upload failed");
 
       setItems((prev) => prev.map((p) => (p.label === label ? { ...p, url: "uploaded" } : p)));
       setUploadState((s) => ({ ...s, [label]: "done" }));

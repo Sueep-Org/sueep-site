@@ -42,18 +42,65 @@ function totalProgress(completed: Record<string, boolean>): { done: number; tota
   return { done: all.filter((i) => completed[i.id]).length, total: all.length };
 }
 
+type PhotoPair = { before: string[]; after: string[] };
+
+// Vercel rejects request bodies over ~4.5 MB before our route ever runs, and
+// most phone photos are bigger than that, so large images get downscaled
+// in the browser first. Anything still over the limit is rejected up front
+// with a clear message instead of a generic failure.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const SHRINK_OVER_BYTES = 1.5 * 1024 * 1024;
+const MAX_DIMENSION = 2400;
+// Each upload holds a DB connection while it writes the image bytes, so a
+// 30-photo batch fired all at once can exhaust the pool and fail at random.
+const UPLOAD_CONCURRENCY = 3;
+
+async function shrinkImage(file: File): Promise<File> {
+  if (file.size <= SHRINK_OVER_BYTES || file.type === "image/gif") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg" });
+  } catch {
+    // Browser can't decode this format (e.g. HEIC outside Safari), so send as-is.
+    return file;
+  }
+}
+
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++]!;
+      await worker(item);
+    }
+  });
+  await Promise.all(runners);
+}
+
 function PhotoUploadArea({
   label,
   photos,
   uploading,
-  uploadCount,
+  progress,
   onUpload,
   onDelete,
 }: {
   label: string;
   photos: string[];
   uploading: boolean;
-  uploadCount: number;
+  progress: { done: number; total: number };
   onUpload: (files: File[]) => void;
   onDelete: (url: string) => void;
 }) {
@@ -75,7 +122,7 @@ function PhotoUploadArea({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              {uploadCount > 1 ? `Uploading ${uploadCount}…` : "Uploading…"}
+              {progress.total > 1 ? `Uploading ${progress.done}/${progress.total}…` : "Uploading…"}
             </>
           ) : (
             <>
@@ -134,21 +181,23 @@ function ChecklistSectionBlock({
 }: {
   section: ChecklistSection;
   completed: Record<string, boolean>;
-  photos: { before: string[]; after: string[] };
+  photos: PhotoPair;
   projectId: string;
   onToggle: (itemId: string, value: boolean) => void;
-  onPhotosChange: (sectionId: string, updated: { before: string[]; after: string[] }) => void;
+  onPhotosChange: (sectionId: string, update: (prev: PhotoPair) => PhotoPair) => void;
 }) {
   const { done, total } = sectionProgress(section, completed);
   const allDone = done === total;
   const [open, setOpen] = useState(!allDone);
   const [uploadingBefore, setUploadingBefore] = useState(false);
   const [uploadingAfter, setUploadingAfter] = useState(false);
-  const [uploadCountBefore, setUploadCountBefore] = useState(0);
-  const [uploadCountAfter, setUploadCountAfter] = useState(0);
+  const [progressBefore, setProgressBefore] = useState({ done: 0, total: 0 });
+  const [progressAfter, setProgressAfter] = useState({ done: 0, total: 0 });
   const [uploadError, setUploadError] = useState("");
 
-  async function uploadOne(type: "before" | "after", file: File): Promise<string> {
+  async function uploadOne(type: "before" | "after", original: File): Promise<string> {
+    const file = await shrinkImage(original);
+    if (file.size > MAX_UPLOAD_BYTES) throw new Error(`${original.name} is too large (max 4 MB)`);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("sectionId", section.id);
@@ -157,47 +206,51 @@ function ChecklistSectionBlock({
       method: "POST",
       body: fd,
     });
-    const data = (await res.json()) as { url?: string; error?: string };
-    if (!res.ok || !data.url) throw new Error(data.error ?? `${file.name} failed to upload`);
+    // A rejection from the hosting layer (e.g. 413) comes back as plain text,
+    // not JSON, so don't let parsing it mask the real failure.
+    const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!res.ok || !data.url) {
+      if (res.status === 413) throw new Error(`${original.name} is too large (max 4 MB)`);
+      throw new Error(data.error ? `${original.name}: ${data.error}` : `${original.name} failed to upload`);
+    }
     return data.url;
   }
 
-  // Uploads every selected file in parallel so a supervisor can pick a
-  // whole batch of before/after shots at once instead of one at a time.
-  // Uses allSettled (not all) so one bad file doesn't drop the rest of an
-  // otherwise-successful batch on the floor.
+  // Uploads a whole batch of before/after shots at once, a few at a time.
+  // Each photo is added to the checklist the moment it finishes (through an
+  // updater, so concurrent batches in other sections or the other
+  // before/after slot can't overwrite each other), and one bad file never
+  // drops the rest of the batch.
   async function handleUpload(type: "before" | "after", files: File[]) {
     const setter = type === "before" ? setUploadingBefore : setUploadingAfter;
-    const countSetter = type === "before" ? setUploadCountBefore : setUploadCountAfter;
+    const progressSetter = type === "before" ? setProgressBefore : setProgressAfter;
     setUploadError("");
     setter(true);
-    countSetter(files.length);
+    progressSetter({ done: 0, total: files.length });
+    const failures: string[] = [];
     try {
-      const results = await Promise.allSettled(files.map((file) => uploadOne(type, file)));
-      const uploaded = results
-        .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
-        .map((r) => r.value);
-      const failedCount = results.length - uploaded.length;
-      if (uploaded.length > 0) {
-        const updated = { ...photos, [type]: [...(photos[type] ?? []), ...uploaded] };
-        onPhotosChange(section.id, updated);
-      }
-      if (failedCount > 0) {
-        setUploadError(
-          failedCount === files.length
-            ? "Upload failed"
-            : `${failedCount} of ${files.length} photos failed to upload`
-        );
+      await runWithConcurrency(files, UPLOAD_CONCURRENCY, async (file) => {
+        try {
+          const url = await uploadOne(type, file);
+          onPhotosChange(section.id, (prev) => ({ ...prev, [type]: [...(prev[type] ?? []), url] }));
+        } catch (err) {
+          failures.push(err instanceof Error ? err.message : `${file.name} failed to upload`);
+        }
+        progressSetter((p) => ({ ...p, done: p.done + 1 }));
+      });
+      if (failures.length > 0) {
+        const prefix =
+          failures.length === files.length ? "Upload failed" : `${failures.length} of ${files.length} photos failed`;
+        setUploadError(`${prefix}: ${failures.join("; ")}`);
       }
     } finally {
       setter(false);
-      countSetter(0);
+      progressSetter({ done: 0, total: 0 });
     }
   }
 
   function handleDelete(type: "before" | "after", url: string) {
-    const updated = { ...photos, [type]: (photos[type] ?? []).filter((u) => u !== url) };
-    onPhotosChange(section.id, updated);
+    onPhotosChange(section.id, (prev) => ({ ...prev, [type]: (prev[type] ?? []).filter((u) => u !== url) }));
     // extract photo ID from url and delete from DB
     const photoId = url.split("/").pop();
     if (photoId) {
@@ -265,7 +318,7 @@ function ChecklistSectionBlock({
                 label="Before"
                 photos={photos.before ?? []}
                 uploading={uploadingBefore}
-                uploadCount={uploadCountBefore}
+                progress={progressBefore}
                 onUpload={(files) => handleUpload("before", files)}
                 onDelete={(url) => handleDelete("before", url)}
               />
@@ -273,7 +326,7 @@ function ChecklistSectionBlock({
                 label="After"
                 photos={photos.after ?? []}
                 uploading={uploadingAfter}
-                uploadCount={uploadCountAfter}
+                progress={progressAfter}
                 onUpload={(files) => handleUpload("after", files)}
                 onDelete={(url) => handleDelete("after", url)}
               />
@@ -312,6 +365,7 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
           ? (d.completedItems as Record<string, boolean>) : {};
         const sp = (typeof d.sectionPhotos === "object" && d.sectionPhotos !== null && !Array.isArray(d.sectionPhotos))
           ? (d.sectionPhotos as SectionPhotos) : {};
+        sectionPhotosRef.current = sp;
         setData({ ...d, completedItems: completed, sectionPhotos: sp });
         setPropertyName(d.propertyName ?? buildingName ?? "");
         setUnitNumber(d.unitNumber ?? "");
@@ -347,11 +401,28 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
     patch({ [field]: value });
   }
 
-  function handlePhotosChange(sectionId: string, updated: { before: string[]; after: string[] }) {
-    if (!data) return;
-    const newSectionPhotos = { ...data.sectionPhotos, [sectionId]: updated };
-    setData((d) => d ? { ...d, sectionPhotos: newSectionPhotos } : d);
-    patch({ sectionPhotos: newSectionPhotos });
+  // Every photo change (from any section, any in-flight upload batch) builds
+  // on the latest list in this ref rather than on whatever render the caller
+  // captured, otherwise parallel uploads overwrite each other and photos
+  // silently vanish from the checklist. Saves are chained so they reach the
+  // server in order, and each one sends the list as of send time.
+  const sectionPhotosRef = useRef<SectionPhotos>({});
+  const photoSaveChain = useRef<Promise<unknown>>(Promise.resolve());
+
+  function handlePhotosChange(sectionId: string, update: (prev: PhotoPair) => PhotoPair) {
+    const current = sectionPhotosRef.current;
+    const next = { ...current, [sectionId]: update(current[sectionId] ?? { before: [], after: [] }) };
+    sectionPhotosRef.current = next;
+    setData((d) => d ? { ...d, sectionPhotos: next } : d);
+    photoSaveChain.current = photoSaveChain.current
+      .then(() =>
+        fetch(`/api/erp/projects/${projectId}/unit-checklist`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sectionPhotos: sectionPhotosRef.current }),
+        })
+      )
+      .catch(() => {});
   }
 
   async function saveInfo(e: React.FormEvent) {

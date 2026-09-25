@@ -3,7 +3,7 @@ import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
-import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -278,6 +278,13 @@ export async function notifyProjectCrew(params: {
   });
   if (rows.length === 0) return;
 
+  const otherDescription = (
+    await prisma.turnoverRequest.findFirst({
+      where: { projects: { some: { id: params.projectId } } },
+      select: { otherDescription: true },
+    })
+  )?.otherDescription;
+
   const sovIds = [...new Set(rows.map((r) => r.assignedSovItemId).filter((v): v is string => !!v))];
   const sovDescById = new Map(
     sovIds.length > 0
@@ -295,7 +302,7 @@ export async function notifyProjectCrew(params: {
       const ownScope = r.assignedSovItemId
         ? sovDescById.get(r.assignedSovItemId) ?? null
         : r.assignedScopeItem
-        ? turnoverScopeLabel(r.assignedScopeItem)
+        ? turnoverScopeDisplayLabel(r.assignedScopeItem, otherDescription)
         : null;
       await sendDayInvite({
         uid: `worker-assignment-${r.id}@sueep.com`,

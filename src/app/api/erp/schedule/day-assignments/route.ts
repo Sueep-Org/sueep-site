@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
-import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, notifyProjectCrew, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
         contractValueCents: true,
         building: { select: { address: true } },
         workOrderRecord: { select: { siteAddress: true } },
-        turnoverRequest: { select: { completedScopeItems: true } },
+        turnoverRequest: { select: { completedScopeItems: true, otherDescription: true } },
       },
     }),
     supervisorUserId ? prisma.erpUser.findUnique({ where: { id: supervisorUserId }, select: { id: true, email: true } }) : null,
@@ -158,6 +158,10 @@ export async function POST(req: Request) {
     const found = await prisma.projectChangeOrder.count({ where: { id: { in: changeOrderIds }, projectId } });
     if (found !== changeOrderIds.length) return NextResponse.json({ error: "Change order not found" }, { status: 404 });
   }
+  // "Other" reads as whatever was typed in for the unit, in errors and in
+  // the invites/notifications below.
+  const scopeLabel = (v: string) => turnoverScopeDisplayLabel(v, project.turnoverRequest?.otherDescription);
+
   // A scope item already marked complete (see /projects/[id]/scope-items)
   // can't be put back on the calendar, that's the whole point of marking it
   // done. Checked server-side too, not just filtered out of the picker.
@@ -166,7 +170,7 @@ export async function POST(req: Request) {
     const blocked = scopeItems.filter((s) => completed.includes(s));
     if (blocked.length > 0) {
       return NextResponse.json(
-        { error: `${blocked.map(turnoverScopeLabel).join(", ")} already marked complete, can't be scheduled` },
+        { error: `${blocked.map(scopeLabel).join(", ")} already marked complete, can't be scheduled` },
         { status: 400 }
       );
     }
@@ -179,7 +183,7 @@ export async function POST(req: Request) {
   // buried in the .ics) on both the supervisor's invite and every crew
   // member's — see notifyProjectCrew for how a worker's own SOV/scope
   // split overrides this when they're individually tagged.
-  const dayScopeText = scopeText(sovDescriptions, scopeItems.map(turnoverScopeLabel));
+  const dayScopeText = scopeText(sovDescriptions, scopeItems.map(scopeLabel));
 
   // Turnovers only, for now. The crew-hours budget assumes the turnover
   // pricing model (contractValueCents ~= 2x target labor cost). Non-turnover
@@ -268,7 +272,7 @@ export async function POST(req: Request) {
       startTime,
       endTime,
       daySovDescriptions: sovDescriptions,
-      dayScopeLabels: scopeItems.map(turnoverScopeLabel),
+      dayScopeLabels: scopeItems.map(scopeLabel),
       url,
     });
 
@@ -326,7 +330,7 @@ export async function POST(req: Request) {
     startTime: assignment.startTime,
     endTime: assignment.endTime,
     daySovDescriptions: sovDescriptions,
-    dayScopeLabels: scopeItems.map(turnoverScopeLabel),
+    dayScopeLabels: scopeItems.map(scopeLabel),
     url,
   });
 

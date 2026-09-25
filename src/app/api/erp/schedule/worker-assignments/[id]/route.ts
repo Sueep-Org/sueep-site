@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { isTurnoverScopeValue, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { isTurnoverScopeValue, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -21,6 +21,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
           jobTitle: true,
           building: { select: { address: true } },
           workOrderRecord: { select: { siteAddress: true } },
+          turnoverRequest: { select: { otherDescription: true } },
         },
       },
     },
@@ -80,6 +81,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
           jobTitle: true,
           building: { select: { address: true } },
           workOrderRecord: { select: { siteAddress: true } },
+          turnoverRequest: { select: { otherDescription: true } },
         },
       },
     },
@@ -115,7 +117,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const contact = await resolveWorkerContact(existing.employeeId, existing.contractorId);
   if (contact) {
     const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
-    const ownScope = sovDescription ?? (data.assignedScopeItem ? turnoverScopeLabel(data.assignedScopeItem) : null);
+    const ownScope = sovDescription ?? (data.assignedScopeItem ? turnoverScopeDisplayLabel(data.assignedScopeItem, existing.project.turnoverRequest?.otherDescription) : null);
     // Day-level time/scope, also used as the scope fallback when this
     // change cleared the worker's own split back to "unassigned" — same
     // rule the initial invite (worker-assignments POST) and
@@ -125,7 +127,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       select: { startTime: true, endTime: true, scopeItems: true, sovItems: { select: { description: true } } },
     });
     const fallbackScope = dayAssignment
-      ? scopeText(dayAssignment.sovItems.map((s) => s.description), dayAssignment.scopeItems.map(turnoverScopeLabel))
+      ? scopeText(dayAssignment.sovItems.map((s) => s.description), dayAssignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, existing.project.turnoverRequest?.otherDescription)))
       : null;
     await sendDayInvite({
       uid: `worker-assignment-${id}@sueep.com`,

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { subFieldName, type SubField } from "@/lib/erp/subcontractorQuestionnaire";
-import { formatSubValue, subFieldInput } from "../../candidates/[id]/subcontractorFieldUi";
+import { subFieldInput } from "../../candidates/[id]/subcontractorFieldUi";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
@@ -22,11 +22,12 @@ type Props = {
    * agent contact, etc.) — folded into this same card instead of a separate
    * Application Info block, so there's one Insurance section, not two. */
   questionnaireFields: SubField[];
-  /** Present when a CandidateApplication is linked — those answers are
-   * read-only here (edit via unlinking, see ContractorApplicationLinkSection). */
-  linkedResponses: Record<string, unknown> | null;
-  /** sub_<key>-keyed values from Contractor.manualApplicationInfo, used only when not linked. */
-  manualInitial: Record<string, string>;
+  /** True when a CandidateApplication is linked, so some of initialValues
+   * came from it. Only changes the helper text; the fields stay editable. */
+  fromApplication: boolean;
+  /** sub_<key>-keyed values: what's saved on the contractor, falling back
+   * to the linked application's answer for fields never edited here. */
+  initialValues: Record<string, string>;
 };
 
 // yyyy-mm-dd for <input type="date">
@@ -43,15 +44,15 @@ export function ContractorInsuranceSection({
   initial,
   workersCompDoc,
   questionnaireFields,
-  linkedResponses,
-  manualInitial,
+  fromApplication,
+  initialValues,
 }: Props) {
   const router = useRouter();
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(initial.hasInsurance);
   const [carrier, setCarrier] = useState(initial.workersCompCarrier ?? "");
   const [policyNumber, setPolicyNumber] = useState(initial.workersCompPolicyNumber ?? "");
   const [expiresAt, setExpiresAt] = useState(toDateInputValue(initial.workersCompExpiresAt));
-  const [questionnaireValues, setQuestionnaireValues] = useState<Record<string, string>>(manualInitial);
+  const [questionnaireValues, setQuestionnaireValues] = useState<Record<string, string>>(initialValues);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
@@ -68,9 +69,11 @@ export function ContractorInsuranceSection({
         workersCompPolicyNumber: policyNumber || null,
         workersCompExpiresAt: expiresAt || null,
       };
-      // Questionnaire answers are read-only while linked to an application —
-      // only send them along when they're actually the editable, manual copy.
-      if (!linkedResponses) body.manualApplicationInfo = questionnaireValues;
+      // Only fields actually changed are saved on the contractor, so untouched
+      // ones keep following the linked application (if any).
+      body.manualApplicationInfo = Object.fromEntries(
+        Object.entries(questionnaireValues).filter(([k, v]) => v !== (initialValues[k] ?? ""))
+      );
 
       const res = await fetch(`/api/erp/contractors/${contractorId}`, {
         method: "PATCH",
@@ -167,29 +170,23 @@ export function ContractorInsuranceSection({
         {questionnaireFields.length > 0 && (
           <div className="border-t border-gray-200 pt-4">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              {linkedResponses ? "From the linked subcontractor application" : "Additional coverage (subcontractor questionnaire)"}
+              Additional coverage (subcontractor questionnaire)
             </h3>
-            {linkedResponses ? (
-              <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                {questionnaireFields.map((field) => (
-                  <div key={field.key}>
-                    <dt className="text-xs text-pink-500">{field.label}</dt>
-                    <dd className="mt-0.5 text-gray-800 whitespace-pre-wrap">{formatSubValue(linkedResponses[subFieldName(field.key)])}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : (
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
-                {questionnaireFields.map((field) => (
-                  <div key={field.key}>
-                    <label className={label}>{field.label}</label>
-                    {subFieldInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) =>
-                      setQuestionnaireValues((prev) => ({ ...prev, [subFieldName(field.key)]: v }))
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {fromApplication ? (
+              <p className="mb-3 text-xs text-gray-400">
+                Pre-filled from the linked subcontractor application. Changes are saved on this contractor only.
+              </p>
+            ) : null}
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              {questionnaireFields.map((field) => (
+                <div key={field.key}>
+                  <label className={label}>{field.label}</label>
+                  {subFieldInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) =>
+                    setQuestionnaireValues((prev) => ({ ...prev, [subFieldName(field.key)]: v }))
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
