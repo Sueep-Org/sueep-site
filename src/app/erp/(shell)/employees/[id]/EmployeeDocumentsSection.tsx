@@ -431,7 +431,7 @@ export function EmployeeDocumentsSection({
                       {d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-3 py-2 text-gray-700">
-                      {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString() : "—"}
+                      {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}
                     </td>
                     <td className="px-3 py-2 text-gray-700">
                       {d.fileUrl ? (

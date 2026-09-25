@@ -103,11 +103,16 @@ export function ProjectContractorSection({
     const next = [...new Set([...scopeCompletedItems, ...values])];
     setScopeCompletedItems(next);
     try {
-      await fetch(`/api/erp/projects/${projectId}/scope-items`, {
+      // Send only what changed; the server merges it into the saved list
+      // and returns the result, which may include items marked elsewhere.
+      const res = await fetch(`/api/erp/projects/${projectId}/scope-items`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ completedScopeItems: next }),
+        body: JSON.stringify({ add: values }),
       });
+      const data = (await res.json().catch(() => ({}))) as { completedScopeItems?: string[] };
+      if (res.ok && data.completedScopeItems) setScopeCompletedItems(data.completedScopeItems);
+      else setScopeCompletedItems(scopeCompletedItems);
     } catch {
       setScopeCompletedItems(scopeCompletedItems);
     }

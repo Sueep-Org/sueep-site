@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
 import { syncSovPercentDone } from "@/lib/sovSync";
 import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
+import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
 type Ctx = { params: Promise<{ id: string; entryId: string }> };
 
@@ -72,6 +73,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
       : Number(body.hourlyRate);
     if (!Number.isFinite(rate) || rate < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
     data.hourlyRateCents = dollarsToCents(rate);
+  }
+  // Same rule as creating a log: no $0 rate for someone paid hourly. Checked
+  // against the employee the log will belong to after this edit.
+  if (data.hourlyRateCents !== undefined || data.employeeId !== undefined) {
+    const finalEmployeeId = data.employeeId !== undefined ? (data.employeeId as string | null) : existing.employeeId;
+    const finalRate = data.hourlyRateCents !== undefined ? (data.hourlyRateCents as number) : existing.hourlyRateCents;
+    const resolved = await resolveLaborRateCents(finalEmployeeId, finalRate);
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+    if (resolved.cents !== finalRate) data.hourlyRateCents = resolved.cents;
   }
   if (body.taskDescription !== undefined) {
     data.taskDescription = body.taskDescription ? String(body.taskDescription).trim() || null : null;

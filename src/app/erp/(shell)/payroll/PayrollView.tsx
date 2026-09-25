@@ -8,7 +8,13 @@ type PayrollRow = {
   employeeId: string | null;
   name: string;
   payType: string;
+  /** Average straight-time rate when the person has logs at more than one
+   * rate (mixedRates). Gross pay is computed per log on the server. */
   hourlyRateCents: number;
+  mixedRates?: boolean;
+  /** Hours logged at $0 for someone paid hourly: almost always a rate that
+   * was never filled in, so the gross below is short by those hours. */
+  missingRateHours?: number;
   totalHours: number;
   regHours: number;
   otHours: number;
@@ -423,10 +429,22 @@ export function PayrollView() {
                       {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.totalHours)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-xs text-gray-400">Flat fee</span> : `${fmt(row.hourlyRateCents)}/hr`}
+                      {row.isContractor ? (
+                        <span className="text-xs text-gray-400">Flat fee</span>
+                      ) : (
+                        <>
+                          {`${fmt(row.hourlyRateCents)}/hr`}
+                          {row.mixedRates ? <div className="text-[10px] text-gray-400">avg, rates vary by job</div> : null}
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
                       {fmt(row.grossPayCents)}
+                      {row.missingRateHours ? (
+                        <div className="text-[10px] font-medium text-red-600">
+                          {fmtHours(Math.round(row.missingRateHours * 100) / 100)} hrs logged with no rate, not included
+                        </div>
+                      ) : null}
                       {row.commissionCents > 0 ? (
                         <>
                           {" + "}

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { buildDayAssignmentInvite, buildScheduleSeriesInvite } from "@/lib/calendarInvite";
+import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
@@ -28,16 +28,6 @@ export function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
 }
 
-/** Stable UID for a crew member's *series* invite (a worker added onto a
- * project's multi-day/repeat range) — keyed by series + which one of
- * employeeId/contractorId they are, not by any one row's id, since the
- * series spans several ProjectWorkerDayAssignment rows. Shared between
- * worker-assignments' POST (send) and the series DELETE route (cancel) so
- * both agree on the same event. */
-export function workerSeriesUid(seriesId: string, employeeId: string | null, contractorId: string | null): string {
-  return `worker-assignment-series-${seriesId}-${employeeId ?? `c-${contractorId}`}@sueep.com`;
-}
-
 function dateKeyLabel(dateKey: string): string {
   return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
     weekday: "long",
@@ -63,17 +53,6 @@ export function formatInviteWhen(dateKey: string, startTime?: string | null, end
   const day = dateKeyLabel(dateKey);
   if (startTime && endTime) return `${day}, ${formatTimeLabel(startTime)} – ${formatTimeLabel(endTime)}`;
   return `${day} (all day)`;
-}
-
-/** Same idea as formatInviteWhen, for a repeating series' overall range. */
-export function formatInviteRange(
-  firstDateKey: string,
-  lastDateKey: string,
-  startTime?: string | null,
-  endTime?: string | null
-): string {
-  const time = startTime && endTime ? `, ${formatTimeLabel(startTime)} – ${formatTimeLabel(endTime)}` : "";
-  return `${dateKeyLabel(firstDateKey)} through ${dateKeyLabel(lastDateKey)}${time}`;
 }
 
 /** Joins SOV item descriptions and/or turnover scope labels into one
@@ -186,60 +165,6 @@ export async function sendDayInvite(params: {
     });
   } catch (e) {
     console.error("Failed to send schedule invite", { uid: params.uid, cancelled: params.cancelled }, e);
-  }
-}
-
-/** Same idea as sendDayInvite, for a recurring/multi-day series — one
- * combined recurring calendar event rather than one email per day. */
-export async function sendSeriesInvite(params: {
-  uid: string;
-  to: string;
-  attendeeName?: string;
-  role: InviteRole;
-  title: string;
-  firstDateKey: string;
-  lastDateKey: string;
-  repeatDays: number[];
-  startTime?: string | null;
-  endTime?: string | null;
-  location?: string;
-  scopeText?: string | null;
-  url?: string;
-  cancelled?: boolean;
-  extraHtml?: string;
-}): Promise<void> {
-  // Same "nothing to notify about" rule as sendDayInvite — skip if the
-  // whole range is already behind today.
-  if (params.lastDateKey < todayEasternKey()) return;
-  const when = formatInviteRange(params.firstDateKey, params.lastDateKey, params.startTime, params.endTime);
-  try {
-    const ics = buildScheduleSeriesInvite({
-      uid: params.uid,
-      firstDateKey: params.firstDateKey,
-      lastDateKey: params.lastDateKey,
-      repeatDays: params.repeatDays,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      summary: `${params.role}: ${params.title}`,
-      description: [params.title, params.scopeText ? `Scope: ${params.scopeText}` : "", params.url ?? ""]
-        .filter(Boolean)
-        .join("\n"),
-      location: params.location,
-      url: params.url,
-      organizerEmail: organizerEmail(),
-      organizerName: "Sueep Schedule",
-      attendeeEmail: params.to,
-      attendeeName: params.attendeeName,
-      cancelled: params.cancelled,
-    });
-    await sendEmail({
-      to: params.to,
-      subject: `${params.cancelled ? "Cancelled" : "You're scheduled"}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when }),
-      attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
-    });
-  } catch (e) {
-    console.error("Failed to send schedule series invite", { uid: params.uid, cancelled: params.cancelled }, e);
   }
 }
 

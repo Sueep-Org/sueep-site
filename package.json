@@ -19,7 +19,6 @@
     "@stripe/react-stripe-js": "^6.1.0",
     "@stripe/stripe-js": "^9.1.0",
     "firebase": "^12.13.0",
-    "firebase-admin": "^13.5.0",
     "jose": "^6.2.2",
     "next": "15.5.7",
     "pdf-lib": "^1.17.1",
@@ -36,7 +35,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
-    "prima": "^0.0.1",
     "prisma": "5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5"

@@ -140,118 +140,127 @@ export async function GET(req: Request) {
   type EmployeeKey = string;
   type WeekKey = string;
 
+  // Each labor log is paid at its own rate: rates legitimately differ per
+  // job (and change after a raise), so one rate per person, which is what
+  // this used to take from their first log, over- or underpaid anyone with
+  // more than one. Hours and straight-time pay are tracked per work week so
+  // overtime can be computed per week, see weekPay below.
   const employeeMap = new Map<EmployeeKey, {
     employeeId: string | null;
     name: string;
     lastName: string;
     payType: string;
-    hourlyRateCents: number;
-    weeklyHours: Map<WeekKey, number>;
+    weeks: Map<WeekKey, { hours: number; straightCents: number }>;
+    rates: Set<number>;
+    /** Hours logged with no rate ($0) for someone paid by the hour. */
+    missingRateHours: number;
     projects: Set<string>;
     entries: { date: string; hours: number; project: string; rateCents: number }[];
   }>();
 
+  function addHours(
+    key: EmployeeKey,
+    init: { employeeId: string | null; name: string; lastName: string; payType: string },
+    workDate: Date,
+    hours: number,
+    rateCents: number,
+    project: string,
+  ) {
+    if (!employeeMap.has(key)) {
+      employeeMap.set(key, { ...init, weeks: new Map(), rates: new Set(), missingRateHours: 0, projects: new Set(), entries: [] });
+    }
+    const emp = employeeMap.get(key)!;
+    const weekStart = mondayOf(workDate).toISOString().slice(0, 10);
+    const week = emp.weeks.get(weekStart) ?? { hours: 0, straightCents: 0 };
+    week.hours += hours;
+    week.straightCents += hours * rateCents;
+    emp.weeks.set(weekStart, week);
+    emp.rates.add(rateCents);
+    if (rateCents === 0 && emp.payType !== "SALARY") emp.missingRateHours += hours;
+    emp.projects.add(project);
+    emp.entries.push({ date: workDate.toISOString().slice(0, 10), hours, project, rateCents });
+  }
+
   for (const entry of entries) {
     // Offshore and Janitorial Contract employees are paid through their own
-    // fixed calcs below, entirely independent of logged hours — any
+    // fixed calcs below, entirely independent of logged hours; any
     // LaborEntry they have is job-costing only and must never feed a
     // biweekly payroll gross-pay number. An INACTIVE salary employee is
-    // excluded entirely too — the flat salary calc below only pays ACTIVE
+    // excluded entirely too: the flat salary calc below only pays ACTIVE
     // salary employees, but without this check a former salary employee
     // with leftover/backdated LaborEntry rows would still show up here,
-    // priced by the old hours-based formula instead of just disappearing.
+    // priced by the hours-based formula instead of just disappearing.
     // (Hourly employees keep showing for hours actually worked before
-    // going inactive — only salary's fixed, employment-status-based payout
+    // going inactive; only salary's fixed, employment-status-based payout
     // needs this exclusion.)
     if (isExcludedFromHoursDrivenPay(entry.employee)) continue;
-    const key: EmployeeKey = entry.employeeId ?? `adhoc:${entry.workerName}`;
-    const name = entry.employee
-      ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
-      : entry.workerName;
-    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.workerName);
-
-    if (!employeeMap.has(key)) {
-      employeeMap.set(key, {
+    addHours(
+      entry.employeeId ?? `adhoc:${entry.workerName}`,
+      {
         employeeId: entry.employeeId,
-        name,
-        lastName: rowLastName,
+        name: entry.employee ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim() : entry.workerName,
+        lastName: entry.employee ? entry.employee.lastName : lastNameOf(entry.workerName),
         payType: entry.employee?.payType ?? "HOURLY",
-        hourlyRateCents: entry.hourlyRateCents,
-        weeklyHours: new Map(),
-        projects: new Set(),
-        entries: [],
-      });
-    }
-
-    const emp = employeeMap.get(key)!;
-    const weekStart = mondayOf(entry.workDate).toISOString().slice(0, 10);
-    emp.weeklyHours.set(weekStart, (emp.weeklyHours.get(weekStart) ?? 0) + entry.hours);
-    emp.projects.add(entry.project?.jobTitle ?? "—");
-    emp.entries.push({
-      date: entry.workDate.toISOString().slice(0, 10),
-      hours: entry.hours,
-      project: entry.project?.jobTitle ?? "—",
-      rateCents: entry.hourlyRateCents,
-    });
+      },
+      entry.workDate,
+      entry.hours,
+      entry.hourlyRateCents,
+      entry.project?.jobTitle ?? "—",
+    );
   }
 
   for (const entry of changeOrderEntries) {
-    if (!entry.hours || !entry.hourlyRateCents) continue;
+    // $0 change order hours are kept (not skipped) so they still count
+    // toward the week's overtime threshold and get flagged as missing a rate.
+    if (!entry.hours) continue;
     if (isExcludedFromHoursDrivenPay(entry.employee)) continue;
-    const key: EmployeeKey = entry.employeeId ?? `adhoc:${entry.name}`;
-    const name = entry.employee
-      ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
-      : entry.name;
-    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.name);
-    const projectTitle = entry.changeOrder.project?.jobTitle ?? "—";
-
-    if (!employeeMap.has(key)) {
-      employeeMap.set(key, {
+    addHours(
+      entry.employeeId ?? `adhoc:${entry.name}`,
+      {
         employeeId: entry.employeeId,
-        name,
-        lastName: rowLastName,
+        name: entry.employee ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim() : entry.name,
+        lastName: entry.employee ? entry.employee.lastName : lastNameOf(entry.name),
         payType: entry.employee?.payType ?? "HOURLY",
-        hourlyRateCents: entry.hourlyRateCents,
-        weeklyHours: new Map(),
-        projects: new Set(),
-        entries: [],
-      });
-    }
-
-    const emp = employeeMap.get(key)!;
-    const weekStart = mondayOf(entry.workDate).toISOString().slice(0, 10);
-    emp.weeklyHours.set(weekStart, (emp.weeklyHours.get(weekStart) ?? 0) + entry.hours);
-    emp.projects.add(projectTitle);
-    emp.entries.push({
-      date: entry.workDate.toISOString().slice(0, 10),
-      hours: entry.hours,
-      project: projectTitle,
-      rateCents: entry.hourlyRateCents,
-    });
+      },
+      entry.workDate,
+      entry.hours,
+      entry.hourlyRateCents,
+      entry.changeOrder.project?.jobTitle ?? "—",
+    );
   }
 
   const OT_THRESHOLD = 40;
-  const OT_MULTIPLIER = 1.5;
+  const OT_PREMIUM = 0.5;
+
+  // One work week's pay. Straight time is every log at its own rate. Hours
+  // past 40 get an extra half of the week's weighted-average rate (the
+  // "regular rate" rule for someone paid different rates in one week), so
+  // with a single rate this is the familiar 1.5x.
+  function weekPay(week: { hours: number; straightCents: number }, payType: string) {
+    if (payType === "SALARY") {
+      // Salaried employees don't earn OT; their gross is replaced by the
+      // flat salary below anyway, hours here are for reference only.
+      return { regHours: Math.min(week.hours, OT_THRESHOLD), otHours: 0, payCents: week.straightCents };
+    }
+    if (week.hours <= OT_THRESHOLD) return { regHours: week.hours, otHours: 0, payCents: week.straightCents };
+    const otHours = week.hours - OT_THRESHOLD;
+    const averageRateCents = week.straightCents / week.hours;
+    return { regHours: OT_THRESHOLD, otHours, payCents: week.straightCents + otHours * averageRateCents * OT_PREMIUM };
+  }
 
   const employeeRows = Array.from(employeeMap.values()).map((emp) => {
     let regHours = 0;
     let otHours = 0;
-    for (const weekHours of emp.weeklyHours.values()) {
-      if (emp.payType === "SALARY") {
-        // Salaried employees don't earn OT — hours past 40/week are still
-        // logged elsewhere but don't add to gross pay here.
-        regHours += Math.min(weekHours, OT_THRESHOLD);
-      } else if (weekHours <= OT_THRESHOLD) {
-        regHours += weekHours;
-      } else {
-        regHours += OT_THRESHOLD;
-        otHours += weekHours - OT_THRESHOLD;
-      }
+    let payCents = 0;
+    let straightCents = 0;
+    for (const week of emp.weeks.values()) {
+      const w = weekPay(week, emp.payType);
+      regHours += w.regHours;
+      otHours += w.otHours;
+      payCents += w.payCents;
+      straightCents += week.straightCents;
     }
-    const totalHours = regHours + otHours;
-    const grossPayCents = Math.round(
-      regHours * emp.hourlyRateCents + otHours * emp.hourlyRateCents * OT_MULTIPLIER
-    );
+    const loggedHours = Array.from(emp.weeks.values()).reduce((sum, w) => sum + w.hours, 0);
 
     return {
       isContractor: false as const,
@@ -259,11 +268,15 @@ export async function GET(req: Request) {
       name: emp.name,
       lastName: emp.lastName,
       payType: emp.payType,
-      hourlyRateCents: emp.hourlyRateCents,
-      totalHours,
+      // Average straight-time rate, for display and the CSV. Pay itself is
+      // computed per log above, not from this.
+      hourlyRateCents: loggedHours > 0 ? Math.round(straightCents / loggedHours) : 0,
+      mixedRates: emp.rates.size > 1,
+      missingRateHours: emp.missingRateHours,
+      totalHours: regHours + otHours,
       regHours,
       otHours,
-      grossPayCents,
+      grossPayCents: Math.round(payCents),
       projects: Array.from(emp.projects).join(", "),
       entries: emp.entries,
     };
@@ -297,6 +310,8 @@ export async function GET(req: Request) {
       lastName: e.lastName,
       payType: "SALARY",
       hourlyRateCents: e.hourlyPayCents ?? 0,
+      mixedRates: false,
+      missingRateHours: 0,
       totalHours: 0,
       regHours: 0,
       otHours: 0,
@@ -344,6 +359,8 @@ export async function GET(req: Request) {
       lastName: e.lastName,
       payType: "JANITORIAL",
       hourlyRateCents: rateCents,
+      mixedRates: false,
+      missingRateHours: 0,
       totalHours: baseHours,
       regHours: baseHours,
       otHours: 0,
@@ -384,6 +401,8 @@ export async function GET(req: Request) {
     lastName: lastNameOf(c.name),
     payType: "CONTRACTOR",
     hourlyRateCents: 0,
+    mixedRates: false,
+    missingRateHours: 0,
     totalHours: 0,
     regHours: 0,
     otHours: 0,
@@ -439,6 +458,8 @@ export async function GET(req: Request) {
       lastName: e.lastName,
       payType: e.payType,
       hourlyRateCents: e.hourlyPayCents ?? 0,
+      mixedRates: false,
+      missingRateHours: 0,
       totalHours: 0,
       regHours: 0,
       otHours: 0,

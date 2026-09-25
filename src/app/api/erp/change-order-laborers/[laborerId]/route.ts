@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
+import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
 type Ctx = { params: Promise<{ laborerId: string }> };
 
@@ -37,7 +38,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       ? Number(String(body.hourlyRate).replace(/[$,]/g, ""))
       : Number(body.hourlyRate);
     if (!Number.isFinite(rate) || rate < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
-    data.hourlyRateCents = dollarsToCents(rate);
+    const resolved = await resolveLaborRateCents(existing.employeeId, dollarsToCents(rate));
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+    data.hourlyRateCents = resolved.cents;
   }
   if (body.taskDescription !== undefined) {
     data.taskDescription = body.taskDescription ? String(body.taskDescription).trim() || null : null;

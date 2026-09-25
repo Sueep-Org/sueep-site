@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
 /**
  * GET /api/erp/labor
@@ -246,6 +247,12 @@ export async function POST(request: NextRequest) {
       employeeRole = employeeRole || employee.role || null;
       employeeRateCents = employee.hourlyPayCents ?? employeeRateCents;
     }
+
+    const rate = await resolveLaborRateCents(linkedEmployeeId ?? null, employeeRateCents);
+    if (!rate.ok) {
+      return NextResponse.json({ success: false, error: rate.error }, { status: 400 });
+    }
+    employeeRateCents = rate.cents;
 
     const laborEntry = await prisma.laborEntry.create({
       data: {

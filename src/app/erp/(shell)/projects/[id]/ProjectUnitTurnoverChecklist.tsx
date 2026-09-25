@@ -366,6 +366,7 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
         const sp = (typeof d.sectionPhotos === "object" && d.sectionPhotos !== null && !Array.isArray(d.sectionPhotos))
           ? (d.sectionPhotos as SectionPhotos) : {};
         sectionPhotosRef.current = sp;
+        completedRef.current = completed;
         setData({ ...d, completedItems: completed, sectionPhotos: sp });
         setPropertyName(d.propertyName ?? buildingName ?? "");
         setUnitNumber(d.unitNumber ?? "");
@@ -380,19 +381,32 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
       .catch(() => setLoading(false));
   }, [projectId]);
 
-  const patch = useCallback((body: Record<string, unknown>) => {
-    fetch(`/api/erp/projects/${projectId}/unit-checklist`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    }).catch(() => {});
+  // Every save goes through one queue so they reach the server in the order
+  // they were made. Sent unqueued, two quick checkbox clicks could arrive
+  // out of order and the older list would overwrite the newer one.
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const patch = useCallback((body: Record<string, unknown> | (() => Record<string, unknown>)) => {
+    saveChain.current = saveChain.current
+      .then(() =>
+        fetch(`/api/erp/projects/${projectId}/unit-checklist`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(typeof body === "function" ? body() : body),
+        })
+      )
+      .catch(() => {});
   }, [projectId]);
+
+  // Latest checked items, so each click builds on every earlier click even
+  // before React re-renders.
+  const completedRef = useRef<Record<string, boolean>>({});
 
   function toggleItem(itemId: string, value: boolean) {
     if (!data) return;
-    const updated = { ...data.completedItems, [itemId]: value };
+    const updated = { ...completedRef.current, [itemId]: value };
+    completedRef.current = updated;
     setData((d) => d ? { ...d, completedItems: updated } : d);
-    patch({ completedItems: updated });
+    patch(() => ({ completedItems: completedRef.current }));
   }
 
   function toggleBool(field: keyof ChecklistData, value: boolean) {
@@ -404,25 +418,16 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
   // Every photo change (from any section, any in-flight upload batch) builds
   // on the latest list in this ref rather than on whatever render the caller
   // captured, otherwise parallel uploads overwrite each other and photos
-  // silently vanish from the checklist. Saves are chained so they reach the
-  // server in order, and each one sends the list as of send time.
+  // silently vanish from the checklist. Saves go through the shared queue
+  // above, and each one sends the list as of send time.
   const sectionPhotosRef = useRef<SectionPhotos>({});
-  const photoSaveChain = useRef<Promise<unknown>>(Promise.resolve());
 
   function handlePhotosChange(sectionId: string, update: (prev: PhotoPair) => PhotoPair) {
     const current = sectionPhotosRef.current;
     const next = { ...current, [sectionId]: update(current[sectionId] ?? { before: [], after: [] }) };
     sectionPhotosRef.current = next;
     setData((d) => d ? { ...d, sectionPhotos: next } : d);
-    photoSaveChain.current = photoSaveChain.current
-      .then(() =>
-        fetch(`/api/erp/projects/${projectId}/unit-checklist`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sectionPhotos: sectionPhotosRef.current }),
-        })
-      )
-      .catch(() => {});
+    patch(() => ({ sectionPhotos: sectionPhotosRef.current }));
   }
 
   async function saveInfo(e: React.FormEvent) {

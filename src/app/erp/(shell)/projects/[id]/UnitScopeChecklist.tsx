@@ -26,21 +26,26 @@ export function UnitScopeChecklist({ projectId, contractedScopeItems, initialCom
   }, [initialCompletedScopeItems]);
 
   async function toggle(value: string) {
+    const marking = !completed.has(value);
     const next = new Set(completed);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
+    if (marking) next.add(value);
+    else next.delete(value);
     setCompleted(next);
     setError("");
     setSaving(true);
     try {
+      // Send only this one change; the server merges it into the saved list.
       const res = await fetch(`/api/erp/projects/${projectId}/scope-items`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ completedScopeItems: Array.from(next) }),
+        body: JSON.stringify(marking ? { add: [value] } : { remove: [value] }),
       });
+      const data = (await res.json().catch(() => ({}))) as { completedScopeItems?: string[] };
       if (!res.ok) {
         setCompleted(completed);
         setError("Failed to save");
+      } else if (data.completedScopeItems) {
+        setCompleted(new Set(data.completedScopeItems));
       }
     } catch {
       setCompleted(completed);
