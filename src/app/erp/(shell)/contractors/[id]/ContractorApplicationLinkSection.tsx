@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { SubcontractorInfoSection } from "../../candidates/[id]/SubcontractorInfoSection";
 
 type LinkedApplication = {
   id: string;
@@ -23,12 +22,10 @@ type Props = {
 };
 
 /** Just the data-source control: which /careers subcontractor application (if
- * any) this contractor is linked to. The Company profile, Insurance, and
- * Licensing cards elsewhere on the profile read from whatever this points
- * at, so it doesn't duplicate those answers itself — it only shows the
- * sections that have no other home on the profile (experience, workforce,
- * safety, financials, etc.), tucked under a disclosure since they're
- * reference-only. */
+ * any) this contractor is linked to. Every questionnaire section on the
+ * profile (Company profile, Insurance, Licensing, and the rest) is an
+ * editable card pre-filled from whatever this points at, so it doesn't
+ * repeat any of those answers itself. */
 export function ContractorApplicationLinkSection({ contractorId, linkedApplication, linkableApplications }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState("");
@@ -60,7 +57,7 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
   return (
     <div>
       <p className="text-xs text-gray-500">
-        Links a submitted /careers application so Company profile, Insurance, and Licensing read from it instead of manual entry.
+        Links a submitted /careers application so the company sections below are pre-filled from its answers. Everything stays editable here.
       </p>
 
       {linkedApplication ? (
@@ -108,16 +105,6 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
 
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
 
-      {linkedApplication && (
-        <details className="mt-4 border-t border-gray-200 pt-3">
-          <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
-            More from their application (experience, workforce, safety, financials…)
-          </summary>
-          <div className="mt-3">
-            <SubcontractorInfoSection responses={linkedApplication.responses} excludeSectionIds={["company", "insurance", "licensing"]} />
-          </div>
-        </details>
-      )}
     </div>
   );
 }

@@ -232,6 +232,26 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
+  // No job can be marked complete until someone has actually logged work on
+  // it: at least one crew labor log, or a contractor assignment for jobs a
+  // subcontractor performed (those never get crew labor logs). Applies to
+  // every segment, not just turnovers, and to every path that lands here
+  // (Setup tab, schedule popover, labor/contractor "mark complete" boxes).
+  // Only checked on the transition into COMPLETE, so already-completed
+  // legacy jobs without logs can still be edited.
+  if (data.status === "COMPLETE" && existing.status !== "COMPLETE") {
+    const [laborCount, contractorCount] = await Promise.all([
+      prisma.laborEntry.count({ where: { projectId: id } }),
+      prisma.contractorAssignment.count({ where: { projectId: id } }),
+    ]);
+    if (laborCount === 0 && contractorCount === 0) {
+      return NextResponse.json(
+        { error: "Log labor (or assign a contractor) before marking this job complete." },
+        { status: 400 },
+      );
+    }
+  }
+
   // A real projectDate change (not just touching other fields, and not
   // clearing it to null) is a reschedule — covers every path that lands
   // here: drag-and-drop on the calendar, the event card's "Save dates", and

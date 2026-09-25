@@ -42,7 +42,7 @@ export function ContractorPaperworkPanel({
   const [sending, setSending] = useState(false);
   const [sendOk, setSendOk] = useState(false);
   const [sendError, setSendError] = useState("");
-  const [uploadingLabel, setUploadingLabel] = useState<string | null>(null);
+  const [uploadingLabels, setUploadingLabels] = useState<Set<string>>(new Set());
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -102,20 +102,36 @@ export function ContractorPaperworkPanel({
     setTimeout(() => setSendOk(false), 3000);
   }
 
+  // Several documents can upload at once, so each row tracks its own
+  // spinner, and a finished upload marks its row right away instead of
+  // waiting on a refresh (which never resets this component's local list).
   async function uploadFile(label: string, file: File) {
-    setUploadingLabel(label);
+    setUploadingLabels((prev) => new Set(prev).add(label));
     setUploadError((prev) => ({ ...prev, [label]: "" }));
-    const fd = new FormData();
-    fd.append("label", label);
-    fd.append("file", file);
-    const res = await fetch(`/api/erp/contractors/${id}/upload-document`, { method: "POST", body: fd });
-    setUploadingLabel(null);
-    if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      setUploadError((prev) => ({ ...prev, [label]: j.error ?? "Upload failed" }));
-      return;
+    try {
+      const fd = new FormData();
+      fd.append("label", label);
+      fd.append("file", file);
+      const res = await fetch(`/api/erp/contractors/${id}/upload-document`, { method: "POST", body: fd });
+      // A rejection from the hosting layer (e.g. 413) is plain text, not JSON.
+      const j = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !j.url) {
+        const message = res.status === 413 ? "File too large (max 4 MB)" : j.error ?? "Upload failed";
+        setUploadError((prev) => ({ ...prev, [label]: message }));
+        return;
+      }
+      const url = j.url;
+      setPaperwork((prev) => prev.map((p) => (p.label === label ? { ...p, url } : p)));
+      router.refresh();
+    } catch {
+      setUploadError((prev) => ({ ...prev, [label]: "Network error" }));
+    } finally {
+      setUploadingLabels((prev) => {
+        const next = new Set(prev);
+        next.delete(label);
+        return next;
+      });
     }
-    router.refresh();
   }
 
   return (
@@ -151,10 +167,10 @@ export function ContractorPaperworkPanel({
                       <button
                         type="button"
                         onClick={() => fileInputRefs.current[item.label]?.click()}
-                        disabled={uploadingLabel === item.label}
+                        disabled={uploadingLabels.has(item.label)}
                         className="text-xs text-gray-500 hover:text-[#E73C6E] disabled:opacity-50"
                       >
-                        {uploadingLabel === item.label ? "Uploading…" : item.url ? "Replace" : "Upload"}
+                        {uploadingLabels.has(item.label) ? "Uploading…" : item.url ? "Replace" : "Upload"}
                       </button>
                     ) : (
                       <span className="text-xs text-amber-500">Save requirements first</span>
@@ -162,7 +178,7 @@ export function ContractorPaperworkPanel({
                     <input
                       ref={(el) => { fileInputRefs.current[item.label] = el; }}
                       type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];

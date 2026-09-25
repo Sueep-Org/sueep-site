@@ -10,7 +10,7 @@ import {
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
-import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
@@ -34,7 +34,7 @@ function scopeSplitOptions(
       .map((s) => ({ id: s.id, label: s.description }));
   }
   if (group === "JANITORIAL_TURNOVER_REQUESTS") {
-    return scopePicks.map((v) => ({ id: v, label: turnoverScopeLabel(v) }));
+    return scopePicks.map((v) => ({ id: v, label: turnoverScopeDisplayLabel(v, project?.otherScopeDescription) }));
   }
   return [];
 }
@@ -45,6 +45,7 @@ type ProjectOption = {
   segment: string;
   sovItems: SOVItemOption[];
   contractedScopeItems: string[] | null;
+  otherScopeDescription: string | null;
   completedScopeItems: string[];
   changeOrders: { id: string; title: string }[];
 };
@@ -242,7 +243,9 @@ export function DayAssignmentModal({
     selectedProject?.contractedScopeItems
       ? TURNOVER_SCOPE_OPTIONS.filter((opt) => selectedProject.contractedScopeItems!.includes(opt.value))
       : TURNOVER_SCOPE_OPTIONS
-  ).filter((opt) => !selectedProject?.completedScopeItems.includes(opt.value));
+  )
+    .filter((opt) => !selectedProject?.completedScopeItems.includes(opt.value))
+    .map((opt) => ({ ...opt, label: turnoverScopeDisplayLabel(opt.value, selectedProject?.otherScopeDescription) }));
 
   // What a single crew member being added to the *selected* project could
   // be split onto — only meaningful once 2+ things are picked in Task
@@ -1067,7 +1070,7 @@ export function DayAssignmentModal({
                   rowGroup === "POST_CONSTRUCTION"
                     ? project?.sovItems.find((s) => s.id === assignedId)?.description ?? null
                     : assignedId
-                    ? turnoverScopeLabel(assignedId)
+                    ? turnoverScopeDisplayLabel(assignedId, project?.otherScopeDescription)
                     : null;
                 return (
                   <li

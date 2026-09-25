@@ -120,6 +120,9 @@ export type ScheduleProject = {
    * unit has. Null when there's no linked TurnoverRequest (falls back to
    * offering every category, since there's nothing to restrict against). */
   contractedScopeItems: string[] | null;
+  /** What was typed in for this unit's "Other" scope (TurnoverRequest.
+   * otherDescription), shown in place of the bare "Other" label. */
+  otherScopeDescription: string | null;
   /** Subset of contractedScopeItems already marked done (see
    * TurnoverRequest.completedScopeItems). The day-assignment scope picker
    * excludes these, a finished item can't be put back on the calendar. */

@@ -196,3 +196,12 @@ const CONTRACTOR_MANUAL_EXCLUDED_FIELDS = new Set([
 export const CONTRACTOR_MANUAL_SECTIONS: SubSection[] = SUBCONTRACTOR_QUESTIONNAIRE.filter((s) =>
   ["company", "insurance", "licensing"].includes(s.id)
 ).map((s) => ({ ...s, fields: s.fields.filter((f) => !CONTRACTOR_MANUAL_EXCLUDED_FIELDS.has(f.key)) }));
+
+/** Every other questionnaire section (experience, services, workforce,
+ * safety, equipment, quality). Shown as editable cards on the Contractor
+ * profile, pre-filled from a linked application when there is one. Not
+ * part of CONTRACTOR_MANUAL_SECTIONS, which also drives the contractor's
+ * own info form. */
+export const CONTRACTOR_PROFILE_EXTRA_SECTIONS: SubSection[] = SUBCONTRACTOR_QUESTIONNAIRE.filter(
+  (s) => !["company", "insurance", "licensing"].includes(s.id)
+);

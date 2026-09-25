@@ -25,6 +25,14 @@ export function turnoverScopeLabel(value: string): string {
   return TURNOVER_SCOPE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
+/** Same as turnoverScopeLabel, but "Other" shows what was actually typed in
+ * for the unit (TurnoverRequest.otherDescription) when there is something,
+ * so the schedule reads "Replace blinds" instead of a bare "Other". */
+export function turnoverScopeDisplayLabel(value: string, otherDescription: string | null | undefined): string {
+  if (value === "OTHER" && otherDescription?.trim()) return otherDescription.trim();
+  return turnoverScopeLabel(value);
+}
+
 /** Parses TurnoverRequest.completedScopeItems (a raw Json column) down to the
  * subset of values that are actually valid scope categories, same defensive
  * pattern as Employee.requiredDocuments. */

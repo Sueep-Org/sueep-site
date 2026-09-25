@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
-import { isTurnoverScopeValue, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { isTurnoverScopeValue, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
@@ -114,6 +114,7 @@ export async function POST(req: Request) {
         jobTitle: true,
         building: { select: { address: true } },
         workOrderRecord: { select: { siteAddress: true } },
+        turnoverRequest: { select: { otherDescription: true } },
       },
     }),
     employeeId
@@ -260,7 +261,7 @@ export async function POST(req: Request) {
   const url = appUrl() ? `${appUrl()}/erp/projects/${projectId}` : undefined;
   // The worker's own split wins; a day-level fallback (looked up per date
   // below, single-day path only) covers everyone else.
-  const ownScope = assignedSovDescription ?? (assignedScopeItem ? turnoverScopeLabel(assignedScopeItem) : null);
+  const ownScope = assignedSovDescription ?? (assignedScopeItem ? turnoverScopeDisplayLabel(assignedScopeItem, project.turnoverRequest?.otherDescription) : null);
   const contact = await resolveWorkerContact(employeeId, contractorId);
 
   if (seriesDates && seriesId) {
@@ -312,7 +313,7 @@ export async function POST(req: Request) {
       select: { startTime: true, endTime: true, scopeItems: true, sovItems: { select: { description: true } } },
     });
     const dayScope = dayAssignment
-      ? scopeText(dayAssignment.sovItems.map((s) => s.description), dayAssignment.scopeItems.map(turnoverScopeLabel))
+      ? scopeText(dayAssignment.sovItems.map((s) => s.description), dayAssignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.turnoverRequest?.otherDescription)))
       : null;
     await sendDayInvite({
       uid: `worker-assignment-${assignment.id}@sueep.com`,

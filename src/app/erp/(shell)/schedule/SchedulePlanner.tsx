@@ -34,7 +34,7 @@ import {
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
-import { TURNOVER_SCOPE_OPTIONS, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox } from "@/app/erp/components/SOVCombobox";
 
 const PX_PER_DAY = 10;
@@ -157,7 +157,9 @@ function availableScopeOptionsFor(p: ScheduleProject) {
     p.contractedScopeItems
       ? TURNOVER_SCOPE_OPTIONS.filter((opt) => p.contractedScopeItems!.includes(opt.value))
       : TURNOVER_SCOPE_OPTIONS
-  ).filter((opt) => !p.completedScopeItems.includes(opt.value));
+  )
+    .filter((opt) => !p.completedScopeItems.includes(opt.value))
+    .map((opt) => ({ ...opt, label: turnoverScopeDisplayLabel(opt.value, p.otherScopeDescription) }));
 }
 
 /** The specific things a single crew member on this day could be split
@@ -180,7 +182,7 @@ function dayScopeSplitOptions(
       .map((s) => ({ id: s.id, label: s.description }));
   }
   if (group === "JANITORIAL_TURNOVER_REQUESTS") {
-    return scopePicks.map((v) => ({ id: v, label: turnoverScopeLabel(v) }));
+    return scopePicks.map((v) => ({ id: v, label: turnoverScopeDisplayLabel(v, p.otherScopeDescription) }));
   }
   return [];
 }
@@ -1166,7 +1168,10 @@ export function SchedulePlanner({
             {entries.length > 0 ? (
               <ul className="mt-1.5 space-y-1">
                 {entries.map((e, i) => {
-                  const scopeLabel = e.sovItemDescriptions.length > 0 ? e.sovItemDescriptions.join(", ") : e.taskDescription;
+                  // Labor logs store the task as its label ("Other"), so swap in
+                  // what was typed for the unit, same as the scope pickers.
+                  const task = e.taskDescription === "Other" && p.otherScopeDescription ? p.otherScopeDescription : e.taskDescription;
+                  const scopeLabel = e.sovItemDescriptions.length > 0 ? e.sovItemDescriptions.join(", ") : task;
                   return (
                     <li
                       key={`${e.workerName}-${i}`}
@@ -3040,7 +3045,7 @@ export function SchedulePlanner({
                   const assignmentSovDescriptions = assignment.sovItemIds
                     .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
                     .filter((d): d is string => !!d);
-                  const assignmentScopeLabels = assignment.scopeItems.map(turnoverScopeLabel);
+                  const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
                   const noSupervisor = !isOverdue && !supervisor && !pm && !contractor;
                   return (
                   <Fragment key={`plan-${assignment.id}`}>

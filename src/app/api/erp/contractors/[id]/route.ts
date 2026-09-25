@@ -55,7 +55,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!Array.isArray(body.paperwork)) {
       return NextResponse.json({ error: "paperwork must be an array" }, { status: 400 });
     }
-    data.paperwork = body.paperwork;
+    // This save only edits which documents are required. A document's link
+    // is owned by the upload routes, so keep whatever link is already on
+    // file for a label instead of trusting the client's copy, which can be
+    // stale (a page opened before an upload finished would otherwise blank
+    // out that upload the next time someone saves the list).
+    const existingPaperwork = (Array.isArray(existing.paperwork) ? existing.paperwork : []) as { label: string; url: string }[];
+    const existingUrls = new Map(existingPaperwork.map((p) => [p.label, p.url]));
+    data.paperwork = (body.paperwork as { label: string; url?: string }[]).map((p) => ({
+      label: p.label,
+      url: existingUrls.get(p.label) || p.url || "",
+    }));
   }
   if (body.manualApplicationInfo !== undefined) {
     const v = body.manualApplicationInfo;
