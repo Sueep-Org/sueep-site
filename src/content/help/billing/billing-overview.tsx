@@ -43,10 +43,11 @@ export function BillingOverview() {
         </Step>
 
         <Step n={4} title="Recurring tab">
-          Lists billing periods generated from buildings&apos; recurring janitorial contracts,
-          grouped under their building, one row per month. See{" "}
-          <A href="/erp/help/buildings/buildings-overview">Buildings Overview</A> for how a
-          recurring contract and its periods get set up in the first place.
+          Lists each janitorial contract&apos;s billing months, grouped under their building, one
+          row per month. The amount includes any one-off extras added that month. Clicking a month
+          opens the contract. See{" "}
+          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A> for how
+          contracts and their months get set up in the first place.
           <ImgPlaceholder label="Recurring billing tab" />
         </Step>
 

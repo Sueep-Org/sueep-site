@@ -1,17 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
-import type { RecurringContract, RecurringContractUnit } from "@prisma/client";
-
-function monthLabel(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-}
+import type { RecurringContract } from "@prisma/client";
 
 function firstOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-}
-
-function endOfMonth(periodStart: Date): Date {
-  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 0));
 }
 
 export type GeneratePeriodResult =
@@ -19,100 +10,37 @@ export type GeneratePeriodResult =
   | { created: false; reason: "already_generated" };
 
 /**
- * Generates the current month's billing + unit work for a recurring
- * contract: one revenue-only "billing" Project, plus one TurnoverRequest +
- * cost-only Project per active enrolled unit — no pricing-package lookup,
- * since these units are covered by the flat monthly rate. Idempotent via
- * the RecurringContractPeriod (recurringContractId, periodStart) unique
- * constraint: a duplicate call for the same month is a no-op.
+ * Generates the current month's billing period for a recurring contract:
+ * a single RecurringContractPeriod holding the flat monthly amount and its
+ * billing status. No Projects or TurnoverRequests are created. Idempotent
+ * via the (recurringContractId, periodStart) unique constraint: a duplicate
+ * call for the same month is a no-op.
  */
-export async function generatePeriodForContract(
-  contract: RecurringContract,
-  units: RecurringContractUnit[]
-): Promise<GeneratePeriodResult> {
+export async function generatePeriodForContract(contract: RecurringContract): Promise<GeneratePeriodResult> {
   const periodStart = firstOfMonth(new Date());
-  const periodEnd = endOfMonth(periodStart);
-
-  const building = await prisma.building.findUniqueOrThrow({ where: { id: contract.buildingId } });
-
-  let period;
   try {
-    period = await prisma.recurringContractPeriod.create({
+    const period = await prisma.recurringContractPeriod.create({
       data: {
         recurringContractId: contract.id,
         periodStart,
-        // Placeholder — replaced right after the billing project is created.
-        // A real value is required up front since billingProjectId is unique/non-null,
-        // and we need the period's own id to link the billing project back to it.
-        billingProjectId: "pending",
+        amountCents: contract.monthlyRateCents,
       },
     });
+    return { created: true, periodId: period.id };
   } catch {
     // Unique constraint on (recurringContractId, periodStart) — already generated this month.
     return { created: false, reason: "already_generated" };
   }
+}
 
-  const billingProject = await prisma.project.create({
-    data: {
-      segment: "JANITORIAL_TURNOVER_REQUESTS",
-      jobTitle: `${building.name} — Monthly Contract — ${monthLabel(periodStart)}`,
-      buildingId: building.id,
-      recurringContractPeriodId: period.id,
-      contractValueCents: contract.monthlyRateCents,
-      projectDate: periodStart,
-      projectEndDate: periodEnd,
-      percentDone: 0,
-      percentInvoiced: 0,
-    },
-  });
+export function parseBillingDay(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 28 ? n : null;
+}
 
-  await prisma.recurringContractPeriod.update({
-    where: { id: period.id },
-    data: { billingProjectId: billingProject.id },
-  });
+export const PERIOD_BILLING_STATUSES = ["NOT_BILLED", "BILLED", "PAID"] as const;
 
-  const activeUnits = units.filter((u) => u.active);
-  await Promise.all(
-    activeUnits.map(async (unit) => {
-      const request = await prisma.turnoverRequest.create({
-        data: {
-          buildingId: building.id,
-          requestType: "REGULAR",
-          unitNumber: unit.unitNumber,
-          bedrooms: unit.isCommonArea ? null : unit.bedrooms,
-          bathrooms: unit.isCommonArea ? null : unit.bathrooms,
-          fullClean: unit.fullClean,
-          carpetCleaning: unit.carpetCleaning,
-          // Covered by the flat monthly rate — no per-unit pricing-package lookup.
-          priceCents: null,
-          startDate: periodStart,
-          endDate: periodEnd,
-        },
-      });
-
-      await prisma.project.create({
-        data: {
-          segment: "JANITORIAL_TURNOVER_REQUESTS",
-          jobTitle: `${building.name} - ${formatUnitDisplay(unit.unitNumber)}`,
-          buildingId: building.id,
-          turnoverRequestId: request.id,
-          recurringContractPeriodId: period.id,
-          projectDate: periodStart,
-          projectEndDate: periodEnd,
-          percentDone: 0,
-          percentInvoiced: 0,
-          // Not set on the billing project above — that revenue is already
-          // commissioned via RecurringContract.commissionEmployeeId on its
-          // own 5%/2% schedule (see computeRecurringCommissionCents); giving
-          // it an owner here too would double-commission it as a one-time
-          // deal. Unit projects normally carry no contractValueCents, but an
-          // "other work" charge can still land on one, so they still need an
-          // owner to get commissioned correctly when that happens.
-          commissionEmployeeId: building.commissionEmployeeId,
-        },
-      });
-    })
-  );
-
-  return { created: true, periodId: period.id };
+/** A period's full billed total: the flat amount plus any one-off extras. */
+export function periodTotalCents(period: { amountCents: number; charges: { amountCents: number }[] }): number {
+  return period.amountCents + period.charges.reduce((s, c) => s + c.amountCents, 0);
 }

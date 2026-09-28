@@ -6,7 +6,7 @@ export function BuildingsOverview() {
       <H2>Overview</H2>
       <P>
         A building is the property a janitorial turnover client owns, everything about turnover
-        pricing, units, and recurring monthly contracts is scoped to one. Buildings don&apos;t have
+        pricing, units, and janitorial contracts is scoped to one. Buildings don&apos;t have
         their own item in the left nav, get to the list by going directly to{" "}
         <strong>ERP → Buildings</strong> in the address bar, or by clicking a building&apos;s name
         from the <A href="/erp/help/billing/billing-overview">Billing → Recurring</A> tab.
@@ -42,8 +42,8 @@ export function BuildingsOverview() {
           other work).
           <ImgPlaceholder label="Units tab with Add unit form" />
           <Callout type="warning">
-            If the unit identifier you type matches one that already exists on this building
-            (including units enrolled on an active recurring contract), you&apos;ll be warned
+            If the unit identifier you type matches one that already exists on this building,
+            you&apos;ll be warned
             before it lets you continue anyway.
           </Callout>
           <Callout type="info">
@@ -72,25 +72,10 @@ export function BuildingsOverview() {
           <ImgPlaceholder label="Pricing Package tab" />
         </Step>
 
-        <Step n={6} title="Recurring Contract tab">
-          For buildings on a flat monthly janitorial contract instead of one-off turnover pricing.
-          <ImgPlaceholder label="Recurring Contract tab" />
-          <UL>
-            <LI>
-              If none exists yet, set one up here: monthly rate, billing day of month, start date,
-              and which salesperson earns commission on it.
-            </LI>
-            <LI>
-              Once created, enroll the units it covers (unit number, bed/bath, common area, and
-              which services are included), and pause, resume, or end the contract entirely.
-            </LI>
-            <LI>
-              Below that is a read-only <strong>Period history</strong> table, one row generated
-              per billing month, with that period&apos;s revenue, cost, and margin. See{" "}
-              <A href="/erp/help/billing/billing-overview">Billing Overview</A> for where these
-              periods get marked billed and paid.
-            </LI>
-          </UL>
+        <Step n={6} title="Janitorial Contract tab">
+          Shows whether this building has a recurring monthly janitorial contract, and its monthly
+          rate. Contracts are created and managed on the Janitorial page, see{" "}
+          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
         </Step>
       </Steps>
     </>

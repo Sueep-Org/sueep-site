@@ -16,7 +16,12 @@ function hasStaticExtension(pathname: string): boolean {
 }
 
 function isPublicAppPath(pathname: string): boolean {
-  return pathname === "/janitorial-turnover" || pathname.startsWith("/janitorial-turnover/");
+  return (
+    pathname === "/janitorial-turnover" ||
+    pathname.startsWith("/janitorial-turnover/") ||
+    // Janitor clock-in links, reached from a phone without an ERP login
+    pathname.startsWith("/clock/")
+  );
 }
 
 /** Browser URL path → internal app route (same as rewrite target). */

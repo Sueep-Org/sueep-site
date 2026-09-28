@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { centsToDollars } from "@/lib/erp/money";
 import { BuildingProfileEditor } from "./BuildingProfileEditor";
 import { BuildingReadOnlySummary } from "./[id]/BuildingReadOnlySummary";
 import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
-import { RecurringContractEditor } from "./RecurringContractEditor";
 import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSection";
 import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
 import { BuildingNotesSection, type BuildingNoteRow } from "./[id]/BuildingNotesSection";
@@ -27,10 +28,9 @@ type Props = {
   canAddUnit?: boolean;
   canLogHours?: boolean;
   units: BuildingUnit[];
-  /** Unit numbers enrolled on this building's active recurring contract —
-   * see BuildingUnitsSection's own doc comment for why these need folding
-   * into the duplicate-identifier warning alongside `units`. */
-  activeRecurringContractUnitNumbers?: string[];
+  /** This building's janitorial (recurring) contract, managed on the Janitorial page. */
+  janitorialContract?: { id: string; status: string; monthlyRateCents: number } | null;
+  canManageJanitorial?: boolean;
   employees: { id: string; name: string }[];
   laborEmployees?: LaborEmployeeOption[];
   commissionEmployeeId?: string | null;
@@ -48,7 +48,8 @@ export function BuildingTabs({
   canAddUnit = false,
   canLogHours = false,
   units,
-  activeRecurringContractUnitNumbers = [],
+  janitorialContract = null,
+  canManageJanitorial = false,
   employees,
   laborEmployees = [],
   commissionEmployeeId = null,
@@ -91,7 +92,6 @@ export function BuildingTabs({
           buildingId={buildingId}
           units={units}
           canAdd={canAddUnit}
-          activeRecurringContractUnitNumbers={activeRecurringContractUnitNumbers}
         />
       ),
     },
@@ -117,8 +117,33 @@ export function BuildingTabs({
       ),
     },
     {
-      label: "Recurring Contract",
-      content: <RecurringContractEditor buildingId={buildingId} canEdit={canEditPricing} employees={employees} />,
+      label: "Janitorial Contract",
+      content: (
+        <div className="max-w-lg rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm">
+          {janitorialContract ? (
+            <>
+              <p>
+                {janitorialContract.status === "ACTIVE" ? "Active" : janitorialContract.status === "PAUSED" ? "Paused" : "Ended"} contract,{" "}
+                <span className="font-semibold text-gray-900">{centsToDollars(janitorialContract.monthlyRateCents)}</span>/month.
+              </p>
+              {canManageJanitorial && (
+                <Link href={`/erp/janitorial/contracts/${janitorialContract.id}`} className="mt-2 inline-block text-pink-600 hover:underline">
+                  Open contract
+                </Link>
+              )}
+            </>
+          ) : (
+            <>
+              <p>This building has no janitorial contract.</p>
+              {canManageJanitorial && (
+                <Link href="/erp/janitorial" className="mt-2 inline-block text-pink-600 hover:underline">
+                  Set one up on the Janitorial page
+                </Link>
+              )}
+            </>
+          )}
+        </div>
+      ),
     },
   ];
 

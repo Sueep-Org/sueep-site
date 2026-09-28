@@ -88,7 +88,6 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         recurringContract: {
           select: { buildingId: true, startDate: true, commissionEmployeeId: true, building: { select: { name: true } } },
         },
-        projects: { select: { id: true, contractValueCents: true, billingStatus: true } },
       },
     }),
     prisma.bidBonusEntry.findMany({
@@ -180,12 +179,12 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // $1.5M cumulative threshold that unlocks the accelerator rate on deals.
   // Only counts once that month's invoice is actually paid — mirrors the
   // one-time-deal gate above, and matches the Billing page's Recurring tab,
-  // which is what marks a period's billing project paid.
+  // which is what marks a period paid. Commission is on the flat monthly
+  // amount only, one-off extras (RecurringContractCharge) aren't commissioned.
   const recurringRowsAll: (RecurringCommissionRow & { ownerId: string | null; year: number })[] = commissionRecurringPeriods
     .map((period) => {
-      const billingProject = period.projects.find((p) => p.id === period.billingProjectId);
-      if (!billingProject?.contractValueCents) return null;
-      if (!billingProject.billingStatus || !["INVOICE_PAID", "PAID"].includes(billingProject.billingStatus)) return null;
+      if (!period.amountCents) return null;
+      if (period.billingStatus !== "PAID") return null;
       const monthIndex =
         (period.periodStart.getUTCFullYear() - period.recurringContract.startDate.getUTCFullYear()) * 12 +
         (period.periodStart.getUTCMonth() - period.recurringContract.startDate.getUTCMonth());
@@ -195,9 +194,9 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         periodId: period.id,
         buildingName: period.recurringContract.building.name,
         periodStart: period.periodStart.toISOString(),
-        monthlyRateCents: billingProject.contractValueCents,
+        monthlyRateCents: period.amountCents,
         monthIndex,
-        commissionCents: computeRecurringCommissionCents(billingProject.contractValueCents, monthIndex),
+        commissionCents: computeRecurringCommissionCents(period.amountCents, monthIndex),
         paidAt: period.commissionPaidAt ? period.commissionPaidAt.toISOString() : null,
         ownerId: period.recurringContract.commissionEmployeeId,
         year: period.periodStart.getUTCFullYear(),

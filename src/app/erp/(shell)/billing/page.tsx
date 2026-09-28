@@ -674,13 +674,15 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
 
 type RecurringPeriodRow = {
   periodId: string;
-  projectId: string;
   periodStart: string;
-  monthlyRateCents: number;
+  /** Flat monthly amount plus any one-off extras. */
+  totalCents: number;
+  extras: string[];
   billingStatus: string;
 };
 
 type RecurringBuildingRow = {
+  contractId: string;
   buildingId: string;
   buildingName: string;
   periods: RecurringPeriodRow[];
@@ -701,12 +703,12 @@ function buildRecurringCsv(rows: RecurringBuildingRow[], start: string, end: str
       dataRows.push([
         escape(building.buildingName),
         escape(period.periodStart.slice(0, 7)),
-        escape((period.monthlyRateCents / 100).toFixed(2)),
+        escape((period.totalCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === period.billingStatus)?.label ?? period.billingStatus),
       ].join(","));
     }
   }
-  const total = rows.flatMap((r) => r.periods).reduce((s, p) => s + p.monthlyRateCents, 0);
+  const total = rows.flatMap((r) => r.periods).reduce((s, p) => s + p.totalCents, 0);
   dataRows.push([escape("TOTAL"), escape(""), escape((total / 100).toFixed(2)), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
@@ -731,7 +733,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
   }, [start, end, search]);
 
   const allPeriods = data?.rows.flatMap((r) => r.periods) ?? [];
-  const totalCents = allPeriods.reduce((s, p) => s + p.monthlyRateCents, 0);
+  const totalCents = allPeriods.reduce((s, p) => s + p.totalCents, 0);
 
   async function updateBillingStatus(period: RecurringPeriodRow, billingStatus: string) {
     setData((prev) => {
@@ -745,11 +747,12 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
       };
     });
     try {
-      await fetch(`/api/erp/projects/${period.projectId}`, {
+      const res = await fetch(`/api/erp/janitorial/periods/${period.periodId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ billingStatus }),
       });
+      if (!res.ok) throw new Error("update failed");
     } catch {
       fetch(billingUrl("/api/erp/billing/recurring", start, end, search))
         .then((r) => r.json()).then((d: RecurringResponse) => setData(d)).catch(() => {});
@@ -819,12 +822,15 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
-                        <Link href={`/erp/projects/${period.projectId}`} className="hover:text-pink-600 hover:underline">
+                        <Link href={`/erp/janitorial/contracts/${building.contractId}`} className="hover:text-pink-600 hover:underline">
                           {new Date(period.periodStart).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
                         </Link>
+                        {period.extras.length > 0 && (
+                          <p className="text-xs text-gray-500">Incl. {period.extras.join(", ")}</p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
-                        {fmt(period.monthlyRateCents)}
+                        {fmt(period.totalCents)}
                       </td>
                       <td className="px-4 py-3">
                         <select

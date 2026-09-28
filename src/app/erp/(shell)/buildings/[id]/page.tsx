@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
@@ -25,16 +25,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           orderBy: { createdAt: "desc" },
           select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
         },
-        // A recurring-contract unit only shows up in the turnover-request
-        // query below once its first monthly period has generated a
-        // project (see recurringContracts.ts) — fetched separately here so
-        // "+ Add unit" can warn against a duplicate identifier even for a
-        // unit that's enrolled but hasn't had its first project generated
-        // yet. Same gap this closes on the New Project form (see
-        // NewProjectForm.tsx's activeRecurringContractUnits).
-        recurringContract: {
-          select: { status: true, units: { where: { active: true }, select: { unitNumber: true } } },
-        },
+        recurringContract: { select: { id: true, status: true, monthlyRateCents: true } },
       },
     }),
     prisma.employee.findMany({
@@ -97,9 +88,6 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       otherDescription: p.turnoverRequest!.otherDescription,
     }));
 
-  const activeRecurringContractUnitNumbers =
-    building.recurringContract?.status === "ACTIVE" ? building.recurringContract.units.map((u) => u.unitNumber) : [];
-
   return (
     <div className="space-y-6">
       <div>
@@ -126,7 +114,8 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         canEditPricing={auth ? canEditPricing(auth.role) : false}
         canAddUnit={auth ? canAddTurnoverUnit(auth.role) : false}
         units={units}
-        activeRecurringContractUnitNumbers={activeRecurringContractUnitNumbers}
+        janitorialContract={building.recurringContract}
+        canManageJanitorial={auth ? canManageJanitorial(auth.role) : false}
         initial={{
           name: building.name,
           builder: building.builder,

@@ -8,9 +8,6 @@ export async function GET() {
   const buildings = await prisma.building.findMany({
     orderBy: { name: "asc" },
     include: {
-      recurringContract: {
-        select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
-      },
       turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
     },
   });

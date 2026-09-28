@@ -22,13 +22,15 @@ export async function GET(req: Request) {
   const today = new Date();
   const contracts = await prisma.recurringContract.findMany({
     where: { status: "ACTIVE" },
-    include: { units: true },
   });
 
   const results = [];
   for (const contract of contracts) {
     if (today.getUTCDate() < contract.billingDayOfMonth) continue;
-    const result = await generatePeriodForContract(contract, contract.units);
+    // Not started yet, or already past its end date.
+    if (contract.startDate > today) continue;
+    if (contract.endDate && contract.endDate < new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))) continue;
+    const result = await generatePeriodForContract(contract);
     results.push({ contractId: contract.id, buildingId: contract.buildingId, ...result });
   }
 

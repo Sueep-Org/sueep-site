@@ -17,6 +17,7 @@ import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
 import { BuildingsOverview } from "./buildings/buildings-overview";
+import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 
 export type ArticleEntry = {
   slug: string;
@@ -177,8 +178,17 @@ export const registry: ArticleEntry[] = [
     slug: "buildings/buildings-overview",
     title: "Buildings Overview",
     category: "Buildings",
-    description: "How to add a building, manage its units, log hours, set its pricing package, and set up a recurring contract.",
+    description: "How to add a building, manage its units, log hours, and set its pricing package.",
     order: 1,
     component: BuildingsOverview,
+  },
+  {
+    slug: "janitorial/janitorial-contracts",
+    title: "Janitorial Contracts",
+    category: "Janitorial",
+    description: "How to set up a recurring janitorial contract, schedule janitors, send clock-in links, review hours, and bill its months.",
+    order: 1,
+    component: JanitorialContracts,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
 ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { fireFranchiseApplicationPixel, fireFranchiseLeadPixel } from "./FranchisePixelEvents";
 
 const MARKETS = [
   "Jacksonville, FL",
@@ -114,6 +115,7 @@ export function FranchiseInquiryForm() {
         return;
       }
       setInquiryId(json.id || null);
+      fireFranchiseLeadPixel();
       setContactSummary({ firstName, email });
       setStep(2);
     } catch {
@@ -169,6 +171,7 @@ export function FranchiseInquiryForm() {
         setSubmitError(json.error || "Something went wrong. Please try again.");
         return;
       }
+      fireFranchiseApplicationPixel();
       setSubmitted(true);
     } catch {
       setSubmitError("Something went wrong. Please check your connection and try again.");

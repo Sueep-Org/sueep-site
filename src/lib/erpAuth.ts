@@ -37,6 +37,12 @@ export function canSeePayroll(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
 
+/** Janitorial page (recurring contracts, and later janitor hours/schedule):
+ * same roles as canSeeFinancials. */
+export function canManageJanitorial(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
+}
+
 export function canManageUsers(role: ErpRole): boolean {
   return role === "ADMIN";
 }

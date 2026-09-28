@@ -9,13 +9,14 @@ import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeInfoLinkSection } from "./EmployeeInfoLinkSection";
+import { EmployeeClockLinkSection } from "./EmployeeClockLinkSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
 import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
 import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
-import { getErpAuth, canEditPayInfo, canViewSsn } from "@/lib/erpAuth";
+import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
   const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
+  const canManageClockLink = canManageJanitorial(auth?.role ?? "EMPLOYEE");
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -238,6 +240,23 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-4">
+              {canManageClockLink && (
+                <CollapsibleSection
+                  title="Clock-in link"
+                  status={employee.clockToken ? "Active" : "Not set up"}
+                  tone={employee.clockToken ? "complete" : "neutral"}
+                >
+                  <EmployeeClockLinkSection
+                    employeeId={employee.id}
+                    firstName={employee.firstName}
+                    email={employee.email}
+                    // Only sent to roles that manage janitorial: the link is the janitor's credential.
+                    initialUrl={employee.clockToken ? `${siteUrl}/clock/${employee.clockToken}` : null}
+                    createdAt={employee.clockTokenCreatedAt?.toISOString() ?? null}
+                  />
+                </CollapsibleSection>
+              )}
+
               <CollapsibleSection title="Info form link" status={infoLinkStatus} tone={infoLinkTone} defaultOpen={infoLinkTone === "empty"}>
                 <EmployeeInfoLinkSection
                   id={employee.id}
@@ -317,6 +336,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Labor",
           content: (
             <EmployeeLaborSection
+              employeeName={`${employee.firstName} ${employee.lastName}`.trim()}
               employeeId={employee.id}
               canSeePay={canSeePay}
               initialEntries={laborEntryRows}

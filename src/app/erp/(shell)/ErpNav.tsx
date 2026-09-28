@@ -447,6 +447,7 @@ const projectGroupItems: NavItem[] = [
     icon: PlusCircleIcon,
   },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
+  { href: "/erp/janitorial", label: "Janitorial", roles: FINANCE_UP, icon: BuildingIcon },
 ];
 
 const billingGroupItems: NavItem[] = [

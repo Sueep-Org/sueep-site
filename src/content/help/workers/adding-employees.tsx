@@ -48,7 +48,7 @@ export function AddingEmployees() {
                 Next is the <strong>Time Off</strong> tab. This is where vacation, sick days, half days, and other time off get logged for the employee. Any time off logged here blocks that employee from being scheduled on the calendar for those days.
                 <Callout type="info">A PM or Admin can override the time off block and schedule the employee anyway if needed. Logged entries can be edited or deleted from this tab too.</Callout>
                 <br></br><br></br>
-                Next is the <strong>Labor</strong> tab, showing this employee&apos;s own labor entries across every project they&apos;ve worked on. See <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A>.
+                Next is the <strong>Labor</strong> tab, showing this employee&apos;s own labor entries across every project they&apos;ve worked on. Filter by date range or project, then click <strong>Download CSV</strong> to export every matching entry (not just the ones loaded on screen) with a total row; pay columns are only included if you can see pay info. See <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A>.
                 <br></br><br></br>
                 The final tab is <strong>Signing</strong>. If you need to send any documents to this employee for signing you can do it here. For more information on contract signing go to the <A href="/erp/help/contracts/uploading-a-contract">Uploading a Contract</A> help page.
                 <Img src="/help/employees/employee_7.png" alt="Employees details" />

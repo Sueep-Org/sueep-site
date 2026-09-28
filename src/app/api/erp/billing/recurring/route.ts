@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { periodTotalCents } from "@/lib/erp/recurringContracts";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -32,22 +33,24 @@ export async function GET(req: Request) {
       : { periodStart: { gte: start!, lte: end! } },
     include: {
       recurringContract: {
-        select: { building: { select: { id: true, name: true } } },
+        select: { id: true, building: { select: { id: true, name: true } } },
       },
-      projects: { select: { id: true, contractValueCents: true, billingStatus: true } },
+      charges: { select: { description: true, amountCents: true } },
     },
     orderBy: [{ periodStart: "asc" }],
   });
 
   type PeriodRow = {
     periodId: string;
-    projectId: string;
     periodStart: string;
-    monthlyRateCents: number;
+    /** Flat amount plus any one-off extras for the month. */
+    totalCents: number;
+    extras: string[];
     billingStatus: string;
   };
 
   type BuildingRow = {
+    contractId: string;
     buildingId: string;
     buildingName: string;
     periods: PeriodRow[];
@@ -56,22 +59,18 @@ export async function GET(req: Request) {
   const buildingMap = new Map<string, BuildingRow>();
 
   for (const period of periods) {
-    const billingProject = period.projects.find((p) => p.id === period.billingProjectId);
-    if (!billingProject) continue;
+    const { id: contractId, building } = period.recurringContract;
 
-    const buildingId = period.recurringContract.building.id;
-    const buildingName = period.recurringContract.building.name;
-
-    if (!buildingMap.has(buildingId)) {
-      buildingMap.set(buildingId, { buildingId, buildingName, periods: [] });
+    if (!buildingMap.has(contractId)) {
+      buildingMap.set(contractId, { contractId, buildingId: building.id, buildingName: building.name, periods: [] });
     }
 
-    buildingMap.get(buildingId)!.periods.push({
+    buildingMap.get(contractId)!.periods.push({
       periodId: period.id,
-      projectId: billingProject.id,
       periodStart: period.periodStart.toISOString(),
-      monthlyRateCents: billingProject.contractValueCents ?? 0,
-      billingStatus: billingProject.billingStatus ?? "NOT_BILLED",
+      totalCents: periodTotalCents(period),
+      extras: period.charges.map((c) => c.description),
+      billingStatus: period.billingStatus,
     });
   }
 
