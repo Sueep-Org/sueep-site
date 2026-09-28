@@ -45,6 +45,25 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   });
   if (!employee) notFound();
 
+  // Their janitorial schedule (current and upcoming weekly shifts), shown
+  // read-only on the profile: the calendar is the only place pay hours come from.
+  const todayLabel = new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" })}T00:00:00.000Z`);
+  const janitorialPatterns = employee.isJanitorialContract
+    ? await prisma.janitorialShiftPattern.findMany({
+        where: { employeeId: employee.id, OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: todayLabel } }] },
+        orderBy: [{ effectiveFrom: "asc" }, { startTime: "asc" }],
+        select: {
+          id: true,
+          daysOfWeek: true,
+          startTime: true,
+          endTime: true,
+          effectiveFrom: true,
+          recurringContractId: true,
+          recurringContract: { select: { building: { select: { name: true } } } },
+        },
+      })
+    : [];
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
   const resendConfigured = Boolean(process.env.RESEND_API_KEY);
 
@@ -233,6 +252,15 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 offshoreMonthlyRateCents: canSeePay ? employee.offshoreMonthlyRateCents : null,
                 isJanitorialContract: employee.isJanitorialContract,
               }}
+              janitorialSchedule={janitorialPatterns.map((p) => ({
+                id: p.id,
+                contractId: p.recurringContractId,
+                buildingName: p.recurringContract.building.name,
+                daysOfWeek: p.daysOfWeek,
+                startTime: p.startTime,
+                endTime: p.endTime,
+                startsOn: p.effectiveFrom > todayLabel ? p.effectiveFrom.toISOString().slice(0, 10) : null,
+              }))}
             />
           ),
         },

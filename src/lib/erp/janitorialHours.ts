@@ -11,6 +11,7 @@
  *   6. Nothing, shift is over                -> scheduled hours ("from schedule")
  *   7. Nothing, shift not over yet           -> upcoming, 0 for now
  * Clock-ins with no matching shift count as unscheduled work, flagged.
+ * Worked time of 6+ hours then has a 30 minute unpaid break taken off.
  */
 
 import { shiftHours, timeToMinutes, type JanitorialShift } from "@/lib/erp/janitorialSchedule";
@@ -18,8 +19,39 @@ import { shiftHours, timeToMinutes, type JanitorialShift } from "@/lib/erp/janit
 const EASTERN = "America/New_York";
 /** Clocking this far off the schedule gets flagged for review. */
 export const LATE_EARLY_FLAG_MINUTES = 15;
+/** Unpaid break: shifts with at least this many worked hours... */
+export const UNPAID_BREAK_THRESHOLD_HOURS = 6;
+/** ...have this many minutes taken off their paid hours. */
+export const UNPAID_BREAK_MINUTES = 30;
+/** Sources whose hours are time worked, so the unpaid break applies. */
+const WORKED_SOURCES: HoursSource[] = ["CLOCKED", "NO_CLOCK_OUT", "CORRECTED", "FROM_SCHEDULE"];
 /** An unscheduled clock-in still open after this long is treated as a missed clock-out. */
 const UNSCHEDULED_OPEN_LIMIT_HOURS = 16;
+/** Clocking in/out farther than this from the building (about a quarter mile) gets flagged. */
+export const FAR_FROM_BUILDING_METERS = 400;
+/** Cap on how much of the phone's reported GPS inaccuracy we forgive. */
+const MAX_ACCURACY_ALLOWANCE_METERS = 300;
+
+/** Straight-line distance between two points, in meters (haversine). */
+export function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** True when a GPS reading is clearly away from the building, after allowing for the phone's own accuracy. */
+export function isFarFromBuilding(distance: number, accuracy: number | null): boolean {
+  return distance - Math.min(accuracy ?? 0, MAX_ACCURACY_ALLOWANCE_METERS) > FAR_FROM_BUILDING_METERS;
+}
+
+/** "0.8 mi" style label for flags. */
+export function formatMiles(meters: number): string {
+  const miles = meters / 1609.34;
+  return miles < 10 ? `${miles.toFixed(1)} mi` : `${Math.round(miles)} mi`;
+}
 
 // ---------------------------------------------------------------------------
 // Eastern wall-clock <-> instant helpers
@@ -88,6 +120,9 @@ export type TimeEntryInput = {
   manualNoShow: boolean;
   notes: string | null;
   hasLocation: boolean;
+  /** Distance from the building when they clocked in/out, when both the GPS reading and the building's location are known. */
+  clockInDistance?: { meters: number; accuracy: number | null } | null;
+  clockOutDistance?: { meters: number; accuracy: number | null } | null;
 };
 
 export type HoursSource =
@@ -116,15 +151,33 @@ export type ResolvedShiftHours = {
   /** What the hours are based on, "HH:MM" Eastern. */
   actualStart: string | null;
   actualEnd: string | null;
+  /** Paid hours, after any unpaid break. */
   hours: number;
+  /** True when the 30 minute unpaid break was taken off `hours`. */
+  breakDeducted: boolean;
   source: HoursSource;
   unscheduled: boolean;
   /** Plain-language reasons this needs a look. Empty = nothing to review. */
   flags: string[];
   entryId: string | null;
   hasLocation: boolean;
+  /** How far from the building they clocked in, in meters, when known. */
+  clockInMeters: number | null;
   notes: string | null;
 };
+
+/** Location flags for an entry's clock-in/out readings. */
+function locationFlags(entry: TimeEntryInput | null): string[] {
+  if (!entry) return [];
+  const flags: string[] = [];
+  if (entry.clockInDistance && isFarFromBuilding(entry.clockInDistance.meters, entry.clockInDistance.accuracy)) {
+    flags.push(`Clocked in ${formatMiles(entry.clockInDistance.meters)} from the building`);
+  }
+  if (entry.clockOutDistance && isFarFromBuilding(entry.clockOutDistance.meters, entry.clockOutDistance.accuracy)) {
+    flags.push(`Clocked out ${formatMiles(entry.clockOutDistance.meters)} from the building`);
+  }
+  return flags;
+}
 
 function resolveEntry(
   entry: TimeEntryInput,
@@ -187,7 +240,7 @@ export function resolveJanitorialHours(input: {
   const now = input.now ?? new Date();
   const entryByShiftKey = new Map(input.entries.filter((e) => e.shiftKey).map((e) => [e.shiftKey!, e]));
   const matchedEntryIds = new Set<string>();
-  const rows: ResolvedShiftHours[] = [];
+  const rows: Omit<ResolvedShiftHours, "breakDeducted">[] = [];
 
   for (const s of input.shifts) {
     const entry = entryByShiftKey.get(s.key) ?? null;
@@ -207,12 +260,18 @@ export function resolveJanitorialHours(input: {
       unscheduled: false,
       entryId: entry?.id ?? null,
       hasLocation: entry?.hasLocation ?? false,
+      clockInMeters: entry?.clockInDistance?.meters ?? null,
       notes: entry?.notes ?? null,
     };
 
     const fromEntry = entry ? resolveEntry(entry, { start: s.startTime, end: s.endTime, endsAt }, now) : null;
     if (fromEntry) {
-      const flags = s.status === "CANCELLED" && fromEntry.hours > 0 ? [...fromEntry.flags, "Worked on a skipped day"] : fromEntry.flags;
+      const flags = [
+        ...fromEntry.flags,
+        ...(s.status === "CANCELLED" && fromEntry.hours > 0 ? ["Worked on a skipped day"] : []),
+        // A correction settles the hours, so location no longer needs review.
+        ...(fromEntry.source === "CORRECTED" || fromEntry.source === "DIDNT_WORK" ? [] : locationFlags(entry)),
+      ];
       rows.push({ ...base, ...fromEntry, flags });
     } else if (s.timeOffType) {
       rows.push({ ...base, actualStart: null, actualEnd: null, hours: 0, source: "TIME_OFF", flags: [] });
@@ -243,13 +302,24 @@ export function resolveJanitorialHours(input: {
       scheduledHours: 0,
       ...resolved,
       unscheduled: true,
-      flags: resolved.source === "CORRECTED" || resolved.source === "DIDNT_WORK" ? resolved.flags : ["Not on the schedule", ...resolved.flags],
+      flags:
+        resolved.source === "CORRECTED" || resolved.source === "DIDNT_WORK"
+          ? resolved.flags
+          : ["Not on the schedule", ...resolved.flags, ...locationFlags(e)],
       entryId: e.id,
       hasLocation: e.hasLocation,
+      clockInMeters: e.clockInDistance?.meters ?? null,
       notes: e.notes,
     });
   }
 
   rows.sort((a, b) => a.date.localeCompare(b.date) || (a.actualStart ?? a.scheduledStart ?? "").localeCompare(b.actualStart ?? b.scheduledStart ?? ""));
-  return rows;
+  return rows.map(applyUnpaidBreak);
+}
+
+/** Takes the unpaid break off a shift's worked hours once they reach the threshold. */
+function applyUnpaidBreak(row: Omit<ResolvedShiftHours, "breakDeducted">): ResolvedShiftHours {
+  const applies = WORKED_SOURCES.includes(row.source) && row.hours >= UNPAID_BREAK_THRESHOLD_HOURS;
+  if (!applies) return { ...row, breakDeducted: false };
+  return { ...row, hours: Math.round((row.hours - UNPAID_BREAK_MINUTES / 60) * 100) / 100, breakDeducted: true };
 }

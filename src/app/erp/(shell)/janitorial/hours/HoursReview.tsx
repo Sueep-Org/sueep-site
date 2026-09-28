@@ -35,22 +35,33 @@ function timeRange(start: string | null, end: string | null): string {
   return end ? `${formatTime12(start)} to ${formatTime12(end)}` : `${formatTime12(start)} to now`;
 }
 
-export function HoursReview() {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(todayEasternAsUtcMidnight()));
+export function HoursReview({
+  initialEmployeeId = "",
+  initialRange = null,
+}: {
+  initialEmployeeId?: string;
+  /** A specific date range (e.g. a pay period from Payroll) instead of a week. */
+  initialRange?: { start: string; end: string } | null;
+}) {
+  const [customRange, setCustomRange] = useState(initialRange);
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfWeek(initialRange ? new Date(`${initialRange.start}T00:00:00Z`) : todayEasternAsUtcMidnight())
+  );
   const [rows, setRows] = useState<ResolvedShiftHours[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState(initialEmployeeId);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [editing, setEditing] = useState<ResolvedShiftHours | null>(null);
 
-  const weekEnd = addDays(weekStart, 6);
+  const rangeStart = customRange ? customRange.start : dayKey(weekStart);
+  const rangeEnd = customRange ? customRange.end : dayKey(addDays(weekStart, 6));
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/erp/janitorial/hours?start=${dayKey(weekStart)}&end=${dayKey(addDays(weekStart, 6))}`);
+      const res = await fetch(`/api/erp/janitorial/hours?start=${rangeStart}&end=${rangeEnd}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Could not load hours");
       setRows(json.rows);
@@ -59,7 +70,7 @@ export function HoursReview() {
     } finally {
       setLoading(false);
     }
-  }, [weekStart]);
+  }, [rangeStart, rangeEnd]);
 
   useEffect(() => {
     void load();
@@ -97,20 +108,39 @@ export function HoursReview() {
       { header: "Scheduled", get: (r) => (r.scheduledStart ? `${r.scheduledStart}-${r.scheduledEnd}` : "Not scheduled") },
       { header: "Worked", get: (r) => (r.actualStart ? `${r.actualStart}-${r.actualEnd ?? ""}` : "") },
       { header: "Hours", get: (r) => r.hours.toFixed(2) },
+      { header: "Unpaid break", get: (r) => (r.breakDeducted ? "30 min" : "") },
       { header: "Source", get: (r) => SOURCE_BADGE[r.source].label },
       { header: "Needs review", get: (r) => r.flags.join("; ") },
       { header: "Notes", get: (r) => r.notes ?? "" },
     ];
     const total = visible.reduce((s, r) => s + r.hours, 0);
     downloadCsv(
-      `janitorial-hours-${dayKey(weekStart)}-to-${dayKey(weekEnd)}.csv`,
-      buildCsv(columns, visible, [["TOTAL", "", "", "", "", total.toFixed(2), "", "", ""]])
+      `janitorial-hours-${rangeStart}-to-${rangeEnd}.csv`,
+      buildCsv(columns, visible, [["TOTAL", "", "", "", "", total.toFixed(2), "", "", "", ""]])
     );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {customRange ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-gray-800">
+            Pay period {formatShortDate(customRange.start)} to {formatShortDate(customRange.end)}
+          </span>
+          <Button
+            variant="secondary"
+            size="xs"
+            onClick={() => {
+              setWeekStart(startOfWeek(new Date(`${customRange.start}T00:00:00Z`)));
+              setCustomRange(null);
+            }}
+          >
+            Back to weekly view
+          </Button>
+          {loading && <span className="ml-2 text-xs text-gray-400">Loading…</span>}
+        </div>
+        ) : (
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -123,7 +153,7 @@ export function HoursReview() {
             </svg>
           </button>
           <span className="min-w-[170px] text-center text-sm font-semibold text-gray-800">
-            {formatShortDate(dayKey(weekStart))} to {formatShortDate(dayKey(weekEnd))}
+            {formatShortDate(rangeStart)} to {formatShortDate(rangeEnd)}
           </span>
           <button
             type="button"
@@ -140,6 +170,7 @@ export function HoursReview() {
           </Button>
           {loading && <span className="ml-2 text-xs text-gray-400">Loading…</span>}
         </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <SearchableSelect
             value={employeeFilter}
@@ -217,7 +248,10 @@ export function HoursReview() {
                             <td className="whitespace-nowrap px-4 py-2.5">
                               {r.source === "FROM_SCHEDULE" ? <span className="text-gray-400">Same as scheduled</span> : timeRange(r.actualStart, r.actualEnd)}
                             </td>
-                            <td className="px-4 py-2.5 text-right font-medium tabular-nums">{r.source === "UPCOMING" ? "" : r.hours.toFixed(2)}</td>
+                            <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                              {r.source === "UPCOMING" ? "" : r.hours.toFixed(2)}
+                              {r.breakDeducted && <p className="text-[11px] font-normal text-gray-400">after 30 min break</p>}
+                            </td>
                             <td className="px-4 py-2.5">
                               <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badge.cls}`}>{badge.label}</span>
                               {r.flags.map((f) => (
@@ -246,7 +280,8 @@ export function HoursReview() {
 
       <p className="text-xs text-gray-500">
         Hours come from the janitor&apos;s clock-in and clock-out. If they didn&apos;t clock in, their scheduled hours are used,
-        unless they have time off logged or the shift was skipped on the calendar.
+        unless they have time off logged or the shift was skipped on the calendar. Shifts of 6 hours or more have a 30 minute
+        unpaid break taken off.
       </p>
 
       {editing && (
@@ -263,7 +298,7 @@ export function HoursReview() {
   );
 }
 
-function CorrectionDialog({ row, onClose, onSaved }: { row: ResolvedShiftHours; onClose: () => void; onSaved: () => void }) {
+export function CorrectionDialog({ row, onClose, onSaved }: { row: ResolvedShiftHours; onClose: () => void; onSaved: () => void }) {
   const [worked, setWorked] = useState(row.source !== "DIDNT_WORK");
   const [startTime, setStartTime] = useState(row.actualStart ?? row.scheduledStart ?? "18:00");
   const [endTime, setEndTime] = useState(row.actualEnd ?? row.scheduledEnd ?? "22:00");

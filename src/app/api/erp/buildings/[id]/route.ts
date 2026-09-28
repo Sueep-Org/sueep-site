@@ -49,6 +49,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "address is required" }, { status: 400 });
     }
     data.address = trimmed;
+    // Coordinates were looked up from the old address (see lib/erp/geocode.ts);
+    // clear them so the next clock-in location check looks the new one up.
+    if (existing.address !== trimmed) {
+      data.latitude = null;
+      data.longitude = null;
+      data.geocodeStatus = null;
+      data.geocodedAt = null;
+    }
   }
   if (body.pmName !== undefined) {
     const trimmed = String(body.pmName || "").trim();

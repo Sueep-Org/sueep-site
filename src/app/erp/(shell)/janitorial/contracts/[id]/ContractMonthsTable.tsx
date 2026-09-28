@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { centsToDollars } from "@/lib/erp/money";
+import { useConfirm } from "@/app/erp/components/ui";
 import { PERIOD_BILLING_OPTIONS, billingBadgeCls } from "../../badges";
 
 type Charge = { id: string; description: string; amountCents: number };
@@ -23,8 +24,20 @@ function monthTotal(m: Month): number {
   return m.amountCents + m.charges.reduce((s, c) => s + c.amountCents, 0);
 }
 
-export function ContractMonthsTable({ contractId, months }: { contractId: string; months: Month[] }) {
+type Labor = { costCents: number; hours: number; missingRateNames: string[]; partial: boolean };
+
+export function ContractMonthsTable({
+  contractId,
+  months,
+  laborByPeriod = {},
+}: {
+  contractId: string;
+  months: Month[];
+  /** Janitorial labor cost per month id (months that have started). */
+  laborByPeriod?: Record<string, Labor>;
+}) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -83,14 +96,18 @@ export function ContractMonthsTable({ contractId, months }: { contractId: string
     }
   }
 
-  function removeCharge(c: Charge) {
-    if (!confirm(`Remove "${c.description}"?`)) return;
-    void send(`/api/erp/janitorial/charges/${c.id}`, "DELETE");
+  async function removeCharge(c: Charge) {
+    const ok = await confirm({ title: "Remove extra?", message: `Remove ${c.description} (${centsToDollars(c.amountCents)}) from this month?`, confirmLabel: "Remove" });
+    if (ok) void send(`/api/erp/janitorial/charges/${c.id}`, "DELETE");
   }
 
-  function removeMonth(m: Month) {
-    if (!confirm(`Remove ${formatMonth(m.periodStart)}? Use this only for a month that shouldn't be billed.`)) return;
-    void send(`/api/erp/janitorial/periods/${m.id}`, "DELETE");
+  async function removeMonth(m: Month) {
+    const ok = await confirm({
+      title: `Remove ${formatMonth(m.periodStart)}?`,
+      message: "Use this only for a month that shouldn't be billed at all. It can be added back with Add a month manually.",
+      confirmLabel: "Remove month",
+    });
+    if (ok) void send(`/api/erp/janitorial/periods/${m.id}`, "DELETE");
   }
 
   const billedTotal = months.reduce((s, m) => s + monthTotal(m), 0);
@@ -102,7 +119,8 @@ export function ContractMonthsTable({ contractId, months }: { contractId: string
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Billing by month</h2>
           <p className="text-xs text-gray-500">
-            Months are added automatically on the billing day. Total {centsToDollars(billedTotal)}, paid {centsToDollars(paidTotal)}, outstanding{" "}
+            Months are added automatically on the billing day. Labor cost is janitorial hours here (after unpaid breaks) at each
+            janitor&apos;s hourly rate. Total {centsToDollars(billedTotal)}, paid {centsToDollars(paidTotal)}, outstanding{" "}
             {centsToDollars(billedTotal - paidTotal)}.
           </p>
         </div>
@@ -134,6 +152,8 @@ export function ContractMonthsTable({ contractId, months }: { contractId: string
                 <th className="px-4 py-3 text-right">Base amount</th>
                 <th className="px-4 py-3">Extras</th>
                 <th className="px-4 py-3 text-right">Total</th>
+                <th className="px-4 py-3 text-right">Labor cost</th>
+                <th className="px-4 py-3 text-right">Margin</th>
                 <th className="px-4 py-3">Billing status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -141,7 +161,7 @@ export function ContractMonthsTable({ contractId, months }: { contractId: string
             <tbody>
               {months.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No months yet. The first one is added on the next billing day.</td>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">No months yet. The first one is added on the next billing day.</td>
                 </tr>
               ) : (
                 months.map((m) => (
@@ -228,6 +248,38 @@ export function ContractMonthsTable({ contractId, months }: { contractId: string
                       )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">{centsToDollars(monthTotal(m))}</td>
+                    {(() => {
+                      const labor = laborByPeriod[m.id];
+                      if (!labor) {
+                        return (
+                          <>
+                            <td className="px-4 py-3 text-right text-gray-400">Not started</td>
+                            <td className="px-4 py-3" />
+                          </>
+                        );
+                      }
+                      const margin = monthTotal(m) - labor.costCents;
+                      const pct = monthTotal(m) > 0 ? Math.round((margin / monthTotal(m)) * 100) : null;
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                            {centsToDollars(labor.costCents)}
+                            <p className="text-[11px] text-gray-400">
+                              {labor.hours.toFixed(1)} hrs{labor.partial ? ", so far" : ""}
+                            </p>
+                            {labor.missingRateNames.length > 0 && (
+                              <p className="text-[11px] text-amber-700" title="Set their hourly pay on their employee profile">
+                                No rate: {labor.missingRateNames.join(", ")}
+                              </p>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 text-right tabular-nums font-semibold ${margin < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                            {centsToDollars(margin)}
+                            {pct != null && <p className="text-[11px] font-normal text-gray-400">{pct}%</p>}
+                          </td>
+                        </>
+                      );
+                    })()}
                     <td className="px-4 py-3">
                       <select
                         value={m.billingStatus}

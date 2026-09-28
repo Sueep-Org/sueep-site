@@ -63,11 +63,15 @@ export async function POST(req: Request, ctx: Ctx) {
     try {
       await sendEmail({
         to: employee.email,
-        subject: "Your Sueep clock-in link",
+        subject: "Your Sueep clock-in link / Tu enlace para marcar entrada",
         html: `<p>Hi ${escapeHtml(employee.firstName)},</p>
 <p>Use this link to clock in and out of your shifts. Save it to your phone's home screen so it's easy to find.</p>
 <p><a href="${url}">${url}</a></p>
 <p>This link is just for you, so please don't share it.</p>
+<hr />
+<p>Hola ${escapeHtml(employee.firstName)},</p>
+<p>Usa este enlace para marcar tu entrada y salida en tus turnos. Guárdalo en la pantalla de inicio de tu teléfono para encontrarlo fácilmente. La página está disponible en español.</p>
+<p>Este enlace es solo para ti, por favor no lo compartas.</p>
 <p>Sueep</p>`,
       });
     } catch (err) {

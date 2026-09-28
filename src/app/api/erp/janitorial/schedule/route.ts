@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { parseDateKey } from "@/lib/erp/janitorialSchedule";
-import { loadJanitorialShifts } from "@/lib/erp/janitorialScheduleServer";
+import { loadJanitorialShifts, mainBuildingByEmployee } from "@/lib/erp/janitorialScheduleServer";
 
 const MAX_RANGE_DAYS = 62;
 
@@ -34,15 +34,23 @@ export async function GET(req: Request) {
       ? prisma.employee.findMany({
           where: { status: "ACTIVE" },
           orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, clockToken: true },
         })
       : Promise.resolve([]),
   ]);
+  const mainBuilding = canEdit ? await mainBuildingByEmployee(employees.map((e) => e.id)) : new Map<string, string>();
 
   return NextResponse.json({
     shifts,
     canEdit,
     contracts: contracts.map((c) => ({ id: c.id, name: c.building.name })),
-    employees: employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() })),
+    // Only whether a link exists, never the link itself (it's the janitor's credential).
+    employees: employees.map((e) => ({
+      id: e.id,
+      name: `${e.firstName} ${e.lastName}`.trim(),
+      hasClockLink: !!e.clockToken,
+      // Their main building (most scheduled hours), for pre-filling new shifts.
+      defaultContractId: mainBuilding.get(e.id) ?? null,
+    })),
   });
 }

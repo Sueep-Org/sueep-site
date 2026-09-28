@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { centsToDollars } from "@/lib/erp/money";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
+import { laborCostByContract, monthBounds } from "@/lib/erp/janitorialProfit";
+import { todayEasternKey } from "@/lib/erp/dates";
 import { NewContractForm } from "./NewContractForm";
 import { ContractStatusBadge, BillingStatusBadge } from "./badges";
 import { JanitorialTabs } from "./JanitorialTabs";
@@ -43,6 +45,26 @@ export default async function JanitorialPage() {
     }),
   ]);
 
+  // Margin for the last full month: that month's billed total minus the
+  // janitorial labor cost there (see janitorialProfit.ts).
+  const today = new Date(`${todayEasternKey()}T00:00:00.000Z`);
+  const lastMonth = monthBounds(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1)));
+  const lastMonthLabel = lastMonth.start.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  const [lastMonthLabor, lastMonthPeriods] = await Promise.all([
+    laborCostByContract(lastMonth.start, lastMonth.end),
+    prisma.recurringContractPeriod.findMany({
+      where: { periodStart: lastMonth.start },
+      include: { charges: { select: { amountCents: true } } },
+    }),
+  ]);
+  const lastMonthRevenue = new Map(lastMonthPeriods.map((p) => [p.recurringContractId, periodTotalCents(p)]));
+  const marginFor = (contractId: string) => {
+    const revenue = lastMonthRevenue.get(contractId);
+    const labor = lastMonthLabor.get(contractId);
+    if (revenue == null && !labor) return null;
+    return { revenue: revenue ?? 0, cost: labor?.costCents ?? 0, margin: (revenue ?? 0) - (labor?.costCents ?? 0) };
+  };
+
   const statusOrder: Record<string, number> = { ACTIVE: 0, PAUSED: 1, ENDED: 2 };
   contracts.sort(
     (a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3) || a.building.name.localeCompare(b.building.name)
@@ -76,13 +98,14 @@ export default async function JanitorialPage() {
                 <th className="px-4 py-3 text-right">Monthly rate</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Latest month</th>
+                <th className="px-4 py-3 text-right">Margin, {lastMonthLabel}</th>
                 <th className="px-4 py-3">Salesperson</th>
               </tr>
             </thead>
             <tbody>
               {contracts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No janitorial contracts yet.</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">No janitorial contracts yet.</td>
                 </tr>
               ) : (
                 contracts.map((c) => {
@@ -112,6 +135,18 @@ export default async function JanitorialPage() {
                         ) : (
                           <span className="text-gray-400">None yet</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {(() => {
+                          const m = marginFor(c.id);
+                          if (!m) return <span className="text-gray-400">No data</span>;
+                          return (
+                            <span title={`Billed ${centsToDollars(m.revenue)}, labor ${centsToDollars(m.cost)}`} className={`font-semibold ${m.margin < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                              {centsToDollars(m.margin)}
+                              {m.margin < 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">Losing money</span>}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {c.commissionEmployee ? `${c.commissionEmployee.firstName} ${c.commissionEmployee.lastName}`.trim() : "Unassigned"}

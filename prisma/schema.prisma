@@ -176,9 +176,20 @@ model Building {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  name           String
-  builder        String?
-  address        String
+  name    String
+  builder String?
+  address String
+
+  /// Looked up from `address` (US Census geocoder, see src/lib/erp/geocode.ts)
+  /// the first time it's needed, for the janitor clock-in location check.
+  /// Cleared when the address changes so it's looked up again.
+  latitude      Float?
+  longitude     Float?
+  /// OK (looked up) | MANUAL (set by hand) | NOT_FOUND (neither lookup found
+  /// it; not retried automatically until the address changes).
+  geocodeStatus String?
+  geocodedAt    DateTime?
+
   pmName         String?
   pmEmail        String?
   pmPhone        String?
@@ -336,20 +347,18 @@ model RecurringContract {
   endDate           DateTime?
   notes             String?
   /// Free-text scope of what gets cleaned, e.g. "Lobby, hallways, gym,
-  /// 3 common bathrooms". Replaces the per-unit list (RecurringContractUnit).
+  /// 3 common bathrooms". Replaced the old per-unit list.
   serviceAreas      String?
 
   /// Salesperson who gets commission credit — manually assigned, since
   /// recurring contracts are created directly in the ERP rather than
   /// synced from a HubSpot deal with an owner.
   commissionEmployeeId String?
-  commissionEmployee   Employee? @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
-
-  units           RecurringContractUnit[]
-  periods         RecurringContractPeriod[]
-  shiftPatterns   JanitorialShiftPattern[]
-  shiftExceptions JanitorialShiftException[]
-  timeEntries     JanitorialTimeEntry[]
+  commissionEmployee   Employee?                  @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+  periods              RecurringContractPeriod[]
+  shiftPatterns        JanitorialShiftPattern[]
+  shiftExceptions      JanitorialShiftException[]
+  timeEntries          JanitorialTimeEntry[]
 
   @@index([status])
   @@index([commissionEmployeeId])
@@ -465,33 +474,6 @@ model JanitorialTimeEntry {
 
   @@index([employeeId, date])
   @@index([date])
-}
-
-/// Legacy: per-unit enrollment on a recurring contract. No longer read or
-/// written (contracts now describe their scope with serviceAreas instead);
-/// kept only so historical rows aren't dropped.
-model RecurringContractUnit {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  recurringContractId String
-  recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
-
-  unitNumber   String
-  bedrooms     Int?
-  bathrooms    Int?
-  isCommonArea Boolean @default(false)
-
-  /// Which service lines run each month for this unit — drives the
-  /// auto-generated TurnoverRequest's flags
-  fullClean      Boolean @default(true)
-  carpetCleaning Boolean @default(false)
-
-  /// Soft-remove so past generated periods keep their unit history intact
-  active Boolean @default(true)
-
-  @@unique([recurringContractId, unitNumber])
-  @@index([recurringContractId])
 }
 
 model RecurringContractPeriod {
@@ -1445,8 +1427,9 @@ model Employee {
   offshoreMonthlyRateCents Int?
 
   /// Still an hourly employee (payType stays HOURLY, hourlyPayCents is their
-  /// rate) but paid a flat 40 hrs/week minus logged vacation, independent of
-  /// any LaborEntry hours they log on projects — same independent-flag
+  /// rate), labeled Janitorial in Payroll. Paid from their janitorial schedule
+  /// hours (see lib/erp/janitorialHours.ts) plus any project hours; Payroll
+  /// warns when they have no janitorial schedule. Same independent-flag
   /// pattern as isOffshore rather than a payType value.
   isJanitorialContract Boolean @default(false)
 

@@ -80,7 +80,13 @@ export function Modal({
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
       onClick={dismissible ? onClose : undefined}
     >
-      <div className={`rounded-xl bg-white p-5 shadow-2xl ${SIZE_CLASSES[size]}`} onClick={(e) => e.stopPropagation()}>
+      {/* Capped at the viewport height and scrollable, so a form that grows
+          (e.g. several janitors added to one shift) never runs off-screen
+          with its Save button out of reach. dvh tracks mobile browser bars. */}
+      <div
+        className={`max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-xl bg-white p-5 shadow-2xl ${SIZE_CLASSES[size]}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {children}
       </div>
     </div>,

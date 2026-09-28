@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { Button, Modal, inputClass, labelClass, useConfirm } from "@/app/erp/components/ui";
@@ -17,16 +17,19 @@ import {
 import { CollapsibleSection } from "./CollapsibleSection";
 
 type Option = { id: string; name: string };
-type ScheduleResponse = { shifts: JanitorialShift[]; canEdit: boolean; contracts: Option[]; employees: Option[] };
+type EmployeeOption = Option & { hasClockLink: boolean; defaultContractId: string | null };
+type ScheduleResponse = { shifts: JanitorialShift[]; canEdit: boolean; contracts: Option[]; employees: EmployeeOption[] };
 
 /** What the shift dialog is open for: a new shift on a day, or an existing one. */
-type Editing = { kind: "new"; date: string; startTime: string } | { kind: "existing"; shift: JanitorialShift };
+/** Values a new-shift form can start from, e.g. "Add another janitor" copying an existing shift. */
+type NewShiftPrefill = { contractId?: string; endTime?: string; daysOfWeek?: number[]; repeat?: boolean; notes?: string };
+type Editing = ({ kind: "new"; date: string; startTime: string } & NewShiftPrefill) | { kind: "existing"; shift: JanitorialShift };
 
 const DEFAULT_START_TIME = "18:00";
 
 // Same pastel chip treatment as the Projects calendar (SchedulePlanner's
 // CALENDAR_GROUP_CHIP_CLASS), one color per building so a contract reads the
-// same across days.
+// same across days. No green: the Projects calendar uses it for turnover.
 const CONTRACT_CHIP_CLASSES = [
   "bg-teal-200 text-teal-900 hover:bg-teal-300",
   "bg-sky-200 text-sky-900 hover:bg-sky-300",
@@ -36,12 +39,20 @@ const CONTRACT_CHIP_CLASSES = [
   "bg-indigo-200 text-indigo-900 hover:bg-indigo-300",
   "bg-rose-200 text-rose-900 hover:bg-rose-300",
   "bg-yellow-200 text-yellow-900 hover:bg-yellow-300",
+  "bg-cyan-200 text-cyan-900 hover:bg-cyan-300",
+  "bg-fuchsia-200 text-fuchsia-900 hover:bg-fuchsia-300",
+  "bg-amber-200 text-amber-900 hover:bg-amber-300",
+  "bg-blue-200 text-blue-900 hover:bg-blue-300",
 ];
 
-function chipClassFor(contractId: string): string {
-  let h = 0;
-  for (const ch of contractId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return CONTRACT_CHIP_CLASSES[h % CONTRACT_CHIP_CLASSES.length];
+/** Colors are handed out in order (by building name), not hashed from the
+ * id, so two buildings only share a color once there are more buildings
+ * than colors. */
+const ChipColorContext = createContext<Map<string, number>>(new Map());
+
+function useChipClass(): (contractId: string) => string {
+  const indexById = useContext(ChipColorContext);
+  return (contractId) => CONTRACT_CHIP_CLASSES[(indexById.get(contractId) ?? 0) % CONTRACT_CHIP_CLASSES.length];
 }
 
 export function JanitorialCalendar({ initialContractId = "" }: { initialContractId?: string }) {
@@ -54,6 +65,22 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
+  // Expanded building groups, keyed `${dayKey}:${contractId}`, same as the
+  // Projects calendar's turnover building groups.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Drag and drop: moving one day's shift to another day.
+  const [dragging, setDragging] = useState<{ shiftKey: string; fromDate: string; label: string } | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+  const [dragError, setDragError] = useState<string | null>(null);
+  const [skipDayFor, setSkipDayFor] = useState<string | null>(null);
+  function toggleGroup(groupKey: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
 
   const todayKey = dayKey(todayEasternAsUtcMidnight());
   const matrix = useMemo(() => monthMatrix(cursor), [cursor]);
@@ -120,6 +147,43 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
   }, [data]);
 
   const canEdit = !!data?.canEdit && (data?.contracts.length ?? 0) > 0;
+
+  async function dropOnDay(toDate: string) {
+    const d = dragging;
+    setDragging(null);
+    setDragOverDay(null);
+    if (!d || d.fromDate === toDate) return;
+    setDragError(null);
+    const err = await sendJson("/api/erp/janitorial/shift-exceptions/move", "POST", { shiftKey: d.shiftKey, toDate });
+    if (err) setDragError(`Couldn't move ${d.label}: ${err}`);
+    void load();
+  }
+
+  const dragProps = (s: JanitorialShift) =>
+    canEdit && s.status !== "CANCELLED"
+      ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            e.dataTransfer.setData("text/plain", s.key);
+            e.dataTransfer.effectAllowed = "move";
+            setDragging({ shiftKey: s.key, fromDate: s.date, label: `${s.employeeName}'s shift` });
+          },
+          onDragEnd: () => {
+            setDragging(null);
+            setDragOverDay(null);
+          },
+        }
+      : {};
+
+  // Active contracts plus any other building on the calendar (e.g. an ended
+  // contract's past shifts), sorted by name, each given the next color.
+  const colorIndexById = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const c of data?.contracts ?? []) names.set(c.id, c.name);
+    for (const s of data?.shifts ?? []) if (!names.has(s.contractId)) names.set(s.contractId, s.buildingName);
+    const ordered = Array.from(names.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    return new Map(ordered.map(([id], i) => [id, i]));
+  }, [data]);
   const filtersActive = contractFilter !== "" || employeeFilter !== "";
 
   const calendarNav = (
@@ -147,6 +211,16 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
           </svg>
         </button>
       </div>
+      {data?.canEdit && (data?.contracts.length ?? 0) > 0 ? (
+        <button
+          type="button"
+          onClick={() => setSkipDayFor(todayKey)}
+          title="Skip every shift on a holiday or closure"
+          className="h-8 rounded border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300"
+        >
+          Skip a day
+        </button>
+      ) : null}
       <div className="relative" ref={filterRef}>
         <button
           type="button"
@@ -203,8 +277,17 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
   );
 
   return (
+    <ChipColorContext.Provider value={colorIndexById}>
     <div className="space-y-6">
       <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
+        {dragError ? (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs text-red-600">
+            <span>{dragError}</span>
+            <button type="button" onClick={() => setDragError(null)} className="shrink-0 font-semibold hover:underline">
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
           <span>
             {monthShifts.length} shift{monthShifts.length === 1 ? "" : "s"} this month, {formatHours(totalHours)}
@@ -244,16 +327,47 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
                 const tooltipPositionClass = `${isLastRow ? "bottom-full mb-1" : "top-full mt-1"} ${isNearRightEdge ? "right-0" : "left-0"}`;
                 const dayShifts = shiftsByDay.get(k) ?? [];
                 return (
-                  <div key={k} className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""}`}>
+                  <div
+                    key={k}
+                    onDragOver={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverDay !== k) setDragOverDay(k);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverDay === k) setDragOverDay(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      void dropOnDay(k);
+                    }}
+                    className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${
+                      dragOverDay === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""
+                    }`}
+                  >
                     <div className={inMonth ? "" : "opacity-40"}>
                       <div className="flex items-center justify-between">
-                        <div
-                          className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium ${
-                            isToday ? "bg-pink-600 text-white" : "text-gray-500"
-                          }`}
-                        >
-                          {cell.getUTCDate()}
-                        </div>
+                        {canEdit && dayShifts.some((s) => s.patternId && s.status !== "CANCELLED") ? (
+                          <button
+                            type="button"
+                            onClick={() => setSkipDayFor(k)}
+                            title="Skip shifts on this day (holiday or closure)"
+                            className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium hover:ring-1 hover:ring-pink-400 ${
+                              isToday ? "bg-pink-600 text-white" : "text-gray-500"
+                            }`}
+                          >
+                            {cell.getUTCDate()}
+                          </button>
+                        ) : (
+                          <div
+                            className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium ${
+                              isToday ? "bg-pink-600 text-white" : "text-gray-500"
+                            }`}
+                          >
+                            {cell.getUTCDate()}
+                          </div>
+                        )}
                         {canEdit && isFutureOrToday ? (
                           <button
                             type="button"
@@ -267,15 +381,52 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
                       </div>
                       {dayShifts.length > 0 ? (
                         <ul className="mt-1 space-y-1">
-                          {dayShifts.map((s) => (
-                            <ShiftChip
-                              key={s.key}
-                              shift={s}
-                              inMonth={inMonth}
-                              tooltipPositionClass={tooltipPositionClass}
-                              onClick={() => setEditing({ kind: "existing", shift: s })}
-                            />
-                          ))}
+                          {groupByBuilding(dayShifts).map((group) => {
+                            // One shift at a building stays its own chip; grouping it saves nothing.
+                            if (group.shifts.length === 1) {
+                              const s = group.shifts[0];
+                              return (
+                                <ShiftChip
+                                  key={s.key}
+                                  shift={s}
+                                  dragProps={dragProps(s)}
+                                  inMonth={inMonth}
+                                  tooltipPositionClass={tooltipPositionClass}
+                                  onClick={() => setEditing({ kind: "existing", shift: s })}
+                                />
+                              );
+                            }
+                            const groupKey = `${k}:${group.contractId}`;
+                            const isExpanded = expandedGroups.has(groupKey);
+                            return (
+                              <Fragment key={groupKey}>
+                                <BuildingGroupChip
+                                  group={group}
+                                  expanded={isExpanded}
+                                  inMonth={inMonth}
+                                  tooltipPositionClass={tooltipPositionClass}
+                                  onToggle={() => toggleGroup(groupKey)}
+                                />
+                                {isExpanded ? (
+                                  <li>
+                                    <ul className="ml-3 space-y-1 border-l-2 border-gray-200 pl-1.5">
+                                      {group.shifts.map((s) => (
+                                        <ShiftChip
+                                          key={s.key}
+                                          shift={s}
+                                          dragProps={dragProps(s)}
+                                          compact
+                                          inMonth={inMonth}
+                                          tooltipPositionClass={tooltipPositionClass}
+                                          onClick={() => setEditing({ kind: "existing", shift: s })}
+                                        />
+                                      ))}
+                                    </ul>
+                                  </li>
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
                         </ul>
                       ) : null}
                     </div>
@@ -288,6 +439,9 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
           <span className="flex items-center gap-1.5">
+            <span className="rounded bg-gray-100 px-1 text-[10px] font-medium text-gray-700">Building 3 ▾</span> Several janitors, click to see each
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-5 rounded border border-dashed border-gray-500 bg-gray-100" /> Changed or one-time
           </span>
           <span className="flex items-center gap-1.5">
@@ -299,14 +453,39 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
         </div>
       </CollapsibleSection>
 
+      {skipDayFor && data && (
+        <SkipDayDialog
+          initialDate={skipDayFor}
+          contracts={data.contracts}
+          loadedShifts={data.shifts}
+          loadedRange={{ start: dayKey(cells[0]), end: dayKey(cells[cells.length - 1]) }}
+          onClose={() => setSkipDayFor(null)}
+          onDone={() => {
+            setSkipDayFor(null);
+            void load();
+          }}
+        />
+      )}
+
       {editing && data && (
         <ShiftDialog
-          key={editing.kind === "new" ? `new-${editing.date}` : editing.shift.key}
+          key={editing.kind === "new" ? `new-${editing.date}-${editing.contractId ?? ""}-${editing.startTime}` : editing.shift.key}
           editing={editing}
           canEdit={!!data.canEdit}
           contracts={data.contracts}
           employees={data.employees}
           defaultContractId={contractFilter}
+          onAddAnother={(shift) =>
+            setEditing({
+              kind: "new",
+              date: shift.date,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+              contractId: shift.contractId,
+              daysOfWeek: shift.pattern?.daysOfWeek ?? [new Date(`${shift.date}T00:00:00Z`).getUTCDay()],
+              repeat: !!shift.pattern,
+            })
+          }
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -315,20 +494,110 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
         />
       )}
     </div>
+    </ChipColorContext.Provider>
   );
 }
 
+type BuildingGroup = { contractId: string; buildingName: string; shifts: JanitorialShift[] };
+
+/** A day's shifts by building, in order of each building's earliest shift. */
+function groupByBuilding(shifts: JanitorialShift[]): BuildingGroup[] {
+  const groups = new Map<string, BuildingGroup>();
+  for (const s of shifts) {
+    const g = groups.get(s.contractId) ?? { contractId: s.contractId, buildingName: s.buildingName, shifts: [] };
+    g.shifts.push(s);
+    groups.set(s.contractId, g);
+  }
+  return Array.from(groups.values());
+}
+
+/** Collapsed "The George, 3" chip for a building with several shifts that day. */
+function BuildingGroupChip({
+  group,
+  expanded,
+  inMonth,
+  tooltipPositionClass,
+  onToggle,
+}: {
+  group: BuildingGroup;
+  expanded: boolean;
+  inMonth: boolean;
+  tooltipPositionClass: string;
+  onToggle: () => void;
+}) {
+  const active = group.shifts.filter((s) => s.status !== "CANCELLED");
+  // Worst state wins, so nothing needing attention hides behind the collapse.
+  const needsCover = active.some((s) => s.timeOffType);
+  const allSkipped = active.length === 0;
+  const hours = active.reduce((sum, s) => sum + s.hours, 0);
+  const chipClassFor = useChipClass();
+  return (
+    <li className={inMonth ? "group relative" : "relative"}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        title={group.buildingName}
+        className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${chipClassFor(group.contractId)} ${
+          allSkipped ? "opacity-60 line-through" : ""
+        }`}
+      >
+        {needsCover ? <span aria-hidden className="shrink-0 text-sm font-bold leading-none text-red-600">⚠</span> : null}
+        <span className="truncate">{group.buildingName}</span>
+        <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap text-[9px] font-normal opacity-80">
+          {group.shifts.length}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
+      </button>
+      {inMonth ? (
+        <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+          <div className="font-semibold">{group.buildingName}</div>
+          <div className="text-gray-300">
+            {group.shifts.length} janitors this day, {formatHours(hours)}
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {group.shifts.map((s) => (
+              <li key={s.key} className={`text-gray-300 ${s.status === "CANCELLED" ? "line-through" : ""}`}>
+                {s.timeOffType && s.status !== "CANCELLED" ? "⚠ " : ""}
+                {formatTime12(s.startTime)} {s.employeeName}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1 text-gray-300">Click to {expanded ? "collapse" : "expand"}</div>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+type ChipDragProps = { draggable?: boolean; onDragStart?: (e: React.DragEvent) => void; onDragEnd?: () => void };
+
 function ShiftChip({
   shift: s,
+  compact = false,
+  dragProps = {},
   inMonth,
   tooltipPositionClass,
   onClick,
 }: {
   shift: JanitorialShift;
+  dragProps?: ChipDragProps;
+  /** Inside a building group: the building name is already on the group chip. */
+  compact?: boolean;
   inMonth: boolean;
   tooltipPositionClass: string;
   onClick: () => void;
 }) {
+  const chipClassFor = useChipClass();
   const cancelled = s.status === "CANCELLED";
   const timeOff = !!s.timeOffType && !cancelled;
   const statusText =
@@ -346,15 +615,14 @@ function ShiftChip({
       <button
         type="button"
         onClick={onClick}
-        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${chipClassFor(s.contractId)} ${
+        {...dragProps}
+        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${dragProps.draggable ? "cursor-grab active:cursor-grabbing" : ""} ${chipClassFor(s.contractId)} ${
           s.status === "CHANGED" || s.status === "EXTRA" ? "border border-dashed border-gray-500" : ""
         } ${cancelled ? "opacity-60 line-through" : ""}`}
       >
         {timeOff ? <span aria-hidden className="shrink-0 text-sm font-bold leading-none text-red-600">⚠</span> : null}
         <span className="shrink-0">{formatTime12(s.startTime)}</span>
-        <span className="truncate">
-          {s.employeeName.split(" ")[0]} · {s.buildingName}
-        </span>
+        <span className="truncate">{compact ? s.employeeName : `${s.employeeName.split(" ")[0]} · ${s.buildingName}`}</span>
       </button>
       {inMonth ? (
         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -365,6 +633,7 @@ function ShiftChip({
           <div className="text-gray-300">{statusText}</div>
           {timeOff ? <div className="text-red-300">Time off logged, needs cover</div> : null}
           {s.notes ? <div className="text-gray-300">{s.notes}</div> : null}
+          {dragProps.draggable ? <div className="mt-1 text-gray-400">Drag to move this day only</div> : null}
         </div>
       ) : null}
     </li>
@@ -393,37 +662,48 @@ function ShiftDialog({
   contracts,
   employees,
   defaultContractId,
+  onAddAnother,
   onClose,
   onSaved,
 }: {
   editing: Editing;
   canEdit: boolean;
   contracts: Option[];
-  employees: Option[];
+  employees: EmployeeOption[];
   defaultContractId: string;
+  onAddAnother: (shift: JanitorialShift) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const confirm = useConfirm();
+  const chipClassFor = useChipClass();
   const existing = editing.kind === "existing" ? editing.shift : null;
   const isPatternShift = !!existing?.pattern;
+  // Links created from this dialog, so the nudge disappears without a reload.
+  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const needsClockLink = (id: string) => !!id && !linkedIds.has(id) && employees.find((e) => e.id === id)?.hasClockLink === false;
 
   // A new shift or an unchanged-yet existing one starts in edit mode for new, view mode otherwise.
   const [mode, setMode] = useState<"view" | "edit">(existing ? "view" : "edit");
   const [scope, setScope] = useState<"day" | "following">("day");
 
-  const initialDate = existing ? existing.date : editing.kind === "new" ? editing.date : "";
-  const initialStart = existing ? existing.startTime : editing.kind === "new" ? editing.startTime : "18:00";
-  const [contractId, setContractId] = useState(existing?.contractId ?? defaultContractId);
+  const prefill = editing.kind === "new" ? editing : null;
+  const initialDate = existing ? existing.date : prefill!.date;
+  const initialStart = existing ? existing.startTime : prefill!.startTime;
+  const [contractId, setContractId] = useState(existing?.contractId ?? prefill?.contractId ?? defaultContractId);
+  // One janitor when editing an existing shift; any number when adding.
   const [employeeId, setEmployeeId] = useState(existing?.employeeId ?? "");
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState(initialStart);
-  const [endTime, setEndTime] = useState(existing?.endTime ?? minutesToTime(timeToMinutes(initialStart) + 240));
-  const [repeat, setRepeat] = useState(!existing);
+  const [endTime, setEndTime] = useState(existing?.endTime ?? prefill?.endTime ?? minutesToTime(timeToMinutes(initialStart) + 240));
+  const [repeat, setRepeat] = useState(existing ? false : prefill?.repeat ?? true);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
-    existing?.pattern?.daysOfWeek ?? [new Date(`${initialDate}T00:00:00Z`).getUTCDay()]
+    existing?.pattern?.daysOfWeek ?? prefill?.daysOfWeek ?? [new Date(`${initialDate}T00:00:00Z`).getUTCDay()]
   );
-  const [notes, setNotes] = useState(existing && existing.status !== "REGULAR" ? existing.notes ?? "" : existing?.pattern?.notes ?? "");
+  const [notes, setNotes] = useState(
+    existing ? (existing.status !== "REGULAR" ? existing.notes ?? "" : existing.pattern?.notes ?? "") : prefill?.notes ?? ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -451,26 +731,50 @@ function ShiftDialog({
     else onSaved();
   }
 
+  function addJanitor(id: string) {
+    if (!id || employeeIds.includes(id)) return;
+    setEmployeeIds((prev) => [...prev, id]);
+    // Fill in their default building if none is picked yet.
+    const fallback = employees.find((e) => e.id === id)?.defaultContractId;
+    if (!contractId && fallback && contracts.some((c) => c.id === fallback)) setContractId(fallback);
+  }
+
+  /** Adds the same shift for every picked janitor. On a partial failure the
+   * ones that saved are dropped from the list so a retry doesn't double them. */
+  async function saveNew() {
+    setSaving(true);
+    setError("");
+    const failed: { id: string; message: string }[] = [];
+    for (const id of employeeIds) {
+      const err = repeat
+        ? await sendJson(`/api/erp/janitorial/contracts/${contractId}/patterns`, "POST", {
+            employeeId: id,
+            daysOfWeek,
+            startTime,
+            endTime,
+            effectiveFrom: date,
+            notes,
+          })
+        : await sendJson("/api/erp/janitorial/shift-exceptions", "POST", { kind: "EXTRA", contractId, date, employeeId: id, startTime, endTime, notes });
+      if (err) failed.push({ id, message: err });
+    }
+    setSaving(false);
+    if (failed.length === 0) return onSaved();
+    const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? "a janitor";
+    setEmployeeIds(failed.map((f) => f.id));
+    setError(`Couldn't add ${failed.map((f) => nameOf(f.id)).join(", ")}: ${failed[0].message}`);
+  }
+
   function save(e: React.FormEvent) {
     e.preventDefault();
     if (!contractId) return setError("Pick a building");
-    if (!employeeId) return setError("Pick a janitor");
 
     if (!existing) {
-      if (repeat) {
-        void run(`/api/erp/janitorial/contracts/${contractId}/patterns`, "POST", {
-          employeeId,
-          daysOfWeek,
-          startTime,
-          endTime,
-          effectiveFrom: date,
-          notes,
-        });
-      } else {
-        void run("/api/erp/janitorial/shift-exceptions", "POST", { kind: "EXTRA", contractId, date, employeeId, startTime, endTime, notes });
-      }
+      if (employeeIds.length === 0) return setError("Add at least one janitor");
+      void saveNew();
       return;
     }
+    if (!employeeId) return setError("Pick a janitor");
 
     if (existing.status === "EXTRA") {
       void run(`/api/erp/janitorial/shift-exceptions/${existing.exceptionId}`, "PATCH", { contractId, date, employeeId, startTime, endTime, notes });
@@ -550,6 +854,13 @@ function ShiftDialog({
               {existing.notes && <p className="mt-1 text-xs text-gray-600">{existing.notes}</p>}
             </div>
           </div>
+          {canEdit && needsClockLink(existing.employeeId) && (
+            <ClockLinkNudge
+              employeeId={existing.employeeId}
+              name={existing.employeeName}
+              onCreated={(id) => setLinkedIds((prev) => new Set(prev).add(id))}
+            />
+          )}
           {existing.timeOffType && existing.status !== "CANCELLED" && (
             <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">
               {existing.employeeName} has time off this day ({existing.timeOffType.toLowerCase().replace("_", " ")}). Change the janitor for this day or skip it.
@@ -563,6 +874,11 @@ function ShiftDialog({
               </Button>
             )}
             {canEdit && existing.status !== "CANCELLED" && <Button size="sm" onClick={() => setMode("edit")}>Edit</Button>}
+            {canEdit && existing.status !== "CANCELLED" && (
+              <Button variant="secondary" size="sm" onClick={() => onAddAnother(existing)}>
+                Add another janitor
+              </Button>
+            )}
             {canEdit && existing.status === "CHANGED" && (
               <Button variant="secondary" size="sm" disabled={saving} onClick={() => run(`/api/erp/janitorial/shift-exceptions/${existing.exceptionId}`, "DELETE")}>
                 Undo change
@@ -627,18 +943,55 @@ function ShiftDialog({
             )}
           </div>
           <div>
-            <label className={labelClass.default} htmlFor="sd-employee">Janitor</label>
-            <SearchableSelect
-              id="sd-employee"
-              value={employeeId}
-              onChange={setEmployeeId}
-              options={employees.map((e) => ({ value: e.id, label: e.name }))}
-              placeholder="Search employees…"
-              allLabel="Pick a janitor"
-              className="mt-1"
-            />
+            <label className={labelClass.default} htmlFor="sd-employee">{existing ? "Janitor" : "Janitors"}</label>
+            {existing ? (
+              <SearchableSelect
+                id="sd-employee"
+                value={employeeId}
+                onChange={setEmployeeId}
+                options={employees.map((e) => ({ value: e.id, label: e.name }))}
+                placeholder="Search employees…"
+                allLabel="Pick a janitor"
+                className="mt-1"
+              />
+            ) : (
+              <SearchableSelect
+                id="sd-employee"
+                value=""
+                onChange={addJanitor}
+                options={employees.filter((e) => !employeeIds.includes(e.id)).map((e) => ({ value: e.id, label: e.name }))}
+                placeholder="Search employees…"
+                allLabel={employeeIds.length === 0 ? "Add a janitor" : "Add another janitor"}
+                className="mt-1"
+              />
+            )}
           </div>
         </div>
+        {!existing && employeeIds.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Janitors on this shift">
+            {employeeIds.map((id) => (
+              <li key={id} className="flex items-center gap-1 rounded-full bg-pink-50 py-1 pl-3 pr-1.5 text-sm text-pink-900 ring-1 ring-inset ring-pink-200">
+                {employees.find((e) => e.id === id)?.name ?? "Unknown"}
+                <button
+                  type="button"
+                  onClick={() => setEmployeeIds((prev) => prev.filter((x) => x !== id))}
+                  aria-label={`Remove ${employees.find((e) => e.id === id)?.name ?? "janitor"}`}
+                  className="flex h-5 w-5 items-center justify-center rounded-full text-pink-700 hover:bg-pink-100"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(existing ? [employeeId] : employeeIds).filter(needsClockLink).map((id) => (
+          <ClockLinkNudge
+            key={id}
+            employeeId={id}
+            name={employees.find((e) => e.id === id)?.name ?? "This janitor"}
+            onCreated={(created) => setLinkedIds((prev) => new Set(prev).add(created))}
+          />
+        ))}
 
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -707,11 +1060,218 @@ function ShiftDialog({
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}
 
-        <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+        {/* Pinned to the bottom of the (scrollable) dialog so Save stays reachable with a long list of janitors. */}
+        <div className="sticky -bottom-5 -mx-5 -mb-5 flex gap-2 border-t border-gray-100 bg-white px-5 py-3">
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? "Saving…" : !existing && employeeIds.length > 1 ? `Save ${employeeIds.length} shifts` : "Save"}
+          </Button>
           <Button variant="secondary" size="sm" onClick={existing ? () => setMode("view") : onClose}>Cancel</Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** Shown when the picked janitor has no clock-in link yet: creates one and
+ * copies it in one click, so setting someone up doesn't need a trip to their
+ * employee profile. */
+function ClockLinkNudge({ employeeId, name, onCreated }: { employeeId: string; name: string; onCreated: (employeeId: string) => void }) {
+  const [state, setState] = useState<"idle" | "working" | "copied" | "created">("idle");
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const firstName = name.split(" ")[0];
+
+  async function createAndCopy() {
+    setState("working");
+    setError("");
+    try {
+      const res = await fetch(`/api/erp/employees/${employeeId}/clock-link`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "create" }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.url) throw new Error(json.error ?? "Couldn't create the link");
+      setUrl(json.url);
+      onCreated(employeeId);
+      try {
+        await navigator.clipboard.writeText(json.url);
+        setState("copied");
+      } catch {
+        setState("created");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't create the link");
+      setState("idle");
+    }
+  }
+
+  if (state === "copied" || state === "created") {
+    return (
+      <div className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+        {state === "copied" ? `Link copied. Text it to ${firstName} and have them save it to their home screen.` : `Link created. Copy it and text it to ${firstName}:`}
+        {url && (
+          <input
+            readOnly
+            value={url}
+            onFocus={(e) => e.currentTarget.select()}
+            aria-label="Clock-in link"
+            className="mt-1.5 w-full rounded border border-emerald-200 bg-white px-2 py-1 font-mono text-[11px] text-gray-700"
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <span>{firstName} doesn&apos;t have a clock-in link yet, so their scheduled hours will be used.</span>
+      <button
+        type="button"
+        onClick={createAndCopy}
+        disabled={state === "working"}
+        className="shrink-0 rounded-md bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+      >
+        {state === "working" ? "Creating…" : "Create & copy link"}
+      </button>
+      {error && <span className="w-full text-red-600">{error}</span>}
+    </div>
+  );
+}
+
+/** Skip every weekly shift on one day (holiday, closure), at all or some
+ * buildings, or put back shifts that were skipped this way. */
+function SkipDayDialog({
+  initialDate,
+  contracts,
+  loadedShifts,
+  loadedRange,
+  onClose,
+  onDone,
+}: {
+  initialDate: string;
+  contracts: Option[];
+  loadedShifts: JanitorialShift[];
+  /** The calendar's visible dates; the preview count only works inside them. */
+  loadedRange: { start: string; end: string };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [date, setDate] = useState(initialDate);
+  const [allBuildings, setAllBuildings] = useState(true);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const scope = (contractId: string) => allBuildings || picked.has(contractId);
+  // Preview from what the calendar already loaded (the visible month).
+  const dayShifts = loadedShifts.filter((s) => s.date === date && scope(s.contractId));
+  const inLoadedRange = date >= loadedRange.start && date <= loadedRange.end;
+  const willSkip = dayShifts.filter((s) => s.patternId && s.status !== "CANCELLED").length;
+  const alreadySkipped = dayShifts.filter((s) => s.status === "CANCELLED" && s.notes?.startsWith("Day skipped")).length;
+  const oneTime = dayShifts.filter((s) => s.status === "EXTRA").length;
+
+  function toggle(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function submit(restore: boolean) {
+    if (!allBuildings && picked.size === 0) return setError("Pick at least one building");
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const res = await fetch("/api/erp/janitorial/skip-day", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date, contractIds: allBuildings ? [] : Array.from(picked), reason, restore }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Something went wrong");
+      if (restore && json.restored === 0) {
+        setMessage("Nothing to put back for that day.");
+        return;
+      }
+      if (!restore && json.skipped === 0) {
+        setMessage("There are no weekly shifts to skip on that day.");
+        return;
+      }
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} size="md" dismissible={false}>
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Skip a day</h3>
+          <p className="text-xs text-gray-500">
+            For holidays or closures. Every weekly shift that day is skipped, so no hours are paid for it. The weekly schedule
+            isn&apos;t changed.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass.default} htmlFor="sk-date">Date</label>
+            <input id="sk-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass.md} />
+          </div>
+          <div>
+            <label className={labelClass.default} htmlFor="sk-reason">Reason (optional)</label>
+            <input id="sk-reason" type="text" placeholder="e.g. Thanksgiving" value={reason} onChange={(e) => setReason(e.target.value)} className={inputClass.md} />
+          </div>
+        </div>
+
+        <div>
+          <span className={labelClass.default}>Buildings</span>
+          <label className="mt-1 flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={allBuildings} onChange={(e) => setAllBuildings(e.target.checked)} className="h-4 w-4 text-pink-600" />
+            All buildings
+          </label>
+          {!allBuildings && (
+            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
+              {contracts.map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 text-pink-600" />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {inLoadedRange && (
+          <p className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            {willSkip === 0 ? "No weekly shifts to skip that day" : `${willSkip} shift${willSkip === 1 ? "" : "s"} will be skipped`}
+            {oneTime > 0 ? `. ${oneTime} one-time shift${oneTime === 1 ? " stays" : "s stay"} on the schedule.` : "."}
+          </p>
+        )}
+
+        {message && <p className="text-xs text-gray-600">{message}</p>}
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+          <Button size="sm" disabled={saving} onClick={() => submit(false)}>
+            {saving ? "Saving…" : willSkip > 0 && inLoadedRange ? `Skip ${willSkip} shift${willSkip === 1 ? "" : "s"}` : "Skip shifts"}
+          </Button>
+          {(alreadySkipped > 0 || !inLoadedRange) && (
+            <Button variant="secondary" size="sm" disabled={saving} onClick={() => submit(true)}>
+              Put back skipped shifts
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onClose} className="ml-auto">Cancel</Button>
+        </div>
+      </div>
     </Modal>
   );
 }
