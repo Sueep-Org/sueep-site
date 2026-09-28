@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
+import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -72,6 +73,9 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "hourlyRate or hourlyRateCents required" }, { status: 400 });
   }
   if (hourlyRateCents < 0) return NextResponse.json({ error: "Invalid rate" }, { status: 400 });
+  const rate = await resolveLaborRateCents(employeeId || null, hourlyRateCents);
+  if (!rate.ok) return NextResponse.json({ error: rate.error }, { status: 400 });
+  hourlyRateCents = rate.cents;
 
   try {
     const laborer = await prisma.$transaction(async (tx) => {

@@ -8,12 +8,22 @@ type PayrollRow = {
   employeeId: string | null;
   name: string;
   payType: string;
+  /** Average straight-time rate when the person has logs at more than one
+   * rate (mixedRates). Gross pay is computed per log on the server. */
   hourlyRateCents: number;
+  mixedRates?: boolean;
+  /** Hours logged at $0 for someone paid hourly: almost always a rate that
+   * was never filled in, so the gross below is short by those hours. */
+  missingRateHours?: number;
   totalHours: number;
   regHours: number;
   otHours: number;
   grossPayCents: number;
   projects: string;
+  /** Has janitorial shift hours this period (links to Janitorial > Hours). */
+  hasJanitorialHours?: boolean;
+  /** Janitorial Contract employee with no shifts on the janitorial schedule this period. */
+  noJanitorialSchedule?: boolean;
   commissionCents: number;
   commissionBreakdown: { label: string; amountCents: number }[];
 };
@@ -406,6 +416,11 @@ export function PayrollView() {
                           <span className={row.isContractor ? "text-gray-900" : "text-gray-500"}>{row.name}</span>
                         )}
                       </div>
+                      {row.noJanitorialSchedule ? (
+                        <Link href="/erp/schedule?calendar=janitorial" className="mt-0.5 block text-[11px] font-medium text-red-600 hover:underline">
+                          No janitorial schedule set, no janitorial hours paid
+                        </Link>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
                       {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.regHours)}
@@ -421,12 +436,34 @@ export function PayrollView() {
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
                       {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.totalHours)}
+                      {row.hasJanitorialHours && row.employeeId ? (
+                        <div>
+                          <Link
+                            href={`/erp/janitorial/hours?employee=${row.employeeId}&start=${toISO(start)}&end=${toISO(end)}`}
+                            className="text-[11px] font-normal text-pink-600 hover:underline"
+                          >
+                            See janitorial shifts
+                          </Link>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-xs text-gray-400">Flat fee</span> : `${fmt(row.hourlyRateCents)}/hr`}
+                      {row.isContractor ? (
+                        <span className="text-xs text-gray-400">Flat fee</span>
+                      ) : (
+                        <>
+                          {`${fmt(row.hourlyRateCents)}/hr`}
+                          {row.mixedRates ? <div className="text-[10px] text-gray-400">avg, rates vary by job</div> : null}
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
                       {fmt(row.grossPayCents)}
+                      {row.missingRateHours ? (
+                        <div className="text-[10px] font-medium text-red-600">
+                          {fmtHours(Math.round(row.missingRateHours * 100) / 100)} hrs logged with no rate, not included
+                        </div>
+                      ) : null}
                       {row.commissionCents > 0 ? (
                         <>
                           {" + "}

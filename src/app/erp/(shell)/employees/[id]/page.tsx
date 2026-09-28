@@ -9,13 +9,14 @@ import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
 import { EmployeeProfileEditor } from "./EmployeeProfileEditor";
 import { EmployeeDocumentsSection } from "./EmployeeDocumentsSection";
 import { EmployeeInfoLinkSection } from "./EmployeeInfoLinkSection";
+import { EmployeeClockLinkSection } from "./EmployeeClockLinkSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
 import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
 import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
-import { getErpAuth, canEditPayInfo, canViewSsn } from "@/lib/erpAuth";
+import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
   const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
+  const canManageClockLink = canManageJanitorial(auth?.role ?? "EMPLOYEE");
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -42,6 +44,25 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     },
   });
   if (!employee) notFound();
+
+  // Their janitorial schedule (current and upcoming weekly shifts), shown
+  // read-only on the profile: the calendar is the only place pay hours come from.
+  const todayLabel = new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" })}T00:00:00.000Z`);
+  const janitorialPatterns = employee.isJanitorialContract
+    ? await prisma.janitorialShiftPattern.findMany({
+        where: { employeeId: employee.id, OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: todayLabel } }] },
+        orderBy: [{ effectiveFrom: "asc" }, { startTime: "asc" }],
+        select: {
+          id: true,
+          daysOfWeek: true,
+          startTime: true,
+          endTime: true,
+          effectiveFrom: true,
+          recurringContractId: true,
+          recurringContract: { select: { building: { select: { name: true } } } },
+        },
+      })
+    : [];
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
   const resendConfigured = Boolean(process.env.RESEND_API_KEY);
@@ -231,6 +252,15 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 offshoreMonthlyRateCents: canSeePay ? employee.offshoreMonthlyRateCents : null,
                 isJanitorialContract: employee.isJanitorialContract,
               }}
+              janitorialSchedule={janitorialPatterns.map((p) => ({
+                id: p.id,
+                contractId: p.recurringContractId,
+                buildingName: p.recurringContract.building.name,
+                daysOfWeek: p.daysOfWeek,
+                startTime: p.startTime,
+                endTime: p.endTime,
+                startsOn: p.effectiveFrom > todayLabel ? p.effectiveFrom.toISOString().slice(0, 10) : null,
+              }))}
             />
           ),
         },
@@ -238,6 +268,23 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Personal & Documents",
           content: (
             <div className="space-y-4">
+              {canManageClockLink && (
+                <CollapsibleSection
+                  title="Clock-in link"
+                  status={employee.clockToken ? "Active" : "Not set up"}
+                  tone={employee.clockToken ? "complete" : "neutral"}
+                >
+                  <EmployeeClockLinkSection
+                    employeeId={employee.id}
+                    firstName={employee.firstName}
+                    email={employee.email}
+                    // Only sent to roles that manage janitorial: the link is the janitor's credential.
+                    initialUrl={employee.clockToken ? `${siteUrl}/clock/${employee.clockToken}` : null}
+                    createdAt={employee.clockTokenCreatedAt?.toISOString() ?? null}
+                  />
+                </CollapsibleSection>
+              )}
+
               <CollapsibleSection title="Info form link" status={infoLinkStatus} tone={infoLinkTone} defaultOpen={infoLinkTone === "empty"}>
                 <EmployeeInfoLinkSection
                   id={employee.id}
@@ -317,6 +364,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
           label: "Labor",
           content: (
             <EmployeeLaborSection
+              employeeName={`${employee.firstName} ${employee.lastName}`.trim()}
               employeeId={employee.id}
               canSeePay={canSeePay}
               initialEntries={laborEntryRows}

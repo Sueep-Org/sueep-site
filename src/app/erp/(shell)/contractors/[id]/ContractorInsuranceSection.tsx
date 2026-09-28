@@ -97,7 +97,7 @@ export function ContractorInsuranceSection({
   const expiryStatus = (() => {
     if (!initial.workersCompExpiresAt) return null;
     const days = (new Date(initial.workersCompExpiresAt).getTime() - Date.now()) / 86_400_000;
-    const display = new Date(initial.workersCompExpiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const display = new Date(initial.workersCompExpiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
     const cls = days < 0 ? "text-red-500" : days <= 30 ? "text-amber-600" : "text-emerald-600";
     const suffix = days < 0 ? " (expired)" : days <= 30 ? " (expiring soon)" : "";
     return <span className={`font-medium ${cls}`}>{display}{suffix}</span>;

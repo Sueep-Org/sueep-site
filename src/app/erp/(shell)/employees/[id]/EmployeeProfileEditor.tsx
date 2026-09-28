@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { WEEKDAY_SHORT, formatTime12, shiftHours } from "@/lib/erp/janitorialSchedule";
+import { formatHours, formatShortDate } from "@/lib/erp/schedule";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -10,6 +13,16 @@ const label = labelClass.default;
 type Props = {
   employeeId: string;
   canSeePay?: boolean;
+  /** Their weekly janitorial shifts (read-only; edited on the calendar). */
+  janitorialSchedule?: {
+    id: string;
+    contractId: string;
+    buildingName: string;
+    daysOfWeek: number[];
+    startTime: string;
+    endTime: string;
+    startsOn: string | null;
+  }[];
   initial: {
     firstName: string;
     lastName: string;
@@ -34,7 +47,7 @@ type Props = {
   };
 };
 
-export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }: Props) {
+export function EmployeeProfileEditor({ employeeId, canSeePay = true, janitorialSchedule = [], initial }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -89,6 +102,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
       payload.hourlyPay = fd.get("hourlyPay") || null;
       payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || null) : null;
     }
+
 
     try {
       const res = await fetch(`/api/erp/employees/${employeeId}`, {
@@ -247,9 +261,46 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, initial }:
             </p>
           )}
           {canSeePay && payMode === "JANITORIAL" && (
-            <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
-              Paid a flat 40 hrs/week at the hourly rate above, minus any vacation logged for them, regardless of hours logged on projects.
-            </p>
+            <div className="sm:col-span-2 -mt-1 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className={label}>Janitorial schedule</span>
+                <Link
+                  href={`/erp/schedule?calendar=janitorial${janitorialSchedule[0] ? `&contract=${janitorialSchedule[0].contractId}` : ""}`}
+                  className="text-xs font-medium text-pink-600 hover:underline"
+                >
+                  {janitorialSchedule.length ? "Edit on calendar" : "Schedule them on the calendar"}
+                </Link>
+              </div>
+              {janitorialSchedule.length === 0 ? (
+                <p className="mt-1 text-amber-700">
+                  No shifts scheduled. They&apos;ll show as $0 with a warning in Payroll until they&apos;re on the calendar.
+                </p>
+              ) : (
+                <>
+                  <ul className="mt-1 space-y-0.5 text-gray-700">
+                    {janitorialSchedule.map((p) => (
+                      <li key={p.id}>
+                        {p.daysOfWeek.slice().sort().map((d) => WEEKDAY_SHORT[d]).join(", ")}, {formatTime12(p.startTime)} to{" "}
+                        {formatTime12(p.endTime)} at {p.buildingName}
+                        {p.startsOn ? <span className="text-gray-400"> (starts {formatShortDate(p.startsOn)})</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formatHours(
+                      Math.round(
+                        janitorialSchedule.filter((p) => !p.startsOn).reduce((s, p) => s + p.daysOfWeek.length * shiftHours(p.startTime, p.endTime), 0) * 100
+                      ) / 100
+                    )}{" "}
+                    scheduled per week.
+                  </p>
+                </>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Paid at the hourly rate above for the hours they clock on these shifts, or the scheduled hours if they don&apos;t clock
+                in, minus unpaid breaks and time off. The schedule on the calendar is the only source for their janitorial pay.
+              </p>
+            </div>
           )}
           <div>
             <label className={label} htmlFor="status">

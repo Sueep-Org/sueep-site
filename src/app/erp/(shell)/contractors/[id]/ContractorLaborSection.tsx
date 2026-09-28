@@ -5,6 +5,8 @@ import Link from "next/link";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { DownloadCsvButton } from "@/app/erp/components/DownloadCsvButton";
+import { buildCsv, downloadCsv, slugForFilename, type CsvColumn } from "@/lib/erp/csv";
 
 export type ContractorAssignmentRow = {
   id: string;
@@ -37,11 +39,13 @@ function formatDate(iso: string | null): string {
 
 export function ContractorLaborSection({
   contractorId,
+  contractorName,
   initialEntries,
   initialHasMore,
   projectOptions,
 }: {
   contractorId: string;
+  contractorName: string;
   initialEntries: ContractorAssignmentRow[];
   initialHasMore: boolean;
   projectOptions: ContractorLaborProjectOption[];
@@ -56,6 +60,43 @@ export function ContractorLaborSection({
   const [projectId, setProjectId] = useState("");
 
   const isFirstRender = useRef(true);
+  const [exporting, setExporting] = useState(false);
+
+  // Exports every entry matching the current filters, not just the page
+  // loaded on screen: same endpoint, with no `take` so it returns all rows.
+  async function exportCsv() {
+    setExporting(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ contractorId });
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+      if (projectId) params.set("projectId", projectId);
+      const res = await fetch(`/api/erp/contractor-labor?${params.toString()}`);
+      const data = (await res.json()) as { success: boolean; data?: ContractorAssignmentRow[]; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to export work history");
+      const rows = data.data ?? [];
+
+      const columns: CsvColumn<ContractorAssignmentRow>[] = [
+        { header: "Start Date", get: (r) => r.date?.slice(0, 10) ?? "" },
+        { header: "End Date", get: (r) => (r.endDate && r.endDate !== r.date ? r.endDate.slice(0, 10) : "") },
+        { header: "Project", get: (r) => r.projectTitle ?? r.buildingName ?? "" },
+        { header: "Change Order", get: (r) => (r.source === "CHANGE_ORDER" ? r.changeOrderTitle ?? "Yes" : "") },
+        { header: "Role", get: (r) => r.role ?? "" },
+        { header: "Cost", get: (r) => (r.costCents != null ? (r.costCents / 100).toFixed(2) : "") },
+        { header: "Task", get: (r) => r.taskDescription ?? "" },
+      ];
+      const totalCost = rows.reduce((sum, r) => sum + (r.costCents ?? 0), 0);
+      const totalRow = ["TOTAL", "", "", "", "", (totalCost / 100).toFixed(2), ""];
+
+      const range = startDate || endDate ? `${startDate || "start"}-to-${endDate || "today"}` : "all";
+      downloadCsv(`labor-${slugForFilename(contractorName)}-${range}.csv`, buildCsv(columns, rows, [totalRow]));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export work history");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function fetchPage(reset: boolean) {
     setLoading(true);
@@ -148,6 +189,14 @@ export function ContractorLaborSection({
             Clear filters
           </button>
         ) : null}
+        <div className="ml-auto">
+          <DownloadCsvButton
+            onClick={exportCsv}
+            busy={exporting}
+            disabled={entries.length === 0}
+            title="Download all work history matching these filters"
+          />
+        </div>
       </div>
 
       {error ? <p className="text-xs text-red-500">{error}</p> : null}

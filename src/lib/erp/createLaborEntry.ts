@@ -16,6 +16,7 @@ import { todayEasternKey } from "@/lib/erp/dates";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { getDescLine } from "@/lib/erp/descLine";
 import type { LaborEntry } from "@prisma/client";
+import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
 export { getDescLine };
 
@@ -228,6 +229,10 @@ export async function createLaborEntryForProject(
     });
     if (!employee) return { ok: false, status: 404, error: "Employee not found" };
   }
+
+  const rate = await resolveLaborRateCents(employeeId || null, hourlyRateCents);
+  if (!rate.ok) return { ok: false, status: 400, error: rate.error };
+  hourlyRateCents = rate.cents;
 
   // If a SUPERVISOR-role ERP user logs their own hours on a project with no
   // PM assigned yet, auto-assign them as the PM. Purely a convenience so the

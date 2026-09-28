@@ -474,6 +474,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           content: (
             <ContractorLaborSection
               contractorId={contractor.id}
+              contractorName={contractor.name}
               initialEntries={laborRows}
               initialHasMore={initialLaborHasMore}
               projectOptions={laborProjects}

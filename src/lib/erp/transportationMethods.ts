@@ -19,11 +19,6 @@ export const TRANSPORTATION_METHOD_OPTIONS = TRANSPORTATION_METHODS.map((value) 
   label: TRANSPORTATION_METHOD_LABELS[value],
 }));
 
-export function transportationMethodLabel(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  return TRANSPORTATION_METHOD_LABELS[raw as TransportationMethod] ?? null;
-}
-
 const TRANSPORTATION_METHOD_SHORT_LABELS: Record<TransportationMethod, string> = {
   COMPANY_VAN: "Van",
   EMPLOYEE_VEHICLE: "Own vehicle",

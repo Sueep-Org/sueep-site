@@ -3,8 +3,6 @@ import { prisma } from "@/lib/prisma";
 const OT_THRESHOLD = 40;
 const OT_MULTIPLIER = 1.5;
 
-export const OT_RATE = OT_MULTIPLIER;
-
 function mondayOf(d: Date): string {
   const date = new Date(d);
   const day = date.getUTCDay();

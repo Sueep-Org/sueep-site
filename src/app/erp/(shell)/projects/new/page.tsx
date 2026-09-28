@@ -44,9 +44,6 @@ export default async function NewProjectPage() {
         pmEmail: true,
         pmPhone: true,
         pricingPackage: true,
-        recurringContract: {
-          select: { id: true, status: true, units: { where: { active: true }, select: { id: true, unitNumber: true } } },
-        },
         turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
       },
     }),

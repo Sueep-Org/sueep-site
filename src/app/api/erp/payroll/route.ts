@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { timeOffEntryHours } from "@/lib/erp/timeOff";
 import { getErpAuth, canSeePayroll } from "@/lib/erpAuth";
+import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -22,21 +22,25 @@ function lastNameOf(name: string): string {
 
 type PayrollEmployeeRef = { payType: string; status: string; isOffshore: boolean; isJanitorialContract: boolean } | null;
 
-/** Offshore/Janitorial Contract are always excluded from the hours-driven
- * bucket (paid via their own fixed calcs below, regardless of status).
- * Salary is only excluded once INACTIVE — an active salary employee's
- * logged hours still show for reference (see the flat-pay override below),
- * but an inactive one shouldn't appear in payroll at all, unlike an hourly
- * employee who's still owed pay for hours actually worked before leaving. */
+/** Offshore is always excluded from the hours-driven bucket (paid via its
+ * own fixed calc below, regardless of status). Salary is only excluded once
+ * INACTIVE — an active salary employee's logged hours still show for
+ * reference (see the flat-pay override below), but an inactive one shouldn't
+ * appear in payroll at all, unlike an hourly employee who's still owed pay
+ * for hours actually worked before leaving. Janitorial Contract employees
+ * are paid from hours (janitorial schedule plus project) like hourly. */
 function isExcludedFromHoursDrivenPay(employee: PayrollEmployeeRef): boolean {
   if (!employee) return false;
-  if (employee.isOffshore || employee.isJanitorialContract) return true;
+  if (employee.isOffshore) return true;
   if (employee.payType === "SALARY" && employee.status !== "ACTIVE") return true;
   return false;
 }
 
-function fmtVacationHours(h: number): string {
-  return h % 1 === 0 ? String(h) : h.toFixed(2);
+/** Janitorial Contract employees keep their own pay-type label (drives the
+ * Payroll page's filter) even when paid from hours. */
+function payrollPayType(employee: PayrollEmployeeRef): string {
+  if (!employee) return "HOURLY";
+  return employee.isJanitorialContract ? "JANITORIAL" : employee.payType;
 }
 
 function mondayOf(date: Date): Date {
@@ -136,122 +140,171 @@ export async function GET(req: Request) {
     }),
   ]);
 
+  // ── Janitorial shift hours ─────────────────────────────────────────────
+  // Live, same numbers as Janitorial > Hours: clocked time, admin
+  // corrections, or the scheduled hours when a janitor didn't clock in (see
+  // src/lib/erp/janitorialHours.ts). Paid at the employee's own hourly rate
+  // and pooled with their project hours for the weekly overtime split.
+  const periodEndMidnight = startOfDay(periodEnd);
+  const janitorialShiftRows = await loadJanitorialHours(periodStart, periodEndMidnight);
+  const janitorialEmployeeIds = Array.from(new Set(janitorialShiftRows.map((r) => r.employeeId)));
+  const janitorialShiftEmployees = janitorialEmployeeIds.length
+    ? await prisma.employee.findMany({
+        where: { id: { in: janitorialEmployeeIds } },
+        select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, payType: true, status: true, isOffshore: true, isJanitorialContract: true },
+      })
+    : [];
+  const janitorialShiftEmployeeById = new Map(janitorialShiftEmployees.map((e) => [e.id, e]));
+
   // ── Employee rows ──────────────────────────────────────────────────────
   type EmployeeKey = string;
   type WeekKey = string;
 
+  // Each labor log is paid at its own rate: rates legitimately differ per
+  // job (and change after a raise), so one rate per person, which is what
+  // this used to take from their first log, over- or underpaid anyone with
+  // more than one. Hours and straight-time pay are tracked per work week so
+  // overtime can be computed per week, see weekPay below.
   const employeeMap = new Map<EmployeeKey, {
     employeeId: string | null;
     name: string;
     lastName: string;
     payType: string;
-    hourlyRateCents: number;
-    weeklyHours: Map<WeekKey, number>;
+    weeks: Map<WeekKey, { hours: number; straightCents: number }>;
+    rates: Set<number>;
+    /** Hours logged with no rate ($0) for someone paid by the hour. */
+    missingRateHours: number;
     projects: Set<string>;
     entries: { date: string; hours: number; project: string; rateCents: number }[];
   }>();
 
+  function addHours(
+    key: EmployeeKey,
+    init: { employeeId: string | null; name: string; lastName: string; payType: string },
+    workDate: Date,
+    hours: number,
+    rateCents: number,
+    project: string,
+  ) {
+    if (!employeeMap.has(key)) {
+      employeeMap.set(key, { ...init, weeks: new Map(), rates: new Set(), missingRateHours: 0, projects: new Set(), entries: [] });
+    }
+    const emp = employeeMap.get(key)!;
+    const weekStart = mondayOf(workDate).toISOString().slice(0, 10);
+    const week = emp.weeks.get(weekStart) ?? { hours: 0, straightCents: 0 };
+    week.hours += hours;
+    week.straightCents += hours * rateCents;
+    emp.weeks.set(weekStart, week);
+    emp.rates.add(rateCents);
+    if (rateCents === 0 && emp.payType !== "SALARY") emp.missingRateHours += hours;
+    emp.projects.add(project);
+    emp.entries.push({ date: workDate.toISOString().slice(0, 10), hours, project, rateCents });
+  }
+
   for (const entry of entries) {
-    // Offshore and Janitorial Contract employees are paid through their own
-    // fixed calcs below, entirely independent of logged hours — any
-    // LaborEntry they have is job-costing only and must never feed a
-    // biweekly payroll gross-pay number. An INACTIVE salary employee is
-    // excluded entirely too — the flat salary calc below only pays ACTIVE
+    // Offshore employees (and Janitorial Contract employees on the flat-40
+    // fallback) are paid through their own fixed calcs below, entirely
+    // independent of logged hours; any LaborEntry they have is job-costing
+    // only and must never feed a biweekly payroll gross-pay number. A
+    // Janitorial Contract employee paid from janitorial hours has their
+    // project hours counted too. An INACTIVE salary employee is
+    // excluded entirely too: the flat salary calc below only pays ACTIVE
     // salary employees, but without this check a former salary employee
     // with leftover/backdated LaborEntry rows would still show up here,
-    // priced by the old hours-based formula instead of just disappearing.
+    // priced by the hours-based formula instead of just disappearing.
     // (Hourly employees keep showing for hours actually worked before
-    // going inactive — only salary's fixed, employment-status-based payout
+    // going inactive; only salary's fixed, employment-status-based payout
     // needs this exclusion.)
     if (isExcludedFromHoursDrivenPay(entry.employee)) continue;
-    const key: EmployeeKey = entry.employeeId ?? `adhoc:${entry.workerName}`;
-    const name = entry.employee
-      ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
-      : entry.workerName;
-    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.workerName);
-
-    if (!employeeMap.has(key)) {
-      employeeMap.set(key, {
+    addHours(
+      entry.employeeId ?? `adhoc:${entry.workerName}`,
+      {
         employeeId: entry.employeeId,
-        name,
-        lastName: rowLastName,
-        payType: entry.employee?.payType ?? "HOURLY",
-        hourlyRateCents: entry.hourlyRateCents,
-        weeklyHours: new Map(),
-        projects: new Set(),
-        entries: [],
-      });
-    }
-
-    const emp = employeeMap.get(key)!;
-    const weekStart = mondayOf(entry.workDate).toISOString().slice(0, 10);
-    emp.weeklyHours.set(weekStart, (emp.weeklyHours.get(weekStart) ?? 0) + entry.hours);
-    emp.projects.add(entry.project?.jobTitle ?? "—");
-    emp.entries.push({
-      date: entry.workDate.toISOString().slice(0, 10),
-      hours: entry.hours,
-      project: entry.project?.jobTitle ?? "—",
-      rateCents: entry.hourlyRateCents,
-    });
+        name: entry.employee ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim() : entry.workerName,
+        lastName: entry.employee ? entry.employee.lastName : lastNameOf(entry.workerName),
+        payType: payrollPayType(entry.employee),
+      },
+      entry.workDate,
+      entry.hours,
+      entry.hourlyRateCents,
+      entry.project?.jobTitle ?? "—",
+    );
   }
 
   for (const entry of changeOrderEntries) {
-    if (!entry.hours || !entry.hourlyRateCents) continue;
+    // $0 change order hours are kept (not skipped) so they still count
+    // toward the week's overtime threshold and get flagged as missing a rate.
+    if (!entry.hours) continue;
     if (isExcludedFromHoursDrivenPay(entry.employee)) continue;
-    const key: EmployeeKey = entry.employeeId ?? `adhoc:${entry.name}`;
-    const name = entry.employee
-      ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim()
-      : entry.name;
-    const rowLastName = entry.employee ? entry.employee.lastName : lastNameOf(entry.name);
-    const projectTitle = entry.changeOrder.project?.jobTitle ?? "—";
-
-    if (!employeeMap.has(key)) {
-      employeeMap.set(key, {
+    addHours(
+      entry.employeeId ?? `adhoc:${entry.name}`,
+      {
         employeeId: entry.employeeId,
-        name,
-        lastName: rowLastName,
-        payType: entry.employee?.payType ?? "HOURLY",
-        hourlyRateCents: entry.hourlyRateCents,
-        weeklyHours: new Map(),
-        projects: new Set(),
-        entries: [],
-      });
-    }
+        name: entry.employee ? `${entry.employee.firstName} ${entry.employee.lastName}`.trim() : entry.name,
+        lastName: entry.employee ? entry.employee.lastName : lastNameOf(entry.name),
+        payType: payrollPayType(entry.employee),
+      },
+      entry.workDate,
+      entry.hours,
+      entry.hourlyRateCents,
+      entry.changeOrder.project?.jobTitle ?? "—",
+    );
+  }
 
-    const emp = employeeMap.get(key)!;
-    const weekStart = mondayOf(entry.workDate).toISOString().slice(0, 10);
-    emp.weeklyHours.set(weekStart, (emp.weeklyHours.get(weekStart) ?? 0) + entry.hours);
-    emp.projects.add(projectTitle);
-    emp.entries.push({
-      date: entry.workDate.toISOString().slice(0, 10),
-      hours: entry.hours,
-      project: projectTitle,
-      rateCents: entry.hourlyRateCents,
-    });
+  // Who got janitorial hours this period, so Payroll can link to their shifts.
+  const withJanitorialHours = new Set<string>();
+  for (const shift of janitorialShiftRows) {
+    if (shift.hours <= 0) continue;
+    const employee = janitorialShiftEmployeeById.get(shift.employeeId);
+    if (!employee || isExcludedFromHoursDrivenPay(employee)) continue;
+    addHours(
+      employee.id,
+      {
+        employeeId: employee.id,
+        name: `${employee.firstName} ${employee.lastName}`.trim(),
+        lastName: employee.lastName,
+        payType: payrollPayType(employee),
+      },
+      new Date(`${shift.date}T00:00:00.000Z`),
+      shift.hours,
+      employee.hourlyPayCents ?? 0,
+      `${shift.buildingName} (janitorial)`,
+    );
+    withJanitorialHours.add(employee.id);
   }
 
   const OT_THRESHOLD = 40;
-  const OT_MULTIPLIER = 1.5;
+  const OT_PREMIUM = 0.5;
+
+  // One work week's pay. Straight time is every log at its own rate. Hours
+  // past 40 get an extra half of the week's weighted-average rate (the
+  // "regular rate" rule for someone paid different rates in one week), so
+  // with a single rate this is the familiar 1.5x.
+  function weekPay(week: { hours: number; straightCents: number }, payType: string) {
+    if (payType === "SALARY") {
+      // Salaried employees don't earn OT; their gross is replaced by the
+      // flat salary below anyway, hours here are for reference only.
+      return { regHours: Math.min(week.hours, OT_THRESHOLD), otHours: 0, payCents: week.straightCents };
+    }
+    if (week.hours <= OT_THRESHOLD) return { regHours: week.hours, otHours: 0, payCents: week.straightCents };
+    const otHours = week.hours - OT_THRESHOLD;
+    const averageRateCents = week.straightCents / week.hours;
+    return { regHours: OT_THRESHOLD, otHours, payCents: week.straightCents + otHours * averageRateCents * OT_PREMIUM };
+  }
 
   const employeeRows = Array.from(employeeMap.values()).map((emp) => {
     let regHours = 0;
     let otHours = 0;
-    for (const weekHours of emp.weeklyHours.values()) {
-      if (emp.payType === "SALARY") {
-        // Salaried employees don't earn OT — hours past 40/week are still
-        // logged elsewhere but don't add to gross pay here.
-        regHours += Math.min(weekHours, OT_THRESHOLD);
-      } else if (weekHours <= OT_THRESHOLD) {
-        regHours += weekHours;
-      } else {
-        regHours += OT_THRESHOLD;
-        otHours += weekHours - OT_THRESHOLD;
-      }
+    let payCents = 0;
+    let straightCents = 0;
+    for (const week of emp.weeks.values()) {
+      const w = weekPay(week, emp.payType);
+      regHours += w.regHours;
+      otHours += w.otHours;
+      payCents += w.payCents;
+      straightCents += week.straightCents;
     }
-    const totalHours = regHours + otHours;
-    const grossPayCents = Math.round(
-      regHours * emp.hourlyRateCents + otHours * emp.hourlyRateCents * OT_MULTIPLIER
-    );
+    const loggedHours = Array.from(emp.weeks.values()).reduce((sum, w) => sum + w.hours, 0);
 
     return {
       isContractor: false as const,
@@ -259,13 +312,19 @@ export async function GET(req: Request) {
       name: emp.name,
       lastName: emp.lastName,
       payType: emp.payType,
-      hourlyRateCents: emp.hourlyRateCents,
-      totalHours,
+      // Average straight-time rate, for display and the CSV. Pay itself is
+      // computed per log above, not from this.
+      hourlyRateCents: loggedHours > 0 ? Math.round(straightCents / loggedHours) : 0,
+      mixedRates: emp.rates.size > 1,
+      missingRateHours: emp.missingRateHours,
+      totalHours: regHours + otHours,
       regHours,
       otHours,
-      grossPayCents,
+      grossPayCents: Math.round(payCents),
       projects: Array.from(emp.projects).join(", "),
       entries: emp.entries,
+      hasJanitorialHours: !!emp.employeeId && withJanitorialHours.has(emp.employeeId),
+      noJanitorialSchedule: false,
     };
   });
 
@@ -297,62 +356,53 @@ export async function GET(req: Request) {
       lastName: e.lastName,
       payType: "SALARY",
       hourlyRateCents: e.hourlyPayCents ?? 0,
+      mixedRates: false,
+      missingRateHours: 0,
       totalHours: 0,
       regHours: 0,
       otHours: 0,
       grossPayCents: Math.round((e.annualSalaryCents ?? 0) / 26),
       projects: "—",
       entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
+      hasJanitorialHours: false,
+      noJanitorialSchedule: false,
     }));
   employeeRows.push(...zeroHourSalaryRows);
 
-  // ── Janitorial Contract employees are paid a flat 40 hrs/week ──────────
-  // minus logged vacation, entirely independent of hours logged on projects
-  // (excluded from the hours-driven loop above). periodEndMidnight mirrors
-  // the midnight-UTC convention EmployeeTimeOff itself uses (periodEnd is
-  // end-of-day, 23:59:59.999, which would off-by-one the day math below).
-  const periodEndMidnight = startOfDay(periodEnd);
-  const FIXED_WEEKLY_HOURS = 40;
-  const periodDays = Math.round((periodEndMidnight.getTime() - periodStart.getTime()) / 86_400_000) + 1;
-  const weeksInPeriod = periodDays / 7;
-
-  const janitorialEmployees = await prisma.employee.findMany({
-    where: { status: "ACTIVE", isJanitorialContract: true },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      hourlyPayCents: true,
-      timeOff: {
-        where: { startDate: { lte: periodEndMidnight }, endDate: { gte: periodStart } },
-        select: { startDate: true, endDate: true, type: true },
-      },
-    },
+  // ── Janitorial Contract employees with nothing scheduled ────────────────
+  // Their janitorial pay comes only from the schedule, so with no shifts this
+  // period there are no janitorial hours to pay. Flag it on their row (added
+  // at $0 if they have no other hours) instead of paying a made-up number.
+  const scheduledJanitorIds = new Set(janitorialShiftRows.map((r) => r.employeeId));
+  const unscheduledJanitors = await prisma.employee.findMany({
+    where: { status: "ACTIVE", isJanitorialContract: true, id: { notIn: Array.from(scheduledJanitorIds) } },
+    select: { id: true, firstName: true, lastName: true, hourlyPayCents: true },
   });
-
-  const janitorialRows = janitorialEmployees.map((e) => {
-    const vacationHours = e.timeOff.reduce(
-      (sum, t) => sum + timeOffEntryHours(t, { clipStart: periodStart, clipEnd: periodEndMidnight }),
-      0
-    );
-    const baseHours = Math.max(0, FIXED_WEEKLY_HOURS * weeksInPeriod - vacationHours);
-    const rateCents = e.hourlyPayCents ?? 0;
-    return {
+  for (const e of unscheduledJanitors) {
+    const existing = employeeRows.find((r) => r.employeeId === e.id);
+    if (existing) {
+      existing.noJanitorialSchedule = true;
+      continue;
+    }
+    employeeRows.push({
       isContractor: false as const,
       employeeId: e.id,
       name: `${e.firstName} ${e.lastName}`.trim(),
       lastName: e.lastName,
       payType: "JANITORIAL",
-      hourlyRateCents: rateCents,
-      totalHours: baseHours,
-      regHours: baseHours,
+      hourlyRateCents: e.hourlyPayCents ?? 0,
+      mixedRates: false,
+      missingRateHours: 0,
+      totalHours: 0,
+      regHours: 0,
       otHours: 0,
-      grossPayCents: Math.round(baseHours * rateCents),
-      projects: vacationHours > 0 ? `${fmtVacationHours(vacationHours)} vacation hrs deducted` : "—",
+      grossPayCents: 0,
+      projects: "No janitorial schedule set",
       entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
-    };
-  });
-  employeeRows.push(...janitorialRows);
+      hasJanitorialHours: false,
+      noJanitorialSchedule: true,
+    });
+  }
 
   // ── Contractor rows — group by contractor, sum costCents ───────────────
   const contractorMap = new Map<string, { name: string; costCents: number; projects: Set<string> }>();
@@ -384,6 +434,8 @@ export async function GET(req: Request) {
     lastName: lastNameOf(c.name),
     payType: "CONTRACTOR",
     hourlyRateCents: 0,
+    mixedRates: false,
+    missingRateHours: 0,
     totalHours: 0,
     regHours: 0,
     otHours: 0,
@@ -439,6 +491,8 @@ export async function GET(req: Request) {
       lastName: e.lastName,
       payType: e.payType,
       hourlyRateCents: e.hourlyPayCents ?? 0,
+      mixedRates: false,
+      missingRateHours: 0,
       totalHours: 0,
       regHours: 0,
       otHours: 0,

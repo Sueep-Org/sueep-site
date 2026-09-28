@@ -176,9 +176,20 @@ model Building {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  name           String
-  builder        String?
-  address        String
+  name    String
+  builder String?
+  address String
+
+  /// Looked up from `address` (US Census geocoder, see src/lib/erp/geocode.ts)
+  /// the first time it's needed, for the janitor clock-in location check.
+  /// Cleared when the address changes so it's looked up again.
+  latitude      Float?
+  longitude     Float?
+  /// OK (looked up) | MANUAL (set by hand) | NOT_FOUND (neither lookup found
+  /// it; not retried automatically until the address changes).
+  geocodeStatus String?
+  geocodedAt    DateTime?
+
   pmName         String?
   pmEmail        String?
   pmPhone        String?
@@ -313,10 +324,12 @@ model TurnoverRequest {
 }
 
 /// A flat monthly (subscription-style) janitorial contract for a Building,
-/// as opposed to one-off per-job pricing. Each month, a scheduled job
-/// generates a RecurringContractPeriod: one billing Project holding the
-/// flat revenue, plus one TurnoverRequest+Project pair per enrolled unit
-/// for cost tracking — see src/lib/erp/recurringContracts.ts.
+/// as opposed to one-off per-job pricing. Managed from the Janitorial page
+/// (/erp/janitorial). Each month, a scheduled job generates a
+/// RecurringContractPeriod holding that month's billing amount and status
+/// directly, see src/lib/erp/recurringContracts.ts. Periods generated
+/// before that change also created a billing Project plus per-unit
+/// TurnoverRequest+Project pairs; those rows are kept but no longer made.
 model RecurringContract {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -333,42 +346,134 @@ model RecurringContract {
   startDate         DateTime
   endDate           DateTime?
   notes             String?
+  /// Free-text scope of what gets cleaned, e.g. "Lobby, hallways, gym,
+  /// 3 common bathrooms". Replaced the old per-unit list.
+  serviceAreas      String?
 
   /// Salesperson who gets commission credit — manually assigned, since
   /// recurring contracts are created directly in the ERP rather than
   /// synced from a HubSpot deal with an owner.
   commissionEmployeeId String?
-  commissionEmployee   Employee? @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
-
-  units   RecurringContractUnit[]
-  periods RecurringContractPeriod[]
+  commissionEmployee   Employee?                  @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+  periods              RecurringContractPeriod[]
+  shiftPatterns        JanitorialShiftPattern[]
+  shiftExceptions      JanitorialShiftException[]
+  timeEntries          JanitorialTimeEntry[]
 
   @@index([status])
   @@index([commissionEmployeeId])
 }
 
-model RecurringContractUnit {
+/// A janitor's standing weekly shift on a janitorial contract, e.g. Mon/Wed/Fri
+/// 18:00-22:00. The Schedule page's Janitorial tab expands these into dated
+/// shifts (see src/lib/erp/janitorialSchedule.ts); one-day changes live in
+/// JanitorialShiftException rather than editing the pattern.
+model JanitorialShiftPattern {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   recurringContractId String
   recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
 
-  unitNumber   String
-  bedrooms     Int?
-  bathrooms    Int?
-  isCommonArea Boolean @default(false)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  /// Which service lines run each month for this unit — drives the
-  /// auto-generated TurnoverRequest's flags
-  fullClean      Boolean @default(true)
-  carpetCleaning Boolean @default(false)
+  /// 0 = Sunday ... 6 = Saturday
+  daysOfWeek Int[]
+  /// "HH:MM" 24h, Eastern wall-clock time (same convention as LaborEntry.clockIn)
+  startTime  String
+  endTime    String
 
-  /// Soft-remove so past generated periods keep their unit history intact
-  active Boolean @default(true)
+  /// Midnight UTC date labels, inclusive. effectiveUntil null = ongoing.
+  effectiveFrom  DateTime
+  effectiveUntil DateTime?
 
-  @@unique([recurringContractId, unitNumber])
+  notes String?
+
+  exceptions JanitorialShiftException[]
+
   @@index([recurringContractId])
+  @@index([employeeId])
+}
+
+/// A one-day change to the janitorial schedule:
+///   CANCELLED - a pattern's shift doesn't happen that day (holiday, site closed)
+///   CHANGED   - a pattern's shift happens with a different janitor and/or hours
+///   EXTRA     - a one-off visit not from any pattern (patternId null)
+model JanitorialShiftException {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recurringContractId String
+  recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
+
+  patternId String?
+  pattern   JanitorialShiftPattern? @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC date label
+  date DateTime
+  /// CANCELLED | CHANGED | EXTRA
+  kind String
+
+  /// CHANGED: the covering janitor (null = pattern's janitor). EXTRA: required.
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// CHANGED: overrides (null = pattern's times). EXTRA: required.
+  startTime  String?
+  endTime    String?
+
+  notes String?
+
+  @@unique([patternId, date])
+  @@index([recurringContractId, date])
+  @@index([date])
+}
+
+/// What actually happened on a janitorial shift: the janitor's own clock
+/// in/out from their phone link, and/or an admin's correction. A scheduled
+/// shift with no row here falls back to its scheduled hours (see
+/// resolveJanitorialHours in src/lib/erp/janitorialHours.ts), so rows only
+/// exist when someone clocked or corrected something.
+model JanitorialTimeEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  recurringContractId String
+  recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
+
+  /// The scheduled shift this is for, same key as JanitorialShift.key
+  /// (`${patternId}:${date}` or `extra:${exceptionId}`). Null = unscheduled
+  /// work the janitor clocked on their own.
+  shiftKey String?  @unique
+  /// Midnight UTC date label of the shift (the day it started)
+  date     DateTime
+
+  clockInAt         DateTime?
+  clockInLatitude   Float?
+  clockInLongitude  Float?
+  clockInAccuracy   Float?
+  clockOutAt        DateTime?
+  clockOutLatitude  Float?
+  clockOutLongitude Float?
+  clockOutAccuracy  Float?
+
+  /// Admin correction, overrides the clock times. "HH:MM" Eastern.
+  /// manualNoShow = corrected to "didn't work" (0 hours).
+  manualStartTime String?
+  manualEndTime   String?
+  manualNoShow    Boolean   @default(false)
+  manualBy        String?
+  manualAt        DateTime?
+  notes           String?
+
+  @@index([employeeId, date])
+  @@index([date])
 }
 
 model RecurringContractPeriod {
@@ -380,16 +485,43 @@ model RecurringContractPeriod {
 
   /// First of the billing month this period covers
   periodStart      DateTime
-  billingProjectId String   @unique
+  /// Legacy: the billing Project older periods were generated with. Null
+  /// for periods generated since billing moved onto the period itself.
+  billingProjectId String?  @unique
+
+  /// This month's base contract amount, copied from monthlyRateCents when
+  /// the period is generated so a later rate change doesn't rewrite history.
+  /// One-off extras for the month live in `charges`. The default is only a
+  /// safety net for older deployed code that doesn't set it.
+  amountCents   Int    @default(0)
+  /// NOT_BILLED | BILLED | PAID
+  billingStatus String @default("NOT_BILLED")
 
   /// Recurring-contract commission (5% of ACV months 1-12, 2% months
-  /// 13-24, $0 after) is computed at read time from monthlyRateCents and
+  /// 13-24, $0 after) is computed at read time from amountCents and
   /// elapsed months — only paid status needs to be persisted per period.
+  /// Extras in `charges` are not commissioned.
   commissionPaidAt DateTime?
 
   projects Project[]
+  charges  RecurringContractCharge[]
 
   @@unique([recurringContractId, periodStart])
+}
+
+/// A one-off extra billed on top of a contract month's flat amount, e.g.
+/// "Post-event deep clean". Billed together with its period.
+model RecurringContractCharge {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  periodId String
+  period   RecurringContractPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  description String
+  amountCents Int
+
+  @@index([periodId])
 }
 
 model LaborAssignment {
@@ -1295,8 +1427,9 @@ model Employee {
   offshoreMonthlyRateCents Int?
 
   /// Still an hourly employee (payType stays HOURLY, hourlyPayCents is their
-  /// rate) but paid a flat 40 hrs/week minus logged vacation, independent of
-  /// any LaborEntry hours they log on projects — same independent-flag
+  /// rate), labeled Janitorial in Payroll. Paid from their janitorial schedule
+  /// hours (see lib/erp/janitorialHours.ts) plus any project hours; Payroll
+  /// warns when they have no janitorial schedule. Same independent-flag
   /// pattern as isOffshore rather than a payType value.
   isJanitorialContract Boolean @default(false)
 
@@ -1344,6 +1477,12 @@ model Employee {
   infoToken       String?   @unique
   infoTokenExpiry DateTime?
 
+  /// Private link for the janitor clock-in page (/clock/[token]). Unlike
+  /// infoToken it doesn't expire, since janitors save it to their phone's
+  /// home screen; it's rotated (old link stops working) if a phone is lost.
+  clockToken          String?   @unique
+  clockTokenCreatedAt DateTime?
+
   /// Array of document type labels required for compliance (e.g. ["I-9", "OSHA card"])
   requiredDocuments Json @default("[]")
 
@@ -1380,6 +1519,9 @@ model Employee {
   offshorePayrollPayments      OffshorePayrollPayment[]
   bidBonusEntries              BidBonusEntry[]
   salesBidEntries              SalesBidEntry[]
+  janitorialShiftPatterns      JanitorialShiftPattern[]
+  janitorialShiftExceptions    JanitorialShiftException[]
+  janitorialTimeEntries        JanitorialTimeEntry[]
 
   @@index([status])
   @@index([defaultProject])
@@ -1563,8 +1705,8 @@ model CommissionPayout {
   paidAt      DateTime
 
   /// "PROJECT" | "RECURRING_PERIOD" — what generated this payout.
-  sourceType String
-  sourceId   String
+  sourceType  String
+  sourceId    String
   /// Snapshotted job title / building+month, so the breakdown still reads
   /// sensibly if the source project or period is later deleted.
   sourceLabel String

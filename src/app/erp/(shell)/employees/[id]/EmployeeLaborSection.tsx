@@ -5,6 +5,8 @@ import Link from "next/link";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { DownloadCsvButton } from "@/app/erp/components/DownloadCsvButton";
+import { buildCsv, downloadCsv, slugForFilename, type CsvColumn } from "@/lib/erp/csv";
 
 export type EmployeeLaborEntryRow = {
   id: string;
@@ -34,12 +36,14 @@ function formatDate(iso: string): string {
 
 export function EmployeeLaborSection({
   employeeId,
+  employeeName,
   canSeePay,
   initialEntries,
   initialHasMore,
   projectOptions,
 }: {
   employeeId: string;
+  employeeName: string;
   canSeePay: boolean;
   initialEntries: EmployeeLaborEntryRow[];
   initialHasMore: boolean;
@@ -55,19 +59,61 @@ export function EmployeeLaborSection({
   const [projectId, setProjectId] = useState("");
 
   const isFirstRender = useRef(true);
+  const [exporting, setExporting] = useState(false);
+
+  function filterParams(): URLSearchParams {
+    const params = new URLSearchParams({ employeeId });
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    if (projectId) params.set("projectId", projectId);
+    return params;
+  }
+
+  // Exports every entry matching the current filters, not just the page
+  // loaded on screen: same endpoint, with no `take` so it returns all rows.
+  async function exportCsv() {
+    setExporting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/erp/labor?${filterParams().toString()}`);
+      const data = (await res.json()) as { success: boolean; data?: EmployeeLaborEntryRow[]; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to export labor entries");
+      const rows = data.data ?? [];
+
+      const columns: CsvColumn<EmployeeLaborEntryRow>[] = [
+        { header: "Date", get: (r) => r.workDate.slice(0, 10) },
+        { header: "Project", get: (r) => r.projectTitle },
+        { header: "Change Order", get: (r) => (r.source === "CHANGE_ORDER" ? r.changeOrderTitle ?? "Yes" : "") },
+        { header: "Role", get: (r) => r.role ?? "" },
+        { header: "Hours", get: (r) => r.hours.toFixed(2) },
+        ...(canSeePay
+          ? [
+              { header: "Hourly Rate", get: (r: EmployeeLaborEntryRow) => (r.hourlyRateCents / 100).toFixed(2) },
+              { header: "Cost", get: (r: EmployeeLaborEntryRow) => ((r.hours * r.hourlyRateCents) / 100).toFixed(2) },
+            ]
+          : []),
+        { header: "Task", get: (r) => r.taskDescription ?? "" },
+      ];
+      const totalHours = rows.reduce((sum, r) => sum + r.hours, 0);
+      const totalCost = rows.reduce((sum, r) => sum + r.hours * r.hourlyRateCents, 0);
+      const totalRow = ["TOTAL", "", "", "", totalHours.toFixed(2), ...(canSeePay ? ["", (totalCost / 100).toFixed(2)] : []), ""];
+
+      const range = startDate || endDate ? `${startDate || "start"}-to-${endDate || "today"}` : "all";
+      downloadCsv(`labor-${slugForFilename(employeeName)}-${range}.csv`, buildCsv(columns, rows, [totalRow]));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export labor entries");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function fetchPage(reset: boolean) {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({
-        employeeId,
-        take: String(LABOR_PAGE_SIZE),
-        skip: String(reset ? 0 : entries.length),
-      });
-      if (startDate) params.set("startDate", startDate);
-      if (endDate) params.set("endDate", endDate);
-      if (projectId) params.set("projectId", projectId);
+      const params = filterParams();
+      params.set("take", String(LABOR_PAGE_SIZE));
+      params.set("skip", String(reset ? 0 : entries.length));
 
       const res = await fetch(`/api/erp/labor?${params.toString()}`);
       const data = (await res.json()) as { success: boolean; data?: EmployeeLaborEntryRow[]; hasMore?: boolean; error?: string };
@@ -147,6 +193,14 @@ export function EmployeeLaborSection({
             Clear filters
           </button>
         ) : null}
+        <div className="ml-auto">
+          <DownloadCsvButton
+            onClick={exportCsv}
+            busy={exporting}
+            disabled={entries.length === 0}
+            title="Download every labor entry matching these filters"
+          />
+        </div>
       </div>
 
       {error ? <p className="text-xs text-red-500">{error}</p> : null}

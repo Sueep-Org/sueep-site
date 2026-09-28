@@ -11,6 +11,12 @@ export function ScheduleCalendarOverview() {
         start and end dates, plus anything planned ahead of time. The Gantt shows the overall
         timeline of active projects.
       </P>
+      <P>
+        Tabs at the top switch between calendars. <strong>Projects</strong> is everything
+        described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
+        see{" "}
+        <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
+      </P>
 
       <H2>Steps</H2>
       <Steps>

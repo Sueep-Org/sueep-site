@@ -87,8 +87,6 @@ type UnitScope = {
   otherWork: boolean;
   otherDescription: string;
   otherPrice: string;
-  /** Covered by the building's flat monthly recurring contract — skips per-unit pricing-package pricing. */
-  recurringContractUnit: boolean;
 };
 
 function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(2)}`): UnitScope {
@@ -118,7 +116,6 @@ function createUnitScope(id = `${Date.now()}-${Math.random().toString(36).slice(
     otherWork: false,
     otherDescription: "",
     otherPrice: "",
-    recurringContractUnit: false,
   };
 }
 
@@ -218,11 +215,6 @@ interface BuildingOption {
   pmEmail?: string | null;
   pmPhone?: string | null;
   pricingPackage?: unknown;
-  recurringContract?: {
-    id: string;
-    status: string;
-    units: { id: string; unitNumber: string }[];
-  } | null;
   existingUnitNumbers?: string[];
 }
 
@@ -831,31 +823,14 @@ export function NewProjectForm({
     () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
     [buildingName, selectedBuilding]
   );
-  const activeRecurringContractUnits = useMemo(
-    () => new Set((selectedBuilding?.recurringContract?.status === "ACTIVE" ? selectedBuilding.recurringContract.units : []).map((u) => u.unitNumber)),
-    [selectedBuilding]
-  );
-  // existingUnitNumbers (from GET /api/erp/buildings) is sourced purely from
-  // TurnoverRequest rows — a recurring-contract unit only shows up there
-  // once its first monthly period has actually generated a project (see
-  // recurringContracts.ts). Folding activeRecurringContractUnits in here
-  // too means a brand-new recurring unit (enrolled but not yet generated)
-  // still trips the duplicate warning instead of silently allowing a
-  // second, redundant one-off unit with the same identifier.
   const existingBuildingUnitNumbers = useMemo(
-    () =>
-      new Set([
-        ...(selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase()),
-        ...Array.from(activeRecurringContractUnits).map((n) => n.trim().toLowerCase()),
-      ]),
-    [selectedBuilding, activeRecurringContractUnits]
+    () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase())),
+    [selectedBuilding]
   );
   const [confirmedDuplicateUnitIds, setConfirmedDuplicateUnitIds] = useState<Set<string>>(new Set());
 
-  /** True if this unit's identifier already exists on the selected building
-   * (including an active recurring-contract unit not yet generated into a
-   * TurnoverRequest), or collides with another unit being added in this
-   * same submission. */
+  /** True if this unit's identifier already exists on the selected building,
+   * or collides with another unit being added in this same submission. */
   function isDuplicateUnitNumber(unitId: string, value: string): boolean {
     const trimmed = value.trim().toLowerCase();
     if (!trimmed) return false;
@@ -1014,35 +989,31 @@ export function NewProjectForm({
       const lines: string[] = [];
       let unitTotal = 0;
 
-      if (unit.recurringContractUnit) {
-        lines.push("covered by recurring contract — no charge");
-      } else {
-        const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning || unit.compounding;
-        if (hasPricedService) {
-          const unitPricing = computeTurnoverPricing({
-            requestType: "TURNOVER",
-            buildingName,
-            pricingPackage,
-            bedrooms: unit.isCommonArea ? null : bedroomsToNumber(unit.bedrooms),
-            bathrooms: unit.isCommonArea ? null : bathroomsToNumber(unit.bathrooms),
-            isCommonArea: unit.isCommonArea,
-            isPartialTurn: unit.isPartialTurn,
-            partialTurnLayout: unit.partialTurnLayout,
-            fullPaint: unit.fullPaint,
-            touchUpPaint: unit.touchUpPaint && !unit.fullPaint ? 1 : 0,
-            fullClean: unit.fullClean,
-            carpetCleaning: unit.carpetCleaning,
-            materialsAdditional: unit.materialsAdditional,
-            ceilingPaint: false,
-            compounding: unit.compounding ? 1 : 0,
-          });
-          lines.push(...unitPricing.breakdown);
-          unitTotal += unitPricing.priceCents;
-        }
+      const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning || unit.compounding;
+      if (hasPricedService) {
+        const unitPricing = computeTurnoverPricing({
+          requestType: "TURNOVER",
+          buildingName,
+          pricingPackage,
+          bedrooms: unit.isCommonArea ? null : bedroomsToNumber(unit.bedrooms),
+          bathrooms: unit.isCommonArea ? null : bathroomsToNumber(unit.bathrooms),
+          isCommonArea: unit.isCommonArea,
+          isPartialTurn: unit.isPartialTurn,
+          partialTurnLayout: unit.partialTurnLayout,
+          fullPaint: unit.fullPaint,
+          touchUpPaint: unit.touchUpPaint && !unit.fullPaint ? 1 : 0,
+          fullClean: unit.fullClean,
+          carpetCleaning: unit.carpetCleaning,
+          materialsAdditional: unit.materialsAdditional,
+          ceilingPaint: false,
+          compounding: unit.compounding ? 1 : 0,
+        });
+        lines.push(...unitPricing.breakdown);
+        unitTotal += unitPricing.priceCents;
+      }
 
-        if (unit.lightWallTouchUps) {
-          lines.push("Light wall touch-ups: not priced");
-        }
+      if (unit.lightWallTouchUps) {
+        lines.push("Light wall touch-ups: not priced");
       }
 
       if (unit.otherWork) {
@@ -1910,23 +1881,6 @@ export function NewProjectForm({
                       </label>
                     ))}
                   </div>
-                  {selectedBuilding?.recurringContract?.status === "ACTIVE" && (
-                    <label className="mt-3 flex min-w-0 items-center rounded-md border border-pink-200 bg-pink-50 px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={unit.recurringContractUnit}
-                        onChange={(e) => updateUnitScope(unit.id, { recurringContractUnit: e.target.checked })}
-                        className="h-4 w-4 text-pink-600"
-                      />
-                      <span className={`${checkboxLabel} break-words`}>
-                        Part of this building&apos;s recurring contract — covered by the flat monthly rate, no per-unit charge
-                        {unit.unitNumber.trim() &&
-                        Array.from(activeRecurringContractUnits).some((n) => n.trim().toLowerCase() === unit.unitNumber.trim().toLowerCase())
-                          ? " (already enrolled)"
-                          : ""}
-                      </span>
-                    </label>
-                  )}
                   {unit.otherWork && (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="min-w-0">

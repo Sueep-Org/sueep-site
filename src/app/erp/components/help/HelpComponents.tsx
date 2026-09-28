@@ -76,10 +76,6 @@ export function TD({ children }: { children: React.ReactNode }) {
   return <td className="border-t border-gray-100 px-4 py-2.5 text-gray-700">{children}</td>;
 }
 
-export function HR() {
-  return <hr className="my-6 border-gray-200" />;
-}
-
 export function Callout({
   type = "info",
   children,
@@ -144,10 +140,3 @@ export function SkipTo({ href, children }: { href: string; children: React.React
   );
 }
 
-export function Embed({ src, title, aspect = "16/9" }: { src: string; title: string; aspect?: "16/9" | "4/3" | "1/1" }) {
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 shadow-sm" style={{ aspectRatio: aspect }}>
-      <iframe src={src} title={title} className="h-full w-full" allowFullScreen allow="autoplay" />
-    </div>
-  );
-}

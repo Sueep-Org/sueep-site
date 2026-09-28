@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MarketingNav } from "../components/MarketingNav";
 import { FranchiseInquiryForm } from "./FranchiseInquiryForm";
+import { FranchisePixelEvents } from "./FranchisePixelEvents";
 
 export const metadata = {
   title: "Franchise Opportunities | Sueep",
@@ -36,6 +37,7 @@ export default function FranchisePage() {
   return (
     <main className="bg-white text-gray-900 min-h-screen flex flex-col">
       <MarketingNav cta={{ label: "Apply for a Franchise", href: "/franchise#apply" }} />
+      <FranchisePixelEvents />
 
       <section className="relative py-16 md:py-24 overflow-hidden">
         <img src="/hero.jpg" alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.18]" />

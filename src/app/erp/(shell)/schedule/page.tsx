@@ -14,6 +14,8 @@ import {
 import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
 import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
+import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
+import { JanitorialCalendar } from "./JanitorialCalendar";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -25,7 +27,24 @@ export const runtime = "nodejs";
 // Change orders in these statuses never happened (or won't) — keep them off the calendar.
 const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
 
-export default async function SchedulePage() {
+type PageProps = { searchParams: Promise<{ calendar?: string; contract?: string }> };
+
+export default async function SchedulePage({ searchParams }: PageProps) {
+  const { calendar, contract } = await searchParams;
+
+  // Each calendar tab loads only its own data: the Janitorial tab fetches
+  // from /api/erp/janitorial/schedule client-side, so none of the project
+  // queries below run for it.
+  if (calendar === "janitorial") {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+        <ScheduleCalendarTabs active="janitorial" />
+        <JanitorialCalendar initialContractId={contract ?? ""} />
+      </div>
+    );
+  }
+
   const auth = await getErpAuth();
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
 
@@ -585,6 +604,8 @@ export default async function SchedulePage() {
           <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
         </div>
       </div>
+
+      <ScheduleCalendarTabs active="projects" />
 
       {/* Project Schedule */}
       <SchedulePlanner

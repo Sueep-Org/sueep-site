@@ -86,7 +86,6 @@ export async function POST(req: Request) {
         if (!unit || typeof unit !== "object") return unit;
         const rest = { ...(unit as Record<string, unknown>) };
         delete rest.otherPrice;
-        delete rest.recurringContractUnit;
         return rest;
       });
     }
