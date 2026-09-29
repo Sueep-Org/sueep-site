@@ -37,6 +37,12 @@ export function canSeePayroll(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
 
+/** Dashboard Finance tab. Net profit there subtracts total salary and
+ * offshore pay, so SALES is left out even though it can see job margins. */
+export function canSeeFinanceDashboard(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "FINANCE";
+}
+
 /** Janitorial page (recurring contracts, and later janitor hours/schedule):
  * same roles as canSeeFinancials. */
 export function canManageJanitorial(role: ErpRole): boolean {

@@ -18,7 +18,7 @@ import { CollapsibleSection } from "./CollapsibleSection";
 
 type Option = { id: string; name: string };
 type EmployeeOption = Option & { hasClockLink: boolean; defaultContractId: string | null };
-type ScheduleResponse = { shifts: JanitorialShift[]; canEdit: boolean; contracts: Option[]; employees: EmployeeOption[] };
+type ScheduleResponse = { shifts: (JanitorialShift & { logged?: boolean })[]; canEdit: boolean; contracts: Option[]; employees: EmployeeOption[] };
 
 /** What the shift dialog is open for: a new shift on a day, or an existing one. */
 /** Values a new-shift form can start from, e.g. "Add another janitor" copying an existing shift. */
@@ -26,6 +26,11 @@ type NewShiftPrefill = { contractId?: string; endTime?: string; daysOfWeek?: num
 type Editing = ({ kind: "new"; date: string; startTime: string } & NewShiftPrefill) | { kind: "existing"; shift: JanitorialShift };
 
 const DEFAULT_START_TIME = "18:00";
+
+// Same convention as the Projects calendar: dashed = planned (no hours logged
+// yet), solid = hours logged (a clock-in, or a manager entering the times).
+const PLANNED_CHIP_CLASS = "border border-dashed border-gray-500";
+const isLogged = (s: JanitorialShift) => !!(s as JanitorialShift & { logged?: boolean }).logged;
 
 // Same pastel chip treatment as the Projects calendar (SchedulePlanner's
 // CALENDAR_GROUP_CHIP_CLASS), one color per building so a contract reads the
@@ -302,7 +307,7 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
           {data && data.canEdit && data.contracts.length === 0 && (
             <span>
               No active janitorial contracts yet. Create one on the{" "}
-              <Link href="/erp/janitorial" className="text-pink-600 hover:underline">Janitorial page</Link> first.
+              <Link href="/erp/janitorial" className="text-pink-600 hover:underline">Janitorial Contracts page</Link> first.
             </span>
           )}
         </div>
@@ -442,7 +447,16 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
             <span className="rounded bg-gray-100 px-1 text-[10px] font-medium text-gray-700">Building 3 ▾</span> Several janitors, click to see each
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-5 rounded border border-dashed border-gray-500 bg-gray-100" /> Changed or one-time
+            <span className="inline-block h-3 w-5 rounded border border-dashed border-gray-500 bg-gray-100" /> Scheduled, no hours logged yet
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-5 rounded bg-gray-200" /> Hours logged
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-semibold text-gray-700">↻</span> Changed for the day
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-semibold text-gray-700">1×</span> One-time shift
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-5 rounded bg-gray-100 opacity-60" /> <span className="line-through">Skipped</span>
@@ -529,6 +543,8 @@ function BuildingGroupChip({
   // Worst state wins, so nothing needing attention hides behind the collapse.
   const needsCover = active.some((s) => s.timeOffType);
   const allSkipped = active.length === 0;
+  const allLogged = active.length > 0 && active.every(isLogged);
+  const loggedCount = active.filter(isLogged).length;
   const hours = active.reduce((sum, s) => sum + s.hours, 0);
   const chipClassFor = useChipClass();
   return (
@@ -539,7 +555,7 @@ function BuildingGroupChip({
         aria-expanded={expanded}
         title={group.buildingName}
         className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${chipClassFor(group.contractId)} ${
-          allSkipped ? "opacity-60 line-through" : ""
+          allSkipped ? "opacity-60 line-through" : allLogged ? "" : PLANNED_CHIP_CLASS
         }`}
       >
         {needsCover ? <span aria-hidden className="shrink-0 text-sm font-bold leading-none text-red-600">⚠</span> : null}
@@ -564,6 +580,11 @@ function BuildingGroupChip({
           <div className="text-gray-300">
             {group.shifts.length} janitors this day, {formatHours(hours)}
           </div>
+          {active.length > 0 && (
+            <div className="text-gray-300">
+              {loggedCount === active.length ? "Hours logged for everyone" : `${loggedCount} of ${active.length} have hours logged`}
+            </div>
+          )}
           <ul className="mt-1 space-y-0.5">
             {group.shifts.map((s) => (
               <li key={s.key} className={`text-gray-300 ${s.status === "CANCELLED" ? "line-through" : ""}`}>
@@ -600,6 +621,7 @@ function ShiftChip({
   const chipClassFor = useChipClass();
   const cancelled = s.status === "CANCELLED";
   const timeOff = !!s.timeOffType && !cancelled;
+  const logged = isLogged(s);
   const statusText =
     cancelled
       ? "Skipped this day"
@@ -617,10 +639,12 @@ function ShiftChip({
         onClick={onClick}
         {...dragProps}
         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${dragProps.draggable ? "cursor-grab active:cursor-grabbing" : ""} ${chipClassFor(s.contractId)} ${
-          s.status === "CHANGED" || s.status === "EXTRA" ? "border border-dashed border-gray-500" : ""
-        } ${cancelled ? "opacity-60 line-through" : ""}`}
+          cancelled ? "opacity-60 line-through" : logged ? "" : PLANNED_CHIP_CLASS
+        }`}
       >
         {timeOff ? <span aria-hidden className="shrink-0 text-sm font-bold leading-none text-red-600">⚠</span> : null}
+        {s.status === "CHANGED" ? <span aria-hidden title="Changed for this day" className="shrink-0">↻</span> : null}
+        {s.status === "EXTRA" ? <span aria-hidden title="One-time shift" className="shrink-0 font-semibold">1×</span> : null}
         <span className="shrink-0">{formatTime12(s.startTime)}</span>
         <span className="truncate">{compact ? s.employeeName : `${s.employeeName.split(" ")[0]} · ${s.buildingName}`}</span>
       </button>
@@ -631,6 +655,7 @@ function ShiftChip({
             {s.employeeName}, {formatTime12(s.startTime)} to {formatTime12(s.endTime)} ({formatHours(s.hours)})
           </div>
           <div className="text-gray-300">{statusText}</div>
+          {!cancelled ? <div className="text-gray-300">{logged ? "Hours logged" : "No hours logged yet"}</div> : null}
           {timeOff ? <div className="text-red-300">Time off logged, needs cover</div> : null}
           {s.notes ? <div className="text-gray-300">{s.notes}</div> : null}
           {dragProps.draggable ? <div className="mt-1 text-gray-400">Drag to move this day only</div> : null}

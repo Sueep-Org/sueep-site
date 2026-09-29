@@ -40,8 +40,18 @@ export async function GET(req: Request) {
   ]);
   const mainBuilding = canEdit ? await mainBuildingByEmployee(employees.map((e) => e.id)) : new Map<string, string>();
 
+  // Shifts with logged hours (a clock-in, or a manager entering the worked
+  // times) show as solid chips; everything else is still just planned.
+  const entries = await prisma.janitorialTimeEntry.findMany({
+    where: { shiftKey: { in: shifts.map((s) => s.key) } },
+    select: { shiftKey: true, clockInAt: true, manualStartTime: true, manualEndTime: true },
+  });
+  const loggedKeys = new Set(
+    entries.filter((e) => e.clockInAt || (e.manualStartTime && e.manualEndTime)).map((e) => e.shiftKey)
+  );
+
   return NextResponse.json({
-    shifts,
+    shifts: shifts.map((s) => ({ ...s, logged: loggedKeys.has(s.key) })),
     canEdit,
     contracts: contracts.map((c) => ({ id: c.id, name: c.building.name })),
     // Only whether a link exists, never the link itself (it's the janitor's credential).

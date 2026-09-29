@@ -7,12 +7,12 @@ import { centsToDollars } from "@/lib/erp/money";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { laborCostByContract, monthBounds } from "@/lib/erp/janitorialProfit";
 import { todayEasternKey } from "@/lib/erp/dates";
-import { NewContractForm } from "./NewContractForm";
-import { ContractStatusBadge, BillingStatusBadge } from "./badges";
-import { JanitorialTabs } from "./JanitorialTabs";
+import { JanitorialHeader } from "./JanitorialTabs";
+import { ContractsTable, type ContractRow } from "./ContractsTable";
+import { StatStrip } from "./StatStrip";
 
 export const metadata: Metadata = {
-  title: "Janitorial",
+  title: "Janitorial Contracts",
 };
 
 export const dynamic = "force-dynamic";
@@ -21,10 +21,16 @@ export default async function JanitorialPage() {
   const auth = await getErpAuth();
   if (!auth || !canManageJanitorial(auth.role)) redirect("/erp");
 
-  const [contracts, buildings, employees] = await Promise.all([
+  // Margin for the last full month: that month's billed total minus the
+  // janitorial labor cost there (see janitorialProfit.ts).
+  const today = new Date(`${todayEasternKey()}T00:00:00.000Z`);
+  const lastMonth = monthBounds(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1)));
+  const lastMonthLabel = lastMonth.start.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+
+  const [contracts, unpaidPeriods, lastMonthLabor, lastMonthPeriods] = await Promise.all([
     prisma.recurringContract.findMany({
       include: {
-        building: { select: { id: true, name: true, address: true } },
+        building: { select: { name: true, address: true } },
         commissionEmployee: { select: { firstName: true, lastName: true } },
         periods: {
           orderBy: { periodStart: "desc" },
@@ -33,132 +39,90 @@ export default async function JanitorialPage() {
         },
       },
     }),
-    prisma.building.findMany({
-      where: { recurringContract: null },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
+    prisma.recurringContractPeriod.findMany({
+      where: { billingStatus: { not: "PAID" } },
+      include: { charges: { select: { amountCents: true } } },
     }),
-    prisma.employee.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      select: { id: true, firstName: true, lastName: true },
-    }),
-  ]);
-
-  // Margin for the last full month: that month's billed total minus the
-  // janitorial labor cost there (see janitorialProfit.ts).
-  const today = new Date(`${todayEasternKey()}T00:00:00.000Z`);
-  const lastMonth = monthBounds(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1)));
-  const lastMonthLabel = lastMonth.start.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
-  const [lastMonthLabor, lastMonthPeriods] = await Promise.all([
     laborCostByContract(lastMonth.start, lastMonth.end),
     prisma.recurringContractPeriod.findMany({
       where: { periodStart: lastMonth.start },
       include: { charges: { select: { amountCents: true } } },
     }),
   ]);
+
   const lastMonthRevenue = new Map(lastMonthPeriods.map((p) => [p.recurringContractId, periodTotalCents(p)]));
-  const marginFor = (contractId: string) => {
+  const marginFor = (contractId: string): ContractRow["margin"] => {
     const revenue = lastMonthRevenue.get(contractId);
     const labor = lastMonthLabor.get(contractId);
     if (revenue == null && !labor) return null;
-    return { revenue: revenue ?? 0, cost: labor?.costCents ?? 0, margin: (revenue ?? 0) - (labor?.costCents ?? 0) };
+    const revenueCents = revenue ?? 0;
+    const costCents = labor?.costCents ?? 0;
+    return { revenueCents, costCents, marginCents: revenueCents - costCents };
   };
 
   const statusOrder: Record<string, number> = { ACTIVE: 0, PAUSED: 1, ENDED: 2 };
-  contracts.sort(
-    (a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3) || a.building.name.localeCompare(b.building.name)
-  );
-  const activeMonthlyCents = contracts.filter((c) => c.status === "ACTIVE").reduce((s, c) => s + c.monthlyRateCents, 0);
-  const activeCount = contracts.filter((c) => c.status === "ACTIVE").length;
+  const rows: ContractRow[] = contracts
+    .sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3) || a.building.name.localeCompare(b.building.name))
+    .map((c) => {
+      const latest = c.periods[0];
+      return {
+        id: c.id,
+        buildingName: c.building.name,
+        address: c.building.address,
+        serviceAreas: c.serviceAreas,
+        status: c.status,
+        monthlyRateCents: c.monthlyRateCents,
+        latest: latest
+          ? {
+              label: latest.periodStart.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }),
+              totalCents: periodTotalCents(latest),
+              billingStatus: latest.billingStatus,
+            }
+          : null,
+        margin: marginFor(c.id),
+        salesperson: c.commissionEmployee ? `${c.commissionEmployee.firstName} ${c.commissionEmployee.lastName}`.trim() : null,
+      };
+    });
+
+  // Summary tiles
+  const active = contracts.filter((c) => c.status === "ACTIVE");
+  const pausedCount = contracts.filter((c) => c.status === "PAUSED").length;
+  const monthlyRevenueCents = active.reduce((s, c) => s + c.monthlyRateCents, 0);
+  const unpaidCents = unpaidPeriods.reduce((s, p) => s + periodTotalCents(p), 0);
+  const margins = rows.map((r) => r.margin).filter((m): m is NonNullable<ContractRow["margin"]> => m != null);
+  const lastMonthMarginCents = margins.reduce((s, m) => s + m.marginCents, 0);
+
+  const tiles: { label: string; value: string; hint?: string; tone?: string }[] = [
+    { label: "Active contracts", value: String(active.length), hint: pausedCount ? `${pausedCount} paused` : undefined },
+    { label: "Monthly revenue", value: centsToDollars(monthlyRevenueCents), hint: `${centsToDollars(monthlyRevenueCents * 12)} a year` },
+    {
+      label: "Not yet paid",
+      value: centsToDollars(unpaidCents),
+      hint: `${unpaidPeriods.length} month${unpaidPeriods.length === 1 ? "" : "s"}`,
+      tone: unpaidCents > 0 ? "text-amber-600" : undefined,
+    },
+    {
+      label: `Margin, ${lastMonthLabel}`,
+      value: margins.length ? centsToDollars(lastMonthMarginCents) : "No data yet",
+      hint: margins.length ? `${margins.length} building${margins.length === 1 ? "" : "s"}` : "Shows once shifts have run",
+      tone: margins.length ? (lastMonthMarginCents < 0 ? "text-red-600" : "text-emerald-700") : "text-gray-400",
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-pink-600">Janitorial</h1>
-      <JanitorialTabs active="contracts" />
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="mt-1 text-sm text-gray-600">
-            {activeCount} active, {centsToDollars(activeMonthlyCents)}/month
-          </p>
-        </div>
-        <NewContractForm
-          buildings={buildings.map((b) => ({ id: b.id, name: b.name }))}
-          employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
-        />
-      </div>
+      <JanitorialHeader
+        active="contracts"
+        action={
+          <Link href="/erp/janitorial/contracts/new" className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500">
+            + New contract
+          </Link>
+        }
+      />
 
-      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
-              <tr>
-                <th className="px-4 py-3">Building</th>
-                <th className="px-4 py-3">Service areas</th>
-                <th className="px-4 py-3 text-right">Monthly rate</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Latest month</th>
-                <th className="px-4 py-3 text-right">Margin, {lastMonthLabel}</th>
-                <th className="px-4 py-3">Salesperson</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">No janitorial contracts yet.</td>
-                </tr>
-              ) : (
-                contracts.map((c) => {
-                  const latest = c.periods[0];
-                  return (
-                    <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <Link href={`/erp/janitorial/contracts/${c.id}`} className="font-medium text-gray-900 hover:text-pink-600 hover:underline">
-                          {c.building.name}
-                        </Link>
-                        {c.building.address && <p className="text-xs text-gray-500">{c.building.address}</p>}
-                      </td>
-                      <td className="max-w-xs px-4 py-3 text-gray-600">
-                        <span className="line-clamp-2">{c.serviceAreas || "Not set"}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">{centsToDollars(c.monthlyRateCents)}</td>
-                      <td className="px-4 py-3"><ContractStatusBadge status={c.status} /></td>
-                      <td className="px-4 py-3">
-                        {latest ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700">
-                              {latest.periodStart.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}
-                            </span>
-                            <span className="tabular-nums text-gray-500">{centsToDollars(periodTotalCents(latest))}</span>
-                            <BillingStatusBadge status={latest.billingStatus} />
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">None yet</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {(() => {
-                          const m = marginFor(c.id);
-                          if (!m) return <span className="text-gray-400">No data</span>;
-                          return (
-                            <span title={`Billed ${centsToDollars(m.revenue)}, labor ${centsToDollars(m.cost)}`} className={`font-semibold ${m.margin < 0 ? "text-red-600" : "text-emerald-700"}`}>
-                              {centsToDollars(m.margin)}
-                              {m.margin < 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">Losing money</span>}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {c.commissionEmployee ? `${c.commissionEmployee.firstName} ${c.commissionEmployee.lastName}`.trim() : "Unassigned"}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <StatStrip stats={tiles} />
+
+      <ContractsTable rows={rows} marginMonthLabel={lastMonthLabel} />
     </div>
   );
 }

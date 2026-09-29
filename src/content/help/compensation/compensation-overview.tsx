@@ -41,7 +41,7 @@ export function CompensationOverview() {
               annual salary ÷ 26, paid every period regardless of logged hours — logged hours
               still show for reference but never change the pay amount.{" "}
               <strong>Janitorial Contract</strong> rows are paid from their janitorial hours (the
-              same live numbers as <strong>Janitorial → Hours</strong>: clocked time, corrections,
+              same live numbers as <strong>Janitorial Contracts → Hours</strong>: clocked time, corrections,
               or their scheduled hours when they didn&apos;t clock in) plus any project hours, at
               their hourly rate, with overtime past 40/week. Janitorial shifts of 6+ hours have a 30 minute unpaid break taken off. Click <strong>See janitorial shifts</strong> under someone&apos;s hours to open their shifts for that pay period on the Janitorial Hours tab. The janitorial schedule is the only source for
               these hours: a Janitorial Contract employee with no janitorial shifts in the period gets no

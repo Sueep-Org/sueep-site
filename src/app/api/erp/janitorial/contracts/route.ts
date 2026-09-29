@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { parseBillingDay } from "@/lib/erp/recurringContracts";
+import { calculatePricing, parsePricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
 
 export async function POST(req: Request) {
   const auth = await getErpAuth();
@@ -22,7 +24,15 @@ export async function POST(req: Request) {
   // request, so a new janitorial client doesn't need a trip to Buildings first.
   const newBuilding =
     body.newBuilding && typeof body.newBuilding === "object" ? (body.newBuilding as Record<string, unknown>) : null;
-  const monthlyRateCents = inputToCents(body.monthlyRate);
+  // The pricing calculator sets the monthly rate; a plain monthlyRate is
+  // still accepted for callers that don't send pricing.
+  let pricing: ContractPricing | null = null;
+  if (body.pricing !== undefined && body.pricing !== null) {
+    const parsed = parsePricing(body.pricing);
+    if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    pricing = parsed.pricing;
+  }
+  const monthlyRateCents = pricing ? calculatePricing(pricing).monthlyPriceCents : inputToCents(body.monthlyRate);
   const billingDayOfMonth = parseBillingDay(body.billingDayOfMonth);
   const startDate = new Date(String(body.startDate ?? ""));
   const commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;
@@ -40,7 +50,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid start date" }, { status: 400 });
   }
 
-  const contractData = { monthlyRateCents, billingDayOfMonth, startDate, commissionEmployeeId, serviceAreas, notes };
+  const contractData = {
+    monthlyRateCents,
+    billingDayOfMonth,
+    startDate,
+    commissionEmployeeId,
+    serviceAreas,
+    notes,
+    ...(pricing ? { pricing: pricing as unknown as Prisma.InputJsonValue } : {}),
+  };
 
   if (newBuilding) {
     const optional = (v: unknown) => (v != null && String(v).trim() !== "" ? String(v).trim() : null);

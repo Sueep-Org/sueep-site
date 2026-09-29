@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
+import { getErpAuth } from "@/lib/erpAuth";
+import { recordInitialPay } from "@/lib/erp/payRates";
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
 
@@ -95,24 +97,30 @@ export async function POST(req: Request) {
   }
 
   try {
-    const employee = await prisma.employee.create({
-      data: {
-        firstName,
-        lastName,
-        email: body.email ? String(body.email).trim().toLowerCase() : null,
-        phone: body.phone ? String(body.phone).trim() : null,
-        role: body.role ? String(body.role).trim() : null,
-        payType,
-        hourlyPayCents: hourlyPayCents ?? null,
-        annualSalaryCents: annualSalaryCents ?? null,
-        defaultProject: body.defaultProject ? String(body.defaultProject).trim() : null,
-        status,
-        hireDate: hireDate ?? null,
-        notes: body.notes ? String(body.notes).trim() : null,
-        isOffshore: Boolean(body.isOffshore),
-        offshoreMonthlyRateCents: offshoreMonthlyRateCents ?? null,
-        isJanitorialContract: Boolean(body.isJanitorialContract),
-      },
+    const auth = await getErpAuth();
+    const employee = await prisma.$transaction(async (tx) => {
+      const created = await tx.employee.create({
+        data: {
+          firstName,
+          lastName,
+          email: body.email ? String(body.email).trim().toLowerCase() : null,
+          phone: body.phone ? String(body.phone).trim() : null,
+          role: body.role ? String(body.role).trim() : null,
+          payType,
+          hourlyPayCents: hourlyPayCents ?? null,
+          annualSalaryCents: annualSalaryCents ?? null,
+          defaultProject: body.defaultProject ? String(body.defaultProject).trim() : null,
+          status,
+          hireDate: hireDate ?? null,
+          notes: body.notes ? String(body.notes).trim() : null,
+          isOffshore: Boolean(body.isOffshore),
+          offshoreMonthlyRateCents: offshoreMonthlyRateCents ?? null,
+          isJanitorialContract: Boolean(body.isJanitorialContract),
+        },
+      });
+      // Starting pay, so it's on record before anyone changes it.
+      await recordInitialPay(tx, created, auth?.email ?? null);
+      return created;
     });
     return NextResponse.json(employee);
   } catch (e) {

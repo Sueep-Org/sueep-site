@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
 
 export function BuildingsOverview() {
   return (
@@ -74,7 +74,7 @@ export function BuildingsOverview() {
 
         <Step n={6} title="Janitorial Contract tab">
           Shows whether this building has a recurring monthly janitorial contract, and its monthly
-          rate. Contracts are created and managed on the Janitorial page, see{" "}
+          rate. Contracts are created and managed on the Janitorial Contracts page, see{" "}
           <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
         </Step>
       </Steps>

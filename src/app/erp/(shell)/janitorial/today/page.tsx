@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
-import { JanitorialTabs } from "../JanitorialTabs";
+import { JanitorialHeader } from "../JanitorialTabs";
 import { TodayPanel } from "./TodayPanel";
 
 export const metadata: Metadata = {
@@ -16,8 +16,7 @@ export default async function JanitorialTodayPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-pink-600">Janitorial</h1>
-      <JanitorialTabs active="today" />
+      <JanitorialHeader active="today" />
       <TodayPanel />
     </div>
   );

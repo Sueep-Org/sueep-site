@@ -11,10 +11,13 @@ import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { laborCostByContract, monthBounds } from "@/lib/erp/janitorialProfit";
 import { ContractStatusBadge } from "../../badges";
 import { ContractDetailsForm } from "./ContractDetailsForm";
+import { ContractPricingEditor } from "./ContractPricingEditor";
+import type { ContractPricing } from "@/lib/erp/janitorialPricing";
 import { ContractStatusActions } from "./ContractStatusActions";
 import { ContractMonthsTable } from "./ContractMonthsTable";
 import { ContractShiftPatterns } from "./ContractShiftPatterns";
 import { BuildingLocationCard } from "./BuildingLocationCard";
+import { StatStrip } from "../../StatStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +95,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
           warn: lastFullMargin < 0,
           bad: lastFullMargin < 0,
         }
-      : { label: "Margin, last full month", value: "No data yet", hint: "Shows once a full month has passed" },
+      : { label: "Margin, last full month", value: "No data yet" },
   ];
 
   const employeeOptions = employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }));
@@ -102,7 +105,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/erp/janitorial" className="text-xs text-pink-600 hover:underline">
-            ← Janitorial
+            ← Janitorial Contracts
           </Link>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-gray-900">{contract.building.name}</h1>
@@ -118,21 +121,14 @@ export default async function JanitorialContractPage({ params }: PageProps) {
         <ContractStatusActions contractId={contract.id} status={contract.status} buildingName={contract.building.name} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs text-gray-500">{t.label}</p>
-            <p
-              className={`mt-0.5 text-xl font-semibold tabular-nums ${
-                "bad" in t && t.bad ? "text-red-600" : t.warn ? "text-amber-600" : "text-gray-900"
-              }`}
-            >
-              {t.value}
-            </p>
-            {t.hint && <p className="text-xs text-gray-400">{t.hint}</p>}
-          </div>
-        ))}
-      </div>
+      <StatStrip
+        stats={tiles.map((t) => ({
+          label: t.label,
+          value: t.value,
+          hint: t.hint,
+          tone: "bad" in t && t.bad ? "text-red-600" : t.warn ? "text-amber-600" : undefined,
+        }))}
+      />
 
       <DetailTabs
         tabs={[
@@ -157,6 +153,16 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   pmPhone: contract.building.pmPhone,
                 }}
                 employees={employeeOptions}
+              />
+            ),
+          },
+          {
+            label: "Pricing",
+            content: (
+              <ContractPricingEditor
+                contractId={contract.id}
+                initialPricing={(contract.pricing as ContractPricing | null) ?? null}
+                currentMonthlyRateCents={contract.monthlyRateCents}
               />
             ),
           },

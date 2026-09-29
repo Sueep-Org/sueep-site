@@ -9,6 +9,7 @@ import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { formatTime12, shiftHours } from "@/lib/erp/janitorialSchedule";
 import type { HoursSource, ResolvedShiftHours } from "@/lib/erp/janitorialHours";
 import { buildCsv, downloadCsv, type CsvColumn } from "@/lib/erp/csv";
+import { StatStrip } from "../StatStrip";
 
 const SOURCE_BADGE: Record<HoursSource, { label: string; cls: string }> = {
   CLOCKED: { label: "Clocked", cls: "bg-emerald-100 text-emerald-800" },
@@ -188,19 +189,14 @@ export function HoursReview({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
+      <StatStrip
+        stats={[
           { label: "Total hours", value: formatHours(Math.round(totalHours * 100) / 100) },
           { label: "Clocked shifts", value: String(clockedCount) },
-          { label: "From schedule", value: String(scheduleCount), hint: "No clock-in, scheduled hours used" },
-          { label: "Needs review", value: String(reviewCount), warn: reviewCount > 0 },
-        ].map((t) => (
-          <div key={t.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm" title={t.hint}>
-            <p className="text-xs text-gray-500">{t.label}</p>
-            <p className={`mt-0.5 text-xl font-semibold tabular-nums ${t.warn ? "text-amber-600" : "text-gray-900"}`}>{t.value}</p>
-          </div>
-        ))}
-      </div>
+          { label: "From schedule", value: String(scheduleCount), title: "No clock-in, scheduled hours used" },
+          { label: "Needs review", value: String(reviewCount), tone: reviewCount > 0 ? "text-amber-600" : undefined },
+        ]}
+      />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getArticlesByCategory } from "@/lib/help";
 import { getErpAuth } from "@/lib/erpAuth";
 
-const categoryOrder = ["Projects", "Workers", "Schedule", "Compensation", "General"];
+const categoryOrder = ["Projects", "Workers", "Schedule", "Janitorial", "Compensation", "General"];
 
 const categoryIcons: Record<string, React.ReactNode> = {
   Projects: (
