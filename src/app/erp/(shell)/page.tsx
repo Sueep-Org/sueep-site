@@ -5,9 +5,11 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials, isProjectManager } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
+import { DashboardTabs, resolveDashboardTab, type DashboardTab } from "./_dashboard/DashboardTabs";
+import { FinanceTab } from "./_dashboard/FinanceTab";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -104,8 +106,11 @@ function mondayOf(d: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export default async function ErpDashboardPage() {
+type PageProps = { searchParams: Promise<{ tab?: string; period?: string }> };
+
+export default async function ErpDashboardPage({ searchParams }: PageProps) {
   try {
+    const { tab: tabParam, period } = await searchParams;
     const auth = await getErpAuth();
     const role = auth?.role ?? "EMPLOYEE";
     const email = auth?.email ?? "";
@@ -146,12 +151,16 @@ export default async function ErpDashboardPage() {
 
     // ── Finance ────────────────────────────────────────────────────────────
     if (role === "FINANCE") {
+      const financeTabs: DashboardTab[] = ["overview", "finance"];
+      const financeTab = resolveDashboardTab(tabParam, financeTabs);
       return (
         <div className="space-y-6">
           <div>
             <p className="text-sm text-gray-400">{today}</p>
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
+          <DashboardTabs tabs={financeTabs} active={financeTab} />
+          {financeTab === "finance" ? <FinanceTab period={period} /> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { href: "/erp/billing", label: "Billing", title: "Project Billing", dot: "bg-emerald-400" },
@@ -170,6 +179,7 @@ export default async function ErpDashboardPage() {
               </Link>
             ))}
           </div>
+          )}
         </div>
       );
     }
@@ -616,7 +626,44 @@ export default async function ErpDashboardPage() {
       );
     }
 
-    // ── Admin / Project Manager ────────────────────────────────────────────
+    // ── Admin / Project Manager / Sales ────────────────────────────────────
+    const adminTabs: DashboardTab[] = [
+      "overview",
+      "operations",
+      ...(canSeeFinanceDashboard(role) ? (["finance"] as const) : []),
+      ...(role === "ADMIN" || isProjectManager(role) ? (["team"] as const) : []),
+    ];
+    const activeTab = resolveDashboardTab(tabParam, adminTabs);
+    const adminHeader = (
+      <>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm text-gray-400">{today}</p>
+            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/erp/projects/new" className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700">
+              + New project
+            </Link>
+            <Link href="/erp/schedule" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Schedule
+            </Link>
+          </div>
+        </div>
+        <DashboardTabs tabs={adminTabs} active={activeTab} />
+      </>
+    );
+
+    // Finance has its own data, none of the operational queries below.
+    if (activeTab === "finance") {
+      return (
+        <div className="space-y-6">
+          {adminHeader}
+          <FinanceTab period={period} />
+        </div>
+      );
+    }
+
     // Eastern-anchored, not naive UTC — "today" has to mean the Eastern
     // business day (same reasoning as the schedule calendar fix), not
     // whatever day UTC happens to be on, which runs ~4-5 hours ahead of
@@ -1052,22 +1099,9 @@ export default async function ErpDashboardPage() {
 
     return (
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-sm text-gray-400">{today}</p>
-            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/erp/projects/new" className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700">
-              + New project
-            </Link>
-            <Link href="/erp/schedule" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-              Schedule
-            </Link>
-          </div>
-        </div>
+        {adminHeader}
 
+        {activeTab === "overview" && (<>
         {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
         <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
           {/* grid-cols steps at 2/4/8 — exact factors of the 8 tiles below, so
@@ -1115,8 +1149,10 @@ export default async function ErpDashboardPage() {
             ))}
           </div>
         </div>
+        </>)}
 
         {/* Today */}
+        {activeTab === "operations" && (
         <div className="space-y-3">
           <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-emerald-400`} />Today</h2>
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -1164,11 +1200,13 @@ export default async function ErpDashboardPage() {
             )}
           </div>
         </div>
+        )}
 
         {/* Needs attention: alert-style widgets together, same spot for
             every role now (previously needsLaborLoggedWidget alone moved
             between top and bottom depending on PM vs Admin; grouping it with
             Labor red flags here makes it consistently easy to find instead). */}
+        {activeTab === "overview" && (
         <div className="space-y-3">
           <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-red-400`} />Needs attention</h2>
           <div className="grid gap-4 lg:grid-cols-3">
@@ -1211,9 +1249,10 @@ export default async function ErpDashboardPage() {
             {needsLaborLoggedWidget}
           </div>
         </div>
+        )}
 
         {/* Financials: only shown to roles that can see them */}
-        {showFinancials && (
+        {activeTab === "operations" && showFinancials && (
           <div className="space-y-3">
             <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-blue-400`} />Financials</h2>
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -1244,6 +1283,7 @@ export default async function ErpDashboardPage() {
         )}
 
         {/* Activity */}
+        {activeTab === "operations" && (
         <div className="space-y-3">
           <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-violet-400`} />Activity</h2>
           <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -1275,10 +1315,10 @@ export default async function ErpDashboardPage() {
           </ul>
         </div>
         </div>
+        )}
 
-        {/* Staffing: Admin/PM only, kept last on purpose so it doesn't
-            compete with anything actionable above it. */}
-        {(role === "ADMIN" || isProjectManager(role)) && (
+        {/* Staffing: Admin/PM only (the Team tab isn't offered to anyone else). */}
+        {activeTab === "team" && (
           <div className="space-y-3">
             <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-sky-400`} />Staffing</h2>
             <div className="grid gap-4 lg:grid-cols-2">

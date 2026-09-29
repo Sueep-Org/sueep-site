@@ -1505,6 +1505,7 @@ model Employee {
   laborEntries                 LaborEntry[]
   documents                    EmployeeDocument[]
   backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
+  payRates                     EmployeePayRate[]
   timeOff                      EmployeeTimeOff[]
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
@@ -1552,6 +1553,51 @@ model EmployeeBackgroundCheckEvent {
   changedBy      String?
 
   @@index([employeeId, createdAt])
+}
+
+/// An employee's pay as of a date. Each row applies from effectiveFrom until
+/// the next row's effectiveFrom, so past pay periods and past job costs are
+/// priced at what the person actually earned then, not today's rate. The pay
+/// fields on Employee stay as "current pay" and always match the latest row
+/// that has started (see src/lib/erp/payRates.ts).
+model EmployeePayRate {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// First day this pay applies (UTC-midnight date label)
+  effectiveFrom            DateTime
+  /// HOURLY | SALARY
+  payType                  String
+  hourlyPayCents           Int?
+  annualSalaryCents        Int?
+  isOffshore               Boolean  @default(false)
+  offshoreMonthlyRateCents Int?
+  /// Email of the ERP user who made the change, null for the initial backfill
+  changedBy                String?
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([employeeId])
+}
+
+/// A closed (paid) biweekly payroll period: the payroll rows exactly as they
+/// were when someone closed it. The Payroll page shows these saved numbers
+/// for a closed period and warns about anything that changed afterward,
+/// instead of silently recalculating what was already paid.
+model PayrollPeriodClose {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// First day of the pay period (UTC-midnight date label)
+  periodStart     DateTime @unique
+  periodEnd       DateTime
+  /// Payroll rows as closed, same shape as GET /api/erp/payroll returns
+  rows            Json
+  totalGrossCents Int
+  /// Email of the ERP user who closed it
+  closedBy        String?
 }
 
 /// A logged block of time off for an employee. No separate request/approval

@@ -1,49 +1,14 @@
-import { calcOtSplits, otLineCents, type OtEntry, type OtSplit } from "./calcOtSplits";
+import { costLaborLogs, sumLineCosts, type LineCost } from "./laborCost";
 
-type LaborLine = OtEntry & { hourlyRateCents: number };
-
-function otAwareLaborCents(entries: LaborLine[], otSplits: Map<string, OtSplit>): number {
-  return entries.reduce((s, e) => {
-    const split = otSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
-    return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
-  }, 0);
-}
-
-export type ProjectMarginInput = {
+type LaborLine = {
   id: string;
-  contractValueCents: number | null;
-  /** Manual fallback fields, used only when there's no labor/material log data. */
-  actualLaborCents: number | null;
-  actualMaterialCents: number | null;
-  laborEntries: LaborLine[];
-  materialEntries: { costCents: number }[];
-  contractorAssignments: { costCents: number | null }[];
+  employeeId: string | null;
+  workDate: Date;
+  createdAt: Date;
+  hours: number;
+  hourlyRateCents: number;
+  workerName?: string | null;
 };
-
-export type ProjectMargin = { actualLaborCents: number; actualMaterialCents: number; marginCents: number | null };
-
-/**
- * Same cost methodology as the Projects table (OT-aware labor + contractor
- * cost, falling back to manually-entered totals when there's no log data) —
- * kept here so margin-based commission and the Projects table never disagree
- * on what a project's actual cost is. Scoped to base projects only, not
- * change orders, since commission is tracked per deal/project.
- */
-export async function computeProjectMargins(projects: ProjectMarginInput[]): Promise<Map<string, ProjectMargin>> {
-  const otSplits = await calcOtSplits(projects.flatMap((p) => p.laborEntries));
-  const result = new Map<string, ProjectMargin>();
-  for (const p of projects) {
-    const laborCents = otAwareLaborCents(p.laborEntries, otSplits);
-    const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
-    const contractorCostCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
-    const actualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
-    const actualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
-    const marginCents =
-      p.contractValueCents == null ? null : p.contractValueCents - (actualLaborCents + actualMaterialCents);
-    result.set(p.id, { actualLaborCents, actualMaterialCents, marginCents });
-  }
-  return result;
-}
 
 type ChangeOrderLine = {
   status: string;
@@ -51,57 +16,114 @@ type ChangeOrderLine = {
   estimatedCostCents: number | null;
   actualLaborCents: number | null;
   actualMaterialCents: number | null;
+  actualTravelCents?: number | null;
   materialEntries: { costCents: number }[];
   laborers: LaborLine[];
   contractorAssignments: { costCents: number | null }[];
 };
 
-export type ProjectActualsInput = ProjectMarginInput & { changeOrders: ChangeOrderLine[] };
-export type ProjectActuals = { contractValueCents: number | null; actualLaborCents: number; actualMaterialCents: number; marginCents: number | null };
+export type ProjectActualsInput = {
+  id: string;
+  contractValueCents: number | null;
+  /** Typed-in totals, used only when there are no labor/material logs. */
+  actualLaborCents: number | null;
+  actualMaterialCents: number | null;
+  /** Typed-in travel cost (there's no travel log, so this always counts). */
+  actualTravelCents?: number | null;
+  laborEntries: LaborLine[];
+  materialEntries: { costCents: number }[];
+  contractorAssignments: { costCents: number | null }[];
+  changeOrders: ChangeOrderLine[];
+};
+
+export type ProjectActuals = {
+  /** Project plus qualifying change orders. */
+  contractValueCents: number | null;
+  /** Labor (logs, or the typed-in total when there are none) plus contractors, change orders included. */
+  actualLaborCents: number;
+  actualMaterialCents: number;
+  actualTravelCents: number;
+  marginCents: number | null;
+  /** The base project alone, before change orders. */
+  base: {
+    laborCents: number;
+    /** False when the typed-in labor total was used because there are no labor logs. */
+    laborFromLogs: boolean;
+    contractorCents: number;
+    materialCents: number;
+    materialFromLogs: boolean;
+    travelCents: number;
+  };
+};
+
+/** A change order counts unless it was voided or rejected. */
+export function isQualifyingChangeOrder(co: { status: string }): boolean {
+  return co.status !== "VOID" && co.status !== "REJECTED";
+}
+
+/** A change order's price, or its estimate until a price is set. */
+export function changeOrderValueCents(co: { contractValueCents: number | null; estimatedCostCents: number | null }): number {
+  return co.contractValueCents ?? co.estimatedCostCents ?? 0;
+}
 
 /**
- * Same as computeProjectMargins, but also rolls up qualifying (non-void,
- * non-rejected) change orders into both the contract value and actual cost
- * — this is the exact methodology the Projects table itself uses (see
- * `rows.map` in projects/page.tsx). Kept as one shared implementation so
- * the table and anything else showing "margin" (the dashboard's Bad
- * margins widget, in particular) can never quietly drift apart on what a
- * project's real cost is, the way they did before this function existed.
+ * The one definition of a project's actual cost and margin: labor priced by
+ * the shared labor cost rule (laborCost.ts), contractor cost, materials, and
+ * travel, with qualifying change orders rolled into both value and cost.
+ * Typed-in labor/material totals are only used when there are no logs.
+ *
+ * The Projects table, project and change order pages, dashboard, commission
+ * and the Finance tab all read this, so they can't disagree on a project's
+ * margin. Pass `lineCosts` when the caller already costed these logs with
+ * costLaborLogs (to avoid doing it twice).
  */
 export async function computeProjectActualsWithChangeOrders(
-  projects: ProjectActualsInput[]
+  projects: ProjectActualsInput[],
+  lineCosts?: Map<string, LineCost>,
 ): Promise<Map<string, ProjectActuals>> {
-  const otSplits = await calcOtSplits([
-    ...projects.flatMap((p) => p.laborEntries),
-    ...projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
-  ]);
+  const costs =
+    lineCosts ??
+    (await costLaborLogs(
+      projects.flatMap((p) => p.laborEntries),
+      projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
+    ));
+
   const result = new Map<string, ProjectActuals>();
   for (const p of projects) {
-    const laborCents = otAwareLaborCents(p.laborEntries, otSplits);
-    const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
-    const contractorCostCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
-    const baseActualLaborCents = (p.laborEntries.length > 0 ? laborCents : (p.actualLaborCents ?? 0)) + contractorCostCents;
-    const baseActualMaterialCents = p.materialEntries.length > 0 ? materialCents : (p.actualMaterialCents ?? 0);
+    const laborFromLogs = p.laborEntries.length > 0;
+    const materialFromLogs = p.materialEntries.length > 0;
+    const contractorCents = p.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+    const base = {
+      laborCents: laborFromLogs ? sumLineCosts(p.laborEntries, costs) : (p.actualLaborCents ?? 0),
+      laborFromLogs,
+      contractorCents,
+      materialCents: materialFromLogs ? p.materialEntries.reduce((s, e) => s + e.costCents, 0) : (p.actualMaterialCents ?? 0),
+      materialFromLogs,
+      travelCents: p.actualTravelCents ?? 0,
+    };
 
-    const qualifyingCOs = p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
-    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0), 0);
-    const coActualMaterialCents = qualifyingCOs.reduce((s, co) => {
-      const mat = co.materialEntries.reduce((ms, e) => ms + e.costCents, 0);
-      return s + (mat > 0 ? mat : (co.actualMaterialCents ?? 0));
-    }, 0);
-    const coActualLaborCents = qualifyingCOs.reduce((s, co) => {
-      const lab = otAwareLaborCents(co.laborers, otSplits);
-      const contractorCost = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
-      return s + (lab > 0 ? lab : (co.actualLaborCents ?? 0)) + contractorCost;
-    }, 0);
+    const qualifyingCOs = p.changeOrders.filter(isQualifyingChangeOrder);
+    const coContractValueCents = qualifyingCOs.reduce((s, co) => s + changeOrderValueCents(co), 0);
+    let coLaborCents = 0;
+    let coMaterialCents = 0;
+    let coTravelCents = 0;
+    for (const co of qualifyingCOs) {
+      const lab = co.laborers.length > 0 ? sumLineCosts(co.laborers, costs) : (co.actualLaborCents ?? 0);
+      const contractor = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
+      const mat = co.materialEntries.length > 0 ? co.materialEntries.reduce((ms, e) => ms + e.costCents, 0) : (co.actualMaterialCents ?? 0);
+      coLaborCents += lab + contractor;
+      coMaterialCents += mat;
+      coTravelCents += co.actualTravelCents ?? 0;
+    }
 
     const contractValueCents =
       p.contractValueCents == null && coContractValueCents === 0 ? null : (p.contractValueCents ?? 0) + coContractValueCents;
-    const actualLaborCents = baseActualLaborCents + coActualLaborCents;
-    const actualMaterialCents = baseActualMaterialCents + coActualMaterialCents;
-    const marginCents = contractValueCents == null ? null : contractValueCents - (actualLaborCents + actualMaterialCents);
+    const actualLaborCents = base.laborCents + base.contractorCents + coLaborCents;
+    const actualMaterialCents = base.materialCents + coMaterialCents;
+    const actualTravelCents = base.travelCents + coTravelCents;
+    const marginCents = contractValueCents == null ? null : contractValueCents - (actualLaborCents + actualMaterialCents + actualTravelCents);
 
-    result.set(p.id, { contractValueCents, actualLaborCents, actualMaterialCents, marginCents });
+    result.set(p.id, { contractValueCents, actualLaborCents, actualMaterialCents, actualTravelCents, marginCents, base });
   }
   return result;
 }

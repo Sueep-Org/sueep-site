@@ -124,6 +124,11 @@ function easternMonthKey(d: Date): string {
   return todayEasternKey(d).slice(0, 7);
 }
 
+function daysInMonth(key: string): number {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
 function monthKeysBetween(firstKey: string, lastKey: string): string[] {
   const keys: string[] = [];
   let [y, m] = firstKey.split("-").map(Number);
@@ -136,12 +141,11 @@ function monthKeysBetween(firstKey: string, lastKey: string): string[] {
   return keys;
 }
 
-function monthEnd(key: string): Date {
-  const [y, m] = key.split("-").map(Number);
-  return new Date(Date.UTC(y, m, 0));
-}
-
 const PAID_PROJECT_STATUSES = new Set(["INVOICE_PAID", "PAID"]);
+
+/** First month shown ("YYYY-MM"). The ERP wasn't fully in use until August
+ * 2026, so earlier months are missing jobs and costs and would mislead. */
+export const FINANCE_DATA_START = "2026-08";
 
 export async function computeFinanceSummary(): Promise<FinanceSummary> {
   const today = todayEasternAsUtcMidnight();
@@ -174,7 +178,7 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
       select: { contractValueCents: true, recurringContractPeriodId: true, turnoverRequestId: true },
     }),
     prisma.recurringContractPeriod.findMany({
-      where: { periodStart: { lte: today } },
+      where: { periodStart: { gte: new Date(`${FINANCE_DATA_START}-01T00:00:00.000Z`), lte: today } },
       select: {
         id: true, periodStart: true, amountCents: true, billingStatus: true, recurringContractId: true,
         charges: { select: { amountCents: true } },
@@ -184,7 +188,7 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
     prisma.recurringContract.findMany({ select: { status: true, monthlyRateCents: true, startDate: true } }),
     prisma.employee.findMany({
       where: { OR: [{ payType: "SALARY", isOffshore: false, isJanitorialContract: false }, { isOffshore: true }] },
-      select: { id: true, status: true, payType: true, isOffshore: true, hireDate: true, annualSalaryCents: true, offshoreMonthlyRateCents: true },
+      select: { id: true, status: true, statusChangedAt: true, payType: true, isOffshore: true, hireDate: true, annualSalaryCents: true, offshoreMonthlyRateCents: true },
     }),
     prisma.offshorePayrollPayment.findMany({
       where: { paidAt: { not: null } },
@@ -216,11 +220,11 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
   const salaryInJobs = new Map<string, number>();
 
   for (const p of jobProjects) {
-    const a = actuals.get(p.id);
-    if (!a || a.contractValueCents == null || a.contractValueCents === 0) { warnings.noContractValue++; continue; }
     const earnedAt = p.turnoverCompletedAt ? easternMonthKey(p.turnoverCompletedAt) : p.projectEndDate ? utcMonthKey(p.projectEndDate) : null;
     if (!earnedAt) { warnings.noCompletionDate++; continue; }
-    if (earnedAt > currentMonthKey) continue;
+    if (earnedAt < FINANCE_DATA_START || earnedAt > currentMonthKey) continue;
+    const a = actuals.get(p.id);
+    if (!a || a.contractValueCents == null || a.contractValueCents === 0) { warnings.noContractValue++; continue; }
 
     const segment = segmentOf(p.segment);
     const costCents = a.actualLaborCents + a.actualMaterialCents;
@@ -279,26 +283,33 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
   }
 
   // ── Month range ─────────────────────────────────────────────────────────
-  const firstKey = [...months.keys()].sort()[0] ?? currentMonthKey;
-  const allKeys = monthKeysBetween(firstKey, currentMonthKey);
+  const allKeys = monthKeysBetween(FINANCE_DATA_START, currentMonthKey);
   for (const key of allKeys) monthOf(key);
 
   // ── Overhead ────────────────────────────────────────────────────────────
-  // Salary and offshore pay are counted from the hire month (or from the
-  // first month with data when no hire date is on file) while ACTIVE. An
+  // Salary and offshore pay are counted from the hire month (or from
+  // FINANCE_DATA_START when no hire date is on file) while ACTIVE. An
   // inactive offshore employee still counts for any month they were marked
   // paid in Offshore Payroll.
   const offshorePaidKeys = new Set(offshorePaid.map((o) => `${o.employeeId}::${utcMonthKey(o.periodStart)}`));
   for (const e of fixedPayEmployees) {
     const hireKey = e.hireDate ? utcMonthKey(e.hireDate) : null;
+    // Someone marked Inactive still counts up to the day they were marked
+    // (statusChangedAt, Eastern), with that last month prorated by day.
+    const leftOn = e.status === "INACTIVE" && e.statusChangedAt ? todayEasternKey(e.statusChangedAt) : null;
     if (!e.isOffshore && e.status === "ACTIVE" && !e.annualSalaryCents) warnings.salaryMissing++;
     for (const key of allKeys) {
-      const employed = e.status === "ACTIVE" && (!hireKey || hireKey <= key);
       const m = monthOf(key);
+      let share = 0;
+      if (hireKey && hireKey > key) share = 0;
+      else if (e.status === "ACTIVE") share = 1;
+      else if (leftOn && leftOn.slice(0, 7) > key) share = 1;
+      else if (leftOn && leftOn.slice(0, 7) === key) share = Number(leftOn.slice(8)) / daysInMonth(key);
       if (e.isOffshore) {
-        if (employed || offshorePaidKeys.has(`${e.id}::${key}`)) m.offshoreCents += e.offshoreMonthlyRateCents ?? 0;
-      } else if (employed && e.annualSalaryCents) {
-        const monthly = Math.round(e.annualSalaryCents / 12);
+        if (offshorePaidKeys.has(`${e.id}::${key}`)) share = 1;
+        m.offshoreCents += Math.round((e.offshoreMonthlyRateCents ?? 0) * share);
+      } else if (share > 0 && e.annualSalaryCents) {
+        const monthly = Math.round((e.annualSalaryCents / 12) * share);
         m.salaryCents += Math.max(0, monthly - (salaryInJobs.get(`${e.id}::${key}`) ?? 0));
       }
     }
@@ -357,5 +368,3 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
   }
   return total;
 }
-
-export { monthEnd };

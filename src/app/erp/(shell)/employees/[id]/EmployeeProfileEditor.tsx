@@ -6,13 +6,36 @@ import { useState } from "react";
 import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { WEEKDAY_SHORT, formatTime12, shiftHours } from "@/lib/erp/janitorialSchedule";
 import { formatHours, formatShortDate } from "@/lib/erp/schedule";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 const input = inputClass.md;
 const label = labelClass.default;
 
+export type PayHistoryRow = {
+  /** "YYYY-MM-DD" */
+  effectiveFrom: string;
+  payType: string;
+  hourlyPayCents: number | null;
+  annualSalaryCents: number | null;
+  isOffshore: boolean;
+  offshoreMonthlyRateCents: number | null;
+};
+
+function money(cents: number | null): string {
+  return ((cents ?? 0) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+function describePay(r: PayHistoryRow): string {
+  if (r.isOffshore) return `Offshore, ${money(r.offshoreMonthlyRateCents)}/month`;
+  if (r.payType === "SALARY") return `Salary, ${money(r.annualSalaryCents)}/year`;
+  return `Hourly, ${money(r.hourlyPayCents)}/hr`;
+}
+
 type Props = {
   employeeId: string;
   canSeePay?: boolean;
+  /** Pay over time, newest first (see lib/erp/payRates.ts). */
+  payHistory?: PayHistoryRow[];
   /** Their weekly janitorial shifts (read-only; edited on the calendar). */
   janitorialSchedule?: {
     id: string;
@@ -47,8 +70,9 @@ type Props = {
   };
 };
 
-export function EmployeeProfileEditor({ employeeId, canSeePay = true, janitorialSchedule = [], initial }: Props) {
+export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory = [], janitorialSchedule = [], initial }: Props) {
   const router = useRouter();
+  const todayKey = todayEasternKey();
   const confirm = useConfirm();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
@@ -99,9 +123,13 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, janitorial
     // leaves whatever those already held untouched.
     if (payMode !== "OFFSHORE") {
       payload.payType = payMode === "JANITORIAL" ? "HOURLY" : payMode;
-      payload.hourlyPay = fd.get("hourlyPay") || null;
+      // A salaried person's job cost comes from their salary (salary / 2,080),
+      // so their hourly field is left as it was rather than cleared.
+      if (payMode !== "SALARY") payload.hourlyPay = fd.get("hourlyPay") || null;
       payload.annualSalary = payMode === "SALARY" ? (fd.get("annualSalary") || null) : null;
     }
+    // Only used when pay actually changed: the day the new pay starts.
+    if (fd.get("payEffectiveFrom")) payload.payEffectiveFrom = fd.get("payEffectiveFrom");
 
 
     try {
@@ -117,6 +145,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, janitorial
         return;
       }
       setOk("Profile updated.");
+      router.refresh();
     } catch {
       setError("Network error");
     } finally {
@@ -249,10 +278,32 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, janitorial
               )}
             </div>
           )}
-          {canSeePay && payMode === "SALARY" && (
+          {canSeePay && (
             <div>
-              <label className={label} htmlFor="hourlyPay">Est. hourly rate (for labor cost tracking)</label>
-              <input id="hourlyPay" name="hourlyPay" type="number" min="0" step="0.01" defaultValue={hourlyPay} className={input} placeholder="e.g. 24.04" />
+              <label className={label} htmlFor="payEffectiveFrom">Pay change starts</label>
+              <input id="payEffectiveFrom" name="payEffectiveFrom" type="date" max={todayKey} defaultValue={todayKey} className={input} />
+              <p className="mt-1 text-xs text-gray-500">Only used if you change pay. Earlier pay periods keep the old rate.</p>
+            </div>
+          )}
+          {canSeePay && payMode === "SALARY" && (
+            <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
+              Hours they log on jobs cost their salary divided by 2,080 (a 40 hour week, all year)
+              {initial.annualSalaryCents ? `, currently ${((initial.annualSalaryCents / 2080) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}/hr` : ""}.
+            </p>
+          )}
+          {canSeePay && payHistory.length > 0 && (
+            <div className="sm:col-span-2 rounded-md border border-gray-200 bg-white p-3 text-sm">
+              <p className={label}>Pay history</p>
+              <ul className="mt-1 divide-y divide-gray-100">
+                {payHistory.map((r) => (
+                  <li key={r.effectiveFrom} className="flex flex-wrap items-baseline justify-between gap-2 py-1.5">
+                    <span className="text-gray-700">
+                      From {new Date(`${r.effectiveFrom}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
+                    </span>
+                    <span className="tabular-nums text-gray-900">{describePay(r)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {canSeePay && payMode === "OFFSHORE" && (

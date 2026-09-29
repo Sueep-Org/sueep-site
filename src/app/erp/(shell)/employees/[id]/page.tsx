@@ -41,6 +41,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       backgroundCheckEvents: { orderBy: { createdAt: "desc" } },
       timeOff: { orderBy: { startDate: "desc" } },
       contractor: { select: { id: true } },
+      payRates: { orderBy: { effectiveFrom: "desc" } },
     },
   });
   if (!employee) notFound();
@@ -225,6 +226,14 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
             <EmployeeProfileEditor
               employeeId={employee.id}
               canSeePay={canSeePay}
+              payHistory={canSeePay ? employee.payRates.map((r) => ({
+                effectiveFrom: r.effectiveFrom.toISOString().slice(0, 10),
+                payType: r.payType,
+                hourlyPayCents: r.hourlyPayCents,
+                annualSalaryCents: r.annualSalaryCents,
+                isOffshore: r.isOffshore,
+                offshoreMonthlyRateCents: r.offshoreMonthlyRateCents,
+              })) : []}
               initial={{
                 firstName: employee.firstName,
                 lastName: employee.lastName,

@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
+import { recordPayChange, samePay, type PayValues } from "@/lib/erp/payRates";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -66,20 +68,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.address !== undefined) data.address = body.address ? String(body.address).trim() : null;
   if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? String(body.dateOfBirth).trim() : null;
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() : null;
+  // Pay fields don't go straight onto the employee: they're saved as a dated
+  // pay change (see recordPayChange below) so past periods keep their rate.
+  const payPatch: Partial<PayValues> = {};
   if (body.payType !== undefined) {
     const pt = String(body.payType || "").toUpperCase();
     if (pt !== "HOURLY" && pt !== "SALARY") return NextResponse.json({ error: "Invalid payType" }, { status: 400 });
-    data.payType = pt;
+    payPatch.payType = pt;
   }
   if (body.hourlyPay !== undefined) {
     const cents = parseHourlyPayCents(body.hourlyPay);
     if (cents === undefined) return NextResponse.json({ error: "Invalid hourlyPay" }, { status: 400 });
-    data.hourlyPayCents = cents;
+    payPatch.hourlyPayCents = cents;
   }
   if (body.annualSalary !== undefined) {
     const cents = parseHourlyPayCents(body.annualSalary);
     if (cents === undefined) return NextResponse.json({ error: "Invalid annualSalary" }, { status: 400 });
-    data.annualSalaryCents = cents;
+    payPatch.annualSalaryCents = cents;
   }
   if (body.defaultProject !== undefined) data.defaultProject = body.defaultProject ? String(body.defaultProject).trim() : null;
   if (body.status !== undefined) {
@@ -103,11 +108,28 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.hireDate = d;
   }
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).trim() : null;
-  if (body.isOffshore !== undefined) data.isOffshore = Boolean(body.isOffshore);
+  if (body.isOffshore !== undefined) payPatch.isOffshore = Boolean(body.isOffshore);
   if (body.offshoreMonthlyRate !== undefined) {
     const cents = parseHourlyPayCents(body.offshoreMonthlyRate);
     if (cents === undefined) return NextResponse.json({ error: "Invalid offshoreMonthlyRate" }, { status: 400 });
-    data.offshoreMonthlyRateCents = cents;
+    payPatch.offshoreMonthlyRateCents = cents;
+  }
+  const currentPay: PayValues = {
+    payType: existing.payType,
+    hourlyPayCents: existing.hourlyPayCents,
+    annualSalaryCents: existing.annualSalaryCents,
+    isOffshore: existing.isOffshore,
+    offshoreMonthlyRateCents: existing.offshoreMonthlyRateCents,
+  };
+  const nextPay: PayValues = { ...currentPay, ...payPatch };
+  const payChanged = !samePay(currentPay, nextPay);
+  const today = todayEasternKey();
+  let payEffectiveFrom = today;
+  if (payChanged && body.payEffectiveFrom) {
+    const key = String(body.payEffectiveFrom).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return NextResponse.json({ error: "Invalid pay change date" }, { status: 400 });
+    if (key > today) return NextResponse.json({ error: "A pay change can't start in the future" }, { status: 400 });
+    payEffectiveFrom = key;
   }
   if (body.isJanitorialContract !== undefined) data.isJanitorialContract = Boolean(body.isJanitorialContract);
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
@@ -162,7 +184,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const { employee, backgroundCheckEvent } = await prisma.$transaction(async (tx) => {
-      const updated = await tx.employee.update({ where: { id }, data });
+      let updated = await tx.employee.update({ where: { id }, data });
+      if (payChanged) {
+        await recordPayChange(tx, existing, nextPay, payEffectiveFrom, auth?.email ?? null);
+        updated = await tx.employee.findUniqueOrThrow({ where: { id } });
+      }
       const event = statusChanged
         ? await tx.employeeBackgroundCheckEvent.create({
             data: {

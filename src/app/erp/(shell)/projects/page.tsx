@@ -4,23 +4,10 @@ import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canSeeFinancials as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
-import { calcOtSplits, otLineCents, type OtSplit } from "@/lib/erp/calcOtSplits";
+import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { getDescLine as getProjectDetailLine } from "@/lib/erp/descLine";
 import { ProjectsTabs } from "./ProjectsTabs";
-
-// Sums labor cost the same OT-aware way the project/CO detail pages do
-// (1.5x pay for hours over 40/week per employee) — a plain hours*rate sum
-// under-reports cost for anyone with overtime that week.
-function otAwareLaborCents(
-  entries: { id: string; hours: number; hourlyRateCents: number }[],
-  otSplits: Map<string, OtSplit>,
-): number {
-  return entries.reduce((s, e) => {
-    const split = otSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
-    return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
-  }, 0);
-}
 
 export const dynamic = "force-dynamic";
 
@@ -157,15 +144,13 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   const buildingNameById = new Map(buildings.map((building) => [building.id, building.name]));
   const buildingAddressById = new Map(buildings.map((building) => [building.id, building.address]));
 
-  // One batched OT-splits call for every labor entry across every project/CO
-  // on this page, instead of one call per project — calcOtSplits queries the
-  // full LaborEntry/ProjectChangeOrderLaborer tables per employee/week
-  // regardless, so batching the "view" doesn't change results, just avoids
-  // an N+1 query pattern across up to 300 projects.
-  const otSplits = await calcOtSplits([
-    ...projects.flatMap((p) => p.laborEntries),
-    ...projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
-  ]);
+  // One batched call costing every labor log on this page with the shared
+  // labor cost rule (overtime across all of a worker's work that week,
+  // salaried time at salary / 2,080), instead of one call per project.
+  const lineCosts = await costLaborLogs(
+    projects.flatMap((p) => p.laborEntries),
+    projects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers.map((l) => ({ ...l, workerName: l.name })))),
+  );
 
   // Same shared cost/margin methodology used everywhere else that shows a
   // project's actuals (dashboard's Bad margins widget, commission) — kept
@@ -176,6 +161,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       contractValueCents: p.contractValueCents,
       actualLaborCents: p.actualLaborCents,
       actualMaterialCents: p.actualMaterialCents,
+      actualTravelCents: p.actualTravelCents,
       laborEntries: p.laborEntries,
       materialEntries: p.materialEntries,
       contractorAssignments: p.contractorAssignments,
@@ -185,11 +171,13 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
         estimatedCostCents: co.estimatedCostCents,
         actualLaborCents: co.actualLaborCents,
         actualMaterialCents: co.actualMaterialCents,
+        actualTravelCents: co.actualTravelCents,
         materialEntries: co.materialEntries,
         laborers: co.laborers,
         contractorAssignments: co.contractorAssignments,
       })),
-    }))
+    })),
+    lineCosts,
   );
 
   const lifecycleRank = (p: (typeof projects)[number]) => {
@@ -207,7 +195,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
 
   const rows = projects.map((p) => {
     const totalHours = p.laborEntries.reduce((s, e) => s + e.hours, 0);
-    const laborCents = otAwareLaborCents(p.laborEntries, otSplits);
+    const laborCents = sumLineCosts(p.laborEntries, lineCosts);
     const materialCents = p.materialEntries.reduce((s, e) => s + e.costCents, 0);
     const paintCents = p.materialEntries.filter((e) => e.category === "PAINT").reduce((s, e) => s + e.costCents, 0);
     const cleaningCents = p.materialEntries
@@ -351,7 +339,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
           description: l.taskDescription ?? null,
           qualityNotes: l.qualityNotes ?? null,
         })),
-        laborCostCents: otAwareLaborCents(co.laborers, otSplits),
+        laborCostCents: sumLineCosts(co.laborers, lineCosts),
         materialCostCents: co.materialEntries.reduce((s, e) => s + e.costCents, 0),
         contractorCostCents: co.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0),
         contractorEntries: co.contractorAssignments.map((a) => ({
