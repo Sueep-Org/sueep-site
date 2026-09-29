@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, Steps, Step, Img, A } from "@/app/erp/components/help/HelpComponents";
 
 export function JanitorialContracts() {
   return (
@@ -11,7 +11,7 @@ export function JanitorialContracts() {
         can see this page. New to it? Start with{" "}
         <A href="/erp/help/janitorial/getting-started">Janitorial Contracts: Getting Started</A>.
       </P>
-      <ImgPlaceholder label="Janitorial contracts list" />
+      <Img src="/help/janitorial/janitorial_contracts_1.png" alt="Janitorial contracts list" />
 
       <H2>Steps</H2>
       <Steps>

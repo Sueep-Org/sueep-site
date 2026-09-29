@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
+import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 const JANITORIAL_SEGMENTS = [
   "JANITORIAL_TURNOVER_REQUESTS",
@@ -77,7 +78,7 @@ function buildUnitRow(project: ProjectForUnitRow) {
     bathrooms: tr?.bathrooms ?? null,
     completedAt: (project.turnoverCompletedAt ?? project.projectEndDate ?? project.updatedAt).toISOString(),
     contractCents,
-    billingStatus: tr?.billingStatus ?? project.billingStatus ?? "NOT_BILLED",
+    billingStatus: normalizeBillingStatus(tr?.billingStatus ?? project.billingStatus),
     scope,
     changeOrders: [] as CORow[],
   };
@@ -273,7 +274,7 @@ export async function GET(req: Request) {
       projectId: co.projectId,
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
-      billingStatus: co.billingStatus ?? "NOT_BILLED",
+      billingStatus: normalizeBillingStatus(co.billingStatus),
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
     });
   }

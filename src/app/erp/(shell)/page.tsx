@@ -10,6 +10,7 @@ import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
 import { DashboardTabs, resolveDashboardTab, type DashboardTab } from "./_dashboard/DashboardTabs";
 import { FinanceTab } from "./_dashboard/FinanceTab";
+import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -80,14 +81,14 @@ type ActivityProject = {
  */
 function describeProjectActivity(p: ActivityProject): { text: string; dot: string } {
   const status = p.status.toUpperCase();
-  const billing = p.billingStatus?.toUpperCase() ?? null;
-  const isPaid = billing === "PAID" || billing === "INVOICE_PAID";
+  const billing = normalizeBillingStatus(p.billingStatus);
+  const isPaid = billing === "PAID";
 
   if (status === "ARCHIVED") return { text: "Archived", dot: "bg-gray-300" };
   if (status === "ON_HOLD") return { text: "Put on hold", dot: "bg-amber-400" };
   if (status === "COMPLETE") return { text: isPaid ? "Completed · invoice paid" : "Completed", dot: "bg-emerald-400" };
   if (isPaid) return { text: "Invoice paid", dot: "bg-emerald-400" };
-  if (billing === "BILLING") return { text: "Sent to billing", dot: "bg-blue-400" };
+  if (billing === "BILLED") return { text: "Sent to billing", dot: "bg-blue-400" };
   if (p.percentInvoiced > 0) return { text: `${Math.round(p.percentInvoiced)}% invoiced`, dot: "bg-sky-400" };
   if (p.percentDone > 0) return { text: `${Math.round(p.percentDone)}% done`, dot: "bg-violet-400" };
   if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "UPCOMING") {
@@ -96,7 +97,7 @@ function describeProjectActivity(p: ActivityProject): { text: string; dot: strin
   return { text: "In progress", dot: "bg-emerald-400" };
 }
 
-// Monday-anchored week bucket, matching the OT week convention in calcOtSplits.ts.
+// Monday-anchored week bucket, matching the OT week convention in laborCost.ts.
 function mondayOf(d: Date): string {
   const date = new Date(d);
   const day = date.getUTCDay();
@@ -937,7 +938,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
     // be a data-entry error or a burnout risk even if the week overall looks
     // normal; a high weekly total on one project can hide a bad entry spread
     // across several days. Distinct from the payroll OT split in
-    // calcOtSplits.ts, which sums a worker's hours across ALL projects for
+    // laborCost.ts, which sums a worker's hours across ALL projects for
     // pay — this is specifically about concentration on ONE project.
     const DAY_HOURS_FLAG_THRESHOLD = 12;
     const WEEK_HOURS_FLAG_THRESHOLD = 40;

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
         try {
           await prisma.project.update({
             where: { id: projectId },
-            data: { billingStatus: "BILLING", percentInvoiced: 50 },
+            data: { billingStatus: "BILLED", percentInvoiced: 50 },
           });
           console.log(`Stripe deposit confirmed — project ${projectId} billing status updated to BILLING (50%)`);
         } catch (e) {

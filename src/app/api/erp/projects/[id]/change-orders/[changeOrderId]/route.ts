@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseBillingStatus } from "@/lib/erp/billingStatus";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
@@ -8,9 +9,7 @@ import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
 const STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"] as const;
-// BILLING/INVOICE_PAID/INACTIVE: used by the billing editor tab
-// NOT_BILLED/BILLED/PAID: used by the billing table (same vocabulary as SOV items / turnover requests)
-const BILLING_STATUSES = ["BILLING", "INVOICE_PAID", "INACTIVE", "NOT_BILLED", "BILLED", "PAID"] as const;
+// billingStatus uses the standard NOT_BILLED/BILLED/PAID words (see lib/erp/billingStatus.ts).
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, changeOrderId } = await ctx.params;
@@ -71,11 +70,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
   if (body.billingStatus !== undefined) {
-    if (body.billingStatus === null || body.billingStatus === "") {
-      data.billingStatus = null;
-    } else {
-      const bs = String(body.billingStatus).toUpperCase();
-      if (!BILLING_STATUSES.includes(bs as (typeof BILLING_STATUSES)[number])) {
+    {
+      // Old spellings are still accepted, but only the standard words are saved.
+      const bs = parseBillingStatus(body.billingStatus);
+      if (!bs) {
         return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
       }
       data.billingStatus = bs;
@@ -86,7 +84,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       // it, which also meant it could never count toward commission, see
       // payroll/page.tsx's isFullyPaidCo). Only kicks in when this same
       // request isn't already managing status itself.
-      if ((bs === "PAID" || bs === "INVOICE_PAID") && body.status === undefined && existing.status !== "COMPLETED") {
+      if (bs === "PAID" && body.status === undefined && existing.status !== "COMPLETED") {
         data.status = "COMPLETED";
         if (!existing.completedAt) data.completedAt = new Date();
       }

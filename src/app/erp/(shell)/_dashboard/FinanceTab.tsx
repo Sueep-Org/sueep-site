@@ -407,10 +407,11 @@ const CALCULATION_NOTES: { term: string; lines: string[] }[] = [
     term: "Job costs",
     lines: [
       "The same numbers as the Projects table, so a job's margin here always matches what you see there.",
-      "Labor: every labor log at the rate it was entered with. Hours past 40 in a week (per worker, across all their projects) are counted at 1.5x.",
-      "Contractors: the cost on each contractor assignment. Materials: every material log.",
+      "Labor is priced exactly the way Payroll pays it. Hourly workers: each log at the rate on it. If a worker passes 40 hours in a week (counting all their projects and janitorial shifts), each hour past 40 also costs half of that week's average hourly rate (the same as 1.5x when they had one rate).",
+      "Salaried and offshore staff: payroll pays them a fixed amount, so their hours on a job cost their yearly pay divided by 2,080 (a 40 hour week, all year), whatever rate was typed on the log. Hours past 40 in a week cost nothing extra.",
+      "Contractors: the cost on each contractor assignment. Materials: every material log. Travel: the travel cost typed on the project.",
       "If a project has no labor or material logs, the actual labor or material totals typed on the project are used instead.",
-      "Janitorial contracts: each janitor's hours (an admin's correction if there is one, otherwise their clock-in time, otherwise their scheduled shift, with a 30 minute unpaid break taken off shifts of 6+ hours) times their current hourly rate, the same hours Payroll pays. Overtime isn't added here. Only days up to today count for the current month.",
+      "Janitorial contracts: each janitor's hours (an admin's correction if there is one, otherwise their clock-in time, otherwise their scheduled shift, with a 30 minute unpaid break taken off shifts of 6+ hours) times their current hourly rate, priced with the same rule and the same hours Payroll pays, overtime included. Only days up to today count for the current month.",
     ],
   },
   {
@@ -423,8 +424,8 @@ const CALCULATION_NOTES: { term: string; lines: string[] }[] = [
   {
     term: "Overhead",
     lines: [
-      "Salaries: each salaried employee's yearly salary divided by 12, every month from their hire date while they're Active. Hours they log on jobs are already in job costs, so that amount is taken back out of their salary for the month so it isn't counted twice.",
-      "The ERP only stores each person's current pay, so a raise or a switch between hourly and salary applies to every month shown.",
+      "Salaries: each salaried employee's yearly salary divided by 12, every month from their hire date while they're Active. Their hours on jobs are already in job costs (see above), so that amount is taken back out of their salary for the month so it isn't counted twice.",
+      "Pay comes from each person's pay history (on their profile), so a raise or a switch between hourly and salary only counts from the day it started.",
       "Offshore pay: each offshore employee's monthly rate from their hire date, plus any month they were marked paid in Offshore Payroll.",
       "Someone marked Inactive still counts up to the day their status was changed. That last month is split by days (marked inactive on the 17th of a 30 day month counts 17/30 of the month).",
       "Commission: payouts, in the month they were marked paid. Reimbursements: in the month of the expense, whether or not it's been paid back yet.",

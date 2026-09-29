@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -118,7 +119,7 @@ export async function GET(req: Request) {
       projectMap.set(project.id, {
         projectId: project.id,
         jobTitle: project.jobTitle,
-        projectBillingStatus: project.billingStatus,
+        projectBillingStatus: normalizeBillingStatus(project.billingStatus),
         contractValueCents: null,
         items: [],
         changeOrders: [],
@@ -138,7 +139,7 @@ export async function GET(req: Request) {
       projectMap.set(project.id, {
         projectId: project.id,
         jobTitle: project.jobTitle,
-        projectBillingStatus: project.billingStatus,
+        projectBillingStatus: normalizeBillingStatus(project.billingStatus),
         contractValueCents: null,
         items: [],
         changeOrders: [],
@@ -149,7 +150,7 @@ export async function GET(req: Request) {
       projectId: co.projectId,
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
-      billingStatus: co.billingStatus ?? "NOT_BILLED",
+      billingStatus: normalizeBillingStatus(co.billingStatus),
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
     });
   }
@@ -184,7 +185,7 @@ export async function GET(req: Request) {
     projectMap.set(project.id, {
       projectId: project.id,
       jobTitle: project.jobTitle,
-      projectBillingStatus: project.billingStatus,
+      projectBillingStatus: normalizeBillingStatus(project.billingStatus),
       contractValueCents: project.contractValueCents,
       items: [],
       changeOrders: [],

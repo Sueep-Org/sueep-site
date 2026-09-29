@@ -9,6 +9,7 @@ import {
 import { searchDealsInConfiguredStages, type HubSpotDealRecord } from "@/lib/hubspot/dealSearch";
 import { syncDealContactsToProject, HubSpotScopesError } from "@/lib/hubspot/syncDealContactsToProject";
 import { hubspotFetch } from "@/lib/hubspot/client";
+import { isBilledStatus } from "@/lib/erp/billingStatus";
 
 function prop(r: HubSpotDealRecord, name: string): string | null {
   const v = r.properties[name];
@@ -42,11 +43,11 @@ async function resolveCompletionBillingStatus(
   pipelineId: string | null,
   projectId: string
 ): Promise<string | null> {
-  if (phase !== "COMPLETED" || previousBillingStatus !== "BILLING") return null;
+  if (phase !== "COMPLETED" || !isBilledStatus(previousBillingStatus)) return null;
   const cfg = parseHubSpotPipelineStageMap();
   const isPostConstruction = !!cfg && pipelineId === cfg.postConstruction.pipelineId;
   if (isPostConstruction || (await allSovItemsPaid(projectId))) {
-    return "INVOICE_PAID";
+    return "PAID";
   }
   return null;
 }
@@ -179,10 +180,13 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             ...(hubspotOwnerId !== undefined ? { hubspotOwnerId } : {}),
             ...(hubspotOwnerName !== undefined ? { hubspotOwnerName } : {}),
             ...(hubspotOwnerEmail !== undefined ? { hubspotOwnerEmail } : {}),
+            // Stamp billingCompletedAt the first time it's marked paid, same as
+            // a manual edit does, so commission sees when it was paid.
+            ...(completionBillingStatus === "PAID" && !existing.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
             ...(completionBillingStatus
               ? { billingStatus: completionBillingStatus }
               : phase === "BILLING"
-                ? { billingStatus: "BILLING" }
+                ? { billingStatus: "BILLED" }
                 : {}),
           },
         });
@@ -210,7 +214,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             hubspotOwnerId: hubspotOwnerId ?? null,
             hubspotOwnerName: hubspotOwnerName ?? null,
             hubspotOwnerEmail: hubspotOwnerEmail ?? null,
-            ...(phase === "BILLING" ? { billingStatus: "BILLING" } : {}),
+            ...(phase === "BILLING" ? { billingStatus: "BILLED" } : {}),
           },
         });
         syncedProjectId = created.id;

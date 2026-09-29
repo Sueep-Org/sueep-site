@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeePayroll } from "@/lib/erpAuth";
+import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 function firstOfMonth(iso: string): Date | null {
   const d = new Date(`${iso}-01T00:00:00Z`);
@@ -31,12 +33,23 @@ export async function GET(req: Request) {
 
   const paidByEmployeeId = new Map(payments.map((p) => [p.employeeId, p.paidAt]));
 
-  const rows = employees.map((e) => ({
-    employeeId: e.id,
-    name: `${e.firstName} ${e.lastName}`.trim(),
-    monthlyRateCents: e.offshoreMonthlyRateCents ?? 0,
-    paidAt: paidByEmployeeId.get(e.id)?.toISOString() ?? null,
-  }));
+  // The rate for this month comes from pay history (the rate in effect on the
+  // month's last day, or today for the month in progress), so an old month
+  // still shows what it paid after a raise.
+  const lastDay = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 0));
+  const todayKey = todayEasternKey();
+  const rateDay = lastDay.toISOString().slice(0, 10) < todayKey ? lastDay.toISOString().slice(0, 10) : todayKey;
+  const histories = await loadPayHistories(employees.map((e) => e.id));
+
+  const rows = employees.map((e) => {
+    const rate = payRateOn(histories.get(e.id), rateDay);
+    return {
+      employeeId: e.id,
+      name: `${e.firstName} ${e.lastName}`.trim(),
+      monthlyRateCents: (rate?.isOffshore ? rate.offshoreMonthlyRateCents : e.offshoreMonthlyRateCents) ?? 0,
+      paidAt: paidByEmployeeId.get(e.id)?.toISOString() ?? null,
+    };
+  });
 
   return NextResponse.json({ periodStart: periodStart.toISOString(), rows });
 }

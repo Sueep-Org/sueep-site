@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
-import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
+import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
 import { ChangeOrderSigningSection, type ContractItem } from "./ChangeOrderSigningSection";
 import type { ContractorRow } from "./ChangeOrderContractorsSection";
@@ -135,22 +135,9 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     return checkStr === todayDateStr && check.approvedForWork;
   });
 
-  const laborOtSplits = await calcOtSplits(
-    changeOrder.laborers.map((l) => ({
-      id: l.id,
-      employeeId: l.employeeId,
-      workDate: l.workDate,
-      hours: l.hours,
-      createdAt: l.createdAt,
-    }))
-  );
-  const computedLaborCents = changeOrder.laborers.reduce(
-    (s, l) => {
-      const split = laborOtSplits.get(l.id) ?? { regHours: l.hours, otHours: 0 };
-      return s + otLineCents(split.regHours, split.otHours, l.hourlyRateCents);
-    },
-    0,
-  );
+  // Same shared labor cost rule as payroll and the Projects table (laborCost.ts).
+  const laborCosts = await costLaborLogs([], changeOrder.laborers.map((l) => ({ ...l, workerName: l.name })));
+  const computedLaborCents = sumLineCosts(changeOrder.laborers, laborCosts);
   const computedMaterialCents = materialEntries.reduce((s, e) => s + e.costCents, 0);
 
   const data = {
@@ -194,7 +181,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
       notes: e.notes,
     })),
     laborers: changeOrder.laborers.map((l) => {
-      const split = laborOtSplits.get(l.id) ?? { regHours: l.hours, otHours: 0 };
+      const cost = laborCosts.get(l.id);
+      const split = cost ? { regHours: cost.regHours, otHours: cost.otHours } : { regHours: l.hours, otHours: 0 };
       return {
         id: l.id,
         employeeId: l.employeeId,

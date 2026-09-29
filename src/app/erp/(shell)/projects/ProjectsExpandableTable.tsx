@@ -6,6 +6,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getDescLine as getDescriptionLine } from "@/lib/erp/descLine";
 import { Modal, Button } from "@/app/erp/components/ui";
+import { billingStatusLabel, normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 type LaborRowBase = {
   id: string;
@@ -547,15 +548,11 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
 }
 
 export function billingBadge(status: string | null) {
-  if (!status) return <EmptyValue />;
-  const map: Record<string, { label: string; cls: string }> = {
-    BILLING: { label: "Billing", cls: "bg-pink-100 text-pink-700" },
-    INVOICE_PAID: { label: "Invoice Paid", cls: "bg-gray-200 text-gray-700" },
-    INACTIVE: { label: "Inactive", cls: "bg-gray-100 text-gray-500" },
-  };
-  const opt = map[status];
-  if (!opt) return <EmptyValue />;
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${opt.cls}`}>{opt.label}</span>;
+  // Old and new spellings both show as one of the three standard statuses.
+  const s = normalizeBillingStatus(status);
+  if (s === "NOT_BILLED") return <EmptyValue />;
+  const cls = s === "PAID" ? "bg-emerald-100 text-emerald-700" : "bg-pink-100 text-pink-700";
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{billingStatusLabel(s)}</span>;
 }
 
 function isJanitorialProject(row: ProjectTableRow, janitorialPipelineId: string | null) {
