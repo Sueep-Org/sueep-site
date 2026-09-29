@@ -349,6 +349,10 @@ model RecurringContract {
   /// Free-text scope of what gets cleaned, e.g. "Lobby, hallways, gym,
   /// 3 common bathrooms". Replaced the old per-unit list.
   serviceAreas      String?
+  /// Pricing calculator inputs (role lines, rates, overrides; see
+  /// lib/erp/janitorialPricing.ts). monthlyRateCents is derived from it when
+  /// set. Null for contracts priced by hand before the calculator existed.
+  pricing           Json?
 
   /// Salesperson who gets commission credit — manually assigned, since
   /// recurring contracts are created directly in the ERP rather than

@@ -18,6 +18,7 @@ import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
 import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
+import { JanitorialGettingStarted } from "./janitorial/getting-started";
 
 export type ArticleEntry = {
   slug: string;
@@ -181,6 +182,15 @@ export const registry: ArticleEntry[] = [
     description: "How to add a building, manage its units, log hours, and set its pricing package.",
     order: 1,
     component: BuildingsOverview,
+  },
+  {
+    slug: "janitorial/getting-started",
+    title: "Janitorial Contracts: Getting Started",
+    category: "Janitorial",
+    description: "The whole janitorial cycle step by step: set up a contract, schedule janitors, clock-in links, daily and weekly checks, payroll, and billing.",
+    order: 0,
+    component: JanitorialGettingStarted,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
   {
     slug: "janitorial/janitorial-contracts",

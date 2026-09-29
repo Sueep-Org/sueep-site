@@ -5,10 +5,11 @@ export function JanitorialContracts() {
     <>
       <H2>Overview</H2>
       <P>
-        The Janitorial page (<strong>ERP → Janitorial</strong>) is where recurring janitorial
+        The Janitorial Contracts page (<strong>ERP → Janitorial Contracts</strong>) is where recurring janitorial
         contracts live: buildings we clean on a flat monthly rate instead of per-job turnover
         pricing. Each contract belongs to one building. Admins, Project Managers, Sales, and Finance
-        can see this page.
+        can see this page. New to it? Start with{" "}
+        <A href="/erp/help/janitorial/getting-started">Janitorial Contracts: Getting Started</A>.
       </P>
       <ImgPlaceholder label="Janitorial contracts list" />
 
@@ -23,6 +24,23 @@ export function JanitorialContracts() {
             <strong>New building</strong> and enter its name and address (property manager details
             are optional). The building is created together with the contract.
           </Callout>
+        </Step>
+
+        <Step n={2} title="Pricing a contract">
+          When creating a contract you can just type a monthly rate, or tick{" "}
+          <strong>Calculate the price from roles, hours, and rates</strong>. The calculator (also on each
+          contract&apos;s <strong>Pricing</strong> tab) works like the proposal spreadsheets:
+          <UL>
+            <LI>Add a line per role (Cleaner, Porter, Foreman...) with people, hours per week each, bill rate, and pay rate.</LI>
+            <LI>Monthly price = people × hours × bill rate × 52 ÷ 12. Payroll uses the pay rate plus the payroll add-on (19% for W2 + health by default).</LI>
+            <LI>Turn on <strong>overtime</strong> (extra half-time) or <strong>paid holidays</strong> to include those costs.</LI>
+            <LI>Sales tax (6% by default) is taken from the monthly price. The summary shows payroll, tax, profit, and margin as you type.</LI>
+            <LI><strong>Override</strong> any line or the total to quote a round number; <strong>Use calculated</strong> goes back.</LI>
+            <LI>
+              The Pricing tab is the only place the monthly rate is set. Saving it changes the rate for months added from then
+              on; months already billed keep their amount.
+            </LI>
+          </UL>
         </Step>
 
         <Step n={2} title="Editing, pausing, or ending a contract">
@@ -112,7 +130,7 @@ export function JanitorialContracts() {
               closures. One-time shifts stay. <strong>Put back skipped shifts</strong> undoes it.
             </LI>
             <LI>
-              A dashed chip was changed for that day or is a one-time shift. A faded, crossed-out
+              Like the Projects calendar, a dashed chip is scheduled with no hours logged yet, and a solid chip has hours logged (the janitor clocked in, or a manager entered the worked times). ↻ marks a shift changed for that day and 1× a one-time shift. A faded, crossed-out
               chip was skipped. A red <strong>⚠</strong> means that janitor has time off logged that
               day; the count at the top shows how many upcoming shifts need cover.
             </LI>
@@ -146,7 +164,7 @@ export function JanitorialContracts() {
         </Step>
 
         <Step n={7} title="Reviewing hours">
-          <strong>Janitorial → Hours</strong> shows every shift for the week, grouped by janitor, with
+          <strong>Janitorial Contracts → Hours</strong> shows every shift for the week, grouped by janitor, with
           where its hours came from:
           <UL>
             <LI><strong>Clocked:</strong> their actual clock-in to clock-out.</LI>
@@ -166,7 +184,7 @@ export function JanitorialContracts() {
           </Callout>
         </Step>
 
-        <Step n={8} title="Watching today: Janitorial → Today">
+        <Step n={8} title="Watching today: Janitorial Contracts → Today">
           A live view of today&apos;s shifts that refreshes every minute, so problems can be fixed while
           the shift is still happening.
           <UL>

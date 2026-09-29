@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { parseBillingDay } from "@/lib/erp/recurringContracts";
+import { calculatePricing, parsePricing } from "@/lib/erp/janitorialPricing";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,7 +24,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const data: Record<string, unknown> = {};
 
-  if (body.monthlyRate !== undefined) {
+  // Saving the pricing calculator also sets the monthly rate from it, so
+  // the two can't disagree. { pricing: null } goes back to a hand-set rate.
+  if (body.pricing !== undefined) {
+    if (body.pricing === null) {
+      data.pricing = Prisma.DbNull;
+    } else {
+      const parsed = parsePricing(body.pricing);
+      if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      data.pricing = parsed.pricing as unknown as Prisma.InputJsonValue;
+      data.monthlyRateCents = calculatePricing(parsed.pricing).monthlyPriceCents;
+    }
+  }
+  if (body.monthlyRate !== undefined && body.pricing === undefined) {
     const cents = inputToCents(body.monthlyRate);
     if (cents === null || cents <= 0) return NextResponse.json({ error: "Monthly rate must be a positive number" }, { status: 400 });
     data.monthlyRateCents = cents;

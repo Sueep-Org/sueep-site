@@ -7,6 +7,7 @@ import { formatTime12 } from "@/lib/erp/janitorialSchedule";
 import { dayCellLabel } from "@/lib/erp/schedule";
 import type { TodayItem, TodayStatus } from "@/lib/erp/janitorialToday";
 import { CorrectionDialog } from "../hours/HoursReview";
+import { StatStrip } from "../StatStrip";
 
 type Item = TodayItem & { phone: string | null };
 type TodayResponse = { todayKey: string; generatedAt: string; items: Item[] };
@@ -99,17 +100,12 @@ export function TodayPanel() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        {TILES.map((t) => {
+      <StatStrip
+        stats={TILES.map((t) => {
           const n = count(t.status);
-          return (
-            <div key={t.status} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
-              <p className="text-xs text-gray-500">{t.label}</p>
-              <p className={`text-xl font-semibold tabular-nums ${n > 0 ? t.tone : "text-gray-300"}`}>{n}</p>
-            </div>
-          );
+          return { label: t.label, value: String(n), tone: n > 0 ? t.tone : "text-gray-300" };
         })}
-      </div>
+      />
 
       {data && items.length === 0 && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">

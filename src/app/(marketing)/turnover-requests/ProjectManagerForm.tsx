@@ -22,7 +22,16 @@ type ProjectOption = {
 };
 type SovItem = { id: string; description: string; completed: boolean };
 
-const STEP_LABELS_CO = ["Your Project", "Request Type", "Details"] as const;
+/** Filename for a downloaded CO contract. Blob URLs carry no filename, so
+ * without a `download` attribute the browser saves them under a random id
+ * with no .pdf extension. Mirrors the server's naming in
+ * /api/co-request-contract-pdf. */
+function contractFilename(coTitle: string, suffix = "") {
+  const base = coTitle.replace(/[^\w\- ]+/g, "").trim() || "change-order";
+  return `${base}${suffix}.pdf`;
+}
+
+const STEP_LABELS_CO =["Your Project", "Request Type", "Details"] as const;
 const STEP_LABELS_CO_SIGNED = ["Your Project", "Request Type", "Details", "Sign Contract"] as const;
 const STEP_LABELS_SOV = ["Your Project", "Request Type", "SOV Item"] as const;
 
@@ -660,14 +669,23 @@ export function ProjectManagerForm({ onBack }: Props) {
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm font-medium text-gray-800">1. Review your contract</p>
               <p className="mt-1 text-xs text-gray-500">Open it to check the details before signing.</p>
-              <a
-                href={contractPdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                View contract PDF
-              </a>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a
+                  href={contractPdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  View contract PDF
+                </a>
+                <a
+                  href={contractPdfUrl}
+                  download={contractFilename(coTitle)}
+                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Download PDF
+                </a>
+              </div>
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
@@ -698,14 +716,25 @@ export function ProjectManagerForm({ onBack }: Props) {
               <p className="text-xs text-gray-500">
                 Open the contract with your signature applied and make sure it looks right before submitting.
               </p>
-              <button
-                type="button"
-                disabled={signedPreviewLoading || !signaturePngDataUrl || !signaturePrintedName.trim()}
-                onClick={() => { void handlePreviewSigned(); }}
-                className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                {signedPreviewLoading ? "Preparing…" : hasViewedSignedContract ? "View signed contract again" : "View signed contract"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={signedPreviewLoading || !signaturePngDataUrl || !signaturePrintedName.trim()}
+                  onClick={() => { void handlePreviewSigned(); }}
+                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {signedPreviewLoading ? "Preparing…" : hasViewedSignedContract ? "View signed contract again" : "View signed contract"}
+                </button>
+                {signedPreviewUrl && hasViewedSignedContract && (
+                  <a
+                    href={signedPreviewUrl}
+                    download={contractFilename(coTitle, " - signed")}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Download signed PDF
+                  </a>
+                )}
+              </div>
               {signedPreviewError && <p className="text-xs text-red-500" role="alert">{signedPreviewError}</p>}
               {hasViewedSignedContract && !signedPreviewError && (
                 <p className="flex items-center gap-1.5 text-xs font-medium text-green-700">
