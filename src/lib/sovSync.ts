@@ -4,9 +4,9 @@ import { prisma } from "./prisma";
 // without the client having actually paid yet. Only PAID counts as paid for
 // commission purposes.
 function mapBillingToProject(status: string): { billingStatus: string | null; percentInvoiced: number } {
-  if (status === "PAID") return { billingStatus: "INVOICE_PAID", percentInvoiced: 100 };
-  if (status === "BILLED") return { billingStatus: "BILLING", percentInvoiced: 100 };
-  return { billingStatus: null, percentInvoiced: 0 };
+  if (status === "PAID") return { billingStatus: "PAID", percentInvoiced: 100 };
+  if (status === "BILLED") return { billingStatus: "BILLED", percentInvoiced: 100 };
+  return { billingStatus: "NOT_BILLED", percentInvoiced: 0 };
 }
 
 /**
@@ -27,7 +27,7 @@ export async function syncProjectBillingFromRequest(turnoverRequestId: string, b
         where: { id: p.id },
         data: {
           ...data,
-          ...(data.billingStatus === "INVOICE_PAID" && !p.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
+          ...(data.billingStatus === "PAID" && !p.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
         },
       })
     )
@@ -68,7 +68,7 @@ export async function syncProjectBillingFromSOV(projectId: string) {
   await prisma.project.update({
     where: { id: projectId },
     data: {
-      billingStatus: allPaid ? "INVOICE_PAID" : "BILLING",
+      billingStatus: allPaid ? "PAID" : "BILLED",
       percentInvoiced,
       ...(allPaid && !current?.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
     },

@@ -19,10 +19,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
+import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
+import { costLaborLogs } from "@/lib/erp/laborCost";
+import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
 import { laborCostByContract, monthBounds } from "@/lib/erp/janitorialProfit";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
-import { todayEasternAsUtcMidnight, todayEasternKey } from "@/lib/erp/dates";
+import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "@/lib/erp/dates";
+import { isPaidStatus } from "@/lib/erp/billingStatus";
 
 export type FinanceSegment = "POST_CONSTRUCTION" | "TURNOVERS" | "JANITORIAL_CONTRACTS" | "OTHER";
 
@@ -141,7 +144,6 @@ function monthKeysBetween(firstKey: string, lastKey: string): string[] {
   return keys;
 }
 
-const PAID_PROJECT_STATUSES = new Set(["INVOICE_PAID", "PAID"]);
 
 /** First month shown ("YYYY-MM"). The ERP wasn't fully in use until August
  * 2026, so earlier months are missing jobs and costs and would mislead. */
@@ -158,16 +160,16 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
         id: true, jobTitle: true, segment: true, billingStatus: true,
         projectEndDate: true, turnoverCompletedAt: true,
         recurringContractPeriodId: true, turnoverRequestId: true,
-        contractValueCents: true, actualLaborCents: true, actualMaterialCents: true,
-        laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+        contractValueCents: true, actualLaborCents: true, actualMaterialCents: true, actualTravelCents: true,
+        laborEntries: { select: { id: true, employeeId: true, workerName: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
         materialEntries: { select: { costCents: true } },
         contractorAssignments: { select: { costCents: true } },
         changeOrders: {
           select: {
             status: true, contractValueCents: true, estimatedCostCents: true,
-            actualLaborCents: true, actualMaterialCents: true,
+            actualLaborCents: true, actualMaterialCents: true, actualTravelCents: true,
             materialEntries: { select: { costCents: true } },
-            laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+            laborers: { select: { id: true, employeeId: true, name: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
             contractorAssignments: { select: { costCents: true } },
           },
         },
@@ -186,9 +188,16 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
       },
     }),
     prisma.recurringContract.findMany({ select: { status: true, monthlyRateCents: true, startDate: true } }),
+    // Anyone paid a salary or offshore rate now or at any point in their pay history.
     prisma.employee.findMany({
-      where: { OR: [{ payType: "SALARY", isOffshore: false, isJanitorialContract: false }, { isOffshore: true }] },
-      select: { id: true, status: true, statusChangedAt: true, payType: true, isOffshore: true, hireDate: true, annualSalaryCents: true, offshoreMonthlyRateCents: true },
+      where: {
+        OR: [
+          { payType: "SALARY", isOffshore: false, isJanitorialContract: false },
+          { isOffshore: true },
+          { payRates: { some: { OR: [{ payType: "SALARY" }, { isOffshore: true }] } } },
+        ],
+      },
+      select: { id: true, status: true, statusChangedAt: true, payType: true, isOffshore: true, hireDate: true, annualSalaryCents: true },
     }),
     prisma.offshorePayrollPayment.findMany({
       where: { paidAt: { not: null } },
@@ -211,13 +220,18 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
   // ── Completed projects ──────────────────────────────────────────────────
   // A recurring contract's own billing placeholder project (older periods
   // only) is left out: that month's revenue is counted from the period below.
-  const jobProjects = completedProjects.filter((p) => !(p.recurringContractPeriodId && !p.turnoverRequestId));
-  const actuals = await computeProjectActualsWithChangeOrders(jobProjects);
+  const jobProjects = completedProjects
+    .filter((p) => !(p.recurringContractPeriodId && !p.turnoverRequestId))
+    .map((p) => ({ ...p, changeOrders: p.changeOrders.map((co) => ({ ...co, laborers: co.laborers.map((l) => ({ ...l, workerName: l.name })) })) }));
+  const lineCosts = await costLaborLogs(
+    jobProjects.flatMap((p) => p.laborEntries),
+    jobProjects.flatMap((p) => p.changeOrders.flatMap((co) => co.laborers)),
+  );
+  const actuals = await computeProjectActualsWithChangeOrders(jobProjects, lineCosts);
 
-  const salariedIds = new Set(fixedPayEmployees.filter((e) => e.payType === "SALARY" && !e.isOffshore).map((e) => e.id));
-  // Straight-time cost of salaried staff's hours inside jobs, per employee
-  // per job month, so it can come back out of their salary overhead.
-  const salaryInJobs = new Map<string, number>();
+  // What salaried and offshore staff's hours already cost inside jobs, per
+  // employee per job month, so that part comes back out of their overhead.
+  const fixedPayInJobs = new Map<string, number>();
 
   for (const p of jobProjects) {
     const earnedAt = p.turnoverCompletedAt ? easternMonthKey(p.turnoverCompletedAt) : p.projectEndDate ? utcMonthKey(p.projectEndDate) : null;
@@ -227,27 +241,26 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
     if (!a || a.contractValueCents == null || a.contractValueCents === 0) { warnings.noContractValue++; continue; }
 
     const segment = segmentOf(p.segment);
-    const costCents = a.actualLaborCents + a.actualMaterialCents;
+    const costCents = a.actualLaborCents + a.actualMaterialCents + a.actualTravelCents;
     const m = monthOf(earnedAt);
     m.revenueCents += a.contractValueCents;
     m.laborCents += a.actualLaborCents;
-    m.materialCents += a.actualMaterialCents;
+    m.materialCents += a.actualMaterialCents + a.actualTravelCents;
     m.segments[segment].revenueCents += a.contractValueCents;
     m.segments[segment].costCents += costCents;
     m.segments[segment].jobs++;
-    if (!p.billingStatus || !PAID_PROJECT_STATUSES.has(p.billingStatus)) m.unpaidCents += a.contractValueCents;
+    if (!isPaidStatus(p.billingStatus)) m.unpaidCents += a.contractValueCents;
     jobs.push({
       id: p.id, href: `/erp/projects/${p.id}`, title: p.jobTitle, monthKey: earnedAt, segment,
       revenueCents: a.contractValueCents, costCents, profitCents: a.contractValueCents - costCents,
     });
 
-    const qualifyingLaborers = p.changeOrders
-      .filter((co) => co.status !== "VOID" && co.status !== "REJECTED")
-      .flatMap((co) => co.laborers);
+    const qualifyingLaborers = p.changeOrders.filter(isQualifyingChangeOrder).flatMap((co) => co.laborers);
     for (const e of [...p.laborEntries, ...qualifyingLaborers]) {
-      if (!e.employeeId || !salariedIds.has(e.employeeId)) continue;
+      const cost = lineCosts.get(e.id);
+      if (!e.employeeId || !cost?.fixedPay) continue;
       const key = `${e.employeeId}::${earnedAt}`;
-      salaryInJobs.set(key, (salaryInJobs.get(key) ?? 0) + Math.round(e.hours * e.hourlyRateCents));
+      fixedPayInJobs.set(key, (fixedPayInJobs.get(key) ?? 0) + Math.round(cost.costCents));
     }
   }
 
@@ -287,31 +300,41 @@ export async function computeFinanceSummary(): Promise<FinanceSummary> {
   for (const key of allKeys) monthOf(key);
 
   // ── Overhead ────────────────────────────────────────────────────────────
-  // Salary and offshore pay are counted from the hire month (or from
-  // FINANCE_DATA_START when no hire date is on file) while ACTIVE. An
-  // inactive offshore employee still counts for any month they were marked
-  // paid in Offshore Payroll.
+  // Salary and offshore pay, day by day from each person's pay history (so a
+  // raise or a switch from hourly only counts from when it happened), from
+  // their hire date while they're Active. Someone marked Inactive still
+  // counts up to the day their status changed. An offshore month marked paid
+  // in Offshore Payroll always counts in full. The part already in job costs
+  // (fixedPayInJobs) comes back out so it isn't counted twice.
+  const histories = await loadPayHistories(fixedPayEmployees.map((e) => e.id));
   const offshorePaidKeys = new Set(offshorePaid.map((o) => `${o.employeeId}::${utcMonthKey(o.periodStart)}`));
   for (const e of fixedPayEmployees) {
-    const hireKey = e.hireDate ? utcMonthKey(e.hireDate) : null;
-    // Someone marked Inactive still counts up to the day they were marked
-    // (statusChangedAt, Eastern), with that last month prorated by day.
+    const history = histories.get(e.id);
+    const hireKey = e.hireDate ? utcDateKey(e.hireDate) : null;
     const leftOn = e.status === "INACTIVE" && e.statusChangedAt ? todayEasternKey(e.statusChangedAt) : null;
-    if (!e.isOffshore && e.status === "ACTIVE" && !e.annualSalaryCents) warnings.salaryMissing++;
+    if (!e.isOffshore && e.payType === "SALARY" && e.status === "ACTIVE" && !e.annualSalaryCents) warnings.salaryMissing++;
     for (const key of allKeys) {
       const m = monthOf(key);
-      let share = 0;
-      if (hireKey && hireKey > key) share = 0;
-      else if (e.status === "ACTIVE") share = 1;
-      else if (leftOn && leftOn.slice(0, 7) > key) share = 1;
-      else if (leftOn && leftOn.slice(0, 7) === key) share = Number(leftOn.slice(8)) / daysInMonth(key);
-      if (e.isOffshore) {
-        if (offshorePaidKeys.has(`${e.id}::${key}`)) share = 1;
-        m.offshoreCents += Math.round((e.offshoreMonthlyRateCents ?? 0) * share);
-      } else if (share > 0 && e.annualSalaryCents) {
-        const monthly = Math.round((e.annualSalaryCents / 12) * share);
-        m.salaryCents += Math.max(0, monthly - (salaryInJobs.get(`${e.id}::${key}`) ?? 0));
+      const days = daysInMonth(key);
+      const paidOffshoreMonth = offshorePaidKeys.has(`${e.id}::${key}`);
+      let salary = 0;
+      let offshore = 0;
+      for (let d = 1; d <= days; d++) {
+        const dayKey = `${key}-${String(d).padStart(2, "0")}`;
+        const rate = payRateOn(history, dayKey);
+        if (!rate) continue;
+        const employed = (!hireKey || hireKey <= dayKey) && (e.status === "ACTIVE" || (leftOn != null && dayKey <= leftOn));
+        if (rate.isOffshore) {
+          if (employed || paidOffshoreMonth) offshore += (rate.offshoreMonthlyRateCents ?? 0) / days;
+        } else if (rate.payType === "SALARY" && employed) {
+          salary += (rate.annualSalaryCents ?? 0) / 12 / days;
+        }
       }
+      const inJobs = fixedPayInJobs.get(`${e.id}::${key}`) ?? 0;
+      const salaryLeft = Math.max(0, salary - inJobs);
+      const offshoreLeft = Math.max(0, offshore - Math.max(0, inJobs - salary));
+      m.salaryCents += Math.round(salaryLeft);
+      m.offshoreCents += Math.round(offshoreLeft);
     }
   }
   for (const c of commissionPayouts) {

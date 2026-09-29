@@ -64,7 +64,9 @@ model Project {
   /// of silently falling outside a single day's window.
   turnoverDigestSentAt DateTime?
 
-  /// BILLING | INACTIVE | INVOICE_PAID — manually set per project
+  /// NOT_BILLED | BILLED | PAID (see src/lib/erp/billingStatus.ts). Older rows
+  /// may still hold BILLING / INVOICE_PAID until the one-time update in
+  /// prisma/data-migrations/unify-billing-status.sql has run.
   billingStatus String?
 
   contractValueCents Int?
@@ -147,7 +149,8 @@ model Project {
   hubspotOwnerName  String?
   hubspotOwnerEmail String?
 
-  /// Sales commission (flat 10% of contractValueCents) is marked paid here.
+  /// Sales commission (margin-tier rate on contract value, see
+  /// src/lib/erp/commission.ts) is marked paid here.
   /// The salesperson defaults to matching hubspotOwnerEmail/hubspotOwnerName
   /// to an Employee, but that match can be wrong (e.g. the HubSpot deal
   /// owner is an estimator, not the salesperson who should get credit) —

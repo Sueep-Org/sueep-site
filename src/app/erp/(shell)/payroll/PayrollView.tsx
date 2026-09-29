@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useConfirm, useToast } from "@/app/erp/components/ui";
 
 type PayrollRow = {
   isContractor: boolean;
@@ -30,10 +31,22 @@ type PayrollRow = {
 
 type PayFilter = "all" | "hourly" | "salary" | "janitorial" | "contractor";
 
+type PayrollChange = {
+  name: string;
+  savedGrossCents: number | null;
+  liveGrossCents: number | null;
+  savedHours: number | null;
+  liveHours: number | null;
+};
+
 type PayrollResponse = {
   periodStart: string;
   periodEnd: string;
   rows: PayrollRow[];
+  /** Set once the period is closed: rows are then what was saved when it was paid. */
+  closed: { closedAt: string; closedBy: string | null; totalGrossCents: number } | null;
+  /** What the records say now vs. what was saved, for a closed period. */
+  changes: PayrollChange[];
 };
 
 const DEFAULT_ANCHOR = "2024-01-01";
@@ -210,7 +223,11 @@ function SettingsPopover({
   );
 }
 
-export function PayrollView() {
+export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [reloadKey, setReloadKey] = useState(0);
+  const [closing, setClosing] = useState(false);
   const [anchorISO, setAnchorISO] = useState(DEFAULT_ANCHOR);
   const [anchorLoaded, setAnchorLoaded] = useState(false);
 
@@ -255,7 +272,7 @@ export function PayrollView() {
       .catch(() => { if (!cancelled) setError("Could not load payroll data."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [periodIndex, anchorISO, anchorLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [periodIndex, anchorISO, anchorLoaded, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveAnchor(draft: string): Promise<string | null> {
     try {
@@ -274,6 +291,41 @@ export function PayrollView() {
       return "Network error";
     }
   }
+
+  async function closePeriod() {
+    if (!data) return;
+    const ok = await confirm({
+      message: `Close ${formatDate(start)} to ${formatDate(end)} as paid? This saves each person's hours and pay exactly as shown. If labor logs change later, the saved numbers stay and the changes are listed here.`,
+    });
+    if (!ok) return;
+    setClosing(true);
+    try {
+      const res = await fetch("/api/erp/payroll/close", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ start: data.periodStart, end: data.periodEnd }),
+      });
+      const result = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { toast(result.error ?? "Could not close the period", "error"); return; }
+      toast("Pay period closed.", "success");
+      setReloadKey((k) => k + 1);
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function reopenPeriod() {
+    if (!data) return;
+    const ok = await confirm({ message: "Reopen this pay period? The saved numbers are dropped and it goes back to showing live numbers from the records." });
+    if (!ok) return;
+    const res = await fetch(`/api/erp/payroll/close?start=${data.periodStart}`, { method: "DELETE" });
+    const result = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) { toast(result.error ?? "Could not reopen the period", "error"); return; }
+    toast("Pay period reopened.", "success");
+    setReloadKey((k) => k + 1);
+  }
+
+  const periodHasEnded = toISO(end) < toISO(new Date());
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
     if (payFilter === "hourly") return !r.isContractor && r.payType !== "SALARY" && r.payType !== "JANITORIAL";
@@ -371,6 +423,53 @@ export function PayrollView() {
           </div>
         </div>
       </div>
+
+      {/* Closed (paid) period: saved numbers, plus anything changed since */}
+      {data && !loading && (data.closed ? (
+        <div className={`rounded-lg border px-4 py-3 text-sm ${data.changes.length ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-gray-800">
+              <span className="font-semibold">Closed</span> on {new Date(data.closed.closedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              {data.closed.closedBy ? ` by ${data.closed.closedBy}` : ""}. Showing what was paid.
+            </p>
+            {canReopen && (
+              <button type="button" onClick={reopenPeriod} className="text-xs font-medium text-gray-600 hover:text-gray-900 hover:underline">
+                Reopen period
+              </button>
+            )}
+          </div>
+          {data.changes.length > 0 && (
+            <div className="mt-2">
+              <p className="font-medium text-amber-800">
+                {data.changes.length} {data.changes.length === 1 ? "person's" : "people's"} records changed after this was closed:
+              </p>
+              <ul className="mt-1 space-y-0.5 text-amber-900">
+                {data.changes.map((c) => (
+                  <li key={c.name} className="tabular-nums">
+                    {c.name}:{" "}
+                    {c.savedGrossCents == null ? `not in the closed payroll, now ${fmt(c.liveGrossCents ?? 0)} (${fmtHours(c.liveHours ?? 0)} hrs)`
+                      : c.liveGrossCents == null ? `paid ${fmt(c.savedGrossCents)}, no longer in the records`
+                      : `paid ${fmt(c.savedGrossCents)} for ${fmtHours(c.savedHours ?? 0)} hrs, records now say ${fmt(c.liveGrossCents)} for ${fmtHours(c.liveHours ?? 0)} hrs`}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-amber-700">Pay any difference in the next period, or reopen and close this one again.</p>
+            </div>
+          )}
+        </div>
+      ) : periodHasEnded && data.rows.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
+          <p className="text-gray-600">Once this period is paid, close it so these numbers are saved and can&apos;t change later.</p>
+          <button
+            type="button"
+            onClick={closePeriod}
+            disabled={closing}
+            className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700 disabled:opacity-50"
+          >
+            {closing ? "Closing..." : "Close period as paid"}
+          </button>
+        </div>
+      ) : null)}
 
       {/* Table */}
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">

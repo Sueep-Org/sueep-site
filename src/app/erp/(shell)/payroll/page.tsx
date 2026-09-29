@@ -11,6 +11,7 @@ import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
 import { OffshorePayrollView } from "./OffshorePayrollView";
 import { ReimbursementsView, type ReimbursementRow } from "./ReimbursementsView";
+import { isPaidStatus } from "@/lib/erp/billingStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -122,12 +123,12 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   }
 
   function isFullyPaidCo(co: { status: string; billingStatus: string | null }): boolean {
-    return co.status === "COMPLETED" && !!co.billingStatus && ["INVOICE_PAID", "PAID"].includes(co.billingStatus);
+    return co.status === "COMPLETED" && isPaidStatus(co.billingStatus);
   }
 
   // A project only becomes commissionable once its own billing is fully paid
-  // (mirrors the "PAID"/"INVOICE_PAID" vocabulary split, some rows were set
-  // outside the normal editor) AND every real change order on it is done and
+  // (isPaidStatus accepts old and new spellings, see billingStatus.ts) AND
+  // every real change order on it is done and
   // paid too. Unbilled/unpaid revenue isn't tracked here at all, so it also
   // doesn't count toward the annual accelerator threshold.
   function isCommissionEligible(p: {
@@ -136,7 +137,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
     changeOrders: { status: string; billingStatus: string | null }[];
   }): boolean {
     if (!p.contractValueCents) return false;
-    if (!p.billingStatus || !["INVOICE_PAID", "PAID"].includes(p.billingStatus)) return false;
+    if (!isPaidStatus(p.billingStatus)) return false;
     return qualifyingChangeOrders(p).every(isFullyPaidCo);
   }
 
@@ -397,7 +398,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         tabs={[
           ...(showPayrollTabs
             ? [
-                { label: "Payroll", content: <PayrollView /> },
+                { label: "Payroll", content: <PayrollView canReopen={auth.role === "ADMIN"} /> },
                 { label: "Offshore Payroll", content: <OffshorePayrollView /> },
               ]
             : []),

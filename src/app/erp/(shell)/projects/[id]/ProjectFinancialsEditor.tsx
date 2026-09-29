@@ -2,17 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BILLING_STATUS_OPTIONS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const labelCls = "block text-xs font-medium text-gray-600";
 
-const BILLING_OPTIONS = [
-  { value: "", label: "— None —" },
-  { value: "BILLING", label: "Billing" },
-  { value: "INACTIVE", label: "Inactive" },
-  { value: "INVOICE_PAID", label: "Invoice Paid" },
-];
+const BILLING_OPTIONS = BILLING_STATUS_OPTIONS;
 
 const ESTIMATOR_API = "https://ai-estimator-api-code-gaaaajezb3hfh9ex.eastus2-01.azurewebsites.net";
 
@@ -38,6 +34,10 @@ type Props = {
   /** Sum of contractValueCents across non-void/rejected change orders — display only, never written back to contractValueCents. */
   qualifyingCoContractValueCents: number;
   qualifyingCoCount: number;
+  /** Material from material logs, or null when there are none (then the typed-in total counts). */
+  materialCentsFromLogs: number | null;
+  /** Project plus change orders, from the shared margin calculation (projectMargin.ts). */
+  totals: { contractValueCents: number | null; costCents: number; marginCents: number | null };
 };
 
 function formatCurrency(cents: number): string {
@@ -70,20 +70,20 @@ export function ProjectFinancialsEditor({
   daysFromLogs,
   qualifyingCoContractValueCents,
   qualifyingCoCount,
+  materialCentsFromLogs,
+  totals,
 }: Props) {
   const hasLaborLogs = laborCentsFromLogs > 0 || hoursFromLogs > 0;
   const router = useRouter();
   const [contractValue, setContractValue] = useState(centsToInput(contractValueCents));
   const [pctDone, setPctDone] = useState(percentDone === 0 ? "" : String(percentDone));
   const [pctInvoiced, setPctInvoiced] = useState(percentInvoiced === 0 ? "" : String(percentInvoiced));
-  const [billStatus, setBillStatus] = useState(billingStatus ?? "");
-  // This dropdown uses a different vocabulary (BILLING/INACTIVE/INVOICE_PAID)
-  // than the one the Billing review page writes (NOT_BILLED/BILLED/PAID), so
-  // its seeded initial value often can't even be displayed correctly. Only
-  // send billingStatus on submit if the user actually touched this field —
-  // otherwise saving this form for an unrelated reason (e.g. correcting
-  // contract value for commission) silently reverts whatever billing status
-  // was set elsewhere since this page loaded.
+  const [billStatus, setBillStatus] = useState<string>(normalizeBillingStatus(billingStatus));
+  // Only send billingStatus on submit if the user actually touched this
+  // field, otherwise saving this form for an unrelated reason (e.g.
+  // correcting contract value for commission) silently reverts whatever
+  // billing status was set elsewhere (Billing page, SOV sync) since this
+  // page loaded.
   const [billStatusTouched, setBillStatusTouched] = useState(false);
   const [estMat, setEstMat] = useState(centsToInput(estMaterialCents));
   const [estTravel, setEstTravel] = useState(centsToInput(estTravelCents));
@@ -446,7 +446,16 @@ export function ProjectFinancialsEditor({
                 )}
                 <div>
                   <label className={labelCls} htmlFor="fin-act-mat">Material ($)</label>
-                  <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
+                  {materialCentsFromLogs != null ? (
+                    <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 tabular-nums">
+                      {formatCurrency(materialCentsFromLogs)}
+                    </div>
+                  ) : (
+                    <>
+                      <input id="fin-act-mat" type="number" min={0} step={0.01} className={inputCls} value={actMat} onChange={(e) => setActMat(e.target.value)} placeholder="0.00" />
+                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback, no material logs yet</p>
+                    </>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls} htmlFor="fin-act-travel">Travel ($)</label>
@@ -477,6 +486,22 @@ export function ProjectFinancialsEditor({
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm tabular-nums">
+          <span><span className="text-gray-500">Total cost </span><span className="font-semibold text-gray-900">{formatCurrency(totals.costCents)}</span></span>
+          {totals.marginCents != null && (
+            <span>
+              <span className="text-gray-500">Margin </span>
+              <span className={`font-semibold ${totals.marginCents < 0 ? "text-red-600" : "text-gray-900"}`}>{formatCurrency(totals.marginCents)}</span>
+              {totals.contractValueCents ? (
+                <span className="ml-1 text-xs text-gray-400">{Math.round((totals.marginCents / totals.contractValueCents) * 100)}%</span>
+              ) : null}
+            </span>
+          )}
+          <span className="text-xs text-gray-400">
+            Labor, contractors, materials and travel{qualifyingCoCount > 0 ? ", change orders included" : ""}. Same numbers as the Projects table.
+          </span>
         </div>
 
         {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}

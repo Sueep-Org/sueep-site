@@ -6,6 +6,7 @@ import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { PROJECTS_LIST_URL_STORAGE_KEY } from "@/lib/erp/projectsListUrl";
 import { ProjectsExpandableTable, type ProjectTableRow } from "./ProjectsExpandableTable";
 import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandableTable";
+import { isBilledStatus } from "@/lib/erp/billingStatus";
 
 type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
 type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
@@ -102,7 +103,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
   }
 
   function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {
-    if (lc === "BILLING") return row.billingStatus === "BILLING";
+    if (lc === "BILLING") return isBilledStatus(row.billingStatus);
     return getLifecycle(row) === lc;
   }
 

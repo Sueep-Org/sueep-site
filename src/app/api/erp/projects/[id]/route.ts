@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isPaidStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { getErpAuth, canOverrideQualityChecklist, canEditPricing } from "@/lib/erpAuth";
@@ -11,7 +12,6 @@ import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import type { ErpRole } from "@/lib/erpSession";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
-const BILLING_STATUSES = ["BILLING", "INACTIVE", "INVOICE_PAID", "NOT_BILLED", "BILLED", "PAID"] as const;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -109,12 +109,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (STATUSES.includes(s as (typeof STATUSES)[number])) data.status = s;
   }
   if (body.billingStatus !== undefined) {
-    if (body.billingStatus === null || body.billingStatus === "") {
-      data.billingStatus = null;
-    } else {
-      const b = String(body.billingStatus).toUpperCase();
-      if (BILLING_STATUSES.includes(b as (typeof BILLING_STATUSES)[number])) data.billingStatus = b;
-    }
+    // Old spellings are still accepted, but only the standard words are saved.
+    const b = parseBillingStatus(body.billingStatus);
+    if (b) data.billingStatus = b;
   }
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
@@ -185,7 +182,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // must NOT auto-mark it paid. billingStatus has to be set explicitly.
   //
   // The inverse does hold, though: billingStatus values that unambiguously
-  // mean "fully invoiced" (PAID/BILLED/INVOICE_PAID) should default
+  // mean "fully invoiced" (BILLED or PAID) should default
   // percentInvoiced to 100 when this request doesn't already specify it —
   // this is what keeps the Janitorial/Recurring billing tabs' direct-PATCH
   // fallback (no turnoverRequestId to sync through) from leaving
@@ -193,7 +190,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (
     body.percentInvoiced === undefined &&
     typeof data.billingStatus === "string" &&
-    ["PAID", "BILLED", "INVOICE_PAID"].includes(data.billingStatus)
+    data.billingStatus !== "NOT_BILLED"
   ) {
     data.percentInvoiced = 100;
   }
@@ -201,10 +198,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // Stamp billingCompletedAt the first time billingStatus becomes paid via a
   // manual edit — same rule the SOV/turnover-request sync paths follow, so
   // commission gating/year-bucketing has a signal regardless of which path
-  // marked it paid. Fully billed isn't enough. Accepts "PAID" alongside the
-  // canonical "INVOICE_PAID" — see BILLING_STATUSES above.
+  // marked it paid. Fully billed isn't enough.
   const nextBillingStatus = data.billingStatus !== undefined ? (data.billingStatus as string | null) : existing.billingStatus;
-  if ((nextBillingStatus === "INVOICE_PAID" || nextBillingStatus === "PAID") && !existing.billingCompletedAt) {
+  if (isPaidStatus(nextBillingStatus) && !existing.billingCompletedAt) {
     data.billingCompletedAt = new Date();
   }
 

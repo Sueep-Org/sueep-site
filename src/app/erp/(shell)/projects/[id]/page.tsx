@@ -6,7 +6,8 @@ import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityCheckli
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
-import { calcOtSplits, otLineCents } from "@/lib/erp/calcOtSplits";
+import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
+import { computeProjectActualsWithChangeOrders, changeOrderValueCents, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
@@ -119,7 +120,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     prisma.projectChangeOrder.findMany({
       where: { projectId: id },
       orderBy: { createdAt: "desc" },
-      include: { laborers: { orderBy: { createdAt: "asc" } } },
+      include: {
+        laborers: { orderBy: { createdAt: "asc" } },
+        materialEntries: { select: { costCents: true } },
+        contractorAssignments: { select: { costCents: true } },
+      },
     }),
     prisma.materialEntry.findMany({
       where: { projectId: id },
@@ -296,20 +301,29 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     ? stripDescLines(project.description, ["Property", "Units"])
     : project.description;
 
-  const contractorCostCents = project.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
-  const laborOtSplits = await calcOtSplits(
-    project.laborEntries.map((e) => ({
-      id: e.id,
-      employeeId: e.employeeId,
-      workDate: e.workDate,
-      hours: e.hours,
-      createdAt: e.createdAt,
-    }))
+  // Costs and margin come from the one shared calculation (projectMargin.ts),
+  // the same numbers the Projects table, dashboard, commission and Finance
+  // tab show for this project.
+  const lineCosts = await costLaborLogs(
+    project.laborEntries,
+    changeOrders.flatMap((co) => co.laborers.map((l) => ({ ...l, workerName: l.name }))),
   );
-  const laborCentsFromLogs = project.laborEntries.reduce((s, e) => {
-    const split = laborOtSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
-    return s + otLineCents(split.regHours, split.otHours, e.hourlyRateCents);
-  }, 0);
+  const actuals = (await computeProjectActualsWithChangeOrders(
+    [{
+      id: project.id,
+      contractValueCents: project.contractValueCents,
+      actualLaborCents: project.actualLaborCents,
+      actualMaterialCents: project.actualMaterialCents,
+      actualTravelCents: project.actualTravelCents,
+      laborEntries: project.laborEntries,
+      materialEntries,
+      contractorAssignments: project.contractorAssignments,
+      changeOrders,
+    }],
+    lineCosts,
+  )).get(project.id)!;
+  const contractorCostCents = actuals.base.contractorCents;
+  const laborCentsFromLogs = sumLineCosts(project.laborEntries, lineCosts);
   const hoursFromLogs = project.laborEntries.reduce((s, e) => s + e.hours, 0);
   // Actual days worked = distinct calendar dates with a labor log, not a
   // simple date-span — a project can run for weeks without being worked every day.
@@ -334,7 +348,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     : [];
 
   const laborRows = project.laborEntries.map((e) => {
-    const split = laborOtSplits.get(e.id) ?? { regHours: e.hours, otHours: 0 };
+    const cost = lineCosts.get(e.id);
+    const split = cost ? { regHours: cost.regHours, otHours: cost.otHours } : { regHours: e.hours, otHours: 0 };
     return {
       id: e.id,
       employeeId: e.employeeId,
@@ -360,11 +375,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   // contractValueCents is only set once a CO's final value is confirmed;
   // until then, fall back to its estimatedCostCents so a CO with just an
   // estimate still counts instead of silently showing as $0.
-  const qualifyingChangeOrders = changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
-  const qualifyingCoContractValueCents = qualifyingChangeOrders.reduce(
-    (s, co) => s + (co.contractValueCents ?? co.estimatedCostCents ?? 0),
-    0
-  );
+  const qualifyingChangeOrders = changeOrders.filter(isQualifyingChangeOrder);
+  const qualifyingCoContractValueCents = qualifyingChangeOrders.reduce((s, co) => s + changeOrderValueCents(co), 0);
 
   const changeOrderRows = changeOrders.map((co) => ({
     id: co.id,
@@ -572,6 +584,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             daysFromLogs={daysFromLogs}
             qualifyingCoContractValueCents={qualifyingCoContractValueCents}
             qualifyingCoCount={qualifyingChangeOrders.length}
+            materialCentsFromLogs={actuals.base.materialFromLogs ? actuals.base.materialCents : null}
+            totals={{
+              contractValueCents: actuals.contractValueCents,
+              costCents: actuals.actualLaborCents + actuals.actualMaterialCents + actuals.actualTravelCents,
+              marginCents: actuals.marginCents,
+            }}
           />
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
