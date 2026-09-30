@@ -66,6 +66,34 @@ export function changeOrderValueCents(co: { contractValueCents: number | null; e
   return co.contractValueCents ?? co.estimatedCostCents ?? 0;
 }
 
+export type ChangeOrderActuals = {
+  valueCents: number;
+  /** Labor (logs, or the typed-in total when there are none) plus contractors. */
+  laborCents: number;
+  /** Part of laborCents: contractor assignments. */
+  contractorCents: number;
+  /** False when the typed-in labor total was used because there are no labor logs. */
+  laborFromLogs: boolean;
+  materialCents: number;
+  travelCents: number;
+};
+
+/** One change order's value and actual cost, by the same rules as its
+ * project (so the pieces always add up to computeProjectActualsWithChangeOrders). */
+export function changeOrderActuals(co: ChangeOrderLine, costs: Map<string, LineCost>): ChangeOrderActuals {
+  const laborFromLogs = co.laborers.length > 0;
+  const labor = laborFromLogs ? sumLineCosts(co.laborers, costs) : (co.actualLaborCents ?? 0);
+  const contractorCents = co.contractorAssignments.reduce((s, a) => s + (a.costCents ?? 0), 0);
+  return {
+    valueCents: changeOrderValueCents(co),
+    laborCents: labor + contractorCents,
+    contractorCents,
+    laborFromLogs,
+    materialCents: co.materialEntries.length > 0 ? co.materialEntries.reduce((s, e) => s + e.costCents, 0) : (co.actualMaterialCents ?? 0),
+    travelCents: co.actualTravelCents ?? 0,
+  };
+}
+
 /**
  * The one definition of a project's actual cost and margin: labor priced by
  * the shared labor cost rule (laborCost.ts), contractor cost, materials, and
@@ -108,12 +136,10 @@ export async function computeProjectActualsWithChangeOrders(
     let coMaterialCents = 0;
     let coTravelCents = 0;
     for (const co of qualifyingCOs) {
-      const lab = co.laborers.length > 0 ? sumLineCosts(co.laborers, costs) : (co.actualLaborCents ?? 0);
-      const contractor = co.contractorAssignments.reduce((cs, a) => cs + (a.costCents ?? 0), 0);
-      const mat = co.materialEntries.length > 0 ? co.materialEntries.reduce((ms, e) => ms + e.costCents, 0) : (co.actualMaterialCents ?? 0);
-      coLaborCents += lab + contractor;
-      coMaterialCents += mat;
-      coTravelCents += co.actualTravelCents ?? 0;
+      const c = changeOrderActuals(co, costs);
+      coLaborCents += c.laborCents;
+      coMaterialCents += c.materialCents;
+      coTravelCents += c.travelCents;
     }
 
     const contractValueCents =

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseBillingStatus } from "@/lib/erp/billingStatus";
+import { normalizeBillingStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
@@ -77,6 +77,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
         return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
       }
       data.billingStatus = bs;
+      // Paid date for the Finance tab: stamped when it becomes paid, left
+      // alone when it's saved as paid again, cleared when it's moved back.
+      if (bs === "PAID") {
+        if (normalizeBillingStatus(existing.billingStatus) !== "PAID") data.paidAt = new Date();
+      } else {
+        data.paidAt = null;
+      }
       // Being marked paid is a strong enough signal that the work itself is
       // done too, auto-complete the CO's own status so it doesn't drift
       // (billingStatus=PAID with status stuck at an earlier stage used to

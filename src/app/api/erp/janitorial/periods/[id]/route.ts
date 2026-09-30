@@ -22,7 +22,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const data: { billingStatus?: string; amountCents?: number } = {};
+  const data: { billingStatus?: string; amountCents?: number; paidAt?: Date | null } = {};
 
   if (body.billingStatus !== undefined) {
     const status = String(body.billingStatus).toUpperCase();
@@ -30,6 +30,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid billing status" }, { status: 400 });
     }
     data.billingStatus = status;
+    // Paid date for the Finance tab: stamped when it becomes PAID, left alone
+    // when it's saved as PAID again, cleared when it's moved back.
+    const current = await prisma.recurringContractPeriod.findUnique({ where: { id }, select: { billingStatus: true } });
+    if (status === "PAID") {
+      if (current?.billingStatus !== "PAID") data.paidAt = new Date();
+    } else {
+      data.paidAt = null;
+    }
   }
   if (body.amount !== undefined) {
     if (!canManageJanitorial(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
