@@ -150,7 +150,36 @@ function BillingCard({ parts, future }: { parts: { label: string; cents: number;
         <p className="text-xs text-gray-500">Future</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{short(futureCents)}</p>
         <p className="mt-0.5 text-xs text-gray-400">sold, not finished</p>
-        {reviewCents > 0 && <p className="text-xs text-amber-700">{short(reviewCents)} needs review</p>}
+        {reviewCents > 0 && (
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs text-amber-700">{short(reviewCents)} needs review</p>
+            <details className="relative">
+              <summary
+                className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full bg-amber-50 text-[10px] font-semibold text-amber-700 hover:bg-amber-100"
+                title="See which projects need review"
+              >
+                !
+              </summary>
+              <div className="absolute right-0 z-10 mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 shadow-lg">
+                <p className="font-medium text-gray-900">May be finished or stale</p>
+                <p className="mt-0.5 text-gray-500">Update each project&apos;s status or dates to fix Future.</p>
+                <ul className="mt-2 space-y-0.5">
+                  {[...review].sort((a, b) => b.valueCents - a.valueCents).map((j) => (
+                    <li key={j.id}>
+                      <Link href={`/erp/projects/${j.id}`} className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1 hover:bg-gray-50">
+                        <span className="min-w-0">
+                          <span className="block truncate text-gray-800" title={j.title}>{j.title}</span>
+                          <span className="block text-gray-400">{j.reviewReason}</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-gray-900" title={money(j.valueCents)}>{short(j.valueCents)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          </div>
+        )}
       </div>
     </div>
   );
