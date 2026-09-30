@@ -19,6 +19,7 @@ import { BillingOverview } from "./billing/billing-overview";
 import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 import { JanitorialGettingStarted } from "./janitorial/getting-started";
+import { FinanceDashboard } from "./finance/finance-dashboard";
 
 export type ArticleEntry = {
   slug: string;
@@ -200,5 +201,14 @@ export const registry: ArticleEntry[] = [
     order: 1,
     component: JanitorialContracts,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "finance/finance-dashboard",
+    title: "Finance Dashboard",
+    category: "Finance",
+    description: "What each number on the dashboard's Finance tab means and how it's calculated: revenue, costs, net profit, billed vs paid, and future revenue.",
+    order: 1,
+    component: FinanceDashboard,
+    roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
   },
 ];

@@ -107,11 +107,11 @@ function mondayOf(d: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-type PageProps = { searchParams: Promise<{ tab?: string; period?: string }> };
+type PageProps = { searchParams: Promise<{ tab?: string; period?: string; by?: string }> };
 
 export default async function ErpDashboardPage({ searchParams }: PageProps) {
   try {
-    const { tab: tabParam, period } = await searchParams;
+    const { tab: tabParam, period, by } = await searchParams;
     const auth = await getErpAuth();
     const role = auth?.role ?? "EMPLOYEE";
     const email = auth?.email ?? "";
@@ -161,7 +161,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
           <DashboardTabs tabs={financeTabs} active={financeTab} />
-          {financeTab === "finance" ? <FinanceTab period={period} /> : (
+          {financeTab === "finance" ? <FinanceTab period={period} by={by} /> : (
           <div className="grid gap-3 sm:grid-cols-2">
             {[
               { href: "/erp/billing", label: "Billing", title: "Project Billing", dot: "bg-emerald-400" },
@@ -660,7 +660,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       return (
         <div className="space-y-6">
           {adminHeader}
-          <FinanceTab period={period} />
+          <FinanceTab period={period} by={by} />
         </div>
       );
     }

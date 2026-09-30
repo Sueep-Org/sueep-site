@@ -503,6 +503,10 @@ model RecurringContractPeriod {
   amountCents   Int    @default(0)
   /// NOT_BILLED | BILLED | PAID
   billingStatus String @default("NOT_BILLED")
+  /// Stamped when billingStatus becomes PAID, cleared if it's moved back.
+  /// The Finance tab's "Paid" view counts the month's revenue here. Months
+  /// paid before this existed have none and fall back to periodStart.
+  paidAt DateTime?
 
   /// Recurring-contract commission (5% of ACV months 1-12, 2% months
   /// 13-24, $0 after) is computed at read time from amountCents and
@@ -797,6 +801,10 @@ model ProjectChangeOrder {
   /// ProjectDayAssignment.changeOrders) to show up.
   endDate             DateTime?
   billingStatus       String?
+  /// Stamped when billingStatus becomes PAID, cleared if it's moved back.
+  /// The Finance tab's "Paid" view counts the change order here. Ones
+  /// paid before this existed have none and fall back to completedAt.
+  paidAt              DateTime?
   percentInvoiced     Int       @default(0)
   completedAt         DateTime?
   estimatedCostCents  Int?
