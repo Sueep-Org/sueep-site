@@ -64,6 +64,27 @@ function BuildingIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
+/** A leaning broom: handle, binding, and bristles, tilted like it's sweeping. */
+function BroomIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <g transform="rotate(35 12 12)" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2.5V12" />
+        <rect x="9.75" y="12" width="4.5" height="2.5" rx="0.5" />
+        <path d="M9.75 14.5L7 21h10l-2.75-6.5" />
+        <path d="M10.75 17.25l-.5 3.75M13.25 17.25l.5 3.75" />
+      </g>
+    </svg>
+  );
+}
+
 function FolderIcon({ className = iconCls }: IconProps) {
   return (
     <svg
@@ -447,7 +468,7 @@ const projectGroupItems: NavItem[] = [
     icon: PlusCircleIcon,
   },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
-  { href: "/erp/janitorial", label: "Janitorial Contracts", roles: FINANCE_UP, icon: BuildingIcon },
+  { href: "/erp/janitorial", label: "Janitorial Contracts", roles: FINANCE_UP, icon: BroomIcon },
 ];
 
 const billingGroupItems: NavItem[] = [
