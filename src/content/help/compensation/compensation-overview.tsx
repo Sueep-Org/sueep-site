@@ -48,6 +48,17 @@ export function CompensationOverview() {
               janitorial hours, and their row shows a red <strong>No janitorial schedule set</strong> warning. Any other employee who works janitorial shifts has those
               hours added to their hourly pay the same way.
             </LI>
+            <LI>
+              <strong>+ Add hours</strong> (right of the filters) is for hourly work that isn&apos;t on a project, a change
+              order, or a janitorial shift, like an office or software intern. Pick the person, then either{" "}
+              <strong>One day</strong> (a date and hours) or <strong>Date range</strong> (from, to, and the total hours), plus
+              an optional note. A date range splits the total evenly across its working days, Monday to Friday only (80 hours
+              over two weeks is 8 hours a day), with any rounding on the last day so it adds up exactly. They&apos;re paid at the person&apos;s hourly rate that day (from their pay history) and count
+              toward their 40 hour week with any other hours, so overtime works the same way. The row shows{" "}
+              <strong>X manual hrs</strong> under the hours; click it to see each entry or <strong>Remove</strong> one. A date
+              range shows as one line and is removed as a whole.
+              Adding or removing hours in a closed period shows up in that period&apos;s list of changes after closing.
+            </LI>
           </UL>
           <Callout type="info">
             The gear icon (top right) lets you change the <strong>pay period anchor</strong> date
@@ -89,8 +100,16 @@ export function CompensationOverview() {
               in the top right of each rep panel.
             </LI>
             <LI>
-              Toggle the <strong>Paid / Not paid</strong> pill on a row once that rep has actually
-              been paid their commission for it.
+              Click the <strong>Not paid</strong> pill on a row once that rep has actually been paid
+              their commission for it, then pick when it was paid: <strong>This pay period</strong>,{" "}
+              <strong>Last pay period</strong>, or any date. The commission shows on the payroll for the
+              pay period that date falls in, so commission paid on an earlier check but only marked now
+              can be dated back and won&apos;t land on the next payroll. If that period is already
+              closed, you&apos;ll see a warning and it is listed there as a change.
+            </LI>
+            <LI>
+              Click a <strong>Paid</strong> pill (it shows the paid date) to change the date or mark it
+              not paid.
             </LI>
           </UL>
           <Callout type="info">

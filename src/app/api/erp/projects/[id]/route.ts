@@ -9,6 +9,7 @@ import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
+import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 import type { ErpRole } from "@/lib/erpSession";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
@@ -171,7 +172,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       body.estimatedDays === null || body.estimatedDays === "" ? null : Math.round(Number(body.estimatedDays));
   }
   if (body.commissionPaid !== undefined) {
-    data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+    // commissionPaidOn (YYYY-MM-DD) lets Finance record when it was actually
+    // paid, which decides the payroll period it lands in. Defaults to now.
+    data.commissionPaidAt = body.commissionPaid ? (paidDayToTimestamp(body.commissionPaidOn) ?? new Date()) : null;
   }
   if (body.commissionEmployeeId !== undefined) {
     data.commissionEmployeeId = body.commissionEmployeeId ? String(body.commissionEmployeeId).trim() : null;

@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useConfirm, useToast } from "@/app/erp/components/ui";
+import { Modal, useConfirm, useToast } from "@/app/erp/components/ui";
+import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
+import { splitHoursOverWorkingDays } from "@/lib/erp/manualHours";
+import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "@/lib/erp/payPeriods";
 
 type PayrollRow = {
   isContractor: boolean;
@@ -27,7 +30,11 @@ type PayrollRow = {
   noJanitorialSchedule?: boolean;
   commissionCents: number;
   commissionBreakdown: { label: string; amountCents: number }[];
+  /** Hours added by hand (work not on a project), so they can be removed. */
+  manualEntries?: { id: string; date: string; hours: number; note: string | null; batchId?: string | null }[];
 };
+
+const manualInputCls = "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 
 type PayFilter = "all" | "hourly" | "salary" | "janitorial" | "contractor";
 
@@ -48,23 +55,6 @@ type PayrollResponse = {
   /** What the records say now vs. what was saved, for a closed period. */
   changes: PayrollChange[];
 };
-
-const DEFAULT_ANCHOR = "2024-01-01";
-const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
-
-function anchorDate(iso: string): Date {
-  return new Date(`${iso}T00:00:00Z`);
-}
-
-function biweeklyIndex(date: Date, anchor: Date): number {
-  return Math.floor((date.getTime() - anchor.getTime()) / TWO_WEEKS_MS);
-}
-
-function biweeklyRange(index: number, anchor: Date): { start: Date; end: Date } {
-  const start = new Date(anchor.getTime() + index * TWO_WEEKS_MS);
-  const end = new Date(start.getTime() + TWO_WEEKS_MS - 1);
-  return { start, end };
-}
 
 function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -223,12 +213,35 @@ function SettingsPopover({
   );
 }
 
-export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
+/** Manual hours as listed on a row: one line per day, or one per date range entered together. */
+type ManualGroup = { id: string; batchId: string | null; label: string; hours: number; days: number; note: string | null };
+
+function shortDay(iso: string): string {
+  return new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function groupManualEntries(entries: NonNullable<PayrollRow["manualEntries"]>): ManualGroup[] {
+  const groups = new Map<string, { batchId: string | null; dates: string[]; hours: number; note: string | null; id: string }>();
+  for (const e of entries) {
+    const key = e.batchId ?? `day:${e.id}`;
+    const g = groups.get(key) ?? { batchId: e.batchId ?? null, dates: [], hours: 0, note: e.note, id: e.id };
+    g.dates.push(e.date);
+    g.hours += e.hours;
+    groups.set(key, g);
+  }
+  return [...groups.values()].map((g) => {
+    const dates = g.dates.sort();
+    const label = dates.length > 1 ? `${shortDay(dates[0])} to ${shortDay(dates[dates.length - 1])}` : shortDay(dates[0]);
+    return { id: g.id, batchId: g.batchId, label, hours: Math.round(g.hours * 100) / 100, days: dates.length, note: g.note };
+  });
+}
+
+export function PayrollView({ canReopen = false, employees = [] }: { canReopen?: boolean; employees?: EmployeeOption[] }) {
   const confirm = useConfirm();
   const toast = useToast();
   const [reloadKey, setReloadKey] = useState(0);
   const [closing, setClosing] = useState(false);
-  const [anchorISO, setAnchorISO] = useState(DEFAULT_ANCHOR);
+  const [anchorISO, setAnchorISO] = useState(DEFAULT_PAYROLL_ANCHOR);
   const [anchorLoaded, setAnchorLoaded] = useState(false);
 
   const [periodIndex, setPeriodIndex] = useState(0);
@@ -237,6 +250,10 @@ export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
   const [error, setError] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [search, setSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ mode: "day" as "day" | "range", employeeId: "", date: "", from: "", to: "", hours: "", note: "" });
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -249,7 +266,7 @@ export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
         setAnchorLoaded(true);
       })
       .catch(() => {
-        setPeriodIndex(biweeklyIndex(new Date(), anchorDate(DEFAULT_ANCHOR)));
+        setPeriodIndex(biweeklyIndex(new Date(), anchorDate(DEFAULT_PAYROLL_ANCHOR)));
         setAnchorLoaded(true);
       });
   }, []);
@@ -326,6 +343,52 @@ export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
   }
 
   const periodHasEnded = toISO(end) < toISO(new Date());
+
+  function openAddHours() {
+    // Default to today when it's in this period, otherwise the period's last day.
+    const today = toISO(new Date());
+    const date = today >= toISO(start) && today <= toISO(end) ? today : toISO(end);
+    // A range starts as the whole pay period (e.g. 80 hours over these two weeks).
+    setAddForm({ mode: "day", employeeId: "", date, from: toISO(start), to: toISO(end), hours: "", note: "" });
+    setAddError("");
+    setAddOpen(true);
+  }
+
+  async function saveManualHours() {
+    setAdding(true);
+    setAddError("");
+    try {
+      const res = await fetch("/api/erp/payroll/manual-hours", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          addForm.mode === "range"
+            ? { employeeId: addForm.employeeId, from: addForm.from, to: addForm.to, hours: addForm.hours, note: addForm.note }
+            : { employeeId: addForm.employeeId, date: addForm.date, hours: addForm.hours, note: addForm.note },
+        ),
+      });
+      const result = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setAddError(result.error ?? "Could not add the hours"); return; }
+      toast("Hours added.", "success");
+      setAddOpen(false);
+      setReloadKey((k) => k + 1);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function removeManualHours(group: ManualGroup, name: string) {
+    const ok = await confirm({
+      message: group.batchId
+        ? `Remove all ${fmtHours(group.hours)} manual hours for ${name} from ${group.label}? This removes every day of that range, including any in another pay period.`
+        : `Remove ${fmtHours(group.hours)} manual hours for ${name} on ${group.label}?`,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/erp/payroll/manual-hours?${group.batchId ? `batchId=${group.batchId}` : `id=${group.id}`}`, { method: "DELETE" });
+    if (!res.ok) { toast("Could not remove the hours", "error"); return; }
+    toast("Hours removed.", "success");
+    setReloadKey((k) => k + 1);
+  }
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
     if (payFilter === "hourly") return !r.isContractor && r.payType !== "SALARY" && r.payType !== "JANITORIAL";
@@ -421,8 +484,120 @@ export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={openAddHours}
+            className="ml-auto rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            title="Add hours for hourly work that isn't on a project"
+          >
+            + Add hours
+          </button>
         </div>
       </div>
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} size="md">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => { e.preventDefault(); saveManualHours(); }}
+        >
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Add hours</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              For hourly work that isn&apos;t on a project, like office or software work. Paid at the person&apos;s
+              hourly rate that day and counted toward their 40 hour week with any other hours.
+            </p>
+          </div>
+          <label className="block text-xs font-medium text-gray-600">
+            Person
+            <EmployeeCombobox employees={employees} value={addForm.employeeId} onChange={(id) => setAddForm((f) => ({ ...f, employeeId: id }))} />
+          </label>
+          <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-medium">
+            {([["day", "One day"], ["range", "Date range"]] as const).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAddForm((f) => ({ ...f, mode }))}
+                className={`rounded-md px-3 py-1 transition ${addForm.mode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {addForm.mode === "day" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-xs font-medium text-gray-600">
+                Date
+                <input type="date" required min={toISO(start)} max={toISO(end)} value={addForm.date}
+                  onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))} className={manualInputCls} />
+              </label>
+              <label className="block text-xs font-medium text-gray-600">
+                Hours
+                <input type="number" required min="0.25" max="24" step="0.25" value={addForm.hours}
+                  onChange={(e) => setAddForm((f) => ({ ...f, hours: e.target.value }))} className={manualInputCls} />
+              </label>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs font-medium text-gray-600">
+                  From
+                  <input type="date" required min={toISO(start)} max={toISO(end)} value={addForm.from}
+                    onChange={(e) => setAddForm((f) => ({ ...f, from: e.target.value }))} className={manualInputCls} />
+                </label>
+                <label className="block text-xs font-medium text-gray-600">
+                  To
+                  <input type="date" required min={addForm.from || toISO(start)} max={toISO(end)} value={addForm.to}
+                    onChange={(e) => setAddForm((f) => ({ ...f, to: e.target.value }))} className={manualInputCls} />
+                </label>
+              </div>
+              <label className="block text-xs font-medium text-gray-600">
+                Total hours
+                <input type="number" required min="0.25" step="0.25" value={addForm.hours}
+                  onChange={(e) => setAddForm((f) => ({ ...f, hours: e.target.value }))} className={manualInputCls} />
+              </label>
+              {(() => {
+                const validRange = !!addForm.from && !!addForm.to && addForm.to >= addForm.from;
+                const days = validRange ? splitHoursOverWorkingDays(addForm.from, addForm.to, 1).length : 0;
+                const split = validRange ? splitHoursOverWorkingDays(addForm.from, addForm.to, Number(addForm.hours)) : [];
+                if (days === 0) return <p className="text-xs text-red-600">No working days (Monday to Friday) in that range.</p>;
+                if (split.length === 0) return <p className="text-xs text-gray-500">Split across {days} working day{days === 1 ? "" : "s"} (Monday to Friday).</p>;
+                const first = split[0].hours;
+                const last = split[split.length - 1].hours;
+                return (
+                  <p className="text-xs text-gray-600">
+                    {split.length} working day{split.length === 1 ? "" : "s"} (Monday to Friday),{" "}
+                    <strong>{fmtHours(first)} hrs a day</strong>
+                    {last !== first ? ` (${fmtHours(last)} on the last day so it adds up)` : ""}.
+                  </p>
+                );
+              })()}
+            </div>
+          )}
+          <label className="block text-xs font-medium text-gray-600">
+            Note <span className="font-normal text-gray-400">(optional)</span>
+            <input
+              type="text"
+              placeholder="e.g. Software work"
+              value={addForm.note}
+              onChange={(e) => setAddForm((f) => ({ ...f, note: e.target.value }))}
+              className={manualInputCls}
+            />
+          </label>
+          {addError && <p className="text-xs text-red-600">{addError}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setAddOpen(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={adding || !addForm.employeeId}
+              className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"
+            >
+              {adding ? "Adding..." : "Add hours"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Closed (paid) period: saved numbers, plus anything changed since */}
       {data && !loading && (data.closed ? (
@@ -544,6 +719,24 @@ export function PayrollView({ canReopen = false }: { canReopen?: boolean }) {
                             See janitorial shifts
                           </Link>
                         </div>
+                      ) : null}
+                      {row.manualEntries?.length ? (
+                        <details className="text-left">
+                          <summary className="cursor-pointer text-right text-[11px] font-normal text-pink-600 hover:underline">
+                            {fmtHours(row.manualEntries.reduce((s, e) => s + e.hours, 0))} manual hrs
+                          </summary>
+                          <ul className="mt-1 space-y-0.5 text-[11px] font-normal text-gray-500">
+                            {groupManualEntries(row.manualEntries).map((g) => (
+                              <li key={g.batchId ?? g.id} className="flex items-center justify-end gap-2">
+                                <span className="truncate">{g.label}{g.note ? `, ${g.note}` : ""}</span>
+                                <span className="tabular-nums">{fmtHours(g.hours)}h{g.days > 1 ? ` over ${g.days} days` : ""}</span>
+                                <button type="button" onClick={() => removeManualHours(g, row.name)} className="text-gray-400 hover:text-red-600" aria-label="Remove these hours">
+                                  Remove
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">

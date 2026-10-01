@@ -206,9 +206,9 @@ function CommissionCard({ earned, paid, owedAll, periodLabel }: { earned: Commis
   const rows = [...people.values()].sort((a, b) => b.owed - a.owed || b.earned - a.earned);
   const sum = (list: CommissionItem[]) => list.reduce((s, i) => s + i.cents, 0);
   const totals = [
-    { label: "Earned", cents: sum(earned), hint: `Commission that became due in ${periodLabel}: a deal once it and its change orders are paid, a janitorial month once it's paid, a bid bonus for its week` },
-    { label: "Paid", cents: sum(paid), hint: `Commission and bid bonuses marked paid in ${periodLabel} (the Commission line in Where the money went)` },
-    { label: "Owed now", cents: sum(owedAll), hint: "Earned but not marked paid yet, from any date" },
+    { label: "Earned (these dates)", cents: sum(earned), hint: `Commission that became due in ${periodLabel}: a deal once it and its change orders are paid, a janitorial month once it's paid, a bid bonus for its week` },
+    { label: "Paid (these dates)", cents: sum(paid), hint: `Commission and bid bonuses marked paid in ${periodLabel} (the Commission line in Where the money went)` },
+    { label: "Owed (all time)", cents: sum(owedAll), hint: "Earned but not marked paid yet, from any date, so it can be more than Earned" },
   ];
   const cell = "py-2 text-right tabular-nums";
 
@@ -233,9 +233,9 @@ function CommissionCard({ earned, paid, owedAll, periodLabel }: { earned: Commis
           <thead>
             <tr className="text-xs text-gray-400">
               <th className="py-1.5 text-left font-medium">Person</th>
-              <th className="py-1.5 text-right font-medium">Earned</th>
-              <th className="py-1.5 text-right font-medium">Paid</th>
-              <th className="py-1.5 text-right font-medium">Owed now</th>
+              <th className="py-1.5 text-right font-medium">Earned (these dates)</th>
+              <th className="py-1.5 text-right font-medium">Paid (these dates)</th>
+              <th className="py-1.5 text-right font-medium">Owed (all time)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">

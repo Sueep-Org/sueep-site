@@ -6,6 +6,9 @@ import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { Modal } from "@/app/erp/components/ui";
+import { todayEasternKey } from "@/lib/erp/dates";
+import { payPeriodForDay, TWO_WEEKS_MS } from "@/lib/erp/payPeriods";
 
 export type CommissionDealRow = {
   projectId: string;
@@ -354,6 +357,157 @@ function RevenueLine({ revenueCents }: { revenueCents: number }) {
   );
 }
 
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function PaidBadge({ paidAt, disabled, onClick }: { paidAt: string | null; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={paidAt ? "Change paid date or mark not paid" : "Mark paid"}
+      className={`whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
+        paidAt
+          ? "border-emerald-300 bg-emerald-100 text-emerald-800"
+          : "border-gray-300 bg-gray-100 text-gray-600"
+      }`}
+    >
+      {paidAt ? `Paid ${formatShortDate(paidAt)}` : "Not paid"}
+    </button>
+  );
+}
+
+type PaidTarget =
+  | { kind: "deal"; ownerKey: string; row: CommissionDealRow }
+  | { kind: "recurring"; ownerKey: string; row: RecurringCommissionRow };
+
+function periodLabel(p: { start: Date; end: Date }): string {
+  return `${formatShortDate(p.start.toISOString())} to ${formatDate(p.end.toISOString())}`;
+}
+
+/**
+ * Marking commission paid asks when it was actually paid. Payroll puts a
+ * payout in whichever pay period its paid date falls in, so commission that
+ * went out on last period's check but is only being marked now can be
+ * dated back to that period instead of landing on the next payroll.
+ */
+function PaidDateModal({
+  target,
+  payrollAnchor,
+  closedPeriodStarts,
+  onClose,
+  onSave,
+}: {
+  target: PaidTarget | null;
+  payrollAnchor: string;
+  closedPeriodStarts: string[];
+  onClose: () => void;
+  onSave: (paidOn: string | null) => void;
+}) {
+  const today = todayEasternKey();
+  const [day, setDay] = useState(today);
+
+  useEffect(() => {
+    if (target) setDay(target.row.paidAt ? target.row.paidAt.slice(0, 10) : todayEasternKey());
+  }, [target]);
+
+  const thisPeriod = payPeriodForDay(today, payrollAnchor);
+  const lastPeriod = {
+    start: new Date(thisPeriod.start.getTime() - TWO_WEEKS_MS),
+    end: new Date(thisPeriod.start.getTime() - 1),
+  };
+  const lastPeriodDay = lastPeriod.end.toISOString().slice(0, 10);
+  const validDay = /^\d{4}-\d{2}-\d{2}$/.test(day);
+  const chosenPeriod = validDay ? payPeriodForDay(day, payrollAnchor) : null;
+  const chosenStart = chosenPeriod ? chosenPeriod.start.toISOString().slice(0, 10) : null;
+  const isClosed = chosenStart != null && closedPeriodStarts.includes(chosenStart);
+  const inThis = chosenStart === thisPeriod.start.toISOString().slice(0, 10);
+  const inLast = chosenStart === lastPeriod.start.toISOString().slice(0, 10);
+
+  const label = !target ? "" : target.kind === "deal" ? target.row.jobTitle : `${target.row.buildingName}, ${formatMonth(target.row.periodStart)}`;
+  const quickClass = (active: boolean) =>
+    `w-full rounded-md border px-3 py-2 text-left text-sm ${
+      active ? "border-pink-500 bg-pink-50 text-pink-800" : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+    }`;
+
+  return (
+    <Modal open={target != null} onClose={onClose} size="md">
+      {target ? (
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (validDay) onSave(day);
+          }}
+        >
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">When was this commission paid?</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {label} · {centsToDollars(target.row.commissionCents)}. It shows on the payroll for the pay period this date falls in.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <button type="button" onClick={() => setDay(today)} className={quickClass(inThis)}>
+              <span className="font-medium">This pay period</span>
+              <span className="ml-2 text-xs text-gray-500">{periodLabel(thisPeriod)}</span>
+            </button>
+            <button type="button" onClick={() => setDay(lastPeriodDay)} className={quickClass(inLast)}>
+              <span className="font-medium">Last pay period</span>
+              <span className="ml-2 text-xs text-gray-500">{periodLabel(lastPeriod)}</span>
+            </button>
+          </div>
+          <label className="block text-xs font-medium text-gray-600">
+            Paid on
+            <input
+              type="date"
+              required
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+            />
+          </label>
+          {chosenPeriod ? (
+            <p className="text-xs text-gray-600">
+              Goes on payroll for <span className="font-semibold">{periodLabel(chosenPeriod)}</span>.
+            </p>
+          ) : null}
+          {isClosed ? (
+            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              That pay period is already closed. Its saved payroll won&apos;t change, but this commission will be listed
+              there as a change since it was closed. It will not be added to the upcoming payroll.
+            </p>
+          ) : null}
+          <div className="flex items-center justify-between gap-2">
+            {target.row.paidAt ? (
+              <button
+                type="button"
+                onClick={() => onSave(null)}
+                className="rounded-md px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              >
+                Mark not paid
+              </button>
+            ) : <span />}
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!validDay}
+                className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"
+              >
+                {target.row.paidAt ? "Save date" : "Mark paid"}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : null}
+    </Modal>
+  );
+}
+
 function CombinedRowTr({
   row,
   buildingCell,
@@ -406,18 +560,7 @@ function CombinedRowTr({
         </td>
         <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
         <td className="px-3 py-2">
-          <button
-            type="button"
-            onClick={() => onTogglePaid(d)}
-            disabled={savingId === d.projectId}
-            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-              d.paidAt
-                ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                : "border-gray-300 bg-gray-100 text-gray-600"
-            }`}
-          >
-            {d.paidAt ? "Paid" : "Not paid"}
-          </button>
+          <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
         </td>
       </tr>
     );
@@ -439,18 +582,7 @@ function CombinedRowTr({
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
       <td className="px-3 py-2">
-        <button
-          type="button"
-          onClick={() => onToggleRecurringPaid(r)}
-          disabled={savingRecurringId === r.periodId}
-          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold disabled:opacity-50 ${
-            r.paidAt
-              ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-              : "border-gray-300 bg-gray-100 text-gray-600"
-          }`}
-        >
-          {r.paidAt ? "Paid" : "Not paid"}
-        </button>
+        <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
       </td>
     </tr>
   );
@@ -611,10 +743,14 @@ export function CommissionByRep({
   years,
   selectedYear,
   reps,
+  payrollAnchor,
+  closedPeriodStarts,
 }: {
   years: number[];
   selectedYear: number;
   reps: RepGroup[];
+  payrollAnchor: string;
+  closedPeriodStarts: string[];
 }) {
   const [dealsByOwner, setDealsByOwner] = useState<Record<string, CommissionDealRow[]>>(() =>
     Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.deals]))
@@ -625,16 +761,19 @@ export function CommissionByRep({
     Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.recurringRows]))
   );
   const [savingRecurringId, setSavingRecurringId] = useState<string | null>(null);
+  const [paidTarget, setPaidTarget] = useState<PaidTarget | null>(null);
 
   // Marking a combined row paid marks the project AND every change order
   // rolled into it together, in one action, they're always toggled in
   // lockstep now rather than separately (see includedChangeOrders).
-  async function setPaid(row: CommissionDealRow, ownerKey: string, paid: boolean) {
+  // paidOn is the "YYYY-MM-DD" it was paid, or null to mark it not paid.
+  async function setPaid(row: CommissionDealRow, ownerKey: string, paidOn: string | null) {
+    const paid = paidOn != null;
     setSavingId(row.projectId);
     setDealsByOwner((prev) => ({
       ...prev,
       [ownerKey]: prev[ownerKey].map((d) =>
-        d.projectId === row.projectId ? { ...d, paidAt: paid ? new Date().toISOString() : null } : d
+        d.projectId === row.projectId ? { ...d, paidAt: paid ? `${paidOn}T12:00:00.000Z` : null } : d
       ),
     }));
     try {
@@ -642,13 +781,13 @@ export function CommissionByRep({
         fetch(`/api/erp/projects/${row.projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ commissionPaid: paid, commissionCents: row.commissionCents }),
+          body: JSON.stringify({ commissionPaid: paid, commissionPaidOn: paidOn, commissionCents: row.commissionCents }),
         }),
         ...row.includedChangeOrders.map((co) =>
           fetch(`/api/erp/projects/${row.projectId}/change-orders/${co.id}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ commissionPaid: paid }),
+            body: JSON.stringify({ commissionPaid: paid, commissionPaidOn: paidOn }),
           })
         ),
       ]);
@@ -663,19 +802,20 @@ export function CommissionByRep({
     }
   }
 
-  async function setRecurringPaid(row: RecurringCommissionRow, ownerKey: string, paid: boolean) {
+  async function setRecurringPaid(row: RecurringCommissionRow, ownerKey: string, paidOn: string | null) {
+    const paid = paidOn != null;
     setSavingRecurringId(row.periodId);
     setRecurringByOwner((prev) => ({
       ...prev,
       [ownerKey]: prev[ownerKey].map((r) =>
-        r.periodId === row.periodId ? { ...r, paidAt: paid ? new Date().toISOString() : null } : r
+        r.periodId === row.periodId ? { ...r, paidAt: paid ? `${paidOn}T12:00:00.000Z` : null } : r
       ),
     }));
     try {
       const res = await fetch(`/api/erp/buildings/${row.buildingId}/recurring-contract/periods/${row.periodId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ commissionPaid: paid, commissionCents: row.commissionCents }),
+        body: JSON.stringify({ commissionPaid: paid, commissionPaidOn: paidOn, commissionCents: row.commissionCents }),
       });
       if (!res.ok) throw new Error("Failed to update");
     } catch {
@@ -716,16 +856,30 @@ export function CommissionByRep({
                   yearRevenueCents={group.yearRevenueCents}
                   deals={dealsByOwner[key] ?? []}
                   savingId={savingId}
-                  onTogglePaid={(row) => setPaid(row, key, !row.paidAt)}
+                  onTogglePaid={(row) => setPaidTarget({ kind: "deal", ownerKey: key, row })}
                   recurringRows={recurringByOwner[key] ?? []}
                   savingRecurringId={savingRecurringId}
-                  onToggleRecurringPaid={(row) => setRecurringPaid(row, key, !row.paidAt)}
+                  onToggleRecurringPaid={(row) => setPaidTarget({ kind: "recurring", ownerKey: key, row })}
                 />
               ),
             };
           })}
         />
       )}
+
+      <PaidDateModal
+        target={paidTarget}
+        payrollAnchor={payrollAnchor}
+        closedPeriodStarts={closedPeriodStarts}
+        onClose={() => setPaidTarget(null)}
+        onSave={(paidOn) => {
+          const t = paidTarget;
+          setPaidTarget(null);
+          if (!t) return;
+          if (t.kind === "deal") setPaid(t.row, t.ownerKey, paidOn);
+          else setRecurringPaid(t.row, t.ownerKey, paidOn);
+        }}
+      />
     </div>
   );
 }
