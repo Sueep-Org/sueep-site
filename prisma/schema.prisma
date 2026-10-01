@@ -1517,6 +1517,7 @@ model Employee {
   documents                    EmployeeDocument[]
   backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
   payRates                     EmployeePayRate[]
+  manualHours                  ManualHoursEntry[]
   timeOff                      EmployeeTimeOff[]
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
@@ -2406,4 +2407,32 @@ model ChangeOrderMaterialEntry {
 
   @@index([changeOrderId])
   @@index([usedOn])
+}
+
+/// Hours added by hand on the Payroll page for hourly work that isn't on a
+/// project, change order, or janitorial shift (e.g. an office or software
+/// intern). Paid at the person's hourly rate that day from their pay history,
+/// and counted toward the 40 hour week with their other hours.
+model ManualHoursEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC date label
+  workDate DateTime
+  hours    Float
+  note     String?
+  /// Who added it (ERP user email)
+  createdBy String?
+  /// Shared by the days of one date range entered together (total hours
+  /// split across its working days), so the range is listed and removed as
+  /// one. Null for a single day.
+  batchId   String?
+
+  @@index([employeeId])
+  @@index([workDate])
+  @@index([batchId])
 }

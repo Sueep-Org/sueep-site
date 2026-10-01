@@ -73,9 +73,11 @@ export function UploadingAContract() {
 
         <div id="Contract-Signing-How">
         <Step n={7} title="Contract Signing">
-          Click <strong>Upload PDF for e-signature</strong> to upload your contract.
+          Click <strong>Send for Signing</strong> (on projects and change orders) or{" "}
+          <strong>Upload PDF</strong> (on employees, contractors and candidates) to upload your contract.
           <Img src="/help/contracts/contract_1.png" alt="Upload PDF button" />
-          Once you&apos;ve chosen your file, click <strong>Open in DocuSeal</strong>.
+          Once you&apos;ve chosen your file, click <strong>Open in DocuSeal</strong> (called{" "}
+          <strong>Finish Sending in DocuSeal</strong> on projects and change orders).
           <Img src="/help/contracts/contract_2.png" alt="Open in DocuSeal button" />
           This is where you&apos;ll land in DocuSeal. Click <strong>Edit</strong>.
           <Img src="/help/contracts/contract_3.png" alt="DocuSeal template page" />
@@ -94,8 +96,10 @@ export function UploadingAContract() {
           Once they sign, refresh the page and you&apos;ll see the status change.
           <Img src="/help/contracts/contract_10.png" alt="Signed status" />
           You can also view and download the contract directly in DocuSeal, or click{" "}
-          <strong>Download signed copy</strong> once it&apos;s signed to get it from the ERP
-          instead.
+          <strong>Download</strong> to get it from the ERP instead. On projects and change orders
+          the Download button works at every stage, so you can grab the unsigned PDF before
+          it&apos;s sent, the in-progress copy while it&apos;s awaiting signature, and the signed
+          copy once it&apos;s done.
           <Img src="/help/contracts/contract_11.png" alt="View and download the contract" />
         </Step>
         </div>
@@ -103,8 +107,9 @@ export function UploadingAContract() {
         <Step n={8} title="Already have a signed contract?">
           If a contract was already signed outside DocuSeal (in person, or through another tool),
           you don&apos;t need to run it through DocuSeal at all. Click{" "}
-          <strong>Already signed? Upload it here</strong> instead, and the PDF is stored directly
-          with a Signed status.
+          <strong>Upload Signed</strong> (on projects and change orders) or{" "}
+          <strong>Already signed? Upload it here</strong> (everywhere else) instead, and the PDF
+          is stored directly with a Signed status.
           <Img src="/help/contracts/contracts.png" alt="View and download the contract" />
         </Step>
 

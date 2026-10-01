@@ -41,14 +41,17 @@ export async function POST(req: Request) {
       docusealSubmissionId: submission.id,
     };
 
-    const [coContract, empContract, contractorContract, candidateContract] = await Promise.all([
+    const [coContract, empContract, contractorContract, candidateContract, projectContract] = await Promise.all([
       prisma.changeOrderContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
       prisma.employeeContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
       prisma.contractorContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
       prisma.candidateContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
+      prisma.projectContract.findFirst({ where: { docusealTemplateId: templateId, signingStatus: "UPLOADED" }, select: { id: true } }),
     ]);
 
-    if (coContract) {
+    if (projectContract) {
+      await prisma.projectContract.update({ where: { id: projectContract.id }, data: { ...updateData, customerEmail: signerEmail } });
+    } else if (coContract) {
       await prisma.changeOrderContract.update({ where: { id: coContract.id }, data: { ...updateData, customerEmail: signerEmail } });
     } else if (empContract) {
       await prisma.employeeContract.update({ where: { id: empContract.id }, data: { ...updateData, signerEmail } });

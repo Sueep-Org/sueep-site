@@ -5,6 +5,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
 import { centsToDollars } from "@/lib/erp/money";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
+import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -157,7 +158,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
   if (body.commissionPaid !== undefined) {
-    data.commissionPaidAt = body.commissionPaid ? new Date() : null;
+    // commissionPaidOn (YYYY-MM-DD) lets Finance record when it was actually
+    // paid, which decides the payroll period it lands in. Defaults to now.
+    data.commissionPaidAt = body.commissionPaid ? (paidDayToTimestamp(body.commissionPaidOn) ?? new Date()) : null;
   }
   if (body.noCrewRequired !== undefined) data.noCrewRequired = body.noCrewRequired === true;
 

@@ -20,7 +20,7 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "SENT")
     return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700">Awaiting Signature</span>;
   if (status === "UPLOADED")
-    return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-yellow-100 text-yellow-700">Uploaded</span>;
+    return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-yellow-100 text-yellow-700">Not Sent Yet</span>;
   return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-yellow-100 text-yellow-700">{status}</span>;
 }
 
@@ -76,34 +76,21 @@ function ContractRow({
               View in DocuSeal →
             </a>
           )}
-          {contract.signingStatus === "SIGNED" && contract.signedDocumentUrl && (
-            contract.signedDocumentUrl.startsWith("data:") ? (
-              <a
-                href={contract.signedDocumentUrl}
-                download={contract.contractPdfFilename ?? "contract.pdf"}
-                className="text-xs font-medium text-pink-600 hover:underline"
-              >
-                Download →
-              </a>
-            ) : (
-              <a
-                href={contract.signedDocumentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-pink-600 hover:underline"
-              >
-                Download signed copy →
-              </a>
-            )
-          )}
-          {contract.signingStatus !== "SIGNED" && contract.docusealTemplateId && (
+          <a
+            href={`/api/erp/projects/${projectId}/contracts/${contract.id}`}
+            download={contract.contractPdfFilename ?? "contract.pdf"}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {contract.signingStatus === "SIGNED" ? "Download Signed" : "Download"}
+          </a>
+          {contract.signingStatus === "UPLOADED" && contract.docusealTemplateId && (
             <a
               href={`https://docuseal.com/templates/${contract.docusealTemplateId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500"
             >
-              Open in DocuSeal →
+              Finish Sending in DocuSeal →
             </a>
           )}
           <button
@@ -227,7 +214,7 @@ export function ProjectSigningSection({
   return (
     <div className="space-y-3">
       {contracts.length === 0 && (
-        <p className="text-sm text-gray-500">No contracts on file yet. Contracts are recorded here automatically when signed externally via the request form, or you can upload one below.</p>
+        <p className="text-sm text-gray-500">No contracts on file yet. Contracts are recorded here automatically when signed externally via the request form, or you can add one below.</p>
       )}
 
       {contracts.map((contract) => (
@@ -238,9 +225,9 @@ export function ProjectSigningSection({
         <div className="flex flex-wrap items-center gap-3">
           <label
             htmlFor="project-contract-upload"
-            className={`inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
           >
-            {uploading ? "Uploading…" : "Upload PDF for e-signature"}
+            {uploading ? "Uploading…" : "Send for Signing"}
           </label>
           <input
             id="project-contract-upload"
@@ -261,10 +248,13 @@ export function ProjectSigningSection({
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
               </svg>
-              Already signed? Upload it here
+              Upload Signed
             </button>
           )}
         </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Send for Signing: upload the unsigned PDF, then place fields and send it from DocuSeal. Upload Signed: the PDF is already signed.
+        </p>
         {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
 
         {!uploading && showPresigned && (

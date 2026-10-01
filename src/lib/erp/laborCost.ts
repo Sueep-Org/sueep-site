@@ -27,10 +27,11 @@ import { fixedPayHourlyCostCents, isFixedPay, loadPayHistories, payRateOn, type 
 export const OT_THRESHOLD_HOURS = 40;
 const OT_PREMIUM = 0.5;
 
-export type WorkSource = "project" | "changeOrder" | "janitorial";
+export type WorkSource = "project" | "changeOrder" | "janitorial" | "manual";
 
 export type WorkLine = {
-  /** Labor log id, change order laborer id, or `jan:<shift key>` for a janitorial shift. */
+  /** Labor log id, change order laborer id, `jan:<shift key>` for a janitorial
+   * shift, or `manual:<id>` for hours added by hand on the Payroll page. */
   id: string;
   source: WorkSource;
   employeeId: string | null;
@@ -39,7 +40,8 @@ export type WorkLine = {
   /** "YYYY-MM-DD" */
   dateKey: string;
   hours: number;
-  /** Rate typed on the log, in cents. Null for janitorial shifts (priced from pay history). */
+  /** Rate typed on the log, in cents. Null for janitorial shifts and manual
+   * hours (priced from pay history). */
   loggedRateCents: number | null;
   /** Tie-breaker for date order within a day. */
   createdAtMs: number;
@@ -133,6 +135,20 @@ export function janitorialWorkLine(r: ResolvedShiftHours): WorkLine {
   };
 }
 
+/** Hours added by hand on the Payroll page, as a work line. */
+export function manualWorkLine(e: { id: string; employeeId: string; workDate: Date; hours: number; createdAt: Date }): WorkLine {
+  return {
+    id: `manual:${e.id}`,
+    source: "manual",
+    employeeId: e.employeeId,
+    workerName: null,
+    dateKey: utcDateKey(e.workDate),
+    hours: e.hours,
+    loggedRateCents: null,
+    createdAtMs: e.createdAt.getTime(),
+  };
+}
+
 type LogLike = {
   id: string;
   employeeId: string | null;
@@ -158,7 +174,7 @@ function logLine(e: LogLike, source: WorkSource): WorkLine {
 }
 
 /** Every line of work for these workers in [start, end] (UTC-midnight labels,
- * inclusive): project logs, change order logs, and janitorial shifts. */
+ * inclusive): project logs, change order logs, janitorial shifts, and manual hours. */
 async function loadWorkLines(employeeIds: string[], workerNames: string[], start: Date, end: Date, preloadedJanitorial?: ResolvedShiftHours[]): Promise<WorkLine[]> {
   const endOfDay = new Date(end);
   endOfDay.setUTCHours(23, 59, 59, 999);
@@ -172,7 +188,7 @@ async function loadWorkLines(employeeIds: string[], workerNames: string[], start
   ];
   if (who.length === 0) return [];
 
-  const [projectLogs, coLogs, janitorial] = await Promise.all([
+  const [projectLogs, coLogs, janitorial, manual] = await Promise.all([
     prisma.laborEntry.findMany({
       where: { workDate: { gte: start, lte: endOfDay }, OR: who },
       select: { id: true, employeeId: true, workerName: true, workDate: true, hours: true, hourlyRateCents: true, createdAt: true },
@@ -182,6 +198,12 @@ async function loadWorkLines(employeeIds: string[], workerNames: string[], start
       select: { id: true, employeeId: true, name: true, workDate: true, hours: true, hourlyRateCents: true, createdAt: true },
     }),
     preloadedJanitorial ?? loadJanitorialFor(employeeIds, start, end),
+    employeeIds.length
+      ? prisma.manualHoursEntry.findMany({
+          where: { employeeId: { in: employeeIds }, workDate: { gte: start, lte: endOfDay } },
+          select: { id: true, employeeId: true, workDate: true, hours: true, createdAt: true },
+        })
+      : [],
   ]);
 
   const ids = new Set(employeeIds);
@@ -189,6 +211,7 @@ async function loadWorkLines(employeeIds: string[], workerNames: string[], start
     ...projectLogs.map((e) => logLine(e, "project")),
     ...coLogs.map((e) => logLine({ ...e, workerName: e.name }, "changeOrder")),
     ...janitorial.filter((r) => ids.has(r.employeeId) && r.hours > 0).map(janitorialWorkLine),
+    ...manual.filter((e) => e.hours > 0).map(manualWorkLine),
   ];
 }
 
@@ -277,4 +300,33 @@ export async function costJanitorialByContract(start: Date, end: Date): Promise<
     byContract.set(r.contractId, entry);
   }
   return byContract;
+}
+
+/**
+ * What hours added by hand on the Payroll page cost, for [start, end]
+ * (UTC-midnight labels, inclusive), priced with the shared rule over the
+ * full weeks around the range so overtime matches payroll. Salaried and
+ * offshore days are left out: their pay is already a fixed amount.
+ */
+export async function costManualHours(start: Date, end: Date): Promise<{ dateKey: string; costCents: number }[]> {
+  const span = weekSpan([utcDateKey(start), utcDateKey(end)]);
+  const spanEnd = new Date(span.end);
+  spanEnd.setUTCHours(23, 59, 59, 999);
+  const entries = await prisma.manualHoursEntry.findMany({
+    where: { workDate: { gte: span.start, lte: spanEnd }, hours: { gt: 0 } },
+    select: { id: true, employeeId: true, workDate: true, hours: true, createdAt: true },
+  });
+  if (entries.length === 0) return [];
+  const employeeIds = Array.from(new Set(entries.map((e) => e.employeeId)));
+  const [lines, histories] = await Promise.all([
+    loadWorkLines(employeeIds, [], span.start, span.end),
+    loadPayHistories(employeeIds),
+  ]);
+  const costs = costWorkLines(lines, histories);
+  const startKey = utcDateKey(start);
+  const endKey = utcDateKey(end);
+  return entries
+    .map((e) => ({ dateKey: utcDateKey(e.workDate), cost: costs.get(`manual:${e.id}`) }))
+    .filter((e) => e.dateKey >= startKey && e.dateKey <= endKey && e.cost && !e.cost.fixedPay)
+    .map((e) => ({ dateKey: e.dateKey, costCents: Math.round(e.cost!.costCents) }));
 }

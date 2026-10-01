@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 
 type Ctx = { params: Promise<{ id: string; periodId: string }> };
 
@@ -25,7 +26,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   try {
     const period = await prisma.recurringContractPeriod.update({
       where: { id: periodId },
-      data: { commissionPaidAt: body.commissionPaid ? new Date() : null },
+      data: { commissionPaidAt: body.commissionPaid ? (paidDayToTimestamp(body.commissionPaidOn) ?? new Date()) : null },
       include: { recurringContract: { select: { commissionEmployeeId: true, building: { select: { name: true } } } } },
     });
 

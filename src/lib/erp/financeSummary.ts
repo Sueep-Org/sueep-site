@@ -27,7 +27,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { changeOrderActuals, computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
-import { costLaborLogs } from "@/lib/erp/laborCost";
+import { costLaborLogs, costManualHours } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
 import { laborCostByContract, monthBounds, type ContractLabor } from "@/lib/erp/janitorialProfit";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
@@ -76,6 +76,8 @@ export type FinanceMonth = {
   salaryCents: number;
   /** Offshore pay not already in job costs (overhead). */
   offshoreCents: number;
+  /** Hourly hours added by hand on the Payroll page, not on any job (overhead). */
+  manualHourlyCents: number;
   commissionCents: number;
   reimbursementCents: number;
   overheadCents: number;
@@ -93,7 +95,7 @@ export type FinanceMonth = {
  * typed on a project with no logs. */
 export function costBreakdown(m: FinanceMonth): { label: string; cents: number; hint: string }[] {
   return [
-    { label: "Hourly payroll", cents: m.laborCents - m.contractorCents - m.salaryInJobsCents - m.offshoreInJobsCents, hint: "Hourly workers on jobs and janitorial shifts, overtime included" },
+    { label: "Hourly payroll", cents: m.laborCents - m.contractorCents - m.salaryInJobsCents - m.offshoreInJobsCents + m.manualHourlyCents, hint: "Hourly workers on jobs and janitorial shifts, plus hours added by hand on Payroll, overtime included" },
     { label: "Salaries", cents: m.salaryCents + m.salaryInJobsCents, hint: "Salaried staff, including their time on jobs" },
     { label: "Offshore", cents: m.offshoreCents + m.offshoreInJobsCents, hint: "Offshore staff monthly pay" },
     { label: "Commission", cents: m.commissionCents, hint: "Commission and bid bonuses, when marked paid" },
@@ -181,7 +183,7 @@ function emptyMonth(key: string): FinanceMonth {
   return {
     key, revenueCents: 0, laborCents: 0, contractorCents: 0, salaryInJobsCents: 0, offshoreInJobsCents: 0,
     materialCents: 0, grossProfitCents: 0,
-    salaryCents: 0, offshoreCents: 0, commissionCents: 0, reimbursementCents: 0,
+    salaryCents: 0, offshoreCents: 0, manualHourlyCents: 0, commissionCents: 0, reimbursementCents: 0,
     overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
   };
 }
@@ -598,10 +600,14 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   }
 
   // ── Buckets ─────────────────────────────────────────────────────────────
-  // Each month in view with its days, or the one custom range bucket.
+  // Each month in view with its days (the month in progress only up to
+  // today, like its revenue and labor), or the one custom range bucket.
   const bucketDays: [string, string[]][] = range
     ? [[FINANCE_RANGE_KEY, range.from <= range.to ? dayKeysBetween(range.from, range.to) : []]]
-    : monthKeysBetween(startKey, currentMonthKey).map((k) => [k, dayKeysBetween(`${k}-01`, `${k}-${String(daysInMonth(k)).padStart(2, "0")}`)]);
+    : monthKeysBetween(startKey, currentMonthKey).map((k) => {
+        const lastDay = `${k}-${String(daysInMonth(k)).padStart(2, "0")}`;
+        return [k, dayKeysBetween(`${k}-01`, lastDay < todayKey ? lastDay : todayKey)];
+      });
   const allKeys = bucketDays.map(([k]) => k);
   for (const key of allKeys) monthOf(key);
 
@@ -690,6 +696,12 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       dayKey: b.weekStart.slice(0, 10), paid: b.paidAt != null,
     })),
   ];
+  // Hourly work added by hand on Payroll (not on any job), on its work day.
+  const manualHours = await costManualHours(dataStart, range ? new Date(`${range.to}T00:00:00.000Z`) : today);
+  for (const h of manualHours) {
+    const key = bucketOf(h.dateKey);
+    if (key) monthOf(key).manualHourlyCents += h.costCents;
+  }
   for (const r of reimbursements) {
     const key = bucketOf(utcDateKey(r.date));
     if (key) monthOf(key).reimbursementCents += r.amountCents;
@@ -697,7 +709,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
 
   for (const m of months.values()) {
     m.grossProfitCents = m.revenueCents - m.laborCents - m.materialCents;
-    m.overheadCents = m.salaryCents + m.offshoreCents + m.commissionCents + m.reimbursementCents;
+    m.overheadCents = m.salaryCents + m.offshoreCents + m.manualHourlyCents + m.commissionCents + m.reimbursementCents;
     m.netProfitCents = m.grossProfitCents - m.overheadCents;
   }
 
@@ -736,6 +748,7 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
     total.grossProfitCents += m.grossProfitCents;
     total.salaryCents += m.salaryCents;
     total.offshoreCents += m.offshoreCents;
+    total.manualHourlyCents += m.manualHourlyCents;
     total.commissionCents += m.commissionCents;
     total.reimbursementCents += m.reimbursementCents;
     total.overheadCents += m.overheadCents;

@@ -55,7 +55,9 @@ export function FinanceDashboard() {
         <LI>
           <strong>Hourly payroll</strong> is priced exactly the way Payroll pays it: each log at the rate on it. If a worker
           passes 40 hours in a week (counting all their projects and janitorial shifts), each hour past 40 also costs half
-          of that week&apos;s average hourly rate. It also includes labor typed on a project that has no labor logs.
+          of that week&apos;s average hourly rate. It also includes labor typed on a project that has no labor logs, and hours
+          added by hand on the Payroll page (<strong>+ Add hours</strong>, for hourly work not on any project), which count as
+          overhead since they aren&apos;t part of a job.
         </LI>
         <LI>
           <strong>Janitorial hours</strong> use an admin&apos;s correction if there is one, otherwise clock-in time,
@@ -67,7 +69,7 @@ export function FinanceDashboard() {
           part isn&apos;t counted twice.
         </LI>
         <LI><strong>Offshore</strong>: each offshore employee&apos;s monthly rate from their hire date, plus any month marked paid in Offshore Payroll.</LI>
-        <LI>Pay comes from each person&apos;s pay history, so a raise or a switch between hourly and salary only counts from the day it started. Someone marked Inactive counts up to the day their status changed.</LI>
+        <LI>Pay comes from each person&apos;s pay history, so a raise or a switch between hourly and salary only counts from the day it started. Someone marked Inactive counts up to the day their status changed. For the month in progress, salaries and offshore pay only count up to today, like its revenue.</LI>
         <LI><strong>Commission</strong>: commission payouts and weekly bid bonuses, when they were marked paid. <strong>Reimbursements</strong>: on the date of the expense.</LI>
         <LI><strong>Contractors</strong>: the cost on each contractor assignment. <strong>Materials and travel</strong>: every material log plus travel typed on the project.</LI>
         <LI>Not included: BD caller bid bonuses and any expense not tracked in the ERP.</LI>
@@ -100,9 +102,9 @@ export function FinanceDashboard() {
       <H2>Commission</H2>
       <UL>
         <LI>Uses the same rules as the Commission tab on the Payroll page, so the two always match.</LI>
-        <LI><strong>Earned</strong>: commission that became due in the selected dates. A deal is due once it and all its change orders are paid, a janitorial contract month once that month is paid, and a bid bonus for its week.</LI>
-        <LI><strong>Paid</strong>: commission and bid bonuses marked paid in the selected dates. This is the Commission line in Where the money went.</LI>
-        <LI><strong>Owed now</strong>: everything earned but not marked paid yet, from any date. It doesn&apos;t change with the dates picked.</LI>
+        <LI><strong>Earned (these dates)</strong>: commission that became due in the selected dates. A deal is due once it and all its change orders are paid, a janitorial contract month once that month is paid, and a bid bonus for its week.</LI>
+        <LI><strong>Paid (these dates)</strong>: commission and bid bonuses marked paid in the selected dates. This is the Commission line in Where the money went.</LI>
+        <LI><strong>Owed (all time)</strong>: everything earned but not marked paid yet, from any date. It doesn&apos;t change with the dates picked, so it can be more than Earned (for example, commission from July still unpaid while viewing August on).</LI>
         <LI>A deal or janitorial contract with no salesperson earns no commission (for example, one the owner sold himself).</LI>
       </UL>
 

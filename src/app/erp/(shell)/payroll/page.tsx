@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials, canSeePayroll } from "@/lib/erpAuth";
+import { DEFAULT_PAYROLL_ANCHOR } from "@/lib/erp/payPeriods";
 import { loadCommissionRows } from "@/lib/erp/commissionRows";
 import { CommissionByRep, type RepGroup } from "../commission/CommissionByRep";
 import { BidsView, type BidRow } from "../commission/BidsView";
@@ -18,7 +19,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [{ deals: allRows, recurring: recurringRowsAll, bidBonuses: bidBonusRows }, employees, reimbursements, salesBidEntries] = await Promise.all([
+  const [{ deals: allRows, recurring: recurringRowsAll, bidBonuses: bidBonusRows }, employees, reimbursements, salesBidEntries, anchorSetting, closedPeriods] = await Promise.all([
     loadCommissionRows(),
     prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, status: true } }),
     prisma.reimbursement.findMany({
@@ -29,7 +30,14 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       orderBy: { createdAt: "desc" },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     }),
+    prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }),
+    prisma.payrollPeriodClose.findMany({ select: { periodStart: true } }),
   ]);
+
+  // For the commission Paid date picker: which pay period a date lands in,
+  // and whether that period's payroll was already closed.
+  const payrollAnchor = anchorSetting?.value ?? DEFAULT_PAYROLL_ANCHOR;
+  const closedPeriodStarts = closedPeriods.map((c) => c.periodStart.toISOString().slice(0, 10));
 
   // The manual bid-pipeline log — a separate comp track from deal/CO/recurring
   // commission, shown as its own flat page ("Bids") rather than nested
@@ -127,7 +135,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
         tabs={[
           ...(showPayrollTabs
             ? [
-                { label: "Payroll", content: <PayrollView canReopen={auth.role === "ADMIN"} /> },
+                { label: "Payroll", content: <PayrollView canReopen={auth.role === "ADMIN"} employees={activeEmployeeOptions} /> },
                 { label: "Offshore Payroll", content: <OffshorePayrollView /> },
               ]
             : []),
@@ -142,7 +150,14 @@ export default async function PayrollPage({ searchParams }: PageProps) {
                 // mount it kept showing the first-loaded year's rows even after
                 // navigating to a different year.
                 content: (
-                  <CommissionByRep key={selectedYear} years={availableYears} selectedYear={selectedYear} reps={repGroups} />
+                  <CommissionByRep
+                    key={selectedYear}
+                    years={availableYears}
+                    selectedYear={selectedYear}
+                    reps={repGroups}
+                    payrollAnchor={payrollAnchor}
+                    closedPeriodStarts={closedPeriodStarts}
+                  />
                 ),
               },
               {
