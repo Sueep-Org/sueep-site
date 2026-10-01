@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -192,9 +193,22 @@ export async function GET(req: Request) {
     });
   }
 
-  const rows = Array.from(projectMap.values()).sort((a, b) =>
-    a.jobTitle.localeCompare(b.jobTitle),
-  );
+  // Flag projects whose current COI is expired or expiring, since the GC
+  // may hold payment over it.
+  const projectCois = await prisma.projectCoi.findMany({
+    where: { projectId: { in: [...projectMap.keys()] } },
+    select: { id: true, projectId: true, holderId: true, holderName: true, issuedOn: true, createdAt: true, expiresAt: true },
+  });
+  const coisByProject = new Map<string, typeof projectCois>();
+  for (const c of projectCois) coisByProject.set(c.projectId, [...(coisByProject.get(c.projectId) ?? []), c]);
+
+  const rows = Array.from(projectMap.values())
+    .sort((a, b) => a.jobTitle.localeCompare(b.jobTitle))
+    .map((row) => {
+      const status = projectCoiStatus(coisByProject.get(row.projectId) ?? []);
+      const label = coiWarningLabel(status);
+      return { ...row, coiWarning: label && status ? { label, expired: status.status === "EXPIRED", holderName: status.holderName } : null };
+    });
 
   return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
 }

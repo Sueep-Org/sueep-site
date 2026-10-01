@@ -118,6 +118,11 @@ model Project {
   hubspotSovAliases       HubSpotSovAlias[]
   hubspotInvoiceMatches   HubSpotInvoiceLineItemMatch[]
   contacts                ProjectContact[]
+  cois                    ProjectCoi[]
+  coiRequests             CoiRequest[]
+  /// Token for this project's public COI request link (/coi-request/[token]).
+  /// Doesn't expire; the GC keeps using it for the life of the job.
+  coiRequestToken         String?                 @unique
   contractorAssignments   ContractorAssignment[]
   laborAssignments        ProjectLaborAssignment[]
   checklistItems          ProjectChecklistItem[]
@@ -2435,4 +2440,213 @@ model ManualHoursEntry {
   @@index([employeeId])
   @@index([workDate])
   @@index([batchId])
+}
+
+/// One of Sueep's own insurance policies, the ones that show up on the COIs
+/// we give GCs and property managers (made in CoverDash, not here). Each
+/// policy keeps its own expiration since they renew on different dates, and
+/// a COI is only current until the earliest policy on it expires. Renewing
+/// means updating the dates on the same row.
+model InsurancePolicy {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// GENERAL_LIABILITY | AUTO | HIRED_NON_OWNED_AUTO | UMBRELLA | WORKERS_COMP | OTHER
+  /// (see src/lib/erp/insurance.ts)
+  policyType    String
+  carrier       String
+  policyNumber  String?
+  /// Midnight UTC date labels
+  effectiveDate DateTime?
+  expiresAt     DateTime
+
+  /// Each occurrence (GL, umbrella), combined single limit (auto), or
+  /// employer's liability each accident (workers' comp)
+  eachOccurrenceCents Int?
+  /// General aggregate (GL, umbrella)
+  aggregateCents      Int?
+  /// GL aggregate applies per project instead of per policy (GCs prefer it)
+  aggregatePerProject Boolean @default(false)
+  /// Any other limits worth keeping, e.g. "EL $1M / $1M / $1M"
+  otherLimits         String?
+
+  /// What the policy allows on a certificate without a policy change
+  blanketAdditionalInsured Boolean @default(false)
+  waiverOfSubrogation      Boolean @default(false)
+  primaryNoncontributory   Boolean @default(false)
+
+  notes          String?
+  /// Off for a policy that was cancelled or replaced, kept for history
+  active         Boolean @default(true)
+  /// Usually included on the COIs we give GCs (pre-checked when adding a
+  /// COI to a project). Off for policies like owned auto that CoverDash
+  /// leaves off our certificates.
+  onCertificates Boolean @default(true)
+
+  coiPolicies ProjectCoiPolicy[]
+
+  @@index([active, expiresAt])
+}
+
+/// A GC, property manager, or anyone else who asks Sueep for a COI, with
+/// their exact name for the certificate holder box and what they usually
+/// require, so repeat requests match and names stay consistent.
+model CoiHolder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Exact legal name as it goes on the certificate
+  name    String
+  /// Other spellings seen on past COIs (e.g. "Bozzuto C/O NetVendor"),
+  /// searchable so the profile is found under any of them
+  aliases String[] @default([])
+  /// Mailing address for the certificate holder box, multi-line
+  address String?
+
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  /// Minimum limits they require, in cents. Null means not specified.
+  reqGlOccurrenceCents         Int?
+  reqGlAggregateCents          Int?
+  reqAutoCents                 Int?
+  reqUmbrellaCents             Int?
+  reqWcEmployersLiabilityCents Int?
+
+  requiresAdditionalInsured      Boolean @default(false)
+  requiresWaiverOfSubrogation    Boolean @default(false)
+  requiresPrimaryNoncontributory Boolean @default(false)
+
+  /// Names to list as additional insured, one per line
+  additionalInsureds String?
+  /// Wording they want in Description of Operations
+  specialWording     String?
+  notes              String?
+
+  /// Hidden from pickers, kept for history
+  archived Boolean @default(false)
+
+  cois ProjectCoi[]
+
+  @@index([archived, name])
+}
+
+/// A COI we gave someone for a project: the PDF made in CoverDash, who it
+/// went to, and which of our policies are on it. The newest COI per holder
+/// on a project is the current one; older ones stay as history.
+model ProjectCoi {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  holderId   String?
+  holder     CoiHolder? @relation(fields: [holderId], references: [id], onDelete: SetNull)
+  /// Holder name as on the certificate, kept if the profile is deleted
+  holderName String
+
+  /// Date on the certificate. Midnight UTC date label.
+  issuedOn  DateTime
+  /// Earliest expiration among its policies, as of when it was issued.
+  /// Saved, not looked up, because renewing a policy updates that policy's
+  /// dates in place while this PDF still shows the old ones.
+  expiresAt DateTime
+  /// Null until it has been sent to the holder
+  sentOn    DateTime?
+  sentTo    String?
+  notes     String?
+  /// Who added it (ERP user email)
+  createdBy String?
+
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  policies ProjectCoiPolicy[]
+
+  /// The request this COI answered, if it came from the request link
+  requestId String?
+  request   CoiRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([holderId])
+  @@index([expiresAt])
+  @@index([requestId])
+}
+
+/// One of our policies as it appeared on a ProjectCoi when it was issued.
+model ProjectCoiPolicy {
+  id String @id @default(cuid())
+
+  coiId String
+  coi   ProjectCoi @relation(fields: [coiId], references: [id], onDelete: Cascade)
+
+  /// The policy row it came from, for finding COIs to reissue on renewal
+  policyId String?
+  policy   InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  policyType   String
+  carrier      String
+  policyNumber String?
+  expiresAt    DateTime
+
+  @@index([coiId])
+  @@index([policyId])
+}
+
+/// A COI request sent in through the public request link, by a GC or
+/// property manager. Per-project links fill in projectId; the general link
+/// leaves it null with whatever they typed in projectText until staff pick
+/// the project.
+model CoiRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Project or property as typed on the general link
+  projectText String?
+
+  /// NEW | PENDING_REVIEW (sent to the broker) | DONE | CANCELLED
+  status String @default("NEW")
+
+  requesterName    String
+  requesterCompany String?
+  requesterEmail   String
+  requesterPhone   String?
+  /// Midnight UTC date label
+  neededBy         DateTime?
+
+  /// Who each COI is for: [{ name, address }]. Matched to CoiHolder by name
+  /// when shown, so a typo here never creates a profile on its own.
+  holders Json
+
+  reqGlOccurrenceCents           Int?
+  reqGlAggregateCents            Int?
+  reqAutoCents                   Int?
+  reqUmbrellaCents               Int?
+  reqWcEmployersLiabilityCents   Int?
+  requiresAdditionalInsured      Boolean @default(false)
+  requiresWaiverOfSubrogation    Boolean @default(false)
+  requiresPrimaryNoncontributory Boolean @default(false)
+  additionalInsureds             String?
+  specialWording                 String?
+  notes                          String?
+
+  /// Their sample COI or contract insurance page, if attached
+  sampleFilename String?
+  sampleMimeType String?
+  sampleData     Bytes?
+
+  cois ProjectCoi[]
+
+  @@index([status, createdAt])
+  @@index([projectId])
 }

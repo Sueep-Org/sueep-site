@@ -445,6 +445,26 @@ function ChevronRightIcon({ open }: { open: boolean }) {
   );
 }
 
+/** A shield, for Insurance & COIs. */
+function ShieldIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3l7.5 3v5.25c0 4.5-3.2 8.4-7.5 9.75-4.3-1.35-7.5-5.25-7.5-9.75V6L12 3zM9 12l2 2 4-4"
+      />
+    </svg>
+  );
+}
+
 interface NavItem {
   href: string;
   label: string;
@@ -483,6 +503,12 @@ const billingGroupItems: NavItem[] = [
     label: "Compensation",
     roles: FINANCE_UP,
     icon: BanknotesIcon,
+  },
+  {
+    href: "/erp/insurance",
+    label: "Insurance & COIs",
+    roles: FINANCE_UP,
+    icon: ShieldIcon,
   },
 ];
 

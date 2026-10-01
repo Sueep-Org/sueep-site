@@ -5,7 +5,8 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager, canManageInsurance } from "@/lib/erpAuth";
+import { loadCoiAlerts } from "@/lib/erp/coiAlerts";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
 import { DashboardTabs, resolveDashboardTab, type DashboardTab } from "./_dashboard/DashboardTabs";
@@ -170,6 +171,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               { href: "/erp/projects", label: "Projects", title: "All Projects", dot: "bg-sky-400" },
               { href: "/erp/candidates", label: "Hiring", title: "Candidates", dot: "bg-amber-400" },
               { href: "/erp/contractors", label: "Hiring", title: "Contractor Verification", dot: "bg-teal-400" },
+              { href: "/erp/insurance", label: "Compliance", title: "Insurance & COIs", dot: "bg-rose-400" },
             ].map((c) => (
               <Link key={c.title} href={c.href} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
                 <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
@@ -1058,6 +1060,53 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
     }
     noSupervisorItems.sort((a, b) => (a.overdue !== b.overdue ? (a.overdue ? -1 : 1) : a.dateKey.localeCompare(b.dateKey)));
 
+    // Projects not yet paid whose COI is expired or expiring (GCs hold
+    // payment over it), for roles that can see Insurance & COIs.
+    const showCoiAlerts = canManageInsurance(role);
+    const [coiAlerts, newCoiRequests] = showCoiAlerts
+      ? await Promise.all([loadCoiAlerts(), prisma.coiRequest.count({ where: { status: "NEW" } })])
+      : [[], 0];
+    const coiAlertsWidget = showCoiAlerts ? (
+      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+          <h3 className="text-sm font-semibold text-gray-900" title="New COI requests, and unpaid projects whose COI is expired or expires within 30 days. GCs may hold payment until they get a new one.">
+            <span aria-hidden className="mr-1 text-red-600">⚠</span>COIs
+          </h3>
+          {coiAlerts.length + newCoiRequests > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{coiAlerts.length + newCoiRequests}</span>
+          )}
+        </div>
+        {coiAlerts.length === 0 && newCoiRequests === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-400">No new requests or expiring COIs.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {newCoiRequests > 0 && (
+              <li>
+                <Link href="/erp/insurance/requests" className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                  <p className="text-sm font-medium text-gray-900">New requests</p>
+                  <span className="shrink-0 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{newCoiRequests}</span>
+                </Link>
+              </li>
+            )}
+            {coiAlerts.slice(0, 8).map((a) => (
+              <li key={a.projectId}>
+                <Link href={`/erp/projects/${a.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900" title={a.jobTitle}>{a.jobTitle}</p>
+                    <p className="truncate text-xs text-gray-400">{a.status.holderName}</p>
+                  </div>
+                  <span className={`shrink-0 text-xs font-semibold ${a.status.status === "EXPIRED" ? "text-red-600" : "text-orange-600"}`}>
+                    {a.status.status === "EXPIRED" ? "Expired " : "Expires "}
+                    {a.status.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    ) : null;
+
     const noSupervisorWidget = (
       <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
@@ -1210,7 +1259,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         {activeTab === "overview" && (
         <div className="space-y-3">
           <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-red-400`} />Needs attention</h2>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className={`grid gap-4 ${showCoiAlerts ? "lg:grid-cols-2 2xl:grid-cols-4" : "lg:grid-cols-3"}`}>
             {noSupervisorWidget}
 
             {/* Same red-tinted chrome as its two neighbors above (noSupervisorWidget,
@@ -1248,6 +1297,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             </div>
 
             {needsLaborLoggedWidget}
+            {coiAlertsWidget}
           </div>
         </div>
         )}

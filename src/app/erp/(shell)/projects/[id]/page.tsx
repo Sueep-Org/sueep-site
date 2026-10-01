@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance } from "@/lib/erpAuth";
+import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
+import { ProjectCoisTab } from "./ProjectCoisTab";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
@@ -55,6 +57,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   // visibility, not compensation fields, so it shouldn't move if the two
   // predicates ever diverge again).
   const canSeeCommission = auth ? canSeeFinancials(auth.role) : false;
+  const canSeeCois = auth ? canManageInsurance(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
   const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
     prisma.project.findUnique({
@@ -107,6 +110,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
         },
         unitTurnoverChecklist: { select: { completedItems: true } },
+        cois: { select: { id: true, holderId: true, holderName: true, issuedOn: true, createdAt: true, expiresAt: true } },
       },
     }),
     prisma.employee.findMany({
@@ -830,6 +834,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
   ];
 
+  if (canSeeCois) allTabs.push({ label: "COIs", content: <ProjectCoisTab projectId={project.id} /> });
+
+  // Header warning when a current COI on this project is expired or close
+  // to it, since the GC may hold payment over it.
+  const coiWarning = canSeeCois
+    ? (() => {
+        const status = projectCoiStatus(project.cois);
+        const label = coiWarningLabel(status);
+        return label && status ? { label, expired: status.status === "EXPIRED", holderName: status.holderName } : null;
+      })()
+    : null;
+
   const tabs = isEmployee
     ? allTabs.filter((t) => t.label === "Labor" || t.label === "Checklist")
     : isSupervisor
@@ -843,6 +859,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
+            {coiWarning && (
+              <span
+                title={`${coiWarning.holderName}. The GC may hold payment until they get a new one. See the COIs tab.`}
+                className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${coiWarning.expired ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+              >
+                {coiWarning.label}
+              </span>
+            )}
             {project.hubspotOwnerName && (
               <p className="mt-1 text-xs text-gray-500">
                 Deal owner: <span className="font-medium text-gray-700">{project.hubspotOwnerName}</span>

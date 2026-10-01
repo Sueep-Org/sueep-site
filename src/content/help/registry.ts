@@ -20,6 +20,7 @@ import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 import { JanitorialGettingStarted } from "./janitorial/getting-started";
 import { FinanceDashboard } from "./finance/finance-dashboard";
+import { InsuranceOverview } from "./insurance/insurance-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -210,5 +211,14 @@ export const registry: ArticleEntry[] = [
     order: 3,
     component: FinanceDashboard,
     roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
+  },
+  {
+    slug: "insurance/insurance-overview",
+    title: "Insurance & COIs",
+    category: "Billing, Pay & Finance",
+    description: "Our insurance policies, certificate holders, and the COIs given out on each project.",
+    order: 4,
+    component: InsuranceOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
 ];

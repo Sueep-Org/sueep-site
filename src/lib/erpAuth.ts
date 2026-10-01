@@ -49,6 +49,11 @@ export function canManageJanitorial(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
 }
 
+/** Insurance page (our policies and COI holders): same roles as canSeeFinancials. */
+export function canManageInsurance(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
+}
+
 export function canManageUsers(role: ErpRole): boolean {
   return role === "ADMIN";
 }

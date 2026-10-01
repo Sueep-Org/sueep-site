@@ -1,5 +1,6 @@
 export { Button, type ButtonVariant, type ButtonSize } from "./Button";
 export { Modal, type ModalSize } from "./Modal";
+export { InfoTip } from "./InfoTip";
 export { inputClass, labelClass, type FieldSize, type LabelSize } from "./styles";
 export { ConfirmProvider, useConfirm, type ConfirmOptions } from "./ConfirmProvider";
 export { ToastProvider, useToast } from "./ToastProvider";

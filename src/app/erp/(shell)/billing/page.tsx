@@ -69,7 +69,22 @@ type PostConProjectRow = {
   contractValueCents: number | null;
   items: SOVItemRow[];
   changeOrders: CORow[];
+  /** Set when the project's current COI is expired or expiring */
+  coiWarning: { label: string; expired: boolean; holderName: string } | null;
 };
+
+/** Pill next to a project name when its COI needs replacing before billing. */
+function CoiWarningPill({ warning }: { warning: PostConProjectRow["coiWarning"] }) {
+  if (!warning) return null;
+  return (
+    <span
+      title={`${warning.holderName}. The GC may hold payment until they get a new one.`}
+      className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${warning.expired ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+    >
+      {warning.label}
+    </span>
+  );
+}
 
 type PostConResponse = {
   start: string;
@@ -281,6 +296,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
                             {project.jobTitle}
                           </Link>
+                          <CoiWarningPill warning={project.coiWarning} />
                         </td>
                         <td className="px-4 py-3 text-gray-400">—</td>
                         <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
@@ -304,9 +320,12 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                     <tr key={row.type === "sov" ? row.item.id : row.co.id} className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {idx === 0 ? (
-                          <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
-                            {project.jobTitle}
-                          </Link>
+                          <>
+                            <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
+                              {project.jobTitle}
+                            </Link>
+                            <CoiWarningPill warning={project.coiWarning} />
+                          </>
                         ) : (
                           <span className="text-gray-300 select-none">↳</span>
                         )}

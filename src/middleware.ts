@@ -20,7 +20,9 @@ function isPublicAppPath(pathname: string): boolean {
     pathname === "/janitorial-turnover" ||
     pathname.startsWith("/janitorial-turnover/") ||
     // Janitor clock-in links, reached from a phone without an ERP login
-    pathname.startsWith("/clock/")
+    pathname.startsWith("/clock/") ||
+    // COI request links sent to GCs and property managers
+    pathname.startsWith("/coi-request/")
   );
 }
 
