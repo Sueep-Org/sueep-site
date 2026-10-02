@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSovPercentDone, syncProjectBillingFromSOV } from "@/lib/sovSync";
+import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -35,6 +35,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!VALID_BILLING.includes(val)) return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
     data.billingStatus = val;
   }
+  Object.assign(
+    data,
+    sovItemDateChanges(
+      existing,
+      {
+        completed: (data.completed as boolean | undefined) ?? existing.completed,
+        billingStatus: (data.billingStatus as string | undefined) ?? existing.billingStatus,
+      },
+      { completedAt: parseSovItemDate(body.completedAt), paidAt: parseSovItemDate(body.paidAt) },
+    ),
+  );
 
   const updated = await prisma.projectSOVItem.update({ where: { id: itemId }, data: data as object });
   // Always resync both — editing scheduledValueCents changes the SOV total

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewContractorForm } from "./NewContractorForm";
+import { SUB_STATUS_STYLE, subCoverage } from "@/lib/erp/subCoverage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export default async function ContractorsPage() {
                 <th className="px-4 py-2">Email</th>
                 <th className="px-4 py-2">Role</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Insurance</th>
                 <th className="px-4 py-2">Added</th>
               </tr>
             </thead>
@@ -61,6 +63,17 @@ export default async function ContractorsPage() {
                     >
                       {c.status === "ACTIVE" ? "Active" : "Inactive"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const coverage = subCoverage(c);
+                      const style = SUB_STATUS_STYLE[coverage.status];
+                      return (
+                        <span title={coverage.summary} className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}>
+                          {style.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-gray-500">
                     {c.createdAt.toLocaleDateString()}

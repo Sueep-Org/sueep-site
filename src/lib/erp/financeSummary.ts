@@ -14,6 +14,16 @@
  * day. A change order that isn't done counts with its project once the
  * project is COMPLETE; until then it's Future, with the open contract.
  *
+ * A project with a Schedule of Values counts line by line instead: each SOV
+ * line on the day it was marked done (in the Paid view, the day it was marked
+ * paid), worth its share of the contract (a line that's 10% of the SOV total
+ * is 10% of the contract value, so the lines always add up to the contract).
+ * Lines not done yet count when the project is COMPLETE, and until then are
+ * Future. Its job costs count on the day they happen (labor on its work day,
+ * material on its used-on day, a contractor on its end date), so a month's
+ * finished lines sit next to that month's spend. Typed-in totals with no
+ * date count when the project is COMPLETE.
+ *
  * Job cost (labor, contractors, material) is priced exactly the way the
  * Projects table prices it (projectMargin.ts), so a project's contract and
  * change orders always add up to its total there.
@@ -130,6 +140,10 @@ export type FinanceJob = {
   revenueCents: number;
   costCents: number;
   profitCents: number;
+  /** What was counted for a project in this bucket (absent for a janitorial
+   * contract month): its whole contract, how many SOV lines, how many change
+   * orders. All zero/false means only costs landed here. */
+  parts?: { contract: boolean; sovLines: number; changeOrders: number };
 };
 
 /** One commission amount for one person on one day (a deal, a contract
@@ -137,7 +151,10 @@ export type FinanceJob = {
 export type CommissionItem = { personId: string | null; personName: string | null; cents: number; dayKey: string; paid: boolean };
 
 /** Something missing that affects the numbers, with where to fix it. */
-export type GapItem = { id: string; label: string; href: string };
+export type GapItem = { id: string; label: string; href: string; detail?: string };
+
+/** How far an SOV total can be from its contract value before it's flagged. */
+const SOV_MISMATCH_CENTS = 100_000;
 
 export type FinanceSummary = {
   months: FinanceMonth[];
@@ -163,6 +180,9 @@ export type FinanceSummary = {
     noContractValue: GapItem[];
     /** Completed jobs left out because they have no end/completion date. */
     noCompletionDate: GapItem[];
+    /** Projects whose SOV lines add up to more than $1,000 away from the
+     * contract value (each line is scaled to its share of the contract). */
+    sovMismatch: GapItem[];
     /** Salaried employees with no salary on file (counted as $0). */
     salaryMissing: GapItem[];
     /** Janitors who worked with no hourly rate set (their hours cost $0). */
@@ -318,8 +338,9 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
         recurringContractPeriodId: true, turnoverRequestId: true,
         contractValueCents: true, actualLaborCents: true, actualMaterialCents: true, actualTravelCents: true,
         laborEntries: { select: { id: true, employeeId: true, workerName: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
-        materialEntries: { select: { costCents: true } },
-        contractorAssignments: { select: { costCents: true } },
+        materialEntries: { select: { costCents: true, usedOn: true } },
+        contractorAssignments: { select: { costCents: true, endDate: true, startDate: true, assignedDate: true, createdAt: true } },
+        sov: { select: { items: { select: { id: true, scheduledValueCents: true, completed: true, completedAt: true, billingStatus: true, paidAt: true }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] } } },
         changeOrders: {
           select: {
             id: true, status: true, billingStatus: true, completedAt: true, endDate: true, paidAt: true,
@@ -371,7 +392,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     return m;
   };
 
-  const warnings: FinanceSummary["warnings"] = { noContractValue: [], noCompletionDate: [], salaryMissing: [], janitorMissingRate: [] };
+  const warnings: FinanceSummary["warnings"] = { noContractValue: [], noCompletionDate: [], sovMismatch: [], salaryMissing: [], janitorMissingRate: [] };
   const jobs: FinanceJob[] = [];
 
   // ── Projects ────────────────────────────────────────────────────────────
@@ -393,11 +414,14 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   // counted there, added together).
   const jobRows = new Map<string, FinanceJob>();
 
-  /** Count one piece of a project: its original contract, or one change
-   * order. Each piece has its own billing status and its own dates. */
+  /** Count one piece of a project: its original contract, one change order,
+   * one SOV line, or (with `spent`) one cost on an SOV project, which counts
+   * on the day it happened in both views. Each piece has its own billing
+   * status and its own dates. */
   const addPiece = (piece: {
     project: (typeof jobProjects)[number];
     isChangeOrder: boolean;
+    isSovLine?: boolean;
     valueCents: number;
     laborCents: number;
     contractorCents: number;
@@ -406,6 +430,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     completedDay: string;
     paidDay: string | null;
     laborLogs: { id: string; employeeId: string | null }[];
+    spent?: boolean;
   }) => {
     const { project: p, valueCents } = piece;
     const status = normalizeBillingStatus(piece.billingStatus);
@@ -421,8 +446,8 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
 
     // Paid view: unpaid pieces aren't counted yet; one paid before its paid
     // date was saved falls back to its completion day.
-    if (anchor === "paid" && status !== "PAID") return;
-    const anchorDay = anchor === "paid" && piece.paidDay ? piece.paidDay : piece.completedDay;
+    if (anchor === "paid" && status !== "PAID" && !piece.spent) return;
+    const anchorDay = anchor === "paid" && piece.paidDay && !piece.spent ? piece.paidDay : piece.completedDay;
     const anchorKey = bucketOf(anchorDay);
     if (!anchorKey) return;
 
@@ -440,12 +465,20 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     const rowKey = `${p.id}::${anchorKey}`;
     let row = jobRows.get(rowKey);
     if (!row) {
-      row = { id: rowKey, href: `/erp/projects/${p.id}`, title: p.jobTitle, monthKey: anchorDay.slice(0, 7), segment, revenueCents: 0, costCents: 0, profitCents: 0 };
+      row = {
+        id: rowKey, href: `/erp/projects/${p.id}`, title: p.jobTitle, monthKey: anchorDay.slice(0, 7), segment,
+        revenueCents: 0, costCents: 0, profitCents: 0, parts: { contract: false, sovLines: 0, changeOrders: 0 },
+      };
       jobRows.set(rowKey, row);
       m.segments[segment].jobs++;
     }
     row.revenueCents += valueCents;
     row.costCents += costCents;
+    if (!piece.spent) {
+      if (piece.isChangeOrder) row.parts!.changeOrders++;
+      else if (piece.isSovLine) row.parts!.sovLines++;
+      else row.parts!.contract = true;
+    }
     row.profitCents = row.revenueCents - row.costCents;
 
     for (const e of piece.laborLogs) {
@@ -463,8 +496,71 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     const isComplete = p.status === "COMPLETE";
     const completedDay = isComplete ? completionDayKey(p) : null;
     let futureChangeOrderCents = 0;
+    let futureContractCents = p.contractValueCents ?? 0;
+    const sovLines = (p.sov?.items ?? []).filter((l) => l.scheduledValueCents > 0);
+    const sovTotal = sovLines.reduce((s, l) => s + l.scheduledValueCents, 0);
 
-    if (isComplete) {
+    if (sovTotal > 0) {
+      // SOV project: each line on its own day, worth its share of the
+      // contract (or its own value when there's no contract value). Shares
+      // are rounded so they add up to the contract exactly.
+      const contractCents = p.contractValueCents ?? sovTotal;
+      if (Math.abs(contractCents - sovTotal) > SOV_MISMATCH_CENTS) {
+        const usd = (c: number) => `$${Math.round(c / 100).toLocaleString("en-US")}`;
+        warnings.sovMismatch.push({ id: p.id, label: p.jobTitle, href: `/erp/projects/${p.id}`, detail: `SOV ${usd(sovTotal)}, contract ${usd(contractCents)}` });
+      }
+      let runningLines = 0;
+      let runningShare = 0;
+      let missingDay = false;
+      futureContractCents = 0;
+      for (const line of sovLines) {
+        runningLines += line.scheduledValueCents;
+        const upTo = Math.round((contractCents * runningLines) / sovTotal);
+        const share = upTo - runningShare;
+        runningShare = upTo;
+        const day = (line.completed ? dayKeyOf(line.completedAt) : null) ?? completedDay;
+        if (!day) {
+          if (isComplete) missingDay = true;
+          else futureContractCents += share;
+          continue;
+        }
+        addPiece({
+          project: p, isChangeOrder: false, isSovLine: true, valueCents: share,
+          laborCents: 0, contractorCents: 0, materialCents: 0,
+          billingStatus: line.billingStatus, completedDay: day, paidDay: dayKeyOf(line.paidAt),
+          laborLogs: [],
+        });
+      }
+      if (missingDay) warnings.noCompletionDate.push({ id: p.id, label: p.jobTitle, href: `/erp/projects/${p.id}` });
+
+      // Its costs, each on the day it happened. Typed-in totals have no
+      // date, so they count when the project is Complete.
+      const spend = (day: string | null, cents: { labor?: number; contractor?: number; material?: number }, laborLogs: { id: string; employeeId: string | null }[] = []) => {
+        const contractorCents = cents.contractor ?? 0;
+        if (!day || (cents.labor ?? 0) + contractorCents + (cents.material ?? 0) === 0) return;
+        addPiece({
+          project: p, isChangeOrder: false, valueCents: 0,
+          laborCents: (cents.labor ?? 0) + contractorCents, contractorCents, materialCents: cents.material ?? 0,
+          billingStatus: null, completedDay: day, paidDay: null, laborLogs, spent: true,
+        });
+      };
+      if (a.base.laborFromLogs) {
+        for (const e of p.laborEntries) {
+          spend(dayKeyOf(e.workDate), { labor: Math.round(lineCosts.get(e.id)?.costCents ?? e.hours * e.hourlyRateCents) }, [e]);
+        }
+      } else {
+        spend(completedDay, { labor: a.base.laborCents });
+      }
+      for (const c of p.contractorAssignments) {
+        spend(dayKeyOf(c.endDate ?? c.startDate ?? c.assignedDate ?? c.createdAt), { contractor: c.costCents ?? 0 });
+      }
+      if (a.base.materialFromLogs) {
+        for (const m of p.materialEntries) spend(dayKeyOf(m.usedOn), { material: m.costCents });
+      } else {
+        spend(completedDay, { material: a.base.materialCents });
+      }
+      spend(completedDay, { material: a.base.travelCents });
+    } else if (isComplete) {
       // The original contract counts when the whole project is finished.
       const gap = { id: p.id, label: p.jobTitle, href: `/erp/projects/${p.id}` };
       if (!a.contractValueCents) warnings.noContractValue.push(gap);
@@ -502,7 +598,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     }
 
     if (!isComplete) {
-      const valueCents = (p.contractValueCents ?? 0) + futureChangeOrderCents;
+      const valueCents = futureContractCents + futureChangeOrderCents;
       if (valueCents > 0) {
         futureJobs.push({
           id: p.id, title: p.jobTitle, status: p.status as FutureJob["status"],

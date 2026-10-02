@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
-import { syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
+import { fetchInvoicePaidOn } from "@/lib/hubspot/invoices";
+import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
 
 export const runtime = "nodejs";
 
@@ -57,7 +58,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!sovItem) return NextResponse.json({ error: "SOV item not found on this project" }, { status: 404 });
 
     if (sovItem.billingStatus !== "PAID") {
-      await prisma.projectSOVItem.update({ where: { id: sovItemId }, data: { billingStatus: "PAID" } });
+      await markSovItemPaid(sovItemId, await fetchInvoicePaidOn(row.hubspotInvoiceId).catch(() => null));
       await syncSovPercentDone(row.projectId);
       await syncProjectBillingFromSOV(row.projectId);
     }

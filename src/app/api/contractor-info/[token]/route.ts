@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { CONTRACTOR_MANUAL_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
+import { inputToCents } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ token: string }> };
 
@@ -23,6 +24,11 @@ async function resolveContractor(token: string) {
       workersCompCarrier: true,
       workersCompPolicyNumber: true,
       workersCompExpiresAt: true,
+      glCarrier: true,
+      glPolicyNumber: true,
+      glExpiresAt: true,
+      glOccurrenceCents: true,
+      glAggregateCents: true,
       candidateApplicationId: true,
       manualApplicationInfo: true,
     },
@@ -74,6 +80,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     workersCompPolicyNumber: contractor.workersCompPolicyNumber,
     workersCompExpiresAt: contractor.workersCompExpiresAt ? contractor.workersCompExpiresAt.toISOString() : null,
     workersCompDocFilename: workersCompDoc?.filename ?? null,
+    glCarrier: contractor.glCarrier,
+    glPolicyNumber: contractor.glPolicyNumber,
+    glExpiresAt: contractor.glExpiresAt ? contractor.glExpiresAt.toISOString() : null,
+    glOccurrenceCents: contractor.glOccurrenceCents,
+    glAggregateCents: contractor.glAggregateCents,
     // Company profile / additional insurance / licensing only make sense to
     // collect here when there's no linked subcontractor application already
     // answering them (see ContractorQuestionnaireCard on the ERP profile).
@@ -122,6 +133,26 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "Full name is required" }, { status: 400 });
   }
 
+  // General liability, self-reported like workers comp; staff can correct it
+  // in the ERP. Only saved when the form sends it.
+  const gl: Record<string, unknown> = {};
+  if (body.glCarrier !== undefined) gl.glCarrier = typeof body.glCarrier === "string" ? body.glCarrier.trim() || null : null;
+  if (body.glPolicyNumber !== undefined) gl.glPolicyNumber = typeof body.glPolicyNumber === "string" ? body.glPolicyNumber.trim() || null : null;
+  if (body.glExpiresAt !== undefined) {
+    const d = parseDate(body.glExpiresAt);
+    if (d === undefined) return NextResponse.json({ error: "Invalid general liability expiration date" }, { status: 400 });
+    gl.glExpiresAt = d;
+  }
+  for (const key of ["glOccurrenceCents", "glAggregateCents"] as const) {
+    if (body[key] === undefined) continue;
+    const raw = body[key];
+    const cents = raw === null || raw === "" ? null : inputToCents(raw);
+    if (raw !== null && raw !== "" && (cents == null || cents < 0)) {
+      return NextResponse.json({ error: "General liability limits must be dollar amounts" }, { status: 400 });
+    }
+    gl[key] = cents;
+  }
+
   // Company profile / additional insurance / licensing answers — only sent
   // by the client when this contractor isn't linked to an application (see
   // isLinkedToApplication above). Merge into whatever's already saved rather
@@ -159,6 +190,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     workersCompCarrier,
     workersCompPolicyNumber,
     workersCompExpiresAt,
+    ...gl,
   };
   if (manualApplicationInfo !== undefined) data.manualApplicationInfo = manualApplicationInfo;
 

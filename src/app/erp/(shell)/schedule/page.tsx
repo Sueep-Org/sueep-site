@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { workersCompWarning } from "@/lib/erp/subCoverage";
 import {
   contractorAssignmentDayKeys,
   dayKey,
@@ -180,7 +181,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }),
     prisma.contractor.findMany({
       where: { status: { not: "INACTIVE" } },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, workersCompExpiresAt: true, workersCompExempt: true },
       orderBy: { name: "asc" },
     }),
     prisma.changeOrderDayAssignment.findMany({
@@ -230,8 +231,13 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   }));
   const employeeNameById = new Map(employees.map((e) => [e.id, e.displayName]));
 
-  const contractors = contractorRows.map((c) => ({ id: c.id, displayName: c.name, email: c.email }));
-  const contractorNameById = new Map(contractors.map((c) => [c.id, c.displayName]));
+  // Pickers show a workers' comp warning next to the name (warning only for
+  // now; scheduling isn't blocked). Calendar labels keep the plain name.
+  const contractors = contractorRows.map((c) => {
+    const wc = workersCompWarning(c);
+    return { id: c.id, displayName: wc ? `${c.name} · ${wc}` : c.name, email: c.email };
+  });
+  const contractorNameById = new Map(contractorRows.map((c) => [c.id, c.name]));
 
   // Planned (not-yet-logged) worker names per project/day — surfaced in the
   // chip tooltip alongside actual logged hours/workers when a chip already

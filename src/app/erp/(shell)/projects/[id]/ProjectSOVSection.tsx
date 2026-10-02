@@ -8,7 +8,11 @@ export type SOVItem = {
   description: string;
   scheduledValueCents: number;
   completed: boolean;
+  /** When it was finished (ISO), null when not done. */
+  completedAt: string | null;
   billingStatus: string;
+  /** When it was marked paid (ISO), null when not paid. */
+  paidAt: string | null;
 };
 
 const BILLING_OPTIONS = [
@@ -25,6 +29,20 @@ function billingBadgeCls(status: string): string {
 
 function fmt(cents: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+/** "YYYY-MM-DD" of a stored date: a picked date is UTC midnight, an
+ * automatic stamp is a real moment, read in Eastern time. */
+function dayKey(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) return iso.slice(0, 10);
+  return d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+function fmtDay(iso: string | null): string {
+  const key = dayKey(iso);
+  return key ? new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
 }
 
 function parseCents(val: string): number {
@@ -48,6 +66,8 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState("");
   const [editValue, setEditValue] = useState("");
+  const [editDone, setEditDone] = useState("");
+  const [editPaid, setEditPaid] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -101,6 +121,8 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
         body: JSON.stringify({
           description: editDesc.trim(),
           scheduledValueCents: parseCents(editValue),
+          ...(editDone ? { completedAt: editDone } : {}),
+          ...(editPaid ? { paidAt: editPaid } : {}),
         }),
       });
       const data = (await res.json()) as SOVItem & { error?: string };
@@ -118,11 +140,15 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
     const next = !item.completed;
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, completed: next } : i)));
     try {
-      await fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, {
+      const res = await fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ completed: next }),
       });
+      if (res.ok) {
+        const data = (await res.json()) as SOVItem;
+        setItems((prev) => prev.map((i) => (i.id === item.id ? data : i)));
+      }
     } catch {
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, completed: item.completed } : i)));
     }
@@ -131,11 +157,15 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
   async function updateBilling(item: SOVItem, billingStatus: string) {
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus } : i)));
     try {
-      await fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, {
+      const res = await fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ billingStatus }),
       });
+      if (res.ok) {
+        const data = (await res.json()) as SOVItem;
+        setItems((prev) => prev.map((i) => (i.id === item.id ? data : i)));
+      }
     } catch {
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus: item.billingStatus } : i)));
     }
@@ -186,7 +216,7 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
 
           if (isEditing) {
             return (
-              <div key={item.id} className="flex items-center gap-3 bg-pink-50 px-4 py-3">
+              <div key={item.id} className="flex flex-wrap items-center gap-3 bg-pink-50 px-4 py-3">
                 <input
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
@@ -202,6 +232,18 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
                   placeholder="0.00"
                   className="w-32 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-right text-gray-900 focus:border-pink-400 focus:outline-none"
                 />
+                {item.completed && (
+                  <label className="flex items-center gap-1 text-xs text-gray-500">
+                    Done
+                    <input type="date" value={editDone} onChange={(e) => setEditDone(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-400 focus:outline-none" />
+                  </label>
+                )}
+                {item.billingStatus === "PAID" && (
+                  <label className="flex items-center gap-1 text-xs text-gray-500">
+                    Paid
+                    <input type="date" value={editPaid} onChange={(e) => setEditPaid(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-400 focus:outline-none" />
+                  </label>
+                )}
                 <div className="flex gap-1.5">
                   <button type="button" onClick={saveEdit} disabled={saving} className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300">Save</button>
                   <button type="button" onClick={() => { setEditingId(null); setError(""); }} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
@@ -222,9 +264,16 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
               ) : (
                 <span className={`h-4 w-4 flex-shrink-0 rounded border ${item.completed ? "border-emerald-500 bg-emerald-100" : "border-gray-300 bg-white"}`} />
               )}
-              <span className={`flex-1 text-sm ${item.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
-                {item.description}
-              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`text-sm ${item.completed ? "line-through text-gray-400" : "text-gray-900"}`}>
+                  {item.description}
+                </span>
+                {(item.completedAt || item.paidAt) && (
+                  <p className="text-[11px] text-gray-400">
+                    {[item.completedAt && `Done ${fmtDay(item.completedAt)}`, item.paidAt && `Paid ${fmtDay(item.paidAt)}`].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
               <span className={`text-sm font-medium tabular-nums ${item.completed ? "text-gray-400" : "text-gray-700"}`}>
                 {fmt(item.scheduledValueCents)}
               </span>
@@ -265,6 +314,8 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
                           setEditingId(item.id);
                           setEditDesc(item.description);
                           setEditValue((item.scheduledValueCents / 100).toFixed(2));
+                          setEditDone(dayKey(item.completedAt) ?? "");
+                          setEditPaid(dayKey(item.paidAt) ?? "");
                           setError("");
                           setAdding(false);
                           setMenuOpenId(null);

@@ -2,7 +2,7 @@ import { getArticlesByCategory } from "@/lib/help";
 import { getErpAuth } from "@/lib/erpAuth";
 import { HelpSearch, type HelpCategory } from "@/app/erp/components/help/HelpSearch";
 
-const categoryOrder = ["Projects", "Turnovers & Buildings", "Janitorial Contracts", "People & Schedule", "Billing, Pay & Finance"];
+const categoryOrder = ["Projects", "Turnovers & Buildings", "Janitorial Contracts", "People & Schedule", "Billing, Pay & Finance", "Insurance & COIs"];
 
 export default async function HelpIndexPage() {
   const auth = await getErpAuth();

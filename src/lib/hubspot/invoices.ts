@@ -1,4 +1,5 @@
 import { hubspotFetch } from "@/lib/hubspot/client";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 /**
  * Low-level HubSpot Invoice/line-item API calls, following the same request
@@ -42,7 +43,7 @@ export async function searchPaidInvoices(pageSize = 100): Promise<HubSpotInvoice
         filterGroups: [
           { filters: [{ propertyName: "hs_invoice_status", operator: "EQ", value: "paid" }] },
         ],
-        properties: ["hs_invoice_status", "hs_number", "hs_createdate"],
+        properties: ["hs_invoice_status", "hs_number", "hs_createdate", "hs_payment_date"],
         limit: pageSize,
         ...(after ? { after } : {}),
       }),
@@ -57,6 +58,21 @@ export async function searchPaidInvoices(pageSize = 100): Promise<HubSpotInvoice
   } while (after);
 
   return results;
+}
+
+/** The day HubSpot says an invoice was paid (hs_payment_date, read in
+ * Eastern time), saved as UTC midnight like a picked date. Null when unset. */
+export function invoicePaidOn(invoice: HubSpotInvoiceRecord): Date | null {
+  const raw = invoice.properties.hs_payment_date;
+  const d = raw ? new Date(raw) : null;
+  return d && !Number.isNaN(d.getTime()) ? new Date(`${todayEasternKey(d)}T00:00:00.000Z`) : null;
+}
+
+/** invoicePaidOn for one invoice by id. */
+export async function fetchInvoicePaidOn(invoiceId: string): Promise<Date | null> {
+  const res = await hubspotFetch(`/crm/v3/objects/invoices/${invoiceId}?properties=hs_payment_date`);
+  if (!res.ok) return null;
+  return invoicePaidOn((await res.json()) as HubSpotInvoiceRecord);
 }
 
 type HubSpotAssociationPage = {

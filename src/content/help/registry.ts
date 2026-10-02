@@ -20,6 +20,8 @@ import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 import { JanitorialGettingStarted } from "./janitorial/getting-started";
 import { FinanceDashboard } from "./finance/finance-dashboard";
+import { InsuranceOverview } from "./insurance/insurance-overview";
+import { CoiQuickStart } from "./insurance/coi-quick-start";
 
 export type ArticleEntry = {
   slug: string;
@@ -210,5 +212,23 @@ export const registry: ArticleEntry[] = [
     order: 3,
     component: FinanceDashboard,
     roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
+  },
+  {
+    slug: "insurance/insurance-overview",
+    title: "Insurance & COIs",
+    category: "Insurance & COIs",
+    description: "Our insurance policies, certificate holders, COI requests, and the COIs given out on each project.",
+    order: 2,
+    component: InsuranceOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "insurance/coi-quick-start",
+    title: "COI Quick Start",
+    category: "Insurance & COIs",
+    description: "A GC asks for a COI: the 5 steps, keeping COIs current, subs, and insurance words in plain English.",
+    order: 1,
+    component: CoiQuickStart,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
 ];

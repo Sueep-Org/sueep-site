@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSovPercentDone } from "@/lib/sovSync";
+import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -75,9 +75,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
       );
       const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
-      if (idsToComplete.length > 0) {
-        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
-      }
+      await markSovItemsCompleted(idsToComplete, assignment.endDate ?? new Date());
       await syncSovPercentDone(existing.projectId);
     }
     return NextResponse.json(assignment);

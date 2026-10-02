@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
+import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
 import { combinedLineItemText, matchSovItem, matchUnitNumber, amountReconciles } from "@/lib/hubspot/billingMatch";
 import {
   searchPaidInvoices,
+  invoicePaidOn,
   fetchAssociatedDealId,
   listAssociatedLineItemIds,
   fetchLineItemsByIds,
@@ -129,7 +130,7 @@ function statusForMethod(method: "ALIAS" | "SCORE" | null): "AUTO_APPLIED" | "AL
   return method === "ALIAS" ? "ALIAS_APPLIED" : "AUTO_APPLIED";
 }
 
-async function applySovResolution(r: SovResolution, projectId: string): Promise<ApplyOutcome> {
+async function applySovResolution(r: SovResolution, projectId: string, paidOn: Date | null): Promise<ApplyOutcome> {
   if (!r.sovItemId) return { status: "PENDING_REVIEW" };
 
   const target = await prisma.projectSOVItem.findUnique({ where: { id: r.sovItemId } });
@@ -146,7 +147,7 @@ async function applySovResolution(r: SovResolution, projectId: string): Promise<
     return { status: "PENDING_REVIEW", matchedSovItemId: target.id };
   }
 
-  await prisma.projectSOVItem.update({ where: { id: target.id }, data: { billingStatus: "PAID" } });
+  await markSovItemPaid(target.id, paidOn);
   // Same side effects the manual billing PATCH route runs after a SOV item
   // billingStatus change — reused, not reimplemented.
   await syncSovPercentDone(projectId);
@@ -271,7 +272,7 @@ export async function processPaidInvoices(): Promise<{ processed: number; errors
       if (project) {
         for (const ctx of contexts) {
           const resolution = await resolveSovLineItem(ctx, project.id);
-          const outcome = await applySovResolution(resolution, project.id);
+          const outcome = await applySovResolution(resolution, project.id, invoicePaidOn(invoice));
           await upsertLedgerRow({
             invoiceId: invoice.id,
             dealId,

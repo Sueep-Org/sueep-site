@@ -185,6 +185,72 @@ function BillingCard({ parts, future }: { parts: { label: string; cents: number;
   );
 }
 
+/** What was counted for a job in these dates: its contract, SOV lines,
+ * change orders, or only costs (work logged, nothing finished yet). */
+function jobIncludes(j: FinanceJob): string {
+  if (!j.parts) return "contract month";
+  const { contract, sovLines, changeOrders } = j.parts;
+  const bits = [
+    contract && "contract",
+    sovLines > 0 && `${sovLines} SOV line${sovLines === 1 ? "" : "s"}`,
+    changeOrders > 0 && `${changeOrders} change order${changeOrders === 1 ? "" : "s"}`,
+  ].filter(Boolean);
+  return bits.length ? bits.join(", ") : "costs only, nothing finished yet";
+}
+
+/** The jobs behind one category's revenue, hidden behind a small "i". */
+function CategoryJobs({ label, jobs }: { label: string; jobs: FinanceJob[] }) {
+  // A job counted in several months (a year view) shows once, added up.
+  const merged = new Map<string, FinanceJob>();
+  for (const j of jobs) {
+    const m = merged.get(j.href);
+    if (!m) {
+      merged.set(j.href, { ...j, parts: j.parts && { ...j.parts } });
+      continue;
+    }
+    m.revenueCents += j.revenueCents;
+    m.costCents += j.costCents;
+    m.profitCents += j.profitCents;
+    if (m.parts && j.parts) {
+      m.parts.contract ||= j.parts.contract;
+      m.parts.sovLines += j.parts.sovLines;
+      m.parts.changeOrders += j.parts.changeOrders;
+    }
+  }
+  if (merged.size === 0) return null;
+  const sorted = [...merged.values()].sort((a, b) => b.revenueCents - a.revenueCents || b.costCents - a.costCents);
+  return (
+    <details className="relative">
+      <summary
+        className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+        title={`See the ${sorted.length} job${sorted.length === 1 ? "" : "s"} in ${label}`}
+      >
+        i
+      </summary>
+      <div className="absolute right-0 z-10 mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 shadow-lg">
+        <p className="font-medium text-gray-900">{label}</p>
+        <ul className="mt-2 space-y-0.5">
+          {sorted.map((j) => (
+            <li key={j.id}>
+              <Link
+                href={j.href}
+                className="flex items-baseline justify-between gap-3 rounded px-1.5 py-1 hover:bg-gray-50"
+                title={`${j.title}\nRevenue ${money(j.revenueCents)}, job costs ${money(j.costCents)}, profit ${money(j.profitCents)}`}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-gray-800">{j.title}</span>
+                  <span className="block text-gray-400">{jobIncludes(j)}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-gray-900">{short(j.revenueCents)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  );
+}
+
 /** Revenue and costs side by side per month (or year), oldest first, with
  * net profit under each. Exact numbers on hover and in the table below. */
 /** Commission earned and paid in the dates, and owed right now, by person. */
@@ -445,6 +511,7 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
   const gapGroups: { title: string; items: GapItem[] }[] = [
     { title: "Complete, no end date (left out)", items: warnings.noCompletionDate },
     { title: "Complete, no contract value (left out)", items: warnings.noContractValue },
+    { title: "SOV total doesn't match contract (lines scaled to the contract)", items: warnings.sovMismatch },
     { title: "Salaried, no salary on file (counted as $0)", items: warnings.salaryMissing },
     {
       title: "Janitors with no hourly rate (hours cost $0)",
@@ -513,7 +580,10 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
                     <ul className="mt-1 space-y-0.5">
                       {g.items.map((item) => (
                         <li key={item.id}>
-                          <Link href={item.href} className="block truncate rounded px-1.5 py-1 text-gray-800 hover:bg-gray-50" title={item.label}>{item.label}</Link>
+                          <Link href={item.href} className="block rounded px-1.5 py-1 hover:bg-gray-50" title={item.label}>
+                            <span className="block truncate text-gray-800">{item.label}</span>
+                            {item.detail && <span className="block text-gray-400">{item.detail}</span>}
+                          </Link>
                         </li>
                       ))}
                     </ul>
@@ -591,17 +661,22 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
               const contractCents = seg.revenueCents - seg.changeOrderCents;
               const share = total.revenueCents > 0 ? (seg.revenueCents / total.revenueCents) * 100 : 0;
               return (
-                <li
-                  key={s}
-                  title={[
-                    `${money(seg.revenueCents)} from ${seg.jobs} ${unit}${seg.jobs === 1 ? "" : "s"}`,
-                    seg.changeOrderCents > 0 && `Contract ${money(contractCents)}, change orders ${money(seg.changeOrderCents)}`,
-                    `Job costs ${money(seg.costCents)}, profit ${money(profit)} (${pctLabel(pct(profit, seg.revenueCents))} margin)`,
-                  ].filter(Boolean).join("\n")}
-                >
-                  <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-gray-700">{FINANCE_SEGMENT_LABELS[s]}</span>
-                    <span className="font-semibold tabular-nums text-gray-900">{short(seg.revenueCents)}</span>
+                <li key={s}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span
+                      className="text-gray-700"
+                      title={[
+                        `${money(seg.revenueCents)} from ${seg.jobs} ${unit}${seg.jobs === 1 ? "" : "s"}`,
+                        seg.changeOrderCents > 0 && `Contract ${money(contractCents)}, change orders ${money(seg.changeOrderCents)}`,
+                        `Job costs ${money(seg.costCents)}, profit ${money(profit)} (${pctLabel(pct(profit, seg.revenueCents))} margin)`,
+                      ].filter(Boolean).join("\n")}
+                    >
+                      {FINANCE_SEGMENT_LABELS[s]}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-semibold tabular-nums text-gray-900">{short(seg.revenueCents)}</span>
+                      <CategoryJobs label={FINANCE_SEGMENT_LABELS[s]} jobs={periodJobs.filter((j) => j.segment === s)} />
+                    </span>
                   </div>
                   {/* Contract, then change orders, inside this category's share of revenue. */}
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100" aria-hidden>

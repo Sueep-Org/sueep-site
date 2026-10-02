@@ -28,7 +28,8 @@ export function FinanceDashboard() {
           <strong>Count by Completed</strong> puts work in the month it was finished. <strong>Count by Paid</strong> counts
           only work marked paid, in the month it was marked paid. A job marked paid before paid dates were saved
           (janitorial months before October 2026) uses its completion month instead. Its job costs move with it, so
-          margins stay the same.
+          margins stay the same. The one exception is a project with a Schedule of Values, whose costs always count on the
+          day they happened (see Costs below).
         </LI>
       </UL>
 
@@ -37,6 +38,23 @@ export function FinanceDashboard() {
         <LI>The contract value of finished work, counted when it was finished (not when it was invoiced or paid).</LI>
         <LI>A project&apos;s original contract counts when the whole project is Complete: turnovers on the day they were marked complete, other projects on their end date.</LI>
         <LI>
+          A project with a <strong>Schedule of Values</strong> counts line by line instead. Each SOV line counts on the day it
+          was marked done, even while the project is still open, so a floor finished in August counts in August. In{" "}
+          <strong>Count by Paid</strong>, a line counts on the day it was marked paid. Lines not done yet count when the
+          project is Complete, and until then they&apos;re in Future.
+        </LI>
+        <LI>
+          Each SOV line is worth its <strong>share of the contract</strong>: a line that&apos;s 10% of the SOV total counts as
+          10% of the contract value, so the lines always add up to the contract. When the SOV total and the contract value
+          are more than $1,000 apart, the project is listed under the <strong>!</strong> icon at the top so someone can fix
+          whichever one is wrong.
+        </LI>
+        <LI>
+          SOV dates: a line gets its done date when it&apos;s ticked off (or the work day of the labor log that finished it)
+          and its paid date when it&apos;s marked paid (or HubSpot&apos;s payment date when the payment came from HubSpot).
+          Both can be changed on the project page: open the line&apos;s menu, click <strong>Edit</strong>, and pick the date.
+        </LI>
+        <LI>
           Each change order counts on its own, on the day it was completed, even while its project is still open. So a
           change order finished in August counts in August, with its own costs. One that isn&apos;t done yet counts with its
           project once the project is Complete. It counts at its price (or its estimate if no price is set). Voided and
@@ -44,7 +62,7 @@ export function FinanceDashboard() {
           marked paid (ones paid before October 2026 have no paid date, so they use their completion day).
         </LI>
         <LI>Janitorial contracts count once per billing month: that month&apos;s contract amount plus any extra charges added to it. The month in progress counts by days so far (on the 10th of a 31 day month, 10/31 of the amount), to match its labor, which only counts up to today.</LI>
-        <LI>Completed projects with no contract value or no end date can&apos;t be counted. The <strong>!</strong> icon at the top lists each one by name; click a name to open it and fill in what&apos;s missing.</LI>
+        <LI>Completed projects with no contract value or no end date can&apos;t be counted. The <strong>!</strong> icon at the top lists each one by name, along with SOVs that don&apos;t match their contract; click a name to open it and fix what&apos;s missing.</LI>
         <LI>A year compares against the same months of the year before. Since data starts August 2026, that first appears in August 2027.</LI>
       </UL>
 
@@ -52,6 +70,13 @@ export function FinanceDashboard() {
       <P>Costs are job costs plus overhead. The breakdown under <strong>Where the money went</strong> adds up to the same total.</P>
       <UL>
         <LI><strong>Job costs</strong> are the same numbers as the Projects table, so a job&apos;s margin here always matches what you see there.</LI>
+        <LI>
+          For a project with a Schedule of Values, job costs count on the day they happened, not when the project is
+          Complete: labor on its work day, materials on their used-on day, a contractor on their end date. That way a
+          month&apos;s finished SOV lines sit next to that month&apos;s spending. Labor or materials typed as a total (no
+          logs) have no date, so they count when the project is Complete. Work on a change order still counts with that
+          change order.
+        </LI>
         <LI>
           <strong>Hourly payroll</strong> is priced exactly the way Payroll pays it: each log at the rate on it. If a worker
           passes 40 hours in a week (counting all their projects and janitorial shifts), each hour past 40 also costs half
@@ -96,7 +121,12 @@ export function FinanceDashboard() {
           Each bar is split into the <strong>original contract</strong> (blue) and <strong>change orders</strong> (orange),
           with the two amounts written underneath. Change orders count on their own completion day (see Revenue above).
         </LI>
-        <LI>Hover a category for its job count, job costs, and margin. Post-construction, Turnovers, and Janitorial contracts always show, even at $0. Under Janitorial contracts, the number of Active contracts and their monthly rates added together (hover for the yearly amount), plus the start date while none has started yet.</LI>
+        <LI>
+          Click the <strong>i</strong> next to a category&apos;s amount to see the jobs behind it, biggest first, with what
+          was counted for each (its contract, how many SOV lines, how many change orders). A job with spending but no
+          finished work in the dates shows as &quot;costs only&quot;. Click a job to open it.
+        </LI>
+        <LI>Hover a category name for its job count, job costs, and margin. Post-construction, Turnovers, and Janitorial contracts always show, even at $0. Under Janitorial contracts, the number of Active contracts and their monthly rates added together (hover for the yearly amount), plus the start date while none has started yet.</LI>
       </UL>
 
       <H2>Commission</H2>

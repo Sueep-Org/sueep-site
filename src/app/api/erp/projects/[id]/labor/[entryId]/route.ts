@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
-import { syncSovPercentDone } from "@/lib/sovSync";
+import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
 import { TRANSPORTATION_METHODS } from "@/lib/erp/transportationMethods";
 import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 
@@ -115,9 +115,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         Array.isArray(body.sovCompletedIds) ? body.sovCompletedIds.map((v) => String(v).trim()) : []
       );
       const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
-      if (idsToComplete.length > 0) {
-        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
-      }
+      await markSovItemsCompleted(idsToComplete, entry.workDate);
       await syncSovPercentDone(id);
     }
     return NextResponse.json(entry);

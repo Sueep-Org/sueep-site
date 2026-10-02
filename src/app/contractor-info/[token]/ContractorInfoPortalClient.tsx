@@ -25,6 +25,12 @@ type Props = {
     workersCompPolicyNumber: string | null;
     workersCompExpiresAt: string | null;
     workersCompDocFilename: string | null;
+    glCarrier: string | null;
+    glPolicyNumber: string | null;
+    glExpiresAt: string | null;
+    /** Dollar amounts as text */
+    glOccurrence: string;
+    glAggregate: string;
     /** sub_<key>-keyed values for the Company profile / additional
      * insurance / licensing fields below, already saved to
      * Contractor.manualApplicationInfo. */
@@ -79,6 +85,13 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
     initial.workersCompExpiresAt ? initial.workersCompExpiresAt.slice(0, 10) : ""
   );
   const [workersCompDocFilename, setWorkersCompDocFilename] = useState(initial.workersCompDocFilename ?? "");
+  const [gl, setGl] = useState({
+    glCarrier: initial.glCarrier ?? "",
+    glPolicyNumber: initial.glPolicyNumber ?? "",
+    glExpiresAt: initial.glExpiresAt ? initial.glExpiresAt.slice(0, 10) : "",
+    glOccurrenceCents: initial.glOccurrence,
+    glAggregateCents: initial.glAggregate,
+  });
   const [uploadingCoi, setUploadingCoi] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [questionnaireValues, setQuestionnaireValues] = useState<Record<string, string>>(initial.questionnaireValues);
@@ -140,6 +153,9 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           workersCompCarrier: workersCompCarrier || null,
           workersCompPolicyNumber: workersCompPolicyNumber || null,
           workersCompExpiresAt: workersCompExpiresAt || null,
+          // Limits are sent as dollar text; the server converts to cents.
+          ...gl,
+          glExpiresAt: gl.glExpiresAt || null,
           ...(isLinkedToApplication ? {} : { questionnaireValues }),
         }),
       });
@@ -292,6 +308,32 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
               </label>
             </div>
           </div>
+
+          <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <legend className="text-sm font-semibold text-gray-800 px-1">General Liability</legend>
+            <div>
+              <label className={labelCls}>Insurance carrier</label>
+              <input type="text" value={gl.glCarrier} onChange={(e) => setGl((g) => ({ ...g, glCarrier: e.target.value }))} className={fieldCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Policy number</label>
+              <input type="text" value={gl.glPolicyNumber} onChange={(e) => setGl((g) => ({ ...g, glPolicyNumber: e.target.value }))} className={fieldCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Each occurrence</label>
+                <input type="text" inputMode="decimal" placeholder="$" value={gl.glOccurrenceCents} onChange={(e) => setGl((g) => ({ ...g, glOccurrenceCents: e.target.value }))} className={fieldCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Aggregate</label>
+                <input type="text" inputMode="decimal" placeholder="$" value={gl.glAggregateCents} onChange={(e) => setGl((g) => ({ ...g, glAggregateCents: e.target.value }))} className={fieldCls} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Policy expiration date</label>
+              <input type="date" value={gl.glExpiresAt} onChange={(e) => setGl((g) => ({ ...g, glExpiresAt: e.target.value }))} className={fieldCls} />
+            </div>
+          </fieldset>
 
           <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
             <legend className="text-sm font-semibold text-gray-800 px-1">Workers&rsquo; Compensation</legend>
