@@ -2,9 +2,10 @@
  * A subcontractor's insurance status from the policies on their profile:
  * VALID, EXPIRING (within 30 days), EXPIRED, or MISSING.
  *
- * Until Sueep sets minimum requirements for subs, general liability and
- * workers' comp (or a workers' comp exemption) are treated as required.
- * Auto and umbrella only count once a date has been entered.
+ * General liability and workers' comp (or a workers' comp exemption) are
+ * always required; auto and umbrella only count once a date is entered.
+ * Limits are checked per job against what the GC requires there, see
+ * subRequirements.ts.
  */
 
 import { expiryStatus } from "./insurance";
@@ -66,3 +67,14 @@ export const SUB_STATUS_STYLE: Record<SubCoverageStatus, { label: string; cls: s
   EXPIRED: { label: "Expired", cls: "bg-red-50 text-red-700" },
   MISSING: { label: "Missing", cls: "bg-gray-100 text-gray-600" },
 };
+
+/**
+ * Short warning when a sub has no current workers' comp (and isn't exempt),
+ * shown next to their name when scheduling. Warning only for now; Sueep
+ * plans to block scheduling in this case later.
+ */
+export function workersCompWarning(c: { workersCompExpiresAt: Date | null; workersCompExempt: boolean }, todayKey: string = todayEasternKey()): string | null {
+  if (c.workersCompExempt) return null;
+  if (!c.workersCompExpiresAt) return "No workers' comp";
+  return utcDateKey(c.workersCompExpiresAt) < todayKey ? "WC expired" : null;
+}

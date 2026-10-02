@@ -15,16 +15,17 @@ export function InsuranceOverview() {
       <Steps>
         <Step n={1} title="Our Policies tab">
           Lists each of our policies (general liability, umbrella, auto, hired and non-owned auto, workers&apos; comp) with its
-          carrier, limits, and expiration date. Click <strong>+ Add policy</strong> to add one, or <strong>Edit</strong> on a row
-          to change it.
+          carrier, limits, and expiration date. Click <strong>+ Add policy</strong> to add one, or click a row to change it.
+          Hover the <strong>i</strong> icons for what each field means.
           <UL>
             <LI>
               <strong>Expiration date</strong> is required. A badge shows <strong>Current</strong>, the number of days left once
               it&apos;s within 30 days, or <strong>Expired</strong>.
             </LI>
             <LI>
-              <strong>Included on certificates</strong>: check blanket additional insured, waiver of subrogation, and primary and
-              noncontributory when the policy includes them. These drive the checks on the Certificate Holders tab.
+              <strong>Includes</strong>: check additional insured, waiver of subrogation, and primary and noncontributory when
+              the policy page in CoverDash lists them as Included. These drive the checks on the Certificate Holders tab. For
+              general liability, also check <strong>Aggregate applies per project</strong> if it does.
             </LI>
             <LI>
               <strong>On our COIs</strong>: leave checked for policies that go on the certificates we give GCs. Uncheck it for
@@ -44,13 +45,18 @@ export function InsuranceOverview() {
           a row to edit it. Use the search box to find a holder by name, other names, or contact.
           <UL>
             <LI>
-              <strong>Exact name for the certificate</strong> is how the name should appear in the certificate holder box. Put
+              <strong>Name</strong> is exactly how it should appear in the certificate holder box. Put
               other spellings you&apos;ve seen on past COIs in <strong>Other names</strong>, one per line, so the profile is
               found under any of them.
             </LI>
             <LI>
-              <strong>What they usually require</strong>: the limits and wording items from their sample COI or contract, plus
-              names to list as additional insured and any Description of Operations wording.
+              <strong>Requirements</strong>: the limits and wording items from their contract or vendor requirements, plus
+              names to list as additional insured and any Description of Operations wording. Leave a limit blank if they
+              don&apos;t ask for it.
+            </LI>
+            <LI>
+              These requirements also apply to subcontractors: a sub must carry what the GC requires on the job. Subs on a
+              project with this holder are checked against them (see the project&apos;s Contractors tab).
             </LI>
           </UL>
           <Callout type="info">
@@ -71,7 +77,8 @@ export function InsuranceOverview() {
             </LI>
           </UL>
           The <strong>Our coverage</strong> column on the list shows the same result: <strong>Covered</strong>,{" "}
-          <strong>Needs umbrella</strong>, or the number of gaps.
+          <strong>Needs umbrella</strong>, or the number of gaps. A limit is the most a policy pays:{" "}
+          <strong>each occurrence</strong> per incident, <strong>aggregate</strong> in total for the policy year.
         </Step>
 
         <Step n={4} title="COIs on a project">
@@ -97,7 +104,7 @@ export function InsuranceOverview() {
           places:
           <UL>
             <LI>
-              <strong>COIs expiring</strong> under Needs attention on the dashboard.
+              The <strong>COIs</strong> box under Needs attention on the dashboard, which also counts new COI requests.
             </LI>
             <LI>A red or amber pill under the project name.</LI>
             <LI>A pill next to the project on the Post-Construction tab of Project Billing.</LI>

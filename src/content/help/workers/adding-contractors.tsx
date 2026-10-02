@@ -71,8 +71,17 @@ export function AddingContractors() {
                     </LI>
                 </UL>
                 The status at the top (<strong>Valid</strong>, <strong>Expiring</strong>, <strong>Expired</strong>, or{" "}
-                <strong>Missing</strong>) also shows in the Insurance column on the Contractors list. For now general liability
-                and workers&apos; comp (or an exemption) are required; auto and umbrella count once a date is entered.
+                <strong>Missing</strong>) also shows in the Insurance column on the Contractors list. General liability and
+                workers&apos; comp (or an exemption) are always required; auto and umbrella count once a date is entered.
+                <br></br><br></br>
+                Subs must carry the insurance the GC requires on the job. A job&apos;s requirements come from the Certificate
+                Holders and COI requests on that project (see Insurance &amp; COIs). On the project&apos;s{" "}
+                <strong>Contractors</strong> tab, <strong>Subs need</strong> shows them, and a <strong>Below job insurance</strong>{" "}
+                tag marks any sub who falls short. The sub&apos;s Insurance section lists the open jobs where they&apos;re below
+                what the GC requires.
+                When scheduling a sub on the calendar or adding them to a project, their name shows{" "}
+                <strong>No workers&apos; comp</strong> or <strong>WC expired</strong> if they don&apos;t have current workers&apos;
+                comp (and aren&apos;t exempt). It&apos;s a warning only for now; they can still be scheduled.
                 <Callout type="info">
                     The dashboard&apos;s <strong>Sub insurance alerts</strong> lists subs whose workers&apos; comp is missing,
                     expired, or expiring within 30 days, and whose general liability is expired or expiring.

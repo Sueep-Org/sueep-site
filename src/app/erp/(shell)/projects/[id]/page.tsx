@@ -5,6 +5,9 @@ import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance } from "@/lib/erpAuth";
 import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
 import { ProjectCoisTab } from "./ProjectCoisTab";
+import { loadJobRequirements, subGaps } from "@/lib/erp/subRequirements";
+import { workersCompWarning } from "@/lib/erp/subCoverage";
+import { requirementSummary } from "@/lib/erp/insurance";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
 import { ProjectCommissionOwnerEditor } from "./ProjectCommissionOwnerEditor";
@@ -119,7 +122,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }),
     prisma.contractor.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, workersCompExpiresAt: true, workersCompExempt: true },
     }),
     prisma.projectChangeOrder.findMany({
       where: { projectId: id },
@@ -420,6 +423,36 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     noCrewRequired: co.noCrewRequired,
   }));
 
+  // Subs must carry what the GC requires on this job. Warn on any who fall
+  // short (insurance roles only).
+  let contractorInsurance: { required: string[]; sources: string[]; gaps: Record<string, string[]> } | undefined;
+  if (canSeeCois) {
+    const jobReq = (await loadJobRequirements([project.id])).get(project.id);
+    if (jobReq) {
+      const subIds = [...new Set(project.contractorAssignments.map((a) => a.contractorId))];
+      const subs = await prisma.contractor.findMany({
+        where: { id: { in: subIds } },
+        select: {
+          id: true,
+          glOccurrenceCents: true,
+          glAggregateCents: true,
+          autoLimitCents: true,
+          umbrellaLimitCents: true,
+          workersCompExpiresAt: true,
+          workersCompExempt: true,
+          sueepAdditionalInsured: true,
+          sueepWaiverOfSubrogation: true,
+          sueepPrimaryNoncontributory: true,
+        },
+      });
+      contractorInsurance = {
+        required: requirementSummary(jobReq),
+        sources: jobReq.sources,
+        gaps: Object.fromEntries(subs.map((s) => [s.id, subGaps(s, jobReq)])),
+      };
+    }
+  }
+
   const contractorRows = project.contractorAssignments.map((a) => ({
     id: a.id,
     contractorId: a.contractorId,
@@ -636,7 +669,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         <ProjectContractorSection
           projectId={project.id}
           initialAssignments={contractorRows}
-          contractors={contractors}
+          insurance={contractorInsurance}
+          contractors={contractors.map((c) => ({ id: c.id, name: c.name, status: c.status, wcWarning: workersCompWarning(c) }))}
           sovItems={sovItems}
           isJanitorialUnit={isTurnover}
           contractedScopeItems={contractedScopeItems}

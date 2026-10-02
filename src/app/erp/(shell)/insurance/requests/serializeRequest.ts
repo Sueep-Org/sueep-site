@@ -1,17 +1,12 @@
 import type { CoiRequest } from "@prisma/client";
-import { normalizeHolderName } from "@/lib/erp/insurance";
+import { holderMatcher } from "@/lib/erp/insurance";
+
+export { holderMatcher };
 import { requestHolders } from "@/lib/erp/coiRequests";
 import { utcDateKey } from "@/lib/erp/dates";
 import type { RequestRow } from "./types";
 
 type Profile = { id: string; name: string; aliases: string[] };
-
-/** Builds a name lookup over holder profiles (name and other names). */
-export function holderMatcher(profiles: Profile[]) {
-  const byName = new Map<string, Profile>();
-  for (const p of profiles) for (const n of [p.name, ...p.aliases]) byName.set(normalizeHolderName(n), p);
-  return (name: string) => byName.get(normalizeHolderName(name)) ?? null;
-}
 
 export function toRequestRow(
   r: Omit<CoiRequest, "sampleData"> & { hasSample: boolean; project: { jobTitle: string } | null; _count: { cois: number } },

@@ -234,3 +234,11 @@ export function normalizeHolderName(name: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Builds a name lookup over holder profiles (name and other names). */
+export function holderMatcher<P extends { id: string; name: string; aliases: string[] }>(profiles: P[]) {
+  const byName = new Map<string, P>();
+  for (const p of profiles) for (const n of [p.name, ...p.aliases]) byName.set(normalizeHolderName(n), p);
+  return (name: string) => byName.get(normalizeHolderName(name)) ?? null;
+}
+

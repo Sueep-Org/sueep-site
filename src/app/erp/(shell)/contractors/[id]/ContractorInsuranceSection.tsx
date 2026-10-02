@@ -37,6 +37,8 @@ type Props = {
   contractorId: string;
   initial: Initial;
   workersCompDoc: { id: string; filename: string } | null;
+  /** Open jobs where the GC requires more than this sub has */
+  jobGaps: { projectId: string; jobTitle: string; sources: string[]; gaps: string[] }[];
   /** The questionnaire's "insurance" section fields, kept as free-text notes
    * below the structured policies. */
   questionnaireFields: SubField[];
@@ -74,7 +76,7 @@ function TriState({ name, value, onChange, text }: { name: string; value: boolea
 /** The sub's insurance: their policies and dates, what their certificate
  * says about Sueep, and an overall Valid / Expiring / Expired / Missing
  * status. The certificate itself is uploaded via Documents below. */
-export function ContractorInsuranceSection({ contractorId, initial, workersCompDoc, questionnaireFields, fromApplication, initialValues }: Props) {
+export function ContractorInsuranceSection({ contractorId, initial, workersCompDoc, jobGaps, questionnaireFields, fromApplication, initialValues }: Props) {
   const router = useRouter();
   const [hasInsurance, setHasInsurance] = useState<boolean | null>(initial.hasInsurance);
   const [f, setF] = useState({
@@ -208,7 +210,7 @@ export function ContractorInsuranceSection({ contractorId, initial, workersCompD
       <div className="flex items-center gap-2">
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.cls}`}>{style.label}</span>
         <span className="text-sm text-gray-700">{coverage.summary}</span>
-        <InfoTip text="Until Sueep sets minimum requirements for subs, general liability and workers' comp (or an exemption) are required. Auto and umbrella count once a date is entered." />
+        <InfoTip text="General liability and workers' comp (or an exemption) are always required. Limits must match what the GC requires on each job the sub works." />
       </div>
       <span className="text-xs text-gray-500">
         {initial.coiReviewedAt
@@ -268,6 +270,24 @@ export function ContractorInsuranceSection({ contractorId, initial, workersCompD
             </dd>
           </div>
         </dl>
+        {jobGaps.length > 0 && (
+          <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="flex items-center gap-1 text-xs font-semibold text-amber-800">
+              Below what the GC requires
+              <InfoTip text="Subs must carry the insurance the GC requires on each job. These are open jobs this sub is on where their coverage falls short." />
+            </p>
+            <ul className="space-y-1 text-xs text-amber-900">
+              {jobGaps.map((j) => (
+                <li key={j.projectId}>
+                  <a href={`/erp/projects/${j.projectId}?tab=Contractors`} className="font-medium hover:underline">
+                    {j.jobTitle}
+                  </a>
+                  <span className="text-amber-800"> ({j.sources.join(", ")}): {j.gaps.join("; ")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
         <button type="button" onClick={() => { setOk(""); setEditing(true); }} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
           Edit

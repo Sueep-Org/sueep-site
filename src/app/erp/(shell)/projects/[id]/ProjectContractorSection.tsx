@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { InfoTip } from "@/app/erp/components/ui";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
 
@@ -24,6 +25,8 @@ export type ContractorOption = {
   id: string;
   name: string;
   status: string;
+  /** e.g. "No workers' comp", shown next to the name when picking. Warning only. */
+  wcWarning?: string | null;
 };
 
 const input = inputClass.md;
@@ -52,8 +55,12 @@ export function ProjectContractorSection({
   isJanitorialUnit = false,
   contractedScopeItems = [],
   completedScopeItems = [],
+  insurance,
 }: {
   projectId: string;
+  /** What the GC requires on this job and where each sub falls short (by
+   * contractor id). Undefined when the job has no requirements on file. */
+  insurance?: { required: string[]; sources: string[]; gaps: Record<string, string[]> };
   initialAssignments: ContractorRow[];
   contractors: ContractorOption[];
   sovItems?: SOVItemOption[];
@@ -339,7 +346,7 @@ export function ProjectContractorSection({
             <select id="c-contractor" name="contractorId" required className={input}>
               <option value="" disabled>Select contractor…</option>
               {activeContractors.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.wcWarning ? `${c.name} · ${c.wcWarning}` : c.name}</option>
               ))}
             </select>
           </div>
@@ -468,7 +475,15 @@ export function ProjectContractorSection({
       {/* Table */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contractors</h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contractors</h2>
+            {insurance && (
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                Subs need: <span className="text-gray-700">{insurance.required.join(" · ")}</span>
+                <InfoTip text={`What ${insurance.sources.join(", ")} requires on this job. Subs must carry the same. Comes from the Certificate Holders and COI requests on this project.`} />
+              </span>
+            )}
+          </div>
           {!showAddForm && (
             <button
               type="button"
@@ -511,7 +526,7 @@ export function ProjectContractorSection({
                           onChange={(e) => setEditFields((f) => ({ ...f, contractorId: e.target.value }))}
                         >
                           {contractors.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
+                            <option key={c.id} value={c.id}>{c.wcWarning ? `${c.name} · ${c.wcWarning}` : c.name}</option>
                           ))}
                         </select>
                       </td>
@@ -596,7 +611,17 @@ export function ProjectContractorSection({
                     </tr>
                   ) : (
                     <tr key={a.id}>
-                      <td className="py-2 pr-2 font-medium text-gray-900">{a.contractorName}</td>
+                      <td className="py-2 pr-2 font-medium text-gray-900">
+                        <span className="flex items-center gap-1.5">
+                          {a.contractorName}
+                          {(insurance?.gaps[a.contractorId]?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                              Below job insurance
+                              <InfoTip text={`Short on: ${insurance!.gaps[a.contractorId].join("; ")}. Update their insurance on their contractor profile.`} />
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="py-2 pr-2 text-gray-500">{a.role || "—"}</td>
                       {/* startDate/endDate are stored as UTC midnight for the intended calendar day — formatting without
                           timeZone: "UTC" re-interprets it in the viewer's local timezone, rolling it back a day for

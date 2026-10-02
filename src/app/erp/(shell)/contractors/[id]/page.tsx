@@ -15,6 +15,7 @@ import { ContractorContactInfoSection } from "./ContractorContactInfoSection";
 import { ContractorBankAccountSection } from "./ContractorBankAccountSection";
 import { ContractorInsuranceSection } from "./ContractorInsuranceSection";
 import { subCoverage } from "@/lib/erp/subCoverage";
+import { loadJobRequirements, subGaps } from "@/lib/erp/subRequirements";
 import { ContractorSsnSection } from "./ContractorSsnSection";
 import { ContractorLaborSection } from "./ContractorLaborSection";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
@@ -121,10 +122,34 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const contractorSsnStatus = contractor.ssn ? "On file" : "Not set";
   const contractorSsnTone = contractor.ssn ? "complete" : "empty";
 
+  // Open jobs where this sub is below what the GC requires.
+  const openJobAssignments = await prisma.project.findMany({
+    where: {
+      status: { notIn: ["COMPLETE", "ARCHIVED"] },
+      OR: [
+        { contractorAssignments: { some: { contractorId: contractor.id } } },
+        { changeOrders: { some: { contractorAssignments: { some: { contractorId: contractor.id } } } } },
+      ],
+    },
+    select: { id: true, jobTitle: true },
+  });
+  const jobRequirements = await loadJobRequirements(openJobAssignments.map((p) => p.id));
+  const jobGaps = openJobAssignments
+    .map((p) => {
+      const req = jobRequirements.get(p.id);
+      return req ? { projectId: p.id, jobTitle: p.jobTitle, sources: req.sources, gaps: subGaps(contractor, req) } : null;
+    })
+    .filter((j): j is NonNullable<typeof j> => j != null && j.gaps.length > 0);
+
   const coverage = subCoverage(contractor);
-  const insuranceStatus = contractor.hasInsurance == null && coverage.status === "MISSING" ? "Not set" : coverage.summary;
+  const insuranceStatus =
+    contractor.hasInsurance == null && coverage.status === "MISSING"
+      ? "Not set"
+      : jobGaps.length
+        ? `${coverage.summary} · below requirements on ${jobGaps.length} job${jobGaps.length === 1 ? "" : "s"}`
+        : coverage.summary;
   const insuranceTone =
-    coverage.status === "VALID" ? "complete" : contractor.hasInsurance == null && coverage.status === "MISSING" ? "empty" : "warning";
+    coverage.status === "VALID" && !jobGaps.length ? "complete" : contractor.hasInsurance == null && coverage.status === "MISSING" ? "empty" : "warning";
 
   const backgroundCheckStatusLabel = backgroundCheckLabel(contractor.backgroundCheckStatus);
   const backgroundCheckTone =
@@ -394,6 +419,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     coiReviewedBy: contractor.coiReviewedBy,
                   }}
                   workersCompDoc={contractor.documents[0] ?? null}
+                  jobGaps={jobGaps}
                   questionnaireFields={insuranceQuestionnaireFields}
                   fromApplication={!!linkedResponses}
                   initialValues={manualValuesFor("insurance")}
