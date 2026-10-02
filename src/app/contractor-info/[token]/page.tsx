@@ -30,6 +30,11 @@ export default async function ContractorInfoPage({ params }: PageProps) {
       workersCompCarrier: true,
       workersCompPolicyNumber: true,
       workersCompExpiresAt: true,
+      glCarrier: true,
+      glPolicyNumber: true,
+      glExpiresAt: true,
+      glOccurrenceCents: true,
+      glAggregateCents: true,
       candidateApplicationId: true,
       manualApplicationInfo: true,
     },
@@ -79,6 +84,11 @@ export default async function ContractorInfoPage({ params }: PageProps) {
         workersCompPolicyNumber: contractor.workersCompPolicyNumber,
         workersCompExpiresAt: contractor.workersCompExpiresAt ? contractor.workersCompExpiresAt.toISOString() : null,
         workersCompDocFilename: workersCompDoc?.filename ?? null,
+        glCarrier: contractor.glCarrier,
+        glPolicyNumber: contractor.glPolicyNumber,
+        glExpiresAt: contractor.glExpiresAt ? contractor.glExpiresAt.toISOString() : null,
+        glOccurrence: contractor.glOccurrenceCents != null ? String(contractor.glOccurrenceCents / 100) : "",
+        glAggregate: contractor.glAggregateCents != null ? String(contractor.glAggregateCents / 100) : "",
         questionnaireValues,
       }}
     />

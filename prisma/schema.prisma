@@ -1825,6 +1825,28 @@ model Contractor {
   workersCompCarrier      String?
   workersCompPolicyNumber String?
   workersCompExpiresAt    DateTime?
+  /// Solo sub with no employees and no workers comp policy (an exemption
+  /// form should be on file under Documents). Counts as covered for WC.
+  workersCompExempt       Boolean   @default(false)
+
+  /// The sub's other policies, from their certificate of insurance. Limits
+  /// in cents. Expiration dates are midnight UTC labels.
+  glCarrier           String?
+  glPolicyNumber      String?
+  glExpiresAt         DateTime?
+  glOccurrenceCents   Int?
+  glAggregateCents    Int?
+  autoExpiresAt       DateTime?
+  autoLimitCents      Int?
+  umbrellaExpiresAt   DateTime?
+  umbrellaLimitCents  Int?
+  /// What their certificate says about Sueep. Null means not checked yet.
+  sueepAdditionalInsured      Boolean?
+  sueepWaiverOfSubrogation    Boolean?
+  sueepPrimaryNoncontributory Boolean?
+  /// When staff last checked their certificate, and who
+  coiReviewedAt DateTime?
+  coiReviewedBy String?
 
   /// Links back to the subcontractor questionnaire this contractor originated from, if any (set via "Convert to Contractor" or the manual link picker on the profile).
   candidateApplicationId String?               @unique
@@ -2226,8 +2248,13 @@ model ProjectSOVItem {
   description         String
   scheduledValueCents Int        @default(0)
   completed           Boolean    @default(false)
+  /// When the line was finished. Set when it's marked done, cleared when it's
+  /// unmarked, editable by hand. The finance dashboard counts the line here.
+  completedAt         DateTime?
   /// NOT_BILLED | BILLED | PAID
   billingStatus       String     @default("NOT_BILLED")
+  /// When the line was marked paid. Cleared when it stops being paid.
+  paidAt              DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
 

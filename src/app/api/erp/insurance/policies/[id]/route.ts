@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageInsurance } from "@/lib/erpAuth";
 import { parsePolicyBody } from "@/lib/erp/insuranceInput";
+import { loadReissueList } from "@/lib/erp/coiRenewals";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -21,12 +22,17 @@ export async function PUT(req: Request, ctx: Ctx) {
   const parsed = parsePolicyBody(body);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  try {
-    await prisma.insurancePolicy.update({ where: { id }, data: parsed.data });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const before = await prisma.insurancePolicy.findUnique({ where: { id }, select: { expiresAt: true } });
+  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await prisma.insurancePolicy.update({ where: { id }, data: parsed.data });
+
+  // Renewed (expiration moved later): count the COIs that now need a new
+  // version, so the page can point to the Renewals tab.
+  let reissueCount = 0;
+  if (parsed.data.expiresAt.getTime() > before.expiresAt.getTime()) {
+    reissueCount = (await loadReissueList()).filter((r) => r.renewedPolicyIds.includes(id)).length;
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, reissueCount });
 }
 
 export async function DELETE(_req: Request, ctx: Ctx) {

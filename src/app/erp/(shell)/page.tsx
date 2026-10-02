@@ -712,7 +712,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       prisma.candidateApplication.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.contractor.findMany({
         where: { status: "ACTIVE" },
-        select: { id: true, name: true, workersCompExpiresAt: true },
+        select: { id: true, name: true, workersCompExpiresAt: true, workersCompExempt: true, glExpiresAt: true },
       }),
       prisma.project.findMany({
         select: {
@@ -844,17 +844,31 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
     // "missing" is just as much a compliance gap as "expired".
     const wcExpiryWindow = new Date(adminTodayStart);
     wcExpiryWindow.setUTCDate(wcExpiryWindow.getUTCDate() + 30);
-    const wcAlerts = contractors
-      .filter((c) => c.workersCompExpiresAt == null || c.workersCompExpiresAt <= wcExpiryWindow)
-      .sort((a, b) => {
-        const at = a.workersCompExpiresAt?.getTime() ?? -Infinity;
-        const bt = b.workersCompExpiresAt?.getTime() ?? -Infinity;
-        return at - bt;
+    // Sub insurance alerts: workers comp missing (unless exempt), expired,
+    // or expiring within 30 days, plus general liability expired or
+    // expiring once a date is on file. One line per sub, most urgent issue.
+    const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    const allWcAlerts = contractors
+      .map((c) => {
+        const issues: { text: string; urgent: boolean; at: number }[] = [];
+        if (!c.workersCompExempt) {
+          if (c.workersCompExpiresAt == null) issues.push({ text: "WC not on file", urgent: true, at: -Infinity });
+          else if (c.workersCompExpiresAt <= wcExpiryWindow) {
+            const expired = c.workersCompExpiresAt <= adminTodayStart;
+            issues.push({ text: `WC ${expired ? "expired" : "expires"} ${shortDay(c.workersCompExpiresAt)}`, urgent: expired, at: c.workersCompExpiresAt.getTime() });
+          }
+        }
+        if (c.glExpiresAt && c.glExpiresAt <= wcExpiryWindow) {
+          const expired = c.glExpiresAt <= adminTodayStart;
+          issues.push({ text: `GL ${expired ? "expired" : "expires"} ${shortDay(c.glExpiresAt)}`, urgent: expired, at: c.glExpiresAt.getTime() });
+        }
+        issues.sort((a, b) => a.at - b.at);
+        return issues.length ? { id: c.id, name: c.name, issue: issues[0], more: issues.length - 1 } : null;
       })
-      .slice(0, 8);
-    const wcMissingOrExpiredCount = contractors.filter(
-      (c) => c.workersCompExpiresAt == null || c.workersCompExpiresAt <= adminTodayStart
-    ).length;
+      .filter((a): a is NonNullable<typeof a> => a != null)
+      .sort((a, b) => a.issue.at - b.issue.at);
+    const wcAlerts = allWcAlerts.slice(0, 8);
+    const wcMissingOrExpiredCount = allWcAlerts.filter((a) => a.issue.urgent).length;
 
     const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
     const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
@@ -1169,7 +1183,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               { label: "Contractors", value: contractors.length, sub: null, href: "/erp/contractors", dot: "bg-sky-400", val: "text-sky-700" },
               { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
               { label: "BG Failed", value: bgCheckFailedCount, sub: null, href: "/erp/employees?backgroundCheck=FAILED", dot: "bg-red-400", val: "text-gray-900", alert: bgCheckFailedCount > 0 },
-              { label: "WC Expiring", value: wcMissingOrExpiredCount, sub: null, href: "/erp/contractors", dot: "bg-red-400", val: "text-gray-900", alert: wcMissingOrExpiredCount > 0 },
+              { label: "Sub Insurance", value: wcMissingOrExpiredCount, sub: null, href: "/erp/contractors", dot: "bg-red-400", val: "text-gray-900", alert: wcMissingOrExpiredCount > 0 },
               { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
             ].map((k) => (
               <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
@@ -1461,7 +1475,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
 
               <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Workers comp alerts</h3>
+                  <h3 className="text-sm font-semibold text-gray-900">Sub insurance alerts</h3>
                   {wcAlerts.length > 0 && (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                       {wcAlerts.length}
@@ -1469,15 +1483,10 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                   )}
                 </div>
                 {wcAlerts.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-400">No missing or expiring workers comp coverage.</p>
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">No missing or expiring sub insurance.</p>
                 ) : (
                   <ul className="divide-y divide-gray-100">
                     {wcAlerts.map((c) => {
-                      const missing = c.workersCompExpiresAt == null;
-                      const expired = !missing && c.workersCompExpiresAt! <= adminTodayStart;
-                      const expires = c.workersCompExpiresAt
-                        ? c.workersCompExpiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                        : null;
                       return (
                         <li key={c.id}>
                           <Link
@@ -1485,10 +1494,9 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                             className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
                           >
                             <p className="truncate text-sm font-medium text-gray-900">{c.name}</p>
-                            <span
-                              className={`shrink-0 text-xs font-semibold ${missing || expired ? "text-red-600" : "text-orange-600"}`}
-                            >
-                              {missing ? "Not on file" : expired ? `Expired ${expires}` : `Expires ${expires}`}
+                            <span className={`shrink-0 text-xs font-semibold ${c.issue.urgent ? "text-red-600" : "text-orange-600"}`}>
+                              {c.issue.text}
+                              {c.more > 0 && <span className="font-normal text-gray-400"> +{c.more}</span>}
                             </span>
                           </Link>
                         </li>

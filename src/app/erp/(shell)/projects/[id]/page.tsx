@@ -268,7 +268,9 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     description: item.description,
     scheduledValueCents: item.scheduledValueCents,
     completed: item.completed,
+    completedAt: item.completedAt?.toISOString() ?? null,
     billingStatus: item.billingStatus,
+    paidAt: item.paidAt?.toISOString() ?? null,
   }));
 
   function stripDescLines(desc: string | null, labels: string[]) {

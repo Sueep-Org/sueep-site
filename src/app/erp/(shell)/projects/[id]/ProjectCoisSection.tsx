@@ -9,10 +9,12 @@ import { todayEasternKey } from "@/lib/erp/dates";
 import { ExpiryBadge } from "../../insurance/badges";
 import type { HolderRow, PolicyRow } from "../../insurance/types";
 import { RequestCard } from "../../insurance/requests/RequestCard";
+import { EmailLinkSection } from "../../insurance/EmailLinkSection";
 import type { RequestRow } from "../../insurance/requests/types";
 
 export type ProjectCoiRow = {
   id: string;
+  holderId: string | null;
   holderName: string;
   issuedOn: string;
   expiresAt: string;
@@ -27,7 +29,7 @@ export type ProjectCoiRow = {
 };
 
 /** What the Add COI form starts with when opened from a request. */
-type AddPrefill = { holderId: string | null; holderName: string; requestId: string | null; notes: string };
+type AddPrefill = { holderId: string | null; holderName: string; requestId: string | null; notes: string; sentTo?: string };
 
 const fmtDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -47,20 +49,42 @@ export function ProjectCoisSection({
   holders,
   policies,
   requests,
+  emailSuggestions,
 }: {
   projectId: string;
   cois: ProjectCoiRow[];
   holders: HolderRow[];
   policies: PolicyRow[];
   requests: RequestRow[];
+  /** Project contacts and past requesters, to email the request link to */
+  emailSuggestions: { name: string; email: string }[];
 }) {
   const [adding, setAdding] = useState<AddPrefill | null>(null);
   const [editing, setEditing] = useState<ProjectCoiRow | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
 
+  function newVersionOf(c: ProjectCoiRow) {
+    setEditing(null);
+    setAdding({ holderId: c.holderId, holderName: c.holderName, requestId: null, notes: "", sentTo: c.sentTo ?? "" });
+  }
+
+  // Renewals tab links here with ?newCoiFrom=<coi id> to start the next
+  // version of that COI right away.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromId = params.get("newCoiFrom");
+    if (!fromId) return;
+    const c = cois.find((x) => x.id === fromId);
+    if (c) newVersionOf(c);
+    params.delete("newCoiFrom");
+    history.replaceState(null, "", `?${params.toString()}`);
+    // Only on first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function addFromRequest(r: RequestRow, index: number) {
     const h = r.holders[index];
-    setAdding({ holderId: h.matchedId, holderName: h.name, requestId: r.id, notes: `Requested by ${r.requesterName}` });
+    setAdding({ holderId: h.matchedId, holderName: h.name, requestId: r.id, notes: `Requested by ${r.requesterName}`, sentTo: r.requesterEmail });
   }
 
   return (
@@ -150,8 +174,8 @@ export function ProjectCoisSection({
       )}
 
       {adding && <AddCoiForm projectId={projectId} holders={holders} policies={policies} prefill={adding} onClose={() => setAdding(null)} />}
-      {linkOpen && <RequestLinkModal projectId={projectId} onClose={() => setLinkOpen(false)} />}
-      {editing && <EditCoiForm projectId={projectId} coi={editing} onClose={() => setEditing(null)} />}
+      {linkOpen && <RequestLinkModal projectId={projectId} suggestions={emailSuggestions} onClose={() => setLinkOpen(false)} />}
+      {editing && <EditCoiForm projectId={projectId} coi={editing} onNewVersion={() => newVersionOf(editing)} onClose={() => setEditing(null)} />}
     </section>
   );
 }
@@ -180,7 +204,7 @@ function AddCoiForm({
   const [file, setFile] = useState<File | null>(null);
   const [sent, setSent] = useState(false);
   const [sentOn, setSentOn] = useState(today);
-  const [sentTo, setSentTo] = useState(() => holders.find((h) => h.id === prefill.holderId)?.contactEmail ?? "");
+  const [sentTo, setSentTo] = useState(() => prefill.sentTo || holders.find((h) => h.id === prefill.holderId)?.contactEmail || "");
   const [notes, setNotes] = useState(prefill.notes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -390,7 +414,7 @@ function HolderDetails({ holder }: { holder: HolderRow }) {
   );
 }
 
-function EditCoiForm({ projectId, coi, onClose }: { projectId: string; coi: ProjectCoiRow; onClose: () => void }) {
+function EditCoiForm({ projectId, coi, onNewVersion, onClose }: { projectId: string; coi: ProjectCoiRow; onNewVersion: () => void; onClose: () => void }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -457,9 +481,19 @@ function EditCoiForm({ projectId, coi, onClose }: { projectId: string; coi: Proj
           ))}
         </ul>
 
-        <a href={`/api/erp/projects/${projectId}/cois/${coi.id}/file`} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium text-pink-600 hover:underline">
-          Open PDF
-        </a>
+        <div className="flex flex-wrap items-center gap-4">
+          <a href={`/api/erp/projects/${projectId}/cois/${coi.id}/file`} target="_blank" rel="noreferrer" className="text-sm font-medium text-pink-600 hover:underline">
+            Open PDF
+          </a>
+          {coi.current && (
+            <span className="inline-flex items-center gap-1">
+              <Button variant="secondary" size="xs" onClick={onNewVersion}>
+                New version
+              </Button>
+              <InfoTip text="Add the renewed COI for the same company. This one then shows as Replaced." />
+            </span>
+          )}
+        </div>
 
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -505,12 +539,19 @@ function EditCoiForm({ projectId, coi, onClose }: { projectId: string; coi: Proj
 }
 
 /** This project's COI request link, to send to the GC or property manager. */
-function RequestLinkModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+function RequestLinkModal({
+  projectId,
+  suggestions,
+  onClose,
+}: {
+  projectId: string;
+  suggestions: { name: string; email: string }[];
+  onClose: () => void;
+}) {
   const toast = useToast();
   const confirm = useConfirm();
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
-
   async function load(reset: boolean) {
     setError("");
     const res = await fetch(`/api/erp/projects/${projectId}/coi-request-link`, {
@@ -566,7 +607,12 @@ function RequestLinkModal({ projectId, onClose }: { projectId: string; onClose: 
         ) : (
           !error && <p className="text-sm text-gray-500">Loading…</p>
         )}
-        <div className="flex items-center justify-between">
+
+        <div className="border-t border-gray-100 pt-4">
+          <EmailLinkSection endpoint={`/api/erp/projects/${projectId}/coi-request-link/send`} suggestions={suggestions} onSent={onClose} />
+        </div>
+
+        <div className="flex items-center justify-between border-t border-gray-100 pt-4">
           <Button variant="ghost" size="sm" onClick={reset} disabled={!url}>
             Make new link
           </Button>

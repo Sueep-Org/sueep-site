@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
-import { syncSovPercentDone } from "@/lib/sovSync";
+import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
 import { sendEmail, buildTurnoverMarginAlertEmail } from "@/lib/email";
 import {
   turnoverTotalHoursBudget,
@@ -299,7 +299,7 @@ export async function createLaborEntryForProject(
     if (sovCompletedIds.size > 0) {
       const idsToComplete = sovItemIds.filter((id) => sovCompletedIds.has(id));
       if (idsToComplete.length > 0) {
-        await prisma.projectSOVItem.updateMany({ where: { id: { in: idsToComplete } }, data: { completed: true } });
+        await markSovItemsCompleted(idsToComplete, new Date(`${workDateRaw.slice(0, 10)}T00:00:00.000Z`));
         await syncSovPercentDone(projectId);
       }
     }

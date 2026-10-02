@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
+import { inputToCents } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -126,6 +127,34 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const d = parseDate(body.workersCompExpiresAt);
     if (d === undefined) return NextResponse.json({ error: "Invalid workersCompExpiresAt" }, { status: 400 });
     data.workersCompExpiresAt = d;
+  }
+  if (body.workersCompExempt !== undefined) data.workersCompExempt = body.workersCompExempt === true;
+
+  // The sub's other policies (from their certificate of insurance).
+  for (const field of ["glCarrier", "glPolicyNumber"] as const) {
+    if (body[field] !== undefined) data[field] = body[field] ? String(body[field]).trim() || null : null;
+  }
+  for (const field of ["glExpiresAt", "autoExpiresAt", "umbrellaExpiresAt"] as const) {
+    if (body[field] === undefined) continue;
+    const d = parseDate(body[field]);
+    if (d === undefined) return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 });
+    data[field] = d;
+  }
+  for (const field of ["glOccurrenceCents", "glAggregateCents", "autoLimitCents", "umbrellaLimitCents"] as const) {
+    if (body[field] === undefined) continue;
+    const raw = body[field];
+    const cents = raw === null || raw === "" ? null : inputToCents(raw);
+    if (raw !== null && raw !== "" && (cents == null || cents < 0)) return NextResponse.json({ error: "Limits must be dollar amounts" }, { status: 400 });
+    data[field] = cents;
+  }
+  for (const field of ["sueepAdditionalInsured", "sueepWaiverOfSubrogation", "sueepPrimaryNoncontributory"] as const) {
+    if (body[field] !== undefined) data[field] = typeof body[field] === "boolean" ? body[field] : null;
+  }
+  // Stamps who checked their certificate and when.
+  if (body.markCoiReviewed === true) {
+    const reviewer = await getErpAuth();
+    data.coiReviewedAt = new Date();
+    data.coiReviewedBy = reviewer?.email ?? null;
   }
 
   if (body.backgroundCheckStatus !== undefined) {

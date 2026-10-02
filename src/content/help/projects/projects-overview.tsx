@@ -58,7 +58,11 @@ export function ProjectsOverview() {
           by hand.
           <Img src="/help/projects_overview/financials.png" alt="Expanded project row" />
           Below that is the project&apos;s <strong>Schedule of Values</strong>, a line-item
-          breakdown used to track what&apos;s been billed against the contract.
+          breakdown used to track what&apos;s been billed against the contract. Each line shows the
+          day it was done and the day it was paid, which the Finance dashboard uses to count it in
+          the right month. To fix a date, open the line&apos;s menu, click <strong>Edit</strong>,
+          and pick the date. Keep the SOV total equal to the contract value, since each line counts
+          as its share of the contract.
         </Step>
 
         <Step n={5} title="Labor, Contractors, and Materials tabs">

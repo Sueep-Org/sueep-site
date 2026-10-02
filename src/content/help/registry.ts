@@ -216,7 +216,7 @@ export const registry: ArticleEntry[] = [
     slug: "insurance/insurance-overview",
     title: "Insurance & COIs",
     category: "Billing, Pay & Finance",
-    description: "Our insurance policies, certificate holders, and the COIs given out on each project.",
+    description: "Our insurance policies, certificate holders, COI requests, and the COIs given out on each project.",
     order: 4,
     component: InsuranceOverview,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],

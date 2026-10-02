@@ -107,6 +107,65 @@ export function InsuranceOverview() {
             clears.
           </Callout>
         </Step>
+
+        <Step n={6} title="COI request links">
+          GCs and property managers can ask for a COI through a link instead of email. The form asks who the certificate is
+          for, their requirements and wording, and lets them attach a sample.
+          <UL>
+            <LI>
+              <strong>Project link</strong>: on a project&apos;s COIs tab, click <strong>Request link</strong>. Copy it, or fill
+              in <strong>Email it</strong> and click <strong>Send</strong>. The project&apos;s contacts and anyone who requested
+              before show as one-click suggestions, and replies come back to you. The GC can reuse the link for every COI on
+              that project. Holders already used on the project show as{" "}
+              <strong>Used before</strong> buttons so a repeat request is one click for them.
+            </LI>
+            <LI>
+              <strong>General link</strong>: on <strong>Insurance &amp; COIs → Requests</strong>. For requests not tied to a
+              project link. They type the project, and you pick it on the request.
+            </LI>
+            <LI>
+              Set <strong>Email new requests to</strong> on the Requests tab so someone hears about new requests. New
+              requests also show on the dashboard and as a count on the Requests tab.
+            </LI>
+          </UL>
+        </Step>
+
+        <Step n={7} title="Working a request">
+          Open requests show at the top of the project&apos;s COIs tab and on the Requests tab.
+          <UL>
+            <LI>
+              <strong>Save to holders</strong> adds a holder you don&apos;t have yet to Certificate Holders with the
+              request&apos;s requirements. <strong>Saved holder</strong> means one already matches.
+            </LI>
+            <LI>
+              <strong>Add COI</strong> opens the Add COI form already filled in for that holder. Once every holder on the
+              request has a COI, the request is marked <strong>Done</strong> on its own.
+            </LI>
+            <LI>
+              <strong>Sent to broker</strong> marks it as waiting on the broker, for when CoverDash puts it in pending review.{" "}
+              <strong>Mark done</strong> and <strong>Cancel</strong> close it by hand.
+            </LI>
+          </UL>
+        </Step>
+
+        <Step n={8} title="Renewals">
+          When a policy renews, edit it on <strong>Our Policies</strong> and update its dates. The save message tells you how
+          many COIs now need a new version.
+          <UL>
+            <LI>
+              <strong>Insurance &amp; COIs → Renewals</strong> lists every current COI on an unpaid project that needs a new
+              version, and why: a policy on it renewed or was replaced, or it expires within 30 days.
+            </LI>
+            <LI>
+              Make the new COI in CoverDash (it often regenerates them in a batch after a renewal), then click{" "}
+              <strong>New version</strong>. The project opens with Add COI filled in for that company and the last place it was
+              sent. Once added, the old one shows as Replaced and drops off the list.
+            </LI>
+            <LI>
+              You can also click a current COI on a project and use <strong>New version</strong> there.
+            </LI>
+          </UL>
+        </Step>
       </Steps>
     </>
   );

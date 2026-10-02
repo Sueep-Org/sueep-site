@@ -5,6 +5,7 @@ const TABS = [
   { id: "policies", label: "Our Policies", href: "/erp/insurance" },
   { id: "holders", label: "Certificate Holders", href: "/erp/insurance/holders" },
   { id: "requests", label: "Requests", href: "/erp/insurance/requests" },
+  { id: "renewals", label: "Renewals", href: "/erp/insurance/renewals" },
 ] as const;
 
 /** Title, tab bar, and an optional main action, shared by every Insurance tab. */

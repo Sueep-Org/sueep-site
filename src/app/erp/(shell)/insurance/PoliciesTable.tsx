@@ -117,7 +117,13 @@ function PolicyForm({ policy, onClose }: { policy: PolicyRow | null; onClose: ()
         setError(data.error ?? "Could not save");
         return;
       }
-      toast(policy ? "Policy saved." : "Policy added.");
+      toast(
+        data.reissueCount > 0
+          ? `Policy renewed. ${data.reissueCount} COI${data.reissueCount === 1 ? " needs" : "s need"} a new version, see the Renewals tab.`
+          : policy
+            ? "Policy saved."
+            : "Policy added.",
+      );
       onClose();
       router.refresh();
     } catch {

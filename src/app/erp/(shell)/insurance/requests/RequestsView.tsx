@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, InfoTip, inputClass, useToast } from "@/app/erp/components/ui";
 import { RequestCard } from "./RequestCard";
+import { EmailLinkSection, type EmailSuggestion } from "../EmailLinkSection";
 import type { RequestRow } from "./types";
 
 export function RequestsView({
@@ -11,12 +12,14 @@ export function RequestsView({
   projects,
   generalLink,
   notifyEmail,
+  emailSuggestions,
 }: {
   open: RequestRow[];
   closed: RequestRow[];
   projects: { id: string; jobTitle: string }[];
   generalLink: string | null;
   notifyEmail: string;
+  emailSuggestions: EmailSuggestion[];
 }) {
   const toast = useToast();
   const [link, setLink] = useState(generalLink);
@@ -83,6 +86,13 @@ export function RequestsView({
             </Button>
           </div>
         </div>
+        {link && (
+          <div className="border-t border-gray-100 pt-4 md:col-span-2">
+            <div className="max-w-xl">
+              <EmailLinkSection endpoint="/api/erp/insurance/request-settings/send" suggestions={emailSuggestions} />
+            </div>
+          </div>
+        )}
       </div>
 
       <section className="space-y-3">

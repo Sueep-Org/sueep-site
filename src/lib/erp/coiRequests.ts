@@ -157,3 +157,46 @@ export async function notifyNewRequest(req: {
     console.error("COI request notification failed:", e);
   }
 }
+
+/** Email that sends a GC or property manager their COI request link. */
+export function buildRequestLinkEmailHtml(opts: { projectTitle: string | null; url: string; message: string | null }): string {
+  const message = opts.message ? `<p style="white-space:pre-line">${esc(opts.message)}</p>` : "";
+  const forWhat = opts.projectTitle ? ` for <strong>${esc(opts.projectTitle)}</strong>` : "";
+  const reuse = opts.projectTitle ? "every certificate you need on this project" : "any certificate you need from us";
+  return `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;line-height:1.5">
+<p>Hello,</p>
+${message}
+<p>Use the link below to request a certificate of insurance from Sueep${forWhat}. Tell us who the certificate is for and what it needs, and attach a sample if you have one.</p>
+<p><a href="${opts.url}" style="display:inline-block;background:#E73C6E;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Request a COI</a></p>
+<p style="color:#6b7280;font-size:12px">You can use this same link for ${reuse}.<br/>${esc(opts.url)}</p>
+<p>Thank you,<br/>Sueep</p>
+</div>`;
+}
+
+const MAX_RECIPIENTS = 5;
+
+/** Parses "a@x.com, b@y.com" into addresses, or an error message. */
+export function parseRecipients(raw: unknown): { to: string[] } | { error: string } {
+  const to = String(raw ?? "")
+    .split(/[,;\s]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  if (!to.length) return { error: "Enter an email address" };
+  if (to.length > MAX_RECIPIENTS) return { error: `At most ${MAX_RECIPIENTS} addresses at a time` };
+  const bad = to.find((e) => !/^\S+@\S+\.\S+$/.test(e));
+  if (bad) return { error: `"${bad}" is not a valid email` };
+  return { to };
+}
+
+/** Emails a request link to each address, with replies going to the sender. Throws if sending fails. */
+export async function sendRequestLinkEmails(opts: { to: string[]; url: string; projectTitle: string | null; message: string | null; replyTo: string }) {
+  const subject = opts.projectTitle ? `Request a certificate of insurance: ${opts.projectTitle}` : "Request a certificate of insurance from Sueep";
+  for (const address of opts.to) {
+    await sendEmail({
+      to: address,
+      subject,
+      html: buildRequestLinkEmailHtml({ projectTitle: opts.projectTitle, url: opts.url, message: opts.message }),
+      replyTo: opts.replyTo,
+    });
+  }
+}

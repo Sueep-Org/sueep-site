@@ -42,6 +42,7 @@ export async function POST(req: Request, ctx: Ctx) {
       scheduledValueCents,
       completed: false,
       billingStatus,
+      paidAt: billingStatus === "PAID" ? new Date() : null,
     },
   });
 

@@ -75,6 +75,64 @@ export async function syncProjectBillingFromSOV(projectId: string) {
   });
 }
 
+/** A date typed for an SOV line ("YYYY-MM-DD"), saved as UTC midnight like
+ * any other picked date. Null when it's missing or not a real date. */
+export function parseSovItemDate(raw: unknown): Date | null {
+  const s = typeof raw === "string" ? raw.trim().slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * The completedAt / paidAt change for one SOV line edit. A line that becomes
+ * done or paid is stamped (with the typed date, or now), one that stops being
+ * done or paid is cleared, and a typed date on a line that already is done or
+ * paid replaces the old one.
+ */
+export function sovItemDateChanges(
+  before: { completed: boolean; billingStatus: string },
+  after: { completed: boolean; billingStatus: string },
+  typed: { completedAt: Date | null; paidAt: Date | null },
+): { completedAt?: Date | null; paidAt?: Date | null } {
+  const changes: { completedAt?: Date | null; paidAt?: Date | null } = {};
+  if (!after.completed) {
+    if (before.completed) changes.completedAt = null;
+  } else if (!before.completed) {
+    changes.completedAt = typed.completedAt ?? new Date();
+  } else if (typed.completedAt) {
+    changes.completedAt = typed.completedAt;
+  }
+  const wasPaid = before.billingStatus === "PAID";
+  if (after.billingStatus !== "PAID") {
+    if (wasPaid) changes.paidAt = null;
+  } else if (!wasPaid) {
+    changes.paidAt = typed.paidAt ?? new Date();
+  } else if (typed.paidAt) {
+    changes.paidAt = typed.paidAt;
+  }
+  return changes;
+}
+
+/** Marks SOV lines done because work logged on them finished them, dated
+ * `on` (the day of that work). Lines already done keep their own date. */
+export async function markSovItemsCompleted(ids: string[], on: Date) {
+  if (ids.length === 0) return;
+  await prisma.projectSOVItem.updateMany({
+    where: { id: { in: ids }, completed: false },
+    data: { completed: true, completedAt: on },
+  });
+}
+
+/** Marks one SOV line paid (a payment matched from HubSpot), on the day
+ * HubSpot says it was paid, or now when HubSpot has no payment date. */
+export async function markSovItemPaid(id: string, paidOn: Date | null) {
+  await prisma.projectSOVItem.updateMany({
+    where: { id, billingStatus: { not: "PAID" } },
+    data: { billingStatus: "PAID", paidAt: paidOn ?? new Date() },
+  });
+}
+
 export async function syncSovPercentDone(projectId: string) {
   const sov = await prisma.projectSOV.findUnique({
     where: { projectId },

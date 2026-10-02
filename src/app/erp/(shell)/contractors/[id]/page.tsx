@@ -14,6 +14,7 @@ import { ContractorInfoLinkSection } from "./ContractorInfoLinkSection";
 import { ContractorContactInfoSection } from "./ContractorContactInfoSection";
 import { ContractorBankAccountSection } from "./ContractorBankAccountSection";
 import { ContractorInsuranceSection } from "./ContractorInsuranceSection";
+import { subCoverage } from "@/lib/erp/subCoverage";
 import { ContractorSsnSection } from "./ContractorSsnSection";
 import { ContractorLaborSection } from "./ContractorLaborSection";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
@@ -120,15 +121,10 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const contractorSsnStatus = contractor.ssn ? "On file" : "Not set";
   const contractorSsnTone = contractor.ssn ? "complete" : "empty";
 
-  const workersCompExpired = contractor.workersCompExpiresAt ? contractor.workersCompExpiresAt < new Date() : false;
-  const insuranceStatus =
-    contractor.hasInsurance === true
-      ? `Insured${contractor.workersCompCarrier ? ` · ${contractor.workersCompCarrier}` : ""}${workersCompExpired ? " (expired)" : ""}`
-      : contractor.hasInsurance === false
-        ? "No insurance"
-        : "Not set";
+  const coverage = subCoverage(contractor);
+  const insuranceStatus = contractor.hasInsurance == null && coverage.status === "MISSING" ? "Not set" : coverage.summary;
   const insuranceTone =
-    contractor.hasInsurance === true ? (workersCompExpired ? "warning" : "complete") : contractor.hasInsurance === false ? "warning" : "empty";
+    coverage.status === "VALID" ? "complete" : contractor.hasInsurance == null && coverage.status === "MISSING" ? "empty" : "warning";
 
   const backgroundCheckStatusLabel = backgroundCheckLabel(contractor.backgroundCheckStatus);
   const backgroundCheckTone =
@@ -263,30 +259,51 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   }));
   const initialLaborHasMore = assignmentTotalCount > CONTRACTOR_LABOR_PAGE_SIZE;
 
+  const upcomingTimeOff = contractor.timeOff.filter((t) => t.endDate >= new Date()).length;
+  const timeOffStatus = upcomingTimeOff ? `${upcomingTimeOff} upcoming` : contractor.timeOff.length ? "None upcoming" : "None logged";
+
+  // Which compliance section, if any, opens on load (see below).
+  const bgExpired = contractor.backgroundCheckExpiresAt ? contractor.backgroundCheckExpiresAt < new Date() : false;
+  const insuranceState =
+    coverage.status === "VALID" ? "ok" : coverage.status === "EXPIRED" ? "bad" : insuranceTone === "empty" ? "none" : "warn";
+  const backgroundState =
+    contractor.backgroundCheckStatus === "PASSED" ? (bgExpired ? "bad" : "ok") : contractor.backgroundCheckStatus === "FAILED" ? "bad" : "other";
+
+  // Everything starts collapsed except the single most urgent compliance
+  // problem, so the page opens on what needs doing instead of every form.
+  const urgentSection =
+    insuranceState === "bad" || (insuranceState === "warn" && coverage.status !== "MISSING")
+      ? "sec-insurance"
+      : backgroundState === "bad"
+        ? "sec-background"
+        : insuranceState === "warn"
+          ? "sec-insurance"
+          : documentsTone === "warning"
+            ? "sec-documents"
+            : null;
+
   return (
     <div className="space-y-4">
       <div>
         <Link href="/erp/contractors" className="text-xs text-pink-600 hover:underline">
           ← Contractor Verification
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-gray-900">{contractor.name}</h1>
-        <p className="mt-1 text-sm text-gray-500">Contractor profile, document verification, and information collection.</p>
-        <div className="mt-3">
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold text-gray-900">{contractor.name}</h1>
           <span
             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-              contractor.status === "ACTIVE"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-gray-100 text-gray-500"
+              contractor.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
             }`}
           >
             {contractor.status === "ACTIVE" ? "Active" : "Inactive"}
           </span>
+          {contractor.role && <span className="text-sm text-gray-500">{contractor.role}</span>}
         </div>
       </div>
 
       <DetailTabs tabs={[
         {
-          label: "General Info",
+          label: "Overview",
           content: (
             <div className="space-y-3">
               <CollapsibleSection title="General information" status={generalInfoStatus} tone="complete">
@@ -321,7 +338,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Company profile" status={companyStatusInfo.status} tone={companyStatusInfo.tone} defaultOpen={companyStatusInfo.defaultOpen}>
+              <CollapsibleSection title="Company profile" status={companyStatusInfo.status} tone={companyStatusInfo.tone}>
                 <ContractorQuestionnaireCard
                   contractorId={contractor.id}
                   title="Company profile"
@@ -349,51 +366,10 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           ),
         },
         {
-          label: "Personal & Documents",
+          label: "Compliance",
           content: (
             <div className="space-y-3">
-              <CollapsibleSection title="Info form link" status={contractorInfoLinkStatus} tone={contractorInfoLinkTone} defaultOpen={contractorInfoLinkTone === "empty"}>
-                <ContractorInfoLinkSection
-                  id={contractor.id}
-                  email={contractor.email}
-                  infoToken={contractor.infoToken}
-                  infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
-                  resendConfigured={resendConfigured}
-                  siteUrl={siteUrl}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Personal information" status={personalInfoStatus} tone={personalInfoTone} defaultOpen={personalInfoTone === "empty"}>
-                <ContractorContactInfoSection
-                  contractorId={contractor.id}
-                  initial={{
-                    contractorFullName: contractor.contractorFullName,
-                    address: contractor.address,
-                    dateOfBirth: contractor.dateOfBirth,
-                  }}
-                />
-              </CollapsibleSection>
-
-              {canSeePay && (
-                <CollapsibleSection title="Bank Account Info" status={contractorBankStatus} tone={contractorBankTone} defaultOpen={contractorBankTone === "empty"}>
-                  <ContractorBankAccountSection
-                    contractorId={contractor.id}
-                    initial={{
-                      bankAccountType: contractor.bankAccountType,
-                      bankAccountNumber: contractor.bankAccountNumber,
-                      bankRoutingNumber: contractor.bankRoutingNumber,
-                    }}
-                  />
-                </CollapsibleSection>
-              )}
-
-              {canSeeSsn && (
-                <CollapsibleSection title="Social Security Number" status={contractorSsnStatus} tone={contractorSsnTone} defaultOpen={contractorSsnTone === "empty"}>
-                  <ContractorSsnSection contractorId={contractor.id} hasSsn={!!contractor.ssn} />
-                </CollapsibleSection>
-              )}
-
-              <CollapsibleSection title="Insurance & Workers Comp" status={insuranceStatus} tone={insuranceTone} defaultOpen={insuranceTone === "empty" || insuranceTone === "warning"}>
+              <CollapsibleSection defaultOpen={urgentSection === "sec-insurance"} title="Insurance & Workers Comp" status={insuranceStatus} tone={insuranceTone}>
                 <ContractorInsuranceSection
                   contractorId={contractor.id}
                   initial={{
@@ -401,6 +377,21 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     workersCompCarrier: contractor.workersCompCarrier,
                     workersCompPolicyNumber: contractor.workersCompPolicyNumber,
                     workersCompExpiresAt: contractor.workersCompExpiresAt?.toISOString() ?? null,
+                    workersCompExempt: contractor.workersCompExempt,
+                    glCarrier: contractor.glCarrier,
+                    glPolicyNumber: contractor.glPolicyNumber,
+                    glExpiresAt: contractor.glExpiresAt?.toISOString() ?? null,
+                    glOccurrenceCents: contractor.glOccurrenceCents,
+                    glAggregateCents: contractor.glAggregateCents,
+                    autoExpiresAt: contractor.autoExpiresAt?.toISOString() ?? null,
+                    autoLimitCents: contractor.autoLimitCents,
+                    umbrellaExpiresAt: contractor.umbrellaExpiresAt?.toISOString() ?? null,
+                    umbrellaLimitCents: contractor.umbrellaLimitCents,
+                    sueepAdditionalInsured: contractor.sueepAdditionalInsured,
+                    sueepWaiverOfSubrogation: contractor.sueepWaiverOfSubrogation,
+                    sueepPrimaryNoncontributory: contractor.sueepPrimaryNoncontributory,
+                    coiReviewedAt: contractor.coiReviewedAt?.toISOString() ?? null,
+                    coiReviewedBy: contractor.coiReviewedBy,
                   }}
                   workersCompDoc={contractor.documents[0] ?? null}
                   questionnaireFields={insuranceQuestionnaireFields}
@@ -409,31 +400,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                 />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Licensing" status={licensingStatusInfo.status} tone={licensingStatusInfo.tone} defaultOpen={licensingStatusInfo.defaultOpen}>
-                <ContractorQuestionnaireCard
-                  contractorId={contractor.id}
-                  title="Licensing"
-                  fields={licensingFields}
-                  fromApplication={!!linkedResponses}
-                  initialValues={manualValuesFor("licensing")}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Documents" status={documentsStatus} tone={documentsTone} defaultOpen={documentsTone === "warning"}>
-                <ContractorPaperworkPanel
-                  id={contractor.id}
-                  email={contractor.email}
-                  paperwork={paperwork}
-                  paperworkUploadToken={contractor.paperworkUploadToken}
-                  paperworkUploadTokenExpiry={
-                    contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
-                  }
-                  resendConfigured={resendConfigured}
-                  siteUrl={siteUrl}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Background Check" status={backgroundCheckStatusLabel} tone={backgroundCheckTone} defaultOpen={backgroundCheckTone === "warning"}>
+              <CollapsibleSection defaultOpen={urgentSection === "sec-background"} title="Background Check" status={backgroundCheckStatusLabel} tone={backgroundCheckTone}>
                 <ContractorBackgroundCheckSection
                   contractorId={contractor.id}
                   initialBackgroundCheckStatus={(contractor.backgroundCheckStatus ?? "NOT_DONE") as "PASSED" | "FAILED" | "PENDING" | "NOT_DONE"}
@@ -451,27 +418,84 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                   }))}
                 />
               </CollapsibleSection>
+
+              <CollapsibleSection defaultOpen={urgentSection === "sec-documents"} title="Documents" status={documentsStatus} tone={documentsTone}>
+                <ContractorPaperworkPanel
+                  id={contractor.id}
+                  email={contractor.email}
+                  paperwork={paperwork}
+                  paperworkUploadToken={contractor.paperworkUploadToken}
+                  paperworkUploadTokenExpiry={
+                    contractor.paperworkUploadTokenExpiry?.toISOString() ?? null
+                  }
+                  resendConfigured={resendConfigured}
+                  siteUrl={siteUrl}
+                />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Licensing" status={licensingStatusInfo.status} tone={licensingStatusInfo.tone}>
+                <ContractorQuestionnaireCard
+                  contractorId={contractor.id}
+                  title="Licensing"
+                  fields={licensingFields}
+                  fromApplication={!!linkedResponses}
+                  initialValues={manualValuesFor("licensing")}
+                />
+              </CollapsibleSection>
             </div>
           ),
         },
         {
-          label: "Time Off",
+          label: "Pay & Personal",
           content: (
-            <ContractorTimeOffSection
-              contractorId={contractor.id}
-              initialTimeOff={contractor.timeOff.map((t) => ({
-                id: t.id,
-                startDate: t.startDate.toISOString(),
-                endDate: t.endDate.toISOString(),
-                type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
-                notes: t.notes,
-              }))}
-            />
+            <div className="space-y-3">
+              <CollapsibleSection title="Info form link" status={contractorInfoLinkStatus} tone={contractorInfoLinkTone}>
+                <ContractorInfoLinkSection
+                  id={contractor.id}
+                  email={contractor.email}
+                  infoToken={contractor.infoToken}
+                  infoTokenExpiry={contractor.infoTokenExpiry?.toISOString() ?? null}
+                  resendConfigured={resendConfigured}
+                  siteUrl={siteUrl}
+                />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Personal information" status={personalInfoStatus} tone={personalInfoTone}>
+                <ContractorContactInfoSection
+                  contractorId={contractor.id}
+                  initial={{
+                    contractorFullName: contractor.contractorFullName,
+                    address: contractor.address,
+                    dateOfBirth: contractor.dateOfBirth,
+                  }}
+                />
+              </CollapsibleSection>
+
+              {canSeePay && (
+                <CollapsibleSection title="Bank Account Info" status={contractorBankStatus} tone={contractorBankTone}>
+                  <ContractorBankAccountSection
+                    contractorId={contractor.id}
+                    initial={{
+                      bankAccountType: contractor.bankAccountType,
+                      bankAccountNumber: contractor.bankAccountNumber,
+                      bankRoutingNumber: contractor.bankRoutingNumber,
+                    }}
+                  />
+                </CollapsibleSection>
+              )}
+
+              {canSeeSsn && (
+                <CollapsibleSection title="Social Security Number" status={contractorSsnStatus} tone={contractorSsnTone}>
+                  <ContractorSsnSection contractorId={contractor.id} hasSsn={!!contractor.ssn} />
+                </CollapsibleSection>
+              )}
+            </div>
           ),
         },
         {
-          label: "Labor",
+          label: "Work",
           content: (
+            <div className="space-y-4">
             <ContractorLaborSection
               contractorId={contractor.id}
               contractorName={contractor.name}
@@ -479,6 +503,19 @@ export default async function ContractorDetailPage({ params }: PageProps) {
               initialHasMore={initialLaborHasMore}
               projectOptions={laborProjects}
             />
+              <CollapsibleSection title="Time off" status={timeOffStatus} tone="neutral">
+                <ContractorTimeOffSection
+                  contractorId={contractor.id}
+                  initialTimeOff={contractor.timeOff.map((t) => ({
+                    id: t.id,
+                    startDate: t.startDate.toISOString(),
+                    endDate: t.endDate.toISOString(),
+                    type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
+                    notes: t.notes,
+                  }))}
+                />
+              </CollapsibleSection>
+            </div>
           ),
         },
         {
