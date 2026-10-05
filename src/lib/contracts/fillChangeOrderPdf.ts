@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // The fillable source contract lives here — a real PDF form (AcroForm
 // fields), not generated from scratch. Field names below must match its
@@ -52,6 +52,41 @@ const FIELD_MAP: Record<keyof ChangeOrderContractFields, string> = {
   purchaseTerms: "purchase_terms",
 };
 
+// The template's fields render in Helvetica, which only covers the WinAnsi
+// character set. pdf-lib throws on anything outside it (emoji, arrows, most
+// math symbols), so swap the common ones for plain text and drop the rest
+// rather than failing the whole contract over one typed character.
+const CHARACTER_REPLACEMENTS: Record<string, string> = {
+  "\u2192": "->",
+  "\u2190": "<-",
+  "\u2264": "<=",
+  "\u2265": ">=",
+  "\u2260": "!=",
+  "\u00a0": " ",
+  "\t": " ",
+};
+
+let helveticaCharacters: Set<number> | null = null;
+
+async function makeTextSanitizer() {
+  if (!helveticaCharacters) {
+    // Throwaway doc, so the contract itself doesn't pick up an unused font.
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    helveticaCharacters = new Set(font.getCharacterSet());
+  }
+  const supported = helveticaCharacters;
+  return (value: string, multiline: boolean): string => {
+    const text = value.replace(/\r\n?/g, "\n");
+    let out = "";
+    for (const ch of text) {
+      if (ch === "\n") { out += multiline ? "\n" : " "; continue; }
+      const mapped = CHARACTER_REPLACEMENTS[ch] ?? ch;
+      for (const c of mapped) if (supported.has(c.codePointAt(0)!)) out += c;
+    }
+    return out;
+  };
+}
+
 // The template's "signature", "signature_date" and "printed_name" fields are
 // deliberately never touched here, they're filled in later once the
 // requester actually signs (see embedChangeOrderSignature below).
@@ -66,6 +101,7 @@ export async function fillChangeOrderContractPdf(fields: ChangeOrderContractFiel
   const templateBytes = await readFile(TEMPLATE_PATH);
   const pdfDoc = await PDFDocument.load(templateBytes);
   const form = pdfDoc.getForm();
+  const sanitize = await makeTextSanitizer();
 
   for (const [key, fieldName] of Object.entries(FIELD_MAP) as [keyof ChangeOrderContractFields, string][]) {
     const value = fields[key];
@@ -76,7 +112,7 @@ export async function fillChangeOrderContractPdf(fields: ChangeOrderContractFiel
     // descriptions especially) can run longer, so drop the cap rather than
     // silently truncating or throwing.
     textField.setMaxLength(undefined);
-    textField.setText(value);
+    textField.setText(sanitize(value, textField.isMultiline()));
     textField.enableReadOnly();
   }
 
@@ -99,6 +135,7 @@ export async function embedChangeOrderSignature(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const form = pdfDoc.getForm();
+  const sanitize = await makeTextSanitizer();
 
   // Setting a field's text marks its appearance dirty, so pdf-lib regenerates
   // it at save time using its own default renderer — which draws a full
@@ -108,7 +145,7 @@ export async function embedChangeOrderSignature(
   // border width here keeps these fields looking like the plain underlined
   // line they were designed as, instead of a boxed form field.
   const printedNameField = form.getTextField("printed_name");
-  printedNameField.setText(fields.printedName);
+  printedNameField.setText(sanitize(fields.printedName, false));
   printedNameField.acroField.getWidgets()[0].getOrCreateBorderStyle().setWidth(0);
   printedNameField.enableReadOnly();
 
