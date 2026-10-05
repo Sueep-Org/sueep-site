@@ -243,8 +243,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
               changeOrderUrl,
             });
             await sendEmail({
+              type: "CHANGE_ORDER_APPROVED",
+              link: `/erp/projects/${id}`,
               to: pmEmployee.email,
-              subject: `Change Order Approved: ${updated.title} — ${project?.jobTitle ?? ""}`,
+              subject: `Change order approved: ${updated.title}${project?.jobTitle ? ` (${project.jobTitle})` : ""}`,
               html,
             });
           }

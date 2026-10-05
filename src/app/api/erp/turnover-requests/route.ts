@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
+import { getNotificationSetting } from "@/lib/notificationSettings";
 
 type RequestBody = Record<string, unknown>;
 
@@ -155,7 +156,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const recipient = building.pmEmail?.trim() || process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
+    const setting = await getNotificationSetting("TURNOVER_REQUEST_CREATED");
     const emailHtml = buildTurnoverRequestEmailHtml({
       buildingName: building.name,
       unitNumber,
@@ -170,10 +171,14 @@ export async function POST(req: Request) {
       sueepPmName,
     });
 
-    const recipients = Array.from(new Set([recipient, sueepPmEmail].filter((to): to is string => Boolean(to))));
+    // The building's PM and the Sueep PM; the Notifications page's list only when neither is on file.
+    const found = [building.pmEmail?.trim(), sueepPmEmail].filter((to): to is string => Boolean(to));
+    const recipients = Array.from(new Set(found.length ? found : setting.to));
     await Promise.all(recipients.map((to) => sendEmail({
+      type: "TURNOVER_REQUEST_CREATED",
+      link: `/erp/buildings/${building.id}`,
       to,
-      subject: `New Turnover Request Created — ${building.name}`,
+      subject: `New turnover request: ${building.name}`,
       html: emailHtml,
       replyTo: createdBy || undefined,
     })));

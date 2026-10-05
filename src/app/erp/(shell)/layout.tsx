@@ -1,7 +1,6 @@
 import { ErpNav } from "./ErpNav";
-import { ScheduleNudgePopup } from "./ScheduleNudgePopup";
 import { ErpProviders } from "./ErpProviders";
-import { getErpAuth, isProjectManager } from "@/lib/erpAuth";
+import { getErpAuth } from "@/lib/erpAuth";
 
 /** Neon cold start / Prisma can exceed default on first request after idle. */
 export const maxDuration = 60;
@@ -14,7 +13,6 @@ export default async function ErpShellLayout({ children }: { children: React.Rea
     <ErpProviders>
       <div id="erp-shell" className="flex min-h-screen sm:h-screen flex-col sm:flex-row">
         <ErpNav role={role} />
-        {isProjectManager(role) && <ScheduleNudgePopup />}
         {/* relative: makes main the containing block for absolute descendants
             (e.g. sr-only file inputs). Without it their containing block is
             html, so the browser's focus scroll after a file picker closes

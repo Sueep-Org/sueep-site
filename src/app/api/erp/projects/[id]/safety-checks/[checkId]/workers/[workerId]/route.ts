@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { SAFETY_ESCALATION_EMAIL, SAFETY_VIOLATION_THRESHOLD } from "@/lib/erp/safetyConfig";
+import { buildSafetyEscalationEmail, buildSafetyNoticeEmail, sendEmail } from "@/lib/email";
+import { SAFETY_VIOLATION_THRESHOLD } from "@/lib/erp/safetyConfig";
 
 export const runtime = "nodejs";
 
@@ -82,15 +82,18 @@ export async function PATCH(req: Request, { params }: Ctx) {
             : "today";
 
           await sendEmail({
+            type: "SAFETY_NOTICE",
+            link: `/erp/projects/${projectId}`,
             to: employee.email,
-            subject: `Safety Compliance Notice — ${checkDateStr}`,
-            html: `
-              <p>Hi ${employee.firstName ?? worker.workerName},</p>
-              <p>You were marked <strong>non-compliant</strong> during the daily PPE inspection on <strong>${checkDateStr}</strong> for <strong>${projectName}</strong>.</p>
-              <p>Per Sueep policy, this issue must be corrected before you may begin work. Please speak with your supervisor immediately.</p>
-              ${violationCount >= 2 ? `<p><strong>Note:</strong> This is violation #${violationCount} on record. ${shouldEscalate ? "This incident has been escalated to Operations Management." : `One more violation will result in escalation.`}</p>` : ""}
-              <p>— Sueep Operations</p>
-            `,
+            subject: `Safety compliance notice: ${checkDateStr}`,
+            html: buildSafetyNoticeEmail({
+              name: employee.firstName || worker.workerName,
+              projectName,
+              checkDate: checkDateStr,
+              violationCount,
+              escalated: shouldEscalate,
+              threshold: SAFETY_VIOLATION_THRESHOLD,
+            }),
           });
 
           await prisma.safetyIncident.update({
@@ -108,19 +111,16 @@ export async function PATCH(req: Request, { params }: Ctx) {
           : "today";
 
         await sendEmail({
-          to: SAFETY_ESCALATION_EMAIL,
-          subject: `[Escalation] Safety Violation — ${worker.workerName}`,
-          html: `
-            <p><strong>Safety Escalation — ${worker.workerName}</strong></p>
-            <p>This worker has been marked non-compliant <strong>${violationCount} times</strong> and has reached the escalation threshold.</p>
-            <ul>
-              <li><strong>Worker:</strong> ${worker.workerName}</li>
-              <li><strong>Project:</strong> ${projectName}</li>
-              <li><strong>Date:</strong> ${checkDateStr}</li>
-              <li><strong>Total violations on record:</strong> ${violationCount}</li>
-            </ul>
-            <p>Please review and take appropriate action per SOP PC-QA-001.</p>
-          `,
+          type: "SAFETY_ESCALATION",
+          link: `/erp/projects/${projectId}`,
+          subject: `Safety escalation: ${worker.workerName}`,
+          html: buildSafetyEscalationEmail({
+            workerName: worker.workerName,
+            projectName,
+            checkDate: checkDateStr,
+            violationCount,
+            projectUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() ? `${process.env.NEXT_PUBLIC_APP_URL.trim()}/erp/projects/${projectId}` : null,
+          }),
         });
 
         await prisma.safetyIncident.update({

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 import {
   computePaintingQuote,
   formatUsd,
@@ -9,7 +9,6 @@ import {
 } from "@/lib/paintingQuote";
 
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
-const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
 const FORMSUBMIT_ENDPOINT =
   process.env.FORMSUBMIT_ENDPOINT || "https://formsubmit.co/fc9c50165f29e01095f6f39726348f26";
 
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
 
 async function notifyAfterQuote(input: PaintingQuoteInput, q: PaintingQuoteResult, lead: LeadContact) {
   const range = `${formatUsd(q.lowCents)} – ${formatUsd(q.highCents)}`;
-  const teamSubject = `Painting follow-up quote: ${lead.name} — ${range}`;
+  const teamSubject = `Painting follow-up quote: ${lead.name}, ${range}`;
   const teamHtml = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">
         <h2 style="margin:0 0 12px 0">Painting scope + instant range (follow-up page)</h2>
@@ -76,7 +75,7 @@ async function notifyAfterQuote(input: PaintingQuoteInput, q: PaintingQuoteResul
         <p><strong>Phone:</strong> ${escapeHtml(lead.phone)}</p>
         <p><strong>ZIP:</strong> ${escapeHtml(lead.zip)}</p>
         <p><strong>Original notes:</strong></p>
-        <pre style="white-space:pre-wrap;margin:0 0 16px 0">${escapeHtml(lead.message || "—")}</pre>
+        <pre style="white-space:pre-wrap;margin:0 0 16px 0">${escapeHtml(lead.message || "N/A")}</pre>
         <p><strong>Planning range:</strong> ${escapeHtml(range)}</p>
         <p><strong>Deposit (50% of planning midpoint):</strong> ${escapeHtml(formatUsd(q.depositCents))}</p>
         <p><strong>Service type:</strong> ${escapeHtml(input.serviceType)}</p>
@@ -102,7 +101,7 @@ async function notifyAfterQuote(input: PaintingQuoteInput, q: PaintingQuoteResul
         `Deposit: ${formatUsd(q.depositCents)}`,
         "",
         "Original message:",
-        lead.message || "—",
+        lead.message || "N/A",
         "",
         "Scope details:",
         JSON.stringify(input, null, 2),
@@ -114,30 +113,23 @@ async function notifyAfterQuote(input: PaintingQuoteInput, q: PaintingQuoteResul
       body: formPayload.toString(),
     });
   } else {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: TO_EMAIL,
-      subject: teamSubject,
-      html: teamHtml,
-      reply_to: lead.email,
-    });
+    await sendEmail({ type: "PAINTING_QUOTE_TEAM", subject: teamSubject, html: teamHtml, replyTo: lead.email });
 
     const customerHtml = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
         <p>Hi ${escapeHtml(lead.name.split(/\s+/)[0] || lead.name)},</p>
-        <p>Thanks for the extra details — <strong>we're on it</strong> and a Sueep team member will follow up to confirm scope and scheduling.</p>
+        <p>Thanks for the extra details. <strong>We're on it</strong> and a Sueep team member will follow up to confirm scope and scheduling.</p>
         <p>Based on what you shared, your <strong>planning range</strong> is about <strong>${escapeHtml(range)}</strong>. Final pricing is always confirmed after we review your property.</p>
-        <p>If you place a deposit from your thank-you page, it is 50% of the midpoint of this range — it secures scheduling and lets us order paint and materials. You&apos;ll review the terms and accept the agreement in Stripe&apos;s secure form right on that page before paying; final pricing is confirmed in writing before work begins.</p>
-        <p>— Sueep</p>
+        <p>If you place a deposit from your thank-you page, it is 50% of the midpoint of this range. It secures scheduling and lets us order paint and materials. You&apos;ll review the terms and accept the agreement in Stripe&apos;s secure form right on that page before paying; final pricing is confirmed in writing before work begins.</p>
+        <p>Sueep</p>
       </div>
     `;
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendEmail({
+      type: "PAINTING_QUOTE_CUSTOMER",
       to: lead.email,
-      subject: "Your Sueep painting planning range — we're on it",
+      subject: "Your Sueep painting planning range: we're on it",
       html: customerHtml,
-      reply_to: TO_EMAIL,
+      replyTo: TO_EMAIL,
     });
   }
 }

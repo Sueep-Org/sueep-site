@@ -1,5 +1,6 @@
 import { buildJanitorialTurnoverProjectEmailHtml, formatUsd, sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import { getNotificationSetting } from "@/lib/notificationSettings";
 
 type TurnoverRequestForEmail = {
   unitNumber: string | null;
@@ -69,14 +70,19 @@ export async function notifyJanitorialTurnoverCreated(params: {
   }
   
   const isExternal = body.source === "external";
-  const recipients = uniqueEmails([
-    isExternal ? (stringValue(body.pmEmail) || building.pmEmail || "") : "",
+  // Staff share one email; the property manager on a client submission gets
+  // their own copy so they don't see Sueep's internal addresses.
+  const staff = uniqueEmails([
     stringValue(body.sueepPmEmail),
-    "david@sueep.com",
-    "jennifer@sueep.com",
+    // Plus the Notifications page's "Also send to" list (David and Jennifer to start).
+    ...(await getNotificationSetting("JANITORIAL_TURNOVER_SUBMITTED")).to,
     ...employeeEmails,
   ]);
-  if (recipients.length === 0) return;
+  const clientPm = isExternal ? stringValue(body.pmEmail) || building.pmEmail || "" : "";
+  const groups = [staff, ...(clientPm && !staff.some((e) => e.toLowerCase() === clientPm.toLowerCase()) ? [[clientPm]] : [])].filter(
+    (g) => g.length > 0
+  );
+  if (groups.length === 0) return;
 
   const totalCents = requests.reduce((sum, request) => sum + (request.priceCents ?? 0), 0);
   const unitNumbers = requests.map((request, index) => request.unitNumber || `Unit ${index + 1}`).join(", ");
@@ -95,10 +101,12 @@ export async function notifyJanitorialTurnoverCreated(params: {
   });
 
   const results = await Promise.allSettled(
-    recipients.map((to) =>
+    groups.map((to) =>
       sendEmail({
+        type: "JANITORIAL_TURNOVER_SUBMITTED",
+        link: `/erp/buildings/${building.id}`,
         to,
-        subject: `New Janitorial Turnover Submitted - ${building.name}`,
+        subject: `New janitorial turnover: ${building.name}`,
         html,
         replyTo: stringValue(body.sueepPmEmail) || undefined,
       })
@@ -106,7 +114,7 @@ export async function notifyJanitorialTurnoverCreated(params: {
   );
   results.forEach((result, i) => {
     if (result.status === "rejected") {
-      console.error(`janitorial turnover notification email failed for ${recipients[i]}`, result.reason);
+      console.error(`janitorial turnover notification email failed for ${groups[i].join(", ")}`, result.reason);
     }
   });
 }

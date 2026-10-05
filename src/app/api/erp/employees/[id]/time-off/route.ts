@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   TIME_OFF_TYPES,
-  TIME_OFF_NOTIFICATION_EMAIL,
   parseTimeOffDate,
   findOverlappingTimeOff,
   overlapErrorMessage,
@@ -67,7 +66,8 @@ export async function POST(req: Request, ctx: Ctx) {
 
     try {
       await sendEmail({
-        to: TIME_OFF_NOTIFICATION_EMAIL,
+        type: "TIME_OFF_LOGGED",
+        link: `/erp/employees/${id}`,
         subject: `Time off logged: ${employee.firstName} ${employee.lastName}`,
         html: buildTimeOffLoggedEmail({
           personName: `${employee.firstName} ${employee.lastName}`,

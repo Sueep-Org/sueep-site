@@ -1,7 +1,25 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewContractorForm } from "./NewContractorForm";
-import { SUB_STATUS_STYLE, subCoverage } from "@/lib/erp/subCoverage";
+import { subCoverage, type CoverageItem } from "@/lib/erp/subCoverage";
+
+const SHORT_DATE: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
+
+/** Check when the policy is on file and not expired, X when it's missing or expired. Hover for the date. */
+function CoverageCheck({ item }: { item: CoverageItem | undefined }) {
+  if (!item) return null;
+  if (item.status === "EXEMPT") {
+    return <span title="Workers' comp exempt" className="text-xs font-medium text-gray-500">Exempt</span>;
+  }
+  const date = item.expiresAt ? new Date(`${item.expiresAt}T00:00:00Z`).toLocaleDateString("en-US", SHORT_DATE) : null;
+  const look = {
+    CURRENT: { mark: "✓", cls: "text-emerald-600", title: `Expires ${date}` },
+    EXPIRING: { mark: "✓", cls: "text-amber-600", title: `Expiring ${date}` },
+    EXPIRED: { mark: "✗", cls: "text-red-600", title: `Expired ${date}` },
+    MISSING: { mark: "✗", cls: "text-gray-400", title: "Not on file" },
+  }[item.status];
+  return <span title={`${item.label}: ${look.title}`} className={`text-base font-bold ${look.cls}`}>{look.mark}</span>;
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,12 +46,17 @@ export default async function ContractorsPage() {
                 <th className="px-4 py-2">Email</th>
                 <th className="px-4 py-2">Role</th>
                 <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Insurance</th>
+                <th className="px-4 py-2 text-center">GL</th>
+                <th className="px-4 py-2 text-center">WC</th>
                 <th className="px-4 py-2">Added</th>
               </tr>
             </thead>
             <tbody>
-              {contractors.map((c, i) => (
+              {contractors.map((c, i) => {
+                const coverage = subCoverage(c);
+                const gl = coverage.items.find((it) => it.key === "gl");
+                const wc = coverage.items.find((it) => it.key === "wc");
+                return (
                 <tr key={c.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <Link
@@ -64,22 +87,14 @@ export default async function ContractorsPage() {
                       {c.status === "ACTIVE" ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const coverage = subCoverage(c);
-                      const style = SUB_STATUS_STYLE[coverage.status];
-                      return (
-                        <span title={coverage.summary} className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}>
-                          {style.label}
-                        </span>
-                      );
-                    })()}
-                  </td>
+                  <td className="px-4 py-3 text-center"><CoverageCheck item={gl} /></td>
+                  <td className="px-4 py-3 text-center"><CoverageCheck item={wc} /></td>
                   <td className="px-4 py-3 text-gray-500">
                     {c.createdAt.toLocaleDateString()}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

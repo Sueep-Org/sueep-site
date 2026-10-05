@@ -31,7 +31,7 @@ type PayrollRow = {
   commissionCents: number;
   commissionBreakdown: { label: string; amountCents: number }[];
   /** Hours added by hand (work not on a project), so they can be removed. */
-  manualEntries?: { id: string; date: string; hours: number; note: string | null; batchId?: string | null }[];
+  manualEntries?: { id: string; date: string; hours: number; note: string | null; batchId?: string | null; repeatId?: string | null; repeatEveryDays?: number | null }[];
 };
 
 const manualInputCls = "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -214,17 +214,26 @@ function SettingsPopover({
 }
 
 /** Manual hours as listed on a row: one line per day, or one per date range entered together. */
-type ManualGroup = { id: string; batchId: string | null; label: string; hours: number; days: number; note: string | null };
+type ManualGroup = {
+  id: string; batchId: string | null; label: string; firstDate: string; hours: number; days: number; note: string | null;
+  repeatId: string | null; repeatEveryDays: number | null;
+};
+
+const REPEAT_OPTIONS = [[0, "Doesn't repeat"], [7, "Every week"], [14, "Every 2 weeks"]] as const;
+
+function repeatLabel(everyDays: number | null): string {
+  return everyDays === 7 ? "repeats weekly" : everyDays === 14 ? "repeats every 2 weeks" : "";
+}
 
 function shortDay(iso: string): string {
   return new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function groupManualEntries(entries: NonNullable<PayrollRow["manualEntries"]>): ManualGroup[] {
-  const groups = new Map<string, { batchId: string | null; dates: string[]; hours: number; note: string | null; id: string }>();
+  const groups = new Map<string, { batchId: string | null; dates: string[]; hours: number; note: string | null; id: string; repeatId: string | null; repeatEveryDays: number | null }>();
   for (const e of entries) {
     const key = e.batchId ?? `day:${e.id}`;
-    const g = groups.get(key) ?? { batchId: e.batchId ?? null, dates: [], hours: 0, note: e.note, id: e.id };
+    const g = groups.get(key) ?? { batchId: e.batchId ?? null, dates: [], hours: 0, note: e.note, id: e.id, repeatId: e.repeatId ?? null, repeatEveryDays: e.repeatEveryDays ?? null };
     g.dates.push(e.date);
     g.hours += e.hours;
     groups.set(key, g);
@@ -232,7 +241,10 @@ function groupManualEntries(entries: NonNullable<PayrollRow["manualEntries"]>): 
   return [...groups.values()].map((g) => {
     const dates = g.dates.sort();
     const label = dates.length > 1 ? `${shortDay(dates[0])} to ${shortDay(dates[dates.length - 1])}` : shortDay(dates[0]);
-    return { id: g.id, batchId: g.batchId, label, hours: Math.round(g.hours * 100) / 100, days: dates.length, note: g.note };
+    return {
+      id: g.id, batchId: g.batchId, label, firstDate: dates[0], hours: Math.round(g.hours * 100) / 100, days: dates.length, note: g.note,
+      repeatId: g.repeatId, repeatEveryDays: g.repeatEveryDays,
+    };
   });
 }
 
@@ -251,9 +263,13 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ mode: "day" as "day" | "range", employeeId: "", date: "", from: "", to: "", hours: "", note: "" });
+  const [addForm, setAddForm] = useState({ mode: "day" as "day" | "range", employeeId: "", date: "", from: "", to: "", hours: "", note: "", repeat: 0 as number });
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
+  const [editing, setEditing] = useState<{ group: ManualGroup; name: string; hours: string; note: string; date: string; later: boolean } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [removingRepeat, setRemovingRepeat] = useState<{ group: ManualGroup; name: string } | null>(null);
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -349,7 +365,7 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
     const today = toISO(new Date());
     const date = today >= toISO(start) && today <= toISO(end) ? today : toISO(end);
     // A range starts as the whole pay period (e.g. 80 hours over these two weeks).
-    setAddForm({ mode: "day", employeeId: "", date, from: toISO(start), to: toISO(end), hours: "", note: "" });
+    setAddForm({ mode: "day", employeeId: "", date, from: toISO(start), to: toISO(end), hours: "", note: "", repeat: 0 });
     setAddError("");
     setAddOpen(true);
   }
@@ -363,8 +379,8 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
           addForm.mode === "range"
-            ? { employeeId: addForm.employeeId, from: addForm.from, to: addForm.to, hours: addForm.hours, note: addForm.note }
-            : { employeeId: addForm.employeeId, date: addForm.date, hours: addForm.hours, note: addForm.note },
+            ? { employeeId: addForm.employeeId, from: addForm.from, to: addForm.to, hours: addForm.hours, note: addForm.note, repeatEvery: addForm.repeat }
+            : { employeeId: addForm.employeeId, date: addForm.date, hours: addForm.hours, note: addForm.note, repeatEvery: addForm.repeat },
         ),
       });
       const result = (await res.json().catch(() => ({}))) as { error?: string };
@@ -377,17 +393,58 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
     }
   }
 
+  function openEdit(group: ManualGroup, name: string) {
+    setEditing({ group, name, hours: String(group.hours), note: group.note ?? "", date: group.firstDate, later: false });
+    setEditError("");
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const { group } = editing;
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      const res = await fetch("/api/erp/payroll/manual-hours", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(group.batchId ? { batchId: group.batchId } : { id: group.id, date: editing.date }),
+          hours: editing.hours,
+          note: editing.note,
+          later: editing.later,
+        }),
+      });
+      const result = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setEditError(result.error ?? "Could not save the hours"); return; }
+      toast("Hours updated.", "success");
+      setEditing(null);
+      setReloadKey((k) => k + 1);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function deleteManualHours(group: ManualGroup, later: boolean) {
+    const query = group.batchId ? `batchId=${encodeURIComponent(group.batchId)}` : `id=${group.id}`;
+    const res = await fetch(`/api/erp/payroll/manual-hours?${query}${later ? "&later=1" : ""}`, { method: "DELETE" });
+    if (!res.ok) { toast("Could not remove the hours", "error"); return; }
+    toast(later ? "Hours removed and repeat stopped." : "Hours removed.", "success");
+    setRemovingRepeat(null);
+    setReloadKey((k) => k + 1);
+  }
+
   async function removeManualHours(group: ManualGroup, name: string) {
+    if (group.repeatId) {
+      setRemovingRepeat({ group, name });
+      return;
+    }
     const ok = await confirm({
       message: group.batchId
         ? `Remove all ${fmtHours(group.hours)} manual hours for ${name} from ${group.label}? This removes every day of that range, including any in another pay period.`
         : `Remove ${fmtHours(group.hours)} manual hours for ${name} on ${group.label}?`,
     });
     if (!ok) return;
-    const res = await fetch(`/api/erp/payroll/manual-hours?${group.batchId ? `batchId=${group.batchId}` : `id=${group.id}`}`, { method: "DELETE" });
-    if (!res.ok) { toast("Could not remove the hours", "error"); return; }
-    toast("Hours removed.", "success");
-    setReloadKey((k) => k + 1);
+    await deleteManualHours(group, false);
   }
 
   const filteredRows = (data?.rows ?? []).filter((r) => {
@@ -573,6 +630,21 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
               })()}
             </div>
           )}
+          <div>
+            <p className="text-xs font-medium text-gray-600">Repeat</p>
+            <div className="mt-1 inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-medium">
+              {REPEAT_OPTIONS.map(([every, label]) => (
+                <button
+                  key={every}
+                  type="button"
+                  onClick={() => setAddForm((f) => ({ ...f, repeat: every }))}
+                  className={`rounded-md px-3 py-1 transition ${addForm.repeat === every ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="block text-xs font-medium text-gray-600">
             Note <span className="font-normal text-gray-400">(optional)</span>
             <input
@@ -597,6 +669,82 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} size="md">
+        {editing && (
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); saveEdit(); }}>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Edit hours</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                {editing.name}, {editing.group.label}
+                {editing.group.repeatId ? `, ${repeatLabel(editing.group.repeatEveryDays)}` : ""}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {editing.group.batchId ? null : (
+                <label className="block text-xs font-medium text-gray-600">
+                  Date
+                  <input type="date" required value={editing.date}
+                    onChange={(e) => setEditing((f) => f && { ...f, date: e.target.value })} className={manualInputCls} />
+                </label>
+              )}
+              <label className="block text-xs font-medium text-gray-600">
+                {editing.group.batchId ? `Total hours (${editing.group.days} days)` : "Hours"}
+                <input type="number" required min="0.25" step="0.25" value={editing.hours}
+                  onChange={(e) => setEditing((f) => f && { ...f, hours: e.target.value })} className={manualInputCls} />
+              </label>
+            </div>
+            <label className="block text-xs font-medium text-gray-600">
+              Note <span className="font-normal text-gray-400">(optional)</span>
+              <input type="text" value={editing.note}
+                onChange={(e) => setEditing((f) => f && { ...f, note: e.target.value })} className={manualInputCls} />
+            </label>
+            {editing.group.repeatId ? (
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                <input type="checkbox" checked={editing.later}
+                  onChange={(e) => setEditing((f) => f && { ...f, later: e.target.checked })} />
+                Also change the hours and note on every later repeat
+              </label>
+            ) : null}
+            {editError && <p className="text-xs text-red-600">{editError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+              <button type="submit" disabled={savingEdit} className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50">
+                {savingEdit ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={!!removingRepeat} onClose={() => setRemovingRepeat(null)} size="sm">
+        {removingRepeat && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Remove repeating hours</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {fmtHours(removingRepeat.group.hours)} manual hours for {removingRepeat.name} on {removingRepeat.group.label}{" "}
+                {repeatLabel(removingRepeat.group.repeatEveryDays)}.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={() => deleteManualHours(removingRepeat.group, false)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Remove just this one
+              </button>
+              <button type="button" onClick={() => deleteManualHours(removingRepeat.group, true)}
+                className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700">
+                Remove this and all later ones, stop repeating
+              </button>
+              <button type="button" onClick={() => setRemovingRepeat(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Closed (paid) period: saved numbers, plus anything changed since */}
@@ -729,7 +877,13 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
                             {groupManualEntries(row.manualEntries).map((g) => (
                               <li key={g.batchId ?? g.id} className="flex items-center justify-end gap-2">
                                 <span className="truncate">{g.label}{g.note ? `, ${g.note}` : ""}</span>
+                                {g.repeatId ? (
+                                  <span className="text-gray-400" title={repeatLabel(g.repeatEveryDays)} aria-label={repeatLabel(g.repeatEveryDays)}>&#x21bb;</span>
+                                ) : null}
                                 <span className="tabular-nums">{fmtHours(g.hours)}h{g.days > 1 ? ` over ${g.days} days` : ""}</span>
+                                <button type="button" onClick={() => openEdit(g, row.name)} className="text-gray-400 hover:text-pink-600" aria-label="Edit these hours">
+                                  Edit
+                                </button>
                                 <button type="button" onClick={() => removeManualHours(g, row.name)} className="text-gray-400 hover:text-red-600" aria-label="Remove these hours">
                                   Remove
                                 </button>

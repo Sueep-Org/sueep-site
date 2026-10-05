@@ -4,14 +4,18 @@ import Link from "next/link";
 const CALENDARS = [
   { id: "projects", label: "Projects", href: "/erp/schedule" },
   { id: "janitorial", label: "Janitorial Contracts", href: "/erp/schedule?calendar=janitorial" },
+  { id: "management", label: "Management", href: "/erp/schedule?calendar=management" },
 ] as const;
+
+// Tabs only some roles get (see canManageManagementCalendar).
+const RESTRICTED: ReadonlySet<string> = new Set(["management"]);
 
 export type ScheduleCalendarId = (typeof CALENDARS)[number]["id"];
 
-export function ScheduleCalendarTabs({ active }: { active: ScheduleCalendarId }) {
+export function ScheduleCalendarTabs({ active, showManagement }: { active: ScheduleCalendarId; showManagement: boolean }) {
   return (
     <nav className="flex gap-1 border-b border-gray-200" aria-label="Calendars">
-      {CALENDARS.map((c) => {
+      {CALENDARS.filter((c) => showManagement || !RESTRICTED.has(c.id)).map((c) => {
         const isActive = c.id === active;
         return (
           <Link

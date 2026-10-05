@@ -55,8 +55,13 @@ export function CompensationOverview() {
               an optional note. A date range splits the total evenly across its working days, Monday to Friday only (80 hours
               over two weeks is 8 hours a day), with any rounding on the last day so it adds up exactly. They&apos;re paid at the person&apos;s hourly rate that day (from their pay history) and count
               toward their 40 hour week with any other hours, so overtime works the same way. The row shows{" "}
-              <strong>X manual hrs</strong> under the hours; click it to see each entry or <strong>Remove</strong> one. A date
-              range shows as one line and is removed as a whole.
+              <strong>X manual hrs</strong> under the hours; click it to see each entry, then <strong>Edit</strong> (hours,
+              note, and a single day&apos;s date) or <strong>Remove</strong> one. A date range shows as one line, is edited as
+              one total, and is removed as a whole.
+              Set <strong>Repeat</strong> to <strong>Every week</strong> or <strong>Every 2 weeks</strong> to add the same
+              hours again on the same days each time (marked &#x21bb;). Each repeat can be edited on its own, or tick{" "}
+              <strong>Also change the hours and note on every later repeat</strong> to change the ones after it too. Removing one asks whether to
+              remove just that one, or that one and every later one, which stops the repeat (earlier ones stay).
               Adding or removing hours in a closed period shows up in that period&apos;s list of changes after closing.
             </LI>
           </UL>

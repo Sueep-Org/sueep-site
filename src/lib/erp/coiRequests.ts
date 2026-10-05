@@ -5,11 +5,10 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { buildCoiRequestAlertEmail, sendEmail } from "@/lib/email";
 import { inputToCents } from "./money";
 
 export const GENERAL_TOKEN_KEY = "coiRequestToken";
-export const NOTIFY_EMAIL_KEY = "coiRequestNotifyEmail";
 
 export const REQUEST_STATUSES = [
   { value: "NEW", label: "New" },
@@ -126,7 +125,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-/** Emails the address set on the Requests tab, if any. Never throws. */
+/** Emails whoever is set for "COI request received" on the Notifications page (also editable on the Requests tab). Never throws. */
 export async function notifyNewRequest(req: {
   id: string;
   projectId: string | null;
@@ -138,20 +137,24 @@ export async function notifyNewRequest(req: {
   neededBy: Date | null;
 }) {
   try {
-    const setting = await prisma.appSetting.findUnique({ where: { key: NOTIFY_EMAIL_KEY } });
-    const to = setting?.value?.trim();
-    if (!to) return;
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://app.sueep.com").replace(/\/$/, "");
     // /erp/... works on both the app subdomain and the main site.
     const link = req.projectId ? `${appUrl}/erp/projects/${req.projectId}?tab=COIs` : `${appUrl}/erp/insurance/requests`;
     const project = req.projectTitle ?? req.projectText ?? "No project given";
     const needed = req.neededBy ? req.neededBy.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : null;
+    // Recipients are set on the Notifications page (and the Requests tab); nobody set means no email.
     await sendEmail({
-      to,
+      type: "COI_REQUEST_RECEIVED",
+      link: req.projectId ? `/erp/projects/${req.projectId}` : "/erp/insurance/requests",
       subject: `COI request: ${project}`,
-      html: `<p><strong>${esc(req.requesterName)}</strong>${req.requesterCompany ? ` (${esc(req.requesterCompany)})` : ""} requested a COI.</p>
-<p>Project: ${esc(project)}<br/>For: ${req.holders.map((h) => esc(h.name)).join(", ")}${needed ? `<br/>Needed by: ${needed}` : ""}</p>
-<p><a href="${link}">Open in the ERP</a></p>`,
+      html: buildCoiRequestAlertEmail({
+        requesterName: req.requesterName,
+        requesterCompany: req.requesterCompany,
+        project,
+        holders: req.holders.map((h) => h.name),
+        neededBy: needed,
+        url: link,
+      }),
     });
   } catch (e) {
     console.error("COI request notification failed:", e);
@@ -193,6 +196,8 @@ export async function sendRequestLinkEmails(opts: { to: string[]; url: string; p
   const subject = opts.projectTitle ? `Request a certificate of insurance: ${opts.projectTitle}` : "Request a certificate of insurance from Sueep";
   for (const address of opts.to) {
     await sendEmail({
+      type: "COI_REQUEST_LINK",
+      link: "/erp/insurance/requests",
       to: address,
       subject,
       html: buildRequestLinkEmailHtml({ projectTitle: opts.projectTitle, url: opts.url, message: opts.message }),

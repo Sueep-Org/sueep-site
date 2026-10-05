@@ -559,8 +559,8 @@ export function SchedulePlanner({
     [changeOrders, projectById],
   );
 
-  // Deep link from elsewhere (e.g. the schedule-nudge popup's "Schedule it"
-  // link) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
+  // Deep link from elsewhere (e.g. each project in the unscheduled-projects
+  // email) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
   const confirm = useConfirm();

@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
@@ -101,23 +102,42 @@ function inviteHtml(params: {
   extraHtml?: string;
 }): string {
   const verb = params.role === "Supervising" ? "assigned to supervise" : "scheduled to work on";
+  const title = escapeHtml(params.title);
   const lines = [
     params.cancelled
-      ? `<p>Your assignment to <strong>${params.title}</strong> on ${params.when} has been removed.</p>`
-      : `<p>You've been ${verb} <strong>${params.title}</strong>, ${params.when}.</p>`,
+      ? `<p>Your assignment to <strong>${title}</strong> on ${params.when} has been removed.</p>`
+      : `<p>You've been ${verb} <strong>${title}</strong>, ${params.when}.</p>`,
     params.extraHtml ?? "",
-    params.scopeText ? `<p><strong>Scope:</strong> ${params.scopeText}</p>` : "",
-    params.location ? `<p><strong>Address:</strong> ${params.location}</p>` : "",
+    params.scopeText ? `<p><strong>Scope:</strong> ${escapeHtml(params.scopeText)}</p>` : "",
+    params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
     !params.cancelled ? `<p>Add the attached invite to your calendar.</p>` : "",
   ];
   return lines.filter(Boolean).join("");
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** What the person actually sees in the invite. A re-send with the same
+ * fingerprint is skipped; the supervisor-only hours note (extraHtml) and the
+ * link are left out on purpose, since they change without the day changing. */
+function inviteFingerprint(p: { to: string; role: InviteRole; title: string; dateKey: string; startTime?: string | null; endTime?: string | null; location?: string; scopeText?: string | null }) {
+  return createHash("sha256")
+    .update(JSON.stringify([p.to.toLowerCase(), p.role, p.title, p.dateKey, p.startTime ?? "", p.endTime ?? "", p.location ?? "", p.scopeText ?? ""]))
+    .digest("hex");
 }
 
 /** Sends (or cancels) the invite for one specific day. `uid` should be
  * stable across re-sends for the same assignment (reuse the row's id) so
  * calendar apps update/remove the existing event instead of duplicating
  * it — same convention every call site already used before this helper
- * existed. */
+ * existed.
+ *
+ * Many schedule edits re-run this for everyone on a day. It only emails
+ * when something the person sees changed since the last invite for this
+ * uid (date, times, title, address, scope), and only sends a cancellation
+ * to someone who actually got an invite. */
 export async function sendDayInvite(params: {
   uid: string;
   to: string;
@@ -139,7 +159,11 @@ export async function sendDayInvite(params: {
   // notify about it. Applies to cancellations too, not just new invites.
   if (params.dateKey < todayEasternKey()) return;
   const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime);
+  const fingerprint = inviteFingerprint(params);
   try {
+    const last = await prisma.scheduleInviteSent.findUnique({ where: { uid: params.uid } });
+    if (params.cancelled ? !last || last.cancelled : last && !last.cancelled && last.fingerprint === fingerprint) return;
+
     const ics = buildDayAssignmentInvite({
       uid: params.uid,
       dateKey: params.dateKey,
@@ -157,11 +181,22 @@ export async function sendDayInvite(params: {
       attendeeName: params.attendeeName,
       cancelled: params.cancelled,
     });
-    await sendEmail({
+    const result = await sendEmail({
+      type: "SCHEDULE_INVITE",
+      link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
       subject: `${params.cancelled ? "Cancelled" : "You're scheduled"}: ${params.title}, ${when}`,
       html: inviteHtml({ ...params, when }),
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
+    });
+    // Only remember invites that really went out, so turning email back on
+    // (or a test copy with email not set up) doesn't swallow the next one.
+    if (result !== "SENT") return;
+    const cancelled = !!params.cancelled;
+    await prisma.scheduleInviteSent.upsert({
+      where: { uid: params.uid },
+      update: { fingerprint, cancelled, sentAt: new Date() },
+      create: { uid: params.uid, fingerprint, cancelled },
     });
   } catch (e) {
     console.error("Failed to send schedule invite", { uid: params.uid, cancelled: params.cancelled }, e);
