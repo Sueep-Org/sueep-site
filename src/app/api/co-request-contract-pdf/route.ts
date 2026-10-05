@@ -67,13 +67,19 @@ export async function POST(req: Request) {
   });
   if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
 
-  const pdfBytes = body.signaturePngDataUrl
-    ? await embedChangeOrderSignature(result.pdfBytes, {
-        signaturePngDataUrl: body.signaturePngDataUrl,
-        printedName: body.signaturePrintedName!.trim(),
-        signatureDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-      })
-    : await flattenContractPdf(result.pdfBytes);
+  let pdfBytes: Uint8Array;
+  try {
+    pdfBytes = body.signaturePngDataUrl
+      ? await embedChangeOrderSignature(result.pdfBytes, {
+          signaturePngDataUrl: body.signaturePngDataUrl,
+          printedName: body.signaturePrintedName!.trim(),
+          signatureDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        })
+      : await flattenContractPdf(result.pdfBytes);
+  } catch (e) {
+    console.error("Failed to finalize change order contract PDF:", e);
+    return Response.json({ error: "Contract could not be prepared. Please try again." }, { status: 500 });
+  }
 
   const filename = `${coTitle.replace(/[^\w\- ]+/g, "").trim() || "change-order"}.pdf`;
   return new Response(Buffer.from(pdfBytes), {
