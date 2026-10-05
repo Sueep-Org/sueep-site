@@ -18,7 +18,8 @@ export function BuildingsOverview() {
         <Step n={1} title="Adding a building">
           Click <strong>Add building</strong> on the list page. Only name and address are
           required, builder and the property manager&apos;s name, email, and phone are optional
-          and can be filled in later.
+          and can be filled in later. To give that property manager their own turnover calendar, see{" "}
+          <A href="/erp/help/turnover/property-manager-links">Property Manager Links</A>.
           <ImgPlaceholder label="Add building form" />
         </Step>
 

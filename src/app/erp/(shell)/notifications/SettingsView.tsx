@@ -16,6 +16,7 @@ export type SettingRow = {
   automatic: string | null;
   toMode: ToMode | null;
   ccEditable: boolean;
+  alwaysOn: boolean;
   setting: SettingValues & { customized: boolean };
   defaults: SettingValues;
   lastSentAt: string | null;
@@ -123,7 +124,8 @@ function SettingRowView({ row, onEdit }: { row: SettingRow; onEdit: () => void }
         role="switch"
         aria-checked={setting.enabled}
         aria-label={`${row.label} ${setting.enabled ? "on" : "off"}`}
-        disabled={busy}
+        disabled={busy || row.alwaysOn}
+        title={row.alwaysOn ? "Always on, people need this email to get in" : undefined}
         onClick={toggle}
         className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50 ${setting.enabled ? "bg-pink-600" : "bg-gray-300"}`}
       >

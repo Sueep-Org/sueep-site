@@ -1366,7 +1366,7 @@ export function NewProjectForm({
             {isTurnover && (
               <div className="flex items-end sm:col-start-3 sm:justify-end">
                 <a
-                  href="/janitorial-turnover"
+                  href={`${(process.env.NEXT_PUBLIC_SITE_URL || "https://sueep.com").replace(/\/$/, "")}/turnover-requests`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center rounded-md border border-pink-200 bg-white px-3 py-2 text-sm font-medium text-pink-700 hover:bg-pink-50"

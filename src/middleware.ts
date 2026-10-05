@@ -17,12 +17,12 @@ function hasStaticExtension(pathname: string): boolean {
 
 function isPublicAppPath(pathname: string): boolean {
   return (
-    pathname === "/janitorial-turnover" ||
-    pathname.startsWith("/janitorial-turnover/") ||
     // Janitor clock-in links, reached from a phone without an ERP login
     pathname.startsWith("/clock/") ||
     // COI request links sent to GCs and property managers
-    pathname.startsWith("/coi-request/")
+    pathname.startsWith("/coi-request/") ||
+    // Property managers' private turnover calendar links
+    pathname.startsWith("/pm/")
   );
 }
 

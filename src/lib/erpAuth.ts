@@ -54,6 +54,12 @@ export function canManageInsurance(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
 }
 
+/** Property Managers page (outside property managers' private turnover
+ * links): same roles as canSeeFinancials, since the link shows prices. */
+export function canManagePropertyManagers(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
+}
+
 /** Schedule page's Management calendar (company deadlines, insurance
  * expirations, everyone's time off): view and edit. */
 export function canManageManagementCalendar(role: ErpRole): boolean {

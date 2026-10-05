@@ -9,6 +9,7 @@ import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
 import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSection";
 import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
 import { BuildingNotesSection, type BuildingNoteRow } from "./[id]/BuildingNotesSection";
+import { BuildingPropertyManagersSection, type BuildingPropertyManager } from "./[id]/BuildingPropertyManagersSection";
 
 type Props = {
   buildingId: string;
@@ -36,6 +37,8 @@ type Props = {
   commissionEmployeeId?: string | null;
   initialNotes: BuildingNoteRow[];
   currentUserId: string | null;
+  /** Null for roles that can't manage property managers */
+  propertyManagers?: BuildingPropertyManager[] | null;
 };
 
 export function BuildingTabs({
@@ -55,6 +58,7 @@ export function BuildingTabs({
   commissionEmployeeId = null,
   initialNotes,
   currentUserId,
+  propertyManagers = null,
 }: Props) {
   const allTabs = [
     {
@@ -78,6 +82,16 @@ export function BuildingTabs({
               employees={employees}
               canEditCommissionOwner={canEditPricing}
             />
+          )}
+          {propertyManagers && (
+            <div className="mt-4">
+              <BuildingPropertyManagersSection
+                buildingId={buildingId}
+                managers={propertyManagers}
+                contactEmail={initial.pmEmail}
+                contactName={initial.pmName}
+              />
+            </div>
           )}
           <div className="mt-4">
             <BuildingNotesSection buildingId={buildingId} initialNotes={initialNotes} currentUserId={currentUserId} />

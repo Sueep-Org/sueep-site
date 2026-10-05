@@ -105,3 +105,44 @@ export function buildDayAssignmentInvite(params: {
   ];
   return `${lines.map(foldLine).join("\r\n")}\r\n`;
 }
+
+/**
+ * An all-day, possibly multi-day event for a property manager to add to
+ * their own calendar, attached to their confirmation email. PUBLISH rather
+ * than REQUEST: it's an "add to calendar" file, not a meeting to answer.
+ * Reuse the uid with a higher sequence when the date moves.
+ */
+export function buildTurnoverCalendarFile(params: {
+  uid: string;
+  /** YYYY-MM-DD */
+  startKey: string;
+  /** YYYY-MM-DD, last day included; same as start for one day */
+  endKey: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  url?: string;
+  sequence?: number;
+}): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Sueep//Turnovers//EN",
+    "METHOD:PUBLISH",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${params.uid}`,
+    `DTSTAMP:${icsTimestamp(new Date())}`,
+    `DTSTART;VALUE=DATE:${icsDate(params.startKey)}`,
+    `DTEND;VALUE=DATE:${nextDayIcsDate(params.endKey < params.startKey ? params.startKey : params.endKey)}`,
+    `SUMMARY:${escapeIcsText(params.summary)}`,
+    ...(params.description ? [`DESCRIPTION:${escapeIcsText(params.description)}`] : []),
+    ...(params.location ? [`LOCATION:${escapeIcsText(params.location)}`] : []),
+    ...(params.url ? [`URL:${escapeIcsText(params.url)}`] : []),
+    `SEQUENCE:${params.sequence ?? 0}`,
+    "TRANSP:TRANSPARENT",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return `${lines.map(foldLine).join("\r\n")}\r\n`;
+}

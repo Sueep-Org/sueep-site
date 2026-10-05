@@ -14,7 +14,9 @@ export function NotificationsOverview() {
       <Steps>
         <Step n={1} title="Turning an email on or off">
           Each email has a switch on the left. Turning it off stops it for everyone right away. Turned-off emails still
-          show in the Email Log as <strong>Turned off</strong>, so you can see what would have been sent.
+          show in the Email Log as <strong>Turned off</strong>, so you can see what would have been sent. A few emails
+          people need to get in, like the property manager sign-in code, have a greyed-out switch and can&apos;t be
+          turned off.
         </Step>
 
         <Step n={2} title="Changing who gets an email">

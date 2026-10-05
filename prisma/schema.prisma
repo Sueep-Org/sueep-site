@@ -222,6 +222,9 @@ model Building {
   hubspotUnitAliases    HubSpotUnitAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
   notes                 BuildingNote[]
+  propertyManagers      PropertyManagerBuilding[]
+  propertyManagerRequests PropertyManagerRequest[]
+  propertyManagerChanges  PropertyManagerChange[]
 
   @@index([name])
   @@index([commissionEmployeeId])
@@ -2792,4 +2795,211 @@ model ScheduleInviteSent {
   fingerprint String
   cancelled   Boolean  @default(false)
   sentAt      DateTime @default(now())
+}
+
+/// An outside property manager (a client, not Sueep staff) who gets a
+/// private link to see and request turnovers for their buildings, with no
+/// ERP login. Managed on the Property Managers page (/erp/property-managers).
+model PropertyManager {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  company String?
+  /// Where their emails and sign-in codes go. One property manager per email.
+  email   String  @unique
+  phone   String?
+  notes   String?
+
+  /// Token for their private link (/pm/[token]). Replaced when staff make a
+  /// new link, so the old one stops working.
+  token  String  @unique
+  /// Off means the link stops working but the history is kept.
+  active Boolean @default(true)
+
+  /// Last time they opened their link
+  lastSeenAt DateTime?
+  /// Email of the ERP user who added them
+  createdBy  String?
+
+  /// Who at Sueep they should call, shown on their page and in emails.
+  /// Starts as the staff member who added them.
+  sueepContactName  String?
+  sueepContactPhone String?
+  sueepContactEmail String?
+
+  /// Gets the Monday "Your turnovers this week" email
+  weeklyEmail       Boolean   @default(true)
+  /// When it last went out, so a re-run the same week doesn't send it twice
+  weeklyEmailSentAt DateTime?
+
+  /// The 6-digit code emailed when they open the link on a new device,
+  /// stored hashed. Cleared once used.
+  signInCodeHash      String?
+  signInCodeExpiresAt DateTime?
+  signInCodeSentAt    DateTime?
+  /// Wrong guesses on the current code. A new code is needed after 5.
+  signInCodeAttempts  Int       @default(0)
+
+  buildings PropertyManagerBuilding[]
+  devices   PropertyManagerDevice[]
+  signInLinks PropertyManagerSignInLink[]
+  requests  PropertyManagerRequest[]
+  changes   PropertyManagerChange[]
+}
+
+/// A browser a property manager signed in on with an emailed code, so they
+/// aren't asked again there. Removed when staff make them a new link.
+model PropertyManagerDevice {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  propertyManagerId String
+  propertyManager   PropertyManager @relation(fields: [propertyManagerId], references: [id], onDelete: Cascade)
+
+  /// Hash of the random value in the browser cookie
+  tokenHash  String   @unique
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+
+  @@index([propertyManagerId])
+}
+
+/// The button in an email we send a property manager. It signs them in
+/// without a code, since only they get the email. Works for a week, and any
+/// number of times in that week. Removed when staff make them a new link.
+model PropertyManagerSignInLink {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  propertyManagerId String
+  propertyManager   PropertyManager @relation(fields: [propertyManagerId], references: [id], onDelete: Cascade)
+
+  /// Hash of the random value in the email's button link
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  @@index([propertyManagerId])
+}
+
+/// Which buildings a property manager can see on their link.
+model PropertyManagerBuilding {
+  propertyManagerId String
+  propertyManager   PropertyManager @relation(fields: [propertyManagerId], references: [id], onDelete: Cascade)
+  buildingId        String
+  building          Building        @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@id([propertyManagerId, buildingId])
+  @@index([buildingId])
+}
+
+/// A turnover a property manager asked for on their link. Stays here, out
+/// of TurnoverRequest/Project, until staff confirm it, so an unconfirmed
+/// request never shows up in billing, scheduling or quality checks.
+model PropertyManagerRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyManagerId String?
+  propertyManager   PropertyManager? @relation(fields: [propertyManagerId], references: [id], onDelete: SetNull)
+  /// PORTAL (their private link) | WEBSITE (the public form on sueep.com)
+  source            String  @default("PORTAL")
+  /// Copied from the property manager when sent, so it still reads right if
+  /// they're deleted. On a WEBSITE request it's whatever they typed.
+  requesterName     String
+  requesterEmail    String
+  requesterPhone    String?
+  /// Hash of the website submitter's IP, to limit how often one person can submit
+  submitterIpHash   String?
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  unitNumber   String
+  /// 0 bedrooms means a studio
+  bedrooms     Int
+  bathrooms    Int
+  isCommonArea Boolean @default(false)
+  sqft         Int?
+  /// GOOD | FAIR | POOR, website form only
+  unitQuality  String?
+
+  fullClean        Boolean @default(false)
+  fullPaint        Boolean @default(false)
+  touchUpPaint     Boolean @default(false)
+  carpetCleaning   Boolean @default(false)
+  /// Anything else, described by them and priced by staff
+  otherWork        Boolean @default(false)
+  otherDescription String?
+
+  /// UTC-midnight day labels
+  requestedStartDate DateTime
+  /// Website form only
+  requestedEndDate   DateTime?
+  moveOutDate        DateTime?
+  moveInDate         DateTime?
+  notes              String?
+
+  /// From the building's pricing package when sent. Leaves out Other work.
+  estimateCents Int
+
+  /// REQUESTED | CONFIRMED | DECLINED | CANCELLED
+  status String @default("REQUESTED")
+
+  /// Set by staff when confirming. Can differ from what was asked for; the
+  /// property manager is told in the confirmation email.
+  confirmedStartDate DateTime?
+  confirmedEndDate   DateTime?
+  priceCents         Int?
+  /// Unit project made on confirm
+  projectId          String?
+  declineReason      String?
+  /// Optional note from staff, sent in the confirm or decline email
+  staffMessage       String?
+  /// Email of the ERP user who confirmed or declined it
+  decidedBy          String?
+  decidedAt          DateTime?
+
+  @@index([buildingId, status])
+  @@index([propertyManagerId])
+  @@index([status, createdAt])
+  @@index([submitterIpHash, createdAt])
+}
+
+/// A property manager asking to cancel or move a turnover Sueep already
+/// confirmed. Staff apply or decline it; nothing about the unit or its crew
+/// changes until they do.
+model PropertyManagerChange {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyManagerId String?
+  propertyManager   PropertyManager? @relation(fields: [propertyManagerId], references: [id], onDelete: SetNull)
+  requesterName     String
+  requesterEmail    String
+
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  /// The unit's Project
+  projectId  String
+
+  /// CANCEL | RESCHEDULE
+  kind         String
+  /// RESCHEDULE only, UTC-midnight day label
+  newStartDate DateTime?
+  reason       String?
+
+  /// OPEN | APPLIED | DECLINED | WITHDRAWN
+  status        String    @default("OPEN")
+  declineReason String?
+  staffMessage  String?
+  decidedBy     String?
+  decidedAt     DateTime?
+
+  @@index([projectId, status])
+  @@index([status, createdAt])
+  @@index([propertyManagerId])
 }

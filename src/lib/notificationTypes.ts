@@ -32,6 +32,8 @@ export type NotificationDef = {
   sender: SenderKind;
   /** False for emails that carry their own full design */
   layout: boolean;
+  /** Can't be turned off on the Notifications page, e.g. sign-in codes people need to get in */
+  alwaysOn: boolean;
 };
 
 const env = (name: string, fallback: string) => (process.env[name] ?? fallback).trim();
@@ -46,6 +48,7 @@ const def = (d: Partial<NotificationDef> & Pick<NotificationDef, "label" | "grou
   defaultEnabled: true,
   sender: "erp",
   layout: true,
+  alwaysOn: false,
   ...d,
 });
 
@@ -149,10 +152,81 @@ export const NOTIFICATIONS = {
   JANITORIAL_TURNOVER_SUBMITTED: def({
     label: "Janitorial turnover submitted",
     group: "Turnovers",
-    when: "A janitorial turnover is submitted, by staff or a property manager",
-    automatic: "The Sueep PM, chosen employees, and the property manager on client submissions (in their own copy)",
+    when: "Staff create a janitorial turnover in the ERP",
+    automatic: "The Sueep PM and chosen employees",
     toMode: "also",
     defaultTo: () => ["david@sueep.com", "jennifer@sueep.com"],
+  }),
+  PROPERTY_MANAGER_TURNOVER_REQUESTED: def({
+    label: "Property manager turnover request",
+    group: "Turnovers",
+    when: "A property manager requests a turnover on their link or the website form",
+    toMode: "recipients",
+    defaultTo: () => ["david@sueep.com", "jennifer@sueep.com"],
+    ccEditable: true,
+  }),
+  PROPERTY_MANAGER_REQUEST_CONFIRMED: def({
+    label: "Turnover request confirmed",
+    group: "Turnovers",
+    when: "Staff confirm a property manager's turnover request",
+    automatic: "The property manager",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+  PROPERTY_MANAGER_REQUEST_DECLINED: def({
+    label: "Turnover request declined",
+    group: "Turnovers",
+    when: "Staff decline a property manager's turnover request",
+    automatic: "The property manager",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+  PROPERTY_MANAGER_CHANGE_REQUESTED: def({
+    label: "Property manager turnover change",
+    group: "Turnovers",
+    when: "A property manager cancels a request, changes its date, or asks to cancel or move a confirmed turnover",
+    toMode: "recipients",
+    defaultTo: () => ["david@sueep.com", "jennifer@sueep.com"],
+    ccEditable: true,
+  }),
+  PROPERTY_MANAGER_CHANGE_ANSWERED: def({
+    label: "Turnover change answered",
+    group: "Turnovers",
+    when: "Staff apply or decline a property manager's cancel or new date",
+    automatic: "The property manager",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+  PROPERTY_MANAGER_WELCOME: def({
+    label: "Property manager welcome",
+    group: "Turnovers",
+    when: "Someone clicks Email them their link on the Property Managers page",
+    automatic: "The property manager",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+  PROPERTY_MANAGER_WAITING_REMINDER: def({
+    label: "Property manager requests waiting",
+    group: "Reminders",
+    when: "Weekday mornings, when a property manager's request or change has waited over 1 business day",
+    toMode: "recipients",
+    defaultTo: () => ["david@sueep.com", "jennifer@sueep.com"],
+    ccEditable: true,
+  }),
+  PROPERTY_MANAGER_WEEKLY: def({
+    label: "Property manager weekly turnovers",
+    group: "Turnovers",
+    when: "Monday mornings, to property managers with turnovers that week or requests waiting",
+    automatic: "Each property manager, unless their Monday email is off",
+    sender: "sueep",
+  }),
+  PROPERTY_MANAGER_SIGN_IN_CODE: def({
+    label: "Property manager sign-in code",
+    group: "Turnovers",
+    when: "A property manager opens their turnover link on a new device",
+    automatic: "The property manager",
+    sender: "sueep",
+    alwaysOn: true,
   }),
   TURNOVER_COMPLETION_DIGEST: def({
     label: "Turnovers completed (daily)",

@@ -45,10 +45,11 @@ function maxDate(dates: (Date | null)[]) {
   return sorted[sorted.length - 1] ?? null;
 }
 
-function projectUrl(buildingId: string) {
+/** The building in the ERP. This email only goes to staff now, so it links there rather than a client page. */
+function buildingUrl(buildingId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
   if (!appUrl) return null;
-  return `${appUrl.replace(/\/$/, "")}/pm-view?building=${buildingId}`;
+  return `${appUrl.replace(/\/$/, "")}/erp/buildings/${buildingId}`;
 }
 
 export async function notifyJanitorialTurnoverCreated(params: {
@@ -69,20 +70,14 @@ export async function notifyJanitorialTurnoverCreated(params: {
     employeeEmails.push(...employees.map((e) => e.email).filter((email): email is string => Boolean(email)));
   }
   
-  const isExternal = body.source === "external";
-  // Staff share one email; the property manager on a client submission gets
-  // their own copy so they don't see Sueep's internal addresses.
+  // Staff only. Clients hear about their turnovers through their property manager link instead.
   const staff = uniqueEmails([
     stringValue(body.sueepPmEmail),
     // Plus the Notifications page's "Also send to" list (David and Jennifer to start).
     ...(await getNotificationSetting("JANITORIAL_TURNOVER_SUBMITTED")).to,
     ...employeeEmails,
   ]);
-  const clientPm = isExternal ? stringValue(body.pmEmail) || building.pmEmail || "" : "";
-  const groups = [staff, ...(clientPm && !staff.some((e) => e.toLowerCase() === clientPm.toLowerCase()) ? [[clientPm]] : [])].filter(
-    (g) => g.length > 0
-  );
-  if (groups.length === 0) return;
+  if (staff.length === 0) return;
 
   const totalCents = requests.reduce((sum, request) => sum + (request.priceCents ?? 0), 0);
   const unitNumbers = requests.map((request, index) => request.unitNumber || `Unit ${index + 1}`).join(", ");
@@ -97,24 +92,19 @@ export async function notifyJanitorialTurnoverCreated(params: {
     endDate: dateLabel(maxDate(requests.map((request) => request.endDate))),
     estimatedTotal: totalCents > 0 ? formatUsd(totalCents) : null,
     details: stringValue(body.description) || null,
-    projectUrl: projectUrl(building.id),
+    projectUrl: buildingUrl(building.id),
   });
 
-  const results = await Promise.allSettled(
-    groups.map((to) =>
-      sendEmail({
-        type: "JANITORIAL_TURNOVER_SUBMITTED",
-        link: `/erp/buildings/${building.id}`,
-        to,
-        subject: `New janitorial turnover: ${building.name}`,
-        html,
-        replyTo: stringValue(body.sueepPmEmail) || undefined,
-      })
-    )
-  );
-  results.forEach((result, i) => {
-    if (result.status === "rejected") {
-      console.error(`janitorial turnover notification email failed for ${groups[i].join(", ")}`, result.reason);
-    }
-  });
+  try {
+    await sendEmail({
+      type: "JANITORIAL_TURNOVER_SUBMITTED",
+      link: `/erp/buildings/${building.id}`,
+      to: staff,
+      subject: `New janitorial turnover: ${building.name}`,
+      html,
+      replyTo: stringValue(body.sueepPmEmail) || undefined,
+    });
+  } catch (e) {
+    console.error(`janitorial turnover notification email failed for ${staff.join(", ")}`, e);
+  }
 }
