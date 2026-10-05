@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
+import { getBackupPms } from "@/lib/notificationSettings";
 import { sendEmail, buildTurnoverCompletionDigestEmail } from "@/lib/email";
 import { findEmployeeEmailByName, getDescLine } from "@/lib/erp/createLaborEntry";
 
@@ -36,8 +37,8 @@ function daysAgo(today: Date, date: Date): number {
 
 /** Same PM-resolution fallback chain used for the turnover margin alert:
  * the project's supervisor name (or a legacy "SUEEP PM:" description line)
- * → Employee lookup by name → the assigned ERP login's email → a fixed
- * default pair (David, Jennifer) when nothing else resolves. Kept here
+ * → Employee lookup by name → the assigned ERP login's email → the backup
+ * PMs on the Notifications page when nothing else resolves. Kept here
  * rather than inlined so every completed unit in a building's digest
  * resolves its PM the same, already-battle-tested way. Returns an array
  * since the fallback case names two recipients rather than one. */
@@ -51,7 +52,7 @@ async function resolveSueepPmEmails(project: {
   if (pmName) recipient = await findEmployeeEmailByName(pmName);
   if (!recipient) recipient = project.supervisorUser?.email ?? null;
   if (recipient) return [recipient];
-  return [(process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim(), "jennifer@sueep.com"];
+  return getBackupPms();
 }
 
 export type TurnoverCompletionDigestResult = {
@@ -191,9 +192,11 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
         : `${projects.length} ${plural} completed at ${building.name}`;
 
       try {
+        // contact@ and emma@ are cc'd by default; that list is on the Notifications page.
         await sendEmail({
+          type: "TURNOVER_COMPLETION_DIGEST",
+          link: `/erp/buildings/${building.id}`,
           to: building.pmEmail,
-          cc: ["contact@sueep.com", "emma@sueep.com"],
           bcc: Array.from(pmEmails),
           subject,
           html,

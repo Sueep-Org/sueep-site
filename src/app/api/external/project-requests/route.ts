@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getNotificationSetting } from "@/lib/notificationSettings";
 import { sendEmail, buildProjectRequestEmail, buildProjectRequestConfirmationEmail } from "@/lib/email";
 import {
   computeChangeOrderLaborEstimate,
@@ -282,14 +283,10 @@ export async function POST(req: Request) {
     if (emp?.email) recipients.push(emp.email);
   }
 
-  // Default Sueep PM as fallback/CC
-  const sueepEmail = (process.env.DOCUSEAL_SUEEP_SIGNER_EMAIL ?? "david@sueep.com").trim();
-  if (!recipients.includes(sueepEmail)) recipients.push(sueepEmail);
-  if (!recipients.includes("jennifer@sueep.com")) recipients.push("jennifer@sueep.com");
-
-  // Estimating always CC'd
-  const estimatingEmail = "estimating@sueep.com";
-  if (!recipients.includes(estimatingEmail)) recipients.push(estimatingEmail);
+  // Plus everyone on the Notifications page's "Also send to" list (Sueep PMs and estimating to start).
+  for (const email of (await getNotificationSetting("PROJECT_REQUEST_RECEIVED")).to) {
+    if (!recipients.some((r) => r.toLowerCase() === email.toLowerCase())) recipients.push(email);
+  }
 
   const typeLabel = type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
   const html = buildProjectRequestEmail({
@@ -323,21 +320,23 @@ export async function POST(req: Request) {
   });
 
   await Promise.all([
-    // Internal notification to supervisors/PM with ERP link
-    ...recipients.map((to) =>
-      sendEmail({
-        to,
-        subject: `${typeLabel}: ${project.jobTitle}`,
-        html,
-        replyTo: requesterEmail.trim(),
-      }).catch((err) => console.error(`Failed to send to ${to}:`, err))
-    ),
+    // Internal notification to the supervisor and staff with the ERP link, one shared email
+    sendEmail({
+      type: "PROJECT_REQUEST_RECEIVED",
+      link: `/erp/projects/${project.id}`,
+      to: recipients,
+      subject: `${typeLabel}: ${project.jobTitle}`,
+      html,
+      replyTo: requesterEmail.trim(),
+    }).catch((err) => console.error("Failed to send client request notification:", err)),
     // Confirmation to the requester — no ERP link. Carries their own copy of
     // the signed contract when this request was signed (see
     // signedContractAttachment above) — otherwise they'd never get one.
     sendEmail({
+      type: "PROJECT_REQUEST_CONFIRMATION",
+      link: `/erp/projects/${project.id}`,
       to: requesterEmail.trim(),
-      subject: `Your request was received — ${project.jobTitle}`,
+      subject: `Your request was received: ${project.jobTitle}`,
       html: confirmationHtml,
       ...(signedContractAttachment ? { attachments: [signedContractAttachment] } : {}),
     }).catch((err) => console.error("Failed to send requester confirmation:", err)),

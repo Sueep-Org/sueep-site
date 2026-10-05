@@ -1,16 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { buildRescheduleEmail, sendEmail } from "@/lib/email";
+import { getBackupPms } from "@/lib/notificationSettings";
 import { getDescLine } from "@/lib/erp/descLine";
 import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 import { formatLongDate } from "@/lib/erp/schedule";
-
-// David Rodriguez and Jennifer Cortes-Loya, Project Managers
-// (david@sueep.com, jennifer@sueep.com), stopgap recipients when a
-// rescheduled project has no day-assignment-level PM and its freeform
-// Project.supervisor name doesn't resolve to a real employee. Project has no
-// reliable, always-populated "project manager" relation to fall back on
-// otherwise (supervisorUserId is the *supervisor*, not a PM).
-const FALLBACK_PM_EMAILS = ["david@sueep.com", "jennifer@sueep.com"];
 
 /**
  * Emails the project's supervisor and PM whenever a project's schedule
@@ -25,7 +18,7 @@ const FALLBACK_PM_EMAILS = ["david@sueep.com", "jennifer@sueep.com"];
  * projects that predate that field, a "SUEEP PM:" line in the description —
  * against an Employee record via the same findEmployeeEmailByName lookup
  * every other PM-resolution chain uses (createLaborEntry.ts), and finally
- * to FALLBACK_PM_EMAILS if that doesn't resolve either — a reschedule should
+ * to the backup PMs on the Notifications page if that doesn't resolve either — a reschedule should
  * always reach *someone* who can act on it.
  */
 export async function notifyProjectRescheduled(params: {
@@ -66,7 +59,7 @@ export async function notifyProjectRescheduled(params: {
   } else {
     const pmName = projectManagerName?.trim() || getDescLine(projectDescription ?? null, "SUEEP PM");
     const resolvedPmEmail = pmName ? await findEmployeeEmailByName(pmName) : null;
-    const fallbackEmails = resolvedPmEmail ? [resolvedPmEmail] : FALLBACK_PM_EMAILS;
+    const fallbackEmails = resolvedPmEmail ? [resolvedPmEmail] : await getBackupPms();
     for (const email of fallbackEmails) recipients.set(email.toLowerCase(), email);
   }
 
@@ -80,12 +73,11 @@ export async function notifyProjectRescheduled(params: {
   await Promise.all(
     [...recipients.values()].map((email) =>
       sendEmail({
+        type: "RESCHEDULE_NOTICE",
+        link: `/erp/projects/${projectId}`,
         to: email,
-        subject: `Rescheduled: ${jobTitle} — now ${newLabel}`,
-        html: [
-          `<p><strong>${jobTitle}</strong> was moved from ${oldLabel} to <strong>${newLabel}</strong>.</p>`,
-          projectUrl ? `<p><a href="${projectUrl}">View project</a></p>` : "",
-        ].join(""),
+        subject: `Rescheduled: ${jobTitle}, now ${newLabel}`,
+        html: buildRescheduleEmail({ jobTitle, oldLabel, newLabel, projectUrl: projectUrl ?? null }),
       }).catch((e) => console.error("Failed to send reschedule notification", e)),
     ),
   );

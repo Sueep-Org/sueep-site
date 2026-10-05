@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { costWorkLines, janitorialWorkLine, manualWorkLine, type WorkLine } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
+import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
 
 export function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -37,8 +38,15 @@ function payrollPayType(employee: PayrollEmployeeRef): string {
   return employee.isJanitorialContract ? "JANITORIAL" : employee.payType;
 }
 
+/** Hours added by hand, listed on a row so they can be edited or removed. */
+type ManualEntryRow = {
+  id: string; date: string; hours: number; note: string | null; batchId: string | null;
+  repeatId: string | null; repeatEveryDays: number | null;
+};
+
 /** Payroll rows for [periodStart, periodEnd] (start of first day, end of last day). */
 export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
+  await fillRepeatingManualHours(periodEnd);
   const [entries, changeOrderEntries, contractorAssignments, coContractorAssignments] = await Promise.all([
     prisma.laborEntry.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
@@ -113,7 +121,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     // Hourly work that isn't on a project, added by hand on the Payroll page.
     prisma.manualHoursEntry.findMany({
       where: { workDate: { gte: periodStart, lte: periodEnd } },
-      include: { employee: { select: { firstName: true, lastName: true } } },
+      include: { employee: { select: { firstName: true, lastName: true } }, repeat: { select: { everyDays: true } } },
       orderBy: { workDate: "asc" },
     }),
   ]);
@@ -197,7 +205,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     projects: Set<string>;
     entries: { date: string; hours: number; project: string; rateCents: number }[];
     /** Hours added by hand, listed so they can be removed. */
-    manualEntries: { id: string; date: string; hours: number; note: string | null; batchId: string | null }[];
+    manualEntries: ManualEntryRow[];
     hasJanitorialHours: boolean;
   }>();
 
@@ -240,7 +248,12 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     row.entries.push({ date: line.dateKey, hours: line.hours, project: line.project, rateCents: line.loggedRateCents ?? cost.rateCents });
     if (line.source === "janitorial") row.hasJanitorialHours = true;
     const manual = manualById.get(line.id);
-    if (manual) row.manualEntries.push({ id: manual.id, date: line.dateKey, hours: manual.hours, note: manual.note, batchId: manual.batchId });
+    if (manual) {
+      row.manualEntries.push({
+        id: manual.id, date: line.dateKey, hours: manual.hours, note: manual.note, batchId: manual.batchId,
+        repeatId: manual.repeatId, repeatEveryDays: manual.repeat?.everyDays ?? null,
+      });
+    }
   }
 
   // ── Salary: a fixed amount per period ───────────────────────────────────
@@ -318,7 +331,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       grossPayCents: 0,
       projects: "No janitorial schedule set",
       entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
-      manualEntries: [] as { id: string; date: string; hours: number; note: string | null; batchId: string | null }[],
+      manualEntries: [] as ManualEntryRow[],
       hasJanitorialHours: false,
       noJanitorialSchedule: true,
     });

@@ -137,7 +137,6 @@ model Project {
   workerDayAssignments    ProjectWorkerDayAssignment[]
   scheduleSeries          ProjectScheduleSeries[]
   notes                   ProjectNote[]
-  scheduleNudgeDismissals ProjectScheduleNudgeDismissal[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -1164,7 +1163,6 @@ model ErpUser {
   hubspotSovAliasesCreated      HubSpotSovAlias[]
   hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
-  scheduleNudgeDismissalsMade   ProjectScheduleNudgeDismissal[]
 
   @@index([firebaseUid])
 }
@@ -1399,29 +1397,6 @@ model ProjectScheduleSeries {
   @@index([projectId])
 }
 
-/// A "not today" dismissal of the daily unscheduled-project nudge for one
-/// project on one calendar day — global per project+day (not scoped to the
-/// dismissing user), since PROJECT_MANAGER is a shared role and this means
-/// "the team already decided this doesn't need scheduling today," not a
-/// personal per-user to-do list. dismissedByUserId is an audit trail only
-/// (same pattern as ProjectNote.authorUser), not a scoping key.
-model ProjectScheduleNudgeDismissal {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  /// Midnight UTC, same convention as ProjectDayAssignment.date — always
-  /// written via todayEasternAsUtcMidnight(), so exact-equality lookups are fine.
-  date DateTime
-
-  dismissedByUserId String?
-  dismissedByUser   ErpUser? @relation(fields: [dismissedByUserId], references: [id], onDelete: SetNull)
-
-  @@unique([projectId, date])
-  @@index([date])
-}
 
 model Employee {
   id        String   @id @default(cuid())
@@ -1523,6 +1498,7 @@ model Employee {
   backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
   payRates                     EmployeePayRate[]
   manualHours                  ManualHoursEntry[]
+  manualHoursRepeats           ManualHoursRepeat[]
   timeOff                      EmployeeTimeOff[]
   laborAssignments             LaborAssignment[]
   projectLaborAssignments      ProjectLaborAssignment[]
@@ -2463,10 +2439,44 @@ model ManualHoursEntry {
   /// split across its working days), so the range is listed and removed as
   /// one. Null for a single day.
   batchId   String?
+  /// Set when this was filled in by a repeating entry. Each repeat is its own
+  /// entry here, so it can be edited or removed without touching the others.
+  repeatId  String?
+  repeat    ManualHoursRepeat? @relation(fields: [repeatId], references: [id], onDelete: SetNull)
 
+  @@unique([repeatId, workDate])
   @@index([employeeId])
   @@index([workDate])
   @@index([batchId])
+}
+
+/// Manual hours that repeat every week or two (see lib/erp/manualHoursRepeat.ts).
+/// The first time is a day or a date range, and each repeat is the same
+/// thing shifted by everyDays. Repeats are saved as ManualHoursEntry rows as
+/// payroll reaches them, up to the latest date anyone has looked at.
+model ManualHoursRepeat {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// First time's first and last day (the same day for a single day)
+  firstFrom DateTime
+  firstTo   DateTime
+  /// 7 or 14
+  everyDays Int
+  /// Hours each time (a range's total, split across its working days)
+  hours     Float
+  note      String?
+  /// First day of the latest time already saved as entries
+  filledThrough DateTime
+  createdBy String?
+
+  entries ManualHoursEntry[]
+
+  @@index([employeeId])
 }
 
 /// One of Sueep's own insurance policies, the ones that show up on the COIs
@@ -2676,4 +2686,110 @@ model CoiRequest {
 
   @@index([status, createdAt])
   @@index([projectId])
+}
+
+/// A color-coded group on the Schedule page's Management calendar. Rows with
+/// a builtinKey are filled in automatically from elsewhere in the ERP
+/// (insurance dates, time off, etc.) and can't be deleted; the rest are added
+/// by staff for their own events. Every category can hold manual events.
+model ManagementCategory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// e.g. "SUB_INSURANCE", see BUILTIN_CATEGORIES in managementCalendar.ts. Null for staff-added categories.
+  builtinKey String? @unique
+  name       String
+  /// Palette key, see CATEGORY_COLORS in managementCalendar.ts
+  color      String  @default("gray")
+  /// Days before an item to include it in the daily reminder email, e.g. {30,7}. Empty means no reminders.
+  remindDays Int[]   @default([])
+  sortOrder  Int     @default(0)
+
+  events ManagementEvent[]
+}
+
+/// An event staff added to the Management calendar by hand.
+model ManagementEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title      String
+  categoryId String
+  category   ManagementCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// UTC-midnight day labels. endDate is null for a one-day event.
+  startDate DateTime
+  endDate   DateTime?
+  /// NONE | MONTHLY | YEARLY
+  repeat    String    @default("NONE")
+  notes     String?
+  link      String?
+  /// Occurrences (YYYY-MM-DD start days) marked done. A one-time event has at most one.
+  doneDates String[]  @default([])
+  /// Email of the ERP user who added it
+  createdBy String?
+
+  @@index([startDate])
+  @@index([categoryId])
+}
+
+/// Who gets an email type and whether it's on, set on the Notifications
+/// page. No row means the defaults in notificationTypes.ts. `type` is an
+/// EmailType key, or "BACKUP_PMS" for the fallback PM list.
+model NotificationSetting {
+  type      String   @id
+  updatedAt DateTime @updatedAt
+  enabled   Boolean  @default(true)
+  /// Meaning depends on the type's toMode: the recipients, extra recipients, or who to use when nobody is found
+  to        String[] @default([])
+  cc        String[] @default([])
+  /// Email of the ERP user who last changed it
+  updatedBy String?
+}
+
+/// Every email sent through sendEmail, for the Email Log page.
+model EmailLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// EmailType key, see notificationTypes.ts
+  type    String
+  to      String[]
+  cc      String[] @default([])
+  bcc     String[] @default([])
+  replyTo String?
+  subject String
+  /// SENT | FAILED | SKIPPED (email not set up on this server) | OFF (type turned off)
+  status  String
+  error   String?
+  /// Resend's id for the message
+  providerId String?
+  /// Final HTML as sent, kept so it can be viewed and resent
+  html    String?
+  /// Calendar invites and other attachments aren't stored, so these can't be resent
+  hasAttachments Boolean @default(false)
+  /// ERP page the email is about, e.g. /erp/projects/abc
+  link    String?
+  /// Set when this row is a resend of another
+  resentFromId String?
+  /// ERP user who resent it
+  sentBy  String?
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@index([status, createdAt])
+}
+
+/// The last schedule invite sent per calendar event (one worker or
+/// supervisor, one day), so an edit that doesn't change anything that
+/// person sees doesn't email them again. See sendDayInvite.
+model ScheduleInviteSent {
+  /// The invite's calendar uid, e.g. worker-assignment-<id>@sueep.com
+  uid         String   @id
+  /// Hash of recipient, day, times, title, address, and scope
+  fingerprint String
+  cancelled   Boolean  @default(false)
+  sentAt      DateTime @default(now())
 }

@@ -42,8 +42,10 @@ export async function POST(
 
   try {
     await sendEmail({
+      type: "CONTRACTOR_UPLOAD_LINK",
+      link: `/erp/contractors/${id}`,
       to: contractor.email,
-      subject: "Upload your documents — Sueep",
+      subject: "Sueep: Upload your documents",
       html: buildContractorDocUploadEmail({
         name: contractor.name,
         uploadUrl,

@@ -59,8 +59,10 @@ export async function POST(req: Request, ctx: Ctx) {
     });
     try {
       await sendEmail({
+        type: "CHANGE_ORDER_NOTICE",
+        link: `/erp/projects/${id}`,
         to: employee.email,
-        subject: `Change Order: ${changeOrder.title} — ${changeOrder.project.jobTitle}`,
+        subject: `Change order: ${changeOrder.title} (${changeOrder.project.jobTitle})`,
         html,
       });
       results.push({ email: employee.email, ok: true });

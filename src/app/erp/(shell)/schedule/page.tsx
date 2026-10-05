@@ -13,10 +13,11 @@ import {
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
-import { canFilterScheduleBySupervisor, getErpAuth } from "@/lib/erpAuth";
+import { canFilterScheduleBySupervisor, canManageManagementCalendar, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
+import { ManagementCalendar } from "./ManagementCalendar";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -32,21 +33,33 @@ type PageProps = { searchParams: Promise<{ calendar?: string; contract?: string 
 
 export default async function SchedulePage({ searchParams }: PageProps) {
   const { calendar, contract } = await searchParams;
+  const auth = await getErpAuth();
+  const showManagement = canManageManagementCalendar(auth?.role ?? "EMPLOYEE");
 
   // Each calendar tab loads only its own data: the Janitorial tab fetches
   // from /api/erp/janitorial/schedule client-side, so none of the project
   // queries below run for it.
+  // Admin and PM only; anyone else lands on the Projects calendar.
+  if (calendar === "management" && showManagement) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+        <ScheduleCalendarTabs active="management" showManagement />
+        <ManagementCalendar />
+      </div>
+    );
+  }
+
   if (calendar === "janitorial") {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
-        <ScheduleCalendarTabs active="janitorial" />
+        <ScheduleCalendarTabs active="janitorial" showManagement={showManagement} />
         <JanitorialCalendar initialContractId={contract ?? ""} />
       </div>
     );
   }
 
-  const auth = await getErpAuth();
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
 
   const [
@@ -611,7 +624,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <ScheduleCalendarTabs active="projects" />
+      <ScheduleCalendarTabs active="projects" showManagement={showManagement} />
 
       {/* Project Schedule */}
       <SchedulePlanner

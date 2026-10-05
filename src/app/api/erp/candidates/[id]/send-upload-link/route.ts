@@ -47,8 +47,10 @@ export async function POST(
 
   try {
     await sendEmail({
+      type: "CANDIDATE_UPLOAD_LINK",
+      link: `/erp/candidates/${id}`,
       to: candidate.email,
-      subject: "Upload your onboarding documents — Sueep",
+      subject: "Sueep: Upload your onboarding documents",
       html: buildPaperworkUploadEmail({
         fullName: candidate.fullName,
         uploadUrl,

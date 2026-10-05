@@ -23,6 +23,7 @@ import { utcDateKey } from "@/lib/erp/dates";
 import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import type { ResolvedShiftHours } from "@/lib/erp/janitorialHours";
 import { fixedPayHourlyCostCents, isFixedPay, loadPayHistories, payRateOn, type PayHistories } from "@/lib/erp/payRates";
+import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
 
 export const OT_THRESHOLD_HOURS = 40;
 const OT_PREMIUM = 0.5;
@@ -187,6 +188,7 @@ async function loadWorkLines(employeeIds: string[], workerNames: string[], start
     ...(workerNames.length ? [{ employeeId: null, name: { in: workerNames } }] : []),
   ];
   if (who.length === 0) return [];
+  if (employeeIds.length) await fillRepeatingManualHours(end);
 
   const [projectLogs, coLogs, janitorial, manual] = await Promise.all([
     prisma.laborEntry.findMany({
@@ -312,6 +314,7 @@ export async function costManualHours(start: Date, end: Date): Promise<{ dateKey
   const span = weekSpan([utcDateKey(start), utcDateKey(end)]);
   const spanEnd = new Date(span.end);
   spanEnd.setUTCHours(23, 59, 59, 999);
+  await fillRepeatingManualHours(span.end);
   const entries = await prisma.manualHoursEntry.findMany({
     where: { workDate: { gte: span.start, lte: spanEnd }, hours: { gt: 0 } },
     select: { id: true, employeeId: true, workDate: true, hours: true, createdAt: true },

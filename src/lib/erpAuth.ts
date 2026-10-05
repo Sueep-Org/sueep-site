@@ -54,6 +54,17 @@ export function canManageInsurance(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
 }
 
+/** Schedule page's Management calendar (company deadlines, insurance
+ * expirations, everyone's time off): view and edit. */
+export function canManageManagementCalendar(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
+/** Notifications page: which emails go out, to whom, and the Email Log. */
+export function canManageNotifications(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
 export function canManageUsers(role: ErpRole): boolean {
   return role === "ADMIN";
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
+// Only used by the FormSubmit fallback; with Resend, recipients are set on the ERP Notifications page.
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
-const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
 const FORMSUBMIT_ENDPOINT =
   process.env.FORMSUBMIT_ENDPOINT || "https://formsubmit.co/fc9c50165f29e01095f6f39726348f26";
 
@@ -131,20 +131,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const payload = {
-      from: FROM_EMAIL,
-      to: TO_EMAIL,
-      subject,
-      html,
-      reply_to: email,
-    } as const;
-    console.log("/api/contact sending via Resend:", {
-      from: payload.from,
-      to: payload.to,
-      hasKey: Boolean(process.env.RESEND_API_KEY),
-    });
-    await resend.emails.send(payload);
+    await sendEmail({ type: "WEBSITE_CONTACT", subject, html, replyTo: email });
 
     if (isFormPost) {
       return NextResponse.redirect(new URL(thankYouPath, req.url), { status: 303 });

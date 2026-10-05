@@ -1,39 +1,188 @@
 import { Resend } from "resend";
+import { prisma } from "@/lib/prisma";
+import { NOTIFICATIONS, type EmailType, type SenderKind } from "@/lib/notificationTypes";
+import { getNotificationSetting } from "@/lib/notificationSettings";
+import { getErpAuth } from "@/lib/erpAuth";
 
 const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
+/** Just the address out of RESEND_FROM, so each email can carry its own sender name. */
+const FROM_ADDRESS = (FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? FROM_EMAIL).trim();
+const SENDER_NAME: Record<SenderKind, string> = { erp: "Sueep ERP", sueep: "Sueep", website: "Sueep Website" };
 
+type Attachment = { filename: string; content: Buffer };
+
+/**
+ * Sends one email of a given type. The type's setting on the Notifications
+ * page can turn it off or add copies; the email is wrapped in the shared
+ * layout and recorded in the Email Log. Throws when the provider rejects it,
+ * same as before, so callers keep their own error handling.
+ */
 export async function sendEmail(options: {
-  to: string;
+  type: EmailType;
+  /** Leave out for types whose recipients are set on the Notifications page (toMode "recipients"). */
+  to?: string | string[];
   subject: string;
   html: string;
   replyTo?: string;
   cc?: string[];
   bcc?: string[];
-  attachments?: Array<{ filename: string; content: Buffer }>;
-}) {
+  attachments?: Attachment[];
+  /** ERP page this email is about, e.g. /erp/projects/abc, shown in the log */
+  link?: string;
+}): Promise<"SENT" | "OFF" | "SKIPPED" | "NO_RECIPIENTS"> {
+  const def = NOTIFICATIONS[options.type];
+  const setting = await getNotificationSetting(options.type);
+  const given = options.to == null ? [] : Array.isArray(options.to) ? options.to : [options.to];
+  const to = uniqueAddresses(given.length || def.toMode !== "recipients" ? given : setting.to);
+  const cc = uniqueAddresses([...(options.cc ?? []), ...setting.cc]).filter((e) => !to.includes(e));
+  const html = def.layout ? wrapEmailLayout(options.html, options.type) : options.html;
+  // Worker and client emails come from a noreply address, so a reply would
+  // be lost. When someone in the ERP sent it, replies go to them instead.
+  const replyTo = options.replyTo ?? (def.sender === "sueep" ? await signedInEmail() : undefined);
+  const base = { type: options.type, to, cc, bcc: options.bcc ?? [], replyTo, subject: options.subject, html, attachments: options.attachments, link: options.link };
+
+  if (!to.length) return "NO_RECIPIENTS";
+  if (!setting.enabled) {
+    await logEmail({ ...base, status: "OFF" });
+    return "OFF";
+  }
+  const { id } = await deliverEmail(base);
+  return id === null && !process.env.RESEND_API_KEY ? "SKIPPED" : "SENT";
+}
+
+/** Sends already-final HTML and logs the result. Used by sendEmail and the log's Resend button. */
+export async function deliverEmail(e: {
+  type: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  replyTo?: string | null;
+  subject: string;
+  html: string;
+  attachments?: Attachment[];
+  link?: string | null;
+  resentFromId?: string;
+  sentBy?: string;
+}): Promise<{ id: string | null }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("Resend API key not configured, email not sent:", options.subject, options.to);
-    return;
+    console.warn("Resend API key not configured, email not sent:", e.subject, e.to);
+    await logEmail({ ...e, status: "SKIPPED", error: "Email isn't set up on this server (no RESEND_API_KEY)" });
+    return { id: null };
   }
 
-  const resend = new Resend(apiKey);
-  const { error } = await resend.emails.send({
-    from: FROM_EMAIL,
-    to: options.to,
-    subject: options.subject,
-    html: options.html,
-    reply_to: options.replyTo,
-    cc: options.cc,
-    bcc: options.bcc,
-    attachments: options.attachments?.map((a) => ({
-      filename: a.filename,
-      content: a.content,
-    })),
-  });
-  if (error) {
-    throw new Error(`Resend error: ${error.message}`);
+  const sender = e.type in NOTIFICATIONS ? NOTIFICATIONS[e.type as EmailType].sender : "erp";
+  try {
+    const { data, error } = await new Resend(apiKey).emails.send({
+      from: `${SENDER_NAME[sender]} <${FROM_ADDRESS}>`,
+      to: e.to,
+      subject: e.subject,
+      html: e.html,
+      reply_to: e.replyTo ?? undefined,
+      cc: e.cc.length ? e.cc : undefined,
+      bcc: e.bcc.length ? e.bcc : undefined,
+      attachments: e.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
+    });
+    if (error) throw new Error(`Resend error: ${error.message}`);
+    await logEmail({ ...e, status: "SENT", providerId: data?.id ?? null });
+    return { id: data?.id ?? null };
+  } catch (err) {
+    await logEmail({ ...e, status: "FAILED", error: err instanceof Error ? err.message : String(err) });
+    throw err;
   }
+}
+
+async function logEmail(e: {
+  type: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  replyTo?: string | null;
+  subject: string;
+  html: string;
+  attachments?: Attachment[];
+  link?: string | null;
+  resentFromId?: string;
+  sentBy?: string;
+  status: "SENT" | "FAILED" | "SKIPPED" | "OFF";
+  error?: string;
+  providerId?: string | null;
+}) {
+  // A logging problem must never stop or fail the email itself.
+  try {
+    await prisma.emailLog.create({
+      data: {
+        type: e.type,
+        to: e.to,
+        cc: e.cc,
+        bcc: e.bcc,
+        replyTo: e.replyTo ?? null,
+        subject: e.subject,
+        status: e.status,
+        error: e.error?.slice(0, 2000) ?? null,
+        providerId: e.providerId ?? null,
+        html: e.html,
+        hasAttachments: !!e.attachments?.length,
+        link: e.link ?? null,
+        resentFromId: e.resentFromId ?? null,
+        sentBy: e.sentBy ?? null,
+      },
+    });
+  } catch (err) {
+    console.error("Could not write email log", err);
+  }
+}
+
+/** The ERP user behind this request, or undefined (cron jobs, public forms, scripts). */
+async function signedInEmail(): Promise<string | undefined> {
+  try {
+    return (await getErpAuth())?.email || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function uniqueAddresses(list: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of list) {
+    const e = raw?.trim();
+    if (e && !out.some((x) => x.toLowerCase() === e.toLowerCase())) out.push(e);
+  }
+  return out;
+}
+
+function appBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "").replace(/\/$/, "");
+}
+
+/**
+ * The shared frame around every email: Sueep logo on top, the email's own
+ * content, and a footer saying why you got it. Staff emails point to the
+ * Notifications page; worker and client emails get a contact line instead.
+ */
+export function wrapEmailLayout(body: string, type: EmailType): string {
+  const def = NOTIFICATIONS[type];
+  const base = appBaseUrl();
+  const logo = base
+    ? `<img src="${escapeHtml(base)}/sueeplogo.png" alt="Sueep" width="64" height="32" style="display:block;height:32px;width:auto;border:0">`
+    : `<span style="font-size:20px;font-weight:bold;color:#E73C6E;letter-spacing:1px">SUEEP</span>`;
+  const contact = (process.env.CONTACT_TO_EMAIL || "contact@sueep.com").trim();
+  const footer =
+    def.sender === "erp"
+      ? `You got this "${escapeHtml(def.label)}" email from the Sueep ERP.${
+          base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Notifications page</a>.` : ""
+        }`
+      : `Sueep. Questions? Email <a href="mailto:${escapeHtml(contact)}" style="color:#6b7280">${escapeHtml(contact)}</a>.`;
+  return `<!doctype html>
+<html><body style="margin:0;padding:0;background:#f3f4f6">
+  <div style="background:#f3f4f6;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+      <div style="padding:16px 24px;border-bottom:3px solid #E73C6E">${logo}</div>
+      <div style="padding:20px 24px;font-size:14px;color:#111;line-height:1.6">${body}</div>
+      <div style="padding:14px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;line-height:1.5">${footer}</div>
+    </div>
+  </div>
+</body></html>`;
 }
 
 export function formatUsd(cents: number) {
@@ -59,13 +208,13 @@ export function buildTurnoverRequestEmailHtml(params: {
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5">
       <h2 style="margin-bottom:12px">New Turnover Request Created</h2>
       <p><strong>Building:</strong> ${escapeHtml(params.buildingName)}</p>
-      <p><strong>Unit:</strong> ${escapeHtml(params.unitNumber || "—")}</p>
+      <p><strong>Unit:</strong> ${escapeHtml(params.unitNumber || "N/A")}</p>
       <p><strong>Request type:</strong> ${escapeHtml(params.requestType)}</p>
-      <p><strong>Bedrooms / Bathrooms:</strong> ${escapeHtml(String(params.bedrooms ?? "—"))} / ${escapeHtml(
-    String(params.bathrooms ?? "—")
+      <p><strong>Bedrooms / Bathrooms:</strong> ${escapeHtml(String(params.bedrooms ?? "N/A"))} / ${escapeHtml(
+    String(params.bathrooms ?? "N/A")
   )}</p>
       <p><strong>Services:</strong> ${escapeHtml(params.services.join(", "))}</p>
-      <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "N/A")} to ${escapeHtml(params.endDate || "N/A")}</p>
       <p><strong>Price:</strong> ${escapeHtml(params.priceLabel)}</p>
       <p><strong>SUEEP PM:</strong> ${escapeHtml(params.sueepPmName || "N/A")}</p>
       <p><strong>Created by:</strong> ${escapeHtml(params.createdBy || "system")}</p>
@@ -102,13 +251,13 @@ export function buildJanitorialTurnoverProjectEmailHtml(params: {
       <h2 style="margin-bottom:12px;color:#E73C6E">New Janitorial Turnover Submitted</h2>
       <p>A new janitorial turnover project has been submitted for your review.</p>
       <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
-      <p><strong>Property:</strong> ${escapeHtml(params.propertyName || "—")}</p>
-      <p><strong>Address:</strong> ${escapeHtml(params.propertyAddress || "—")}</p>
-      <p><strong>Property Manager/Maintenance Manager:</strong> ${escapeHtml(params.managerName || "—")}</p>
-      <p><strong>SUEEP PM:</strong> ${escapeHtml(params.sueepPmName || "—")}</p>
-      <p><strong>Units:</strong> ${escapeHtml(params.unitNumbers || "—")}</p>
-      <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "—")} — ${escapeHtml(params.endDate || "—")}</p>
-      <p><strong>Estimated total:</strong> ${escapeHtml(params.estimatedTotal || "—")}</p>
+      <p><strong>Property:</strong> ${escapeHtml(params.propertyName || "N/A")}</p>
+      <p><strong>Address:</strong> ${escapeHtml(params.propertyAddress || "N/A")}</p>
+      <p><strong>Property Manager/Maintenance Manager:</strong> ${escapeHtml(params.managerName || "N/A")}</p>
+      <p><strong>SUEEP PM:</strong> ${escapeHtml(params.sueepPmName || "N/A")}</p>
+      <p><strong>Units:</strong> ${escapeHtml(params.unitNumbers || "N/A")}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(params.startDate || "N/A")} to ${escapeHtml(params.endDate || "N/A")}</p>
+      <p><strong>Estimated total:</strong> ${escapeHtml(params.estimatedTotal || "N/A")}</p>
       ${projectLink}
       ${details}
     </div>
@@ -131,7 +280,7 @@ export function buildPaperworkUploadEmail(params: {
       <p>Hi ${escapeHtml(params.fullName)},</p>
       <p>Congratulations on moving forward with Sueep! To complete your onboarding we need you to upload the following documents:</p>
       <ul style="margin:12px 0;padding-left:20px">${docList}</ul>
-      <p>Use the secure link below — no account required. The link expires in ${days} days.</p>
+      <p>Use the secure link below. No account required, and the link expires in ${days} days.</p>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.uploadUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -158,7 +307,7 @@ export function buildContractorDocUploadEmail(params: {
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
       <h2 style="margin-bottom:8px;color:#E73C6E">Action required: upload your documents</h2>
       <p>Hi ${escapeHtml(params.name)},</p>
-      <p>Please upload the following documents using the secure link below. No account required — the link expires in ${days} days.</p>
+      <p>Please upload the following documents using the secure link below. No account required, and the link expires in ${days} days.</p>
       <ul style="margin:12px 0;padding-left:20px">${docList}</ul>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.uploadUrl)}"
@@ -183,7 +332,7 @@ export function buildContractorInfoEmail(params: {
       <h2 style="margin-bottom:8px;color:#E73C6E">Action required: complete your contractor information</h2>
       <p>Hi ${escapeHtml(params.name)},</p>
       <p>Please complete the contractor information form using the secure link below. You will be asked to provide your personal details, banking information, and insurance status.</p>
-      <p>No account required — the link expires in ${days} days.</p>
+      <p>No account required, and the link expires in ${days} days.</p>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.infoUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -207,7 +356,7 @@ export function buildEmployeeInfoEmail(params: {
       <h2 style="margin-bottom:8px;color:#E73C6E">Action required: complete your employee information</h2>
       <p>Hi ${escapeHtml(params.name)},</p>
       <p>Please complete the employee information form using the secure link below. You will be asked to provide your address, date of birth, banking information, and SSN.</p>
-      <p>No account required — the link expires in ${days} days.</p>
+      <p>No account required, and the link expires in ${days} days.</p>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.infoUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -254,7 +403,7 @@ export function buildChangeOrderNotificationEmail(params: {
       <p><strong>Change order:</strong> ${escapeHtml(params.coTitle)}</p>
       <p><strong>Status:</strong> ${escapeHtml(params.coStatus)}</p>
       <p><strong>Estimated cost:</strong> ${escapeHtml(params.estimatedCost)}</p>
-      <p><strong>Schedule impact:</strong> ${params.estimatedDays != null ? `${params.estimatedDays} day(s)` : "—"}</p>
+      <p><strong>Schedule impact:</strong> ${params.estimatedDays != null ? `${params.estimatedDays} day(s)` : "N/A"}</p>
       ${requestedBy}
       ${description}
       ${reason}
@@ -289,10 +438,10 @@ export function buildWorkOrderNotificationEmailHtml(params: {
       <p>Hi ${escapeHtml(params.recipientName)},</p>
       <p>A job brief has been created for the following project and assigned to you for review.</p>
       <p><strong>Project Name:</strong> ${escapeHtml(params.projectName)}</p>
-      <p><strong>Site Address:</strong> ${escapeHtml(params.siteAddress || "—")}</p>
+      <p><strong>Site Address:</strong> ${escapeHtml(params.siteAddress || "N/A")}</p>
       ${contactsBlock}
-      <p><strong>Starting Date (Estimated):</strong> ${escapeHtml(params.startDate || "—")}</p>
-      <p><strong>Service Type:</strong> ${escapeHtml(params.serviceType || "—")}</p>
+      <p><strong>Starting Date (Estimated):</strong> ${escapeHtml(params.startDate || "N/A")}</p>
+      <p><strong>Service Type:</strong> ${escapeHtml(params.serviceType || "N/A")}</p>
       ${notesBlock}
       ${projectLink}
       <p style="font-size:12px;color:#888;margin-top:24px">Please log in to the project portal to review the full details.</p>
@@ -325,7 +474,7 @@ export function buildProjectRequestEmail(params: {
 
   const crewLine =
     params.coCleanerCount || params.coSupervisorCount
-      ? `<p><strong>Requested Crew:</strong> ${params.coCleanerCount ?? 0} cleaner(s), ${params.coSupervisorCount ?? 0} supervisor(s) — 8-hr day</p>`
+      ? `<p><strong>Requested Crew:</strong> ${params.coCleanerCount ?? 0} cleaner(s), ${params.coSupervisorCount ?? 0} supervisor(s), 8-hr day</p>`
       : "";
   const priceLine =
     params.coQuotedPriceCents != null
@@ -360,7 +509,7 @@ export function buildProjectRequestEmail(params: {
       <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
       ${details}
       ${cta}
-      <p style="margin-top:24px;font-size:13px;color:#6b7280">— The Sueep Team</p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
   `;
 }
@@ -396,7 +545,7 @@ export function buildProjectRequestConfirmationEmail(params: {
       <p>Hi ${escapeHtml(params.requesterName)},</p>
       <p>We've received your ${typeLabel} for <strong>${escapeHtml(params.projectTitle)}</strong>. The project supervisor and Sueep PM have been notified and will be in touch shortly.</p>
       ${detail}
-      <p style="margin-top:24px;font-size:13px;color:#6b7280">— The Sueep Team</p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
   `;
 }
@@ -442,9 +591,12 @@ export function buildScheduleNudgeEmail(params: {
   const headline = params.cadence === "morning" ? "Today's unscheduled projects" : "Still unscheduled for today";
   const intro =
     params.cadence === "morning"
-      ? "These active projects haven't been scheduled for today yet:"
-      : "It's midday and these active projects still haven't been scheduled for today:";
-  const items = params.projects.map((p) => `<li>${escapeHtml(p.jobTitle)}</li>`).join("");
+      ? "These active projects of yours haven't been scheduled for today yet. Click one to schedule it:"
+      : "It's midday and these active projects of yours still haven't been scheduled for today:";
+  // Each project opens today's "assign a supervisor" window for it on the Schedule.
+  const items = params.projects
+    .map((p) => `<li><a href="${escapeHtml(`${params.scheduleUrl}?scheduleProjectId=${encodeURIComponent(p.id)}`)}" style="color:#E73C6E">${escapeHtml(p.jobTitle)}</a></li>`)
+    .join("");
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
@@ -551,6 +703,141 @@ export function buildTurnoverCompletionDigestEmail(params: {
       ${upcomingSection}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
+  `;
+}
+
+/** Morning email listing Management calendar items that hit a reminder day. */
+export function buildManagementReminderEmail(params: {
+  items: { title: string; detail: string | null; category: string; date: string; when: string }[];
+  calendarUrl: string;
+}) {
+  const rows = params.items
+    .map(
+      (i) => `<tr>
+        <td style="padding:6px 12px 6px 0;white-space:nowrap;vertical-align:top"><strong>${escapeHtml(i.when)}</strong><br><span style="color:#6b7280;font-size:12px">${escapeHtml(i.date)}</span></td>
+        <td style="padding:6px 0;vertical-align:top">${escapeHtml(i.title)}${i.detail ? `<br><span style="color:#6b7280;font-size:12px">${escapeHtml(i.detail)}</span>` : ""}<br><span style="color:#9ca3af;font-size:12px">${escapeHtml(i.category)}</span></td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Coming up on the Management calendar</h2>
+      <table style="border-collapse:collapse;margin:12px 0 20px">${rows}</table>
+      <p style="margin:20px 0"><a href="${escapeHtml(params.calendarUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open calendar</a></p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">Reminder days for each category can be changed under Categories on the calendar.</p>
+    </div>
+  `;
+}
+
+export function buildEmailFailuresEmail(params: {
+  failures: { label: string; to: string; subject: string; error: string; url: string }[];
+  logUrl: string;
+}) {
+  const rows = params.failures
+    .map(
+      (f) => `<li style="margin-bottom:10px"><a href="${escapeHtml(f.url)}" style="color:#111;font-weight:bold">${escapeHtml(f.subject)}</a><br>
+        <span style="font-size:12px;color:#6b7280">${escapeHtml(f.label)}, to ${escapeHtml(f.to)}</span><br>
+        <span style="font-size:12px;color:#dc2626">${escapeHtml(f.error)}</span></li>`
+    )
+    .join("");
+  const n = params.failures.length;
+  return `
+    <h2 style="margin:0 0 12px;color:#dc2626">${n} email${n === 1 ? "" : "s"} failed to send</h2>
+    <p>These didn't reach anyone in the last day. Open one to see it and resend it.</p>
+    <ul style="margin:12px 0 20px;padding-left:20px">${rows}</ul>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.logUrl)}" style="${BUTTON_STYLE}">Open Email Log</a></p>
+  `;
+}
+
+const BUTTON_STYLE = "background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold";
+
+export function buildSafetyNoticeEmail(params: {
+  name: string;
+  projectName: string;
+  checkDate: string;
+  violationCount: number;
+  escalated: boolean;
+  threshold: number;
+}) {
+  const remaining = params.threshold - params.violationCount;
+  const note =
+    params.violationCount >= 2
+      ? `<p><strong>Note:</strong> This is violation #${params.violationCount} on record. ${
+          params.escalated
+            ? "This has been escalated to Operations Management."
+            : `${remaining === 1 ? "One more violation" : `${remaining} more violations`} will result in escalation.`
+        }</p>`
+      : "";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Safety compliance notice</h2>
+    <p>Hi ${escapeHtml(params.name)},</p>
+    <p>You were marked <strong>non-compliant</strong> during the daily PPE inspection on <strong>${escapeHtml(params.checkDate)}</strong> for <strong>${escapeHtml(params.projectName)}</strong>.</p>
+    <p>Per Sueep policy, this must be corrected before you begin work. Please speak with your supervisor right away.</p>
+    ${note}
+    <p>Sueep Operations</p>
+  `;
+}
+
+export function buildSafetyEscalationEmail(params: {
+  workerName: string;
+  projectName: string;
+  checkDate: string;
+  violationCount: number;
+  projectUrl: string | null;
+}) {
+  return `
+    <h2 style="margin:0 0 12px;color:#dc2626">Safety escalation: ${escapeHtml(params.workerName)}</h2>
+    <p>This worker has been marked non-compliant <strong>${params.violationCount} times</strong> and has reached the escalation limit.</p>
+    <p><strong>Worker:</strong> ${escapeHtml(params.workerName)}<br>
+       <strong>Project:</strong> ${escapeHtml(params.projectName)}<br>
+       <strong>Date:</strong> ${escapeHtml(params.checkDate)}<br>
+       <strong>Violations on record:</strong> ${params.violationCount}</p>
+    <p>Please review and take action per SOP PC-QA-001.</p>
+    ${params.projectUrl ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE}">View project</a></p>` : ""}
+  `;
+}
+
+/** English and Spanish, since most janitors read the Spanish half. */
+export function buildClockLinkEmail(params: { firstName: string; url: string }) {
+  const name = escapeHtml(params.firstName);
+  const url = escapeHtml(params.url);
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Your clock-in link</h2>
+    <p>Hi ${name},</p>
+    <p>Use this link to clock in and out of your shifts. Save it to your phone's home screen so it's easy to find.</p>
+    <p style="margin:20px 0"><a href="${url}" style="${BUTTON_STYLE}">Open my clock-in page</a></p>
+    <p style="font-size:12px;color:#555">Or copy this link: ${url}</p>
+    <p>This link is just for you, so please don't share it.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+    <h2 style="margin:0 0 12px;color:#E73C6E">Tu enlace para marcar entrada</h2>
+    <p>Hola ${name},</p>
+    <p>Usa este enlace para marcar tu entrada y salida en tus turnos. Guárdalo en la pantalla de inicio de tu teléfono para encontrarlo fácilmente. La página está disponible en español.</p>
+    <p>Este enlace es solo para ti, por favor no lo compartas.</p>
+  `;
+}
+
+export function buildCoiRequestAlertEmail(params: {
+  requesterName: string;
+  requesterCompany: string | null;
+  project: string;
+  holders: string[];
+  neededBy: string | null;
+  url: string;
+}) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">New COI request</h2>
+    <p><strong>${escapeHtml(params.requesterName)}</strong>${params.requesterCompany ? ` (${escapeHtml(params.requesterCompany)})` : ""} asked for a certificate of insurance.</p>
+    <p><strong>Project:</strong> ${escapeHtml(params.project)}<br>
+       <strong>For:</strong> ${params.holders.map(escapeHtml).join(", ")}${params.neededBy ? `<br><strong>Needed by:</strong> ${escapeHtml(params.neededBy)}` : ""}</p>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open in the ERP</a></p>
+  `;
+}
+
+export function buildRescheduleEmail(params: { jobTitle: string; oldLabel: string; newLabel: string; projectUrl: string | null }) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Project rescheduled</h2>
+    <p><strong>${escapeHtml(params.jobTitle)}</strong> was moved from ${escapeHtml(params.oldLabel)} to <strong>${escapeHtml(params.newLabel)}</strong>.</p>
+    ${params.projectUrl ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE}">View project</a></p>` : ""}
   `;
 }
 

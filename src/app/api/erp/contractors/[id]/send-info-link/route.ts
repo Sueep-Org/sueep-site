@@ -34,8 +34,10 @@ export async function POST(
 
   try {
     await sendEmail({
+      type: "CONTRACTOR_INFO_LINK",
+      link: `/erp/contractors/${id}`,
       to: contractor.email,
-      subject: "Complete your contractor information — Sueep",
+      subject: "Sueep: Complete your contractor information",
       html: buildContractorInfoEmail({
         name: contractor.name,
         infoUrl,

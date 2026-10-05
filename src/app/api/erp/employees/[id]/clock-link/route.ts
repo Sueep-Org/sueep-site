@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
-import { sendEmail } from "@/lib/email";
+import { buildClockLinkEmail, sendEmail } from "@/lib/email";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,9 +11,6 @@ function clockUrl(token: string): string {
   return `${siteUrl}/clock/${token}`;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 /**
  * Manages an employee's private clock-in link. Body:
@@ -62,17 +59,11 @@ export async function POST(req: Request, ctx: Ctx) {
     const url = clockUrl(employee.clockToken);
     try {
       await sendEmail({
+        type: "CLOCK_LINK",
+        link: `/erp/employees/${id}`,
         to: employee.email,
         subject: "Your Sueep clock-in link / Tu enlace para marcar entrada",
-        html: `<p>Hi ${escapeHtml(employee.firstName)},</p>
-<p>Use this link to clock in and out of your shifts. Save it to your phone's home screen so it's easy to find.</p>
-<p><a href="${url}">${url}</a></p>
-<p>This link is just for you, so please don't share it.</p>
-<hr />
-<p>Hola ${escapeHtml(employee.firstName)},</p>
-<p>Usa este enlace para marcar tu entrada y salida en tus turnos. Guárdalo en la pantalla de inicio de tu teléfono para encontrarlo fácilmente. La página está disponible en español.</p>
-<p>Este enlace es solo para ti, por favor no lo compartas.</p>
-<p>Sueep</p>`,
+        html: buildClockLinkEmail({ firstName: employee.firstName, url }),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Email send failed";

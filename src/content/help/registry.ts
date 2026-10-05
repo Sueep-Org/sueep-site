@@ -13,6 +13,8 @@ import { MaterialsLog } from "./projects/material-logs";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
+import { ManagementCalendar } from "./schedule/management-calendar";
+import { NotificationsOverview } from "./notifications/notifications-overview";
 import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
@@ -150,6 +152,24 @@ export const registry: ArticleEntry[] = [
     description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",
     order: 6,
     component: ScheduleCalendarOverview,
+  },
+  {
+    slug: "schedule/management-calendar",
+    title: "Management Calendar",
+    category: "People & Schedule",
+    description: "Insurance expirations, time off, deadlines and your own events in one calendar, with email reminders.",
+    order: 7,
+    component: ManagementCalendar,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
+  },
+  {
+    slug: "notifications/notifications-overview",
+    title: "Email Notifications",
+    category: "People & Schedule",
+    description: "Turn ERP and website emails on or off, change who gets them, and check the Email Log.",
+    order: 8,
+    component: NotificationsOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
   {
     slug: "compensation/compensation-overview",

@@ -71,8 +71,10 @@ export async function POST(req: Request, ctx: Ctx) {
 
   try {
     await sendEmail({
+      type: "JOB_BRIEF",
+      link: `/erp/projects/${id}`,
       to: employee.email,
-      subject: `Job Brief: ${projectName}`,
+      subject: `Job brief: ${projectName}`,
       html,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });

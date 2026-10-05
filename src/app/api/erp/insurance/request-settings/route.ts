@@ -2,7 +2,8 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageInsurance } from "@/lib/erpAuth";
-import { GENERAL_TOKEN_KEY, NOTIFY_EMAIL_KEY, requestLinkUrl } from "@/lib/erp/coiRequests";
+import { GENERAL_TOKEN_KEY, requestLinkUrl } from "@/lib/erp/coiRequests";
+import { parseEmailList } from "@/lib/notificationTypes";
 
 /**
  * The general COI request link (for requests not tied to a project link)
@@ -15,14 +16,15 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) as { createLink?: unknown; resetLink?: unknown; notifyEmail?: unknown };
 
+  // Same setting as "COI request received" on the Notifications page.
   if (typeof body.notifyEmail === "string") {
-    const emails = body.notifyEmail.split(",").map((e) => e.trim()).filter(Boolean);
-    if (emails.some((e) => !/^\S+@\S+\.\S+$/.test(e))) return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
-    if (emails.length) {
-      await prisma.appSetting.upsert({ where: { key: NOTIFY_EMAIL_KEY }, update: { value: emails.join(", ") }, create: { key: NOTIFY_EMAIL_KEY, value: emails.join(", ") } });
-    } else {
-      await prisma.appSetting.deleteMany({ where: { key: NOTIFY_EMAIL_KEY } });
-    }
+    const emails = parseEmailList(body.notifyEmail);
+    if (!emails) return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
+    await prisma.notificationSetting.upsert({
+      where: { type: "COI_REQUEST_RECEIVED" },
+      update: { to: emails, updatedBy: auth.email },
+      create: { type: "COI_REQUEST_RECEIVED", to: emails, updatedBy: auth.email },
+    });
   }
 
   let current = (await prisma.appSetting.findUnique({ where: { key: GENERAL_TOKEN_KEY } }))?.value ?? null;

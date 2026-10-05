@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 
+// Only used by the FormSubmit fallback; with Resend, recipients are set on the ERP Notifications page.
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
-const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep.com>";
 const FORMSUBMIT_ENDPOINT =
   process.env.FORMSUBMIT_ENDPOINT || "https://formsubmit.co/fc9c50165f29e01095f6f39726348f26";
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const subject = `Residential painting lead (wizard step 1): ${name}`;
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111">
-        <h2 style="margin:0 0 12px 0">Painting estimate — initial step</h2>
+        <h2 style="margin:0 0 12px 0">Painting estimate, first step</h2>
         <p>Customer started the on-page quote flow.</p>
         <p><strong>Name:</strong> ${escapeHtml(name)}</p>
         <p><strong>Email:</strong> ${escapeHtml(email)}</p>
@@ -59,14 +59,7 @@ export async function POST(req: NextRequest) {
         body: formPayload.toString(),
       });
     } else {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      await resend.emails.send({
-        from: FROM_EMAIL,
-        to: TO_EMAIL,
-        subject,
-        html,
-        reply_to: email,
-      });
+      await sendEmail({ type: "PAINTING_LEAD", subject, html, replyTo: email });
     }
 
     return NextResponse.json({ ok: true });

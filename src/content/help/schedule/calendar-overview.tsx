@@ -15,7 +15,9 @@ export function ScheduleCalendarOverview() {
         Tabs at the top switch between calendars. <strong>Projects</strong> is everything
         described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
         see{" "}
-        <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
+        <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>. Admins and PMs
+        also see <strong>Management</strong>, for insurance expirations, time off and company
+        deadlines, see <A href="/erp/help/schedule/management-calendar">Management Calendar</A>.
       </P>
 
       <H2>Steps</H2>

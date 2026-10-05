@@ -71,7 +71,9 @@ export function AddingContractors() {
                     </LI>
                 </UL>
                 The status at the top (<strong>Valid</strong>, <strong>Expiring</strong>, <strong>Expired</strong>, or{" "}
-                <strong>Missing</strong>) also shows in the Insurance column on the Contractors list. General liability and
+                <strong>Missing</strong>) covers all their policies. On the Contractors list, the <strong>GL</strong> and{" "}
+                <strong>WC</strong> columns show a check when that policy is current (amber when it expires within 30 days) and
+                an X when it&apos;s missing or expired. Hover a mark to see the date. General liability and
                 workers&apos; comp (or an exemption) are always required; auto and umbrella count once a date is entered.
                 <br></br><br></br>
                 Subs must carry the insurance the GC requires on the job. A job&apos;s requirements come from the Certificate

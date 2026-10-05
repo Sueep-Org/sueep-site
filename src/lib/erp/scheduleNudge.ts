@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
+import { getDescLine } from "@/lib/erp/descLine";
+import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 import { sendEmail, buildScheduleNudgeEmail } from "@/lib/email";
+import { getBackupPms } from "@/lib/notificationSettings";
 
-export type ScheduleNudgeProject = { id: string; jobTitle: string };
+export type ScheduleNudgeProject = { id: string; jobTitle: string; pmName: string | null };
 
 function todayWindow() {
   const start = todayEasternAsUtcMidnight();
@@ -13,22 +16,23 @@ function todayWindow() {
 }
 
 /** ACTIVE (WIP) projects with no ProjectDayAssignment covering a supervisor
- * or PM, no LaborEntry, and no covering change-order date range for today,
- * and no "not today" dismissal for today. A bare ProjectWorkerDayAssignment
- * (workers planned but no supervisor/PM day-assignment) does NOT count as
- * scheduled here — same rule the calendar's own "needs a supervisor" chip
- * uses; treating it as sufficient used to let an unsupervised day silently
- * suppress the nudge. */
+ * or PM, no LaborEntry, and no covering change-order date range for today.
+ * A bare ProjectWorkerDayAssignment (workers planned but no supervisor/PM
+ * day-assignment) does NOT count as scheduled here — same rule the
+ * calendar's own "needs a supervisor" chip uses; treating it as sufficient
+ * used to let an unsupervised day silently suppress the nudge. */
 export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudgeProject[]> {
   const { start, end } = todayWindow();
 
-  const [projects, dayAssignments, laborToday, dismissals] = await Promise.all([
+  const [projects, dayAssignments, laborToday] = await Promise.all([
     prisma.project.findMany({
       select: {
         id: true,
         jobTitle: true,
         status: true,
         projectDate: true,
+        supervisor: true,
+        description: true,
         changeOrders: { select: { status: true, startDate: true, endDate: true } },
       },
     }),
@@ -37,7 +41,6 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
       select: { projectId: true, supervisorUserId: true, projectManagerUserId: true },
     }),
     prisma.laborEntry.findMany({ where: { workDate: { gte: start, lte: end } }, select: { projectId: true } }),
-    prisma.projectScheduleNudgeDismissal.findMany({ where: { date: start }, select: { projectId: true } }),
   ]);
 
   const scheduledIds = new Set([
@@ -47,7 +50,6 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
     ...dayAssignments.filter((d) => d.supervisorUserId || d.projectManagerUserId).map((d) => d.projectId),
     ...laborToday.map((r) => r.projectId),
   ]);
-  const dismissedIds = new Set(dismissals.map((d) => d.projectId));
 
   // A qualifying (non-VOID/REJECTED) change order whose own date range
   // covers today counts as "scheduled" too — a CO's work can be underway
@@ -63,52 +65,57 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
 
   return projects
     .filter((p) => deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "ACTIVE")
-    .filter((p) => !scheduledIds.has(p.id) && !dismissedIds.has(p.id) && !coScheduledToday(p))
-    .map((p) => ({ id: p.id, jobTitle: p.jobTitle }))
+    .filter((p) => !scheduledIds.has(p.id) && !coScheduledToday(p))
+    .map((p) => ({
+      id: p.id,
+      jobTitle: p.jobTitle,
+      // Project.supervisor holds the PM's name (the "PM" column on the
+      // projects table), or older projects have a "SUEEP PM:" description line.
+      pmName: p.supervisor?.trim() || getDescLine(p.description, "SUEEP PM") || null,
+    }))
     .sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
 }
 
-export async function dismissProjectForToday(
-  projectId: string,
-  dismissedByUserId: string | null,
-): Promise<{ ok: true } | { ok: false; error: "not_found" }> {
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
-  if (!project) return { ok: false, error: "not_found" };
-
-  const { start: date } = todayWindow();
-  await prisma.projectScheduleNudgeDismissal.upsert({
-    where: { projectId_date: { projectId, date } },
-    create: { projectId, date, dismissedByUserId },
-    update: { dismissedByUserId },
-  });
-  return { ok: true };
-}
-
-/** Emails every PROJECT_MANAGER-role ErpUser the list of still-unscheduled
- * ACTIVE projects for today — skipped entirely (no recipients queried, no
- * email sent) once nothing is left unscheduled, so this never sends an
- * empty "all clear" email. */
+/** Emails each PM the still-unscheduled ACTIVE projects they manage today.
+ * Projects whose PM can't be matched to an employee email go to the backup
+ * PMs. Nobody is emailed when nothing is left unscheduled. */
 export async function sendScheduleNudgeEmails(
   cadence: "morning" | "midday",
 ): Promise<{ sent: boolean; recipientCount: number; projectCount: number }> {
   const projects = await getUnscheduledActiveProjectsToday();
   if (projects.length === 0) return { sent: false, recipientCount: 0, projectCount: 0 };
 
-  const recipients = await prisma.erpUser.findMany({
-    where: { role: "PROJECT_MANAGER" },
-    select: { id: true, email: true },
-  });
-  if (recipients.length === 0) return { sent: false, recipientCount: 0, projectCount: projects.length };
+  const emailByName = new Map<string, string | null>();
+  const byRecipient = new Map<string, ScheduleNudgeProject[]>();
+  const backupPms = await getBackupPms();
+  for (const p of projects) {
+    let email: string | null = null;
+    if (p.pmName) {
+      const key = p.pmName.toLowerCase();
+      if (!emailByName.has(key)) emailByName.set(key, await findEmployeeEmailByName(p.pmName));
+      email = emailByName.get(key) ?? null;
+    }
+    for (const to of email ? [email] : backupPms) {
+      const k = to.toLowerCase();
+      byRecipient.set(k, [...(byRecipient.get(k) ?? []), p]);
+    }
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const scheduleUrl = appUrl ? `${appUrl}/erp/schedule` : "/erp/schedule";
-  const html = buildScheduleNudgeEmail({ cadence, projects, scheduleUrl });
-  const subject =
-    cadence === "morning"
-      ? `Morning check: ${projects.length} project${projects.length === 1 ? "" : "s"} not yet scheduled today`
-      : `Midday check: ${projects.length} project${projects.length === 1 ? "" : "s"} still not scheduled today`;
+  const type = cadence === "morning" ? "SCHEDULE_NUDGE_MORNING" : "SCHEDULE_NUDGE_MIDDAY";
 
-  await Promise.allSettled(recipients.map((r) => sendEmail({ to: r.email, subject, html })));
+  await Promise.allSettled(
+    Array.from(byRecipient, ([to, own]) => {
+      const n = own.length;
+      const subject =
+        cadence === "morning"
+          ? `Morning check: ${n} of your project${n === 1 ? "" : "s"} not yet scheduled today`
+          : `Midday check: ${n} of your project${n === 1 ? "" : "s"} still not scheduled today`;
+      const html = buildScheduleNudgeEmail({ cadence, projects: own, scheduleUrl });
+      return sendEmail({ type, link: "/erp/schedule", to, subject, html });
+    }),
+  );
 
-  return { sent: true, recipientCount: recipients.length, projectCount: projects.length };
+  return { sent: true, recipientCount: byRecipient.size, projectCount: projects.length };
 }
