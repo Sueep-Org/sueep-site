@@ -79,15 +79,21 @@ export async function parsePropertyManagerBody(
   };
 }
 
-/** The signed-in staff member as a starting Sueep contact for a new property manager. */
+/** Starting Sueep contact for a new property manager. Name and phone come
+ * from their Employee profile, so a changed number shows up here too. */
+export const DEFAULT_SUEEP_CONTACT_EMAIL = "nick@sueep.com";
+
+/** Nick Wehr as the starting Sueep contact for a new property manager, or
+ * the signed-in staff member if his employee profile can't be found. */
 export async function defaultSueepContact(staffEmail: string): Promise<{ name: string; phone: string; email: string }> {
-  const employee = await prisma.employee.findFirst({
-    where: { email: { equals: staffEmail, mode: "insensitive" } },
-    select: { firstName: true, lastName: true, phone: true },
-  });
-  return {
-    name: employee ? `${employee.firstName} ${employee.lastName}`.trim() : "",
-    phone: employee?.phone ?? "",
-    email: staffEmail.toLowerCase(),
-  };
+  for (const email of [DEFAULT_SUEEP_CONTACT_EMAIL, staffEmail]) {
+    const employee = await prisma.employee.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { firstName: true, lastName: true, phone: true },
+    });
+    if (employee) {
+      return { name: `${employee.firstName} ${employee.lastName}`.trim(), phone: employee.phone ?? "", email: email.toLowerCase() };
+    }
+  }
+  return { name: "", phone: "", email: staffEmail.toLowerCase() };
 }
