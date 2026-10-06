@@ -59,7 +59,7 @@ export function JanitorialGettingStarted() {
           <strong>Needs attention</strong>:
           <UL>
             <LI><strong>Late:</strong> 15+ minutes past start with no clock-in. Call or text them from the row.</LI>
-            <LI><strong>Needs cover:</strong> the janitor has time off. Find a cover opens the calendar for that building.</LI>
+            <LI><strong>Needs cover:</strong> the janitor has approved time off. Find a cover opens the calendar for that building.</LI>
             <LI><strong>Didn&apos;t clock out</strong> and <strong>No clock-in</strong>: fix the hours with Correct hours.</LI>
             <LI>Clock-ins far from the building are flagged too.</LI>
           </UL>
@@ -70,7 +70,7 @@ export function JanitorialGettingStarted() {
 
         <Step n={5} title="Every week: review hours">
           <strong>Janitorial Contracts → Hours</strong> shows every shift and where its hours came from: Clocked, From
-          schedule (no clock-in), Time off, Skipped, or Corrected. Tick <strong>Needs review only</strong> to see just the
+          schedule (no clock-in), Time off (approved only), Skipped, or Corrected. Tick <strong>Needs review only</strong> to see just the
           flagged ones (late, left early, no clock-out, unscheduled, far from the building) and use{" "}
           <strong>Correct</strong> to fix any of them. Shifts of 6+ hours have a 30 minute unpaid break taken off.
         </Step>

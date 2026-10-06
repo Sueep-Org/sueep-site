@@ -11,6 +11,7 @@ import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { costWorkLines, janitorialWorkLine, manualWorkLine, type WorkLine } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
 import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
+import { timeOffEntryDays, unpaidTimeOffDays } from "@/lib/erp/timeOff";
 
 export function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -275,6 +276,43 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     rowFor(id, id, `${e.firstName} ${e.lastName}`.trim(), e.lastName).salaryCents = salaryCents;
   }
 
+  // ── Unpaid time off ─────────────────────────────────────────────────────
+  // Approved Unpaid entries, and days an Admin made unpaid past the yearly
+  // limit, come off salary at the same 1/364-per-day rate salary is paid at.
+  // Hourly pay needs nothing: days off have no hours.
+  const unpaidTimeOff = await prisma.employeeTimeOff.findMany({
+    where: {
+      employeeId: { in: salaryCandidates.map((e) => e.id) },
+      status: "APPROVED",
+      OR: [{ type: "UNPAID" }, { unpaidDays: { gt: 0 } }],
+      startDate: { lte: periodEnd },
+      endDate: { gte: periodStart },
+    },
+    select: { employeeId: true, startDate: true, endDate: true, type: true, unpaidDays: true },
+  });
+  const periodDaySet = new Set(periodDays);
+  const unpaidByEmployee = new Map<string, { cents: number; days: number }>();
+  for (const t of unpaidTimeOff) {
+    const row = employeeMap.get(t.employeeId);
+    if (!row || row.salaryCents <= 0) continue;
+    const history = histories.get(t.employeeId);
+    const total = unpaidByEmployee.get(t.employeeId) ?? { cents: 0, days: 0 };
+    const unpaidDays = t.type === "UNPAID" ? timeOffEntryDays(t) : t.unpaidDays;
+    for (const { date, fraction } of unpaidTimeOffDays({ ...t, unpaidDays })) {
+      const day = date.toISOString().slice(0, 10);
+      if (!periodDaySet.has(day)) continue;
+      const rate = payRateOn(history, day);
+      if (!rate || rate.payType !== "SALARY" || rate.isOffshore) continue;
+      total.cents += ((rate.annualSalaryCents ?? 0) / 364) * fraction;
+      total.days += fraction;
+    }
+    unpaidByEmployee.set(t.employeeId, total);
+  }
+  for (const [employeeId, { cents }] of unpaidByEmployee) {
+    const row = employeeMap.get(employeeId);
+    if (row) row.salaryCents = Math.max(0, row.salaryCents - cents);
+  }
+
   const employeeRows = Array.from(employeeMap.values()).map((emp) => {
     const employee = emp.employeeId ? employeesById.get(emp.employeeId) ?? null : null;
     const isSalaryRow = emp.salaryCents > 0;
@@ -293,6 +331,9 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       regHours: emp.regHours,
       otHours: emp.otHours,
       grossPayCents: Math.round(emp.hourlyPayCents + emp.salaryCents),
+      /** Already taken off grossPayCents (see unpaid time off above). */
+      unpaidTimeOffCents: Math.round(emp.employeeId ? unpaidByEmployee.get(emp.employeeId)?.cents ?? 0 : 0),
+      unpaidTimeOffDays: emp.employeeId ? unpaidByEmployee.get(emp.employeeId)?.days ?? 0 : 0,
       projects: emp.projects.size ? Array.from(emp.projects).join(", ") : "-",
       entries: emp.entries,
       manualEntries: emp.manualEntries,
@@ -329,6 +370,8 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       regHours: 0,
       otHours: 0,
       grossPayCents: 0,
+      unpaidTimeOffCents: 0,
+      unpaidTimeOffDays: 0,
       projects: "No janitorial schedule set",
       entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
       manualEntries: [] as ManualEntryRow[],

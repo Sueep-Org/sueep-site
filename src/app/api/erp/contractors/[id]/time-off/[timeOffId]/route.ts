@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { TIME_OFF_TYPES, parseTimeOffDate, findOverlappingContractorTimeOff, overlapErrorMessage } from "@/lib/erp/timeOff";
+import { getErpAuth } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string; timeOffId: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, timeOffId } = await ctx.params;
+  const auth = await getErpAuth();
   const existing = await prisma.contractorTimeOff.findFirst({ where: { id: timeOffId, contractorId: id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -30,6 +32,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     type = TIME_OFF_TYPES.includes(typeRaw as (typeof TIME_OFF_TYPES)[number]) ? typeRaw : "VACATION";
   }
 
+  // Changing the dates or type sends it back for approval. A notes-only
+  // edit keeps its status.
+  const backToPending =
+    startDate.getTime() !== existing.startDate.getTime() ||
+    endDate.getTime() !== existing.endDate.getTime() ||
+    type !== existing.type;
+
   try {
     const overlap = await findOverlappingContractorTimeOff(id, startDate, endDate, timeOffId);
     if (overlap) {
@@ -43,6 +52,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
         endDate,
         type,
         notes: body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : existing.notes,
+        ...(backToPending
+          ? { status: "PENDING", requestedBy: auth?.email ?? existing.requestedBy, reviewedBy: null, reviewedAt: null, reviewNote: null }
+          : {}),
       },
     });
     return NextResponse.json(row);

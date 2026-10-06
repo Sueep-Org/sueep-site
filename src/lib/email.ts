@@ -617,6 +617,11 @@ const TIME_OFF_TYPE_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
+function timeOffRangeLabel(startDate: Date, endDate: Date): string {
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return startDate.getTime() === endDate.getTime() ? fmt(startDate) : `${fmt(startDate)} - ${fmt(endDate)}`;
+}
+
 export function buildTimeOffLoggedEmail(params: {
   personName: string;
   personKind: "Employee" | "Contractor";
@@ -625,19 +630,58 @@ export function buildTimeOffLoggedEmail(params: {
   endDate: Date;
   days: number;
   notes: string | null;
+  requestedBy?: string | null;
+  limitOverride?: string | null;
+  unpaidDays?: number;
 }) {
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  const range = params.startDate.getTime() === params.endDate.getTime() ? fmt(params.startDate) : `${fmt(params.startDate)} – ${fmt(params.endDate)}`;
+  const range = timeOffRangeLabel(params.startDate, params.endDate);
   const typeLabel = TIME_OFF_TYPE_LABELS[params.type] ?? params.type;
   const dayLabel = `${params.days} day${params.days === 1 ? "" : "s"}`;
+  const override =
+    params.limitOverride === "UNPAID"
+      ? `Over the yearly limit, Admin override: ${params.unpaidDays} day${params.unpaidDays === 1 ? "" : "s"} unpaid`
+      : params.limitOverride === "PAID"
+        ? "Over the yearly limit, Admin override: paid"
+        : null;
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">Time off logged</h2>
+      <h2 style="margin-bottom:12px;color:#E73C6E">Time off request needs approval</h2>
       <p><strong>${escapeHtml(params.personName)}</strong> (${params.personKind})</p>
       <p><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
       <p><strong>Dates:</strong> ${escapeHtml(range)} (${dayLabel})</p>
+      ${override ? `<p><strong>${escapeHtml(override)}</strong></p>` : ""}
       ${params.notes ? `<p><strong>Notes:</strong> ${escapeHtml(params.notes)}</p>` : ""}
+      ${params.requestedBy ? `<p><strong>Requested by:</strong> ${escapeHtml(params.requestedBy)}</p>` : ""}
+      <p>Approve or deny it on their Time Off tab in the ERP.</p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
+export function buildTimeOffReviewedEmail(params: {
+  personName: string;
+  decision: "APPROVED" | "DENIED";
+  type: string;
+  startDate: Date;
+  endDate: Date;
+  days: number;
+  reviewedBy: string;
+  note: string | null;
+}) {
+  const range = timeOffRangeLabel(params.startDate, params.endDate);
+  const typeLabel = TIME_OFF_TYPE_LABELS[params.type] ?? params.type;
+  const dayLabel = `${params.days} day${params.days === 1 ? "" : "s"}`;
+  const word = params.decision === "APPROVED" ? "approved" : "denied";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Time off ${word}</h2>
+      <p><strong>${escapeHtml(params.personName)}</strong></p>
+      <p><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(range)} (${dayLabel})</p>
+      <p><strong>${params.decision === "APPROVED" ? "Approved" : "Denied"} by:</strong> ${escapeHtml(params.reviewedBy)}</p>
+      ${params.note ? `<p><strong>Note:</strong> ${escapeHtml(params.note)}</p>` : ""}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
   `;
@@ -1031,6 +1075,33 @@ export function buildCoiRequestAlertEmail(params: {
     <p><strong>Project:</strong> ${escapeHtml(params.project)}<br>
        <strong>For:</strong> ${params.holders.map(escapeHtml).join(", ")}${params.neededBy ? `<br><strong>Needed by:</strong> ${escapeHtml(params.neededBy)}` : ""}</p>
     <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open in the ERP</a></p>
+  `;
+}
+
+export function buildReadyToBillEmail(params: {
+  jobTitle: string;
+  items: { kind: string; title: string; amountCents: number | null }[];
+  projectUrl: string | null;
+  billingUrl: string | null;
+}) {
+  const rows = params.items
+    .map(
+      (i) => `<tr>
+        <td style="padding:6px 12px 6px 0;color:#6b7280">${escapeHtml(i.kind)}</td>
+        <td style="padding:6px 12px 6px 0">${escapeHtml(i.title)}</td>
+        <td style="padding:6px 0;text-align:right">${i.amountCents != null ? formatUsd(i.amountCents) : ""}</td>
+      </tr>`,
+    )
+    .join("");
+  const buttons = [
+    params.billingUrl ? `<a href="${escapeHtml(params.billingUrl)}" style="${BUTTON_STYLE}">Open Billing</a>` : "",
+    params.projectUrl ? `<a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE};margin-left:8px">View project</a>` : "",
+  ].join("");
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Ready to bill</h2>
+    <p><strong>${escapeHtml(params.jobTitle)}</strong> has work ready to invoice.</p>
+    <table style="border-collapse:collapse;font-size:14px;margin:12px 0">${rows}</table>
+    ${buttons ? `<p style="margin:20px 0">${buttons}</p>` : ""}
   `;
 }
 

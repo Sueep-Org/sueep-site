@@ -5,6 +5,7 @@ import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
 import { centsToDollars } from "@/lib/erp/money";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
+import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
@@ -205,6 +206,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
         include: { laborers: { orderBy: { createdAt: "asc" } } },
       });
     });
+
+    // Moving into Billing or Completed means it's ready to invoice, unless
+    // it got there by being marked billed or paid.
+    const DONE = ["BILLING", "COMPLETED"];
+    if (DONE.includes(updated.status) && !DONE.includes(existing.status) && normalizeBillingStatus(updated.billingStatus) === "NOT_BILLED") {
+      await notifyReadyToBill(id, [{ kind: "Change order", title: updated.title, amountCents: updated.contractValueCents }]);
+    }
 
     // Fire approval notification to the project's PM — non-blocking, best effort
     if (becomingApproved) {

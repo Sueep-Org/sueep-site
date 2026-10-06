@@ -19,7 +19,8 @@ import { loadJobRequirements, subGaps } from "@/lib/erp/subRequirements";
 import { ContractorSsnSection } from "./ContractorSsnSection";
 import { ContractorLaborSection } from "./ContractorLaborSection";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
-import { ContractorTimeOffSection } from "./ContractorTimeOffSection";
+import { TimeOffSection, type TimeOffRow } from "@/app/erp/components/TimeOffSection";
+import { erpRoleForEmail, timeOffReviewBlock } from "@/lib/erp/timeOff";
 import { ContractorApplicationLinkSection } from "./ContractorApplicationLinkSection";
 import { ContractorQuestionnaireCard } from "./ContractorQuestionnaireCard";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
@@ -284,7 +285,10 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   }));
   const initialLaborHasMore = assignmentTotalCount > CONTRACTOR_LABOR_PAGE_SIZE;
 
-  const upcomingTimeOff = contractor.timeOff.filter((t) => t.endDate >= new Date()).length;
+  const upcomingTimeOff = contractor.timeOff.filter((t) => t.status !== "DENIED" && t.endDate >= new Date()).length;
+  const timeOffReviewBlockForViewer = auth
+    ? timeOffReviewBlock(auth, { email: contractor.email, erpRole: await erpRoleForEmail(contractor.email) })
+    : "Sign in to review time off.";
   const timeOffStatus = upcomingTimeOff ? `${upcomingTimeOff} upcoming` : contractor.timeOff.length ? "None upcoming" : "None logged";
 
   // Which compliance section, if any, opens on load (see below).
@@ -530,15 +534,24 @@ export default async function ContractorDetailPage({ params }: PageProps) {
               projectOptions={laborProjects}
             />
               <CollapsibleSection title="Time off" status={timeOffStatus} tone="neutral">
-                <ContractorTimeOffSection
-                  contractorId={contractor.id}
+                <TimeOffSection
+                  kind="contractor"
+                  personId={contractor.id}
+                  reviewBlock={timeOffReviewBlockForViewer}
+                  isAdmin={auth?.role === "ADMIN"}
                   initialTimeOff={contractor.timeOff.map((t) => ({
-                    id: t.id,
-                    startDate: t.startDate.toISOString(),
-                    endDate: t.endDate.toISOString(),
-                    type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
-                    notes: t.notes,
-                  }))}
+                id: t.id,
+                startDate: t.startDate.toISOString(),
+                endDate: t.endDate.toISOString(),
+                type: t.type as TimeOffRow["type"],
+                notes: t.notes,
+                status: t.status as TimeOffRow["status"],
+                requestedBy: t.requestedBy,
+                reviewedBy: t.reviewedBy,
+                reviewNote: t.reviewNote,
+                limitOverride: null,
+                unpaidDays: 0,
+              }))}
                 />
               </CollapsibleSection>
             </div>

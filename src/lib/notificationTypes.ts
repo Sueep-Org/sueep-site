@@ -98,6 +98,14 @@ export const NOTIFICATIONS = {
     automatic: "The scheduled person",
     sender: "sueep",
   }),
+  READY_TO_BILL: def({
+    label: "Ready to bill",
+    group: "Projects & schedule",
+    when: "A post-construction project or turnover unit is marked complete, a change order moves to Billing or Completed, or SOV lines are marked done",
+    toMode: "recipients",
+    defaultTo: () => ["jennifer@sueep.com"],
+    ccEditable: true,
+  }),
   RESCHEDULE_NOTICE: def({
     label: "Project rescheduled",
     group: "Projects & schedule",
@@ -279,11 +287,18 @@ export const NOTIFICATIONS = {
     sender: "sueep",
   }),
   TIME_OFF_LOGGED: def({
-    label: "Time off logged",
+    label: "Time off request",
     group: "People",
-    when: "Time off is added for an employee or contractor",
+    when: "Time off is requested for an employee or contractor and needs approval",
     toMode: "recipients",
     defaultTo: () => [env("TIME_OFF_NOTIFICATION_EMAIL", "contact@sueep.com")],
+    ccEditable: true,
+  }),
+  TIME_OFF_REVIEWED: def({
+    label: "Time off approved or denied",
+    group: "People",
+    when: "An Admin or PM approves or denies a time off request",
+    automatic: "The person who requested it",
     ccEditable: true,
   }),
 

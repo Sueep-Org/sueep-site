@@ -24,7 +24,7 @@ export function NotificationsOverview() {
           Click <strong>Edit</strong> to change the people you can control. What the list means depends on the email:
           <UL>
             <LI>
-              <strong>Send to:</strong> these people are the only recipients (for example Time off logged).
+              <strong>Send to:</strong> these people are the only recipients (for example Time off request).
             </LI>
             <LI>
               <strong>Also send to:</strong> the ERP picks people automatically (like the project&apos;s supervisor),

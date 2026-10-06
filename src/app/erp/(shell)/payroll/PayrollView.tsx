@@ -23,6 +23,9 @@ type PayrollRow = {
   regHours: number;
   otHours: number;
   grossPayCents: number;
+  /** Salary taken off for approved unpaid time off (already out of grossPayCents) */
+  unpaidTimeOffCents?: number;
+  unpaidTimeOffDays?: number;
   projects: string;
   /** Has janitorial shift hours this period (links to Janitorial > Hours). */
   hasJanitorialHours?: boolean;
@@ -905,6 +908,11 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
                       {fmt(row.grossPayCents)}
+                      {row.unpaidTimeOffCents ? (
+                        <div className="text-[10px] font-medium text-amber-700">
+                          {fmt(row.unpaidTimeOffCents)} off for {row.unpaidTimeOffDays} unpaid day{row.unpaidTimeOffDays === 1 ? "" : "s"} off
+                        </div>
+                      ) : null}
                       {row.missingRateHours ? (
                         <div className="text-[10px] font-medium text-red-600">
                           {fmtHours(Math.round(row.missingRateHours * 100) / 100)} hrs logged with no rate, not included

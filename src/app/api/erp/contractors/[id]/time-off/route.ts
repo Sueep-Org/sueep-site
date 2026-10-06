@@ -7,12 +7,14 @@ import {
   overlapErrorMessage,
   timeOffEntryDays,
 } from "@/lib/erp/timeOff";
+import { getErpAuth } from "@/lib/erpAuth";
 import { sendEmail, buildTimeOffLoggedEmail } from "@/lib/email";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const auth = await getErpAuth();
   const contractor = await prisma.contractor.findUnique({ where: { id }, select: { id: true, name: true } });
   if (!contractor) return NextResponse.json({ error: "Contractor not found" }, { status: 404 });
 
@@ -50,6 +52,8 @@ export async function POST(req: Request, ctx: Ctx) {
         endDate,
         type,
         notes,
+        status: "PENDING",
+        requestedBy: auth?.email ?? null,
       },
     });
 
@@ -57,7 +61,7 @@ export async function POST(req: Request, ctx: Ctx) {
       await sendEmail({
         type: "TIME_OFF_LOGGED",
         link: `/erp/contractors/${id}`,
-        subject: `Time off logged: ${contractor.name}`,
+        subject: `Time off request: ${contractor.name}`,
         html: buildTimeOffLoggedEmail({
           personName: contractor.name,
           personKind: "Contractor",
@@ -66,6 +70,7 @@ export async function POST(req: Request, ctx: Ctx) {
           endDate,
           days: timeOffEntryDays({ startDate, endDate, type }),
           notes,
+          requestedBy: auth?.email ?? null,
         }),
       });
     } catch (e) {

@@ -31,8 +31,8 @@ export function ManagementCalendar() {
               <strong>COI requests due:</strong> the needed-by date on open COI requests.
             </LI>
             <LI>
-              <strong>Time off:</strong> every employee&apos;s and contractor&apos;s time off. Notes only show when you click
-              the item.
+              <strong>Time off:</strong> every employee&apos;s and contractor&apos;s approved and pending time off (pending is
+              marked in the title, denied doesn&apos;t show). Notes only show when you click the item.
             </LI>
             <LI>
               <strong>Background checks</strong> and <strong>Employee documents:</strong> expiration dates for active

@@ -38,8 +38,10 @@ export function CompensationOverview() {
             <LI>
               Hourly rows are computed automatically from logged labor, with regular and overtime
               hours split at 40/week. <strong>Salary</strong> rows are always the employee&apos;s
-              annual salary ÷ 26, paid every period regardless of logged hours — logged hours
-              still show for reference but never change the pay amount.{" "}
+              annual salary ÷ 26, paid every period regardless of logged hours. Logged hours
+              still show for reference but never change the pay amount. The one exception is
+              approved unpaid time off (an Unpaid entry, or days past the 15-day limit an Admin
+              made unpaid): those days come off the salary, shown in amber under the gross pay.{" "}
               <strong>Janitorial Contract</strong> rows are paid from their janitorial hours (the
               same live numbers as <strong>Janitorial Contracts → Hours</strong>: clocked time, corrections,
               or their scheduled hours when they didn&apos;t clock in) plus any project hours, at

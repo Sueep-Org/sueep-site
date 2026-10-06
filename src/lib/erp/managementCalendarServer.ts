@@ -96,14 +96,14 @@ export async function loadManagementItems(
       : [],
     want("TIME_OFF")
       ? prisma.employeeTimeOff.findMany({
-          where: { startDate: { lte: end }, endDate: { gte: start } },
-          select: { id: true, startDate: true, endDate: true, type: true, notes: true, employee: { select: { id: true, firstName: true, lastName: true } } },
+          where: { status: { not: "DENIED" }, startDate: { lte: end }, endDate: { gte: start } },
+          select: { id: true, startDate: true, endDate: true, type: true, notes: true, status: true, employee: { select: { id: true, firstName: true, lastName: true } } },
         })
       : [],
     want("TIME_OFF")
       ? prisma.contractorTimeOff.findMany({
-          where: { startDate: { lte: end }, endDate: { gte: start } },
-          select: { id: true, startDate: true, endDate: true, type: true, notes: true, contractor: { select: { id: true, name: true } } },
+          where: { status: { not: "DENIED" }, startDate: { lte: end }, endDate: { gte: start } },
+          select: { id: true, startDate: true, endDate: true, type: true, notes: true, status: true, contractor: { select: { id: true, name: true } } },
         })
       : [],
     want("BACKGROUND_CHECKS")
@@ -194,7 +194,7 @@ export async function loadManagementItems(
   for (const t of employeeTimeOff) {
     add("TIME_OFF", {
       key: `eto:${t.id}`,
-      title: `${fullName(t.employee)}: ${TIME_OFF_LABELS[t.type] ?? "Time off"}`,
+      title: `${fullName(t.employee)}: ${TIME_OFF_LABELS[t.type] ?? "Time off"}${t.status === "PENDING" ? " (pending)" : ""}`,
       detail: formatItemDates(utcDateKey(t.startDate), utcDateKey(t.endDate)),
       notes: t.notes,
       href: `/erp/employees/${t.employee.id}`,
@@ -205,7 +205,7 @@ export async function loadManagementItems(
   for (const t of contractorTimeOff) {
     add("TIME_OFF", {
       key: `cto:${t.id}`,
-      title: `${t.contractor.name}: ${TIME_OFF_LABELS[t.type] ?? "Time off"}`,
+      title: `${t.contractor.name}: ${TIME_OFF_LABELS[t.type] ?? "Time off"}${t.status === "PENDING" ? " (pending)" : ""}`,
       detail: `Contractor, ${formatItemDates(utcDateKey(t.startDate), utcDateKey(t.endDate))}`,
       notes: t.notes,
       href: `/erp/contractors/${t.contractor.id}`,

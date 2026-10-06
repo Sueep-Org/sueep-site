@@ -5,13 +5,23 @@ export function PropertyManagerLinks() {
     <>
       <H2>What this is</H2>
       <P>
-        Outside property managers (our clients, not Sueep staff) can get a <strong>private link</strong> to their own turnover
-        calendar. There they can see every turnover at their buildings, request new ones with a price estimate, and ask to cancel
-        or move one. They don&apos;t need an ERP login.
+        Outside property managers (our clients, not Sueep staff) can get a <strong>private page</strong> for their buildings.
+        There they can see every turnover, book new ones with a price estimate, and ask to cancel or move one. They don&apos;t
+        need a password or an ERP login.
       </P>
-      <P>Nothing a property manager does changes the schedule on its own. Your part:</P>
+      <P>Turnover requests reach us two ways, and both land in the same place:</P>
       <UL>
-        <LI>Set each property manager up once and send them their link.</LI>
+        <LI>
+          <strong>Their private page</strong>, for property managers we&apos;ve set up.
+        </LI>
+        <LI>
+          <strong>The website form</strong> at sueep.com/turnover-requests, for anyone. These show a blue{" "}
+          <strong>Website</strong> tag.
+        </LI>
+      </UL>
+      <P>Nothing a client does changes the schedule on its own. Your part:</P>
+      <UL>
+        <LI>Set each property manager up once. The ERP emails them their page.</LI>
         <LI>Confirm or decline the turnovers they request.</LI>
         <LI>Apply or decline the cancels and new dates they ask for.</LI>
       </UL>
@@ -26,55 +36,75 @@ export function PropertyManagerLinks() {
           Go to <strong>Property Managers</strong> and click <strong>+ Add property manager</strong>. Under{" "}
           <strong>From buildings</strong>, click their name if it&apos;s there. That fills in their info and every building
           they&apos;re listed on. Otherwise type their name and email. Each email can only belong to one property manager.
+          <Callout type="tip">
+            You can also start from a building: open it, and on the <strong>Details</strong> tab click <strong>+ Add</strong> under{" "}
+            <strong>Property manager links</strong>. That building is picked for you.
+          </Callout>
         </Step>
         <Step n={2} title="2. Pick their buildings">
           Search and check every building they manage. They only see turnovers at these buildings. One property manager can
           have many buildings, and one building can have more than one property manager.
         </Step>
-        <Step n={3} title="3. Send them the link">
-          Click <strong>Add</strong>. Their link is copied for you, so paste it into an email to them. You can copy it again any
-          time by opening their row.
-          <Callout type="tip">Tell them to bookmark it. The same link works for good unless you make a new one.</Callout>
+        <Step n={3} title="3. Check their Sueep contact">
+          <strong>Their Sueep contact</strong> starts as you. It&apos;s who they&apos;re told to call, on their page and in every
+          email. Change it if someone else looks after them.
+        </Step>
+        <Step n={4} title="4. Add and email them">
+          Leave <strong>Email them their link now</strong> checked and click <strong>Add</strong>. They get a welcome email with
+          three simple steps and a <strong>See my turnovers</strong> button. <strong>Monday email</strong> is on too (see below).
         </Step>
       </Steps>
 
       <H2>What the property manager sees</H2>
       <UL>
         <LI>
-          <strong>First time on a phone or computer:</strong> they click <strong>Email me a code</strong> and type in the 6-digit
-          code we email them. After that, that device remembers them for a year. This stops a forwarded link from working on
-          someone else&apos;s phone.
+          <strong>Getting in:</strong> the <strong>See my turnovers</strong> button in any email we send them signs them in, with
+          nothing to type. It works for a week after the email. If they open a bookmark on a new phone or computer instead, we
+          email them a 6-digit code to type in once. After that, that device remembers them for a year.
         </LI>
         <LI>
-          <strong>A month calendar and a list</strong> of their turnovers, colored by status: Requested, Scheduled, In progress, On
-          hold, and Done (the last 12 months).
+          <strong>Coming up</strong> (the first screen): what&apos;s waiting on us, what&apos;s being worked on now, and
+          what&apos;s booked in the next 14 days. <strong>Calendar</strong> shows the month, and <strong>All</strong> lists
+          everything, including finished units from the last year.
+        </LI>
+        <LI>
+          <strong>Status words they see:</strong> Requested, Booked, Being worked on, On hold, Done, and Declined.
         </LI>
         <LI>
           <strong>Each unit</strong> shows its dates, price, crew days, and a checklist of the work with what&apos;s done.
         </LI>
+        <LI>
+          <strong>Booking:</strong> they tap <strong>Book a turnover</strong>, enter the unit, work, and start date, and see an
+          estimate from the building&apos;s pricing package. Units we&apos;ve turned before fill in their size, and{" "}
+          <strong>Same as last time</strong> checks last time&apos;s work. They can add up to 10 units in one booking.
+        </LI>
+        <LI>A bar at the top says who to call: their Sueep contact&apos;s name and phone number.</LI>
       </UL>
       <Callout type="warning">
         A unit&apos;s status comes from its project. If a finished unit isn&apos;t marked <strong>Complete</strong>, the property
-        manager sees it as still in progress. Keep unit projects up to date.
+        manager sees it as still being worked on. Keep unit projects up to date.
       </Callout>
 
       <H2>A new request comes in</H2>
       <P>
-        Property managers pick the unit, its size, the work, and a preferred start date. They see an estimate from the
-        building&apos;s pricing package. You get a <strong>Property manager turnover request</strong> email, and the request
+        You get a <strong>Property manager turnover request</strong> email (one per booking, listing every unit). The request
         shows on the dashboard (<strong>Turnover requests to answer</strong>) and on{" "}
-        <strong>Property Managers → Requests</strong>.
+        <strong>Property Managers → Requests</strong>, one row per unit.
       </P>
       <Steps>
         <Step n={1} title="1. Check it">
-          Open <strong>Requests</strong>. Read the work, dates, and notes. If it includes <strong>Other</strong> work, that
-          isn&apos;t in the estimate yet, so you&apos;ll need to price it.
+          Open <strong>Requests</strong>. Read the work, dates, and notes. Website requests also show the person&apos;s email and
+          phone. If a request includes <strong>Other</strong> work, that isn&apos;t in the estimate yet.
         </Step>
         <Step n={2} title="2. Confirm it">
-          Click <strong>Confirm</strong>. Set the start date, an end date if it takes more than one day, and the price (it
-          starts at their estimate). Add a message if you want, then click <strong>Confirm and email</strong>. This makes the
-          unit project, the same as the turnover form would, so it shows on Projects, Schedule, and Billing. The property
-          manager gets an email with the date and price. If you changed the date or price, the email points that out.
+          If their date and the estimate are fine, click <strong>Confirm</strong>. That&apos;s it. To change the date, add an end
+          date, change the price, or add a message, click <strong>Change</strong> instead. Requests with Other work always open
+          the form, so you can price it.
+          <P>
+            Confirming makes the unit project, the same as the turnover form would, so it shows on Projects, Schedule, and
+            Billing. The property manager gets an email with the date, the price, and a calendar file they can open to add it to
+            their own calendar. If you changed the date or price, the email points that out.
+          </P>
         </Step>
         <Step n={3} title="Or decline it">
           Click <strong>Decline</strong> and give a reason. They see the reason in their email, and the request stays on their
@@ -92,7 +122,7 @@ export function PropertyManagerLinks() {
       <H3>Turnovers you already confirmed</H3>
       <P>
         They can ask to cancel or move a turnover until <strong>8 AM Eastern the day before it starts</strong>. After that they
-        have to email us. Their ask doesn&apos;t change anything until you answer it. You get a{" "}
+        have to call or email us. Their ask doesn&apos;t change anything until you answer it. You get a{" "}
         <strong>Property manager turnover change</strong> email, and it shows under{" "}
         <strong>Changes to confirmed turnovers</strong> at the top of the Requests tab.
       </P>
@@ -104,13 +134,27 @@ export function PropertyManagerLinks() {
         </Step>
         <Step n={2} title="2. Apply it">
           Click <strong>Apply</strong>. A cancel archives the unit project. A new date moves the unit&apos;s start and end
-          dates and keeps its length. The property manager gets an email.
+          dates and keeps its length, and their email includes an updated calendar file.
         </Step>
         <Step n={3} title="Or decline it">
           Click <strong>Decline</strong> and give a reason. The unit stays as it is and they get an email.
         </Step>
       </Steps>
       <P>Property managers can also take back an ask before you answer it. You get an email, and there&apos;s nothing to do.</P>
+
+      <H2>Reminders and the Monday email</H2>
+      <UL>
+        <LI>
+          <strong>For staff:</strong> weekday mornings, if any request or change has waited over a business day, the people set
+          on the Notifications page get a <strong>Property manager requests waiting</strong> email. It repeats each weekday until
+          they&apos;re answered.
+        </LI>
+        <LI>
+          <strong>For property managers:</strong> Monday mornings, each one gets <strong>Your turnovers this week</strong>: what
+          we&apos;re working on that week and anything still waiting on us. It&apos;s skipped when there&apos;s nothing. To stop
+          it for one person, open their row and uncheck <strong>Monday email</strong>.
+        </LI>
+      </UL>
 
       <H2>Keeping links safe</H2>
       <Table>
@@ -122,10 +166,16 @@ export function PropertyManagerLinks() {
         </THead>
         <tbody>
           <tr>
-            <TD>Their link got forwarded or shared</TD>
+            <TD>They lost their link</TD>
             <TD>
-              Open their row and click <strong>Make new link</strong>. The old link stops working and every device they signed in on
-              is signed out. Send them the new link.
+              Open their row and click <strong>Email them their link</strong>. They get the welcome email again.
+            </TD>
+          </tr>
+          <tr>
+            <TD>Their link or an email from us got forwarded</TD>
+            <TD>
+              Open their row and click <strong>Make new link</strong>. The old link stops working, every device they signed in on
+              is signed out, and the buttons in emails we already sent stop working. Then click <strong>Email them their link</strong>.
             </TD>
           </tr>
           <tr>
@@ -148,12 +198,14 @@ export function PropertyManagerLinks() {
         </tbody>
       </Table>
       <P>
-        <strong>Last opened</strong> on the Property Managers page shows the last time they used their link.
+        <strong>Last opened</strong> on the Property Managers page, and on the building&apos;s Details tab, shows the last time
+        they used their page.
       </P>
 
       <H2>Emails</H2>
       <P>
-        All of these are on the <A href="/erp/help/notifications/notifications-overview">Notifications</A> page under Turnovers.
+        All of these are on the <A href="/erp/help/notifications/notifications-overview">Notifications</A> page, under Turnovers
+        or Reminders.
       </P>
       <Table>
         <THead>
@@ -165,19 +217,24 @@ export function PropertyManagerLinks() {
         </THead>
         <tbody>
           <tr>
+            <TD>Property manager welcome</TD>
+            <TD>The property manager</TD>
+            <TD>You add them with Email them their link now checked, or click Email them their link.</TD>
+          </tr>
+          <tr>
             <TD>Property manager sign-in code</TD>
             <TD>The property manager</TD>
-            <TD>They open their link on a new device. This one can&apos;t be turned off, or they couldn&apos;t get in.</TD>
+            <TD>They open a bookmark on a new device. This one can&apos;t be turned off, or they couldn&apos;t get in.</TD>
           </tr>
           <tr>
             <TD>Property manager turnover request</TD>
             <TD>Staff set on the Notifications page</TD>
-            <TD>They request a turnover. Replying goes straight to them.</TD>
+            <TD>Someone books on their page or the website form. Replying goes straight to them.</TD>
           </tr>
           <tr>
             <TD>Turnover request confirmed / declined</TD>
             <TD>The property manager</TD>
-            <TD>You confirm or decline a request.</TD>
+            <TD>You confirm or decline a request. Confirmed emails include the calendar file.</TD>
           </tr>
           <tr>
             <TD>Property manager turnover change</TD>
@@ -188,6 +245,16 @@ export function PropertyManagerLinks() {
             <TD>Turnover change answered</TD>
             <TD>The property manager</TD>
             <TD>You apply or decline their cancel or new date.</TD>
+          </tr>
+          <tr>
+            <TD>Property manager weekly turnovers</TD>
+            <TD>Each property manager with Monday email on</TD>
+            <TD>Monday mornings, when they have something that week or waiting.</TD>
+          </tr>
+          <tr>
+            <TD>Property manager requests waiting</TD>
+            <TD>Staff set on the Notifications page</TD>
+            <TD>Weekday mornings, when something has waited over a business day.</TD>
           </tr>
         </tbody>
       </Table>
@@ -203,35 +270,47 @@ export function PropertyManagerLinks() {
         <tbody>
           <tr>
             <TD>A client wants to see or book their turnovers</TD>
-            <TD>Add them as a property manager and send them their link.</TD>
+            <TD>Add them as a property manager. The welcome email does the rest.</TD>
+          </tr>
+          <tr>
+            <TD>They can&apos;t find their page</TD>
+            <TD>Click Email them their link on their row.</TD>
           </tr>
           <tr>
             <TD>They say the code never came</TD>
-            <TD>Check their email on their row, and have them check spam. They can click Send a new code after a minute.</TD>
+            <TD>Check their email on their row, and have them check spam. Or send them the welcome email, whose button needs no code.</TD>
           </tr>
           <tr>
             <TD>They say the link doesn&apos;t work</TD>
-            <TD>Check Link on is checked. If you made a new link, send them that one.</TD>
+            <TD>Check Link on is checked. If you made a new link, send them the welcome email again.</TD>
           </tr>
           <tr>
             <TD>A new request shows up</TD>
-            <TD>Confirm with the date and price, or decline with a reason.</TD>
+            <TD>Click Confirm, or Change to adjust the date or price first, or Decline with a reason.</TD>
           </tr>
           <tr>
             <TD>The request has Other work</TD>
-            <TD>Add its cost to the price when confirming.</TD>
+            <TD>Click Confirm and add its cost to the price.</TD>
+          </tr>
+          <tr>
+            <TD>A website request comes from someone new</TD>
+            <TD>Confirm or decline it as usual. To give them their own page, add them as a property manager.</TD>
           </tr>
           <tr>
             <TD>They ask to cancel or move a confirmed turnover</TD>
             <TD>Clear its crew days on the Schedule if there are any, then Apply. Or Decline with a reason.</TD>
           </tr>
           <tr>
-            <TD>They see a finished unit as still in progress</TD>
+            <TD>They see a finished unit as still being worked on</TD>
             <TD>Mark that unit project Complete.</TD>
           </tr>
           <tr>
             <TD>They need a change after the deadline</TD>
-            <TD>They email us. Make the change on the unit and Schedule as usual.</TD>
+            <TD>They call or email us. Make the change on the unit and Schedule as usual.</TD>
+          </tr>
+          <tr>
+            <TD>They don&apos;t want the Monday email</TD>
+            <TD>Uncheck Monday email on their row.</TD>
           </tr>
         </tbody>
       </Table>

@@ -107,36 +107,36 @@ model Project {
   recurringContractPeriodId String?
   recurringContractPeriod   RecurringContractPeriod? @relation(fields: [recurringContractPeriodId], references: [id], onDelete: SetNull)
 
-  laborEntries            LaborEntry[]
-  materialEntries         MaterialEntry[]
-  distanceEntries         DistanceEntry[]
-  workOrders              ProjectWorkOrder[]
-  workOrderAttachments    ProjectWorkOrderAttachment[]
-  images                  ProjectImage[]
-  changeOrders            ProjectChangeOrder[]
-  sovScheduleRequests     ProjectSovScheduleRequest[]
-  hubspotSovAliases       HubSpotSovAlias[]
-  hubspotInvoiceMatches   HubSpotInvoiceLineItemMatch[]
-  contacts                ProjectContact[]
-  cois                    ProjectCoi[]
-  coiRequests             CoiRequest[]
+  laborEntries          LaborEntry[]
+  materialEntries       MaterialEntry[]
+  distanceEntries       DistanceEntry[]
+  workOrders            ProjectWorkOrder[]
+  workOrderAttachments  ProjectWorkOrderAttachment[]
+  images                ProjectImage[]
+  changeOrders          ProjectChangeOrder[]
+  sovScheduleRequests   ProjectSovScheduleRequest[]
+  hubspotSovAliases     HubSpotSovAlias[]
+  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
+  contacts              ProjectContact[]
+  cois                  ProjectCoi[]
+  coiRequests           CoiRequest[]
   /// Token for this project's public COI request link (/coi-request/[token]).
   /// Doesn't expire; the GC keeps using it for the life of the job.
-  coiRequestToken         String?                 @unique
-  contractorAssignments   ContractorAssignment[]
-  laborAssignments        ProjectLaborAssignment[]
-  checklistItems          ProjectChecklistItem[]
-  unitTurnoverChecklist   UnitTurnoverChecklist?
-  workOrderRecord         ProjectWorkOrderRecord?
-  qualityChecks           QualityCheck[]
-  dailySafetyChecks       DailySafetyCheck[]
-  contracts               ProjectContract[]
-  safetyIncidents         SafetyIncident[]
-  sov                     ProjectSOV?
-  dayAssignments          ProjectDayAssignment[]
-  workerDayAssignments    ProjectWorkerDayAssignment[]
-  scheduleSeries          ProjectScheduleSeries[]
-  notes                   ProjectNote[]
+  coiRequestToken       String?                       @unique
+  contractorAssignments ContractorAssignment[]
+  laborAssignments      ProjectLaborAssignment[]
+  checklistItems        ProjectChecklistItem[]
+  unitTurnoverChecklist UnitTurnoverChecklist?
+  workOrderRecord       ProjectWorkOrderRecord?
+  qualityChecks         QualityCheck[]
+  dailySafetyChecks     DailySafetyCheck[]
+  contracts             ProjectContract[]
+  safetyIncidents       SafetyIncident[]
+  sov                   ProjectSOV?
+  dayAssignments        ProjectDayAssignment[]
+  workerDayAssignments  ProjectWorkerDayAssignment[]
+  scheduleSeries        ProjectScheduleSeries[]
+  notes                 ProjectNote[]
 
   /// Link to the ERP user assigned as supervisor (used to filter supervisor dashboard)
   supervisorUserId String?
@@ -215,14 +215,14 @@ model Building {
   /// items back to the right building's units for billing-status automation.
   hubspotDealId String? @unique
 
-  turnoverRequests      TurnoverRequest[]
-  contractorAssignments ContractorAssignment[]
-  projects              Project[]
-  recurringContract     RecurringContract?
-  hubspotUnitAliases    HubSpotUnitAlias[]
-  hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
-  notes                 BuildingNote[]
-  propertyManagers      PropertyManagerBuilding[]
+  turnoverRequests        TurnoverRequest[]
+  contractorAssignments   ContractorAssignment[]
+  projects                Project[]
+  recurringContract       RecurringContract?
+  hubspotUnitAliases      HubSpotUnitAlias[]
+  hubspotInvoiceMatches   HubSpotInvoiceLineItemMatch[]
+  notes                   BuildingNote[]
+  propertyManagers        PropertyManagerBuilding[]
   propertyManagerRequests PropertyManagerRequest[]
   propertyManagerChanges  PropertyManagerChange[]
 
@@ -507,13 +507,13 @@ model RecurringContractPeriod {
   /// the period is generated so a later rate change doesn't rewrite history.
   /// One-off extras for the month live in `charges`. The default is only a
   /// safety net for older deployed code that doesn't set it.
-  amountCents   Int    @default(0)
+  amountCents   Int       @default(0)
   /// NOT_BILLED | BILLED | PAID
-  billingStatus String @default("NOT_BILLED")
+  billingStatus String    @default("NOT_BILLED")
   /// Stamped when billingStatus becomes PAID, cleared if it's moved back.
   /// The Finance tab's "Paid" view counts the month's revenue here. Months
   /// paid before this existed have none and fall back to periodStart.
-  paidAt DateTime?
+  paidAt        DateTime?
 
   /// Recurring-contract commission (5% of ACV months 1-12, 2% months
   /// 13-24, $0 after) is computed at read time from amountCents and
@@ -1156,11 +1156,11 @@ model ErpUser {
   role        String   @default("EMPLOYEE")
 
   supervisorProjects            Project[]
-  dayAssignments                ProjectDayAssignment[]          @relation("ProjectDayAssignmentSupervisor")
-  dayAssignmentsAsPM            ProjectDayAssignment[]          @relation("ProjectDayAssignmentPM")
-  supervisorChangeOrders        ProjectChangeOrder[]            @relation("ChangeOrderSupervisor")
-  coDayAssignments              ChangeOrderDayAssignment[]      @relation("ChangeOrderDayAssignmentSupervisor")
-  coDayAssignmentsAsPM          ChangeOrderDayAssignment[]      @relation("ChangeOrderDayAssignmentPM")
+  dayAssignments                ProjectDayAssignment[]        @relation("ProjectDayAssignmentSupervisor")
+  dayAssignmentsAsPM            ProjectDayAssignment[]        @relation("ProjectDayAssignmentPM")
+  supervisorChangeOrders        ProjectChangeOrder[]          @relation("ChangeOrderSupervisor")
+  coDayAssignments              ChangeOrderDayAssignment[]    @relation("ChangeOrderDayAssignmentSupervisor")
+  coDayAssignmentsAsPM          ChangeOrderDayAssignment[]    @relation("ChangeOrderDayAssignmentPM")
   projectNotes                  ProjectNote[]
   buildingNotes                 BuildingNote[]
   hubspotSovAliasesCreated      HubSpotSovAlias[]
@@ -1400,7 +1400,6 @@ model ProjectScheduleSeries {
   @@index([projectId])
 }
 
-
 model Employee {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -1596,12 +1595,12 @@ model PayrollPeriodClose {
   closedBy        String?
 }
 
-/// A logged block of time off for an employee. No separate request/approval
-/// status for now (every row that exists is treated as approved, matching
-/// how loosely most things work in this ERP). Deleting a row is how it gets
-/// cancelled. Blocks scheduling that employee on the calendar for any day
-/// inside [startDate, endDate], overridable by a PM/Admin the same way the
-/// quality checklist and safety check gates are (see canOverridePto).
+/// A block of time off for an employee. Starts PENDING and only blocks
+/// scheduling (and zeroes janitorial shifts) once APPROVED, see
+/// timeOffReviewBlock in timeOff.ts for who can approve. Blocks scheduling
+/// that employee on the calendar for any day inside [startDate, endDate],
+/// overridable by a PM/Admin the same way the quality checklist and safety
+/// check gates are (see canOverridePto). Deleting a row cancels it.
 model EmployeeTimeOff {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -1619,7 +1618,24 @@ model EmployeeTimeOff {
   type  String  @default("VACATION")
   notes String?
 
+  /// PENDING | APPROVED | DENIED. The DB default is APPROVED so rows from
+  /// before approvals existed stay approved; the API always creates PENDING.
+  status        String    @default("APPROVED")
+  /// Email of the ERP user who logged or last changed the dates
+  requestedBy   String?
+  /// Email of the ERP user who approved or denied it
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+  /// Set when an Admin let this go past the yearly paid day limit: PAID
+  /// (paid anyway) or UNPAID (the days past the limit are unpaid, see unpaidDays)
+  limitOverride String?
+  /// Days of this entry past the yearly limit that are unpaid. Taken off
+  /// salaried pay in payroll once approved, counted from the entry's last day back.
+  unpaidDays    Float     @default(0)
+
   @@index([employeeId, startDate, endDate])
+  @@index([status])
 }
 
 /// Tracks whether an offshore employee's fixed monthly pay has been paid for
@@ -1810,22 +1826,22 @@ model Contractor {
 
   /// The sub's other policies, from their certificate of insurance. Limits
   /// in cents. Expiration dates are midnight UTC labels.
-  glCarrier           String?
-  glPolicyNumber      String?
-  glExpiresAt         DateTime?
-  glOccurrenceCents   Int?
-  glAggregateCents    Int?
-  autoExpiresAt       DateTime?
-  autoLimitCents      Int?
-  umbrellaExpiresAt   DateTime?
-  umbrellaLimitCents  Int?
+  glCarrier                   String?
+  glPolicyNumber              String?
+  glExpiresAt                 DateTime?
+  glOccurrenceCents           Int?
+  glAggregateCents            Int?
+  autoExpiresAt               DateTime?
+  autoLimitCents              Int?
+  umbrellaExpiresAt           DateTime?
+  umbrellaLimitCents          Int?
   /// What their certificate says about Sueep. Null means not checked yet.
   sueepAdditionalInsured      Boolean?
   sueepWaiverOfSubrogation    Boolean?
   sueepPrimaryNoncontributory Boolean?
   /// When staff last checked their certificate, and who
-  coiReviewedAt DateTime?
-  coiReviewedBy String?
+  coiReviewedAt               DateTime?
+  coiReviewedBy               String?
 
   /// Links back to the subcontractor questionnaire this contractor originated from, if any (set via "Convert to Contractor" or the manual link picker on the profile).
   candidateApplicationId String?               @unique
@@ -1886,8 +1902,8 @@ model ContractorBackgroundCheckEvent {
   @@index([contractorId, createdAt])
 }
 
-/// A logged block of time off for a contractor, same shape and scheduling-block
-/// behavior as EmployeeTimeOff (see canOverridePto).
+/// A block of time off for a contractor, same shape, approval flow and
+/// scheduling-block behavior as EmployeeTimeOff (see canOverridePto).
 model ContractorTimeOff {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -1905,7 +1921,15 @@ model ContractorTimeOff {
   type  String  @default("VACATION")
   notes String?
 
+  /// Same approval fields as EmployeeTimeOff (no yearly limit for contractors)
+  status      String    @default("APPROVED")
+  requestedBy String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNote  String?
+
   @@index([contractorId, startDate, endDate])
+  @@index([status])
 }
 
 model ContractorAssignment {
@@ -2433,9 +2457,9 @@ model ManualHoursEntry {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   /// Midnight UTC date label
-  workDate DateTime
-  hours    Float
-  note     String?
+  workDate  DateTime
+  hours     Float
+  note      String?
   /// Who added it (ERP user email)
   createdBy String?
   /// Shared by the days of one date range entered together (total hours
@@ -2466,16 +2490,16 @@ model ManualHoursRepeat {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   /// First time's first and last day (the same day for a single day)
-  firstFrom DateTime
-  firstTo   DateTime
+  firstFrom     DateTime
+  firstTo       DateTime
   /// 7 or 14
-  everyDays Int
+  everyDays     Int
   /// Hours each time (a range's total, split across its working days)
-  hours     Float
-  note      String?
+  hours         Float
+  note          String?
   /// First day of the latest time already saved as entries
   filledThrough DateTime
-  createdBy String?
+  createdBy     String?
 
   entries ManualHoursEntry[]
 
@@ -2758,27 +2782,27 @@ model EmailLog {
   createdAt DateTime @default(now())
 
   /// EmailType key, see notificationTypes.ts
-  type    String
-  to      String[]
-  cc      String[] @default([])
-  bcc     String[] @default([])
-  replyTo String?
-  subject String
+  type           String
+  to             String[]
+  cc             String[] @default([])
+  bcc            String[] @default([])
+  replyTo        String?
+  subject        String
   /// SENT | FAILED | SKIPPED (email not set up on this server) | OFF (type turned off)
-  status  String
-  error   String?
+  status         String
+  error          String?
   /// Resend's id for the message
-  providerId String?
+  providerId     String?
   /// Final HTML as sent, kept so it can be viewed and resent
-  html    String?
+  html           String?
   /// Calendar invites and other attachments aren't stored, so these can't be resent
-  hasAttachments Boolean @default(false)
+  hasAttachments Boolean  @default(false)
   /// ERP page the email is about, e.g. /erp/projects/abc
-  link    String?
+  link           String?
   /// Set when this row is a resend of another
-  resentFromId String?
+  resentFromId   String?
   /// ERP user who resent it
-  sentBy  String?
+  sentBy         String?
 
   @@index([createdAt])
   @@index([type, createdAt])
@@ -2842,11 +2866,11 @@ model PropertyManager {
   /// Wrong guesses on the current code. A new code is needed after 5.
   signInCodeAttempts  Int       @default(0)
 
-  buildings PropertyManagerBuilding[]
-  devices   PropertyManagerDevice[]
+  buildings   PropertyManagerBuilding[]
+  devices     PropertyManagerDevice[]
   signInLinks PropertyManagerSignInLink[]
-  requests  PropertyManagerRequest[]
-  changes   PropertyManagerChange[]
+  requests    PropertyManagerRequest[]
+  changes     PropertyManagerChange[]
 }
 
 /// A browser a property manager signed in on with an emailed code, so they
@@ -2905,7 +2929,7 @@ model PropertyManagerRequest {
   propertyManagerId String?
   propertyManager   PropertyManager? @relation(fields: [propertyManagerId], references: [id], onDelete: SetNull)
   /// PORTAL (their private link) | WEBSITE (the public form on sueep.com)
-  source            String  @default("PORTAL")
+  source            String           @default("PORTAL")
   /// Copied from the property manager when sent, so it still reads right if
   /// they're deleted. On a WEBSITE request it's whatever they typed.
   requesterName     String

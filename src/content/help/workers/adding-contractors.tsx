@@ -22,7 +22,7 @@ export function AddingContractors() {
                 <br></br><br></br>
                 Sections start collapsed, with a status line on each; only the most urgent problem opens on its own.
                 <br></br><br></br>
-                The profile has five tabs: <strong>Overview</strong> (name, email, status, application and company profile), <strong>Compliance</strong> (insurance, background check, documents, licensing), <strong>Pay &amp; Personal</strong> (info form link, personal info, bank, SSN), <strong>Work</strong> (labor and time off), and <strong>Signing</strong>.
+                The profile has five tabs: <strong>Overview</strong> (name, email, status, application and company profile), <strong>Compliance</strong> (insurance, background check, documents, licensing), <strong>Pay &amp; Personal</strong> (info form link, personal info, bank, SSN), <strong>Work</strong> (labor and time off), and <strong>Signing</strong>. Time off for a contractor needs an Admin or PM to approve it, same as an employee&apos;s, but there&apos;s no yearly day limit.
                 <br></br><br></br>
                 On <strong>Overview</strong>, open <strong>General information</strong> to edit their name, email, and status (active or inactive). There&apos;s also a <strong>Delete contractor</strong> button there if you need to remove one entirely.
                 <Img src="/help/add_contractor/contractor_3.png" alt="Contractor" />

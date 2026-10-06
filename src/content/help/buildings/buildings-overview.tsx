@@ -27,7 +27,9 @@ export function BuildingsOverview() {
           A building&apos;s own page opens on the <strong>Details</strong> tab: its profile fields,
           plus a HubSpot deal search so turnover invoices can be matched to that deal, and (for
           roles that can edit pricing) who earns commission on this building&apos;s turnover work.
-          Below that is a shared <strong>Notes</strong> section the whole team can post to.
+          Below that, <strong>Property manager links</strong> shows which property managers have a
+          private page for this building, with <strong>+ Add</strong> to set one up, and a shared{" "}
+          <strong>Notes</strong> section the whole team can post to.
           <ImgPlaceholder label="Building Details tab" />
           <Callout type="info">
             Supervisors and employees see a read-only summary here instead of the editable form.

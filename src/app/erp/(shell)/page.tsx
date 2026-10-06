@@ -769,7 +769,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       // endDate >= today catches PTO already in progress, not just what
       // hasn't started yet. Capped short on purpose, see the widget below.
       prisma.employeeTimeOff.findMany({
-        where: { endDate: { gte: adminTodayStart } },
+        where: { status: { not: "DENIED" }, endDate: { gte: adminTodayStart } },
         orderBy: { startDate: "asc" },
         take: 8,
         select: {
@@ -777,6 +777,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           startDate: true,
           endDate: true,
           type: true,
+          status: true,
           employee: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
@@ -1435,6 +1436,11 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                               {t.employee.firstName} {t.employee.lastName}
                             </p>
                             <span className="flex shrink-0 items-center gap-2">
+                              {t.status === "PENDING" && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Pending
+                                </span>
+                              )}
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                                 {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
                               </span>
