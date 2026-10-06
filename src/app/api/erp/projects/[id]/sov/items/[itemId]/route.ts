@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
@@ -53,6 +54,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
   // itself isn't part of this request.
   await syncSovPercentDone(id);
   await syncProjectBillingFromSOV(id);
+  if (updated.completed && !existing.completed && updated.billingStatus === "NOT_BILLED") {
+    await notifyReadyToBill(id, [{ kind: "SOV line", title: updated.description, amountCents: updated.scheduledValueCents }]);
+  }
   return NextResponse.json(updated);
 }
 

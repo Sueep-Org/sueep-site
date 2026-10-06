@@ -90,7 +90,7 @@ export function JanitorialContracts() {
               The calendar looks and works like the Projects calendar: one chip per shift showing
               the start time, janitor, and building. When several janitors work the same building
               that day, they&apos;re grouped into one chip with the building name and a count; click
-              it to see each person&apos;s shift. A red ⚠ on the group means someone in it has time off.
+              it to see each person&apos;s shift. A red ⚠ on the group means someone in it has approved time off.
               Hover a chip for details. Use the arrows to change months and the filter icon to show one
               building or janitor.
             </LI>
@@ -131,7 +131,7 @@ export function JanitorialContracts() {
             </LI>
             <LI>
               Like the Projects calendar, a dashed chip is scheduled with no hours logged yet, and a solid chip has hours logged (the janitor clocked in, or a manager entered the worked times). ↻ marks a shift changed for that day and 1× a one-time shift. A faded, crossed-out
-              chip was skipped. A red <strong>⚠</strong> means that janitor has time off logged that
+              chip was skipped. A red <strong>⚠</strong> means that janitor has approved time off that
               day; the count at the top shows how many upcoming shifts need cover.
             </LI>
             <LI>
@@ -170,7 +170,7 @@ export function JanitorialContracts() {
             <LI><strong>Clocked:</strong> their actual clock-in to clock-out.</LI>
             <LI><strong>From schedule:</strong> they didn&apos;t clock in, so their scheduled hours are used.</LI>
             <LI><strong>No clock-out:</strong> they clocked in but not out, so the scheduled end time is used and it&apos;s flagged.</LI>
-            <LI><strong>Time off</strong> and <strong>Skipped</strong> count as 0 hours.</LI>
+            <LI><strong>Time off</strong> (approved only, pending requests don&apos;t count yet) and <strong>Skipped</strong> count as 0 hours.</LI>
             <LI>Shifts of 6 hours or more have a 30 minute unpaid break taken off (shown as &quot;after 30 min break&quot;).</LI>
             <LI>Clocking in or leaving more than 15 minutes off schedule, working an unscheduled shift, or a missing clock-out shows under <strong>Needs review</strong>.</LI>
           </UL>
@@ -188,7 +188,7 @@ export function JanitorialContracts() {
           A live view of today&apos;s shifts that refreshes every minute, so problems can be fixed while
           the shift is still happening.
           <UL>
-            <LI><strong>Needs attention</strong> lists anyone 15+ minutes late without clocking in, anyone with time off who needs a cover, anyone still clocked in after their shift ended (including last night), shifts that ended with no clock-in, and clock-ins far from the building.</LI>
+            <LI><strong>Needs attention</strong> lists anyone 15+ minutes late without clocking in, anyone with approved time off who needs a cover, anyone still clocked in after their shift ended (including last night), shifts that ended with no clock-in, and clock-ins far from the building.</LI>
             <LI>Each has <strong>Call</strong> and <strong>Text</strong> buttons (when their profile has a phone number), <strong>Find a cover</strong> (opens that building on the calendar), or <strong>Correct hours</strong>.</LI>
             <LI>Below that: who&apos;s clocked in now, who&apos;s coming up later, and who&apos;s done.</LI>
           </UL>

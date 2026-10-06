@@ -14,7 +14,9 @@ export function NotificationsOverview() {
       <Steps>
         <Step n={1} title="Turning an email on or off">
           Each email has a switch on the left. Turning it off stops it for everyone right away. Turned-off emails still
-          show in the Email Log as <strong>Turned off</strong>, so you can see what would have been sent.
+          show in the Email Log as <strong>Turned off</strong>, so you can see what would have been sent. A few emails
+          people need to get in, like the property manager sign-in code, have a greyed-out switch and can&apos;t be
+          turned off.
         </Step>
 
         <Step n={2} title="Changing who gets an email">
@@ -22,7 +24,7 @@ export function NotificationsOverview() {
           Click <strong>Edit</strong> to change the people you can control. What the list means depends on the email:
           <UL>
             <LI>
-              <strong>Send to:</strong> these people are the only recipients (for example Time off logged).
+              <strong>Send to:</strong> these people are the only recipients (for example Time off request).
             </LI>
             <LI>
               <strong>Also send to:</strong> the ERP picks people automatically (like the project&apos;s supervisor),

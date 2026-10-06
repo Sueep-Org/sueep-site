@@ -24,6 +24,7 @@ import { JanitorialGettingStarted } from "./janitorial/getting-started";
 import { FinanceDashboard } from "./finance/finance-dashboard";
 import { InsuranceOverview } from "./insurance/insurance-overview";
 import { CoiQuickStart } from "./insurance/coi-quick-start";
+import { PropertyManagerLinks } from "./turnover/property-manager-links";
 
 export type ArticleEntry = {
   slug: string;
@@ -196,6 +197,15 @@ export const registry: ArticleEntry[] = [
     description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring, and resolve items in Needs Review.",
     order: 1,
     component: BillingOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "turnover/property-manager-links",
+    title: "Property Manager Links",
+    category: "Turnovers & Buildings",
+    description: "Give property managers a private turnover page, confirm requests from their page and the website form, and handle cancels and new dates.",
+    order: 3,
+    component: PropertyManagerLinks,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
   },
   {

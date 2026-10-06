@@ -29,6 +29,14 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/property-manager-weekly",
+      "schedule": "30 11 * * 1"
+    },
+    {
+      "path": "/api/cron/property-manager-reminders",
+      "schedule": "30 13 * * 1-5"
+    },
+    {
       "path": "/api/cron/management-reminders",
       "schedule": "0 12 * * *"
     },

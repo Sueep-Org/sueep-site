@@ -39,6 +39,7 @@ export default async function NotificationsPage() {
       automatic: d.automatic,
       toMode: d.toMode,
       ccEditable: d.ccEditable,
+      alwaysOn: d.alwaysOn,
       setting: settings[type],
       defaults: { enabled: fallback.enabled, to: fallback.to, cc: fallback.cc },
       lastSentAt: lastSentBy.get(type) ?? null,

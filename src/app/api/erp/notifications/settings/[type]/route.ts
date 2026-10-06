@@ -38,6 +38,9 @@ export async function PUT(req: Request, ctx: Ctx) {
   if (!isEmailType(type)) return NextResponse.json({ error: "Unknown email type" }, { status: 404 });
   const def = NOTIFICATIONS[type];
   const current = await getNotificationSetting(type);
+  if (def.alwaysOn && body.enabled === false) {
+    return NextResponse.json({ error: "This email can't be turned off" }, { status: 400 });
+  }
   const enabled = body.enabled === undefined ? current.enabled : body.enabled === true;
   const to = body.to === undefined || !def.toMode ? current.to : parseEmailList(body.to);
   const cc = body.cc === undefined || !def.ccEditable ? current.cc : parseEmailList(body.cc);

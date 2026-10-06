@@ -617,6 +617,11 @@ const TIME_OFF_TYPE_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
+function timeOffRangeLabel(startDate: Date, endDate: Date): string {
+  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return startDate.getTime() === endDate.getTime() ? fmt(startDate) : `${fmt(startDate)} - ${fmt(endDate)}`;
+}
+
 export function buildTimeOffLoggedEmail(params: {
   personName: string;
   personKind: "Employee" | "Contractor";
@@ -625,19 +630,58 @@ export function buildTimeOffLoggedEmail(params: {
   endDate: Date;
   days: number;
   notes: string | null;
+  requestedBy?: string | null;
+  limitOverride?: string | null;
+  unpaidDays?: number;
 }) {
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  const range = params.startDate.getTime() === params.endDate.getTime() ? fmt(params.startDate) : `${fmt(params.startDate)} – ${fmt(params.endDate)}`;
+  const range = timeOffRangeLabel(params.startDate, params.endDate);
   const typeLabel = TIME_OFF_TYPE_LABELS[params.type] ?? params.type;
   const dayLabel = `${params.days} day${params.days === 1 ? "" : "s"}`;
+  const override =
+    params.limitOverride === "UNPAID"
+      ? `Over the yearly limit, Admin override: ${params.unpaidDays} day${params.unpaidDays === 1 ? "" : "s"} unpaid`
+      : params.limitOverride === "PAID"
+        ? "Over the yearly limit, Admin override: paid"
+        : null;
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">Time off logged</h2>
+      <h2 style="margin-bottom:12px;color:#E73C6E">Time off request needs approval</h2>
       <p><strong>${escapeHtml(params.personName)}</strong> (${params.personKind})</p>
       <p><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
       <p><strong>Dates:</strong> ${escapeHtml(range)} (${dayLabel})</p>
+      ${override ? `<p><strong>${escapeHtml(override)}</strong></p>` : ""}
       ${params.notes ? `<p><strong>Notes:</strong> ${escapeHtml(params.notes)}</p>` : ""}
+      ${params.requestedBy ? `<p><strong>Requested by:</strong> ${escapeHtml(params.requestedBy)}</p>` : ""}
+      <p>Approve or deny it on their Time Off tab in the ERP.</p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
+export function buildTimeOffReviewedEmail(params: {
+  personName: string;
+  decision: "APPROVED" | "DENIED";
+  type: string;
+  startDate: Date;
+  endDate: Date;
+  days: number;
+  reviewedBy: string;
+  note: string | null;
+}) {
+  const range = timeOffRangeLabel(params.startDate, params.endDate);
+  const typeLabel = TIME_OFF_TYPE_LABELS[params.type] ?? params.type;
+  const dayLabel = `${params.days} day${params.days === 1 ? "" : "s"}`;
+  const word = params.decision === "APPROVED" ? "approved" : "denied";
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Time off ${word}</h2>
+      <p><strong>${escapeHtml(params.personName)}</strong></p>
+      <p><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
+      <p><strong>Dates:</strong> ${escapeHtml(range)} (${dayLabel})</p>
+      <p><strong>${params.decision === "APPROVED" ? "Approved" : "Denied"} by:</strong> ${escapeHtml(params.reviewedBy)}</p>
+      ${params.note ? `<p><strong>Note:</strong> ${escapeHtml(params.note)}</p>` : ""}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
     </div>
   `;
@@ -816,6 +860,207 @@ export function buildClockLinkEmail(params: { firstName: string; url: string }) 
   `;
 }
 
+export function buildPropertyManagerCodeEmail(params: { firstName: string; code: string }) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Your sign-in code</h2>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
+    <p>Enter this code on your Sueep turnover page:</p>
+    <p style="margin:20px 0;font-size:28px;font-weight:bold;letter-spacing:6px;color:#111827">${escapeHtml(params.code)}</p>
+    <p>It works for 15 minutes. You'll only need a code once on each phone or computer.</p>
+    <p style="font-size:12px;color:#555">Didn't ask for this? You can ignore this email.</p>
+  `;
+}
+
+/** To staff: a new turnover request, one or more units at one building. */
+export function buildPropertyManagerRequestEmail(params: {
+  requester: string;
+  building: string;
+  start: string;
+  units: { unit: string; layout: string; work: string[]; estimate: string; moveOut: string | null; moveIn: string | null }[];
+  total: string | null;
+  notes: string | null;
+  url: string;
+}) {
+  const line = (label: string, value: string | null) => (value ? `<strong>${label}:</strong> ${escapeHtml(value)}<br>` : "");
+  const units = params.units
+    .map(
+      (u) =>
+        `<p>${line("Unit", `${u.unit} (${u.layout})`)}${line("Work", u.work.join(", "))}${line("Move-out", u.moveOut)}${line("Move-in", u.moveIn)}${line("Estimate", u.estimate)}</p>`,
+    )
+    .join("");
+  const count = params.units.length;
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">New turnover request${count > 1 ? ` (${count} units)` : ""}</h2>
+    <p><strong>${escapeHtml(params.requester)}</strong> asked for ${count > 1 ? `${count} turnovers` : "a turnover"} at <strong>${escapeHtml(params.building)}</strong>, starting <strong>${escapeHtml(params.start)}</strong>.</p>
+    ${units}
+    ${params.total ? `<p><strong>Total estimate:</strong> ${escapeHtml(params.total)}</p>` : ""}
+    ${params.notes ? `<p style="white-space:pre-line"><strong>Notes:</strong> ${escapeHtml(params.notes)}</p>` : ""}
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open requests</a></p>
+  `;
+}
+
+/** To staff: property manager requests and changes nobody has answered. */
+export function buildPropertyManagerWaitingEmail(params: { items: { what: string; from: string; sent: string }[]; url: string }) {
+  const rows = params.items
+    .map(
+      (i) =>
+        `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">${escapeHtml(i.what)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee">${escapeHtml(i.from)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap">${escapeHtml(i.sent)}</td></tr>`,
+    )
+    .join("");
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Property managers are waiting</h2>
+    <p>These have waited over a business day for an answer:</p>
+    <table style="border-collapse:collapse;font-size:14px;width:100%">
+      <tr><th align="left" style="padding:6px 8px;border-bottom:2px solid #ddd">What</th><th align="left" style="padding:6px 8px;border-bottom:2px solid #ddd">From</th><th align="left" style="padding:6px 8px;border-bottom:2px solid #ddd">Sent</th></tr>
+      ${rows}
+    </table>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open requests</a></p>
+  `;
+}
+
+/** Monday email to a property manager: their turnovers this week, and anything waiting on us. */
+export function buildPropertyManagerWeeklyEmail(params: {
+  firstName: string;
+  weekLabel: string;
+  thisWeek: { what: string; dates: string; status: string }[];
+  waiting: { what: string; detail: string }[];
+  url: string | null;
+  contact: SueepContact | null;
+}) {
+  const cell = "padding:6px 8px;border-bottom:1px solid #eee";
+  const week = params.thisWeek.length
+    ? `<table style="border-collapse:collapse;font-size:14px;width:100%">${params.thisWeek
+        .map((t) => `<tr><td style="${cell}"><strong>${escapeHtml(t.what)}</strong></td><td style="${cell}">${escapeHtml(t.dates)}</td><td style="${cell}">${escapeHtml(t.status)}</td></tr>`)
+        .join("")}</table>`
+    : "<p>Nothing booked this week.</p>";
+  const waiting = params.waiting.length
+    ? `<p style="margin-top:20px"><strong>Waiting for us to confirm:</strong></p><ul style="padding-left:20px">${params.waiting
+        .map((w) => `<li>${escapeHtml(w.what)}: ${escapeHtml(w.detail)}</li>`)
+        .join("")}</ul>`
+    : "";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Your turnovers this week</h2>
+    <p>Hi ${escapeHtml(params.firstName)}, here&#39;s what&#39;s happening ${escapeHtml(params.weekLabel)}:</p>
+    ${week}
+    ${waiting}
+    ${seeMyTurnoversButton(params.url)}
+    ${contactLine(params.contact)}
+  `;
+}
+
+/** Who at Sueep a property manager should call. */
+export type SueepContact = { name: string | null; phone: string | null; email: string | null };
+
+/** "Questions? Call David Rodriguez at (215) 555-0100 or email david@sueep.com." */
+function contactLine(contact: SueepContact | null | undefined): string {
+  if (!contact?.name && !contact?.phone && !contact?.email) return "";
+  const who = contact.name ? escapeHtml(contact.name) : "us";
+  const ways = [
+    contact.phone ? `call ${who} at <a href="tel:${escapeHtml(contact.phone.replace(/[^\d+]/g, ""))}">${escapeHtml(contact.phone)}</a>` : null,
+    contact.email ? `email <a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a>` : null,
+  ].filter(Boolean);
+  return ways.length ? `<p>Questions? ${ways.join(" or ")}.</p>` : "";
+}
+
+function seeMyTurnoversButton(url: string | null): string {
+  return url ? `<p style="margin:20px 0"><a href="${escapeHtml(url)}" style="${BUTTON_STYLE}">See my turnovers</a></p>` : "";
+}
+
+/** First email a property manager gets: what the page is and how to use it, in plain steps. */
+export function buildPropertyManagerWelcomeEmail(params: { firstName: string; buildings: string[]; url: string; contact: SueepContact | null }) {
+  const buildings = params.buildings.map((b) => `<strong>${escapeHtml(b)}</strong>`);
+  const list = buildings.length > 1 ? `${buildings.slice(0, -1).join(", ")} and ${buildings[buildings.length - 1]}` : (buildings[0] ?? "your buildings");
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Your Sueep turnover page</h2>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
+    <p>We set up a page where you can see and book turnovers for ${list}. No password needed.</p>
+    <ol style="padding-left:20px;line-height:1.7">
+      <li>Click the button below to open your page.</li>
+      <li>Bookmark it, or save it to your phone&#39;s home screen.</li>
+      <li>To book a turnover, tap <strong>Book a turnover</strong>. We email you to confirm the date and price.</li>
+    </ol>
+    ${seeMyTurnoversButton(params.url)}
+    <p style="font-size:12px;color:#555">If your page ever asks for a code, we&#39;ll email you one. Please don&#39;t forward this email, since the button signs you in.</p>
+    ${contactLine(params.contact)}
+  `;
+}
+
+/** To the property manager. `changes` lists what staff changed from the request, e.g. the date or price. */
+export function buildPropertyManagerConfirmedEmail(params: {
+  firstName: string;
+  building: string;
+  unit: string;
+  dates: string;
+  price: string;
+  changes: string[];
+  message: string | null;
+  url: string | null;
+  contact?: SueepContact | null;
+}) {
+  const changes = params.changes.length
+    ? `<p style="background:#fef3c7;padding:10px 12px;border-radius:6px">${params.changes.map(escapeHtml).join("<br>")}</p>`
+    : "";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Turnover scheduled</h2>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
+    <p>Unit <strong>${escapeHtml(params.unit)}</strong> at <strong>${escapeHtml(params.building)}</strong> is scheduled for <strong>${escapeHtml(params.dates)}</strong>.</p>
+    <p><strong>Price:</strong> ${escapeHtml(params.price)}</p>
+    ${changes}
+    <p style="font-size:13px;color:#555">To add it to your calendar, open the attached file.</p>
+    ${params.message ? `<p style="white-space:pre-line">${escapeHtml(params.message)}</p>` : ""}
+    ${seeMyTurnoversButton(params.url)}
+    ${contactLine(params.contact)}
+  `;
+}
+
+export function buildPropertyManagerDeclinedEmail(params: {
+  firstName: string;
+  building: string;
+  unit: string;
+  reason: string;
+  message: string | null;
+  url: string | null;
+  contact?: SueepContact | null;
+}) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">We can't take this turnover</h2>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
+    <p>We aren't able to do your request for unit <strong>${escapeHtml(params.unit)}</strong> at <strong>${escapeHtml(params.building)}</strong>.</p>
+    <p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p>
+    ${params.message ? `<p style="white-space:pre-line">${escapeHtml(params.message)}</p>` : ""}
+    ${seeMyTurnoversButton(params.url)}
+    ${contactLine(params.contact)}
+  `;
+}
+
+/** To staff when a property manager cancels or moves something. `lines` are already plain sentences. */
+export function buildPropertyManagerChangeEmail(params: { title: string; lines: string[]; url: string }) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">${escapeHtml(params.title)}</h2>
+    ${params.lines.map((l) => `<p style="white-space:pre-line">${escapeHtml(l)}</p>`).join("")}
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open requests</a></p>
+  `;
+}
+
+/** To the property manager when staff apply or decline their cancel or new date. */
+export function buildPropertyManagerChangeAnsweredEmail(params: {
+  firstName: string;
+  title: string;
+  body: string;
+  message: string | null;
+  url: string | null;
+  contact?: SueepContact | null;
+}) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">${escapeHtml(params.title)}</h2>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
+    <p>${escapeHtml(params.body)}</p>
+    ${params.message ? `<p style="white-space:pre-line">${escapeHtml(params.message)}</p>` : ""}
+    ${seeMyTurnoversButton(params.url)}
+    ${contactLine(params.contact)}
+  `;
+}
+
 export function buildCoiRequestAlertEmail(params: {
   requesterName: string;
   requesterCompany: string | null;
@@ -830,6 +1075,33 @@ export function buildCoiRequestAlertEmail(params: {
     <p><strong>Project:</strong> ${escapeHtml(params.project)}<br>
        <strong>For:</strong> ${params.holders.map(escapeHtml).join(", ")}${params.neededBy ? `<br><strong>Needed by:</strong> ${escapeHtml(params.neededBy)}` : ""}</p>
     <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open in the ERP</a></p>
+  `;
+}
+
+export function buildReadyToBillEmail(params: {
+  jobTitle: string;
+  items: { kind: string; title: string; amountCents: number | null }[];
+  projectUrl: string | null;
+  billingUrl: string | null;
+}) {
+  const rows = params.items
+    .map(
+      (i) => `<tr>
+        <td style="padding:6px 12px 6px 0;color:#6b7280">${escapeHtml(i.kind)}</td>
+        <td style="padding:6px 12px 6px 0">${escapeHtml(i.title)}</td>
+        <td style="padding:6px 0;text-align:right">${i.amountCents != null ? formatUsd(i.amountCents) : ""}</td>
+      </tr>`,
+    )
+    .join("");
+  const buttons = [
+    params.billingUrl ? `<a href="${escapeHtml(params.billingUrl)}" style="${BUTTON_STYLE}">Open Billing</a>` : "",
+    params.projectUrl ? `<a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE};margin-left:8px">View project</a>` : "",
+  ].join("");
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Ready to bill</h2>
+    <p><strong>${escapeHtml(params.jobTitle)}</strong> has work ready to invoice.</p>
+    <table style="border-collapse:collapse;font-size:14px;margin:12px 0">${rows}</table>
+    ${buttons ? `<p style="margin:20px 0">${buttons}</p>` : ""}
   `;
 }
 

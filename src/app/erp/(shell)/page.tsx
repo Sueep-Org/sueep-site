@@ -5,7 +5,7 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager, canManageInsurance } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager, canManageInsurance, canManagePropertyManagers } from "@/lib/erpAuth";
 import { loadCoiAlerts } from "@/lib/erp/coiAlerts";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
@@ -769,7 +769,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       // endDate >= today catches PTO already in progress, not just what
       // hasn't started yet. Capped short on purpose, see the widget below.
       prisma.employeeTimeOff.findMany({
-        where: { endDate: { gte: adminTodayStart } },
+        where: { status: { not: "DENIED" }, endDate: { gte: adminTodayStart } },
         orderBy: { startDate: "asc" },
         take: 8,
         select: {
@@ -777,6 +777,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           startDate: true,
           endDate: true,
           type: true,
+          status: true,
           employee: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
@@ -1121,6 +1122,23 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       </div>
     ) : null;
 
+    // Turnovers property managers asked for on their link, waiting on staff.
+    const pmRequestCount = canManagePropertyManagers(role)
+      ? (await prisma.propertyManagerRequest.count({ where: { status: "REQUESTED" } })) + (await prisma.propertyManagerChange.count({ where: { status: "OPEN" } }))
+      : 0;
+    const pmRequestsWidget =
+      pmRequestCount > 0 ? (
+        <Link
+          href="/erp/property-managers/requests"
+          className="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-white px-4 py-3 shadow-sm transition hover:bg-violet-50/40"
+        >
+          <h3 className="text-sm font-semibold text-gray-900" title="Turnovers property managers requested on their link, and cancels or new dates they asked for, waiting for someone to answer">
+            Turnover requests to answer
+          </h3>
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">{pmRequestCount}</span>
+        </Link>
+      ) : null;
+
     const noSupervisorWidget = (
       <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
@@ -1311,6 +1329,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             </div>
 
             {needsLaborLoggedWidget}
+            {pmRequestsWidget}
             {coiAlertsWidget}
           </div>
         </div>
@@ -1417,6 +1436,11 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                               {t.employee.firstName} {t.employee.lastName}
                             </p>
                             <span className="flex shrink-0 items-center gap-2">
+                              {t.status === "PENDING" && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  Pending
+                                </span>
+                              )}
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                                 {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
                               </span>

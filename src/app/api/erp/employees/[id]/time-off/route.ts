@@ -6,15 +6,17 @@ import {
   findOverlappingTimeOff,
   overlapErrorMessage,
   timeOffEntryDays,
-  paidTimeOffDaysUsed,
-  paidTimeOffLimitError,
+  checkPaidTimeOffLimit,
+  parseLimitOverride,
 } from "@/lib/erp/timeOff";
+import { getErpAuth } from "@/lib/erpAuth";
 import { sendEmail, buildTimeOffLoggedEmail } from "@/lib/email";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const auth = await getErpAuth();
   const employee = await prisma.employee.findUnique({ where: { id }, select: { id: true, firstName: true, lastName: true } });
   if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
@@ -36,16 +38,18 @@ export async function POST(req: Request, ctx: Ctx) {
   const typeRaw = String(body.type || "VACATION").toUpperCase();
   const type = TIME_OFF_TYPES.includes(typeRaw as (typeof TIME_OFF_TYPES)[number]) ? typeRaw : "VACATION";
 
-  // Employees get 15 paid days off per calendar year — beyond that, further
-  // time off can only be logged as Unpaid. Contractors aren't subject to
-  // this (no cap check on that route).
-  if (type !== "UNPAID") {
-    const year = startDate.getUTCFullYear();
-    const used = await paidTimeOffDaysUsed(id, year);
-    const adding = timeOffEntryDays({ startDate, endDate, type });
-    const limitError = paidTimeOffLimitError(used, adding, year);
-    if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
-  }
+  // Employees get 15 paid days off per calendar year. Past that it's refused
+  // unless an Admin overrides it, paid or unpaid. Contractors aren't subject
+  // to this (no cap check on that route).
+  const limit = await checkPaidTimeOffLimit({
+    employeeId: id,
+    startDate,
+    endDate,
+    type,
+    override: parseLimitOverride(body.limitOverride),
+    role: auth?.role,
+  });
+  if (!limit.ok) return NextResponse.json(limit.body, { status: limit.status });
 
   try {
     const overlap = await findOverlappingTimeOff(id, startDate, endDate);
@@ -61,6 +65,10 @@ export async function POST(req: Request, ctx: Ctx) {
         endDate,
         type,
         notes,
+        status: "PENDING",
+        requestedBy: auth?.email ?? null,
+        limitOverride: limit.limitOverride,
+        unpaidDays: limit.unpaidDays,
       },
     });
 
@@ -68,7 +76,7 @@ export async function POST(req: Request, ctx: Ctx) {
       await sendEmail({
         type: "TIME_OFF_LOGGED",
         link: `/erp/employees/${id}`,
-        subject: `Time off logged: ${employee.firstName} ${employee.lastName}`,
+        subject: `Time off request: ${employee.firstName} ${employee.lastName}`,
         html: buildTimeOffLoggedEmail({
           personName: `${employee.firstName} ${employee.lastName}`,
           personKind: "Employee",
@@ -77,6 +85,9 @@ export async function POST(req: Request, ctx: Ctx) {
           endDate,
           days: timeOffEntryDays({ startDate, endDate, type }),
           notes,
+          requestedBy: auth?.email ?? null,
+          limitOverride: limit.limitOverride,
+          unpaidDays: limit.unpaidDays,
         }),
       });
     } catch (e) {

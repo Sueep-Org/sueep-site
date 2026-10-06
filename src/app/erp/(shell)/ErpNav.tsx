@@ -528,6 +528,7 @@ const projectGroupItems: NavItem[] = [
   },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
   { href: "/erp/janitorial", label: "Janitorial Contracts", roles: FINANCE_UP, icon: BroomIcon },
+  { href: "/erp/property-managers", label: "Property Managers", roles: FINANCE_UP, icon: IdCardIcon },
 ];
 
 const billingGroupItems: NavItem[] = [

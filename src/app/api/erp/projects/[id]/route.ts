@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isPaidStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
+import { isBilledStatus, isPaidStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { getErpAuth, canOverrideQualityChecklist, canEditPricing } from "@/lib/erpAuth";
 import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
+import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
@@ -287,6 +288,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });
+
+    // Skipped when it's already billed or paid, e.g. HubSpot moved it there first.
+    if (data.status === "COMPLETE" && existing.status !== "COMPLETE" && !isPaidStatus(project.billingStatus) && !isBilledStatus(project.billingStatus)) {
+      await notifyReadyToBill(id, [{ kind: "Project", title: "Project marked complete", amountCents: project.contractValueCents }]);
+    }
 
     if (becomingComplete && existing.turnoverRequestId) {
       const tr = await prisma.turnoverRequest.findUnique({

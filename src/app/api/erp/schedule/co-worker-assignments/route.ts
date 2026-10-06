@@ -109,7 +109,8 @@ export async function POST(req: Request) {
   // 409-and-explain shape as the background-check guard above. PM/ADMIN/
   // SALES can override, same role set as the project route.
   if ((employeeId || contractorId) && (!auth || !canOverridePto(auth.role))) {
-    const overlapWhere = { startDate: { lte: date }, endDate: { gte: date } };
+    // Only approved time off blocks; pending requests don't yet.
+    const overlapWhere = { status: "APPROVED", startDate: { lte: date }, endDate: { gte: date } };
     const conflictingPto = employeeId
       ? await prisma.employeeTimeOff.findFirst({ where: { employeeId, ...overlapWhere } })
       : await prisma.contractorTimeOff.findFirst({ where: { contractorId: contractorId!, ...overlapWhere } });

@@ -245,7 +245,8 @@ export async function POST(req: Request) {
   // safety-check gates.
   if ((employeeId || contractorId) && (!auth || !canOverridePto(auth.role))) {
     const datesToCheck = seriesDates ?? [date];
-    const overlapWhere = { OR: datesToCheck.map((d) => ({ startDate: { lte: d }, endDate: { gte: d } })) };
+    // Only approved time off blocks; pending requests don't yet.
+    const overlapWhere = { status: "APPROVED", OR: datesToCheck.map((d) => ({ startDate: { lte: d }, endDate: { gte: d } })) };
     const conflictingPto = employeeId
       ? await prisma.employeeTimeOff.findFirst({ where: { employeeId, ...overlapWhere } })
       : await prisma.contractorTimeOff.findFirst({ where: { contractorId: contractorId!, ...overlapWhere } });

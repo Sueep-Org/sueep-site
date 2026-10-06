@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { notifyReadyToBill, type ReadyToBillItem } from "@/lib/erp/notifyReadyToBill";
 
 // Billed and paid are distinct — a request can be fully invoiced (BILLED)
 // without the client having actually paid yet. Only PAID counts as paid for
@@ -118,10 +119,24 @@ export function sovItemDateChanges(
  * `on` (the day of that work). Lines already done keep their own date. */
 export async function markSovItemsCompleted(ids: string[], on: Date) {
   if (ids.length === 0) return;
-  await prisma.projectSOVItem.updateMany({
+  const newlyDone = await prisma.projectSOVItem.findMany({
     where: { id: { in: ids }, completed: false },
+    select: { id: true, description: true, scheduledValueCents: true, billingStatus: true, sov: { select: { projectId: true } } },
+  });
+  if (newlyDone.length === 0) return;
+  await prisma.projectSOVItem.updateMany({
+    where: { id: { in: newlyDone.map((i) => i.id) }, completed: false },
     data: { completed: true, completedAt: on },
   });
+  // One ready to bill email per project, listing every line this finished.
+  const byProject = new Map<string, ReadyToBillItem[]>();
+  for (const i of newlyDone) {
+    if (i.billingStatus !== "NOT_BILLED") continue;
+    const list = byProject.get(i.sov.projectId) ?? [];
+    list.push({ kind: "SOV line", title: i.description, amountCents: i.scheduledValueCents });
+    byProject.set(i.sov.projectId, list);
+  }
+  for (const [projectId, items] of byProject) await notifyReadyToBill(projectId, items);
 }
 
 /** Marks one SOV line paid (a payment matched from HubSpot), on the day

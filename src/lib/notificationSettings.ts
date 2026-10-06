@@ -15,7 +15,7 @@ export async function getNotificationSetting(type: EmailType): Promise<ResolvedS
   try {
     const row = await prisma.notificationSetting.findUnique({ where: { type } });
     if (!row) return defaultSetting(type);
-    return { enabled: row.enabled, to: row.to, cc: NOTIFICATIONS[type].ccEditable ? row.cc : [], customized: true };
+    return { enabled: row.enabled || NOTIFICATIONS[type].alwaysOn, to: row.to, cc: NOTIFICATIONS[type].ccEditable ? row.cc : [], customized: true };
   } catch (e) {
     console.error(`Could not read notification setting ${type}, using defaults`, e);
     return defaultSetting(type);
@@ -40,7 +40,7 @@ export async function loadAllSettings(): Promise<{ settings: Record<EmailType, R
   for (const type of Object.keys(NOTIFICATIONS) as EmailType[]) {
     const row = byType.get(type);
     settings[type] = row
-      ? { enabled: row.enabled, to: row.to, cc: NOTIFICATIONS[type].ccEditable ? row.cc : [], customized: true }
+      ? { enabled: row.enabled || NOTIFICATIONS[type].alwaysOn, to: row.to, cc: NOTIFICATIONS[type].ccEditable ? row.cc : [], customized: true }
       : defaultSetting(type);
   }
   const backup = byType.get(BACKUP_PMS_KEY);

@@ -15,7 +15,7 @@ export async function loadJanitorialShifts(start: Date, end: Date): Promise<Jani
       select: { id: true, status: true, startDate: true, endDate: true, building: { select: { name: true } } },
     }),
     prisma.employeeTimeOff.findMany({
-      where: { startDate: { lte: end }, endDate: { gte: start } },
+      where: { status: "APPROVED", startDate: { lte: end }, endDate: { gte: start } },
       select: { employeeId: true, startDate: true, endDate: true, type: true },
     }),
   ]);

@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DocusealForm } from "@docuseal/react";
-import { computeTurnoverPricing } from "@/lib/turnoverPricing";
-import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -20,17 +17,13 @@ const UNIT_QUALITY_OPTIONS = [
 type BedroomValue = (typeof BEDROOM_OPTIONS)[number];
 type BathroomValue = (typeof BATHROOM_OPTIONS)[number];
 
-const TOTAL_STEPS = 4;
-const STEP_LABELS = ["Building", "Unit & Services", "Your Info", "Sign Contract"] as const;
+const TOTAL_STEPS = 3;
+const STEP_LABELS = ["Building", "Unit & Services", "Your Info"] as const;
 
 export interface BuildingOption {
   id: string;
   name: string;
   address: string;
-  pmName?: string | null;
-  pmEmail?: string | null;
-  pmPhone?: string | null;
-  pricingPackage?: unknown;
 }
 
 interface FormState {
@@ -47,12 +40,14 @@ interface FormState {
   carpetCleaning: boolean;
   otherWork: boolean;
   otherDescription: string;
-  otherPrice: string;
   startDate: string;
   endDate: string;
+  notes: string;
   pmName: string;
   pmEmail: string;
   pmPhone: string;
+  /** Hidden from people; only bots fill it in */
+  website: string;
 }
 
 const initial: FormState = {
@@ -69,12 +64,13 @@ const initial: FormState = {
   carpetCleaning: false,
   otherWork: false,
   otherDescription: "",
-  otherPrice: "",
   startDate: "",
   endDate: "",
+  notes: "",
   pmName: "",
   pmEmail: "",
   pmPhone: "",
+  website: "",
 };
 
 function StepIndicator({ current }: { current: number }) {
@@ -137,13 +133,6 @@ function ServiceCheckbox({
   );
 }
 
-function dollarsToCents(value: string): number {
-  const normalized = value.replace(/[$,\s]/g, "");
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.round(parsed * 100);
-}
-
 function bedroomsToNumber(value: BedroomValue): number {
   if (value === "Studio") return 0;
   if (value === "4+") return 4;
@@ -165,9 +154,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [signingEmbedSrc, setSigningEmbedSrc] = useState("");
-  const [signingLoading, setSigningLoading] = useState(false);
-  const [signingSubmissionId, setSigningSubmissionId] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
 
   const selectedBuilding = buildings.find((b) => b.id === form.buildingId) ?? null;
 
@@ -175,24 +162,15 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
     setForm((prev) => ({ ...prev, ...updates }));
   }
 
-  function handleBuildingChange(id: string) {
-    const building = buildings.find((b) => b.id === id);
-    patch({
-      buildingId: id,
-      pmName: building?.pmName ?? "",
-      pmEmail: building?.pmEmail ?? "",
-      pmPhone: building?.pmPhone ?? "",
-    });
-  }
-
   function validateStep(s: number): string {
     if (s === 1 && !form.buildingId) return "Please select a building.";
     if (s === 2) {
-      if (!form.startDate) return "Target start date is required.";
-      if (form.otherWork) {
-        if (!form.otherDescription.trim()) return "Please describe the other work needed.";
-        if (!form.otherPrice.trim() || Number(form.otherPrice) <= 0) return "Please enter a price for the other work.";
+      if (!form.isCommonArea && !form.unitNumber.trim()) return "Please enter the unit number.";
+      if (!form.fullClean && !form.fullPaint && !form.touchUpPaint && !form.carpetCleaning && !form.otherWork) {
+        return "Please pick at least one service.";
       }
+      if (!form.startDate) return "Target start date is required.";
+      if (form.otherWork && !form.otherDescription.trim()) return "Please describe the other work needed.";
     }
     if (s === 3) {
       if (!form.pmName.trim()) return "Your name is required.";
@@ -204,15 +182,10 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
   function handleBack() {
     setError("");
     if (step === 1) { onBack(); return; }
-    if (step === 4) {
-      setSigningEmbedSrc("");
-      setStep(3);
-      return;
-    }
     setStep((s) => s - 1);
   }
 
-  async function handleNext() {
+  function handleNext() {
     const err = validateStep(step);
     if (err) { setError(err); return; }
     setError("");
@@ -223,111 +196,46 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
     const err = validateStep(3);
     if (err) { setError(err); return; }
     setError("");
-    setSigningLoading(true);
-
-    const pricingPackage = getTurnoverPricingPackage(selectedBuilding?.name ?? "");
-    const isCommonArea = form.isCommonArea;
-    const bedrooms = isCommonArea ? undefined : bedroomsToNumber(form.bedrooms);
-    const bathrooms = isCommonArea ? undefined : bathroomsToNumber(form.bathrooms);
-    const pricing = computeTurnoverPricing({
-      requestType: "TURNOVER",
-      pricingPackage,
-      bedrooms,
-      bathrooms,
-      isCommonArea,
-      fullClean: form.fullClean,
-      fullPaint: form.fullPaint,
-      touchUpPaint: form.touchUpPaint ? 1 : 0,
-      carpetCleaning: form.carpetCleaning,
-      materialsAdditional: false,
-      ceilingPaint: false,
-      // Not offered as an option on this public form yet, same tier as
-      // ceilingPaint above — only settable internally via the ERP's Layout
-      // tab (UnitScopeEditor) once the request comes in.
-      compounding: 0,
-    });
-    const otherCents = form.otherWork ? dollarsToCents(form.otherPrice) : 0;
-    const totalPriceCents = pricing.priceCents + otherCents;
-
+    setSending(true);
     try {
-      const signingRes = await fetch("/api/real-estate-signing-embed", {
+      // Prices are worked out by Sueep from the building's pricing package, so none are sent.
+      const res = await fetch("/api/website-turnover-requests", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          agentName: form.pmName.trim(),
-          agentEmail: form.pmEmail.trim(),
-          address: selectedBuilding?.address ?? "",
+          buildingId: form.buildingId,
+          unitNumber: form.unitNumber.trim(),
+          isCommonArea: form.isCommonArea,
+          bedrooms: bedroomsToNumber(form.bedrooms),
+          bathrooms: bathroomsToNumber(form.bathrooms),
+          sqft: form.sqft || undefined,
+          unitQuality: form.unitQuality || undefined,
           fullClean: form.fullClean,
           touchUpPaint: form.touchUpPaint,
           fullPaint: form.fullPaint,
           carpetCleaning: form.carpetCleaning,
           otherWork: form.otherWork,
           otherDescription: form.otherWork ? form.otherDescription.trim() : undefined,
-          priceCents: totalPriceCents,
-          cleanDate: form.startDate || undefined,
-          depositNA: true,
-          isPropertyManager: true,
+          startDate: form.startDate,
+          endDate: form.endDate || undefined,
+          notes: form.notes.trim() || undefined,
+          name: form.pmName.trim(),
+          email: form.pmEmail.trim(),
+          phone: form.pmPhone.trim() || undefined,
+          website: form.website,
         }),
       });
-      const signingData = (await signingRes.json().catch(() => ({}))) as { embedSrc?: string; submissionId?: number; error?: string };
-      if (!signingRes.ok || !signingData.embedSrc) {
-        setError(signingData.error || "Could not load contract. Please try again.");
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error || "Submission failed. Please contact Sueep directly.");
         return;
       }
-      setSigningEmbedSrc(signingData.embedSrc);
-      setSigningSubmissionId(signingData.submissionId ?? null);
-      setStep(4);
-    } catch {
-      setError("Network error loading contract. Please try again.");
-    } finally {
-      setSigningLoading(false);
-    }
-  }
-
-  async function handleSigningComplete() {
-    // Submit the project only after the contract is signed
-    try {
-      const res = await fetch("/api/janitorial-turnover-projects", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          buildingId: form.buildingId,
-          unitScopes: [
-            {
-              unitNumber: form.unitNumber.trim() || "Unit TBD",
-              bedrooms: form.isCommonArea ? undefined : bedroomsToNumber(form.bedrooms),
-              bathrooms: form.isCommonArea ? undefined : bathroomsToNumber(form.bathrooms),
-              isCommonArea: form.isCommonArea,
-              sqft: form.sqft || undefined,
-              unitQuality: form.unitQuality || undefined,
-              fullClean: form.fullClean,
-              touchUpPaint: form.touchUpPaint,
-              fullPaint: form.fullPaint,
-              carpetCleaning: form.carpetCleaning,
-              otherWork: form.otherWork,
-              otherDescription: form.otherWork ? form.otherDescription.trim() : undefined,
-              otherPrice: form.otherWork ? form.otherPrice : undefined,
-              startDate: form.startDate || undefined,
-              endDate: form.endDate || undefined,
-            },
-          ],
-          pmName: form.pmName.trim(),
-          pmEmail: form.pmEmail.trim(),
-          pmPhone: form.pmPhone.trim() || undefined,
-          sueepPmName: "David Rodriguez",
-          sueepPmEmail: "david@sueep.com",
-          source: "external",
-          docusealSubmissionId: signingSubmissionId ?? undefined,
-        }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error || "Submission failed. Please contact Sueep directly.");
-      }
+      setSubmitted(true);
     } catch {
       setError("Network error. Please contact Sueep directly.");
+    } finally {
+      setSending(false);
     }
-    setSubmitted(true);
   }
 
   if (submitted) {
@@ -339,9 +247,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           </svg>
         </div>
         <div>
-          <p className="text-lg font-semibold text-green-900">Signed & submitted!</p>
+          <p className="text-lg font-semibold text-green-900">Request sent!</p>
           <p className="mt-2 max-w-sm text-sm text-green-700">
-            Your agreement has been signed and your request sent to Sueep. We&apos;ll be in touch shortly.
+            Sueep will review it and email you to confirm the date and price.
           </p>
         </div>
         <button
@@ -371,7 +279,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                 id="pm-building"
                 className={input}
                 value={form.buildingId}
-                onChange={(e) => handleBuildingChange(e.target.value)}
+                onChange={(e) => patch({ buildingId: e.target.value })}
               >
                 <option value="">Select a building…</option>
                 {buildings.map((b) => (
@@ -396,7 +304,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="pm-unit">
-                  Unit number
+                  Unit number{form.isCommonArea ? "" : " *"}
                 </label>
                 <input
                   id="pm-unit"
@@ -517,39 +425,23 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                 />
                 <ServiceCheckbox
                   checked={form.otherWork}
-                  onChange={(v) => patch({ otherWork: v, ...(!v && { otherDescription: "", otherPrice: "" }) })}
+                  onChange={(v) => patch({ otherWork: v, ...(!v && { otherDescription: "" }) })}
                   label="Other"
                 />
               </div>
               {form.otherWork && (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={label} htmlFor="pm-other-description">
-                      Describe the work *
-                    </label>
-                    <input
-                      id="pm-other-description"
-                      className={input}
-                      value={form.otherDescription}
-                      onChange={(e) => patch({ otherDescription: e.target.value })}
-                      placeholder="e.g. Window cleaning"
-                    />
-                  </div>
-                  <div>
-                    <label className={label} htmlFor="pm-other-price">
-                      Price ($) *
-                    </label>
-                    <input
-                      id="pm-other-price"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className={input}
-                      value={form.otherPrice}
-                      onChange={(e) => patch({ otherPrice: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
+                <div className="mt-3">
+                  <label className={label} htmlFor="pm-other-description">
+                    Describe the work *
+                  </label>
+                  <input
+                    id="pm-other-description"
+                    className={input}
+                    value={form.otherDescription}
+                    onChange={(e) => patch({ otherDescription: e.target.value })}
+                    placeholder="e.g. Window cleaning"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Sueep will price this when confirming your request.</p>
                 </div>
               )}
             </div>
@@ -581,36 +473,26 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                 />
               </div>
             </div>
-          </>
-        )}
 
-        {/* Step 4 — Sign Contract */}
-        {step === 4 && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-              <p className="text-sm font-medium text-blue-900">Almost done — please sign the service agreement below.</p>
-              <p className="mt-1 text-xs text-blue-700">
-                Sueep will countersign and send you a copy once your request is confirmed.
-              </p>
+            <div>
+              <label className={label} htmlFor="pm-notes">
+                Notes
+              </label>
+              <textarea
+                id="pm-notes"
+                rows={2}
+                className={input}
+                value={form.notes}
+                onChange={(e) => patch({ notes: e.target.value })}
+                placeholder="Access, lockbox code, anything we should know"
+              />
             </div>
-            <DocusealForm
-              src={signingEmbedSrc}
-              email={form.pmEmail}
-              withTitle={false}
-              onComplete={() => { void handleSigningComplete(); }}
-              className="w-full"
-            />
-          </div>
+          </>
         )}
 
         {/* Step 3 — Your Info */}
         {step === 3 && (
           <>
-            {(selectedBuilding?.pmName || selectedBuilding?.pmEmail) && (
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-                We pre-filled your info from the building record. Please confirm or update before submitting.
-              </div>
-            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="pm-name">
@@ -651,52 +533,50 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                 />
               </div>
             </div>
+            {/* Spam trap: hidden from people, so anything typed here came from a bot. */}
+            <div aria-hidden="true" className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+              <label htmlFor="pm-website">Website</label>
+              <input
+                id="pm-website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={form.website}
+                onChange={(e) => patch({ website: e.target.value })}
+              />
+            </div>
           </>
         )}
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      {step < 4 && (
-        <div className="mt-6 flex gap-3">
+      <div className="mt-6 flex gap-3">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Back
+        </button>
+        {step < 3 ? (
           <button
             type="button"
-            onClick={handleBack}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            onClick={handleNext}
+            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            Back
+            Next
           </button>
-          {step < 3 ? (
-            <button
-              type="button"
-              onClick={() => { void handleNext(); }}
-              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={signingLoading}
-              onClick={() => { void handleSubmit(); }}
-              className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {signingLoading ? "Loading contract…" : "Review & Sign"}
-            </button>
-          )}
-        </div>
-      )}
-      {step === 4 && (
-        <div className="mt-4">
+        ) : (
           <button
             type="button"
-            onClick={handleBack}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            disabled={sending}
+            onClick={() => { void handleSubmit(); }}
+            className="rounded-md bg-[#E73C6E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            Back
+            {sending ? "Sending…" : "Submit request"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

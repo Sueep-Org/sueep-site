@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial, canManagePropertyManagers } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
@@ -26,6 +26,10 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           select: { id: true, body: true, createdAt: true, authorName: true, authorUserId: true },
         },
         recurringContract: { select: { id: true, status: true, monthlyRateCents: true } },
+        propertyManagers: {
+          select: { propertyManager: { select: { id: true, name: true, email: true, active: true, lastSeenAt: true } } },
+          orderBy: { propertyManager: { name: "asc" } },
+        },
       },
     }),
     prisma.employee.findMany({
@@ -132,6 +136,11 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         commissionEmployeeId={building.commissionEmployeeId}
         initialNotes={building.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         currentUserId={currentErpUser?.id ?? null}
+        propertyManagers={
+          auth && canManagePropertyManagers(auth.role)
+            ? building.propertyManagers.map(({ propertyManager: m }) => ({ ...m, lastSeenAt: m.lastSeenAt?.toISOString() ?? null }))
+            : null
+        }
       />
     </div>
   );

@@ -18,7 +18,8 @@ export function BuildingsOverview() {
         <Step n={1} title="Adding a building">
           Click <strong>Add building</strong> on the list page. Only name and address are
           required, builder and the property manager&apos;s name, email, and phone are optional
-          and can be filled in later.
+          and can be filled in later. To give that property manager their own turnover calendar, see{" "}
+          <A href="/erp/help/turnover/property-manager-links">Property Manager Links</A>.
           <ImgPlaceholder label="Add building form" />
         </Step>
 
@@ -26,7 +27,9 @@ export function BuildingsOverview() {
           A building&apos;s own page opens on the <strong>Details</strong> tab: its profile fields,
           plus a HubSpot deal search so turnover invoices can be matched to that deal, and (for
           roles that can edit pricing) who earns commission on this building&apos;s turnover work.
-          Below that is a shared <strong>Notes</strong> section the whole team can post to.
+          Below that, <strong>Property manager links</strong> shows which property managers have a
+          private page for this building, with <strong>+ Add</strong> to set one up, and a shared{" "}
+          <strong>Notes</strong> section the whole team can post to.
           <ImgPlaceholder label="Building Details tab" />
           <Callout type="info">
             Supervisors and employees see a read-only summary here instead of the editable form.

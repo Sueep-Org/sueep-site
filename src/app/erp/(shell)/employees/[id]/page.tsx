@@ -13,7 +13,8 @@ import { EmployeeClockLinkSection } from "./EmployeeClockLinkSection";
 import { EmployeeBankAccountSection } from "./EmployeeBankAccountSection";
 import { EmployeeSsnSection } from "./EmployeeSsnSection";
 import { EmployeeLaborSection } from "./EmployeeLaborSection";
-import { EmployeeTimeOffSection } from "./EmployeeTimeOffSection";
+import { TimeOffSection, type TimeOffRow } from "@/app/erp/components/TimeOffSection";
+import { PAID_TIME_OFF_DAYS_PER_YEAR, erpRoleForEmail, timeOffReviewBlock } from "@/lib/erp/timeOff";
 import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
@@ -45,6 +46,9 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     },
   });
   if (!employee) notFound();
+  const timeOffReviewBlockForViewer = auth
+    ? timeOffReviewBlock(auth, { email: employee.email, erpRole: await erpRoleForEmail(employee.email) })
+    : "Sign in to review time off.";
 
   // Their janitorial schedule (current and upcoming weekly shifts), shown
   // read-only on the profile: the calendar is the only place pay hours come from.
@@ -357,14 +361,24 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
         {
           label: "Time Off",
           content: (
-            <EmployeeTimeOffSection
-              employeeId={employee.id}
+            <TimeOffSection
+              kind="employee"
+              personId={employee.id}
+              reviewBlock={timeOffReviewBlockForViewer}
+              isAdmin={auth?.role === "ADMIN"}
+              paidDayLimit={PAID_TIME_OFF_DAYS_PER_YEAR}
               initialTimeOff={employee.timeOff.map((t) => ({
                 id: t.id,
                 startDate: t.startDate.toISOString(),
                 endDate: t.endDate.toISOString(),
-                type: t.type as "VACATION" | "SICK" | "HALF_DAY" | "UNPAID" | "OTHER",
+                type: t.type as TimeOffRow["type"],
                 notes: t.notes,
+                status: t.status as TimeOffRow["status"],
+                requestedBy: t.requestedBy,
+                reviewedBy: t.reviewedBy,
+                reviewNote: t.reviewNote,
+                limitOverride: t.limitOverride as TimeOffRow["limitOverride"],
+                unpaidDays: t.unpaidDays,
               }))}
             />
           ),

@@ -5,19 +5,22 @@ export function CreatingATurnoverRequest() {
     <>
       <H2>Overview</H2>
       <P>
-        Turnover requests track a unit&apos;s scope of work and drive its pricing. Most come in
-        through the public request form, but PMs can also create one directly from New Project,
-        and the same scope can be edited from inside the ERP afterward.
+        Turnover requests track a unit&apos;s scope of work and drive its pricing. Clients send
+        them through the website form or their private property manager page, and PMs can also
+        create one directly from New Project. The same scope can be edited from inside the ERP
+        afterward.
       </P>
 
       <Steps>
         <Step n={1} title="How most requests come in">
-          Property managers, project managers, and real estate contacts submit requests through
-          the public form on the marketing site, not from inside the ERP. That form has them fill
-          in the unit and scope of work, and sign before submitting.
+          Property managers send requests through the website form (sueep.com/turnover-requests)
+          or their own private page. They fill in the unit, the work, and a start date.
           <Img src="/help/turnover/turnover_1.png" alt="Material Log" />
-          Once submitted, the request creates a project in the ERP automatically, linked to the
-          building and unit.
+          Nothing is created right away. Each request waits on{" "}
+          <strong>Property Managers → Requests</strong> until someone confirms it, and confirming
+          makes the project, linked to the building and unit. See{" "}
+          <A href="/erp/help/turnover/property-manager-links">Property Manager Links</A> for how to
+          confirm, decline, and handle cancels.
         </Step>
 
         <Step n={2} title="Creating a request yourself, from New Project">
