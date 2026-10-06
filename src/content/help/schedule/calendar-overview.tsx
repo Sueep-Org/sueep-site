@@ -5,11 +5,12 @@ export function ScheduleCalendarOverview() {
     <>
       <H2>Overview</H2>
       <P>
-        The Schedule page (<strong>ERP → Schedule</strong>) has two views: a month{" "}
-        <strong>Calendar</strong> and a <strong>Gantt</strong> chart. The calendar shows what&apos;s
-        actually happening day-by-day, driven by real logged labor rather than just a project&apos;s
-        start and end dates, plus anything planned ahead of time. The Gantt shows the overall
-        timeline of active projects.
+        The Schedule page (<strong>ERP → Schedule</strong>) has a month{" "}
+        <strong>Calendar</strong> (the <strong>Projects</strong> tab) and a{" "}
+        <strong>Timeline</strong> tab. The calendar shows what&apos;s actually happening
+        day-by-day, driven by real logged labor rather than just a project&apos;s start and end
+        dates, plus anything planned ahead of time. The Timeline shows projects as bars over time,
+        or each worker&apos;s jobs over time.
       </P>
       <P>
         Tabs at the top switch between calendars. <strong>Projects</strong> is everything
@@ -205,15 +206,43 @@ export function ScheduleCalendarOverview() {
           </P>
         </Step>
 
-        <Step n={11} title="The Gantt chart">
-          Below the calendar, the Gantt chart shows a horizontal timeline of{" "}
-          <strong>active</strong> projects only, using their start/end dates (a 14-day window is
-          assumed if there&apos;s no end date). Projects with no end date (still open-ended, not
-          finished) are listed first.
+        <Step n={11} title="The Timeline tab">
+          The <strong>Timeline</strong> tab has two views. <strong>By project</strong> shows a
+          horizontal timeline of commercial painting
+          and cleaning projects that are <strong>Active</strong>, <strong>Upcoming</strong>, or{" "}
+          <strong>On hold</strong>. Projects being worked on today are listed first.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_10.png" alt="Gantt chart view" />
-          Use the <strong>Today</strong> button and the arrows next to it to jump to or scroll
-          around the current date. The chart opens centered on today by default. Each row also
-          has a dropdown to reassign that project&apos;s supervisor directly.
+          <P>
+            How to read a bar: the solid fill is % done. A dashed outline is upcoming, gray is on
+            hold. A red line after a bar shows how many days it&apos;s past its end date. A bar with
+            a faded end has no end date set, so its length is a 20-day estimate. Under each
+            project name is who covers the job: its supervisor and/or subcontractors. Many jobs
+            run on a sub alone, so no supervisor is normal. The <strong>i</strong> icon next to the
+            Today button shows this key.
+          </P>
+          <P>
+            An amber dot next to a project name means its data needs fixing. Hover it to see why.
+            Use <strong>Needs attention</strong> to see projects that are 100% done but
+            not marked complete, past their end date, or upcoming with a start date that already
+            passed. Use <strong>Missing dates</strong> to see projects with no start or end date.
+          </P>
+          <P>
+            Switch between <strong>Week</strong>, <strong>Month</strong>, and{" "}
+            <strong>Quarter</strong> zoom. Use the <strong>Today</strong> button and the arrows next
+            to it to jump to or scroll around the current date. When a project&apos;s bar is
+            scrolled out of view, a date pill shows at the edge of its row; click it to slide to
+            that bar. Picking a filter jumps to its projects if none are in view. On a phone or
+            small screen, swipe the chart in any direction. The names stay pinned on the left.
+          </P>
+          <P>
+            <strong>By crew</strong> shows one row per person (supervisors, employees, and subs)
+            with a block for each job they&apos;re on, from four weeks back onward, turnovers
+            included. Solid blocks are logged work or a confirmed sub; dashed blocks are only
+            planned. Under each name is how many of the next 14 days they&apos;re booked, or{" "}
+            <strong>Free next 2 wks</strong>. A red mark on top of a row means that person is on
+            two jobs the same day; use <strong>Double-booked</strong> to list only those people.
+            Click any block to open its project.
+          </P>
         </Step>
       </Steps>
     </>
