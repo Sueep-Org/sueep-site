@@ -46,7 +46,7 @@ export function PropertyManagerLinks() {
           have many buildings, and one building can have more than one property manager.
         </Step>
         <Step n={3} title="3. Check their Sueep contact">
-          <strong>Their Sueep contact</strong> starts as you. It&apos;s who they&apos;re told to call, on their page and in every
+          <strong>Their Sueep contact</strong> starts as Nick Wehr. It&apos;s who they&apos;re told to call, on their page and in every
           email. Change it if someone else looks after them.
         </Step>
         <Step n={4} title="4. Add and email them">
