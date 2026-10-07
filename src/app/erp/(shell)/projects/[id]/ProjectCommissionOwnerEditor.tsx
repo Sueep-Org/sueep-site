@@ -40,7 +40,9 @@ export function ProjectCommissionOwnerEditor({
   }
 
   return (
-    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+    // A div, not a p: SearchableSelect renders divs, which can't sit inside a
+    // p (invalid HTML, and React flags it as a hydration error).
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
       Commission owner:
       <SearchableSelect
         value={value}
@@ -52,6 +54,6 @@ export function ProjectCommissionOwnerEditor({
         className="w-48"
       />
       {error && <span className="text-red-500">{error}</span>}
-    </p>
+    </div>
   );
 }

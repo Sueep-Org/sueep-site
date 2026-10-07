@@ -92,6 +92,8 @@ export async function deliverEmail(e: {
   }
 }
 
+const lower = (s: string) => s.trim().toLowerCase();
+
 async function logEmail(e: {
   type: string;
   to: string[];
@@ -113,9 +115,10 @@ async function logEmail(e: {
     await prisma.emailLog.create({
       data: {
         type: e.type,
-        to: e.to,
-        cc: e.cc,
-        bcc: e.bcc,
+        // Lowercased so each person's Notifications page can match their login exactly.
+        to: e.to.map(lower),
+        cc: e.cc.map(lower),
+        bcc: e.bcc.map(lower),
         replyTo: e.replyTo ?? null,
         subject: e.subject,
         status: e.status,
@@ -170,7 +173,7 @@ export function wrapEmailLayout(body: string, type: EmailType): string {
   const footer =
     def.sender === "erp"
       ? `You got this "${escapeHtml(def.label)}" email from the Sueep ERP.${
-          base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Notifications page</a>.` : ""
+          base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Notification Management page</a>.` : ""
         }`
       : `Sueep. Questions? Email <a href="mailto:${escapeHtml(contact)}" style="color:#6b7280">${escapeHtml(contact)}</a>.`;
   return `<!doctype html>
@@ -875,8 +878,9 @@ export function buildPropertyManagerCodeEmail(params: { firstName: string; code:
 export function buildPropertyManagerRequestEmail(params: {
   requester: string;
   building: string;
-  start: string;
-  units: { unit: string; layout: string; work: string[]; estimate: string; moveOut: string | null; moveIn: string | null }[];
+  /** Shared start day, or null when the units start on different days (each unit's `start` is then set) */
+  start: string | null;
+  units: { unit: string; layout: string; work: string[]; estimate: string; start?: string | null; moveOut: string | null; moveIn: string | null }[];
   total: string | null;
   notes: string | null;
   url: string;
@@ -885,13 +889,13 @@ export function buildPropertyManagerRequestEmail(params: {
   const units = params.units
     .map(
       (u) =>
-        `<p>${line("Unit", `${u.unit} (${u.layout})`)}${line("Work", u.work.join(", "))}${line("Move-out", u.moveOut)}${line("Move-in", u.moveIn)}${line("Estimate", u.estimate)}</p>`,
+        `<p>${line("Unit", `${u.unit} (${u.layout})`)}${line("Start", u.start ?? null)}${line("Work", u.work.join(", "))}${line("Move-out", u.moveOut)}${line("Move-in", u.moveIn)}${line("Estimate", u.estimate)}</p>`,
     )
     .join("");
   const count = params.units.length;
   return `
     <h2 style="margin:0 0 12px;color:#E73C6E">New turnover request${count > 1 ? ` (${count} units)` : ""}</h2>
-    <p><strong>${escapeHtml(params.requester)}</strong> asked for ${count > 1 ? `${count} turnovers` : "a turnover"} at <strong>${escapeHtml(params.building)}</strong>, starting <strong>${escapeHtml(params.start)}</strong>.</p>
+    <p><strong>${escapeHtml(params.requester)}</strong> asked for ${count > 1 ? `${count} turnovers` : "a turnover"} at <strong>${escapeHtml(params.building)}</strong>, ${params.start ? `starting <strong>${escapeHtml(params.start)}</strong>` : "starting on different days"}.</p>
     ${units}
     ${params.total ? `<p><strong>Total estimate:</strong> ${escapeHtml(params.total)}</p>` : ""}
     ${params.notes ? `<p style="white-space:pre-line"><strong>Notes:</strong> ${escapeHtml(params.notes)}</p>` : ""}

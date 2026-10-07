@@ -101,13 +101,22 @@ export async function createPropertyManagerRequests(
     if (!work.fullClean && !work.fullPaint && !work.touchUpPaint && !work.carpetCleaning && !otherWork) {
       return { error: `${name}: pick at least one kind of work` };
     }
+    // A unit can have its own start day; otherwise it uses the booking's.
+    let unitStart = requestedStartDate;
+    if (u.startDate != null && u.startDate !== "") {
+      const own = dayValue(u.startDate);
+      if (!own) return { error: `${name}: pick a start date` };
+      if ((u.startDate as string) < todayEasternKey()) return { error: `${name}: the start date can't be in the past` };
+      unitStart = own;
+    }
     const moveOutDate = dayValue(u.moveOutDate);
     const moveInDate = dayValue(u.moveInDate);
     if (moveOutDate && moveInDate && moveInDate < moveOutDate) return { error: `${name}: move-in can't be before move-out` };
-    if (moveInDate && moveInDate < requestedStartDate) return { error: `${name}: move-in is before the start date. Pick an earlier start.` };
+    if (moveInDate && moveInDate < unitStart) return { error: `${name}: move-in is before the start date. Pick an earlier start.` };
 
     units.push({
       unitNumber,
+      requestedStartDate: unitStart,
       bedrooms: layout.bedrooms,
       bathrooms: layout.bathrooms,
       ...work,
@@ -141,7 +150,6 @@ export async function createPropertyManagerRequests(
           requesterName: manager.name,
           requesterEmail: manager.email,
           buildingId: building.id,
-          requestedStartDate,
           notes,
           ...u,
         },
@@ -163,6 +171,7 @@ async function emailStaffAboutRequests(requests: PropertyManagerRequest[], build
     const estimate = (r: PropertyManagerRequest) => (r.otherWork ? `${money(r.estimateCents)} plus other work` : money(r.estimateCents));
     const total = requests.reduce((n, r) => n + r.estimateCents, 0);
     const unitList = requests.map((r) => `#${r.unitNumber}`).join(", ");
+    const sameStart = requests.every((r) => r.requestedStartDate.getTime() === first.requestedStartDate.getTime());
     await sendEmail({
       type: "PROPERTY_MANAGER_TURNOVER_REQUESTED",
       link: "/erp/property-managers/requests",
@@ -173,12 +182,13 @@ async function emailStaffAboutRequests(requests: PropertyManagerRequest[], build
           ? `${first.requesterName} (${first.requesterEmail}${first.requesterPhone ? `, ${first.requesterPhone}` : ""}), on the website form,`
           : first.requesterName,
         building: buildingName,
-        start: formatDay(first.requestedStartDate)!,
+        start: sameStart ? formatDay(first.requestedStartDate) : null,
         units: requests.map((r) => ({
           unit: `#${r.unitNumber}`,
           layout: requestLayoutLabel(r.bedrooms, r.bathrooms, r.isCommonArea),
           work: requestWorkLabels(r),
           estimate: estimate(r),
+          start: sameStart ? null : formatDay(r.requestedStartDate),
           moveOut: formatDay(r.moveOutDate),
           moveIn: formatDay(r.moveInDate),
         })),

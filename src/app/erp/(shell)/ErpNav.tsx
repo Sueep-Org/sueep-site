@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ErpBrandLogo } from "@/app/erp/components/ErpBrandLogo";
 import { ErpLogoutButton } from "./ErpLogoutButton";
 import type { ErpRole } from "@/lib/erpSession";
+import { INBOX_CHANGED_EVENT } from "./inbox/areas";
 
 type AllRoles = ErpRole[];
 const ALL: AllRoles = [
@@ -588,7 +589,7 @@ const adminGroupItems: NavItem[] = [
   },
   {
     href: "/erp/notifications",
-    label: "Notifications",
+    label: "Notification Management",
     roles: PM_ADMIN,
     icon: BellIcon,
   },
@@ -605,6 +606,12 @@ const estimatorItem: NavItem = {
   label: "Estimator",
   roles: PM_EST,
   icon: RulerIcon,
+};
+const notificationsItem: NavItem = {
+  href: "/erp/inbox",
+  label: "Notifications",
+  roles: ALL,
+  icon: BellIcon,
 };
 const helpCenterItem: NavItem = {
   href: "/erp/help",
@@ -626,7 +633,17 @@ function isGroupActive(pathname: string, items: NavItem[]) {
 const rowCls =
   "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors";
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+/** Small pink count, e.g. unread notifications. Hidden at 0. */
+function CountBadge({ count, className = "" }: { count?: number; className?: string }) {
+  if (!count) return null;
+  return (
+    <span className={`rounded-full bg-pink-600 px-1.5 text-[10px] font-semibold leading-4 text-white ${className}`}>
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function NavLink({ item, pathname, badge }: { item: NavItem; pathname: string; badge?: number }) {
   const active =
     pathname === item.href ||
     (item.href !== "/erp" &&
@@ -650,6 +667,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         className={`h-5 w-5 shrink-0 ${active ? "text-pink-600" : "text-gray-400"}`}
       />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <CountBadge count={badge} />
     </Link>
   );
 }
@@ -667,7 +685,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 const railIconBtnCls =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors";
 
-function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function RailLink({ item, pathname, badge }: { item: NavItem; pathname: string; badge?: number }) {
   const active =
     pathname === item.href ||
     (item.href !== "/erp" && pathname.startsWith(item.href + "/"));
@@ -679,8 +697,9 @@ function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
         href={item.href}
         target={isExternalEstimator ? "_blank" : undefined}
         rel={isExternalEstimator ? "noopener noreferrer" : undefined}
-        aria-label={item.label}
+        aria-label={badge ? `${item.label}, ${badge} unread` : item.label}
         className={[
+          "relative",
           railIconBtnCls,
           active
             ? "bg-pink-50 text-pink-600"
@@ -688,6 +707,7 @@ function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
         ].join(" ")}
       >
         <Icon className="h-5 w-5 shrink-0" />
+        <CountBadge count={badge} className="absolute right-1 top-1" />
       </Link>
       <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
         {item.label}
@@ -854,6 +874,26 @@ export function ErpNav({ role }: { role: ErpRole }) {
     setOpen(false);
   }, [pathname]);
 
+  // Unread count for the Notifications badge: rechecked on every page change
+  // and whenever the inbox marks something read.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/erp/inbox/unread")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!cancelled && j && typeof j.count === "number") setUnread(j.count);
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener(INBOX_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(INBOX_CHANGED_EVENT, load);
+    };
+  }, [pathname]);
+
   const showDashboard = allowed(dashboardItem, role);
   const visibleProjectItems = projectGroupItems.filter((i) => allowed(i, role));
   const visibleBillingItems = billingGroupItems.filter((i) => allowed(i, role));
@@ -867,6 +907,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
     return (
       <>
         {showDashboard && <NavLink item={dashboardItem} pathname={pathname} />}
+        <NavLink item={notificationsItem} pathname={pathname} badge={unread} />
 
         {visibleProjectItems.length > 0 && (
           <>
@@ -955,6 +996,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
           {showDashboard && (
             <RailLink item={dashboardItem} pathname={pathname} />
           )}
+          <RailLink item={notificationsItem} pathname={pathname} badge={unread} />
 
           {(visibleProjectItems.length > 0 ||
             visibleBillingItems.length > 0 ||
@@ -1019,9 +1061,10 @@ export function ErpNav({ role }: { role: ErpRole }) {
           </Link>
           <button
             onClick={() => setOpen((v) => !v)}
-            aria-label={open ? "Close menu" : "Open menu"}
-            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            aria-label={open ? "Close menu" : unread ? `Open menu, ${unread} unread notifications` : "Open menu"}
+            className="relative rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           >
+            {!open && <CountBadge count={unread} className="absolute -right-1 -top-1" />}
             {open ? (
               <svg
                 xmlns="http://www.w3.org/2000/svg"

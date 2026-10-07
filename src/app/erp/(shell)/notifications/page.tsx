@@ -8,7 +8,7 @@ import { NotificationsHeader } from "./NotificationsHeader";
 import { SettingsView, type SettingRow } from "./SettingsView";
 
 export const metadata: Metadata = {
-  title: "Notifications",
+  title: "Notification Management",
 };
 
 export const dynamic = "force-dynamic";

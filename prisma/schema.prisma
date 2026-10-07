@@ -1790,6 +1790,11 @@ model Contractor {
   /// convention as Employee.role, not a fixed enum.
   role String?
 
+  /// Runs jobs on their own with no Sueep supervisor on site. A job or day
+  /// with this sub planned or confirmed on it doesn't get the schedule's
+  /// "needs a supervisor" alerts (calendar, dashboard, nudge emails).
+  runsWithoutSupervisor Boolean @default(false)
+
   /// ACTIVE | INACTIVE
   status String @default("ACTIVE")
 
@@ -2784,8 +2789,8 @@ model EmailLog {
   /// EmailType key, see notificationTypes.ts
   type           String
   to             String[]
-  cc             String[] @default([])
-  bcc            String[] @default([])
+  cc             String[]       @default([])
+  bcc            String[]       @default([])
   replyTo        String?
   subject        String
   /// SENT | FAILED | SKIPPED (email not set up on this server) | OFF (type turned off)
@@ -2796,17 +2801,31 @@ model EmailLog {
   /// Final HTML as sent, kept so it can be viewed and resent
   html           String?
   /// Calendar invites and other attachments aren't stored, so these can't be resent
-  hasAttachments Boolean  @default(false)
+  hasAttachments Boolean        @default(false)
   /// ERP page the email is about, e.g. /erp/projects/abc
   link           String?
   /// Set when this row is a resend of another
   resentFromId   String?
   /// ERP user who resent it
   sentBy         String?
+  reads          EmailLogRead[]
 
   @@index([createdAt])
   @@index([type, createdAt])
   @@index([status, createdAt])
+}
+
+/// Who has opened which email on their Notifications page. Unread = no row.
+model EmailLogRead {
+  id         String   @id @default(cuid())
+  readAt     DateTime @default(now())
+  emailLogId String
+  emailLog   EmailLog @relation(fields: [emailLogId], references: [id], onDelete: Cascade)
+  /// Lowercased login email
+  userEmail  String
+
+  @@unique([emailLogId, userEmail])
+  @@index([userEmail])
 }
 
 /// The last schedule invite sent per calendar event (one worker or

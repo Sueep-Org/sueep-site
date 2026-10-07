@@ -16,6 +16,7 @@ import {
   formatItemDates,
   isRepeatValue,
   keyToDate,
+  parseBirthDateKey,
   type BuiltinKey,
   type ManagementCategoryDto,
   type ManagementItem,
@@ -61,6 +62,8 @@ export async function loadManagementItems(
     documents,
     contracts,
     anchorSetting,
+    employeeBirthdays,
+    contractorBirthdays,
     events,
   ] = await Promise.all([
     want("SUEEP_INSURANCE")
@@ -131,6 +134,19 @@ export async function loadManagementItems(
         })
       : [],
     want("PAYROLL") ? prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }) : null,
+    // Date of birth is free text, so it's filtered by day after loading.
+    want("BIRTHDAYS")
+      ? prisma.employee.findMany({
+          where: { status: "ACTIVE", dateOfBirth: { not: null } },
+          select: { id: true, firstName: true, lastName: true, dateOfBirth: true },
+        })
+      : [],
+    want("BIRTHDAYS")
+      ? prisma.contractor.findMany({
+          where: { status: "ACTIVE", dateOfBirth: { not: null } },
+          select: { id: true, name: true, contractorFullName: true, dateOfBirth: true },
+        })
+      : [],
     prisma.managementEvent.findMany({
       where: { startDate: { lte: end }, OR: [{ repeat: { not: "NONE" } }, { startDate: { gte: start } }, { endDate: { gte: start } }] },
       select: { id: true, title: true, categoryId: true, startDate: true, endDate: true, repeat: true, notes: true, link: true, doneDates: true },
@@ -279,6 +295,25 @@ export async function loadManagementItems(
         done: isClosed,
         ...oneDay(p.end),
       });
+    }
+  }
+
+  const birthdays: { key: string; name: string; dob: string | null; detail: string; href: string }[] = [
+    ...employeeBirthdays.map((e) => ({ key: `bday:e:${e.id}`, name: fullName(e), dob: e.dateOfBirth, detail: "Employee", href: `/erp/employees/${e.id}` })),
+    ...contractorBirthdays.map((c) => ({
+      key: `bday:c:${c.id}`,
+      name: c.contractorFullName || c.name,
+      dob: c.dateOfBirth,
+      detail: "Contractor",
+      href: `/erp/contractors/${c.id}`,
+    })),
+  ];
+  for (const b of birthdays) {
+    const dob = parseBirthDateKey(b.dob);
+    if (!dob) continue;
+    // Feb 29 birthdays land on Feb 28 in other years.
+    for (const occ of eventOccurrences(dob, null, "YEARLY", startKey, endKey)) {
+      add("BIRTHDAYS", { key: `${b.key}:${occ.start}`, title: `${b.name}'s birthday`, detail: b.detail, href: b.href, ...occ });
     }
   }
 

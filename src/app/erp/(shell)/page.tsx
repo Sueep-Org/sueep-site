@@ -688,9 +688,15 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
           materialEntries: { select: { costCents: true } },
           contractorAssignments: { select: { costCents: true } },
+          // Any day with a sub who runs jobs without a supervisor on it, see
+          // Contractor.runsWithoutSupervisor. Clears "No supervisor" below.
+          workerDayAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+          dayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
           changeOrders: {
             select: {
               id: true, title: true, status: true, supervisorUserId: true, startDate: true,
+              coWorkerAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+              coDayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
               contractValueCents: true, estimatedCostCents: true,
               actualLaborCents: true, actualMaterialCents: true,
               materialEntries: { select: { costCents: true } },
@@ -733,7 +739,11 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       }),
       prisma.projectDayAssignment.findMany({
         where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
-        select: { projectId: true, project: { select: { jobTitle: true } } },
+        select: {
+          projectId: true,
+          project: { select: { jobTitle: true } },
+          supervisorContractor: { select: { runsWithoutSupervisor: true } },
+        },
       }),
       prisma.projectWorkerDayAssignment.findMany({
         where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
@@ -741,7 +751,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           projectId: true,
           project: { select: { jobTitle: true } },
           employee: { select: { firstName: true, lastName: true } },
-          contractor: { select: { name: true } },
+          contractor: { select: { name: true, runsWithoutSupervisor: true } },
         },
       }),
       prisma.dailySafetyCheck.findMany({
@@ -892,6 +902,8 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       loggedWorkers: Set<string>;
       plannedWorkers: Set<string>;
       supervisorUserId: string | null;
+      /** A sub who runs jobs without a supervisor is on it today. */
+      soloSubToday: boolean;
     };
     const scheduledTodayMap = new Map<string, ScheduledToday>();
     function getOrInitScheduled(projectId: string, jobTitle: string): ScheduledToday {
@@ -900,17 +912,20 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       const created: ScheduledToday = {
         projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set(),
         supervisorUserId: supervisorByProjectId.get(projectId) ?? null,
+        soloSubToday: false,
       };
       scheduledTodayMap.set(projectId, created);
       return created;
     }
     for (const a of todayDayAssignments) {
-      getOrInitScheduled(a.projectId, a.project.jobTitle);
+      const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
+      if (a.supervisorContractor?.runsWithoutSupervisor) entry.soloSubToday = true;
     }
     for (const a of todayWorkerAssignments) {
       const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
       const name = a.employee ? `${a.employee.firstName} ${a.employee.lastName}`.trim() : a.contractor?.name;
       if (name) entry.plannedWorkers.add(name);
+      if (a.contractor?.runsWithoutSupervisor) entry.soloSubToday = true;
     }
     for (const e of laborForFlags) {
       if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;
@@ -1058,6 +1073,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
       if (!p.projectDate || p.projectDate < NEEDS_ATTENTION_SINCE) continue;
       if (p.laborEntries.length > 0) continue;
+      if (p.workerDayAssignments.length > 0 || p.dayAssignments.length > 0) continue;
       noSupervisorItems.push({
         key: `proj-${p.id}`, projectId: p.id, title: p.jobTitle,
         dateKey: utcDateKey(p.projectDate), overdue: p.projectDate < adminTodayStart,
@@ -1067,6 +1083,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         if (co.status === "COMPLETED" || co.status === "REJECTED" || co.status === "VOID") continue;
         if (!co.startDate || co.startDate < NEEDS_ATTENTION_SINCE) continue;
         if (co.laborers.length > 0) continue;
+        if (co.coWorkerAssignments.length > 0 || co.coDayAssignments.length > 0) continue;
         noSupervisorItems.push({
           key: `co-${co.id}`, projectId: p.id, title: co.title,
           dateKey: utcDateKey(co.startDate), overdue: co.startDate < adminTodayStart,
@@ -1255,7 +1272,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                       <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
                         <div className="min-w-0">
                           <p className="flex items-center gap-1 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>
-                            {!p.supervisorUserId && (
+                            {!p.supervisorUserId && !p.soloSubToday && (
                               <span className="shrink-0 text-amber-500" title="No supervisor assigned">⚠</span>
                             )}
                             <span className="truncate">{p.jobTitle}</span>
@@ -1265,7 +1282,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                           </p>
                         </div>
                         <span className="flex shrink-0 items-center gap-1.5">
-                          {!p.supervisorUserId && (
+                          {!p.supervisorUserId && !p.soloSubToday && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                               No supervisor
                             </span>

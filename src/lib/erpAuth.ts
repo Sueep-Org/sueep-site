@@ -66,6 +66,11 @@ export function canManageManagementCalendar(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
 
+/** Schedule Timeline tab: dragging a project bar to change its start/end dates. */
+export function canRescheduleOnTimeline(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
 /** Notifications page: which emails go out, to whom, and the Email Log. */
 export function canManageNotifications(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";

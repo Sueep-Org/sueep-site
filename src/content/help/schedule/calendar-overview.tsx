@@ -5,11 +5,12 @@ export function ScheduleCalendarOverview() {
     <>
       <H2>Overview</H2>
       <P>
-        The Schedule page (<strong>ERP → Schedule</strong>) has two views: a month{" "}
-        <strong>Calendar</strong> and a <strong>Gantt</strong> chart. The calendar shows what&apos;s
-        actually happening day-by-day, driven by real logged labor rather than just a project&apos;s
-        start and end dates, plus anything planned ahead of time. The Gantt shows the overall
-        timeline of active projects.
+        The Schedule page (<strong>ERP → Schedule</strong>) has a month{" "}
+        <strong>Calendar</strong> (the <strong>Projects</strong> tab) and a{" "}
+        <strong>Gantt</strong> tab. The calendar shows what&apos;s actually happening
+        day-by-day, driven by real logged labor rather than just a project&apos;s start and end
+        dates, plus anything planned ahead of time. The Gantt shows projects as bars over time,
+        or each worker&apos;s jobs over time.
       </P>
       <P>
         Tabs at the top switch between calendars. <strong>Projects</strong> is everything
@@ -51,6 +52,12 @@ export function ScheduleCalendarOverview() {
             labor was never logged.&quot; Amber warning chips only appear for projects that are
             still active (not Complete or Archived) and starting today or in the future. Once a
             supervisor is assigned or work is logged, the warning clears automatically.
+          </Callout>
+          <Callout type="tip">
+            Some subs run jobs on their own. On the sub&apos;s page (Contractors, then the sub,
+            then General information), check <strong>Runs jobs without a supervisor</strong>. Any
+            job or day that sub is planned on then skips the amber &quot;needs a supervisor&quot;
+            warnings here, on the dashboard, and in the daily schedule reminder emails.
           </Callout>
           <Callout type="tip">
             A day cell only shows up to 4 chips at once. If there&apos;s more, click{" "}
@@ -205,15 +212,67 @@ export function ScheduleCalendarOverview() {
           </P>
         </Step>
 
-        <Step n={11} title="The Gantt chart">
-          Below the calendar, the Gantt chart shows a horizontal timeline of{" "}
-          <strong>active</strong> projects only, using their start/end dates (a 14-day window is
-          assumed if there&apos;s no end date). Projects with no end date (still open-ended, not
-          finished) are listed first.
+        <Step n={11} title="The Gantt tab">
+          The <strong>Gantt</strong> tab has three views. <strong>By project</strong> shows a
+          horizontal timeline of commercial painting
+          and cleaning projects that are <strong>Active</strong>, <strong>Upcoming</strong>, or{" "}
+          <strong>On hold</strong>, grouped into sections: <strong>In progress</strong>,{" "}
+          <strong>Needs attention</strong>, <strong>Upcoming</strong>, and <strong>On hold</strong>{" "}
+          (collapsed to start). Click a section heading to collapse or expand it. Jobs with no
+          dates at all show <strong>No dates set</strong> instead of a bar.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_10.png" alt="Gantt chart view" />
-          Use the <strong>Today</strong> button and the arrows next to it to jump to or scroll
-          around the current date. The chart opens centered on today by default. Each row also
-          has a dropdown to reassign that project&apos;s supervisor directly.
+          <P>
+            How to read a bar: the solid fill is % done. A dashed outline is upcoming, gray is on
+            hold. A red line after a bar shows how many days it&apos;s past its end date. A bar with
+            a faded end has no end date set, so its length is an estimate (an open job runs at
+            least up to today). A striped section is the job&apos;s change orders, so the bar keeps
+            going through change-order work and the job only counts as late once that&apos;s
+            past too. The number after an in-progress bar is its % done; a red number is days
+            late. Small circles next to each project name are who covers it (pink for the
+            supervisor, blue for subs). Many jobs run on a sub alone, so no supervisor is normal.
+            Hover any name, bar, circle, or icon for the full details (dates, crew, problems). A
+            small color key sits above the chart, and the <strong>i</strong> icon explains more.
+          </P>
+          <P>
+            The <strong>Needs attention</strong> section holds projects that are 100% done but
+            not marked complete, past their end date, or upcoming with a start date that already
+            passed. An amber check means done but not marked complete; an amber clock means the
+            start date passed. The <strong>Missing dates</strong> button lists projects missing a
+            start or end date.
+          </P>
+          <P>
+            Switch between <strong>Week</strong>, <strong>Month</strong>, and{" "}
+            <strong>Quarter</strong> zoom. Use the <strong>Today</strong> button and the arrows next
+            to it to jump to or scroll around the current date. When a project&apos;s bar is
+            scrolled out of view, a date pill shows at the edge of its row; click it to slide to
+            that bar. Picking a filter jumps to its projects if none are in view. On a phone or
+            small screen, swipe the chart in any direction. The names stay pinned on the left.
+          </P>
+          <P>
+            <strong>By crew</strong> shows one row per person (supervisors, employees, and subs)
+            with a block for each job they&apos;re on, from four weeks back onward, turnovers
+            included. Solid blocks are logged work or a confirmed sub; dashed blocks are only
+            planned. The strip under each name is the next 14 days, filled where they&apos;re booked
+            and all green when they&apos;re free. A red mark on top of a row means that person is on
+            two jobs the same day; use <strong>Double-booked</strong> to list only those people.
+            Click any block to open its project.
+          </P>
+          <P>
+            <strong>Turnovers</strong> shows one row per property and one cell per week. The
+            number in each cell is how many turnover units at that property are on the schedule
+            that week (logged, planned, or starting), and darker green means busier. Hover a cell
+            to see which units. Busiest properties are listed first, the green badge is how many
+            units are still open, and the top row adds up every property.
+          </P>
+          <P>
+            Admins and PMs can change dates right on the chart in <strong>By project</strong>.
+            Drag a bar to move the whole job, or drag its left or right edge to change just the
+            start or end date. A date preview shows while you drag, and you confirm before
+            anything saves. Changing a start date emails the supervisor and PM, the same as
+            moving it on the calendar, and a job with one planned day moves that day too. Dragging
+            the right edge of a job with no end date is a quick way to set one. Dragging works with
+            a mouse or trackpad; on a phone, tap a bar to open the project instead.
+          </P>
         </Step>
       </Steps>
     </>

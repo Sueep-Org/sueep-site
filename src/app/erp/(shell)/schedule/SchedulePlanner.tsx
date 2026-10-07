@@ -11,9 +11,9 @@ import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
 import {
-  addDays,
   coIsComplete,
   computeProjectSpanMarkersByDay,
+  soloSubCoverage,
   dayCellLabel,
   dayKey,
   formatHours,
@@ -21,8 +21,6 @@ import {
   matchesSearchQuery,
   monthLabel,
   monthMatrix,
-  projectWindow,
-  startOfDay,
   startOfMonth,
   type ScheduleChangeOrder,
   type ScheduleCoDayAssignment,
@@ -37,23 +35,7 @@ import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/proje
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox } from "@/app/erp/components/SOVCombobox";
 
-const PX_PER_DAY = 10;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function statusBarClass(status: string): string {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-pink-600/90 hover:bg-pink-500";
-    case "ON_HOLD":
-      return "bg-amber-600/90 hover:bg-amber-500";
-    case "COMPLETE":
-      return "bg-emerald-700/90 hover:bg-emerald-600";
-    case "ARCHIVED":
-      return "bg-gray-600/90 hover:bg-gray-500";
-    default:
-      return "bg-pink-600/80";
-  }
-}
 
 const CALENDAR_GROUP_LABEL: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "Post-construction",
@@ -256,7 +238,7 @@ type Person = { id: string; displayName: string };
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
-type WorkerPerson = Person & { email: string | null };
+type WorkerPerson = Person & { email: string | null; runsSolo?: boolean };
 
 /** Duplicates a calendar card (or a logged-labor day) onto whichever other
  * days get picked on the mini calendar — they don't need to be consecutive
@@ -1353,8 +1335,8 @@ export function SchedulePlanner({
       }
       // Assigning a supervisor here also sets it as the project's overall
       // supervisor server-side (see the day-assignments route) — mirror that
-      // in the Gantt's inline dropdown right away, same as the day-assignment
-      // modal does.
+      // in the local supervisor overrides right away, same as the
+      // day-assignment modal does.
       if (eventDaySupervisorId) setSupervisorOverrides((o) => ({ ...o, [projectId]: eventDaySupervisorId }));
     } catch (err) {
       setEventDayError(err instanceof Error ? err.message : "Failed to save");
@@ -2175,11 +2157,9 @@ export function SchedulePlanner({
     );
   }
 
-  // Local overrides so reassigning a supervisor updates the dropdown right
+  // Local overrides so assigning a supervisor from a day shows up right
   // away, without waiting on a full server round-trip / router.refresh().
   const [supervisorOverrides, setSupervisorOverrides] = useState<Record<string, string | null>>({});
-  const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
-  const [errorProjectId, setErrorProjectId] = useState<string | null>(null);
 
   function currentSupervisorId(p: ScheduleProject): string {
     return (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
@@ -2194,102 +2174,6 @@ export function SchedulePlanner({
     return (co.id in coSupervisorOverrides ? coSupervisorOverrides[co.id] : co.supervisorUserId) ?? "";
   }
 
-  async function handleSupervisorChange(p: ScheduleProject, nextId: string) {
-    const previous = currentSupervisorId(p);
-    const value = nextId || null;
-    setSupervisorOverrides((o) => ({ ...o, [p.id]: value }));
-    setSavingProjectId(p.id);
-    setErrorProjectId(null);
-    try {
-      const res = await fetch(`/api/erp/projects/${p.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ supervisorUserId: value }),
-      });
-      if (!res.ok) throw new Error("Update failed");
-    } catch {
-      setSupervisorOverrides((o) => ({ ...o, [p.id]: previous || null }));
-      setErrorProjectId(p.id);
-    } finally {
-      setSavingProjectId(null);
-    }
-  }
-
-  // Gantt only shows active, post-construction projects. On hold / complete
-  // / archived jobs don't need a place on the timeline, and janitorial/real
-  // estate/other segments have their own workflows that don't fit a
-  // start-to-end bar.
-  const allGanttWindows = useMemo(
-    () =>
-      projects
-        .filter((p) => p.status === "ACTIVE" && calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION")
-        .map((p) => ({ p, ...projectWindow(p) })),
-    [projects],
-  );
-
-  const [ganttSearch, setGanttSearch] = useState("");
-
-  // Ongoing (today falls within its start/end window) first, then by start
-  // date, so what's actually being worked on right now is always at the
-  // top rather than wherever it happened to fall in the project list.
-  const windows = useMemo(() => {
-    const query = ganttSearch.trim();
-    const matched = query
-      ? allGanttWindows.filter((w) => matchesSearchQuery(w.p.jobTitle, query))
-      : allGanttWindows;
-    const isOngoing = (w: (typeof allGanttWindows)[number]) => w.start <= todayDate && w.end >= todayDate;
-    return matched.slice().sort((a, b) => {
-      const rankDiff = (isOngoing(a) ? 0 : 1) - (isOngoing(b) ? 0 : 1);
-      if (rankDiff !== 0) return rankDiff;
-      return a.start.getTime() - b.start.getTime();
-    });
-  }, [allGanttWindows, ganttSearch, todayDate]);
-
-  // Kept on allGanttWindows (not the search-filtered windows) so the
-  // timeline's scale/columns stay put while searching, only the rows change.
-  const ganttRange = useMemo(() => {
-    if (allGanttWindows.length === 0) {
-      return { start: addDays(todayDate, -7), end: addDays(todayDate, 60) };
-    }
-    let min = allGanttWindows[0]!.start;
-    let max = allGanttWindows[0]!.end;
-    for (const w of allGanttWindows) {
-      if (w.start < min) min = w.start;
-      if (w.end > max) max = w.end;
-    }
-    return { start: addDays(min, -7), end: addDays(max, 14) };
-  }, [allGanttWindows, todayDate]);
-
-  const totalDays = Math.max(
-    1,
-    Math.ceil((ganttRange.end.getTime() - ganttRange.start.getTime()) / (86400000)) + 1,
-  );
-  const timelineWidth = totalDays * PX_PER_DAY;
-
-  const dayOffset = (d: Date) =>
-    Math.floor((startOfDay(d).getTime() - ganttRange.start.getTime()) / 86400000);
-
-  const todayOffsetPx = dayOffset(todayDate) * PX_PER_DAY;
-
-  const ganttScrollRef = useRef<HTMLDivElement>(null);
-
-  function scrollGanttToToday(behavior: ScrollBehavior = "auto") {
-    const el = ganttScrollRef.current;
-    if (!el) return;
-    const target = Math.max(0, todayOffsetPx - PX_PER_DAY * 3);
-    el.scrollTo({ left: target, behavior });
-  }
-
-  function scrollGanttBy(days: number) {
-    ganttScrollRef.current?.scrollBy({ left: days * PX_PER_DAY, behavior: "smooth" });
-  }
-
-  // Default the Gantt to today on first load, rather than wherever the
-  // earliest project happens to start (which could be months back).
-  useEffect(() => {
-    scrollGanttToToday();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const matrix = useMemo(() => monthMatrix(cursor), [cursor]);
 
@@ -2345,9 +2229,33 @@ export function SchedulePlanner({
   // computation instead of two. Split into the two chip types below by
   // `kind`, purely so the render code and legend conditions below don't need
   // to change shape.
+  // Jobs and days with a sub who runs jobs without a supervisor on them
+  // (Contractor.runsWithoutSupervisor) never get a "needs a supervisor"
+  // alert, the sub is in charge on site.
+  const projectSoloCoverage = useMemo(() => {
+    const soloIds = new Set(contractors.filter((c) => c.runsSolo).map((c) => c.id));
+    return soloSubCoverage(
+      [
+        ...workerAssignments.map((a) => ({ ownerId: a.projectId, dateKey: a.dateKey, contractorId: a.contractorId })),
+        ...dayAssignments.map((a) => ({ ownerId: a.projectId, dateKey: a.dateKey, contractorId: a.supervisorContractorId })),
+      ],
+      soloIds,
+    );
+  }, [contractors, workerAssignments, dayAssignments]);
+  const coSoloCoverage = useMemo(() => {
+    const soloIds = new Set(contractors.filter((c) => c.runsSolo).map((c) => c.id));
+    return soloSubCoverage(
+      [
+        ...coWorkerAssignments.map((a) => ({ ownerId: a.changeOrderId, dateKey: a.dateKey, contractorId: a.contractorId })),
+        ...coDayAssignments.map((a) => ({ ownerId: a.changeOrderId, dateKey: a.dateKey, contractorId: a.supervisorContractorId })),
+      ],
+      soloIds,
+    );
+  }, [contractors, coWorkerAssignments, coDayAssignments]);
+
   const projectSpanMarkersByDay = useMemo(
-    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides),
-    [projects, dayAssignments, supervisorOverrides]
+    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides, projectSoloCoverage.ownerIds),
+    [projects, dayAssignments, supervisorOverrides, projectSoloCoverage]
   );
   const hasNeedsSupervisorMarkers = useMemo(
     () => Array.from(projectSpanMarkersByDay.values()).some((list) => list.some((e) => e.kind === "needsSupervisor")),
@@ -2365,6 +2273,7 @@ export function SchedulePlanner({
     for (const co of changeOrders) {
       const supervisorId = currentCoSupervisorId(co);
       if (supervisorId) continue;
+      if (coSoloCoverage.ownerIds.has(co.id)) continue;
       if (Object.keys(co.laborByDay).length > 0) continue;
       if (coIsComplete(co.status)) continue;
       if (!co.scheduledDateKey) continue;
@@ -2381,7 +2290,7 @@ export function SchedulePlanner({
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeOrders, coDayAssignments, coSupervisorOverrides]);
+  }, [changeOrders, coDayAssignments, coSupervisorOverrides, coSoloCoverage]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -2524,45 +2433,6 @@ export function SchedulePlanner({
     </div>
   );
 
-  const ganttNav = (
-    <div className="flex items-center gap-2">
-      <input
-        type="text"
-        value={ganttSearch}
-        onChange={(e) => setGanttSearch(e.target.value)}
-        placeholder="Search projects..."
-        className="w-40 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 placeholder-gray-400 focus:border-pink-400 focus:outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => scrollGanttBy(-14)}
-        aria-label="Scroll timeline earlier"
-        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        onClick={() => scrollGanttToToday("smooth")}
-        className="rounded border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-pink-300 hover:text-pink-600"
-      >
-        Today
-      </button>
-      <button
-        type="button"
-        onClick={() => scrollGanttBy(14)}
-        aria-label="Scroll timeline later"
-        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-800"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-    </div>
-  );
-
   // Which rows of the "How to read this" key below have anything to show —
   // each row only appears once its own state actually exists somewhere on
   // the visible calendar, same rule every individual legend entry already
@@ -2572,7 +2442,11 @@ export function SchedulePlanner({
   const legendShowsOverdue = dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey);
   const legendShowsNeedsSupervisor = hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0;
   const legendShowsNoSupervisorPlanned = dayAssignments.some(
-    (a) => !a.supervisorUserId && !a.projectManagerUserId && !a.supervisorContractorId
+    (a) =>
+      !a.supervisorUserId &&
+      !a.projectManagerUserId &&
+      !a.supervisorContractorId &&
+      !projectSoloCoverage.dayPairs.has(`${a.projectId}:${a.dateKey}`)
   );
   const legendShowsType = presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0;
   const legendShowsStatus =
@@ -3046,7 +2920,8 @@ export function SchedulePlanner({
                     .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
                     .filter((d): d is string => !!d);
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
-                  const noSupervisor = !isOverdue && !supervisor && !pm && !contractor;
+                  const noSupervisor =
+                    !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
                   return (
                   <Fragment key={`plan-${assignment.id}`}>
                   <li className={inMonth ? "group relative" : "relative"}>
@@ -3524,112 +3399,6 @@ export function SchedulePlanner({
         ) : null}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Project timeline" headerExtra={allGanttWindows.length > 0 ? ganttNav : undefined}>
-        {allGanttWindows.length === 0 ? (
-          <p className="text-sm text-gray-500">No projects yet. Create one in Projects → New project.</p>
-        ) : windows.length === 0 ? (
-          <p className="text-sm text-gray-500">No projects match your search.</p>
-        ) : (
-          <div className="flex max-h-[min(70vh,720px)] flex-col overflow-hidden rounded-lg border border-gray-200">
-            <div className="flex min-h-0 flex-1 overflow-auto">
-              <div className="sticky left-0 z-10 w-[220px] shrink-0 border-r border-gray-200 bg-white">
-                <div className="flex h-14 items-center border-b border-gray-200 px-3 text-[10px] font-semibold uppercase text-gray-500">
-                  Project
-                </div>
-                {windows.map(({ p }, idx) => (
-                  <div
-                    key={p.id}
-                    className={`flex h-14 flex-col justify-center gap-0.5 border-b border-gray-100 px-3 text-xs text-gray-800 ${
-                      idx % 2 === 1 ? "bg-gray-50/60" : "bg-white"
-                    }`}
-                  >
-                    <Link href={`/erp/projects/${p.id}`} className="truncate font-medium text-pink-600 hover:underline" title={p.jobTitle}>
-                      {p.jobTitle}
-                    </Link>
-                    <select
-                      value={currentSupervisorId(p)}
-                      onChange={(e) => handleSupervisorChange(p, e.target.value)}
-                      disabled={savingProjectId === p.id}
-                      className="w-full rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px] text-gray-600 focus:border-pink-400 focus:outline-none disabled:opacity-60"
-                    >
-                      <option value="">— Unassigned —</option>
-                      {supervisors.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.displayName}
-                        </option>
-                      ))}
-                    </select>
-                    {errorProjectId === p.id ? (
-                      <span className="text-[9px] font-medium text-red-500">Failed to save — reverted</span>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              <div ref={ganttScrollRef} className="min-w-0 flex-1 overflow-x-auto">
-                <div style={{ width: timelineWidth }} className="relative">
-                  {/* Today column — highlighted so "where are we now" is obvious at a glance */}
-                  {todayOffsetPx >= 0 && todayOffsetPx < timelineWidth ? (
-                    <div
-                      className="pointer-events-none absolute inset-y-0 z-0 border-x border-pink-200 bg-pink-50/70"
-                      style={{ left: todayOffsetPx, width: PX_PER_DAY }}
-                    />
-                  ) : null}
-                  <div
-                    className="relative flex h-14 items-end border-b border-gray-200 bg-white/80 text-[10px] text-gray-500"
-                    style={{ width: timelineWidth }}
-                  >
-                    {Array.from({ length: totalDays }).map((_, i) => {
-                      const d = addDays(ganttRange.start, i);
-                      const isTodayCol = i * PX_PER_DAY === todayOffsetPx;
-                      const show =
-                        isTodayCol || d.getUTCDate() === 1 || i === 0 || d.getUTCDay() === 0
-                          ? isTodayCol
-                            ? "Today"
-                            : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-                          : "";
-                      return (
-                        <div
-                          key={i}
-                          style={{ width: PX_PER_DAY, minWidth: PX_PER_DAY }}
-                          className={`shrink-0 border-l border-gray-100 ${d.getUTCDay() === 0 ? "bg-gray-50" : ""}`}
-                        >
-                          {show ? (
-                            <span className={`pl-0.5 ${isTodayCol ? "font-semibold text-pink-600" : ""}`}>{show}</span>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {windows.map((w, idx) => {
-                    const startOff = Math.max(0, dayOffset(w.start));
-                    const endOff = Math.min(totalDays - 1, dayOffset(w.end));
-                    const left = startOff * PX_PER_DAY;
-                    const width = Math.max(PX_PER_DAY * 2, (endOff - startOff + 1) * PX_PER_DAY);
-                    return (
-                      <div
-                        key={w.p.id}
-                        className={`relative h-14 border-b border-gray-100 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
-                        style={{ width: timelineWidth }}
-                      >
-                        <Link
-                          href={`/erp/projects/${w.p.id}`}
-                          title={`${w.p.jobTitle} — ${w.p.percentDone}% done`}
-                          className={`absolute top-3 z-10 flex h-8 items-center rounded px-2 text-[11px] font-medium text-white shadow ring-1 ring-black/5 ${statusBarClass(w.p.status)}`}
-                          style={{ left, width: Math.min(width, timelineWidth - left) }}
-                        >
-                          <span className="truncate">{w.p.segment}</span>
-                          <span className="ml-2 opacity-80">{w.p.percentDone}%</span>
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </CollapsibleSection>
-
       {openDayKey ? (
         <DayAssignmentModal
           dateKey={openDayKey}
@@ -3649,7 +3418,7 @@ export function SchedulePlanner({
           onCreated={(a) => {
             setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
             // Assigning a supervisor here also sets the project's supervisor
-            // server-side, mirror that in the Gantt's inline dropdown right
+            // server-side, mirror that in the local supervisor overrides right
             // away. Skipped for a PM-only assignment, that never touches the
             // project's supervisor field (see the day-assignments route).
             if (a.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));

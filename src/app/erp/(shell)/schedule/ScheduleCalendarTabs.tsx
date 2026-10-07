@@ -3,6 +3,7 @@ import Link from "next/link";
 // Add future calendars here: one entry plus a branch in page.tsx.
 const CALENDARS = [
   { id: "projects", label: "Projects", href: "/erp/schedule" },
+  { id: "timeline", label: "Gantt", href: "/erp/schedule?calendar=timeline" },
   { id: "janitorial", label: "Janitorial Contracts", href: "/erp/schedule?calendar=janitorial" },
   { id: "management", label: "Management", href: "/erp/schedule?calendar=management" },
 ] as const;

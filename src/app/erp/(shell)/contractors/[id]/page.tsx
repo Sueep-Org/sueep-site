@@ -344,6 +344,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     phone: contractor.phone,
                     role: contractor.role,
                     status: contractor.status,
+                    runsWithoutSupervisor: contractor.runsWithoutSupervisor,
                   }}
                 />
               </CollapsibleSection>
