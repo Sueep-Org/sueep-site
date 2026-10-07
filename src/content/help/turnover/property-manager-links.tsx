@@ -76,7 +76,8 @@ export function PropertyManagerLinks() {
         <LI>
           <strong>Booking:</strong> they tap <strong>Book a turnover</strong>, enter the unit, work, and start date, and see an
           estimate from the building&apos;s pricing package. Units we&apos;ve turned before fill in their size, and{" "}
-          <strong>Same as last time</strong> checks last time&apos;s work. They can add up to 10 units in one booking.
+          <strong>Same as last time</strong> checks last time&apos;s work. They can add up to 10 units in one booking. All
+          units start on the same date unless they tap <strong>Change date</strong> on a unit to give it its own.
         </LI>
         <LI>A bar at the top says who to call: their Sueep contact&apos;s name and phone number.</LI>
       </UL>
@@ -146,7 +147,7 @@ export function PropertyManagerLinks() {
       <UL>
         <LI>
           <strong>For staff:</strong> weekday mornings, if any request or change has waited over a business day, the people set
-          on the Notifications page get a <strong>Property manager requests waiting</strong> email. It repeats each weekday until
+          on the Notification Management page get a <strong>Property manager requests waiting</strong> email. It repeats each weekday until
           they&apos;re answered.
         </LI>
         <LI>
@@ -204,7 +205,7 @@ export function PropertyManagerLinks() {
 
       <H2>Emails</H2>
       <P>
-        All of these are on the <A href="/erp/help/notifications/notifications-overview">Notifications</A> page, under Turnovers
+        All of these are on the <A href="/erp/help/notifications/notifications-overview">Notification Management</A> page, under Turnovers
         or Reminders.
       </P>
       <Table>
@@ -228,7 +229,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager turnover request</TD>
-            <TD>Staff set on the Notifications page</TD>
+            <TD>Staff set on the Notification Management page</TD>
             <TD>Someone books on their page or the website form. Replying goes straight to them.</TD>
           </tr>
           <tr>
@@ -238,7 +239,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager turnover change</TD>
-            <TD>Staff set on the Notifications page</TD>
+            <TD>Staff set on the Notification Management page</TD>
             <TD>They cancel or move a request, ask to cancel or move a confirmed turnover, or take back an ask.</TD>
           </tr>
           <tr>
@@ -253,7 +254,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager requests waiting</TD>
-            <TD>Staff set on the Notifications page</TD>
+            <TD>Staff set on the Notification Management page</TD>
             <TD>Weekday mornings, when something has waited over a business day.</TD>
           </tr>
         </tbody>

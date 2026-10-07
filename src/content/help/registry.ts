@@ -15,6 +15,7 @@ import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
 import { ManagementCalendar } from "./schedule/management-calendar";
 import { NotificationsOverview } from "./notifications/notifications-overview";
+import { MyNotifications } from "./notifications/my-notifications";
 import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
@@ -162,6 +163,14 @@ export const registry: ArticleEntry[] = [
     order: 7,
     component: ManagementCalendar,
     roles: ["ADMIN", "PROJECT_MANAGER"],
+  },
+  {
+    slug: "notifications/my-notifications",
+    title: "Your Notifications",
+    category: "People & Schedule",
+    description: "Every ERP email sent to you in one list, with unread counts.",
+    order: 8,
+    component: MyNotifications,
   },
   {
     slug: "notifications/notifications-overview",

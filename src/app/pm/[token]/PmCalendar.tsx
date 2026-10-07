@@ -875,6 +875,8 @@ type UnitDraft = {
   moveOut: string;
   moveIn: string;
   showMore: boolean;
+  /** This unit's own start day; empty means it uses the booking's start date */
+  ownStart: string;
 };
 
 const NO_WORK: RequestWork = { fullClean: false, fullPaint: false, touchUpPaint: false, carpetCleaning: false };
@@ -891,6 +893,7 @@ function newDraft(key: number, copyWorkFrom?: UnitDraft): UnitDraft {
     moveOut: "",
     moveIn: "",
     showMore: false,
+    ownStart: "",
   };
 }
 
@@ -939,7 +942,13 @@ function BookingForm({
     setNextKey((k) => k + 1);
   }
   function removeUnit(key: number) {
-    setDrafts((list) => list.filter((d) => d.key !== key));
+    const left = drafts.filter((d) => d.key !== key);
+    // Down to one unit: its own date becomes the booking's, since the per-unit date only shows with 2+.
+    if (left.length === 1 && left[0].ownStart) {
+      setStart(left[0].ownStart);
+      left[0] = { ...left[0], ownStart: "" };
+    }
+    setDrafts(left);
   }
 
   /** Size and last work for a draft, from the unit's last turnover when we know it. */
@@ -977,6 +986,7 @@ function BookingForm({
             ...d.work,
             otherWork: d.otherWork,
             otherDescription: d.otherDescription,
+            startDate: d.ownStart || undefined,
             moveOutDate: d.moveOut,
             moveInDate: d.moveIn,
           })),
@@ -1034,7 +1044,7 @@ function BookingForm({
 
           <div>
             <label className={labelCls} htmlFor="req-start">
-              Start date
+              {drafts.length > 1 ? "Start date for all units" : "Start date"}
             </label>
             <input id="req-start" type="date" min={today} value={start} onChange={(e) => setStart(e.target.value)} className={fieldClass} />
           </div>
@@ -1046,6 +1056,7 @@ function BookingForm({
               : undefined;
             const knownSize = !d.layoutPicked && known?.layout ? REQUEST_LAYOUTS.find((l) => l.value === known.layout) : undefined;
             const canRepeat = known && hasWork(known.work) && !sameWork(known.work, d.work);
+            const unitStart = d.ownStart || start;
             return (
               <div key={d.key} className="space-y-3 rounded-lg border border-gray-200 p-3">
                 <div className="flex items-center justify-between">
@@ -1074,6 +1085,35 @@ function BookingForm({
                     </p>
                   )}
                 </div>
+
+                {drafts.length > 1 &&
+                  (d.ownStart ? (
+                    <div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <label className={labelCls} htmlFor={`req-start-${d.key}`}>
+                          Start date for this unit
+                        </label>
+                        <button type="button" onClick={() => update(d.key, { ownStart: "" })} className="text-xs text-gray-500 hover:text-pink-600">
+                          Same as the others
+                        </button>
+                      </div>
+                      <input
+                        id={`req-start-${d.key}`}
+                        type="date"
+                        min={today}
+                        value={d.ownStart}
+                        onChange={(e) => update(d.key, { ownStart: e.target.value })}
+                        className={fieldClass}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-700">
+                      Starts {start ? formatKey(start, { weekday: "short", month: "short", day: "numeric" }) : "on the date above"}{" "}
+                      <button type="button" onClick={() => update(d.key, { ownStart: start || today })} className="text-xs text-pink-600 hover:underline">
+                        Change date
+                      </button>
+                    </p>
+                  ))}
 
                 {knownSize ? (
                   <p className="text-sm text-gray-700">
@@ -1158,7 +1198,7 @@ function BookingForm({
                       <label className={labelCls} htmlFor={`req-in-${d.key}`}>
                         Move-in
                       </label>
-                      <input id={`req-in-${d.key}`} type="date" min={start || today} value={d.moveIn} onChange={(e) => update(d.key, { moveIn: e.target.value })} className={fieldClass} />
+                      <input id={`req-in-${d.key}`} type="date" min={unitStart || today} value={d.moveIn} onChange={(e) => update(d.key, { moveIn: e.target.value })} className={fieldClass} />
                     </div>
                   </div>
                 ) : (

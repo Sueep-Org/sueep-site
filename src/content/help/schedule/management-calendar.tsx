@@ -6,7 +6,7 @@ export function ManagementCalendar() {
       <H2>Overview</H2>
       <P>
         The <strong>Management</strong> tab on the Schedule page is one calendar for company deadlines: insurance
-        expirations, everyone&apos;s time off, background checks, pay periods, and anything you add yourself. Only Admins
+        expirations, everyone&apos;s time off, background checks, pay periods, birthdays, and anything you add yourself. Only Admins
         and Project Managers can see it.
       </P>
 
@@ -43,6 +43,10 @@ export function ManagementCalendar() {
             </LI>
             <LI>
               <strong>Payroll:</strong> the last day of each pay period. It&apos;s crossed off once that payroll is closed.
+            </LI>
+            <LI>
+              <strong>Birthdays:</strong> every year on the date of birth saved on active employees&apos; and
+              contractors&apos; profiles. People with no date of birth don&apos;t show.
             </LI>
           </UL>
           Click an automatic item and choose <strong>Open</strong> to go to the page where its date lives. Change it there
@@ -85,7 +89,7 @@ export function ManagementCalendar() {
 
       <Callout type="tip">
         Starting reminders: insurance 30 and 7 days, COIs 14 days, COI requests 2 days, background checks and documents
-        30 days, janitorial contracts 60 and 30 days. Time off and payroll start with no reminders.
+        30 days, janitorial contracts 60 and 30 days, birthdays 7 days. Time off and payroll start with no reminders.
       </Callout>
     </>
   );

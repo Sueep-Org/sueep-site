@@ -129,6 +129,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.workersCompExpiresAt = d;
   }
   if (body.workersCompExempt !== undefined) data.workersCompExempt = body.workersCompExempt === true;
+  if (body.runsWithoutSupervisor !== undefined) data.runsWithoutSupervisor = body.runsWithoutSupervisor === true;
 
   // The sub's other policies (from their certificate of insurance).
   for (const field of ["glCarrier", "glPolicyNumber"] as const) {

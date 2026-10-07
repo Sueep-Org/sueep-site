@@ -24,7 +24,7 @@ function todayWindow() {
 export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudgeProject[]> {
   const { start, end } = todayWindow();
 
-  const [projects, dayAssignments, laborToday] = await Promise.all([
+  const [projects, dayAssignments, laborToday, soloWorkersToday] = await Promise.all([
     prisma.project.findMany({
       select: {
         id: true,
@@ -38,17 +38,32 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
     }),
     prisma.projectDayAssignment.findMany({
       where: { date: { gte: start, lte: end } },
-      select: { projectId: true, supervisorUserId: true, projectManagerUserId: true },
+      select: {
+        projectId: true,
+        supervisorUserId: true,
+        projectManagerUserId: true,
+        supervisorContractor: { select: { runsWithoutSupervisor: true } },
+      },
     }),
     prisma.laborEntry.findMany({ where: { workDate: { gte: start, lte: end } }, select: { projectId: true } }),
+    // A sub who runs jobs without a supervisor (Contractor.runsWithoutSupervisor)
+    // planned on the job today is in charge on site, so it counts as scheduled.
+    prisma.projectWorkerDayAssignment.findMany({
+      where: { date: { gte: start, lte: end }, contractor: { runsWithoutSupervisor: true } },
+      select: { projectId: true },
+    }),
   ]);
 
   const scheduledIds = new Set([
     // A day assignment covered by a supervisor OR a PM-only day (see the
     // schema's ProjectDayAssignment.projectManagerUserId comment — a real,
-    // intentional case) counts as scheduled; a bare worker-only day does not.
-    ...dayAssignments.filter((d) => d.supervisorUserId || d.projectManagerUserId).map((d) => d.projectId),
+    // intentional case) counts as scheduled; a bare worker-only day does
+    // not, unless that worker is a sub who runs jobs without a supervisor.
+    ...dayAssignments
+      .filter((d) => d.supervisorUserId || d.projectManagerUserId || d.supervisorContractor?.runsWithoutSupervisor)
+      .map((d) => d.projectId),
     ...laborToday.map((r) => r.projectId),
+    ...soloWorkersToday.map((r) => r.projectId),
   ]);
 
   // A qualifying (non-VOID/REJECTED) change order whose own date range

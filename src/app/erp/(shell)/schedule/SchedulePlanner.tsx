@@ -13,6 +13,7 @@ import { useConfirm } from "@/app/erp/components/ui";
 import {
   coIsComplete,
   computeProjectSpanMarkersByDay,
+  soloSubCoverage,
   dayCellLabel,
   dayKey,
   formatHours,
@@ -237,7 +238,7 @@ type Person = { id: string; displayName: string };
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
-type WorkerPerson = Person & { email: string | null };
+type WorkerPerson = Person & { email: string | null; runsSolo?: boolean };
 
 /** Duplicates a calendar card (or a logged-labor day) onto whichever other
  * days get picked on the mini calendar — they don't need to be consecutive
@@ -2228,9 +2229,33 @@ export function SchedulePlanner({
   // computation instead of two. Split into the two chip types below by
   // `kind`, purely so the render code and legend conditions below don't need
   // to change shape.
+  // Jobs and days with a sub who runs jobs without a supervisor on them
+  // (Contractor.runsWithoutSupervisor) never get a "needs a supervisor"
+  // alert, the sub is in charge on site.
+  const projectSoloCoverage = useMemo(() => {
+    const soloIds = new Set(contractors.filter((c) => c.runsSolo).map((c) => c.id));
+    return soloSubCoverage(
+      [
+        ...workerAssignments.map((a) => ({ ownerId: a.projectId, dateKey: a.dateKey, contractorId: a.contractorId })),
+        ...dayAssignments.map((a) => ({ ownerId: a.projectId, dateKey: a.dateKey, contractorId: a.supervisorContractorId })),
+      ],
+      soloIds,
+    );
+  }, [contractors, workerAssignments, dayAssignments]);
+  const coSoloCoverage = useMemo(() => {
+    const soloIds = new Set(contractors.filter((c) => c.runsSolo).map((c) => c.id));
+    return soloSubCoverage(
+      [
+        ...coWorkerAssignments.map((a) => ({ ownerId: a.changeOrderId, dateKey: a.dateKey, contractorId: a.contractorId })),
+        ...coDayAssignments.map((a) => ({ ownerId: a.changeOrderId, dateKey: a.dateKey, contractorId: a.supervisorContractorId })),
+      ],
+      soloIds,
+    );
+  }, [contractors, coWorkerAssignments, coDayAssignments]);
+
   const projectSpanMarkersByDay = useMemo(
-    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides),
-    [projects, dayAssignments, supervisorOverrides]
+    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides, projectSoloCoverage.ownerIds),
+    [projects, dayAssignments, supervisorOverrides, projectSoloCoverage]
   );
   const hasNeedsSupervisorMarkers = useMemo(
     () => Array.from(projectSpanMarkersByDay.values()).some((list) => list.some((e) => e.kind === "needsSupervisor")),
@@ -2248,6 +2273,7 @@ export function SchedulePlanner({
     for (const co of changeOrders) {
       const supervisorId = currentCoSupervisorId(co);
       if (supervisorId) continue;
+      if (coSoloCoverage.ownerIds.has(co.id)) continue;
       if (Object.keys(co.laborByDay).length > 0) continue;
       if (coIsComplete(co.status)) continue;
       if (!co.scheduledDateKey) continue;
@@ -2264,7 +2290,7 @@ export function SchedulePlanner({
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeOrders, coDayAssignments, coSupervisorOverrides]);
+  }, [changeOrders, coDayAssignments, coSupervisorOverrides, coSoloCoverage]);
 
   const plannedByDay = useMemo(() => {
     const map = new Map<string, ScheduleDayAssignment[]>();
@@ -2416,7 +2442,11 @@ export function SchedulePlanner({
   const legendShowsOverdue = dayAssignments.some((a) => a.dateKey < todayKey) || coDayAssignments.some((a) => a.dateKey < todayKey);
   const legendShowsNeedsSupervisor = hasNeedsSupervisorMarkers || coNeedsSupervisorByDay.size > 0;
   const legendShowsNoSupervisorPlanned = dayAssignments.some(
-    (a) => !a.supervisorUserId && !a.projectManagerUserId && !a.supervisorContractorId
+    (a) =>
+      !a.supervisorUserId &&
+      !a.projectManagerUserId &&
+      !a.supervisorContractorId &&
+      !projectSoloCoverage.dayPairs.has(`${a.projectId}:${a.dateKey}`)
   );
   const legendShowsType = presentGroups.length > 0 || changeOrders.length > 0 || sovRequestRows.length > 0;
   const legendShowsStatus =
@@ -2890,7 +2920,8 @@ export function SchedulePlanner({
                     .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
                     .filter((d): d is string => !!d);
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
-                  const noSupervisor = !isOverdue && !supervisor && !pm && !contractor;
+                  const noSupervisor =
+                    !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
                   return (
                   <Fragment key={`plan-${assignment.id}`}>
                   <li className={inMonth ? "group relative" : "relative"}>

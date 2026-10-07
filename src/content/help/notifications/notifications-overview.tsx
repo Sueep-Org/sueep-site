@@ -5,7 +5,7 @@ export function NotificationsOverview() {
     <>
       <H2>Overview</H2>
       <P>
-        The <strong>Notifications</strong> page (left menu, under <strong>Admin</strong>) lists every email the ERP and the
+        The <strong>Notification Management</strong> page (left menu, under <strong>Admin</strong>) lists every email the ERP and the
         website send. Admins and Project Managers can turn each one on or off, change who gets it, and check what
         actually went out.
       </P>

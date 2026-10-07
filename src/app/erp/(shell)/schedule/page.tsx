@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { workersCompWarning } from "@/lib/erp/subCoverage";
 import {
   addDays,
+  coIsComplete,
   contractorAssignmentDayKeys,
   dayKey,
   type ScheduleChangeOrder,
@@ -15,8 +16,9 @@ import {
 } from "@/lib/erp/schedule";
 import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
 import { createCrewCollector } from "@/lib/erp/crewTimeline";
+import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { canFilterScheduleBySupervisor, canManageManagementCalendar, getErpAuth } from "@/lib/erpAuth";
+import { canFilterScheduleBySupervisor, canManageManagementCalendar, canRescheduleOnTimeline, getErpAuth } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
@@ -198,7 +200,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }),
     prisma.contractor.findMany({
       where: { status: { not: "INACTIVE" } },
-      select: { id: true, name: true, email: true, workersCompExpiresAt: true, workersCompExempt: true },
+      select: { id: true, name: true, email: true, workersCompExpiresAt: true, workersCompExempt: true, runsWithoutSupervisor: true },
       orderBy: { name: "asc" },
     }),
     prisma.changeOrderDayAssignment.findMany({
@@ -252,7 +254,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   // now; scheduling isn't blocked). Calendar labels keep the plain name.
   const contractors = contractorRows.map((c) => {
     const wc = workersCompWarning(c);
-    return { id: c.id, displayName: wc ? `${c.name} · ${wc}` : c.name, email: c.email };
+    return { id: c.id, displayName: wc ? `${c.name} · ${wc}` : c.name, email: c.email, runsSolo: c.runsWithoutSupervisor };
   });
   const contractorNameById = new Map(contractorRows.map((c) => [c.id, c.name]));
 
@@ -434,6 +436,24 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     ownPlannedDaysByChangeOrder.set(a.changeOrderId, set);
   }
 
+  // Statuses of each project's (non rejected/void) COs, for the same
+  // "active change order means WIP" rule the rest of the ERP uses.
+  const coStatusesByProject = new Map<string, { status: string }[]>();
+  // Each CO's scheduled day span, so the Gantt bar can continue through it.
+  const coSpansByProject = new Map<string, ScheduleProject["changeOrderSpans"]>();
+  for (const co of changeOrderRows) {
+    const list = coStatusesByProject.get(co.projectId) ?? [];
+    list.push({ status: co.status });
+    coStatusesByProject.set(co.projectId, list);
+    const start = co.startDate ?? co.requestedDate;
+    if (!start) continue;
+    const startKey = dayKey(start);
+    const endKey = co.endDate && dayKey(co.endDate) > startKey ? dayKey(co.endDate) : startKey;
+    const spans = coSpansByProject.get(co.projectId) ?? [];
+    spans.push({ startKey, endKey, title: co.title, complete: coIsComplete(co.status) });
+    coSpansByProject.set(co.projectId, spans);
+  }
+
   // Open COs per project, for the day-assignment modal's CO picker.
   const changeOrdersByProject = new Map<string, { id: string; title: string }[]>();
   for (const co of changeOrderRows) {
@@ -547,6 +567,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       createdAt: r.createdAt.toISOString(),
       percentDone: r.percentDone,
       supervisorUserId: r.supervisorUserId,
+      hasActiveChangeOrder: hasActiveChangeOrder(coStatusesByProject.get(r.id) ?? []),
+      changeOrderSpans: coSpansByProject.get(r.id) ?? [],
       workDayKeys: Array.from(workDayKeysByProject.get(r.id) ?? []),
       laborByDay,
       laborEntriesByDay,
@@ -688,6 +710,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           supervisors={supervisors}
           contractors={contractorRows.map((c) => ({ id: c.id, displayName: c.name }))}
           crew={crew.result()}
+          canReschedule={canRescheduleOnTimeline(auth?.role ?? "EMPLOYEE")}
         />
       </div>
     );

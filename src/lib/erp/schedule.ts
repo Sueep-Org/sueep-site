@@ -80,6 +80,14 @@ export type ScheduleProject = {
   createdAt: string;
   percentDone: number;
   supervisorUserId: string | null;
+  /** Has a submitted/approved/billing change order (see hasActiveChangeOrder
+   * in projectLifecycle.ts), which makes it count as active (WIP) even when
+   * its own status still says Upcoming or On hold. */
+  hasActiveChangeOrder: boolean;
+  /** Each of this project's change orders (not rejected/void) as a day span:
+   * start (or requested) date through end date. Lets the Gantt carry the
+   * job's bar on through its change-order work. */
+  changeOrderSpans: { startKey: string; endKey: string; title: string; complete: boolean }[];
   /** Day keys (YYYY-MM-DD) this project actually has logged labor on. */
   workDayKeys: string[];
   /** Per-day hours/workers breakdown, keyed by the same day keys as workDayKeys — powers the calendar chip tooltip. */
@@ -413,6 +421,31 @@ export function contractorAssignmentDayKeys(assignedDate: Date | null, startDate
   return keys;
 }
 
+/** A planned or covering row naming a contractor, keyed by the project or
+ * change order it's on (`ownerId`). */
+export type SoloCoverageInput = { ownerId: string; dateKey: string; contractorId: string | null };
+
+/**
+ * Which projects (or change orders) and which of their days have a sub on
+ * them who runs jobs without a supervisor (Contractor.runsWithoutSupervisor).
+ * Those never get a "needs a supervisor" alert: the sub is the one in charge
+ * on site. Feed it every row that can put a contractor on a job: worker
+ * day-assignments and the "Contractor (if no supervisor)" coverage slot.
+ */
+export function soloSubCoverage(
+  rows: SoloCoverageInput[],
+  soloContractorIds: ReadonlySet<string>,
+): { ownerIds: Set<string>; dayPairs: Set<string> } {
+  const ownerIds = new Set<string>();
+  const dayPairs = new Set<string>();
+  for (const r of rows) {
+    if (!r.contractorId || !soloContractorIds.has(r.contractorId)) continue;
+    ownerIds.add(r.ownerId);
+    dayPairs.add(`${r.ownerId}:${r.dateKey}`);
+  }
+  return { ownerIds, dayPairs };
+}
+
 export type ProjectSpanMarkerKind = "needsSupervisor" | "spanEndpoint";
 
 /** One occurrence of a project's declared start or end date claiming a
@@ -444,8 +477,10 @@ export type ProjectSpanMarker = { project: ScheduleProject; role: "start" | "end
  * Classification:
  *  - "needsSupervisor": the project has no supervisor at all (checking
  *    `supervisorOverrides` first, so an assignment made earlier in this same
- *    session clears the alert without a page refresh) and no logged work on
- *    any day, and isn't complete/archived.
+ *    session clears the alert without a page refresh), no logged work on
+ *    any day, no sub who runs jobs without a supervisor planned on it
+ *    (`soloCoveredProjectIds`, see soloSubCoverage), and isn't
+ *    complete/archived.
  *  - "spanEndpoint": everything else not already excluded above — has a
  *    supervisor, or has logged work on some other day — so the date doesn't
  *    just silently not exist on the calendar.
@@ -460,7 +495,8 @@ export type ProjectSpanMarker = { project: ScheduleProject; role: "start" | "end
 export function computeProjectSpanMarkersByDay(
   projects: ScheduleProject[],
   dayAssignments: ScheduleDayAssignment[],
-  supervisorOverrides: Record<string, string | null>
+  supervisorOverrides: Record<string, string | null>,
+  soloCoveredProjectIds: ReadonlySet<string> = new Set()
 ): Map<string, ProjectSpanMarker[]> {
   const plannedDayPairs = new Set(dayAssignments.map((a) => `${a.projectId}:${a.dateKey}`));
   const map = new Map<string, ProjectSpanMarker[]>();
@@ -471,7 +507,7 @@ export function computeProjectSpanMarkersByDay(
 
     const supervisorId = (p.id in supervisorOverrides ? supervisorOverrides[p.id] : p.supervisorUserId) ?? "";
     const hasLoggedWork = p.workDayKeys.length > 0;
-    const isUnsupervisedAndUnworked = !supervisorId && !hasLoggedWork;
+    const isUnsupervisedAndUnworked = !supervisorId && !hasLoggedWork && !soloCoveredProjectIds.has(p.id);
     // A complete project never needs the loud "needs supervisor" warning —
     // there's nothing left to do — but it still gets a quiet spanEndpoint
     // marker on its start/end day rather than vanishing outright, even when

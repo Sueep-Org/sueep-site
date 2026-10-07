@@ -10,7 +10,7 @@ export function NotificationsHeader({ active, failedCount = 0 }: { active: (type
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold text-pink-600">Notifications</h1>
+        <h1 className="text-2xl font-bold text-pink-600">Notification Management</h1>
         <InfoTip text="Every email the ERP and website send. Turn emails on or off, change who gets them, and see what went out." />
       </div>
       <nav className="flex gap-1 border-b border-gray-200" aria-label="Notification sections">

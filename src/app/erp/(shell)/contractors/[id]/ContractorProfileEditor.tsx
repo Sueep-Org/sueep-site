@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -15,6 +15,7 @@ type Props = {
     phone: string | null;
     role: string | null;
     status: string;
+    runsWithoutSupervisor: boolean;
   };
 };
 
@@ -44,6 +45,7 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
           phone: fd.get("phone") || null,
           role: fd.get("role") || null,
           status: fd.get("status"),
+          runsWithoutSupervisor: fd.get("runsWithoutSupervisor") === "on",
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -136,6 +138,19 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
             </select>
+          </div>
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <input
+              id="runsWithoutSupervisor"
+              name="runsWithoutSupervisor"
+              type="checkbox"
+              defaultChecked={initial.runsWithoutSupervisor}
+              className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+            />
+            <label htmlFor="runsWithoutSupervisor" className="text-sm text-gray-700">
+              Runs jobs without a supervisor
+            </label>
+            <InfoTip text="Jobs and days this sub is on won't be flagged as needing a supervisor on the schedule, dashboard, or nudge emails." />
           </div>
         </div>
         {error ? <p className="text-xs text-red-500">{error}</p> : null}

@@ -62,6 +62,7 @@ export const BUILTIN_KEYS = [
   "EMPLOYEE_DOCUMENTS",
   "JANITORIAL_CONTRACTS",
   "PAYROLL",
+  "BIRTHDAYS",
 ] as const;
 export type BuiltinKey = (typeof BUILTIN_KEYS)[number];
 
@@ -76,7 +77,26 @@ export const BUILTIN_SOURCE: Record<BuiltinKey, string> = {
   EMPLOYEE_DOCUMENTS: "Expiration dates on active employees' documents",
   JANITORIAL_CONTRACTS: "End dates on janitorial contracts",
   PAYROLL: "Last day of each pay period (checked once payroll is closed)",
+  BIRTHDAYS: "Date of birth on active employees' and contractors' profiles",
 };
+
+/**
+ * "YYYY-MM-DD" from a free-text date of birth. The profile form saves
+ * YYYY-MM-DD; M/D/YYYY is accepted too since the field is plain text.
+ */
+export function parseBirthDateKey(value: string | null): string | null {
+  const s = value?.trim() ?? "";
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  let [y, mo, d] = m ? [m[1], m[2], m[3]] : [];
+  if (!m) {
+    m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+    if (!m) return null;
+    [mo, d, y] = [m[1], m[2], m[3]];
+  }
+  const key = `${y}-${mo!.padStart(2, "0")}-${d!.padStart(2, "0")}`;
+  const date = new Date(`${key}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === key ? key : null;
+}
 
 /** Full class strings so Tailwind keeps them. */
 export const CATEGORY_COLORS: Record<string, { chip: string; dot: string }> = {
