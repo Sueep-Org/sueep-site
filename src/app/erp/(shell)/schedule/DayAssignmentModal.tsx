@@ -11,8 +11,9 @@ import {
 } from "@/lib/erp/schedule";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { SOVMultiCombobox, SOVPriceSummary, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
 
 /** The specific things a single crew member on a day could be split onto —
@@ -252,6 +253,14 @@ export function DayAssignmentModal({
   // details, see scopeSplitOptions.
   const splitOptions = scopeSplitOptions(selectedGroup, selectedProject, sovPicks, scopePicks);
 
+  // Prices of the picked SOV lines, so a sub can be quoted right here.
+  // Empty for roles that can't see financials (price comes through null).
+  const pickedSovPrices = selectedProject
+    ? sovPicks
+        .map((id) => selectedProject.sovItems.find((s) => s.id === id))
+        .filter((s): s is SOVItemOption => s?.scheduledValueCents != null)
+    : [];
+
   const filteredEmployees = employeeQuery.trim()
     ? employees.filter((e) => matchesSearchQuery(e.displayName, employeeQuery))
     : employees;
@@ -276,7 +285,13 @@ export function DayAssignmentModal({
     : (() => {
         const parts: string[] = [];
         if (selectedGroup === "POST_CONSTRUCTION") {
-          if (sovPicks.length > 0) parts.push(`${sovPicks.length} SOV item${sovPicks.length === 1 ? "" : "s"} picked`);
+          if (sovPicks.length > 0) {
+            const priced =
+              pickedSovPrices.length > 0
+                ? ` (${centsToDollars(pickedSovPrices.reduce((sum, s) => sum + (s.scheduledValueCents ?? 0), 0))})`
+                : "";
+            parts.push(`${sovPicks.length} SOV item${sovPicks.length === 1 ? "" : "s"} picked${priced}`);
+          }
           else if (comment.trim()) parts.push("note added");
         }
         if (selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && scopePicks.length > 0) {
@@ -818,7 +833,10 @@ export function DayAssignmentModal({
                   <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
                   <div className="mt-1">
                     {selectedProject.sovItems.length > 0 ? (
-                      <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                      <>
+                        <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                        <SOVPriceSummary sovItems={selectedProject.sovItems} selectedIds={sovPicks} />
+                      </>
                     ) : (
                       <div>
                         <p className="text-xs text-gray-400">No SOV items on this project yet.</p>

@@ -120,8 +120,9 @@ export type ScheduleProject = {
   plannedWorkersByDay: Record<string, string[]>;
   /** This project's SOV line items (id/description/completed) — lets the
    * day-assignment modal offer an SOV-item picker for Post-Construction
-   * projects. Empty for projects with no SOV. */
-  sovItems: { id: string; description: string; completed: boolean }[];
+   * projects. Empty for projects with no SOV. scheduledValueCents is null
+   * for roles that can't see financials. */
+  sovItems: { id: string; description: string; completed: boolean; scheduledValueCents: number | null }[];
   /** TURNOVER_SCOPE_OPTIONS values actually contracted for this unit (from
    * its TurnoverRequest), restricting the day-assignment scope picker to
    * just what was selected — e.g. only "CLEAN"/"PAINT" if that's all the
