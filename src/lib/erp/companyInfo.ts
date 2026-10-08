@@ -39,6 +39,8 @@ export type CompanyInfoRow = {
   /** "•••• 4821" for a sensitive row with a value, else null */
   masked: string | null;
   comment: string | null;
+  /** Clickable web address, always http(s) */
+  link: string | null;
   /** YYYY-MM-DD */
   expiresAt: string | null;
   updatedAt: string;
@@ -52,6 +54,7 @@ export type CompanyInfoInput = {
   value: string | null | undefined;
   sensitive: boolean;
   comment: string | null;
+  link: string | null;
   expiresAt: Date | null;
 };
 
@@ -75,6 +78,13 @@ export function parseCompanyInfoBody(body: Record<string, unknown>): { data: Com
     if (Number.isNaN(expiresAt.getTime())) return { error: "Expiration date is not a valid date." };
   }
 
+  let link: string | null = null;
+  const rawLink = text(body.link);
+  if (rawLink) {
+    link = toLink(rawLink);
+    if (!link) return { error: "Link must be a web address, like https://www.example.com" };
+  }
+
   return {
     data: {
       section: body.section,
@@ -82,9 +92,24 @@ export function parseCompanyInfoBody(body: Record<string, unknown>): { data: Com
       value: body.value === undefined ? undefined : text(body.value),
       sensitive: body.sensitive === true,
       comment: text(body.comment),
+      link,
       expiresAt,
     },
   };
+}
+
+/** A typed link as an https address ("pa.gov/lookup" gets https://), or null if it isn't a web address. */
+export function toLink(value: string): string | null {
+  const v = value.trim();
+  if (/\s/.test(v) || v.length > 2000) return null;
+  const withScheme = /^https?:\/\//i.test(v) ? v : /^[a-z][a-z0-9+.-]*:/i.test(v) ? null : `https://${v}`;
+  if (!withScheme) return null;
+  try {
+    const u = new URL(withScheme);
+    return /^https?:$/.test(u.protocol) && u.hostname.includes(".") ? u.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Shown as a link when the value is a web address. */

@@ -3194,6 +3194,8 @@ model CompanyInfoField {
   valueEncrypted String?
   sensitive      Boolean   @default(false)
   comment        String?
+  /// Web page for this row (license lookup, portal, registration), shown as a clickable Open link
+  link           String?
   /// Licenses, certifications, etc. that lapse
   expiresAt      DateTime? @db.Date
   sortOrder      Int       @default(0)

@@ -31,6 +31,7 @@ export function toCompanyInfoRow(f: CompanyInfoField): CompanyInfoRow {
     sensitive: f.sensitive,
     masked,
     comment: f.comment,
+    link: f.link,
     expiresAt: f.expiresAt ? utcDateKey(f.expiresAt) : null,
     updatedAt: f.updatedAt.toISOString(),
     updatedByEmail: f.updatedByEmail,
@@ -60,6 +61,7 @@ export function companyInfoWriteData(
     value: input.sensitive ? null : plain,
     valueEncrypted: input.sensitive && plain ? encryptSecret(plain) : null,
     comment: input.comment,
+    link: input.link,
     expiresAt: input.expiresAt,
     updatedByEmail: email,
   };
