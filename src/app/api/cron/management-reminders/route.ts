@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { sendManagementReminders } from "@/lib/erp/managementReminders";
+import { sendQualityCheckReminders } from "@/lib/erp/janitorialQualityChecks";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Runs daily (see vercel.json), ~8am Eastern (7am during EST, fixed UTC like
  * the other crons). Emails Admins and PMs the Management calendar items that
- * reach one of their category's reminder days today.
+ * reach one of their category's reminder days today, plus the quality check
+ * emails (tomorrow's checks to whoever does them, and overdue ones).
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -16,5 +18,6 @@ export async function GET(req: Request) {
   }
 
   const result = await sendManagementReminders();
-  return NextResponse.json(result);
+  const qualityChecks = await sendQualityCheckReminders();
+  return NextResponse.json({ ...result, qualityChecks });
 }

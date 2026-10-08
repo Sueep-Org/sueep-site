@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { parseBillingDay } from "@/lib/erp/recurringContracts";
+import { addOneYearKey, utcDateKey } from "@/lib/erp/dates";
 import { calculatePricing, parsePricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
 
 export async function POST(req: Request) {
@@ -49,11 +50,19 @@ export async function POST(req: Request) {
   if (Number.isNaN(startDate.getTime())) {
     return NextResponse.json({ error: "Invalid start date" }, { status: 400 });
   }
+  // Contracts are usually yearly, so the expiration date defaults to a year after the start.
+  const expirationDate = body.expirationDate
+    ? new Date(String(body.expirationDate))
+    : new Date(`${addOneYearKey(utcDateKey(startDate))}T00:00:00.000Z`);
+  if (Number.isNaN(expirationDate.getTime()) || expirationDate <= startDate) {
+    return NextResponse.json({ error: "Expiration date must be after the start date" }, { status: 400 });
+  }
 
   const contractData = {
     monthlyRateCents,
     billingDayOfMonth,
     startDate,
+    expirationDate,
     commissionEmployeeId,
     serviceAreas,
     notes,

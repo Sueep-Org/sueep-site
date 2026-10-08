@@ -44,3 +44,13 @@ export function utcDateKey(d: Date): string {
 export function todayEasternAsUtcMidnight(now: Date = new Date()): Date {
   return new Date(`${todayEasternKey(now)}T00:00:00.000Z`);
 }
+
+/**
+ * "YYYY-MM-DD" one year after a day label, e.g. a janitorial contract's
+ * expiration date from its start date. Feb 29 lands on Mar 1.
+ */
+export function addOneYearKey(key: string): string {
+  const d = new Date(`${key}T00:00:00.000Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return utcDateKey(d);
+}

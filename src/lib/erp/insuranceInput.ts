@@ -46,6 +46,29 @@ function moneyFields<K extends string>(body: Body, keys: K[]): { data: Record<K,
   return { data };
 }
 
+/** Premium, audit, and cancel date: the same on a policy's current term and its past terms. */
+type CostFields = { premiumCents: number | null; auditAdjustmentCents: number | null; auditDate: Date | null; cancelledOn: Date | null };
+
+function parseCostFields(body: Body, effectiveDate: Date | null, expiresAt: Date): { data: CostFields } | { error: string } {
+  const premium = money(body, "premiumCents");
+  if (premium === "invalid") return { error: "Premium must be a dollar amount" };
+  // An audit can be a refund, so negative is fine here.
+  const rawAudit = body.auditAdjustmentCents;
+  const audit = rawAudit == null || rawAudit === "" ? null : inputToCents(rawAudit);
+  if (rawAudit != null && rawAudit !== "" && audit == null) return { error: "Audit amount must be a dollar amount (negative for a refund)" };
+  const auditDate = day(body.auditDate);
+  if (auditDate === "invalid") return { error: "Audit date is not a valid date" };
+  if (audit && !auditDate) return { error: "Add the date of the audit bill or refund" };
+  const cancelledOn = day(body.cancelledOn);
+  if (cancelledOn === "invalid") return { error: "Cancelled date is not a valid date" };
+  if (cancelledOn && (cancelledOn > expiresAt || (effectiveDate && cancelledOn < effectiveDate))) {
+    return { error: "Cancelled date has to be within the policy dates" };
+  }
+  return {
+    data: { premiumCents: premium, auditAdjustmentCents: audit || null, auditDate: audit ? auditDate : null, cancelledOn },
+  };
+}
+
 export function parsePolicyBody(body: Body) {
   if (!isPolicyType(body.policyType)) return { error: "Pick a policy type" } as const;
   const carrier = text(body.carrier);
@@ -57,9 +80,12 @@ export function parsePolicyBody(body: Body) {
   if (effectiveDate && effectiveDate > expiresAt) return { error: "Effective date is after the expiration date" } as const;
   const limits = moneyFields(body, ["eachOccurrenceCents", "aggregateCents"]);
   if ("error" in limits) return limits;
+  const cost = parseCostFields(body, effectiveDate, expiresAt);
+  if ("error" in cost) return { error: cost.error } as const;
 
   return {
     data: {
+      ...cost.data,
       policyType: body.policyType,
       carrier,
       policyNumber: text(body.policyNumber),
@@ -76,6 +102,18 @@ export function parsePolicyBody(body: Body) {
       onCertificates: body.onCertificates !== false,
     },
   } as const;
+}
+
+/** A past policy term: its own dates plus the same cost fields. */
+export function parseTermBody(body: Body) {
+  const expiresAt = day(body.expiresAt);
+  if (!expiresAt || expiresAt === "invalid") return { error: "Expiration date is required" } as const;
+  const effectiveDate = day(body.effectiveDate);
+  if (effectiveDate === "invalid") return { error: "Effective date is not a valid date" } as const;
+  if (effectiveDate && effectiveDate > expiresAt) return { error: "Effective date is after the expiration date" } as const;
+  const cost = parseCostFields(body, effectiveDate, expiresAt);
+  if ("error" in cost) return { error: cost.error } as const;
+  return { data: { effectiveDate, expiresAt, ...cost.data } } as const;
 }
 
 export function parseHolderBody(body: Body) {
@@ -114,4 +152,23 @@ export function parseHolderBody(body: Body) {
       archived: body.archived === true,
     },
   } as const;
+}
+
+export type InsuranceContactInput = {
+  name: string;
+  company: string | null;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+};
+
+export function parseContactBody(body: Body): { data: InsuranceContactInput } | { error: string } {
+  const name = text(body.name);
+  if (!name) return { error: "Name is required." };
+  const email = text(body.email);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Email doesn't look right." };
+  return {
+    data: { name, company: text(body.company), role: text(body.role), email, phone: text(body.phone), notes: text(body.notes) },
+  };
 }

@@ -97,6 +97,12 @@ export function FinanceDashboard() {
         <LI>Pay comes from each person&apos;s pay history, so a raise or a switch between hourly and salary only counts from the day it started. Someone marked Inactive counts up to the day their status changed. For the month in progress, salaries and offshore pay only count up to today, like its revenue.</LI>
         <LI><strong>Commission</strong>: commission payouts and weekly bid bonuses, when they were marked paid. <strong>Reimbursements</strong>: on the date of the expense.</LI>
         <LI><strong>Contractors</strong>: the cost on each contractor assignment. <strong>Materials and travel</strong>: every material log plus travel typed on the project.</LI>
+        <LI>
+          <strong>Insurance</strong>: each policy&apos;s premium from <strong>Insurance &amp; COIs</strong>, spread evenly over the
+          days of its term (a $12,000 yearly policy is about $1,000 a month). An audit bill or refund counts in full on its
+          date. A cancelled policy stops on its cancel date. Earlier terms are kept when a policy renews, so past months
+          don&apos;t change. Active policies with no premium are listed under the <strong>!</strong> icon.
+        </LI>
         <LI>Not included: BD caller bid bonuses and any expense not tracked in the ERP.</LI>
       </UL>
 

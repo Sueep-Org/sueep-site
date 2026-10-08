@@ -26,6 +26,7 @@ import { FinanceDashboard } from "./finance/finance-dashboard";
 import { InsuranceOverview } from "./insurance/insurance-overview";
 import { CoiQuickStart } from "./insurance/coi-quick-start";
 import { PropertyManagerLinks } from "./turnover/property-manager-links";
+import { CompanyInfoOverview } from "./company-info/company-info-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -269,5 +270,14 @@ export const registry: ArticleEntry[] = [
     order: 1,
     component: CoiQuickStart,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+  },
+  {
+    slug: "company-info/company-info-overview",
+    title: "Company Info",
+    category: "Company Info",
+    description: "Our IDs, licenses, banking, financial statements, and website logins: where they live and how locked values work.",
+    order: 1,
+    component: CompanyInfoOverview,
+    roles: ["ADMIN", "PROJECT_MANAGER"],
   },
 ];

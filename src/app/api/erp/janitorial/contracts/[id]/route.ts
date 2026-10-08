@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { parseBillingDay } from "@/lib/erp/recurringContracts";
+import { addOneYearKey, utcDateKey } from "@/lib/erp/dates";
+import { cleanAreas } from "@/lib/erp/janitorialQualityShared";
 import { calculatePricing, parsePricing } from "@/lib/erp/janitorialPricing";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -66,6 +68,27 @@ export async function PATCH(req: Request, ctx: Ctx) {
       if (Number.isNaN(d.getTime())) return NextResponse.json({ error: "Invalid end date" }, { status: 400 });
       data.endDate = d;
     }
+  }
+  if (body.expirationDate !== undefined) {
+    if (body.expirationDate === null || body.expirationDate === "") {
+      data.expirationDate = null;
+    } else {
+      const d = new Date(String(body.expirationDate));
+      if (Number.isNaN(d.getTime())) return NextResponse.json({ error: "Invalid expiration date" }, { status: 400 });
+      data.expirationDate = d;
+    }
+  }
+  // { renew: true } = renewed for another year: the term moves forward a year
+  // from its current expiration date (or from the start date if it had none).
+  if (body.renew === true) {
+    const current = await prisma.recurringContract.findUnique({ where: { id }, select: { startDate: true, expirationDate: true } });
+    if (!current) return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    const from = current.expirationDate ?? current.startDate;
+    data.expirationDate = new Date(`${addOneYearKey(utcDateKey(from))}T00:00:00.000Z`);
+  }
+  if (body.qualityAreas !== undefined) {
+    if (!Array.isArray(body.qualityAreas)) return NextResponse.json({ error: "Key areas must be a list" }, { status: 400 });
+    data.qualityAreas = cleanAreas(body.qualityAreas);
   }
   if (body.serviceAreas !== undefined) {
     data.serviceAreas = body.serviceAreas ? String(body.serviceAreas).trim() : null;

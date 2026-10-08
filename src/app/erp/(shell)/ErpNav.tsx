@@ -505,6 +505,25 @@ function CogIcon({ className = iconCls }: IconProps) {
   );
 }
 
+function ClipboardIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 4.5H7.5A1.5 1.5 0 006 6v13.5A1.5 1.5 0 007.5 21h9a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H15M9 4.5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 4.5M9 4.5A1.5 1.5 0 0010.5 6h3A1.5 1.5 0 0015 4.5M9 11h6M9 14.5h6M9 18h3.5"
+      />
+    </svg>
+  );
+}
+
 interface NavItem {
   href: string;
   label: string;
@@ -586,6 +605,12 @@ const adminGroupItems: NavItem[] = [
     label: "User Management",
     roles: ["ADMIN"],
     icon: IdCardIcon,
+  },
+  {
+    href: "/erp/company-info",
+    label: "Company Info",
+    roles: PM_ADMIN,
+    icon: ClipboardIcon,
   },
   {
     href: "/erp/notifications",

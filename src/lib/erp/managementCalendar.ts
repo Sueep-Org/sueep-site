@@ -39,6 +39,8 @@ export type ManagementItem = {
   };
   /** Manual event occurrence marked done, or a pay period already closed */
   done: boolean;
+  /** Automatic item that is expected to be marked done, so it shows as overdue once past (quality checks) */
+  tracksDone?: boolean;
 };
 
 export const REPEAT_OPTIONS = [
@@ -63,6 +65,8 @@ export const BUILTIN_KEYS = [
   "JANITORIAL_CONTRACTS",
   "PAYROLL",
   "BIRTHDAYS",
+  "COMPANY_INFO",
+  "QUALITY_CHECKS",
 ] as const;
 export type BuiltinKey = (typeof BUILTIN_KEYS)[number];
 
@@ -75,9 +79,11 @@ export const BUILTIN_SOURCE: Record<BuiltinKey, string> = {
   TIME_OFF: "Employee and contractor time off",
   BACKGROUND_CHECKS: "Background check expirations for active employees and contractors",
   EMPLOYEE_DOCUMENTS: "Expiration dates on active employees' documents",
-  JANITORIAL_CONTRACTS: "End dates on janitorial contracts",
+  JANITORIAL_CONTRACTS: "Start, expiration and end dates on janitorial contracts",
   PAYROLL: "Last day of each pay period (checked once payroll is closed)",
   BIRTHDAYS: "Date of birth on active employees' and contractors' profiles",
+  COMPANY_INFO: "Expiration dates on Company Info (licenses, registrations, certifications)",
+  QUALITY_CHECKS: "Quality check visits scheduled on janitorial contracts",
 };
 
 /**

@@ -39,7 +39,7 @@ export function ManagementCalendar() {
               employees and contractors.
             </LI>
             <LI>
-              <strong>Janitorial contracts ending:</strong> contract end dates.
+              <strong>Janitorial contracts:</strong> contract start, expiration, and end dates.
             </LI>
             <LI>
               <strong>Payroll:</strong> the last day of each pay period. It&apos;s crossed off once that payroll is closed.
@@ -47,6 +47,14 @@ export function ManagementCalendar() {
             <LI>
               <strong>Birthdays:</strong> every year on the date of birth saved on active employees&apos; and
               contractors&apos; profiles. People with no date of birth don&apos;t show.
+            </LI>
+            <LI>
+              <strong>Company licenses and IDs:</strong> expiration dates on Company Info, like contractor licenses and MBE/WBE
+              certifications.
+            </LI>
+            <LI>
+              <strong>Quality checks:</strong> site visits scheduled on janitorial contracts, with who is doing them. They
+              turn overdue (red outline) until the check form is finished. Open goes straight to the form.
             </LI>
           </UL>
           Click an automatic item and choose <strong>Open</strong> to go to the page where its date lives. Change it there

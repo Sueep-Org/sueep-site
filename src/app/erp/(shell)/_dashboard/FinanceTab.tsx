@@ -517,6 +517,7 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
       title: "Janitors with no hourly rate (hours cost $0)",
       items: warnings.janitorMissingRate.map((name) => ({ id: name, label: name, href: "/erp/employees" })),
     },
+    { title: "Insurance policies with no premium (counted as $0)", items: warnings.insuranceMissingPremium },
   ].filter((g) => g.items.length > 0);
   const gapCount = gapGroups.reduce((s, g) => s + g.items.length, 0);
 

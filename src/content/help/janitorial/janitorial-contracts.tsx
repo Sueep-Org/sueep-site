@@ -24,6 +24,12 @@ export function JanitorialContracts() {
             <strong>New building</strong> and enter its name and address (property manager details
             are optional). The building is created together with the contract.
           </Callout>
+          <Callout type="info">
+            Contracts are usually yearly, so the <strong>expiration date</strong> starts one year after the
+            start date and can be changed. It shows on the Management calendar with reminders. When the client
+            renews, click <strong>Renew for another year</strong> on the contract page to move it forward a
+            year. The expiration date never stops billing or shifts; only an <strong>end date</strong> does.
+          </Callout>
         </Step>
 
         <Step n={2} title="Pricing a contract">
@@ -216,6 +222,50 @@ export function JanitorialContracts() {
           and the margin. The current month shows cost so far. The contracts list shows each
           building&apos;s margin for last month and flags any that lost money. Overtime premium isn&apos;t
           split across buildings, and a janitor with no hourly rate set shows as &quot;No rate&quot;.
+        </Step>
+
+        <Step n={11} title="Quality checks">
+          A quality check is a site visit by a project manager or admin: check the key areas (bathrooms,
+          lobby, hallways...), talk with the property manager, and give the team any updates. On a
+          contract&apos;s <strong>Quality</strong> tab, click <strong>Schedule a check</strong>, pick the
+          date and who is doing it.
+          <UL>
+            <LI>The person gets an email when someone else assigns them, and again the morning before.</LI>
+            <LI>Checks show on the Management calendar under <strong>Quality checks</strong>.</LI>
+            <LI>
+              Set the building&apos;s <strong>Key areas</strong> once on the Quality tab (it starts from Service
+              areas). Every visit checks them in that order.
+            </LI>
+            <LI>
+              At the building, click <strong>Start check</strong> (or the button in the email) on your phone. Mark each
+              area <strong>Good</strong> or <strong>Needs attention</strong>, add photos and notes, then fill in who you
+              spoke with at the property, what was discussed, and any team updates. <strong>Save draft</strong> keeps
+              your answers; <strong>Finish check</strong> marks it done. Add an area for just this visit at the bottom
+              of the list.
+            </LI>
+            <LI>
+              If an area needed attention on the last visit, the form shows that note under the area so you can
+              check it was fixed.
+            </LI>
+            <LI>
+              After <strong>Finish check</strong> you land on <strong>Send visit summary</strong>. Pick who gets it
+              (property managers with a link to the building, the building contact, or any email), edit the message,
+              and choose whether to include area notes, what you discussed, and photos. Each area&apos;s Good or Needs
+              attention is always included. Check the preview, then send, or skip and send it later from the check.
+            </LI>
+            <LI>
+              When areas need attention or there are team updates, the janitors scheduled at the building get an email
+              (if their profile has one) and see the notes on their clock-in page, in English or Spanish, until they tap{" "}
+              <strong>I&apos;ve seen this</strong> (or for 14 days).
+            </LI>
+            <LI>
+              A check that isn&apos;t finished shows as <strong>Overdue</strong>, and the next morning the person and
+              every admin get one email about it. Finished checks list how many areas needed attention; click one to
+              see everything from that visit.
+            </LI>
+            <LI>Use <strong>Edit</strong> to move it or give it to someone else, and <strong>Cancel</strong> to remove it.</LI>
+            <LI>The contracts list shows each building&apos;s <strong>Next check</strong>.</LI>
+          </UL>
         </Step>
       </Steps>
 

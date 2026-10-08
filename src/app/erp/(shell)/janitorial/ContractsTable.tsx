@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { centsToDollars } from "@/lib/erp/money";
+import { daysBetween } from "@/lib/erp/managementCalendar";
 import { BillingStatusBadge, ContractStatusBadge } from "./badges";
 
 export type ContractRow = {
@@ -14,13 +15,17 @@ export type ContractRow = {
   monthlyRateCents: number;
   latest: { label: string; totalCents: number; billingStatus: string } | null;
   margin: { revenueCents: number; costCents: number; marginCents: number } | null;
+  /** "YYYY-MM-DD" end of the current yearly term */
+  expirationDate: string | null;
+  /** "YYYY-MM-DD" earliest quality check not marked done */
+  nextCheck: string | null;
   salesperson: string | null;
 };
 
 type StatusFilter = "current" | "ended" | "all";
 
 /** Contracts list with search and a status filter (ended contracts hidden by default). */
-export function ContractsTable({ rows, marginMonthLabel }: { rows: ContractRow[]; marginMonthLabel: string }) {
+export function ContractsTable({ rows, marginMonthLabel, today }: { rows: ContractRow[]; marginMonthLabel: string; today: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("current");
@@ -68,7 +73,7 @@ export function ContractsTable({ rows, marginMonthLabel }: { rows: ContractRow[]
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
                 <th className="px-4 py-3">Building</th>
@@ -76,13 +81,15 @@ export function ContractsTable({ rows, marginMonthLabel }: { rows: ContractRow[]
                 <th className="px-4 py-3 text-right">Monthly rate</th>
                 <th className="px-4 py-3">Latest month</th>
                 <th className="px-4 py-3 text-right">Margin, {marginMonthLabel}</th>
+                <th className="px-4 py-3">Expires</th>
+                <th className="px-4 py-3">Next check</th>
                 <th className="px-4 py-3">Salesperson</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     {rows.length === 0
                       ? "No janitorial contracts yet."
                       : q
@@ -139,6 +146,12 @@ export function ContractsTable({ rows, marginMonthLabel }: { rows: ContractRow[]
                         <span className="text-gray-400">No data</span>
                       )}
                     </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {r.status === "ENDED" ? <span className="text-gray-400">-</span> : <ExpirationCell date={r.expirationDate} today={today} />}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {r.status === "ENDED" ? <span className="text-gray-400">-</span> : <NextCheckCell date={r.nextCheck} today={today} />}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{r.salesperson ?? <span className="text-gray-400">Unassigned</span>}</td>
                   </tr>
                 ))
@@ -149,4 +162,22 @@ export function ContractsTable({ rows, marginMonthLabel }: { rows: ContractRow[]
       </div>
     </section>
   );
+}
+
+/** Expiration date, amber within 60 days or when missing, red once it has passed. */
+function ExpirationCell({ date, today }: { date: string | null; today: string }) {
+  if (!date) return <span className="text-amber-600">Not set</span>;
+  const days = daysBetween(today, date);
+  const text = new Date(`${date}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  if (days < 0) return <span className="font-medium text-red-600">{text}, expired</span>;
+  if (days <= 60) return <span className="font-medium text-amber-600">{text}</span>;
+  return <span className="text-gray-700">{text}</span>;
+}
+
+/** Next quality check, red when it's past and not marked done. */
+function NextCheckCell({ date, today }: { date: string | null; today: string }) {
+  if (!date) return <span className="text-gray-400">None scheduled</span>;
+  const text = new Date(`${date}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  if (date < today) return <span className="font-medium text-red-600">{text}, overdue</span>;
+  return <span className={date === today ? "font-medium text-amber-600" : "text-gray-700"}>{date === today ? "Today" : text}</span>;
 }

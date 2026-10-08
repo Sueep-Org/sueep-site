@@ -29,7 +29,7 @@
  * change orders always add up to its total there.
  *
  * Net profit also subtracts overhead: salaries, offshore pay, commission paid
- * out, and reimbursements. Salaried staff also log hours on jobs, and that
+ * out, reimbursements, and insurance. Salaried staff also log hours on jobs, and that
  * labor is already in job cost, so only the part of each salary that isn't
  * already in a job that month counts as overhead (otherwise it would be
  * subtracted twice).
@@ -44,6 +44,8 @@ import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "@/lib/erp/dates";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { loadCommissionRows } from "@/lib/erp/commissionRows";
+import { insuranceCostForDays, termStartKey, type CostTerm } from "@/lib/erp/insuranceCost";
+import { policyTypeLabel } from "@/lib/erp/insurance";
 
 export type FinanceSegment = "POST_CONSTRUCTION" | "TURNOVERS" | "JANITORIAL_CONTRACTS" | "OTHER";
 
@@ -90,6 +92,8 @@ export type FinanceMonth = {
   manualHourlyCents: number;
   commissionCents: number;
   reimbursementCents: number;
+  /** Insurance premiums spread over each term, plus audit bills/refunds (overhead). */
+  insuranceCents: number;
   overheadCents: number;
   netProfitCents: number;
   /** Work finished this month (always by completion month, whatever the
@@ -112,6 +116,7 @@ export function costBreakdown(m: FinanceMonth): { label: string; cents: number; 
     { label: "Contractors", cents: m.contractorCents, hint: "Contractor assignments on jobs" },
     { label: "Materials and travel", cents: m.materialCents, hint: "Material logs and travel typed on projects" },
     { label: "Reimbursements", cents: m.reimbursementCents, hint: "Expenses, in the month of the expense" },
+    { label: "Insurance", cents: m.insuranceCents, hint: "Policy premiums spread over each term, plus audit bills or refunds on their date" },
   ];
 }
 
@@ -187,6 +192,8 @@ export type FinanceSummary = {
     salaryMissing: GapItem[];
     /** Janitors who worked with no hourly rate set (their hours cost $0). */
     janitorMissingRate: string[];
+    /** Active policies in the period with no premium entered (counted as $0). */
+    insuranceMissingPremium: GapItem[];
   };
 };
 
@@ -204,7 +211,7 @@ function emptyMonth(key: string): FinanceMonth {
     key, revenueCents: 0, laborCents: 0, contractorCents: 0, salaryInJobsCents: 0, offshoreInJobsCents: 0,
     materialCents: 0, grossProfitCents: 0,
     salaryCents: 0, offshoreCents: 0, manualHourlyCents: 0, commissionCents: 0, reimbursementCents: 0,
-    overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
+    insuranceCents: 0, overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
   };
 }
 
@@ -327,7 +334,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   const bucketOf = (dayKey: string): string | null =>
     range ? (dayKey >= range.from && dayKey <= range.to ? FINANCE_RANGE_KEY : null) : inRange(dayKey.slice(0, 7)) ? dayKey.slice(0, 7) : null;
 
-  const [allProjects, periods, contracts, fixedPayEmployees, offshorePaid, commissionPayouts, commissionRows, reimbursements] = await Promise.all([
+  const [allProjects, periods, contracts, fixedPayEmployees, offshorePaid, commissionPayouts, commissionRows, reimbursements, policies] = await Promise.all([
     // Complete projects (their contracts count) plus open ones (their
     // finished change orders count now, the rest is Future).
     prisma.project.findMany({
@@ -383,6 +390,13 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     prisma.commissionPayout.findMany({ select: { amountCents: true, paidAt: true, employeeId: true, employee: { select: { firstName: true, lastName: true } } } }),
     loadCommissionRows(),
     prisma.reimbursement.findMany({ select: { amountCents: true, date: true } }),
+    prisma.insurancePolicy.findMany({
+      select: {
+        id: true, policyType: true, carrier: true, active: true,
+        effectiveDate: true, expiresAt: true, premiumCents: true, auditAdjustmentCents: true, auditDate: true, cancelledOn: true,
+        terms: { select: { effectiveDate: true, expiresAt: true, premiumCents: true, auditAdjustmentCents: true, auditDate: true, cancelledOn: true } },
+      },
+    }),
   ]);
 
   const months = new Map<string, FinanceMonth>();
@@ -392,7 +406,9 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     return m;
   };
 
-  const warnings: FinanceSummary["warnings"] = { noContractValue: [], noCompletionDate: [], sovMismatch: [], salaryMissing: [], janitorMissingRate: [] };
+  const warnings: FinanceSummary["warnings"] = {
+    noContractValue: [], noCompletionDate: [], sovMismatch: [], salaryMissing: [], janitorMissingRate: [], insuranceMissingPremium: [],
+  };
   const jobs: FinanceJob[] = [];
 
   // ── Projects ────────────────────────────────────────────────────────────
@@ -803,9 +819,34 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     if (key) monthOf(key).reimbursementCents += r.amountCents;
   }
 
+  // Insurance: each term's premium spread day by day over the term, and
+  // audit bills or refunds on their date (lib/erp/insuranceCost.ts). A
+  // policy's past terms are kept when it renews, so past months don't change.
+  const dayOrNull = (d: Date | null) => (d ? utcDateKey(d) : null);
+  const costTerms: CostTerm[] = policies.flatMap((p) =>
+    [p, ...p.terms].map((t) => ({
+      effectiveKey: dayOrNull(t.effectiveDate),
+      expiresKey: utcDateKey(t.expiresAt),
+      premiumCents: t.premiumCents,
+      auditAdjustmentCents: t.auditAdjustmentCents,
+      auditDateKey: dayOrNull(t.auditDate),
+      cancelledOnKey: dayOrNull(t.cancelledOn),
+    })),
+  );
+  for (const [key, dayKeys] of bucketDays) monthOf(key).insuranceCents += insuranceCostForDays(costTerms, dayKeys);
+  // Active policies whose current term overlaps the view but have no premium.
+  const viewFirst = bucketDays[0]?.[1][0];
+  const viewLast = bucketDays.at(-1)?.[1].at(-1);
+  for (const p of policies) {
+    if (!p.active || p.premiumCents != null || !viewFirst || !viewLast) continue;
+    const term = { effectiveKey: dayOrNull(p.effectiveDate), expiresKey: utcDateKey(p.expiresAt) };
+    if (termStartKey(term) > viewLast || term.expiresKey <= viewFirst) continue;
+    warnings.insuranceMissingPremium.push({ id: p.id, label: `${policyTypeLabel(p.policyType)} (${p.carrier})`, href: "/erp/insurance" });
+  }
+
   for (const m of months.values()) {
     m.grossProfitCents = m.revenueCents - m.laborCents - m.materialCents;
-    m.overheadCents = m.salaryCents + m.offshoreCents + m.manualHourlyCents + m.commissionCents + m.reimbursementCents;
+    m.overheadCents = m.salaryCents + m.offshoreCents + m.manualHourlyCents + m.commissionCents + m.reimbursementCents + m.insuranceCents;
     m.netProfitCents = m.grossProfitCents - m.overheadCents;
   }
 
@@ -847,6 +888,7 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
     total.manualHourlyCents += m.manualHourlyCents;
     total.commissionCents += m.commissionCents;
     total.reimbursementCents += m.reimbursementCents;
+    total.insuranceCents += m.insuranceCents;
     total.overheadCents += m.overheadCents;
     total.netProfitCents += m.netProfitCents;
     total.paidCents += m.paidCents;

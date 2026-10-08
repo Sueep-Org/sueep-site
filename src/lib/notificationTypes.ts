@@ -324,6 +324,43 @@ export const NOTIFICATIONS = {
     automatic: "Every Admin and PM",
   }),
 
+  QUALITY_CHECK_ASSIGNED: def({
+    label: "Quality check assigned",
+    group: "Reminders",
+    when: "Someone schedules a janitorial quality check for another person, or moves it to them",
+    automatic: "The Admin or PM doing the check",
+  }),
+
+  QUALITY_CHECK_REMINDER: def({
+    label: "Quality check tomorrow",
+    group: "Reminders",
+    when: "About 8am the day before a janitorial quality check",
+    automatic: "The Admin or PM doing the check",
+  }),
+
+  QUALITY_CHECK_OVERDUE: def({
+    label: "Quality check overdue",
+    group: "Reminders",
+    when: "About 8am the day after a janitorial quality check that wasn't marked done (once per check)",
+    automatic: "The Admin or PM doing the check, plus every Admin",
+  }),
+
+  QUALITY_CHECK_SUMMARY: def({
+    label: "Site visit summary",
+    group: "Turnovers",
+    when: "Staff send the property manager a summary after finishing a janitorial quality check",
+    automatic: "The property managers picked when sending",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+
+  QUALITY_CHECK_TEAM_NOTICE: def({
+    label: "Quality check notes for janitors",
+    group: "People",
+    when: "A janitorial quality check is finished with areas that need attention or team updates",
+    automatic: "Janitors scheduled at that building who have an email on their profile",
+  }),
+
   WEBSITE_CONTACT: def({
     label: "Website contact form",
     group: "Website",

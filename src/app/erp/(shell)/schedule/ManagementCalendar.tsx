@@ -31,7 +31,7 @@ const MAX_CHIPS_PER_DAY = 3;
 const UPCOMING_DAYS = 30;
 const HIDDEN_KEY = "mgmtCalendarHiddenCategories";
 
-const isOverdue = (item: ManagementItem, todayKey: string) => !!item.event && !item.done && item.end < todayKey;
+const isOverdue = (item: ManagementItem, todayKey: string) => (!!item.event || !!item.tracksDone) && !item.done && item.end < todayKey;
 
 async function sendJson(url: string, method: string, body?: unknown): Promise<string | null> {
   try {

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { centsToDollars } from "@/lib/erp/money";
-import { todayEasternKey } from "@/lib/erp/dates";
+import { todayEasternKey, utcDateKey } from "@/lib/erp/dates";
+import { daysBetween } from "@/lib/erp/managementCalendar";
 import { shiftHours } from "@/lib/erp/janitorialSchedule";
 import { formatHours } from "@/lib/erp/schedule";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
@@ -18,6 +19,9 @@ import { ContractMonthsTable } from "./ContractMonthsTable";
 import { ContractShiftPatterns } from "./ContractShiftPatterns";
 import { BuildingLocationCard } from "./BuildingLocationCard";
 import { StatStrip } from "../../StatStrip";
+import { ContractQualityChecks } from "./ContractQualityChecks";
+import { checkerName, loadCheckers, namesByEmail } from "@/lib/erp/janitorialQualityChecks";
+import { keyAreasFor, needsAttention, parseAreaResults } from "@/lib/erp/janitorialQualityShared";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +32,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
   if (!auth || !canManageJanitorial(auth.role)) redirect("/erp");
   const { id } = await params;
 
-  const [contract, employees, latestGpsClockIn] = await Promise.all([
+  const [contract, employees, latestGpsClockIn, checkers] = await Promise.all([
     prisma.recurringContract.findUnique({
       where: { id },
       include: {
@@ -43,6 +47,10 @@ export default async function JanitorialContractPage({ params }: PageProps) {
           orderBy: [{ effectiveFrom: "asc" }, { startTime: "asc" }],
           include: { employee: { select: { firstName: true, lastName: true } } },
         },
+        qualityChecks: {
+          orderBy: { scheduledDate: "desc" },
+          include: { assignedUser: { select: { email: true } } },
+        },
       },
     }),
     prisma.employee.findMany({
@@ -55,8 +63,10 @@ export default async function JanitorialContractPage({ params }: PageProps) {
       orderBy: { clockInAt: "desc" },
       select: { clockInAt: true, employee: { select: { firstName: true, lastName: true } } },
     }),
+    loadCheckers(),
   ]);
   if (!contract) notFound();
+  const assigneeNames = await namesByEmail(contract.qualityChecks.flatMap((q) => (q.assignedUser ? [q.assignedUser.email] : [])));
 
   // Summary tiles
   const today = todayEasternKey();
@@ -98,6 +108,17 @@ export default async function JanitorialContractPage({ params }: PageProps) {
       : { label: "Margin, last full month", value: "No data yet" },
   ];
 
+  // Yearly term: amber within 60 days, red once it has expired without a renewal.
+  const expiration = contract.expirationDate
+    ? (() => {
+        const key = utcDateKey(contract.expirationDate);
+        const daysLeft = daysBetween(today, key);
+        return { key, daysLeft, tone: daysLeft < 0 ? "font-medium text-red-600" : daysLeft <= 60 ? "font-medium text-amber-600" : "text-gray-500" };
+      })()
+    : null;
+  const formatDateKey = (key: string) =>
+    new Date(`${key}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
   const employeeOptions = employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }));
 
   return (
@@ -117,8 +138,23 @@ export default async function JanitorialContractPage({ params }: PageProps) {
               Building profile
             </Link>
           </p>
+          {contract.status !== "ENDED" &&
+            (expiration ? (
+              <p className={`mt-1 text-sm ${expiration.tone}`}>
+                {expiration.daysLeft < 0 ? "Expired " : "Expires "}
+                {formatDateKey(expiration.key)}
+                {expiration.daysLeft >= 0 && expiration.daysLeft <= 60 ? ` (in ${expiration.daysLeft} day${expiration.daysLeft === 1 ? "" : "s"})` : ""}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm font-medium text-amber-600">No expiration date set. Add it on the Details tab.</p>
+            ))}
         </div>
-        <ContractStatusActions contractId={contract.id} status={contract.status} buildingName={contract.building.name} />
+        <ContractStatusActions
+          contractId={contract.id}
+          status={contract.status}
+          buildingName={contract.building.name}
+          expirationDate={contract.expirationDate ? utcDateKey(contract.expirationDate) : null}
+        />
       </div>
 
       <StatStrip
@@ -142,6 +178,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   billingDayOfMonth: contract.billingDayOfMonth,
                   startDate: contract.startDate.toISOString(),
                   endDate: contract.endDate ? contract.endDate.toISOString() : null,
+                  expirationDate: contract.expirationDate ? contract.expirationDate.toISOString() : null,
                   serviceAreas: contract.serviceAreas,
                   notes: contract.notes,
                   commissionEmployeeId: contract.commissionEmployeeId,
@@ -198,6 +235,30 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   }
                 />
               </div>
+            ),
+          },
+          {
+            label: "Quality",
+            content: (
+              <ContractQualityChecks
+                contractId={contract.id}
+                today={today}
+                checkers={checkers.map((c) => ({ id: c.id, name: c.name }))}
+                keyAreas={keyAreasFor(contract)}
+                usingServiceAreas={contract.qualityAreas.length === 0}
+                checks={contract.qualityChecks.map((q) => ({
+                  id: q.id,
+                  date: utcDateKey(q.scheduledDate),
+                  assignedUserId: q.assignedUserId,
+                  assigneeName: checkerName(q.assignedUser, assigneeNames),
+                  status: q.status === "DONE" ? "DONE" : "SCHEDULED",
+                  notes: q.notes,
+                  completedAt: q.completedAt ? q.completedAt.toISOString() : null,
+                  attentionAreas: needsAttention(parseAreaResults(q.areaResults)).map((r) => r.area),
+                  started: q.areaResults != null,
+                  summarySent: q.summarySentAt != null,
+                }))}
+              />
             ),
           },
           {

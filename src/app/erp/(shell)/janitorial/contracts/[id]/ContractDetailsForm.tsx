@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { inputClass, labelClass, useToast } from "@/app/erp/components/ui";
+import { InfoTip, inputClass, labelClass, useToast } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 
 const input = inputClass.md;
@@ -16,6 +16,7 @@ type Contract = {
   billingDayOfMonth: number;
   startDate: string;
   endDate: string | null;
+  expirationDate: string | null;
   serviceAreas: string | null;
   notes: string | null;
   commissionEmployeeId: string | null;
@@ -39,6 +40,7 @@ export function ContractDetailsForm({
   const [billingDay, setBillingDay] = useState(String(contract.billingDayOfMonth));
   const [startDate, setStartDate] = useState(contract.startDate.slice(0, 10));
   const [endDate, setEndDate] = useState(contract.endDate ? contract.endDate.slice(0, 10) : "");
+  const [expirationDate, setExpirationDate] = useState(contract.expirationDate ? contract.expirationDate.slice(0, 10) : "");
   const [serviceAreas, setServiceAreas] = useState(contract.serviceAreas ?? "");
   const [notes, setNotes] = useState(contract.notes ?? "");
   const [salespersonId, setSalespersonId] = useState(contract.commissionEmployeeId ?? "");
@@ -57,6 +59,7 @@ export function ContractDetailsForm({
           billingDayOfMonth: Number(billingDay),
           startDate,
           endDate: endDate || null,
+          expirationDate: expirationDate || null,
           serviceAreas,
           notes,
           commissionEmployeeId: salespersonId || null,
@@ -98,7 +101,21 @@ export function ContractDetailsForm({
           <input id="cd-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={input} />
         </div>
         <div>
-          <label className={label} htmlFor="cd-end">End date</label>
+          <label className={label} htmlFor="cd-expiration">
+            <span className="inline-flex items-center gap-1">
+              Expiration date
+              <InfoTip text="When the current yearly term ends. Shows on the Management calendar with reminders. It does not stop billing or shifts." />
+            </span>
+          </label>
+          <input id="cd-expiration" type="date" value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} className={input} />
+        </div>
+        <div>
+          <label className={label} htmlFor="cd-end">
+            <span className="inline-flex items-center gap-1">
+              End date
+              <InfoTip text="Only when the contract is actually ending. Billing and shifts stop after this day." />
+            </span>
+          </label>
           <input id="cd-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={input} />
         </div>
         <div className="sm:col-span-2">

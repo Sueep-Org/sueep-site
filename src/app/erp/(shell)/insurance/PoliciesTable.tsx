@@ -7,9 +7,8 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { POLICY_TYPES, expiryStatus, formatLimit, occurrenceLabel, policyTypeLabel } from "@/lib/erp/insurance";
 import { ExpiryBadge, Included } from "./badges";
 import { centsToField, type PolicyRow } from "./types";
-
-const fmtDay = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+import { PastTerms } from "./PastTerms";
+import { fmtDay, fmtMoney } from "./format";
 
 export function PoliciesTable({ policies }: { policies: PolicyRow[] }) {
   const [editing, setEditing] = useState<PolicyRow | "new" | null>(null);
@@ -33,6 +32,12 @@ export function PoliciesTable({ policies }: { policies: PolicyRow[] }) {
                 <th className="px-3 py-2 font-medium">Limits</th>
                 <th className="px-3 py-2 font-medium">
                   <span className="inline-flex items-center gap-1">
+                    Premium
+                    <InfoTip text="What this term costs. Spread over the term as overhead on the Finance dashboard." />
+                  </span>
+                </th>
+                <th className="px-3 py-2 font-medium">
+                  <span className="inline-flex items-center gap-1">
                     Includes
                     <InfoTip text="What this policy lets us put on a certificate without a policy change: additional insured (AI), waiver of subrogation, and primary and noncontributory (P&NC)." />
                   </span>
@@ -53,6 +58,9 @@ export function PoliciesTable({ policies }: { policies: PolicyRow[] }) {
                   <td className="px-3 py-2.5 tabular-nums">
                     {[p.eachOccurrenceCents, p.aggregateCents].filter((c) => c != null).map((c) => formatLimit(c)).join(" / ") || "Not set"}
                     {p.aggregatePerProject && <span className="ml-1.5 text-xs text-gray-500">per project</span>}
+                  </td>
+                  <td className="px-3 py-2.5 tabular-nums">
+                    {p.premiumCents != null ? fmtMoney(p.premiumCents) : <span className={p.active ? "text-amber-600" : ""}>Not set</span>}
                   </td>
                   <td className="px-3 py-2.5">
                     <Included ai={p.blanketAdditionalInsured} waiver={p.waiverOfSubrogation} pnc={p.primaryNoncontributory} />
@@ -95,11 +103,18 @@ function PolicyForm({ policy, onClose }: { policy: PolicyRow | null; onClose: ()
     notes: policy?.notes ?? "",
     active: policy?.active ?? true,
     onCertificates: policy?.onCertificates ?? true,
+    premiumCents: centsToField(policy?.premiumCents ?? null),
+    auditAdjustmentCents: centsToField(policy?.auditAdjustmentCents ?? null),
+    auditDate: policy?.auditDate ?? "",
+    cancelledOn: policy?.cancelledOn ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const hasAggregate = form.policyType === "GENERAL_LIABILITY" || form.policyType === "UMBRELLA" || form.policyType === "OTHER";
+  // Moving the expiration later is a renewal: the old term's cost is kept
+  // under Past terms, and its audit and cancel date stay with it.
+  const renewing = !!policy && !!form.expiresAt && form.expiresAt > policy.expiresAt;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -193,7 +208,18 @@ function PolicyForm({ policy, onClose }: { policy: PolicyRow | null; onClose: ()
           </div>
           <div>
             <label className={labelClass.default} htmlFor="pol-exp">Expiration date *</label>
-            <input id="pol-exp" type="date" value={form.expiresAt} onChange={(e) => set("expiresAt", e.target.value)} className={inputClass.md} />
+            <input
+              id="pol-exp"
+              type="date"
+              value={form.expiresAt}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((f) =>
+                  policy && v > policy.expiresAt ? { ...f, expiresAt: v, auditAdjustmentCents: "", auditDate: "", cancelledOn: "" } : { ...f, expiresAt: v },
+                );
+              }}
+              className={inputClass.md}
+            />
           </div>
           <div>
             <label className={labelClass.default} htmlFor="pol-occ">{occurrenceLabel(form.policyType)}</label>
@@ -212,6 +238,43 @@ function PolicyForm({ policy, onClose }: { policy: PolicyRow | null; onClose: ()
             <input id="pol-other" type="text" value={form.otherLimits} onChange={(e) => set("otherLimits", e.target.value)} placeholder="e.g. EL $1M / $1M / $1M" className={inputClass.md} />
           </div>
         </div>
+
+        <fieldset className="space-y-2">
+          <legend className={`${labelClass.default} flex items-center gap-1`}>
+            Cost <InfoTip text="Counts as overhead on the Finance dashboard: the premium spread evenly over the term, the audit amount on its date." />
+          </legend>
+          {renewing && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Renewing: the old term and its {policy?.premiumCents != null ? `${fmtMoney(policy.premiumCents)} premium` : "cost"} are saved under Past terms. Enter
+              the new term&apos;s premium below.
+            </p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelClass.default} htmlFor="pol-premium">
+                Premium for this term <InfoTip text="Total for the term, fees and taxes included. If it's paid monthly, add up the payments." />
+              </label>
+              <input id="pol-premium" type="text" inputMode="decimal" placeholder="$0" value={form.premiumCents} onChange={(e) => set("premiumCents", e.target.value)} className={inputClass.md} />
+            </div>
+            <div>
+              <label className={labelClass.default} htmlFor="pol-cancel">
+                Cancelled on <InfoTip text="Only if it was cancelled before it expired. The premium stops counting that day." />
+              </label>
+              <input id="pol-cancel" type="date" value={form.cancelledOn} onChange={(e) => set("cancelledOn", e.target.value)} className={inputClass.md} />
+            </div>
+            <div>
+              <label className={labelClass.default} htmlFor="pol-audit">
+                Audit amount <InfoTip text="Bill after this term's audit, or a negative number for a refund (e.g. -450). Counts in full on the audit date." />
+              </label>
+              <input id="pol-audit" type="text" inputMode="decimal" placeholder="$0" value={form.auditAdjustmentCents} onChange={(e) => set("auditAdjustmentCents", e.target.value)} className={inputClass.md} />
+            </div>
+            <div>
+              <label className={labelClass.default} htmlFor="pol-audit-date">Audit date</label>
+              <input id="pol-audit-date" type="date" value={form.auditDate} onChange={(e) => set("auditDate", e.target.value)} className={inputClass.md} />
+            </div>
+          </div>
+          {policy && <PastTerms policyId={policy.id} terms={policy.terms} />}
+        </fieldset>
 
         <fieldset className="space-y-2">
           <legend className={`${labelClass.default} flex items-center gap-1`}>

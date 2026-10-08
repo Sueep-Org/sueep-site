@@ -776,6 +776,94 @@ export function buildManagementReminderEmail(params: {
   `;
 }
 
+/** To the property manager after a quality check visit. Ratings only; notes and photos when staff chose to include them. */
+export function buildQualityCheckSummaryEmail(params: {
+  building: string;
+  dateLabel: string;
+  message: string;
+  areas: { area: string; good: boolean; note: string | null }[];
+  discussion: string | null;
+  photoCount: number;
+  contact: SueepContact | null;
+}) {
+  const cell = "padding:8px;border-bottom:1px solid #eee;vertical-align:top";
+  const rows = params.areas
+    .map(
+      (a) => `<tr>
+        <td style="${cell}"><strong>${escapeHtml(a.area)}</strong>${a.note ? `<br><span style="font-size:13px;color:#555">${escapeHtml(a.note)}</span>` : ""}</td>
+        <td style="${cell};white-space:nowrap;text-align:right">${
+          a.good
+            ? `<span style="color:#047857;font-weight:bold">Good</span>`
+            : `<span style="color:#b45309;font-weight:bold">Needs attention</span>`
+        }</td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <h2 style="margin:0 0 4px;color:#E73C6E">Site visit summary</h2>
+    <p style="margin:0 0 16px;color:#555">${escapeHtml(params.building)}, ${escapeHtml(params.dateLabel)}</p>
+    ${params.message ? `<p style="white-space:pre-line">${escapeHtml(params.message)}</p>` : ""}
+    <table style="border-collapse:collapse;font-size:14px;width:100%;margin:12px 0">${rows}</table>
+    ${params.discussion ? `<p><strong>What we discussed:</strong></p><p style="white-space:pre-line">${escapeHtml(params.discussion)}</p>` : ""}
+    ${params.photoCount ? `<p style="font-size:13px;color:#555">${params.photoCount} photo${params.photoCount === 1 ? " is" : "s are"} attached.</p>` : ""}
+    ${contactLine(params.contact)}
+  `;
+}
+
+/** To janitors at the building, in English and Spanish, after a quality check flags something. */
+export function buildQualityTeamNoticeEmail(params: {
+  firstName: string;
+  building: string;
+  dateLabel: string;
+  areas: { area: string; note: string | null }[];
+  teamUpdates: string | null;
+  clockUrl: string | null;
+}) {
+  const list = params.areas.length
+    ? `<ul style="padding-left:20px">${params.areas.map((a) => `<li><strong>${escapeHtml(a.area)}</strong>${a.note ? `: ${escapeHtml(a.note)}` : ""}</li>`).join("")}</ul>`
+    : "";
+  const updates = params.teamUpdates ? `<p style="white-space:pre-line;background:#f3f4f6;padding:10px 12px;border-radius:6px">${escapeHtml(params.teamUpdates)}</p>` : "";
+  const button = params.clockUrl
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.clockUrl)}" style="${BUTTON_STYLE}">Open my clock-in page / Abrir mi página</a></p>`
+    : "";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Notes from the site visit at ${escapeHtml(params.building)}</h2>
+    <p>Hi ${escapeHtml(params.firstName)}, your manager visited ${escapeHtml(params.building)} on ${escapeHtml(params.dateLabel)}.</p>
+    ${params.areas.length ? "<p>Please take care of these areas:</p>" : ""}
+    ${list}
+    ${updates}
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+    <p>Hola ${escapeHtml(params.firstName)}, tu supervisor visitó ${escapeHtml(params.building)} el ${escapeHtml(params.dateLabel)}.</p>
+    ${params.areas.length ? "<p>Por favor atiende estas áreas (las notas están arriba):</p>" : ""}
+    ${list}
+    ${button}
+  `;
+}
+
+/** Janitorial quality check emails: assigned, tomorrow, overdue. */
+export function buildQualityCheckEmail(params: {
+  heading: string;
+  intro: string;
+  checks: { building: string; address: string | null; date: string; assignee: string; notes: string | null }[];
+  url: string;
+  buttonLabel: string;
+}) {
+  const rows = params.checks
+    .map(
+      (c) => `<tr>
+        <td style="padding:6px 12px 6px 0;white-space:nowrap;vertical-align:top"><strong>${escapeHtml(c.date)}</strong></td>
+        <td style="padding:6px 0;vertical-align:top"><strong>${escapeHtml(c.building)}</strong>${c.address ? `<br><span style="color:#6b7280;font-size:12px">${escapeHtml(c.address)}</span>` : ""}<br><span style="color:#6b7280;font-size:12px">${escapeHtml(c.assignee)}</span>${c.notes ? `<br><span style="font-size:12px">${escapeHtml(c.notes)}</span>` : ""}</td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">${escapeHtml(params.heading)}</h2>
+    <p>${escapeHtml(params.intro)}</p>
+    <table style="border-collapse:collapse;margin:12px 0 20px">${rows}</table>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">${escapeHtml(params.buttonLabel)}</a></p>
+  `;
+}
+
 export function buildEmailFailuresEmail(params: {
   failures: { label: string; to: string; subject: string; error: string; url: string }[];
   logUrl: string;

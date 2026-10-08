@@ -355,10 +355,17 @@ model RecurringContract {
   status            String    @default("ACTIVE")
   startDate         DateTime
   endDate           DateTime?
+  /// When the current yearly term expires. Only drives the Management
+  /// calendar and its reminders; unlike endDate it never stops billing or
+  /// shifts. "Renew for another year" moves it forward a year. Null = not set.
+  expirationDate       DateTime?
   notes             String?
   /// Free-text scope of what gets cleaned, e.g. "Lobby, hallways, gym,
   /// 3 common bathrooms". Replaced the old per-unit list.
   serviceAreas      String?
+  /// Key areas checked on every quality check visit, in order. Empty means
+  /// not set up yet: the check form falls back to splitting serviceAreas.
+  qualityAreas      String[]  @default([])
   /// Pricing calculator inputs (role lines, rates, overrides; see
   /// lib/erp/janitorialPricing.ts). monthlyRateCents is derived from it when
   /// set. Null for contracts priced by hand before the calculator existed.
@@ -373,9 +380,96 @@ model RecurringContract {
   shiftPatterns        JanitorialShiftPattern[]
   shiftExceptions      JanitorialShiftException[]
   timeEntries          JanitorialTimeEntry[]
+  qualityChecks        JanitorialQualityCheck[]
 
   @@index([status])
   @@index([commissionEmployeeId])
+}
+
+/// A janitor tapped "I've seen this" on a quality check notice on their
+/// clock-in page, so it stops showing for them.
+model JanitorialQualityNoticeSeen {
+  qualityCheckId String
+  qualityCheck   JanitorialQualityCheck @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  seenAt         DateTime               @default(now())
+
+  @@id([qualityCheckId, employeeId])
+  @@index([employeeId])
+}
+
+/// A photo taken on a quality check visit, stored in the database like the
+/// daily safety check photos. Shrunk in the browser before upload.
+model JanitorialQualityPhoto {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  qualityCheckId String
+  qualityCheck   JanitorialQualityCheck @relation(fields: [qualityCheckId], references: [id], onDelete: Cascade)
+
+  /// Which key area it shows; null = general photo of the visit
+  area       String?
+  data       Bytes
+  mimeType   String
+  /// Email of the ERP user who uploaded it
+  uploadedBy String?
+
+  @@index([qualityCheckId])
+}
+
+/// A scheduled site visit where a Sueep project manager (or admin) checks
+/// the building's key areas, talks with the property manager, and gives the
+/// team updates. Scheduled one at a time for now (no repeating schedule).
+/// Shows on the Management calendar's Quality checks category.
+model JanitorialQualityCheck {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recurringContractId String
+  recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC date label
+  scheduledDate DateTime
+  /// Admin or Project Manager doing the visit. Null if their login was removed.
+  assignedUserId String?
+  assignedUser   ErpUser? @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  /// SCHEDULED | DONE
+  status      String    @default("SCHEDULED")
+  completedAt DateTime?
+  /// Email of the ERP user who marked it done
+  completedBy String?
+  notes       String?
+  /// Email of the ERP user who scheduled it
+  createdBy   String?
+  /// When the "overdue" email went out, so it's only sent once
+  overdueEmailSentAt DateTime?
+
+  /// What was found, one entry per area:
+  /// [{ area, rating: "GOOD" | "NEEDS_ATTENTION" | null, note }]
+  /// (see janitorialQualityShared.ts). Null until the form is first saved.
+  areaResults          Json?
+  /// Who they spoke with at the property (free text, e.g. "Maria, leasing office")
+  propertyManagerName  String?
+  /// What was discussed with the property manager, requests or complaints
+  propertyManagerNotes String?
+  /// Updates for the janitorial team: supplies, staffing, praise, issues
+  teamUpdates          String?
+
+  /// Visit summary emailed to the property manager (sent from the summary page after finishing)
+  summarySentAt DateTime?
+  summarySentTo String[]  @default([])
+  /// When the janitors at the building were told about areas needing attention / team updates
+  teamNotifiedAt DateTime?
+
+  photos      JanitorialQualityPhoto[]
+  noticesSeen JanitorialQualityNoticeSeen[]
+
+  @@index([recurringContractId, scheduledDate])
+  @@index([scheduledDate])
+  @@index([assignedUserId])
 }
 
 /// A janitor's standing weekly shift on a janitorial contract, e.g. Mon/Wed/Fri
@@ -1166,6 +1260,7 @@ model ErpUser {
   hubspotSovAliasesCreated      HubSpotSovAlias[]
   hubspotUnitAliasesCreated     HubSpotUnitAlias[]
   hubspotInvoiceMatchesResolved HubSpotInvoiceLineItemMatch[]
+  janitorialQualityChecks       JanitorialQualityCheck[]
 
   @@index([firebaseUid])
 }
@@ -1522,6 +1617,7 @@ model Employee {
   janitorialShiftPatterns      JanitorialShiftPattern[]
   janitorialShiftExceptions    JanitorialShiftException[]
   janitorialTimeEntries        JanitorialTimeEntry[]
+  qualityNoticesSeen           JanitorialQualityNoticeSeen[]
 
   @@index([status])
   @@index([defaultProject])
@@ -2553,9 +2649,42 @@ model InsurancePolicy {
   /// leaves off our certificates.
   onCertificates Boolean @default(true)
 
+  /// Cost of the current term (effectiveDate to expiresAt), spread day by
+  /// day as overhead on the Finance dashboard (lib/erp/insuranceCost.ts)
+  premiumCents         Int?
+  /// Bill (positive) or refund (negative) from this term's audit, counted on auditDate
+  auditAdjustmentCents Int?
+  auditDate            DateTime?
+  /// Cancelled before expiresAt: the premium stops counting on this day
+  cancelledOn          DateTime?
+  /// Earlier terms, saved when the policy renews, so past months keep their cost
+  terms                InsurancePolicyTerm[]
+
   coiPolicies ProjectCoiPolicy[]
 
   @@index([active, expiresAt])
+}
+
+/// A past term of an InsurancePolicy and what it cost. Saved automatically
+/// when the policy's expiration moves later (renewal); audits usually come
+/// in after that, so these stay editable.
+model InsurancePolicyTerm {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  policyId String
+  policy   InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  /// Midnight UTC date labels, same as the policy
+  effectiveDate        DateTime?
+  expiresAt            DateTime
+  premiumCents         Int?
+  auditAdjustmentCents Int?
+  auditDate            DateTime?
+  cancelledOn          DateTime?
+
+  @@index([policyId])
 }
 
 /// A GC, property manager, or anyone else who asks Sueep for a COI, with
@@ -3045,4 +3174,121 @@ model PropertyManagerChange {
   @@index([projectId, status])
   @@index([status, createdAt])
   @@index([propertyManagerId])
+}
+
+/// One row of the Company Info page (the boss's "General information"
+/// sheet): our IDs, licenses, certifications and other company facts.
+/// Admin + PM only. Repeating facts (NAICS codes, owners) are just more
+/// rows with the same label.
+model CompanyInfoField {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Card the row sits in (COMPANY, FEDERAL_IDS, ...; see lib/erp/companyInfo.ts)
+  section        String
+  label          String
+  /// Plain value, null when the row is sensitive
+  value          String?
+  /// AES-256-GCM ciphertext (lib/erp/secretBox.ts), set only when sensitive
+  valueEncrypted String?
+  sensitive      Boolean   @default(false)
+  comment        String?
+  /// Licenses, certifications, etc. that lapse
+  expiresAt      DateTime? @db.Date
+  sortOrder      Int       @default(0)
+  updatedByEmail String?
+
+  @@index([section, sortOrder])
+}
+
+/// Who revealed or copied an encrypted value on Company Info, and when.
+/// Kept even after the row itself is deleted.
+model CompanyInfoAccessLog {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  /// FIELD (CompanyInfoField) or LOGIN (CompanyLogin)
+  targetType String
+  targetId   String
+  /// Row label at the time, so the log still reads after a delete
+  label      String
+  /// REVEAL or COPY
+  action     String
+  userEmail  String
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+/// One year on Company Info's Financial tab: annual volume plus that
+/// year's P&L and balance sheet (CompanyDocument rows with the same year).
+model CompanyFinancialYear {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  year              Int     @unique
+  /// BigInt so volume past $21M still fits in cents
+  annualVolumeCents BigInt?
+  comment           String?
+  updatedByEmail    String?
+}
+
+/// A file or Drive link on Company Info: yearly P&L / balance sheet, W9,
+/// and other company paperwork. Either `data` (uploaded, max 4MB like
+/// contractor documents) or `linkUrl` is set.
+model CompanyDocument {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// PROFIT_LOSS, BALANCE_SHEET, or OTHER (see lib/erp/companyInfo.ts)
+  kind            String
+  /// Set for PROFIT_LOSS and BALANCE_SHEET
+  year            Int?
+  label           String
+  linkUrl         String?
+  filename        String?
+  mimeType        String?
+  size            Int?
+  data            Bytes?
+  uploadedByEmail String?
+
+  @@index([kind, year])
+}
+
+/// A website login on Company Info's Logins tab. The password only ever
+/// sits in the database encrypted (lib/erp/secretBox.ts) and only leaves
+/// the server through the logged reveal route.
+model CompanyLogin {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Site or account name, e.g. "SAM.gov"
+  name              String
+  url               String?
+  username          String?
+  passwordEncrypted String?
+  /// When the password was last changed here, to spot stale ones
+  passwordChangedAt DateTime?
+  /// Whose account it is, or who handles it
+  owner             String?
+  notes             String?
+  updatedByEmail    String?
+}
+
+/// People we deal with about our own insurance (broker, agent, carrier
+/// contacts), on the Insurance page's Contacts tab.
+model InsuranceContact {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name    String
+  company String?
+  /// What they handle, e.g. "Broker" or "Workers' comp claims"
+  role    String?
+  email   String?
+  phone   String?
+  notes   String?
 }

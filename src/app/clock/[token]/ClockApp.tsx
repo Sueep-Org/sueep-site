@@ -16,6 +16,14 @@ type Shift = {
 type UpcomingShift = { key: string; date: string; buildingName: string; startTime: string; endTime: string; skipped: boolean; timeOff: boolean };
 type PeriodDay = { key: string; date: string; buildingName: string; hours: number; source: string; breakDeducted: boolean };
 
+type Notice = {
+  id: string;
+  date: string;
+  buildingName: string;
+  areas: { area: string; note: string | null; photoIds: string[] }[];
+  teamUpdates: string | null;
+};
+
 type ClockData = {
   firstName: string;
   todayKey: string;
@@ -26,6 +34,7 @@ type ClockData = {
   defaultBuildingId: string | null;
   upcoming: UpcomingShift[];
   payPeriod: { start: string; end: string; days: PeriodDay[] };
+  notices: Notice[];
 };
 
 type Lang = "en" | "es";
@@ -80,6 +89,10 @@ const STRINGS = {
     err_SHIFT_OTHER_PERSON: "This shift is assigned to someone else.",
     err_PICK_BUILDING: "Pick the building you're working at.",
     err_generic: "Something went wrong. Try again.",
+    noticeTitle: "Site visit at {building}",
+    noticeAreas: "Please take care of:",
+    noticeUpdates: "Updates from your manager:",
+    noticeSeen: "I've seen this",
   },
   es: {
     hi: "Hola {name}",
@@ -129,6 +142,10 @@ const STRINGS = {
     err_SHIFT_OTHER_PERSON: "Este turno está asignado a otra persona.",
     err_PICK_BUILDING: "Elige el edificio donde estás trabajando.",
     err_generic: "Algo salió mal. Inténtalo de nuevo.",
+    noticeTitle: "Visita al edificio {building}",
+    noticeAreas: "Por favor atiende:",
+    noticeUpdates: "Mensaje de tu supervisor:",
+    noticeSeen: "Ya lo vi",
   },
 } as const;
 
@@ -277,6 +294,22 @@ export function ClockApp({ token }: { token: string }) {
     }
   }
 
+  async function markSeen(checkId: string) {
+    setBusy(true);
+    try {
+      await fetch(`/api/clock/${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "seen", checkId }),
+      });
+      await load();
+    } catch {
+      setActionError(t("err_generic"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const bigButton = "w-full rounded-2xl py-5 text-xl font-bold text-white shadow-md active:scale-[0.99] disabled:opacity-50";
   const card = "rounded-2xl bg-white p-5 shadow-sm";
   const nowLabel = new Date(now).toLocaleTimeString(locale(lang), { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
@@ -340,6 +373,46 @@ export function ClockApp({ token }: { token: string }) {
 
             {view === "today" && (
               <>
+                {data.notices.map((n) => (
+                  <section key={n.id} className="space-y-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5" role="status">
+                    <div>
+                      <p className="text-lg font-semibold">{t("noticeTitle", { building: n.buildingName })}</p>
+                      <p className="text-sm capitalize text-gray-600">{dayLabel(n.date, lang)}</p>
+                    </div>
+                    {n.areas.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">{t("noticeAreas")}</p>
+                        <ul className="space-y-2">
+                          {n.areas.map((a) => (
+                            <li key={a.area} className="rounded-xl bg-white p-3">
+                              <p className="font-semibold">{a.area}</p>
+                              {a.note && <p className="text-sm text-gray-700">{a.note}</p>}
+                              {a.photoIds.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {a.photoIds.map((id) => (
+                                    <a key={id} href={`/api/clock/${encodeURIComponent(token)}/quality-photos/${id}`} target="_blank" rel="noreferrer">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={`/api/clock/${encodeURIComponent(token)}/quality-photos/${id}`} alt={a.area} className="h-20 w-20 rounded-lg object-cover" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {n.teamUpdates && (
+                      <div>
+                        <p className="text-sm font-semibold">{t("noticeUpdates")}</p>
+                        <p className="whitespace-pre-line rounded-xl bg-white p-3 text-sm text-gray-800">{n.teamUpdates}</p>
+                      </div>
+                    )}
+                    <button type="button" disabled={busy} onClick={() => markSeen(n.id)} className="w-full rounded-xl bg-gray-900 py-3 text-base font-semibold text-white disabled:opacity-50">
+                      {t("noticeSeen")}
+                    </button>
+                  </section>
+                ))}
                 {done && (
                   <div className="rounded-2xl bg-emerald-50 p-4 text-center text-base font-semibold text-emerald-800" role="status">
                     {done}

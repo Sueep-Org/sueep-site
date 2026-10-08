@@ -19,7 +19,7 @@ export default async function InsurancePoliciesPage() {
   if (!auth || !canManageInsurance(auth.role)) redirect("/erp");
 
   const [policies, newRequests] = await Promise.all([
-    prisma.insurancePolicy.findMany({ orderBy: [{ active: "desc" }, { expiresAt: "asc" }] }),
+    prisma.insurancePolicy.findMany({ orderBy: [{ active: "desc" }, { expiresAt: "asc" }], include: { terms: true } }),
     prisma.coiRequest.count({ where: { status: "NEW" } }),
   ]);
   const active = policies.filter((p) => p.active);

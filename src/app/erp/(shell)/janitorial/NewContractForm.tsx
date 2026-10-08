@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { emptyPricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
+import { InfoTip } from "@/app/erp/components/ui";
+import { addOneYearKey } from "@/lib/erp/dates";
 import { PricingCalculator } from "./PricingCalculator";
 
 type Option = { id: string; name: string };
@@ -29,10 +31,14 @@ export function NewContractForm({ buildings, employees }: { buildings: Option[];
   const [pricing, setPricing] = useState<ContractPricing>(emptyPricing);
   const [billingDay, setBillingDay] = useState("1");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  // Follows the start date (one year later) until it is changed by hand.
+  const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [serviceAreas, setServiceAreas] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const defaultExpiration = /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? addOneYearKey(startDate) : "";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,6 +55,7 @@ export function NewContractForm({ buildings, employees }: { buildings: Option[];
           ...(useCalculator ? { pricing } : { monthlyRate: rate }),
           billingDayOfMonth: Number(billingDay),
           startDate,
+          expirationDate: expirationDate ?? defaultExpiration,
           serviceAreas,
           commissionEmployeeId: salespersonId || null,
         }),
@@ -135,10 +142,25 @@ export function NewContractForm({ buildings, employees }: { buildings: Option[];
 
       <section className={card}>
         <h2 className={cardTitle}>Contract terms</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className={labelClass} htmlFor="nc-start">Start date *</label>
             <input id="nc-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="nc-expiration">
+              <span className="inline-flex items-center gap-1">
+                Expiration date *
+                <InfoTip text="When the yearly term ends, one year after the start by default. Shows on the Management calendar with reminders." />
+              </span>
+            </label>
+            <input
+              id="nc-expiration"
+              type="date"
+              value={expirationDate ?? defaultExpiration}
+              onChange={(e) => setExpirationDate(e.target.value || null)}
+              className={inputClass}
+            />
           </div>
           <div>
             <label className={labelClass} htmlFor="nc-day">Billing day of month *</label>

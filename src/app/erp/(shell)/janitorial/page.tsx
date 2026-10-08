@@ -6,7 +6,7 @@ import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { centsToDollars } from "@/lib/erp/money";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { laborCostByContract, monthBounds } from "@/lib/erp/janitorialProfit";
-import { todayEasternKey } from "@/lib/erp/dates";
+import { todayEasternKey, utcDateKey } from "@/lib/erp/dates";
 import { JanitorialHeader } from "./JanitorialTabs";
 import { ContractsTable, type ContractRow } from "./ContractsTable";
 import { StatStrip } from "./StatStrip";
@@ -32,6 +32,7 @@ export default async function JanitorialPage() {
       include: {
         building: { select: { name: true, address: true } },
         commissionEmployee: { select: { firstName: true, lastName: true } },
+        qualityChecks: { where: { status: "SCHEDULED" }, orderBy: { scheduledDate: "asc" }, take: 1, select: { scheduledDate: true } },
         periods: {
           orderBy: { periodStart: "desc" },
           take: 1,
@@ -80,6 +81,8 @@ export default async function JanitorialPage() {
             }
           : null,
         margin: marginFor(c.id),
+        expirationDate: c.expirationDate ? utcDateKey(c.expirationDate) : null,
+        nextCheck: c.qualityChecks[0] ? utcDateKey(c.qualityChecks[0].scheduledDate) : null,
         salesperson: c.commissionEmployee ? `${c.commissionEmployee.firstName} ${c.commissionEmployee.lastName}`.trim() : null,
       };
     });
@@ -122,7 +125,7 @@ export default async function JanitorialPage() {
 
       <StatStrip stats={tiles} />
 
-      <ContractsTable rows={rows} marginMonthLabel={lastMonthLabel} />
+      <ContractsTable today={todayEasternKey()} rows={rows} marginMonthLabel={lastMonthLabel} />
     </div>
   );
 }
