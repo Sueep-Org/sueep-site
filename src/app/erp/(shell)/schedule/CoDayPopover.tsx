@@ -77,7 +77,8 @@ export function CoDayPopover({
   // it reads as backwards. Falls back to the plain read-only coverage/crew
   // view instead, same idea as a project's confirmed chip getting the
   // read-only labor card instead of its editable planned one.
-  const readOnly = coIsComplete(co.status) || !!(summary && (summary.hours > 0 || summary.workers.length > 0));
+  const hasLoggedLabor = !!(summary && (summary.hours > 0 || summary.workers.length > 0));
+  const readOnly = coIsComplete(co.status) || hasLoggedLabor;
   const supervisorName = assignment?.supervisorUserId
     ? supervisors.find((s) => s.id === assignment.supervisorUserId)?.displayName
     : null;
@@ -195,8 +196,8 @@ export function CoDayPopover({
     }
   }
 
-  async function handleRemoveCoverage() {
-    if (!assignment) return;
+  async function handleRemoveCoverage(): Promise<boolean> {
+    if (!assignment) return false;
     setRemoving(true);
     try {
       const res = await fetch(`/api/erp/schedule/co-day-assignments/${assignment.id}`, { method: "DELETE" });
@@ -208,8 +209,10 @@ export function CoDayPopover({
       setStartTime("");
       setEndTime("");
       setComment("");
+      return true;
     } catch {
       setError("Failed to remove");
+      return false;
     } finally {
       setRemoving(false);
     }
@@ -307,6 +310,25 @@ export function CoDayPopover({
                   </p>
                 ) : null}
                 {assignment.comment ? <p className="mt-1 text-[11px] text-gray-600">Note: {assignment.comment}</p> : null}
+              </div>
+            ) : null}
+
+            {/* A completed CO can still carry a stray planned day (e.g. one
+                scheduled on the wrong date after the fact). With no labor
+                logged on it there's nothing to protect, so let it be removed. */}
+            {assignment && !hasLoggedLabor ? (
+              <div className="mt-2">
+                {error ? <p className="mb-1 text-[10px] text-red-500">{error}</p> : null}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (await handleRemoveCoverage()) onClose();
+                  }}
+                  disabled={removing}
+                  className="rounded border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                >
+                  {removing ? "Removing…" : "Remove this day"}
+                </button>
               </div>
             ) : null}
 
