@@ -2,14 +2,43 @@
 
 import { useEffect, useRef, useState } from "react";
 import { inputClass } from "@/app/erp/components/ui";
+import { centsToDollars } from "@/lib/erp/money";
 
 export type SOVItemOption = {
   id: string;
   description: string;
   completed: boolean;
+  /** Line price, when the caller is allowed to show it. */
+  scheduledValueCents?: number | null;
 };
 
 const input = inputClass.md;
+
+/** Price of each picked SOV line plus a total, so a sub can be quoted on
+ * the spot. Renders nothing when prices aren't available (callers pass null
+ * prices for roles that can't see financials). */
+export function SOVPriceSummary({ sovItems, selectedIds }: { sovItems: SOVItemOption[]; selectedIds: string[] }) {
+  const priced = selectedIds
+    .map((id) => sovItems.find((s) => s.id === id))
+    .filter((s): s is SOVItemOption => s?.scheduledValueCents != null);
+  if (priced.length === 0) return null;
+  return (
+    <div className="mt-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs">
+      {priced.map((s) => (
+        <div key={s.id} className="flex justify-between gap-2 text-gray-600">
+          <span className="truncate">{s.description}</span>
+          <span className="shrink-0">{centsToDollars(s.scheduledValueCents)}</span>
+        </div>
+      ))}
+      {priced.length > 1 ? (
+        <div className="mt-1 flex justify-between gap-2 border-t border-gray-200 pt-1 font-medium text-gray-800">
+          <span>Total</span>
+          <span>{centsToDollars(priced.reduce((sum, s) => sum + (s.scheduledValueCents ?? 0), 0))}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /** Multi-select SOV item picker: selected items show as removable chips above
  * a search box; each list row shows a checkbox for "selected here" plus a
@@ -100,6 +129,9 @@ export function SOVMultiCombobox({
                   className="pointer-events-none h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-pink-600"
                 />
                 <span className="flex-1">{sov.description}</span>
+                {sov.scheduledValueCents != null ? (
+                  <span className="shrink-0 text-xs text-gray-500">{centsToDollars(sov.scheduledValueCents)}</span>
+                ) : null}
                 {sov.completed ? <span className="shrink-0 text-emerald-500 text-xs">✓ done</span> : null}
               </li>
             );

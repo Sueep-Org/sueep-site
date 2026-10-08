@@ -33,7 +33,8 @@ import {
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { SOVMultiCombobox } from "@/app/erp/components/SOVCombobox";
+import { SOVMultiCombobox, SOVPriceSummary } from "@/app/erp/components/SOVCombobox";
+import { centsToDollars } from "@/lib/erp/money";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -1867,7 +1868,10 @@ export function SchedulePlanner({
               <label className="block text-[9px] text-gray-400">SOV item(s) being worked on</label>
               <div className="mt-0.5">
                 {p.sovItems.length > 0 ? (
-                  <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} />
+                  <>
+                    <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} />
+                    <SOVPriceSummary sovItems={p.sovItems} selectedIds={eventSovPicks} />
+                  </>
                 ) : (
                   <div>
                     <p className="text-[10px] text-gray-400">No SOV items on this project yet.</p>
@@ -2916,9 +2920,16 @@ export function SchedulePlanner({
                   const contractor = !supervisor && !pm && assignment.supervisorContractorId
                     ? contractors.find((c) => c.id === assignment.supervisorContractorId)
                     : null;
-                  const assignmentSovDescriptions = assignment.sovItemIds
-                    .map((sovId) => project.sovItems.find((s) => s.id === sovId)?.description)
-                    .filter((d): d is string => !!d);
+                  // Price after each line when the viewer can see financials.
+                  const assignmentSovItems = assignment.sovItemIds
+                    .map((sovId) => project.sovItems.find((s) => s.id === sovId))
+                    .filter((s): s is ScheduleProject["sovItems"][number] => !!s);
+                  const assignmentSovDescriptions = assignmentSovItems.map((s) =>
+                    s.scheduledValueCents != null ? `${s.description} (${centsToDollars(s.scheduledValueCents)})` : s.description
+                  );
+                  const pricedSovItems = assignmentSovItems.filter((s) => s.scheduledValueCents != null);
+                  const assignmentSovTotalCents =
+                    pricedSovItems.length > 0 ? pricedSovItems.reduce((sum, s) => sum + (s.scheduledValueCents ?? 0), 0) : null;
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
                   const noSupervisor =
                     !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
@@ -2987,6 +2998,9 @@ export function SchedulePlanner({
                         ) : null}
                         {assignmentSovDescriptions.length > 0 ? (
                           <div className="mt-1 text-gray-300">SOV: {assignmentSovDescriptions.join(", ")}</div>
+                        ) : null}
+                        {assignmentSovTotalCents != null ? (
+                          <div className="font-medium text-white">SOV total: {centsToDollars(assignmentSovTotalCents)}</div>
                         ) : null}
                         {assignmentScopeLabels.length > 0 ? (
                           <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>

@@ -18,7 +18,13 @@ import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/tur
 import { createCrewCollector } from "@/lib/erp/crewTimeline";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { canFilterScheduleBySupervisor, canManageManagementCalendar, canRescheduleOnTimeline, getErpAuth } from "@/lib/erpAuth";
+import {
+  canFilterScheduleBySupervisor,
+  canManageManagementCalendar,
+  canRescheduleOnTimeline,
+  canSeeFinancials,
+  getErpAuth,
+} from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
@@ -67,6 +73,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   }
 
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
+  const showSovPrices = canSeeFinancials(auth?.role ?? "EMPLOYEE");
 
   const [
     projectRows,
@@ -104,7 +111,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         createdAt: true,
         percentDone: true,
         supervisorUserId: true,
-        sov: { select: { items: { select: { id: true, description: true, completed: true } } } },
+        sov: { select: { items: { select: { id: true, description: true, completed: true, scheduledValueCents: true } } } },
         turnoverRequest: {
           select: {
             fullClean: true,
@@ -573,7 +580,14 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       laborByDay,
       laborEntriesByDay,
       plannedWorkersByDay,
-      sovItems: r.sov?.items ?? [],
+      // Price only for roles that can see financials, so supervisors
+      // never get contract values in the page payload.
+      sovItems: (r.sov?.items ?? []).map((s) => ({
+        id: s.id,
+        description: s.description,
+        completed: s.completed,
+        scheduledValueCents: showSovPrices ? s.scheduledValueCents : null,
+      })),
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
       otherScopeDescription: r.turnoverRequest?.otherDescription ?? null,
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
