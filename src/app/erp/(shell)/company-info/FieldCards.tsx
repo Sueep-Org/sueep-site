@@ -28,7 +28,7 @@ export function FieldCards({ rows, tab, searchable = false }: { rows: CompanyInf
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!q) return rows;
-    return rows.filter((r) => [r.label, r.value ?? "", r.comment ?? ""].some((s) => s.toLowerCase().includes(q)));
+    return rows.filter((r) => [r.label, r.value ?? "", r.comment ?? "", r.link ?? ""].some((s) => s.toLowerCase().includes(q)));
   }, [rows, q]);
 
   async function fetchSecret(row: CompanyInfoRow, action: "REVEAL" | "COPY"): Promise<string | null> {
@@ -181,6 +181,18 @@ function FieldRow({
       </dt>
       <dd className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm text-gray-900">
         <span className="min-w-0 break-words">{shown}</span>
+        {row.link && (
+          <a
+            href={row.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={row.link}
+            className="inline-flex items-center gap-1 text-xs font-medium text-pink-600 hover:underline"
+          >
+            <ExternalIcon />
+            Open
+          </a>
+        )}
         {row.expiresAt && (
           <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
             <ExpiryBadge status={expiryStatus(new Date(`${row.expiresAt}T00:00:00.000Z`))} />
@@ -209,6 +221,14 @@ function FieldRow({
         </Button>
       </div>
     </div>
+  );
+}
+
+function ExternalIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H18v4.5M18 6l-7.5 7.5M10.5 7.5H6.75A.75.75 0 006 8.25v9a.75.75 0 00.75.75h9a.75.75 0 00.75-.75V13.5" />
+    </svg>
   );
 }
 
@@ -248,6 +268,7 @@ function FieldForm({
     value: row?.sensitive ? "" : (row?.value ?? ""),
     sensitive: row?.sensitive ?? false,
     comment: row?.comment ?? "",
+    link: row?.link ?? "",
     expiresAt: row?.expiresAt ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -350,6 +371,21 @@ function FieldForm({
         <label className={labelClass.default}>
           Comment
           <textarea value={form.comment} onChange={(e) => set("comment", e.target.value)} rows={2} className={inputClass.md} />
+        </label>
+
+        <label className={labelClass.default}>
+          <span className="inline-flex items-center gap-1">
+            Link
+            <InfoTip text="A web page for this row, like a license lookup or a portal. Shows as a clickable Open next to the value." />
+          </span>
+          <input
+            type="url"
+            inputMode="url"
+            value={form.link}
+            onChange={(e) => set("link", e.target.value)}
+            placeholder="https://"
+            className={inputClass.md}
+          />
         </label>
 
         <label className={labelClass.default}>
