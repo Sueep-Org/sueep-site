@@ -17,6 +17,22 @@ export type PolicyRow = {
   notes: string | null;
   active: boolean;
   onCertificates: boolean;
+  premiumCents: number | null;
+  auditAdjustmentCents: number | null;
+  auditDate: string | null;
+  cancelledOn: string | null;
+  /** Earlier terms, newest first (only loaded on the Our Policies tab) */
+  terms: PolicyTermRow[];
+};
+
+export type PolicyTermRow = {
+  id: string;
+  effectiveDate: string | null;
+  expiresAt: string;
+  premiumCents: number | null;
+  auditAdjustmentCents: number | null;
+  auditDate: string | null;
+  cancelledOn: string | null;
 };
 
 export type HolderRow = {
@@ -45,3 +61,13 @@ export type HolderRow = {
 export function centsToField(c: number | null): string {
   return c == null ? "" : String(c / 100);
 }
+
+export type ContactRow = {
+  id: string;
+  name: string;
+  company: string | null;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+};

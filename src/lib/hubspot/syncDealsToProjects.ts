@@ -164,7 +164,11 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             // emails) and pass any "is a PM assigned" truthy check.
             // Leaving it unset (null/absent) lets those checks work.
             segment: projectSegment,
-            status,
+            // Once a project is COMPLETE in the ERP it stays complete. Deals
+            // that are still billing often sit in WIP in HubSpot, and the
+            // next sync used to flip the project back to ACTIVE. Reopening
+            // a completed project is done by hand in the ERP.
+            status: existing.status === "COMPLETE" ? existing.status : status,
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             // Once a project has a start date, the ERP schedule owns it —

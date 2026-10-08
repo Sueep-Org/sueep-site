@@ -1,8 +1,10 @@
-import type { InsurancePolicy, CoiHolder } from "@prisma/client";
+import type { InsurancePolicy, InsurancePolicyTerm, CoiHolder } from "@prisma/client";
 import { utcDateKey } from "@/lib/erp/dates";
 import type { PolicyRow, HolderRow } from "./types";
 
-export function toPolicyRow(p: InsurancePolicy): PolicyRow {
+const dayOrNull = (d: Date | null) => (d ? utcDateKey(d) : null);
+
+export function toPolicyRow(p: InsurancePolicy & { terms?: InsurancePolicyTerm[] }): PolicyRow {
   return {
     id: p.id,
     policyType: p.policyType,
@@ -20,6 +22,22 @@ export function toPolicyRow(p: InsurancePolicy): PolicyRow {
     notes: p.notes,
     active: p.active,
     onCertificates: p.onCertificates,
+    premiumCents: p.premiumCents,
+    auditAdjustmentCents: p.auditAdjustmentCents,
+    auditDate: dayOrNull(p.auditDate),
+    cancelledOn: dayOrNull(p.cancelledOn),
+    terms: (p.terms ?? [])
+      .slice()
+      .sort((a, b) => b.expiresAt.getTime() - a.expiresAt.getTime())
+      .map((t) => ({
+        id: t.id,
+        effectiveDate: dayOrNull(t.effectiveDate),
+        expiresAt: utcDateKey(t.expiresAt),
+        premiumCents: t.premiumCents,
+        auditAdjustmentCents: t.auditAdjustmentCents,
+        auditDate: dayOrNull(t.auditDate),
+        cancelledOn: dayOrNull(t.cancelledOn),
+      })),
   };
 }
 

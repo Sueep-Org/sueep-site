@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { UNIT_CHECKLIST_SECTIONS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import type { ChecklistSection } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { SignaturePadInput } from "@/components/SignaturePad";
+import { MAX_UPLOAD_BYTES, shrinkImage } from "@/lib/shrinkImage";
 
 type SectionPhotos = Record<string, { before: string[]; after: string[] }>;
 
@@ -44,39 +45,9 @@ function totalProgress(completed: Record<string, boolean>): { done: number; tota
 
 type PhotoPair = { before: string[]; after: string[] };
 
-// Vercel rejects request bodies over ~4.5 MB before our route ever runs, and
-// most phone photos are bigger than that, so large images get downscaled
-// in the browser first. Anything still over the limit is rejected up front
-// with a clear message instead of a generic failure.
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-const SHRINK_OVER_BYTES = 1.5 * 1024 * 1024;
-const MAX_DIMENSION = 2400;
 // Each upload holds a DB connection while it writes the image bytes, so a
 // 30-photo batch fired all at once can exhaust the pool and fail at random.
 const UPLOAD_CONCURRENCY = 3;
-
-async function shrinkImage(file: File): Promise<File> {
-  if (file.size <= SHRINK_OVER_BYTES || file.type === "image/gif") return file;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
-    const width = Math.round(bitmap.width * scale);
-    const height = Math.round(bitmap.height * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-    if (!blob || blob.size >= file.size) return file;
-    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, { type: "image/jpeg" });
-  } catch {
-    // Browser can't decode this format (e.g. HEIC outside Safari), so send as-is.
-    return file;
-  }
-}
 
 async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
   let next = 0;

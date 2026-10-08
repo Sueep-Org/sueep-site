@@ -11,6 +11,8 @@ import { COI_WATCH_PROJECT_WHERE, currentCoiIds } from "./projectCois";
 import { OPEN_STATUSES } from "./coiRequests";
 import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "./payPeriods";
 import { utcDateKey } from "./dates";
+import { COMPANY_INFO_SECTIONS } from "./companyInfo";
+import { checkerName, namesByEmail } from "./janitorialQualityChecks";
 import {
   eventOccurrences,
   formatItemDates,
@@ -64,6 +66,8 @@ export async function loadManagementItems(
     anchorSetting,
     employeeBirthdays,
     contractorBirthdays,
+    companyInfoFields,
+    qualityChecks,
     events,
   ] = await Promise.all([
     want("SUEEP_INSURANCE")
@@ -129,8 +133,8 @@ export async function loadManagementItems(
       : [],
     want("JANITORIAL_CONTRACTS")
       ? prisma.recurringContract.findMany({
-          where: { endDate: inRange },
-          select: { id: true, endDate: true, status: true, building: { select: { name: true } } },
+          where: { OR: [{ endDate: inRange }, { startDate: inRange }, { expirationDate: inRange, status: { not: "ENDED" } }] },
+          select: { id: true, startDate: true, endDate: true, expirationDate: true, status: true, building: { select: { name: true } } },
         })
       : [],
     want("PAYROLL") ? prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }) : null,
@@ -145,6 +149,27 @@ export async function loadManagementItems(
       ? prisma.contractor.findMany({
           where: { status: "ACTIVE", dateOfBirth: { not: null } },
           select: { id: true, name: true, contractorFullName: true, dateOfBirth: true },
+        })
+      : [],
+    // Label and section only: values (some encrypted) never reach the calendar.
+    want("COMPANY_INFO")
+      ? prisma.companyInfoField.findMany({
+          where: { expiresAt: inRange },
+          select: { id: true, label: true, section: true, expiresAt: true },
+        })
+      : [],
+    want("QUALITY_CHECKS")
+      ? prisma.janitorialQualityCheck.findMany({
+          where: { scheduledDate: inRange },
+          select: {
+            id: true,
+            scheduledDate: true,
+            status: true,
+            notes: true,
+            recurringContractId: true,
+            assignedUser: { select: { email: true } },
+            recurringContract: { select: { building: { select: { name: true } } } },
+          },
         })
       : [],
     prisma.managementEvent.findMany({
@@ -260,13 +285,23 @@ export async function loadManagementItems(
   }
 
   for (const c of contracts) {
-    add("JANITORIAL_CONTRACTS", {
-      key: `jc:${c.id}`,
-      title: `${c.building.name} contract ends`,
-      detail: c.status === "ACTIVE" ? null : `Status: ${c.status.toLowerCase()}`,
-      href: `/erp/janitorial/contracts/${c.id}`,
-      ...oneDay(c.endDate!),
-    });
+    const href = `/erp/janitorial/contracts/${c.id}`;
+    const status = c.status === "ACTIVE" ? null : `Status: ${c.status.toLowerCase()}`;
+    if (within(c.startDate)) {
+      add("JANITORIAL_CONTRACTS", { key: `jc-start:${c.id}`, title: `${c.building.name} contract starts`, detail: status, href, ...oneDay(c.startDate) });
+    }
+    if (c.status !== "ENDED" && within(c.expirationDate)) {
+      add("JANITORIAL_CONTRACTS", {
+        key: `jc-expires:${c.id}`,
+        title: `${c.building.name} contract expires`,
+        detail: "Yearly term ends. Click Renew for another year on the contract page once renewed.",
+        href,
+        ...oneDay(c.expirationDate),
+      });
+    }
+    if (within(c.endDate)) {
+      add("JANITORIAL_CONTRACTS", { key: `jc:${c.id}`, title: `${c.building.name} contract ends`, detail: status, href, ...oneDay(c.endDate) });
+    }
   }
 
   if (want("PAYROLL")) {
@@ -315,6 +350,30 @@ export async function loadManagementItems(
     for (const occ of eventOccurrences(dob, null, "YEARLY", startKey, endKey)) {
       add("BIRTHDAYS", { key: `${b.key}:${occ.start}`, title: `${b.name}'s birthday`, detail: b.detail, href: b.href, ...occ });
     }
+  }
+
+  for (const f of companyInfoFields) {
+    add("COMPANY_INFO", {
+      key: `companyinfo:${f.id}`,
+      title: `${f.label} expires`,
+      detail: COMPANY_INFO_SECTIONS.find((s) => s.id === f.section)?.label ?? null,
+      href: COMPANY_INFO_SECTIONS.find((s) => s.id === f.section)?.tab === "financial" ? "/erp/company-info/financial" : "/erp/company-info",
+      ...oneDay(f.expiresAt!),
+    });
+  }
+
+  const checkerNames = await namesByEmail(qualityChecks.flatMap((q) => (q.assignedUser ? [q.assignedUser.email] : [])));
+  for (const q of qualityChecks) {
+    add("QUALITY_CHECKS", {
+      key: `qc:${q.id}`,
+      title: `${q.recurringContract.building.name} quality check`,
+      detail: checkerName(q.assignedUser, checkerNames),
+      notes: q.notes,
+      href: `/erp/janitorial/quality-checks/${q.id}`,
+      done: q.status === "DONE",
+      tracksDone: true,
+      ...oneDay(q.scheduledDate),
+    });
   }
 
   const known = new Set(categories.map((c) => c.id));

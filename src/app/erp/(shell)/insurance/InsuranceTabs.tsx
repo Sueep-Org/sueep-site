@@ -6,6 +6,7 @@ const TABS = [
   { id: "holders", label: "Certificate Holders", href: "/erp/insurance/holders" },
   { id: "requests", label: "Requests", href: "/erp/insurance/requests" },
   { id: "renewals", label: "Renewals", href: "/erp/insurance/renewals" },
+  { id: "contacts", label: "Contacts", href: "/erp/insurance/contacts" },
 ] as const;
 
 /** Title, tab bar, and an optional main action, shared by every Insurance tab. */
@@ -28,7 +29,7 @@ export function InsuranceHeader({
         </div>
         {action}
       </div>
-      <nav className="flex gap-1 border-b border-gray-200" aria-label="Insurance sections">
+      <nav className="flex gap-1 overflow-x-auto border-b border-gray-200" aria-label="Insurance sections">
         {TABS.map((t) => {
           const isActive = t.id === active;
           return (
@@ -36,7 +37,7 @@ export function InsuranceHeader({
               key={t.id}
               href={t.href}
               aria-current={isActive ? "page" : undefined}
-              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
+              className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium ${
                 isActive ? "border-pink-600 text-pink-600" : "border-transparent text-gray-500 hover:text-gray-800"
               }`}
             >

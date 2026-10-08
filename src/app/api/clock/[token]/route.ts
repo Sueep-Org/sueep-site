@@ -6,6 +6,7 @@ import { easternDateKey } from "@/lib/erp/janitorialHours";
 import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { ensureBuildingCoordinates } from "@/lib/erp/geocode";
 import type { JanitorialShift } from "@/lib/erp/janitorialSchedule";
+import { noticesForJanitor } from "@/lib/erp/janitorialQualityChecks";
 
 /**
  * Janitor clock-in, reached from their private /clock/[token] link (no ERP
@@ -109,7 +110,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const todayKey = easternDateKey(new Date());
   const today = utcMidnight(todayKey);
   const payPeriod = await currentPayPeriod(todayKey);
-  const [shifts, entries, openEntry, contracts, upcoming, periodHours] = await Promise.all([
+  const [shifts, entries, openEntry, contracts, upcoming, periodHours, notices] = await Promise.all([
     recentShifts(employee.id, todayKey),
     prisma.janitorialTimeEntry.findMany({
       where: { employeeId: employee.id, date: { gte: new Date(utcMidnight(todayKey).getTime() - 86_400_000) } },
@@ -127,6 +128,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     }),
     loadJanitorialShifts(today, new Date(today.getTime() + (UPCOMING_DAYS - 1) * 86_400_000)),
     loadJanitorialHours(payPeriod.start, today),
+    noticesForJanitor(employee.id, todayKey),
   ]);
 
   const entryByKey = new Map(entries.filter((e) => e.shiftKey).map((e) => [e.shiftKey!, e]));
@@ -155,6 +157,8 @@ export async function GET(_req: Request, ctx: Ctx) {
       .filter((e) => !e.shiftKey && utcDateKey(e.date) === todayKey && e.clockInAt && e.id !== openEntry?.id)
       .map((e) => ({ id: e.id, buildingName: e.recurringContract.building.name, clockInAt: e.clockInAt!.toISOString(), clockOutAt: e.clockOutAt?.toISOString() ?? null })),
     buildings: contracts.map((c) => ({ id: c.id, name: c.building.name })),
+    // Notes from recent site visits at their buildings, until they tap "seen".
+    notices,
     defaultBuildingId: (await mainBuildingByEmployee([employee.id])).get(employee.id) ?? null,
     upcoming: upcoming
       .filter((s) => s.employeeId === employee.id)
@@ -198,6 +202,18 @@ export async function POST(req: Request, ctx: Ctx) {
   const lng = parseCoord(body.longitude, 180);
   const accuracy = lat != null && lng != null ? parseCoord(body.accuracy, 1_000_000) : null;
   const action = String(body.action ?? "");
+
+  if (action === "seen") {
+    const notice = (await noticesForJanitor(employee.id, easternDateKey(now))).find((n) => n.id === String(body.checkId ?? ""));
+    if (notice) {
+      await prisma.janitorialQualityNoticeSeen.upsert({
+        where: { qualityCheckId_employeeId: { qualityCheckId: notice.id, employeeId: employee.id } },
+        create: { qualityCheckId: notice.id, employeeId: employee.id },
+        update: {},
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (action === "out") {
     const open = await prisma.janitorialTimeEntry.findFirst({ where: openEntryWhere(employee.id), orderBy: { clockInAt: "desc" } });

@@ -32,8 +32,15 @@ export function InsuranceOverview() {
               ones CoverDash leaves off, like our owned auto. Checked policies are pre-selected when adding a COI to a project.
             </LI>
             <LI>
-              When a policy renews, edit it and update its dates. If it was cancelled or replaced, uncheck{" "}
-              <strong>Active</strong> instead of deleting it.
+              <strong>Cost</strong>: the premium for the current term, fees and taxes included. It counts as overhead on the
+              dashboard&apos;s Finance tab, spread evenly over the term. When an audit bill or refund comes in, enter the amount
+              (negative for a refund) and its date. If the policy was cancelled early, enter <strong>Cancelled on</strong>.
+            </LI>
+            <LI>
+              When a policy renews, edit it and update its dates, then enter the new premium. The old term and its cost move to{" "}
+              <strong>Past terms</strong> on their own, so last year&apos;s months keep their cost. An audit for an old term
+              usually comes later: click <strong>Edit</strong> on that past term to add it. If it was cancelled or replaced,
+              uncheck <strong>Active</strong> instead of deleting it.
             </LI>
           </UL>
           The strip at the top shows how many policies are active, which one expires next, and the most we can certify per
@@ -172,6 +179,12 @@ export function InsuranceOverview() {
               You can also click a current COI on a project and use <strong>New version</strong> there.
             </LI>
           </UL>
+        </Step>
+
+        <Step n={9} title="Contacts tab">
+          Our broker, agent, and carrier contacts. Click <strong>+ Add contact</strong>, or click a row to edit it. Put what they
+          handle (for example &quot;Broker, all policies&quot;) in <strong>Handles</strong>. Click an email or phone number to
+          email or call.
         </Step>
       </Steps>
     </>

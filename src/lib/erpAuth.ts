@@ -71,6 +71,17 @@ export function canRescheduleOnTimeline(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
 }
 
+/** Company Info page (our IDs, licenses, bank info, website logins): view,
+ * edit, and reveal encrypted values. Every reveal is logged. */
+export function canManageCompanyInfo(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER";
+}
+
+/** Company Info's Access log tab: who revealed or copied which locked value. */
+export function canViewCompanyInfoAccessLog(role: ErpRole): boolean {
+  return role === "ADMIN";
+}
+
 /** Notifications page: which emails go out, to whom, and the Email Log. */
 export function canManageNotifications(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER";
