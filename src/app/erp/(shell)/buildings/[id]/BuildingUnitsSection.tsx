@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UnitScopeCard } from "../../projects/[id]/UnitScopeCard";
 import { AddUnitForm } from "./AddUnitForm";
+import { UnitInvoiceChips, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 
 export type BuildingUnit = {
   projectId: string;
@@ -21,6 +22,8 @@ export type BuildingUnit = {
   compounding: number | null;
   otherWork: boolean;
   otherDescription: string | null;
+  /** HubSpot invoices for this turn; empty for roles that can't see financials */
+  invoices?: UnitInvoiceChip[];
 };
 
 type Props = {
@@ -42,27 +45,30 @@ export function BuildingUnitsSection({ buildingId, units, canAdd }: Props) {
       ) : (
         <div className="space-y-3">
           {units.map((unit) => (
-            <Link key={unit.projectId} href={`/erp/projects/${unit.projectId}`} className="block transition hover:opacity-80">
-              <UnitScopeCard
-                unitNumber={unit.unitNumber}
-                bedrooms={unit.bedrooms}
-                bathrooms={unit.bathrooms}
-                isPartialTurn={unit.isPartialTurn}
-                partialTurnLayout={unit.partialTurnLayout}
-                sqft={unit.sqft}
-                unitQuality={unit.unitQuality}
-                fullClean={unit.fullClean}
-                fullPaint={unit.fullPaint}
-                touchUpPaint={unit.touchUpPaint}
-                carpetCleaning={unit.carpetCleaning}
-                materialsAdditional={unit.materialsAdditional}
-                ceilingPaint={unit.ceilingPaint}
-                compounding={unit.compounding}
-                otherWork={unit.otherWork}
-                otherDescription={unit.otherDescription}
-                contractValueCents={null}
-              />
-            </Link>
+            <div key={unit.projectId} className="space-y-1.5">
+              <Link href={`/erp/projects/${unit.projectId}`} className="block transition hover:opacity-80">
+                <UnitScopeCard
+                  unitNumber={unit.unitNumber}
+                  bedrooms={unit.bedrooms}
+                  bathrooms={unit.bathrooms}
+                  isPartialTurn={unit.isPartialTurn}
+                  partialTurnLayout={unit.partialTurnLayout}
+                  sqft={unit.sqft}
+                  unitQuality={unit.unitQuality}
+                  fullClean={unit.fullClean}
+                  fullPaint={unit.fullPaint}
+                  touchUpPaint={unit.touchUpPaint}
+                  carpetCleaning={unit.carpetCleaning}
+                  materialsAdditional={unit.materialsAdditional}
+                  ceilingPaint={unit.ceilingPaint}
+                  compounding={unit.compounding}
+                  otherWork={unit.otherWork}
+                  otherDescription={unit.otherDescription}
+                  contractValueCents={null}
+                />
+              </Link>
+              <UnitInvoiceChips invoices={unit.invoices ?? []} />
+            </div>
           ))}
         </div>
       )}

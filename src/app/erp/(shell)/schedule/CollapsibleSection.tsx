@@ -19,11 +19,12 @@ export function CollapsibleSection({
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
+      {/* Wraps on narrow screens so headerExtra drops below the title instead of spilling out of the card. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-5 py-4">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex flex-1 items-center gap-3 text-left"
+          className="flex flex-auto items-center gap-3 text-left"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -40,7 +41,7 @@ export function CollapsibleSection({
             {description && <p className="mt-0.5 text-xs text-gray-500">{description}</p>}
           </div>
         </button>
-        {headerExtra && <div className="shrink-0">{headerExtra}</div>}
+        {headerExtra && <div className="max-w-full">{headerExtra}</div>}
       </div>
       {open && <div className="p-5">{children}</div>}
     </section>

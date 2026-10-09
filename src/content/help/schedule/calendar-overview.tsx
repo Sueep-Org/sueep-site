@@ -6,15 +6,17 @@ export function ScheduleCalendarOverview() {
       <H2>Overview</H2>
       <P>
         The Schedule page (<strong>ERP → Schedule</strong>) has a month{" "}
-        <strong>Calendar</strong> (the <strong>Projects</strong> tab) and a{" "}
-        <strong>Gantt</strong> tab. The calendar shows what&apos;s actually happening
+        <strong>Calendar</strong> (the <strong>Projects</strong> tab) with a{" "}
+        <strong>Gantt</strong> chart below it. The calendar shows what&apos;s actually happening
         day-by-day, driven by real logged labor rather than just a project&apos;s start and end
         dates, plus anything planned ahead of time. The Gantt shows projects as bars over time,
         or each worker&apos;s jobs over time.
       </P>
       <P>
-        Tabs at the top switch between calendars. <strong>Projects</strong> is everything
-        described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
+        Tabs at the top switch between calendars. <strong>Master</strong> puts projects,
+        janitorial shifts and (for Admins and PMs) management items on one month view; click a
+        chip to open it, and use the Projects / Janitorial / Management buttons to hide a layer.{" "}
+        <strong>Projects</strong> is everything described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
         see{" "}
         <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>. Admins and PMs
         also see <strong>Management</strong>, for insurance expirations, time off and company
@@ -212,8 +214,8 @@ export function ScheduleCalendarOverview() {
           </P>
         </Step>
 
-        <Step n={11} title="The Gantt tab">
-          The <strong>Gantt</strong> tab has three views. <strong>By project</strong> shows a
+        <Step n={11} title="The Gantt chart">
+          The <strong>Gantt</strong> sits below the Projects calendar and has three views. <strong>By project</strong> shows a
           horizontal timeline of commercial painting
           and cleaning projects that are <strong>Active</strong>, <strong>Upcoming</strong>, or{" "}
           <strong>On hold</strong>, grouped into sections: <strong>In progress</strong>,{" "}

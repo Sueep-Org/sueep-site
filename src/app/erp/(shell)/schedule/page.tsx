@@ -30,6 +30,7 @@ import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
 import { ManagementCalendar } from "./ManagementCalendar";
 import { ProjectGantt } from "./ProjectGantt";
+import { MasterCalendar, type MasterProject } from "./MasterCalendar";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -656,78 +657,91 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     visibleCoWorkerAssignments = coWorkerAssignments.filter((a) => visibleChangeOrderIds.has(a.changeOrderId));
   }
 
-  if (calendar === "timeline") {
-    // "By crew" rows: every person-day from the last four weeks onward, from
-    // logged labor, sub engagements, planned crew, and planned coverage, on
-    // any project this viewer can see (turnovers too, a worker on a
-    // turnover isn't free). Same person matched across sources by employee
-    // record, then by name.
-    const crewFromKey = dayKey(addDays(todayEasternAsUtcMidnight(), -28));
-    const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
-    const projectIdByChangeOrder = new Map(changeOrderRows.map((co) => [co.id, co.projectId]));
-    const crew = createCrewCollector();
-    const employeeIdByEmail = new Map(
-      scheduleEmployees.filter((e) => e.email).map((e) => [e.email!.toLowerCase(), e.id]),
-    );
-    const supervisorKeyByUserId = new Map<string, string>();
-    for (const e of employees) crew.person(`e:${e.id}`, e.displayName, "EMPLOYEE");
-    for (const c of contractorRows) crew.person(`c:${c.id}`, c.name, "CONTRACTOR");
-    for (const u of supervisorUsers) {
-      const empId = employeeIdByEmail.get(u.email.toLowerCase());
-      const key = empId ? `e:${empId}` : `u:${u.id}`;
-      supervisorKeyByUserId.set(u.id, key);
-      crew.person(key, supervisors.find((s) => s.id === u.id)?.displayName ?? u.email, "SUPERVISOR");
+  if (calendar === "master") {
+    // Planned = any day with a supervisor/PM or crew assigned.
+    const plannedDaysByProject = new Map<string, Set<string>>();
+    for (const a of [...visibleDayAssignments, ...visibleWorkerAssignments]) {
+      const set = plannedDaysByProject.get(a.projectId) ?? new Set<string>();
+      set.add(a.dateKey);
+      plannedDaysByProject.set(a.projectId, set);
     }
-    const addDay = (key: string | null | undefined, projectId: string | null | undefined, k: string, logged: boolean) => {
-      if (!key || !projectId || k < crewFromKey || !visibleProjectIds.has(projectId)) return;
-      crew.add(key, projectId, k, logged);
-    };
-    for (const le of laborEntryRows) {
-      let key: string | null = le.employeeId ? `e:${le.employeeId}` : null;
-      if (key && !crew.has(key)) crew.person(key, le.workerName, "EMPLOYEE");
-      key ??= crew.keyForName(le.workerName);
-      addDay(key, le.projectId, dayKey(le.workDate), true);
-    }
-    for (const ca of contractorAssignmentRows) {
-      for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, ca.projectId, k, true);
-    }
-    for (const ca of coContractorAssignmentRows) {
-      const pid = projectIdByChangeOrder.get(ca.changeOrderId);
-      for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, pid, k, true);
-    }
-    for (const cl of coLaborerRows) addDay(crew.keyForName(cl.name), projectIdByChangeOrder.get(cl.changeOrderId), dayKey(cl.workDate), true);
-    for (const a of workerAssignmentRows) {
-      addDay(a.employeeId ? `e:${a.employeeId}` : a.contractorId ? `c:${a.contractorId}` : null, a.projectId, dayKey(a.date), false);
-    }
-    for (const a of coWorkerAssignmentRows) {
-      const pid = projectIdByChangeOrder.get(a.changeOrderId);
-      addDay(a.employeeId ? `e:${a.employeeId}` : a.contractorId ? `c:${a.contractorId}` : null, pid, dayKey(a.date), false);
-    }
-    for (const a of dayAssignmentRows) {
-      if (a.supervisorUserId) addDay(supervisorKeyByUserId.get(a.supervisorUserId), a.projectId, dayKey(a.date), false);
-      if (a.supervisorContractorId) addDay(`c:${a.supervisorContractorId}`, a.projectId, dayKey(a.date), false);
-    }
-    for (const a of coDayAssignmentRows) {
-      const pid = projectIdByChangeOrder.get(a.changeOrderId);
-      if (a.supervisorUserId) addDay(supervisorKeyByUserId.get(a.supervisorUserId), pid, dayKey(a.date), false);
-      if (a.supervisorContractorId) addDay(`c:${a.supervisorContractorId}`, pid, dayKey(a.date), false);
-    }
-
+    const masterProjects: MasterProject[] = visibleProjects
+      .filter((p) => p.status !== "ARCHIVED")
+      .map((p) => ({
+        id: p.id,
+        jobTitle: p.jobTitle,
+        segment: p.segment,
+        status: p.status,
+        loggedDayKeys: p.workDayKeys,
+        plannedDayKeys: Array.from(plannedDaysByProject.get(p.id) ?? []),
+        startKey: p.projectDate ? p.projectDate.slice(0, 10) : null,
+        endKey: p.projectEndDate ? p.projectEndDate.slice(0, 10) : null,
+        buildingId: p.buildingId,
+        buildingName: p.buildingName,
+      }));
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
-        <ScheduleCalendarTabs active="timeline" showManagement={showManagement} />
-        <ProjectGantt
-          projects={visibleProjects}
-          dayAssignments={visibleDayAssignments}
-          workerAssignments={visibleWorkerAssignments}
-          supervisors={supervisors}
-          contractors={contractorRows.map((c) => ({ id: c.id, displayName: c.name }))}
-          crew={crew.result()}
-          canReschedule={canRescheduleOnTimeline(auth?.role ?? "EMPLOYEE")}
-        />
+        <ScheduleCalendarTabs active="master" showManagement={showManagement} />
+        <MasterCalendar projects={masterProjects} showManagement={showManagement} />
       </div>
     );
+  }
+
+  // "By crew" rows: every person-day from the last four weeks onward, from
+  // logged labor, sub engagements, planned crew, and planned coverage, on
+  // any project this viewer can see (turnovers too, a worker on a
+  // turnover isn't free). Same person matched across sources by employee
+  // record, then by name.
+  const crewFromKey = dayKey(addDays(todayEasternAsUtcMidnight(), -28));
+  const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
+  const projectIdByChangeOrder = new Map(changeOrderRows.map((co) => [co.id, co.projectId]));
+  const crew = createCrewCollector();
+  const employeeIdByEmail = new Map(
+    scheduleEmployees.filter((e) => e.email).map((e) => [e.email!.toLowerCase(), e.id]),
+  );
+  const supervisorKeyByUserId = new Map<string, string>();
+  for (const e of employees) crew.person(`e:${e.id}`, e.displayName, "EMPLOYEE");
+  for (const c of contractorRows) crew.person(`c:${c.id}`, c.name, "CONTRACTOR");
+  for (const u of supervisorUsers) {
+    const empId = employeeIdByEmail.get(u.email.toLowerCase());
+    const key = empId ? `e:${empId}` : `u:${u.id}`;
+    supervisorKeyByUserId.set(u.id, key);
+    crew.person(key, supervisors.find((s) => s.id === u.id)?.displayName ?? u.email, "SUPERVISOR");
+  }
+  const addDay = (key: string | null | undefined, projectId: string | null | undefined, k: string, logged: boolean) => {
+    if (!key || !projectId || k < crewFromKey || !visibleProjectIds.has(projectId)) return;
+    crew.add(key, projectId, k, logged);
+  };
+  for (const le of laborEntryRows) {
+    let key: string | null = le.employeeId ? `e:${le.employeeId}` : null;
+    if (key && !crew.has(key)) crew.person(key, le.workerName, "EMPLOYEE");
+    key ??= crew.keyForName(le.workerName);
+    addDay(key, le.projectId, dayKey(le.workDate), true);
+  }
+  for (const ca of contractorAssignmentRows) {
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, ca.projectId, k, true);
+  }
+  for (const ca of coContractorAssignmentRows) {
+    const pid = projectIdByChangeOrder.get(ca.changeOrderId);
+    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, pid, k, true);
+  }
+  for (const cl of coLaborerRows) addDay(crew.keyForName(cl.name), projectIdByChangeOrder.get(cl.changeOrderId), dayKey(cl.workDate), true);
+  for (const a of workerAssignmentRows) {
+    addDay(a.employeeId ? `e:${a.employeeId}` : a.contractorId ? `c:${a.contractorId}` : null, a.projectId, dayKey(a.date), false);
+  }
+  for (const a of coWorkerAssignmentRows) {
+    const pid = projectIdByChangeOrder.get(a.changeOrderId);
+    addDay(a.employeeId ? `e:${a.employeeId}` : a.contractorId ? `c:${a.contractorId}` : null, pid, dayKey(a.date), false);
+  }
+  for (const a of dayAssignmentRows) {
+    if (a.supervisorUserId) addDay(supervisorKeyByUserId.get(a.supervisorUserId), a.projectId, dayKey(a.date), false);
+    if (a.supervisorContractorId) addDay(`c:${a.supervisorContractorId}`, a.projectId, dayKey(a.date), false);
+  }
+  for (const a of coDayAssignmentRows) {
+    const pid = projectIdByChangeOrder.get(a.changeOrderId);
+    if (a.supervisorUserId) addDay(supervisorKeyByUserId.get(a.supervisorUserId), pid, dayKey(a.date), false);
+    if (a.supervisorContractorId) addDay(`c:${a.supervisorContractorId}`, pid, dayKey(a.date), false);
   }
 
   return (
@@ -754,6 +768,16 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         initialWorkerAssignments={visibleWorkerAssignments}
         initialCoDayAssignments={visibleCoDayAssignments}
         initialCoWorkerAssignments={visibleCoWorkerAssignments}
+      />
+
+      <ProjectGantt
+        projects={visibleProjects}
+        dayAssignments={visibleDayAssignments}
+        workerAssignments={visibleWorkerAssignments}
+        supervisors={supervisors}
+        contractors={contractorRows.map((c) => ({ id: c.id, displayName: c.name }))}
+        crew={crew.result()}
+        canReschedule={canRescheduleOnTimeline(auth?.role ?? "EMPLOYEE")}
       />
     </div>
   );

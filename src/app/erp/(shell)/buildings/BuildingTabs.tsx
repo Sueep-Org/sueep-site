@@ -10,6 +10,7 @@ import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSec
 import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
 import { BuildingNotesSection, type BuildingNoteRow } from "./[id]/BuildingNotesSection";
 import { BuildingPropertyManagersSection, type BuildingPropertyManager } from "./[id]/BuildingPropertyManagersSection";
+import { HubSpotDocumentsSection } from "@/app/erp/components/HubSpotDocumentsSection";
 
 type Props = {
   buildingId: string;
@@ -28,6 +29,8 @@ type Props = {
   canEditPricing?: boolean;
   canAddUnit?: boolean;
   canLogHours?: boolean;
+  /** HubSpot invoices/quotes tab, financial roles only */
+  canSeeInvoices?: boolean;
   units: BuildingUnit[];
   /** This building's janitorial (recurring) contract, managed on the Janitorial Contracts page. */
   janitorialContract?: { id: string; status: string; monthlyRateCents: number } | null;
@@ -50,6 +53,7 @@ export function BuildingTabs({
   canEditPricing = false,
   canAddUnit = false,
   canLogHours = false,
+  canSeeInvoices = false,
   units,
   janitorialContract = null,
   canManageJanitorial = false,
@@ -130,6 +134,20 @@ export function BuildingTabs({
         </div>
       ),
     },
+    ...(canSeeInvoices
+      ? [
+          {
+            label: "Invoices & Quotes",
+            content: (
+              <HubSpotDocumentsSection
+                endpoint={`/api/erp/buildings/${buildingId}/hubspot-documents`}
+                noDealMessage="No HubSpot deal is linked to this building. Link one on the Details tab."
+                invoicesInfo="Read live from this building's HubSpot deal. Opening this tab also refreshes the invoice shown on each unit."
+              />
+            ),
+          },
+        ]
+      : []),
     {
       label: "Janitorial Contract",
       content: (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial, canManagePropertyManagers } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial, canManagePropertyManagers, canSeeFinancials } from "@/lib/erpAuth";
 import { BuildingTabs } from "../BuildingTabs";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
@@ -44,6 +44,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         status: true,
         turnoverRequest: {
           select: {
+            id: true,
             unitNumber: true,
             bedrooms: true,
             bathrooms: true,
@@ -69,6 +70,14 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
   ]);
   if (!building) notFound();
 
+  const unitInvoices =
+    auth && canSeeFinancials(auth.role)
+      ? await prisma.hubSpotUnitInvoice.findMany({
+          where: { turnoverRequestId: { in: unitProjects.map((p) => p.turnoverRequest?.id).filter((x): x is string => Boolean(x)) } },
+          orderBy: { invoiceDate: "desc" },
+        })
+      : [];
+
   const units: BuildingUnit[] = unitProjects
     .filter((p) => p.turnoverRequest)
     .map((p) => ({
@@ -90,6 +99,18 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
       compounding: p.turnoverRequest!.compounding,
       otherWork: p.turnoverRequest!.otherWork,
       otherDescription: p.turnoverRequest!.otherDescription,
+      invoices: unitInvoices
+        .filter((i) => i.turnoverRequestId === p.turnoverRequest!.id)
+        .map((i) => ({
+          id: i.id,
+          invoiceNumber: i.invoiceNumber,
+          status: i.status,
+          dueDate: i.dueDate?.toISOString() ?? null,
+          paidDate: i.paidDate?.toISOString() ?? null,
+          amountCents: i.amountCents,
+          viewUrl: i.viewUrl,
+          pdfUrl: i.pdfUrl,
+        })),
     }));
 
   return (
@@ -133,6 +154,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
         laborEmployees={employees}
         canLogHours={auth ? canAddLaborLogs(auth.role) : false}
+        canSeeInvoices={auth ? canSeeFinancials(auth.role) : false}
         commissionEmployeeId={building.commissionEmployeeId}
         initialNotes={building.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         currentUserId={currentErpUser?.id ?? null}
