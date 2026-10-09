@@ -9,6 +9,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/hubspot-unit-invoices",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/cron/schedule-nudge-morning",
       "schedule": "0 12 * * *"
     },

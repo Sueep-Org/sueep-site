@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { SearchableSelect } from "../../components/SearchableSelect";
+import { UnitInvoiceChips, expectedBillingStatus, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
+import { InfoTip } from "@/app/erp/components/ui";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,8 @@ type SOVItemRow = {
   description: string;
   scheduledValueCents: number;
   billingStatus: string;
+  /** HubSpot invoices linked to this SOV item */
+  invoices: UnitInvoiceChip[];
 };
 
 type CORow = {
@@ -58,6 +62,8 @@ type CORow = {
   contractValueCents: number;
   billingStatus: string;
   completedAt: string;
+  /** HubSpot invoices linked to this change order (post-construction only) */
+  invoices?: UnitInvoiceChip[];
 };
 
 type PostConProjectRow = {
@@ -92,11 +98,66 @@ type PostConResponse = {
   rows: PostConProjectRow[];
 };
 
-function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string): string {
+type Totals = { invoicedCents: number; paidCents: number };
+/** Per-project HubSpot invoices from /api/erp/billing/post-construction/invoices. */
+type PostConHubSpot =
+  | { invoices: UnitInvoiceChip[]; hubspot: Totals; erp: Totals; mismatch: boolean; unlinkedCount: number }
+  | { error: string };
+
+/** Project-level HubSpot notes shown on a project's first billing row: the
+ * totals mismatch "!" and how many of its invoices aren't linked to a line. */
+function PostConProjectFlags({ hs, projectId }: { hs: PostConHubSpot | undefined | "loading"; projectId: string }) {
+  if (hs === "loading" || !hs) return null;
+  if ("error" in hs) return <span className="text-xs text-red-500" title={hs.error}>HubSpot error</span>;
+  return (
+    <>
+      {hs.unlinkedCount > 0 && (
+        <Link
+          href={`/erp/projects/${projectId}?tab=${encodeURIComponent("Invoices & Quotes")}`}
+          className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 hover:underline"
+        >
+          {hs.unlinkedCount} not linked
+        </Link>
+      )}
+      {hs.mismatch && (
+        <span
+          title={`HubSpot: invoiced ${fmt(hs.hubspot.invoicedCents)}, paid ${fmt(hs.hubspot.paidCents)}. Here (whole project): billed ${fmt(hs.erp.invoicedCents)}, paid ${fmt(hs.erp.paidCents)}.`}
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
+        >
+          !
+        </span>
+      )}
+    </>
+  );
+}
+
+function PostConInvoiceCell({ hs }: { hs: PostConHubSpot | undefined | "loading" }) {
+  if (hs === "loading") return <span className="text-xs text-gray-400">Loading...</span>;
+  if (!hs) return <span className="text-xs text-gray-400">No deal</span>;
+  if ("error" in hs) return <span className="text-xs text-red-500" title={hs.error}>HubSpot error</span>;
+  if (hs.invoices.length === 0) return <span className="text-xs text-gray-400">None</span>;
+  return (
+    <span className="flex items-center gap-1.5">
+      <UnitInvoiceChips invoices={hs.invoices} compact />
+      {hs.mismatch && (
+        <span
+          title={`HubSpot: invoiced ${fmt(hs.hubspot.invoicedCents)}, paid ${fmt(hs.hubspot.paidCents)}. Here (whole project): billed ${fmt(hs.erp.invoicedCents)}, paid ${fmt(hs.erp.paidCents)}.`}
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
+        >
+          !
+        </span>
+      )}
+    </span>
+  );
+}
+
+function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, hsByProject: Record<string, PostConHubSpot> = {}): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Project", "Item", "Type", "Value", "Billing Status"].map(escape).join(",");
+  const headers = ["Project", "Item", "Type", "Value", "Billing Status", "HubSpot Invoices"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const project of rows) {
+    const hs = hsByProject[project.projectId];
+    const invoiceNumbers = hs && !("error" in hs) ? hs.invoices.map((i) => i.invoiceNumber).filter(Boolean).join(" ") : "";
     for (const item of project.items) {
       dataRows.push([
         escape(project.jobTitle),
@@ -104,6 +165,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
         escape("SOV"),
         escape((item.scheduledValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === item.billingStatus)?.label ?? item.billingStatus),
+        escape((item.invoices ?? []).map((i) => i.invoiceNumber).filter(Boolean).join(" ")),
       ].join(","));
     }
     for (const co of (project.changeOrders ?? [])) {
@@ -113,6 +175,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
         escape("Change Order"),
         escape((co.contractValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
+        escape((co.invoices ?? []).map((i) => i.invoiceNumber).filter(Boolean).join(" ")),
       ].join(","));
     }
     if (project.items.length === 0 && (project.changeOrders ?? []).length === 0 && project.contractValueCents != null) {
@@ -122,6 +185,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
         escape("Project Total"),
         escape((project.contractValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === project.projectBillingStatus)?.label ?? project.projectBillingStatus ?? "Not Billed"),
+        escape(invoiceNumbers),
       ].join(","));
     }
   }
@@ -130,7 +194,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string):
   const wholeProjectTotal = rows
     .filter((r) => r.items.length === 0 && (r.changeOrders ?? []).length === 0)
     .reduce((s, r) => s + (r.contractValueCents ?? 0), 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal + wholeProjectTotal) / 100).toFixed(2)), escape("")].join(","));
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal + wholeProjectTotal) / 100).toFixed(2)), escape(""), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -152,6 +216,21 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [start, end, search]);
+
+  // HubSpot invoices load after the table, keyed by the set of projects shown.
+  const [hsByProject, setHsByProject] = useState<Record<string, PostConHubSpot> | null>(null);
+  const projectIdsKey = data?.rows.map((r) => r.projectId).join(",") ?? "";
+  useEffect(() => {
+    if (!projectIdsKey) return;
+    let cancelled = false;
+    setHsByProject(null);
+    fetch(`/api/erp/billing/post-construction/invoices?ids=${encodeURIComponent(projectIdsKey)}`)
+      .then((r) => r.json())
+      .then((d: { projects?: Record<string, PostConHubSpot> }) => { if (!cancelled) setHsByProject(d.projects ?? {}); })
+      .catch(() => { if (!cancelled) setHsByProject({}); });
+    return () => { cancelled = true; };
+  }, [projectIdsKey]);
+  const hsFor = (projectId: string) => (hsByProject === null ? ("loading" as const) : hsByProject[projectId]);
 
   const allItems = data?.rows.flatMap((r) => r.items) ?? [];
   const allCOs = data?.rows.flatMap((r) => r.changeOrders ?? []) ?? [];
@@ -236,7 +315,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
 
   function downloadCsv() {
     if (!data) return;
-    const csv = buildPostConCsv(data.rows, data.start, data.end);
+    const csv = buildPostConCsv(data.rows, data.start, data.end, hsByProject ?? {});
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -274,15 +353,21 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                 <th className="px-4 py-3">SOV Item</th>
                 <th className="px-4 py-3 text-right">Value</th>
                 <th className="px-4 py-3">Billing Status</th>
+                <th className="px-4 py-3">
+                  <span className="flex items-center gap-1">
+                    HubSpot Invoices
+                    <InfoTip align="right" text="Invoices linked to each line. Link or fix them on the project's Invoices & Quotes tab. A ! means HubSpot's invoiced or paid total doesn't match the whole project's billing here." />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
               ) : (
                 data.rows.map((project) => {
                   const allProjectRows = [
@@ -312,6 +397,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                               <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
                           </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <PostConInvoiceCell hs={hsFor(project.projectId)} />
                         </td>
                       </tr>
                     );
@@ -366,6 +454,12 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           </select>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <UnitInvoiceChips invoices={(row.type === "sov" ? row.item.invoices : row.co.invoices) ?? []} compact />
+                          {idx === 0 && <PostConProjectFlags hs={hsFor(project.projectId)} projectId={project.projectId} />}
+                        </span>
+                      </td>
                     </tr>
                   ));
                 })
@@ -381,7 +475,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                     {" "}across {data.rows.length} project{data.rows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3" colSpan={2} />
                 </tr>
               </tfoot>
             )}
@@ -415,6 +509,7 @@ type JanUnitRow = {
   billingStatus: string;
   scope: string;
   changeOrders: JanCORow[];
+  invoices: UnitInvoiceChip[];
 };
 
 type JanBuildingRow = {
@@ -431,7 +526,7 @@ type JanResponse = {
 
 function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Building", "Unit", "Beds/Baths", "Scope", "Completed", "Contract Amount", "Billing Status"].map(escape).join(",");
+  const headers = ["Building", "Unit", "Beds/Baths", "Scope", "Completed", "Contract Amount", "Billing Status", "HubSpot Invoice"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const building of rows) {
     for (const unit of building.units) {
@@ -445,6 +540,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
         escape(unit.completedAt.slice(0, 10)),
         escape((unit.contractCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus),
+        escape((unit.invoices ?? []).map((i) => i.invoiceNumber).filter(Boolean).join(" ")),
       ].join(","));
       for (const co of (unit.changeOrders ?? [])) {
         dataRows.push([
@@ -455,13 +551,14 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
           escape(co.completedAt.slice(0, 10)),
           escape((co.contractValueCents / 100).toFixed(2)),
           escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
+          escape(""),
         ].join(","));
       }
     }
   }
   const unitTotal = rows.flatMap((r) => r.units).reduce((s, u) => s + u.contractCents, 0);
   const coTotal = rows.flatMap((r) => r.units).flatMap((u) => u.changeOrders ?? []).reduce((s, c) => s + c.contractValueCents, 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(""), escape(((unitTotal + coTotal) / 100).toFixed(2)), escape("")].join(","));
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(""), escape(((unitTotal + coTotal) / 100).toFixed(2)), escape(""), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -592,15 +689,21 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                 <th className="px-4 py-3">Completed</th>
                 <th className="px-4 py-3 text-right">Contract Amount</th>
                 <th className="px-4 py-3">Billing Status</th>
+                <th className="px-4 py-3">
+                  <span className="flex items-center gap-1">
+                    HubSpot Invoice
+                    <InfoTip align="right" text="Synced hourly from HubSpot. A ! means HubSpot's invoice status doesn't match the billing status here. Search also finds invoice numbers." />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
               ) : (
                 data.rows.map((building) => {
                   const buildingRows = building.units.flatMap((unit) => [
@@ -664,6 +767,9 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                           </select>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        {row.type === "unit" && <JanInvoiceCell unit={row.unit} />}
+                      </td>
                     </tr>
                   ));
                 })
@@ -678,7 +784,7 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                     {" "}across {data.rows.length} building{data.rows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3" colSpan={2} />
                 </tr>
               </tfoot>
             )}
@@ -686,6 +792,26 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
         </div>
       </section>
     </div>
+  );
+}
+
+function JanInvoiceCell({ unit }: { unit: JanUnitRow }) {
+  const invoices = unit.invoices ?? [];
+  if (invoices.length === 0) return <span className="text-xs text-gray-400">None</span>;
+  const expected = expectedBillingStatus(invoices);
+  const mismatch = expected !== null && expected !== unit.billingStatus;
+  return (
+    <span className="flex items-center gap-1.5">
+      <UnitInvoiceChips invoices={invoices} compact />
+      {mismatch && (
+        <span
+          title={`HubSpot says ${expected === "PAID" ? "paid" : "invoiced, not paid"}, but this unit is marked ${BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus}.`}
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
+        >
+          !
+        </span>
+      )}
+    </span>
   );
 }
 

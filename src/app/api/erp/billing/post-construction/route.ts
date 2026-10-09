@@ -98,8 +98,35 @@ export async function GET(req: Request) {
     orderBy: { completedAt: "asc" },
   });
 
-  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string };
-  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; completedAt: string };
+  // Invoices linked to each SOV item / change order (HubSpotSovInvoice).
+  const linkedInvoices = await prisma.hubSpotSovInvoice.findMany({
+    where: { OR: [{ sovItemId: { in: items.map((i) => i.id) } }, { changeOrderId: { in: changeOrders.map((c) => c.id) } }] },
+    orderBy: { invoiceDate: "desc" },
+  });
+  type InvoiceChip = {
+    id: string;
+    invoiceNumber: string | null;
+    status: string | null;
+    dueDate: string | null;
+    paidDate: string | null;
+    amountCents: number;
+    viewUrl: string | null;
+  };
+  const invoicesFor = (key: "sovItemId" | "changeOrderId", id: string): InvoiceChip[] =>
+    linkedInvoices
+      .filter((r) => r[key] === id)
+      .map((r) => ({
+        id: r.id,
+        invoiceNumber: r.invoiceNumber,
+        status: r.status,
+        dueDate: r.dueDate?.toISOString() ?? null,
+        paidDate: r.paidDate?.toISOString() ?? null,
+        amountCents: r.amountCents,
+        viewUrl: r.viewUrl,
+      }));
+
+  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; invoices: InvoiceChip[] };
+  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; completedAt: string; invoices: InvoiceChip[] };
 
   type ProjectRow = {
     projectId: string;
@@ -131,6 +158,7 @@ export async function GET(req: Request) {
       description: item.description,
       scheduledValueCents: item.scheduledValueCents,
       billingStatus: item.billingStatus,
+      invoices: invoicesFor("sovItemId", item.id),
     });
   }
 
@@ -153,6 +181,7 @@ export async function GET(req: Request) {
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: normalizeBillingStatus(co.billingStatus),
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
+      invoices: invoicesFor("changeOrderId", co.id),
     });
   }
 

@@ -81,8 +81,21 @@ function buildUnitRow(project: ProjectForUnitRow) {
     billingStatus: normalizeBillingStatus(tr?.billingStatus ?? project.billingStatus),
     scope,
     changeOrders: [] as CORow[],
+    invoices: [] as InvoiceRow[],
   };
 }
+
+/** HubSpot invoices for a turn (see syncUnitInvoices.ts). */
+type InvoiceRow = {
+  id: string;
+  invoiceNumber: string | null;
+  status: string | null;
+  dueDate: string | null;
+  paidDate: string | null;
+  amountCents: number;
+  viewUrl: string | null;
+  pdfUrl: string | null;
+};
 
 type UnitRow = ReturnType<typeof buildUnitRow>;
 
@@ -169,6 +182,7 @@ export async function GET(req: Request) {
                 { building: { name: { contains: q, mode: "insensitive" as const } } },
                 { turnoverRequest: { unitNumber: { contains: q, mode: "insensitive" as const } } },
                 { turnoverRequest: { building: { name: { contains: q, mode: "insensitive" as const } } } },
+                { turnoverRequest: { hubspotUnitInvoices: { some: { invoiceNumber: { contains: q, mode: "insensitive" as const } } } } },
               ],
             }
           : {
@@ -277,6 +291,29 @@ export async function GET(req: Request) {
       billingStatus: normalizeBillingStatus(co.billingStatus),
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
     });
+  }
+
+  const turnIds = Array.from(unitByProjectId.values())
+    .map((u) => u.turnoverRequestId)
+    .filter((x): x is string => Boolean(x));
+  if (turnIds.length > 0) {
+    const invoices = await prisma.hubSpotUnitInvoice.findMany({
+      where: { turnoverRequestId: { in: turnIds } },
+      orderBy: { invoiceDate: "desc" },
+    });
+    const unitByTurnId = new Map(Array.from(unitByProjectId.values()).map((u) => [u.turnoverRequestId, u]));
+    for (const i of invoices) {
+      unitByTurnId.get(i.turnoverRequestId)?.invoices.push({
+        id: i.id,
+        invoiceNumber: i.invoiceNumber,
+        status: i.status,
+        dueDate: i.dueDate?.toISOString() ?? null,
+        paidDate: i.paidDate?.toISOString() ?? null,
+        amountCents: i.amountCents,
+        viewUrl: i.viewUrl,
+        pdfUrl: i.pdfUrl,
+      });
+    }
   }
 
   const rows = Array.from(buildingMap.values());

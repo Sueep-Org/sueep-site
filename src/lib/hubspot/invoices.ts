@@ -80,7 +80,7 @@ type HubSpotAssociationPage = {
   paging?: { next?: { after?: string } };
 };
 
-async function listAssociatedObjectIds(fromObjectType: string, fromId: string, toObjectType: string): Promise<string[]> {
+export async function listAssociatedObjectIds(fromObjectType: string, fromId: string, toObjectType: string): Promise<string[]> {
   const ids: string[] = [];
   let after: string | null = null;
 

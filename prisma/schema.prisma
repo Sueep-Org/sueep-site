@@ -117,6 +117,7 @@ model Project {
   sovScheduleRequests   ProjectSovScheduleRequest[]
   hubspotSovAliases     HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
+  hubspotSovInvoices    HubSpotSovInvoice[]
   contacts              ProjectContact[]
   cois                  ProjectCoi[]
   coiRequests           CoiRequest[]
@@ -221,6 +222,7 @@ model Building {
   recurringContract       RecurringContract?
   hubspotUnitAliases      HubSpotUnitAlias[]
   hubspotInvoiceMatches   HubSpotInvoiceLineItemMatch[]
+  hubspotUnitInvoices     HubSpotUnitInvoice[]
   notes                   BuildingNote[]
   propertyManagers        PropertyManagerBuilding[]
   propertyManagerRequests PropertyManagerRequest[]
@@ -326,6 +328,7 @@ model TurnoverRequest {
   qualityChecks         QualityCheck[]
   projects              Project[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
+  hubspotUnitInvoices   HubSpotUnitInvoice[]
 
   @@index([buildingId])
   @@index([status])
@@ -358,7 +361,7 @@ model RecurringContract {
   /// When the current yearly term expires. Only drives the Management
   /// calendar and its reminders; unlike endDate it never stops billing or
   /// shifts. "Renew for another year" moves it forward a year. Null = not set.
-  expirationDate       DateTime?
+  expirationDate    DateTime?
   notes             String?
   /// Free-text scope of what gets cleaned, e.g. "Lobby, hallways, gym,
   /// 3 common bathrooms". Replaced the old per-unit list.
@@ -431,19 +434,19 @@ model JanitorialQualityCheck {
   recurringContract   RecurringContract @relation(fields: [recurringContractId], references: [id], onDelete: Cascade)
 
   /// Midnight UTC date label
-  scheduledDate DateTime
+  scheduledDate  DateTime
   /// Admin or Project Manager doing the visit. Null if their login was removed.
   assignedUserId String?
   assignedUser   ErpUser? @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
 
   /// SCHEDULED | DONE
-  status      String    @default("SCHEDULED")
-  completedAt DateTime?
+  status             String    @default("SCHEDULED")
+  completedAt        DateTime?
   /// Email of the ERP user who marked it done
-  completedBy String?
-  notes       String?
+  completedBy        String?
+  notes              String?
   /// Email of the ERP user who scheduled it
-  createdBy   String?
+  createdBy          String?
   /// When the "overdue" email went out, so it's only sent once
   overdueEmailSentAt DateTime?
 
@@ -459,8 +462,8 @@ model JanitorialQualityCheck {
   teamUpdates          String?
 
   /// Visit summary emailed to the property manager (sent from the summary page after finishing)
-  summarySentAt DateTime?
-  summarySentTo String[]  @default([])
+  summarySentAt  DateTime?
+  summarySentTo  String[]  @default([])
   /// When the janitors at the building were told about areas needing attention / team updates
   teamNotifiedAt DateTime?
 
@@ -953,6 +956,8 @@ model ProjectChangeOrder {
   /// This CO's own planned crew, same concept as ProjectWorkerDayAssignment
   /// but scoped to the CO directly (see ChangeOrderWorkerDayAssignment).
   coWorkerAssignments   ChangeOrderWorkerDayAssignment[]
+
+  hubspotSovInvoices HubSpotSovInvoice[]
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -2372,6 +2377,7 @@ model ProjectSOVItem {
   scheduleRequests      ProjectSovScheduleRequest[]
   hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
+  hubspotSovInvoices    HubSpotSovInvoice[]
 
   @@index([sovId])
 }
@@ -2523,6 +2529,85 @@ model HubSpotInvoiceLineItemMatch {
   @@index([status])
   @@index([projectId])
   @@index([buildingId])
+}
+
+/// One row per (HubSpot invoice, unit) on a building's deal, any invoice
+/// status (draft/open/paid/voided). A read-only mirror for showing
+/// "INV-1395 · Open · PDF" on a turn. Never changes billing status; that
+/// stays processPaidInvoices' job (see syncUnitInvoices.ts).
+model HubSpotUnitInvoice {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buildingId        String
+  building          Building         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  unitNumber        String
+  /// Best guess at which turn of this unit the invoice is for. Null when
+  /// no turn could be picked; the unit number still shows it on the building.
+  turnoverRequestId String?
+  turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: SetNull)
+
+  hubspotInvoiceId  String
+  invoiceNumber     String?
+  /// draft | open | paid | voided (HubSpot's hs_invoice_status)
+  status            String?
+  invoiceDate       DateTime?
+  dueDate           DateTime?
+  paidDate          DateTime?
+  /// Sum of this unit's line items on the invoice.
+  amountCents       Int
+  invoiceTotalCents Int?
+  balanceDueCents   Int?
+  viewUrl           String?
+  pdfUrl            String?
+  /// Linked by hand from the Invoices & Quotes tab. Once an invoice has any
+  /// manual row, the sync leaves that invoice's rows alone.
+  manual            Boolean   @default(false)
+  linkedByName      String?
+
+  @@unique([hubspotInvoiceId, unitNumber])
+  @@index([buildingId, unitNumber])
+  @@index([turnoverRequestId])
+}
+
+/// Project-side twin of HubSpotUnitInvoice: one row per (HubSpot invoice,
+/// SOV item or change order) on a project's own deal, any invoice status.
+/// Display-only, never changes billing status (see syncProjectInvoices.ts).
+/// Exactly one of sovItemId / changeOrderId is set.
+model HubSpotSovInvoice {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId     String
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sovItemId     String?
+  sovItem       ProjectSOVItem?     @relation(fields: [sovItemId], references: [id], onDelete: Cascade)
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  hubspotInvoiceId  String
+  invoiceNumber     String?
+  /// draft | open | paid | voided (HubSpot's hs_invoice_status)
+  status            String?
+  invoiceDate       DateTime?
+  dueDate           DateTime?
+  paidDate          DateTime?
+  /// This SOV item's / change order's share of the invoice.
+  amountCents       Int
+  invoiceTotalCents Int?
+  balanceDueCents   Int?
+  viewUrl           String?
+  pdfUrl            String?
+  /// Linked by hand; the sync leaves an invoice alone once it has any manual row.
+  manual            Boolean   @default(false)
+  linkedByName      String?
+
+  @@index([projectId])
+  @@index([hubspotInvoiceId])
+  @@index([sovItemId])
+  @@index([changeOrderId])
 }
 
 model ChangeOrderMaterialEntry {

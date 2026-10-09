@@ -28,6 +28,8 @@ import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { UnitScopeCard } from "./UnitScopeCard";
+import { UnitInvoiceChips } from "@/app/erp/components/UnitInvoiceChips";
+import { HubSpotDocumentsSection } from "@/app/erp/components/HubSpotDocumentsSection";
 import { UnitScopeEditor } from "./UnitScopeEditor";
 import { UnitScopeChecklist } from "./UnitScopeChecklist";
 import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/turnoverScope";
@@ -286,6 +288,24 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       .trim() || null;
   }
   const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
+  const unitInvoices =
+    project.turnoverRequest && canSeeCommission
+      ? (
+          await prisma.hubSpotUnitInvoice.findMany({
+            where: { turnoverRequestId: project.turnoverRequest.id },
+            orderBy: { invoiceDate: "desc" },
+          })
+        ).map((i) => ({
+          id: i.id,
+          invoiceNumber: i.invoiceNumber,
+          status: i.status,
+          dueDate: i.dueDate?.toISOString() ?? null,
+          paidDate: i.paidDate?.toISOString() ?? null,
+          amountCents: i.amountCents,
+          viewUrl: i.viewUrl,
+          pdfUrl: i.pdfUrl,
+        }))
+      : [];
   // Once the unit's overall status is COMPLETED, every contracted scope item
   // counts as done regardless of what was individually checked off along the
   // way, that's the whole point of the overall status. Otherwise, only what
@@ -503,6 +523,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 contractValueCents={project.contractValueCents}
                 completedScopeItems={completedScopeItems}
               />
+              {unitInvoices.length > 0 && (
+                <div className="mt-2">
+                  <UnitInvoiceChips invoices={unitInvoices} />
+                </div>
+              )}
             </div>
           )}
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Project Setup</p>
@@ -870,6 +895,20 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : []),
   ];
 
+  // Turnover units share their building's deal and show invoice chips on
+  // the Overview instead, so this is for projects with their own deal.
+  if (canSeeCommission && project.hubspotDealId && !project.turnoverRequest) {
+    allTabs.push({
+      label: "Invoices & Quotes",
+      content: (
+        <HubSpotDocumentsSection
+          endpoint={`/api/erp/projects/${project.id}/hubspot-documents`}
+          noDealMessage="No HubSpot deal is linked to this project."
+          invoicesInfo="Read live from this project's HubSpot deal."
+        />
+      ),
+    });
+  }
   if (canSeeCois) allTabs.push({ label: "COIs", content: <ProjectCoisTab projectId={project.id} /> });
 
   // Header warning when a current COI on this project is expired or close
