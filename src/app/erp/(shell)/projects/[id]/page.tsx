@@ -2,11 +2,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance, canManageCommunications } from "@/lib/erpAuth";
 import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
 import { ProjectCoisTab } from "./ProjectCoisTab";
+import { ProjectCommunicationsTab } from "./ProjectCommunicationsTab";
 import { loadJobRequirements, subGaps } from "@/lib/erp/subRequirements";
-import { workersCompWarning } from "@/lib/erp/subCoverage";
+import { insuranceWarning } from "@/lib/erp/subCoverage";
 import { requirementSummary } from "@/lib/erp/insurance";
 import { checklistCompletionPct, CHECKLIST_LABOR_THRESHOLD_PCT } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { ENFORCE_LABOR_CHECKLIST_GATES } from "@/lib/erp/laborChecklistGates";
@@ -23,7 +24,7 @@ import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { SupervisorChangeOrderRequestForm } from "./SupervisorChangeOrderRequestForm";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
-import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { DetailTabs, type DetailTab } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
@@ -50,6 +51,42 @@ import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ id: string }> };
+
+/**
+ * Which project tabs share a dropdown, and the shorter name each one gets
+ * inside it. Tabs keep their own label as the URL key, so links like
+ * ?tab=Financials still land on the right one. Tabs not listed stay on the
+ * bar by themselves.
+ */
+const PROJECT_TAB_GROUPS: { label: string; members: Record<string, string> }[] = [
+  {
+    label: "Financials",
+    members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes" },
+  },
+  { label: "Labor", members: { Labor: "Hourly", Contractors: "Contractors" } },
+  { label: "Quality & Safety", members: { Checklist: "Checklist", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
+];
+
+/** Folds the flat tab list into PROJECT_TAB_GROUPS, each group sitting where its first tab was. */
+function groupProjectTabs(flat: { label: string; content: React.ReactNode }[]): DetailTab[] {
+  const out: DetailTab[] = [];
+  const groups = new Map<string, { label: string; menuLabel: string; content: React.ReactNode }[]>();
+  for (const tab of flat) {
+    const group = PROJECT_TAB_GROUPS.find((g) => tab.label in g.members);
+    if (!group) {
+      out.push(tab);
+      continue;
+    }
+    let children = groups.get(group.label);
+    if (!children) {
+      children = [];
+      groups.set(group.label, children);
+      out.push({ label: group.label, children });
+    }
+    children.push({ ...tab, menuLabel: group.members[tab.label] });
+  }
+  return out;
+}
 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
@@ -125,7 +162,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }),
     prisma.contractor.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, status: true, workersCompExpiresAt: true, workersCompExempt: true },
+      select: { id: true, name: true, status: true, hasInsurance: true, glExpiresAt: true, autoExpiresAt: true, umbrellaExpiresAt: true, workersCompExpiresAt: true, workersCompExempt: true },
     }),
     prisma.projectChangeOrder.findMany({
       where: { projectId: id },
@@ -707,7 +744,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           projectId={project.id}
           initialAssignments={contractorRows}
           insurance={contractorInsurance}
-          contractors={contractors.map((c) => ({ id: c.id, name: c.name, status: c.status, wcWarning: workersCompWarning(c) }))}
+          contractors={contractors.map((c) => {
+            const w = insuranceWarning(c);
+            return { id: c.id, name: c.name, status: c.status, insuranceShort: w?.short ?? null, insuranceWarning: w ? `${c.name}: ${w.detail}.` : null };
+          })}
           sovItems={sovItems}
           isJanitorialUnit={isTurnover}
           contractedScopeItems={contractedScopeItems}
@@ -922,6 +962,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     });
   }
   if (canSeeCois) allTabs.push({ label: "COIs", content: <ProjectCoisTab projectId={project.id} /> });
+  allTabs.push({
+    label: "Communications",
+    content: <ProjectCommunicationsTab projectId={project.id} canManage={auth ? canManageCommunications(auth.role) : false} senderEmail={auth?.email ?? ""} />,
+  });
 
   // Header warning when a current COI on this project is expired or close
   // to it, since the GC may hold payment over it.
@@ -977,7 +1021,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <DetailTabs tabs={tabs} />
+      <DetailTabs tabs={groupProjectTabs(tabs)} />
     </div>
   );
 }

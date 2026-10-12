@@ -60,6 +60,12 @@ export function canManagePropertyManagers(role: ErpRole): boolean {
   return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
 }
 
+/** Project Communications tab: add and edit contacts, and send emails from
+ * the ERP. Everyone who can open the project can read the tab. */
+export function canManageCommunications(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "PROJECT_MANAGER" || role === "SALES" || role === "FINANCE";
+}
+
 /** Schedule page's Management calendar (company deadlines, insurance
  * expirations, everyone's time off): view and edit. */
 export function canManageManagementCalendar(role: ErpRole): boolean {

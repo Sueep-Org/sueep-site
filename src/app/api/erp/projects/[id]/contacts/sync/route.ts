@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth, canManageCommunications } from "@/lib/erpAuth";
 import { syncDealContactsToProject } from "@/lib/hubspot/syncDealContactsToProject";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: Request, ctx: Ctx) {
+  const auth = await getErpAuth();
+  if (!auth || !canManageCommunications(auth.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const project = await prisma.project.findUnique({
     where: { id },

@@ -12,6 +12,7 @@ import {
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, SOVPriceSummary, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
@@ -59,7 +60,7 @@ type Person = { id: string; displayName: string };
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
-type WorkerPerson = Person & { email: string | null };
+type WorkerPerson = Person & { email: string | null; insuranceWarning?: string | null };
 
 /**
  * Closed-by-default section for everything in this modal that isn't the
@@ -169,6 +170,7 @@ export function DayAssignmentModal({
   // Same idea, but an outside Contractor covered the day instead of a
   // supervisor (e.g. a subcontractor running the site solo).
   const [supervisorContractorId, setSupervisorContractorId] = useState("");
+  const checkInsurance = useInsuranceCheck(contractors);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   // Post-Construction: which SOV line item(s) this day's work is for.
@@ -332,6 +334,7 @@ export function DayAssignmentModal({
       setError("End time must be after start time");
       return;
     }
+    if (!(await checkInsurance(supervisorContractorId))) return;
     setSaving(true);
     try {
       const usingSeries = !!allDateKeys;
@@ -432,6 +435,7 @@ export function DayAssignmentModal({
       setError("End time must be after start time");
       return;
     }
+    if (!(await checkInsurance(supervisorContractorId))) return;
     setSaving(true);
     try {
       const res = await fetch("/api/erp/schedule/co-day-assignments", {
@@ -497,6 +501,7 @@ export function DayAssignmentModal({
       setWorkerError(workerType === "employee" ? "Pick a worker" : "Pick a contractor");
       return;
     }
+    if (workerType === "contractor" && !(await checkInsurance(workerId))) return;
 
     if (targetMode === "co") {
       if (!coId) {

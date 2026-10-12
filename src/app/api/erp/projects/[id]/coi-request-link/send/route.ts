@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: Ctx) {
   }
 
   try {
-    await sendRequestLinkEmails({ to: recipients.to, url: requestLinkUrl(token), projectTitle: project.jobTitle, message, replyTo: auth.email });
+    await sendRequestLinkEmails({ to: recipients.to, url: requestLinkUrl(token), projectTitle: project.jobTitle, projectId: id, message, replyTo: auth.email });
   } catch (e) {
     console.error("coi-request-link send", e);
     return NextResponse.json({ error: "Could not send the email" }, { status: 502 });

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getErpAuth, canManageCommunications } from "@/lib/erpAuth";
+import { isEmailAddress } from "@/lib/erp/projectContacts";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -16,6 +18,10 @@ export async function GET(_req: Request, ctx: Ctx) {
 }
 
 export async function POST(req: Request, ctx: Ctx) {
+  const auth = await getErpAuth();
+  if (!auth || !canManageCommunications(auth.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const project = await prisma.project.findUnique({ where: { id }, select: { id: true } });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -29,6 +35,8 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const fullName = String(body.fullName || "").trim();
   if (!fullName) return NextResponse.json({ error: "fullName is required" }, { status: 400 });
+  const email = body.email != null ? String(body.email).trim() : "";
+  if (email && !isEmailAddress(email)) return NextResponse.json({ error: "That email address doesn't look right" }, { status: 400 });
 
   try {
     const contact = await prisma.projectContact.create({

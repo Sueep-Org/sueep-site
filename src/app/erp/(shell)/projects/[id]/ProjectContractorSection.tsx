@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
 import { InfoTip } from "@/app/erp/components/ui";
+import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
 
@@ -26,7 +27,9 @@ export type ContractorOption = {
   name: string;
   status: string;
   /** e.g. "No workers' comp", shown next to the name when picking. Warning only. */
-  wcWarning?: string | null;
+  insuranceShort?: string | null;
+  /** Full sentence for the pop-up shown when they're added, see useInsuranceCheck. */
+  insuranceWarning?: string | null;
 };
 
 const input = inputClass.md;
@@ -75,6 +78,7 @@ export function ProjectContractorSection({
   completedScopeItems?: string[];
 }) {
   const router = useRouter();
+  const checkInsurance = useInsuranceCheck(contractors);
   const [assignments, setAssignments] = useState(initialAssignments);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<EditFields>({ contractorId: "", role: "", startDate: "", endDate: "", costDollars: "", taskDescription: "", sovItemIds: [] });
@@ -171,6 +175,7 @@ export function ProjectContractorSection({
   }
 
   async function onSaveEdit(rowId: string) {
+    if (!(await checkInsurance(editFields.contractorId, assignments.find((a) => a.id === rowId)?.contractorId))) return;
     const costCents = editFields.costDollars.trim() !== "" ? Math.round(parseFloat(editFields.costDollars) * 100) : null;
     const taskDescription = editFields.taskDescription.trim() || null;
     const res = await fetch(`/api/erp/contractor-assignments/${rowId}`, {
@@ -222,6 +227,10 @@ export function ProjectContractorSection({
     const contractorId = String(fd.get("contractorId") || "");
     if (!contractorId) {
       setAddError("Select a contractor.");
+      setLoading(false);
+      return;
+    }
+    if (!(await checkInsurance(contractorId))) {
       setLoading(false);
       return;
     }
@@ -346,7 +355,7 @@ export function ProjectContractorSection({
             <select id="c-contractor" name="contractorId" required className={input}>
               <option value="" disabled>Select contractor…</option>
               {activeContractors.map((c) => (
-                <option key={c.id} value={c.id}>{c.wcWarning ? `${c.name} · ${c.wcWarning}` : c.name}</option>
+                <option key={c.id} value={c.id}>{c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name}</option>
               ))}
             </select>
           </div>
@@ -526,7 +535,7 @@ export function ProjectContractorSection({
                           onChange={(e) => setEditFields((f) => ({ ...f, contractorId: e.target.value }))}
                         >
                           {contractors.map((c) => (
-                            <option key={c.id} value={c.id}>{c.wcWarning ? `${c.name} · ${c.wcWarning}` : c.name}</option>
+                            <option key={c.id} value={c.id}>{c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name}</option>
                           ))}
                         </select>
                       </td>

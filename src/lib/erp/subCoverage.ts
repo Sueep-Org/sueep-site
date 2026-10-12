@@ -69,12 +69,23 @@ export const SUB_STATUS_STYLE: Record<SubCoverageStatus, { label: string; cls: s
 };
 
 /**
- * Short warning when a sub has no current workers' comp (and isn't exempt),
- * shown next to their name when scheduling. Warning only for now; Sueep
- * plans to block scheduling in this case later.
+ * What to warn about when a sub is added to a job: general liability or
+ * workers' comp that is missing or expired (an exempt sub is fine on
+ * workers' comp). `short` goes next to their name in pickers, `detail` in
+ * the pop-up. Warning only, scheduling is never blocked.
  */
-export function workersCompWarning(c: { workersCompExpiresAt: Date | null; workersCompExempt: boolean }, todayKey: string = todayEasternKey()): string | null {
-  if (c.workersCompExempt) return null;
-  if (!c.workersCompExpiresAt) return "No workers' comp";
-  return utcDateKey(c.workersCompExpiresAt) < todayKey ? "WC expired" : null;
+export function insuranceWarning(c: SubCoverageInput, todayKey: string = todayEasternKey()): { short: string; detail: string } | null {
+  const bad = subCoverage(c, todayKey).items.filter((i) => (i.key === "gl" || i.key === "wc") && (i.status === "MISSING" || i.status === "EXPIRED"));
+  if (bad.length === 0) {
+    return c.hasInsurance === false ? { short: "No insurance", detail: "marked as having no insurance" } : null;
+  }
+  const expiredOn = (i: CoverageItem) => new Date(`${i.expiresAt}T00:00:00Z`).toLocaleDateString("en-US", SHORT_DATE);
+  const detail = bad
+    .map((i) => (i.status === "MISSING" ? `no ${i.label.toLowerCase()} on file` : `${i.label.toLowerCase()} expired ${expiredOn(i)}`))
+    .join(", ");
+  const short =
+    bad.length === 2 && bad.every((i) => i.status === "MISSING")
+      ? "No insurance"
+      : bad.map((i) => (i.status === "MISSING" ? `No ${i.label.toLowerCase()}` : `${i.label} expired`)).join(", ");
+  return { short, detail };
 }

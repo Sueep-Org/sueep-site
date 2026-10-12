@@ -9,7 +9,7 @@ const FROM_EMAIL = process.env.RESEND_FROM || "Sueep Website <noreply@mail.sueep
 const FROM_ADDRESS = (FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? FROM_EMAIL).trim();
 const SENDER_NAME: Record<SenderKind, string> = { erp: "Sueep ERP", sueep: "Sueep", website: "Sueep Website" };
 
-type Attachment = { filename: string; content: Buffer };
+type Attachment = { filename: string; content: Buffer; mimeType?: string };
 
 /**
  * Sends one email of a given type. The type's setting on the Notifications
@@ -29,6 +29,10 @@ export async function sendEmail(options: {
   attachments?: Attachment[];
   /** ERP page this email is about, e.g. /erp/projects/abc, shown in the log */
   link?: string;
+  /** ERP user who wrote it, for emails typed out by hand */
+  sentBy?: string;
+  /** Store the attached files with the log row, so they can be opened later */
+  keepAttachments?: boolean;
 }): Promise<"SENT" | "OFF" | "SKIPPED" | "NO_RECIPIENTS"> {
   const def = NOTIFICATIONS[options.type];
   const setting = await getNotificationSetting(options.type);
@@ -39,7 +43,7 @@ export async function sendEmail(options: {
   // Worker and client emails come from a noreply address, so a reply would
   // be lost. When someone in the ERP sent it, replies go to them instead.
   const replyTo = options.replyTo ?? (def.sender === "sueep" ? await signedInEmail() : undefined);
-  const base = { type: options.type, to, cc, bcc: options.bcc ?? [], replyTo, subject: options.subject, html, attachments: options.attachments, link: options.link };
+  const base = { type: options.type, to, cc, bcc: options.bcc ?? [], replyTo, subject: options.subject, html, attachments: options.attachments, link: options.link, sentBy: options.sentBy, keepAttachments: options.keepAttachments };
 
   if (!to.length) return "NO_RECIPIENTS";
   if (!setting.enabled) {
@@ -63,6 +67,7 @@ export async function deliverEmail(e: {
   link?: string | null;
   resentFromId?: string;
   sentBy?: string;
+  keepAttachments?: boolean;
 }): Promise<{ id: string | null }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -106,31 +111,43 @@ async function logEmail(e: {
   link?: string | null;
   resentFromId?: string;
   sentBy?: string;
+  keepAttachments?: boolean;
   status: "SENT" | "FAILED" | "SKIPPED" | "OFF";
   error?: string;
   providerId?: string | null;
 }) {
+  const row = {
+    type: e.type,
+    // Lowercased so each person's Notifications page can match their login exactly.
+    to: e.to.map(lower),
+    cc: e.cc.map(lower),
+    bcc: e.bcc.map(lower),
+    replyTo: e.replyTo ?? null,
+    subject: e.subject,
+    status: e.status,
+    error: e.error?.slice(0, 2000) ?? null,
+    providerId: e.providerId ?? null,
+    html: e.html,
+    hasAttachments: !!e.attachments?.length,
+    link: e.link ?? null,
+    resentFromId: e.resentFromId ?? null,
+    sentBy: e.sentBy ?? null,
+  };
+  const files = e.keepAttachments ? (e.attachments ?? []) : [];
   // A logging problem must never stop or fail the email itself.
   try {
-    await prisma.emailLog.create({
-      data: {
-        type: e.type,
-        // Lowercased so each person's Notifications page can match their login exactly.
-        to: e.to.map(lower),
-        cc: e.cc.map(lower),
-        bcc: e.bcc.map(lower),
-        replyTo: e.replyTo ?? null,
-        subject: e.subject,
-        status: e.status,
-        error: e.error?.slice(0, 2000) ?? null,
-        providerId: e.providerId ?? null,
-        html: e.html,
-        hasAttachments: !!e.attachments?.length,
-        link: e.link ?? null,
-        resentFromId: e.resentFromId ?? null,
-        sentBy: e.sentBy ?? null,
-      },
-    });
+    if (files.length) {
+      try {
+        await prisma.emailLog.create({
+          data: { ...row, attachments: { create: files.map((a) => ({ filename: a.filename, mimeType: a.mimeType || "application/octet-stream", size: a.content.length, data: a.content })) } },
+        });
+        return;
+      } catch (err) {
+        // Better a record without its files than no record of the email at all.
+        console.error("Could not store email attachments, logging the email without them", err);
+      }
+    }
+    await prisma.emailLog.create({ data: row });
   } catch (err) {
     console.error("Could not write email log", err);
   }
@@ -370,6 +387,31 @@ export function buildEmployeeInfoEmail(params: {
       <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
     </div>
   `;
+}
+
+/** An email someone typed on a project's Communications tab. Plain text in, blank lines become paragraphs. */
+export function buildProjectMessageEmail(params: {
+  message: string;
+  projectTitle: string;
+  senderEmail: string;
+  /** See projectMessageLink for who gets one. */
+  button?: { url: string; label: string; note: string } | null;
+}) {
+  const paragraphs = params.message
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p style="margin:0 0 14px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+  const button = params.button
+    ? `<p style="margin:20px 0 6px"><a href="${escapeHtml(params.button.url)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${escapeHtml(params.button.label)}</a></p>
+<p style="margin:0;font-size:12px;color:#6b7280">${escapeHtml(params.button.note)}</p>`
+    : "";
+  return `${paragraphs}${button}
+<p style="margin:20px 0 0;padding-top:12px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
+  Sent by ${escapeHtml(params.senderEmail)} at Sueep about ${escapeHtml(params.projectTitle)}. Reply to this email to reach them.
+</p>`;
 }
 
 export function buildChangeOrderNotificationEmail(params: {

@@ -192,12 +192,12 @@ export function parseRecipients(raw: unknown): { to: string[] } | { error: strin
 }
 
 /** Emails a request link to each address, with replies going to the sender. Throws if sending fails. */
-export async function sendRequestLinkEmails(opts: { to: string[]; url: string; projectTitle: string | null; message: string | null; replyTo: string }) {
+export async function sendRequestLinkEmails(opts: { to: string[]; url: string; projectTitle: string | null; projectId?: string; message: string | null; replyTo: string }) {
   const subject = opts.projectTitle ? `Request a certificate of insurance: ${opts.projectTitle}` : "Request a certificate of insurance from Sueep";
   for (const address of opts.to) {
     await sendEmail({
       type: "COI_REQUEST_LINK",
-      link: "/erp/insurance/requests",
+      link: opts.projectId ? `/erp/projects/${opts.projectId}` : "/erp/insurance/requests",
       to: address,
       subject,
       html: buildRequestLinkEmailHtml({ projectTitle: opts.projectTitle, url: opts.url, message: opts.message }),

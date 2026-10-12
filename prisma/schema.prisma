@@ -3022,8 +3022,8 @@ model EmailLog {
   /// EmailType key, see notificationTypes.ts
   type           String
   to             String[]
-  cc             String[]       @default([])
-  bcc            String[]       @default([])
+  cc             String[]          @default([])
+  bcc            String[]          @default([])
   replyTo        String?
   subject        String
   /// SENT | FAILED | SKIPPED (email not set up on this server) | OFF (type turned off)
@@ -3033,8 +3033,9 @@ model EmailLog {
   providerId     String?
   /// Final HTML as sent, kept so it can be viewed and resent
   html           String?
-  /// Calendar invites and other attachments aren't stored, so these can't be resent
-  hasAttachments Boolean        @default(false)
+  /// Only files attached to a project message are stored (see EmailAttachment).
+  /// Calendar invites and the rest aren't, so these can't be resent.
+  hasAttachments Boolean           @default(false)
   /// ERP page the email is about, e.g. /erp/projects/abc
   link           String?
   /// Set when this row is a resend of another
@@ -3042,10 +3043,28 @@ model EmailLog {
   /// ERP user who resent it
   sentBy         String?
   reads          EmailLogRead[]
+  attachments    EmailAttachment[]
 
   @@index([createdAt])
   @@index([type, createdAt])
   @@index([status, createdAt])
+}
+
+/// A file sent with an email written on a project's Communications tab, kept
+/// so the project's record shows exactly what went out.
+model EmailAttachment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  emailLogId String
+  emailLog   EmailLog @relation(fields: [emailLogId], references: [id], onDelete: Cascade)
+
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  @@index([emailLogId])
 }
 
 /// Who has opened which email on their Notifications page. Unread = no row.
