@@ -10,6 +10,7 @@ import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
+import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
   coIsComplete,
   computeProjectSpanMarkersByDay,
@@ -239,7 +240,7 @@ type Person = { id: string; displayName: string };
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
-type WorkerPerson = Person & { email: string | null; runsSolo?: boolean };
+type WorkerPerson = Person & { email: string | null; runsSolo?: boolean; insuranceWarning?: string | null };
 
 /** Duplicates a calendar card (or a logged-labor day) onto whichever other
  * days get picked on the mini calendar — they don't need to be consecutive
@@ -547,6 +548,7 @@ export function SchedulePlanner({
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
   const confirm = useConfirm();
+  const checkInsurance = useInsuranceCheck(contractors);
   const searchParams = useSearchParams();
   useEffect(() => {
     const projectId = searchParams.get("scheduleProjectId");
@@ -1295,6 +1297,7 @@ export function SchedulePlanner({
       }
       return;
     }
+    if (!(await checkInsurance(eventDaySupervisorContractorId, existing?.supervisorContractorId))) return;
     setEventDaySaving(true);
     try {
       const res = await fetch("/api/erp/schedule/day-assignments", {
@@ -1475,6 +1478,7 @@ export function SchedulePlanner({
     const soleOption = splitOptions.length === 1 ? splitOptions[0]!.id : null;
     const scopePick = splitOptions.length > 1 ? eventWorkerScopePick : soleOption;
     const group = p ? calendarSegmentGroup(p.segment) : null;
+    if (eventWorkerType === "contractor" && !(await checkInsurance(eventWorkerId))) return;
     if (!force) {
       const conflicts = findWorkerConflicts(k, projectId, eventWorkerType, eventWorkerId);
       if (conflicts.length > 0) {

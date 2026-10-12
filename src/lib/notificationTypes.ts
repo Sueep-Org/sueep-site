@@ -60,6 +60,15 @@ export const NOTIFICATIONS = {
     automatic: "The employees picked when sending",
     sender: "sueep",
   }),
+  PROJECT_MESSAGE: def({
+    label: "Project message",
+    group: "Projects & schedule",
+    when: "Someone writes an email on a project's Communications tab",
+    automatic: "The people picked when sending, with the sender copied",
+    sender: "sueep",
+    // Someone typed this one out, so it must not be dropped silently.
+    alwaysOn: true,
+  }),
   CHANGE_ORDER_NOTICE: def({
     label: "Change order notice",
     group: "Projects & schedule",

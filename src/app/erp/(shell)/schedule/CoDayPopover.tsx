@@ -15,6 +15,7 @@ import {
 } from "@/lib/erp/schedule";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
+import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -23,7 +24,7 @@ type Person = { id: string; displayName: string };
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
  * all. Null surfaces a "no email on file" note wherever they're picked. */
-type WorkerPerson = Person & { email: string | null };
+type WorkerPerson = Person & { email: string | null; insuranceWarning?: string | null };
 
 /** Click-through popover for a change-order chip on the month calendar —
  * always shows logged labor for the day (read-only). Once that day is done
@@ -71,6 +72,7 @@ export function CoDayPopover({
   const summary = co.laborByDay[dateKey];
   const router = useRouter();
   const confirm = useConfirm();
+  const checkInsurance = useInsuranceCheck(contractors);
 
   // This day already happened — either it has actual logged labor, or the
   // CO as a whole is done — so offering a "plan supervisor/PM/crew" form for
@@ -160,6 +162,7 @@ export function CoDayPopover({
       setError("End time must be after start time");
       return;
     }
+    if (!(await checkInsurance(supervisorContractorId, assignment?.supervisorContractorId))) return;
     setSaving(true);
     try {
       const res = await fetch("/api/erp/schedule/co-day-assignments", {
@@ -225,6 +228,7 @@ export function CoDayPopover({
       setWorkerError(workerType === "employee" ? "Pick a worker" : "Pick a contractor");
       return;
     }
+    if (workerType === "contractor" && !(await checkInsurance(id))) return;
     setAddingWorker(true);
     try {
       const res = await fetch("/api/erp/schedule/co-worker-assignments", {

@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type SimpleTab = { label: string; content: React.ReactNode };
-/** A hover-dropdown group — the group's own label is just a trigger, never itself selectable; only its children are. */
+type SimpleTab = {
+  /** Also the tab's key in the URL (?tab=Labor), so links into a tab keep working when it moves into a group. */
+  label: string;
+  /** Shorter name shown inside a group's menu, e.g. "Hourly" for the Labor tab under a Labor group. */
+  menuLabel?: string;
+  content: React.ReactNode;
+};
+/** A dropdown group — the group's own label is just a trigger, never itself selectable; only its children are. */
 type GroupTab = { label: string; children: SimpleTab[] };
 export type DetailTab = SimpleTab | GroupTab;
 
@@ -21,7 +27,21 @@ function flattenTabs(tabs: DetailTab[]): SimpleTab[] {
   return tabs.flatMap((t) => (isGroupTab(t) ? t.children : [t]));
 }
 
-export function DetailTabs({ tabs, paramName = "tab" }: Props) {
+/** A group left with one tab (e.g. after a role filter) shows as that plain tab, and an empty one is dropped. */
+function collapseSmallGroups(tabs: DetailTab[]): DetailTab[] {
+  return tabs.flatMap((t) => (isGroupTab(t) && t.children.length < 2 ? t.children.map(({ label, content }) => ({ label, content })) : [t]));
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 4.5 6 8l3.5-3.5" />
+    </svg>
+  );
+}
+
+export function DetailTabs({ tabs: rawTabs, paramName = "tab" }: Props) {
+  const tabs = collapseSmallGroups(rawTabs);
   const flatTabs = flattenTabs(tabs);
   const [activeLabel, setActiveLabel] = useState(flatTabs[0]?.label ?? "");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -53,6 +73,24 @@ export function DetailTabs({ tabs, paramName = "tab" }: Props) {
     closeTimer.current = setTimeout(() => setOpenGroup(null), 150);
   }
 
+  // Tapping or clicking anywhere else, or Escape, closes an open group menu
+  // (touch screens have no "mouse leave" to do it).
+  useEffect(() => {
+    if (!openGroup) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!(e.target as Element | null)?.closest?.("[data-tab-group]")) setOpenGroup(null);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenGroup(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openGroup]);
+
   const activeContent = flatTabs.find((t) => t.label === activeLabel)?.content;
 
   return (
@@ -68,8 +106,10 @@ export function DetailTabs({ tabs, paramName = "tab" }: Props) {
             isGroupTab(tab) ? (
               <optgroup key={tab.label} label={tab.label}>
                 {tab.children.map((child) => (
+                  // The closed select shows only the option's text, so a
+                  // renamed tab carries its group ("Labor: Hourly").
                   <option key={child.label} value={child.label}>
-                    {child.label}
+                    {child.menuLabel && child.menuLabel !== child.label ? `${tab.label}: ${child.menuLabel}` : child.label}
                   </option>
                 ))}
               </optgroup>
@@ -86,28 +126,35 @@ export function DetailTabs({ tabs, paramName = "tab" }: Props) {
       <div className="hidden sm:flex sticky top-0 z-10 bg-white flex-wrap gap-2 border-b border-gray-200 pb-3 mb-6 pt-1">
         {tabs.map((tab) => {
           if (isGroupTab(tab)) {
-            const isChildActive = tab.children.some((child) => child.label === activeLabel);
+            const activeChild = tab.children.find((child) => child.label === activeLabel);
             const isOpen = openGroup === tab.label;
             return (
               <div
                 key={tab.label}
+                data-tab-group
                 className="relative"
-                onMouseEnter={() => openGroupNow(tab.label)}
-                onMouseLeave={scheduleCloseGroup}
+                // Hover opens it for a mouse only. A tap also fires "enter",
+                // which would open the menu just before the click toggled it shut.
+                onPointerEnter={(e) => e.pointerType === "mouse" && openGroupNow(tab.label)}
+                onPointerLeave={(e) => e.pointerType === "mouse" && scheduleCloseGroup()}
               >
                 <button
                   type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isOpen}
                   onClick={() => setOpenGroup(isOpen ? null : tab.label)}
                   className={
-                    isChildActive || isOpen
-                      ? "rounded-full bg-gray-200 px-4 py-1.5 text-sm font-semibold text-gray-800"
-                      : "rounded-full px-4 py-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+                    activeChild || isOpen
+                      ? "flex items-center gap-1.5 rounded-full bg-gray-200 px-4 py-1.5 text-sm font-semibold text-gray-800"
+                      : "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
                   }
                 >
                   {tab.label}
+                  {activeChild && <span className="font-normal text-gray-600">· {activeChild.menuLabel ?? activeChild.label}</span>}
+                  <Chevron open={isOpen} />
                 </button>
                 {isOpen && (
-                  <div className="absolute left-0 z-20 mt-1 min-w-[9rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  <div role="menu" className="absolute left-0 z-20 mt-1 min-w-[11rem] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
                     {tab.children.map((child) => (
                       <button
                         key={child.label}
@@ -117,7 +164,7 @@ export function DetailTabs({ tabs, paramName = "tab" }: Props) {
                           child.label === activeLabel ? "font-semibold text-pink-600" : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
-                        {child.label}
+                        {child.menuLabel ?? child.label}
                       </button>
                     ))}
                   </div>

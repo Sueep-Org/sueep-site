@@ -50,7 +50,7 @@ export default async function EmailLogDetailPage({ params }: PageProps) {
           ] as [string, React.ReactNode],
         ]
       : []),
-    ...(log.sentBy ? [["Resent by", log.sentBy] as [string, string]] : []),
+    ...(log.sentBy ? [[log.resentFromId ? "Resent by" : "Sent by", log.sentBy] as [string, string]] : []),
   ];
 
   return (

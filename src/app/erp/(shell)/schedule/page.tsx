@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { workersCompWarning } from "@/lib/erp/subCoverage";
+import { insuranceWarning } from "@/lib/erp/subCoverage";
 import {
   addDays,
   coIsComplete,
@@ -208,7 +208,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }),
     prisma.contractor.findMany({
       where: { status: { not: "INACTIVE" } },
-      select: { id: true, name: true, email: true, workersCompExpiresAt: true, workersCompExempt: true, runsWithoutSupervisor: true },
+      select: { id: true, name: true, email: true, hasInsurance: true, glExpiresAt: true, autoExpiresAt: true, umbrellaExpiresAt: true, workersCompExpiresAt: true, workersCompExempt: true, runsWithoutSupervisor: true },
       orderBy: { name: "asc" },
     }),
     prisma.changeOrderDayAssignment.findMany({
@@ -258,11 +258,18 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   }));
   const employeeNameById = new Map(employees.map((e) => [e.id, e.displayName]));
 
-  // Pickers show a workers' comp warning next to the name (warning only for
-  // now; scheduling isn't blocked). Calendar labels keep the plain name.
+  // Pickers show an insurance warning next to the name, and adding them
+  // asks for a confirm (warning only; scheduling isn't blocked). Calendar
+  // labels keep the plain name.
   const contractors = contractorRows.map((c) => {
-    const wc = workersCompWarning(c);
-    return { id: c.id, displayName: wc ? `${c.name} · ${wc}` : c.name, email: c.email, runsSolo: c.runsWithoutSupervisor };
+    const w = insuranceWarning(c);
+    return {
+      id: c.id,
+      displayName: w ? `${c.name} · ${w.short}` : c.name,
+      email: c.email,
+      runsSolo: c.runsWithoutSupervisor,
+      insuranceWarning: w ? `${c.name}: ${w.detail}.` : null,
+    };
   });
   const contractorNameById = new Map(contractorRows.map((c) => [c.id, c.name]));
 
