@@ -135,7 +135,7 @@ export default function Home() {
           <div className="md:text-right md:pl-8">
             <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E]">Get in touch</p>
             <h3 className="mt-2 font-semibold text-xl md:text-2xl">Sueep Headquarters</h3>
-            <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">2 Bala Plaza, Suite 300<br />Bala Cynwyd, PA 19004</p>
+            <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">3500 Scotts Lane, Unit F22<br />Philadelphia, PA 19129</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">(267) 217-3596</p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">contact@sueep.com</p>
             <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • NY</p>

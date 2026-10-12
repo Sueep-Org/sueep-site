@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
-import { combinedLineItemText, matchSovItem, matchUnitNumber, amountReconciles } from "@/lib/hubspot/billingMatch";
+import { combinedLineItemText, matchSovItem, matchUnitNumber, amountReconciles, AMOUNT_TOLERANCE_CENTS } from "@/lib/hubspot/billingMatch";
+import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
 import {
   searchPaidInvoices,
   invoicePaidOn,
@@ -11,6 +12,8 @@ import {
 } from "@/lib/hubspot/invoices";
 
 const SETTLED_STATUSES = new Set(["AUTO_APPLIED", "ALIAS_APPLIED", "RESOLVED", "IGNORED", "ALREADY_PAID_SKIPPED"]);
+/** Statuses meaning the sync has already counted a line item as paying its line. */
+const APPLIED_STATUSES = new Set(["AUTO_APPLIED", "ALIAS_APPLIED", "ALREADY_PAID_SKIPPED"]);
 
 function parseAmountCents(raw: string | null | undefined): number {
   const n = raw ? Number.parseFloat(raw) : NaN;
@@ -21,8 +24,24 @@ type LineItemContext = {
   li: HubSpotLineItemRecord;
   haystack: string;
   amountCents: number;
-  existing: { status: string; lineItemText: string; amountCents: number } | null;
+  existing: { status: string; lineItemText: string; amountCents: number; resolvedAt: Date | null; matchedSovItemId: string | null } | null;
 };
+
+/**
+ * A line a person (or a linked invoice) already settled, with nothing about
+ * it changed in HubSpot since. Left alone: running it through the matching
+ * again would undo that and mark it unresolved.
+ */
+function settledByHand(ctx: LineItemContext): boolean {
+  const e = ctx.existing;
+  return (
+    !!e &&
+    (e.status === "RESOLVED" || e.status === "IGNORED") &&
+    e.resolvedAt != null &&
+    e.lineItemText === ctx.haystack &&
+    e.amountCents === ctx.amountCents
+  );
+}
 
 type SovResolution = {
   kind: "sov";
@@ -130,7 +149,12 @@ function statusForMethod(method: "ALIAS" | "SCORE" | null): "AUTO_APPLIED" | "AL
   return method === "ALIAS" ? "ALIAS_APPLIED" : "AUTO_APPLIED";
 }
 
-async function applySovResolution(r: SovResolution, projectId: string, paidOn: Date | null): Promise<ApplyOutcome> {
+async function applySovResolution(
+  r: SovResolution,
+  projectId: string,
+  paidOn: Date | null,
+  previousStatus: string | null,
+): Promise<ApplyOutcome> {
   if (!r.sovItemId) return { status: "PENDING_REVIEW" };
 
   const target = await prisma.projectSOVItem.findUnique({ where: { id: r.sovItemId } });
@@ -138,12 +162,18 @@ async function applySovResolution(r: SovResolution, projectId: string, paidOn: D
 
   if (target.billingStatus === "PAID") return { status: "ALREADY_PAID_SKIPPED", matchedSovItemId: target.id };
 
+  // This line item was already counted as paying this SOV line, and the
+  // line isn't Paid now, so a person moved it back. Leave their status.
+  if (previousStatus && APPLIED_STATUSES.has(previousStatus)) {
+    return { status: previousStatus as ApplyOutcome["status"], matchedSovItemId: target.id };
+  }
+
   // Jumping straight from not-yet-invoiced to paid with no ERP-side BILLED
   // step is itself a signal something's off (wrong project matched, stale
   // ERP data) — don't auto-apply, route to review instead.
   if (target.billingStatus === "NOT_BILLED") return { status: "PENDING_REVIEW", matchedSovItemId: target.id };
 
-  if (!amountReconciles(r.amountCents, target.scheduledValueCents)) {
+  if (!amountReconciles(r.amountCents, target.scheduledValueCents, AMOUNT_TOLERANCE_CENTS)) {
     return { status: "PENDING_REVIEW", matchedSovItemId: target.id };
   }
 
@@ -180,7 +210,7 @@ async function applyUnitGroup(
   // >1 candidate happens when a recurring contract has multiple unpaid
   // billing periods for the same unit at once — text alone can't tell them
   // apart, so disambiguate by which one the total actually reconciles with.
-  const reconciling = candidates.filter((c) => amountReconciles(sumCents, c.approvedPriceCents ?? c.priceCents ?? 0));
+  const reconciling = candidates.filter((c) => amountReconciles(sumCents, c.approvedPriceCents ?? c.priceCents ?? 0, AMOUNT_TOLERANCE_CENTS));
 
   if (reconciling.length !== 1) {
     const outcome: ApplyOutcome = { status: "PENDING_REVIEW", matchedUnitNumber: unitNumber };
@@ -262,17 +292,21 @@ export async function processPaidInvoices(): Promise<{ processed: number; errors
       });
       const existingByLineItemId = new Map(existingRows.map((r) => [r.hubspotLineItemId, r]));
 
-      const contexts: LineItemContext[] = lineItems.map((li) => {
-        const haystack = combinedLineItemText(li.properties.name ?? "", li.properties.description);
-        const amountCents = parseAmountCents(li.properties.amount);
-        const existing = existingByLineItemId.get(li.id) ?? null;
-        return { li, haystack, amountCents, existing };
-      });
+      const contexts: LineItemContext[] = lineItems
+        .map((li) => {
+          const haystack = combinedLineItemText(li.properties.name ?? "", li.properties.description);
+          const amountCents = parseAmountCents(li.properties.amount);
+          const existing = existingByLineItemId.get(li.id) ?? null;
+          return { li, haystack, amountCents, existing };
+        })
+        .filter((ctx) => !settledByHand(ctx));
+      if (contexts.length === 0) continue;
 
       if (project) {
         for (const ctx of contexts) {
           const resolution = await resolveSovLineItem(ctx, project.id);
-          const outcome = await applySovResolution(resolution, project.id, invoicePaidOn(invoice));
+          const sameLine = ctx.existing && ctx.existing.matchedSovItemId === resolution.sovItemId;
+          const outcome = await applySovResolution(resolution, project.id, invoicePaidOn(invoice), sameLine ? ctx.existing!.status : null);
           await upsertLedgerRow({
             invoiceId: invoice.id,
             dealId,
@@ -334,6 +368,15 @@ export async function processPaidInvoices(): Promise<{ processed: number; errors
         }
 
         for (const [unitNumber, group] of grouped) {
+          // Every line here was already counted as paying a turn. Applying
+          // it again would either re-mark a turn someone moved back, or
+          // (the turn being Paid, so no longer a Billed candidate) drop
+          // these lines back to unresolved for no reason.
+          const alreadyApplied = group.every((r) => {
+            const prior = existingByLineItemId.get(r.li.id);
+            return !!prior && APPLIED_STATUSES.has(prior.status) && !!prior.matchedTurnoverRequestId && prior.matchedUnitNumber === unitNumber;
+          });
+          if (alreadyApplied) continue;
           const { perLineItem } = await applyUnitGroup(building.id, unitNumber, group);
           for (const r of group) {
             const outcome = perLineItem.get(r.li.id) ?? { status: "PENDING_REVIEW" as const };
@@ -357,6 +400,13 @@ export async function processPaidInvoices(): Promise<{ processed: number; errors
     } catch (e) {
       errors.push(`invoice ${invoice.id}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  // Change orders and hand-linked invoices, which the loop above doesn't cover.
+  try {
+    await applyPaidInvoiceLinks();
+  } catch (e) {
+    errors.push(`linked invoices: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { processed, errors };

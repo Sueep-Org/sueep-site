@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   // Opening the tab refreshes this project's SOV invoice links, reusing
-  // what was just fetched. Display-only, so a failure here is just logged.
+  // what was just fetched. A failure here is just logged.
   try {
     await syncProjectInvoices(id, project.hubspotDealId, docs.invoices);
   } catch (err) {
@@ -43,6 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       where: { projectId: id },
       select: {
         hubspotInvoiceId: true,
+        invoiceNumber: true,
         sovItemId: true,
         changeOrderId: true,
         amountCents: true,
@@ -64,12 +65,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }),
   ]);
   const linksByInvoice = new Map<string, unknown[]>();
+  // Which invoice each line is on, so the link editor can say a pick will move it.
+  const heldBy = new Map<string, { invoiceId: string; number: string | null }>();
   for (const r of linkRows) {
+    const targetId = r.sovItemId ? `sov:${r.sovItemId}` : r.changeOrderId ? `co:${r.changeOrderId}` : null;
+    if (targetId) heldBy.set(targetId, { invoiceId: r.hubspotInvoiceId, number: r.invoiceNumber });
     linksByInvoice.set(r.hubspotInvoiceId, [
       ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
       {
-        targetId: r.sovItemId ? `sov:${r.sovItemId}` : `co:${r.changeOrderId}`,
-        label: r.sovItem?.description ?? `CO: ${r.changeOrder?.title ?? ""}`,
+        // No line = someone chose to keep this invoice unlinked.
+        targetId,
+        label: !targetId ? "Left unlinked" : (r.sovItem?.description ?? `CO: ${r.changeOrder?.title ?? ""}`),
         amountCents: r.amountCents,
         manual: r.manual,
         linkedByName: r.linkedByName,
@@ -100,8 +106,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       scope: "project",
       ownerId: id,
       targets: [
-        ...sovItems.map((i) => ({ id: `sov:${i.id}`, label: i.description, hint: `SOV · ${money(i.scheduledValueCents)}` })),
-        ...changeOrders.map((c) => ({ id: `co:${c.id}`, label: `CO: ${c.title}`, hint: `Change order · ${money(c.contractValueCents)}` })),
+        ...sovItems.map((i) => ({ id: `sov:${i.id}`, label: i.description, hint: `SOV · ${money(i.scheduledValueCents)}`, heldBy: heldBy.get(`sov:${i.id}`) ?? null })),
+        ...changeOrders.map((c) => ({ id: `co:${c.id}`, label: `CO: ${c.title}`, hint: `Change order · ${money(c.contractValueCents)}`, heldBy: heldBy.get(`co:${c.id}`) ?? null })),
       ],
     },
   });

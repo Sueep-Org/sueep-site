@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { resolveLaborRateCents } from "@/lib/erp/laborRate";
+import { loadEmployeeJanitorialLabor } from "@/lib/erp/employeeJanitorialLabor";
+import { getErpAuth, canEditPayInfo } from "@/lib/erpAuth";
 
 /**
  * GET /api/erp/labor
@@ -15,6 +17,10 @@ import { resolveLaborRateCents } from "@/lib/erp/laborRate";
  *   - workDate: Filter by a single work date
  *   - startDate / endDate: Filter by a work date range (inclusive)
  *   - workerName: Filter by worker name
+ *   - includeJanitorial=1: with employeeId and no project or name filter, also
+ *     returns that employee's worked janitorial shifts (source "JANITORIAL",
+ *     projectId = the contract id). Only the employee profile asks for this,
+ *     so project labor views are unaffected.
  *   - skip / take: Pagination — when `take` is omitted, all matching rows are returned
  *     (existing behavior); when provided, one extra row is fetched to compute `hasMore`.
  */
@@ -56,7 +62,12 @@ export async function GET(request: NextRequest) {
     if (workerName) changeOrderWhere.name = { contains: workerName, mode: "insensitive" };
     if (workDateFilter) changeOrderWhere.workDate = workDateFilter;
 
-    const [entries, changeOrderEntries] = await Promise.all([
+    const wantJanitorial = searchParams.get("includeJanitorial") === "1" && !!employeeId && !projectId && !workerName;
+    // Their pay rate is only sent to roles allowed to see pay.
+    const canSeePay = wantJanitorial ? canEditPayInfo((await getErpAuth())?.role ?? "EMPLOYEE") : false;
+    const janitorialDay = workDate ? new Date(workDate) : null;
+
+    const [entries, changeOrderEntries, janitorialEntries] = await Promise.all([
       prisma.laborEntry.findMany({
         where,
         select: {
@@ -105,12 +116,18 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [{ workDate: "desc" }, { createdAt: "desc" }],
       }),
+      wantJanitorial
+        ? loadEmployeeJanitorialLabor(employeeId!, {
+            start: janitorialDay ?? (startDate ? new Date(startDate) : null),
+            end: janitorialDay ?? (endDate ? new Date(endDate) : null),
+          })
+        : Promise.resolve([]),
     ]);
 
     const combined = [
       ...entries.map((e) => ({
         id: e.id,
-        source: "PROJECT" as const,
+        source: "PROJECT" as "PROJECT" | "CHANGE_ORDER" | "JANITORIAL",
         projectId: e.projectId,
         employeeId: e.employeeId,
         projectTitle: e.project.jobTitle,
@@ -145,6 +162,25 @@ export async function GET(request: NextRequest) {
         locationAccuracy: null as number | null,
         lastLocationAt: null as Date | null,
         changeOrderTitle: e.changeOrder.title,
+      })),
+      ...janitorialEntries.map((e) => ({
+        id: e.id,
+        source: "JANITORIAL" as const,
+        projectId: e.contractId,
+        employeeId: employeeId as string | null,
+        projectTitle: e.buildingName,
+        workDate: e.workDate,
+        createdAt: e.workDate,
+        workerName: "",
+        role: null as string | null,
+        hours: e.hours,
+        hourlyRateCents: canSeePay ? e.hourlyRateCents : 0,
+        taskDescription: e.taskDescription,
+        locationLatitude: null as number | null,
+        locationLongitude: null as number | null,
+        locationAccuracy: null as number | null,
+        lastLocationAt: null as Date | null,
+        changeOrderTitle: null as string | null,
       })),
     ].sort((a, b) => {
       const workDateDiff = b.workDate.getTime() - a.workDate.getTime();

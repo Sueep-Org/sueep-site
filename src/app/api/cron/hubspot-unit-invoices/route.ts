@@ -7,8 +7,8 @@ export const maxDuration = 300;
 
 /**
  * Runs hourly (see vercel.json). Mirrors HubSpot invoices onto building
- * units and onto post-construction SOV lines / change orders, for display
- * only; never changes billing status.
+ * units and onto post-construction SOV lines / change orders, then marks
+ * lines Paid where their linked invoices are paid and match in amount.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");

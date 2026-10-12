@@ -15,6 +15,7 @@ import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { computeProjectActualsWithChangeOrders, changeOrderValueCents, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
+import { ProjectLienEditor } from "./ProjectLienEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
@@ -655,6 +656,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               marginCents: actuals.marginCents,
             }}
           />
+          {isPostConstruction && (
+            <>
+              <hr className="my-6 border-gray-200" />
+              <ProjectLienEditor
+                projectId={project.id}
+                lienState={project.lienState}
+                lienRole={project.lienRole}
+                lienResidential={project.lienResidential}
+              />
+            </>
+          )}
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
           <ProjectSOVSection

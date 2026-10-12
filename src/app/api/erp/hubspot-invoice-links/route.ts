@@ -4,6 +4,7 @@ import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { fetchDealInvoices } from "@/lib/hubspot/dealDocuments";
 import { invoiceSnapshot, syncBuildingUnitInvoices } from "@/lib/hubspot/syncUnitInvoices";
 import { syncProjectInvoices } from "@/lib/hubspot/syncProjectInvoices";
+import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,13 +17,19 @@ type Body = {
    * share of the invoice. Empty = drop the manual links and go back to
    * whatever the automatic match finds. */
   links: Array<{ targetId: string; amountCents: number }>;
+  /** Project only, with no links: keep this invoice linked to nothing, so
+   * the automatic match doesn't put it back on a line. */
+  unlinked?: boolean;
 };
 
 /**
  * Replaces which units (building) or SOV items / change orders (project) one
- * HubSpot invoice is linked to. One invoice can cover several. Saved links
- * are marked manual so the hourly sync never overwrites them. Display-only:
- * billing status is not changed.
+ * HubSpot invoice is linked to. One invoice can cover several, but on a
+ * project each SOV item or change order holds one invoice: linking a line
+ * that's on another invoice moves it here. Saved links are marked manual so
+ * the hourly sync never overwrites them. When the
+ * invoice is paid and its share matches the line's value, the line is marked
+ * Paid (see applyPaidInvoiceLinks).
  */
 export async function PUT(req: Request) {
   const auth = await getErpAuth();
@@ -86,6 +93,7 @@ export async function PUT(req: Request) {
       }),
     ]);
     if (links.length === 0) await syncBuildingUnitInvoices(body.ownerId, owner.hubspotDealId, invoices);
+    await applyPaidInvoiceLinks({ buildingId: body.ownerId });
   } else {
     const parsed = links.map((l) => {
       const [kind, id] = l.targetId.split(":");
@@ -99,10 +107,19 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Every pick must be an SOV item or change order on this project" }, { status: 400 });
     }
 
+    // A marker row with no line keeps an invoice deliberately unlinked.
+    const rows = parsed.length > 0 ? parsed : body.unlinked === true ? [{ sovItemId: null, changeOrderId: null, amountCents: 0 }] : [];
+    const sovIds = parsed.flatMap((p) => p.sovItemId ?? []);
+    const coIds = parsed.flatMap((p) => p.changeOrderId ?? []);
+
     await prisma.$transaction([
       prisma.hubSpotSovInvoice.deleteMany({ where: { projectId: body.ownerId, hubspotInvoiceId: invoice.id } }),
+      // One invoice per line: take these lines off any other invoice.
+      prisma.hubSpotSovInvoice.deleteMany({
+        where: { projectId: body.ownerId, OR: [{ sovItemId: { in: sovIds } }, { changeOrderId: { in: coIds } }] },
+      }),
       prisma.hubSpotSovInvoice.createMany({
-        data: parsed.map((p) => ({
+        data: rows.map((p) => ({
           projectId: body.ownerId,
           hubspotInvoiceId: invoice.id,
           sovItemId: p.sovItemId,
@@ -114,7 +131,10 @@ export async function PUT(req: Request) {
         })),
       }),
     ]);
-    if (links.length === 0) await syncProjectInvoices(body.ownerId, owner.hubspotDealId, invoices);
+    // Always re-run the automatic match: it fills in an invoice that was
+    // reset, and re-places any invoice that just lost a line to this one.
+    await syncProjectInvoices(body.ownerId, owner.hubspotDealId, invoices);
+    await applyPaidInvoiceLinks({ projectId: body.ownerId });
   }
 
   return NextResponse.json({ ok: true });

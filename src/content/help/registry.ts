@@ -204,7 +204,7 @@ export const registry: ArticleEntry[] = [
     slug: "billing/billing-overview",
     title: "Billing Overview",
     category: "Billing, Pay & Finance",
-    description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring, and resolve items in Needs Review.",
+    description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring.",
     order: 1,
     component: BillingOverview,
     roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
