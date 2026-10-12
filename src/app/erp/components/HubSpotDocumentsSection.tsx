@@ -115,8 +115,8 @@ function LinkedTo({ inv, onEdit }: { inv: Invoice; onEdit: () => void }) {
         inv.links.map((l, i) => (
           <span
             key={`${l.targetId}-${i}`}
-            title={l.manual ? `Linked by ${l.linkedByName ?? "someone"}` : "Matched automatically"}
-            className="max-w-[14rem] truncate rounded bg-pink-50 px-1.5 py-0.5 text-xs font-medium text-pink-700"
+            title={!l.targetId ? `Kept unlinked by ${l.linkedByName ?? "someone"}` : l.manual ? `Linked by ${l.linkedByName ?? "someone"}` : "Matched automatically"}
+            className={`max-w-[14rem] truncate rounded px-1.5 py-0.5 text-xs font-medium ${l.targetId ? "bg-pink-50 text-pink-700" : "bg-gray-100 text-gray-500"}`}
           >
             {l.label}
             {inv.links.length > 1 && <span className="font-normal text-pink-500"> · {money(l.amountCents)}</span>}

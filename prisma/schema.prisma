@@ -71,6 +71,14 @@ model Project {
 
   contractValueCents Int?
 
+  /// What the deadline to file a lien on this job depends on (see
+  /// src/lib/erp/lienDeadline.ts). PA | NJ | DE | NY
+  /// The last day of work is projectEndDate of a COMPLETE project, kept only there.
+  lienState       String?
+  /// Who hired Sueep: SUB (a general contractor) | DIRECT (the property owner)
+  lienRole        String?
+  lienResidential Boolean @default(false)
+
   estMaterialCents Int?
   estTravelCents   Int?
   estLaborCents    Int?
@@ -2533,8 +2541,9 @@ model HubSpotInvoiceLineItemMatch {
 
 /// One row per (HubSpot invoice, unit) on a building's deal, any invoice
 /// status (draft/open/paid/voided). A read-only mirror for showing
-/// "INV-1395 · Open · PDF" on a turn. Never changes billing status; that
-/// stays processPaidInvoices' job (see syncUnitInvoices.ts).
+/// "INV-1395 · Open · PDF" on a turn. Billing status is processPaidInvoices'
+/// job, except a paid invoice linked by hand, which marks its unit Paid when
+/// the amount matches (see applyPaidLinks.ts).
 model HubSpotUnitInvoice {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -2565,6 +2574,10 @@ model HubSpotUnitInvoice {
   /// manual row, the sync leaves that invoice's rows alone.
   manual            Boolean   @default(false)
   linkedByName      String?
+  /// When the sync counted this invoice as paying its line (it marked the
+  /// line Paid, or found it Paid already). The sync does that once: if the
+  /// line is moved back afterwards, it stays where the person put it.
+  paidAppliedAt     DateTime?
 
   @@unique([hubspotInvoiceId, unitNumber])
   @@index([buildingId, unitNumber])
@@ -2573,8 +2586,10 @@ model HubSpotUnitInvoice {
 
 /// Project-side twin of HubSpotUnitInvoice: one row per (HubSpot invoice,
 /// SOV item or change order) on a project's own deal, any invoice status.
-/// Display-only, never changes billing status (see syncProjectInvoices.ts).
-/// Exactly one of sovItemId / changeOrderId is set.
+/// A paid invoice whose amount matches marks its line Paid (see applyPaidLinks.ts).
+/// One of sovItemId / changeOrderId is set, and a line holds one invoice at
+/// most. A manual row with neither is an invoice someone chose to keep
+/// unlinked, so the automatic match leaves it alone.
 model HubSpotSovInvoice {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -2603,6 +2618,10 @@ model HubSpotSovInvoice {
   /// Linked by hand; the sync leaves an invoice alone once it has any manual row.
   manual            Boolean   @default(false)
   linkedByName      String?
+  /// When the sync counted this invoice as paying its line (it marked the
+  /// line Paid, or found it Paid already). The sync does that once: if the
+  /// line is moved back afterwards, it stays where the person put it.
+  paidAppliedAt     DateTime?
 
   @@index([projectId])
   @@index([hubspotInvoiceId])

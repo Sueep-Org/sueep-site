@@ -17,6 +17,7 @@ import { TimeOffSection, type TimeOffRow } from "@/app/erp/components/TimeOffSec
 import { PAID_TIME_OFF_DAYS_PER_YEAR, erpRoleForEmail, timeOffReviewBlock } from "@/lib/erp/timeOff";
 import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
+import { loadEmployeeJanitorialLabor } from "@/lib/erp/employeeJanitorialLabor";
 import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +100,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
     : "Not set";
   const bankTone = employee.bankAccountNumber ? "complete" : "empty";
 
-  const [initialLaborEntries, initialChangeOrderEntries, laborProjectGroups, changeOrderProjectRows] =
+  const [initialLaborEntries, initialChangeOrderEntries, laborProjectGroups, changeOrderProjectRows, janitorialLabor] =
     await Promise.all([
       prisma.laborEntry.findMany({
         where: { employeeId: employee.id },
@@ -138,6 +139,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
         select: { changeOrder: { select: { projectId: true } } },
         distinct: ["changeOrderId"],
       }),
+      loadEmployeeJanitorialLabor(employee.id),
     ]);
   const laborProjectIds = new Set([
     ...laborProjectGroups.map((g) => g.projectId),
@@ -153,7 +155,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
   const combinedLaborEntries = [
     ...initialLaborEntries.map((e) => ({
       id: e.id,
-      source: "PROJECT" as const,
+      source: "PROJECT" as "PROJECT" | "CHANGE_ORDER" | "JANITORIAL",
       projectId: e.projectId,
       projectTitle: e.project.jobTitle,
       changeOrderTitle: null as string | null,
@@ -173,6 +175,21 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       workDate: e.workDate,
       createdAt: e.createdAt,
       role: e.role,
+      hours: e.hours,
+      hourlyRateCents: e.hourlyRateCents,
+      taskDescription: e.taskDescription,
+    })),
+    // Worked janitorial shifts. projectId holds the contract id here; the
+    // list links those rows to the contract instead of a project.
+    ...janitorialLabor.map((e) => ({
+      id: e.id,
+      source: "JANITORIAL" as const,
+      projectId: e.contractId,
+      projectTitle: e.buildingName,
+      changeOrderTitle: null as string | null,
+      workDate: e.workDate,
+      createdAt: e.workDate,
+      role: null as string | null,
       hours: e.hours,
       hourlyRateCents: e.hourlyRateCents,
       taskDescription: e.taskDescription,

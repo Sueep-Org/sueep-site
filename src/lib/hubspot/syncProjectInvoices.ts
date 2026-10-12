@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { matchSovItem } from "@/lib/hubspot/billingMatch";
 import { fetchDealInvoices, type DealInvoice } from "@/lib/hubspot/dealDocuments";
 import { invoiceSnapshot } from "@/lib/hubspot/syncUnitInvoices";
+import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
 
 /**
  * Project-side twin of syncUnitInvoices: mirrors every invoice on a
@@ -10,14 +11,20 @@ import { invoiceSnapshot } from "@/lib/hubspot/syncUnitInvoices";
  *
  * Matching per line item, same order the paid-invoice sync uses: its own
  * settled match, then a confirmed alias, then word scoring against SOV item
- * descriptions and change order titles. Display-only: never touches
- * billingStatus or the review queue. Invoices linked by hand are left alone
- * apart from refreshing their HubSpot details.
+ * descriptions and change order titles. This only saves the links; whether
+ * a paid link marks its line Paid is decided by applyPaidInvoiceLinks, which
+ * syncAllProjectInvoices runs afterwards. Invoices linked by hand are left
+ * alone apart from refreshing their HubSpot details.
+ *
+ * A line holds one invoice at most, though one invoice can cover many lines.
+ * A line someone linked by hand is off limits to the automatic match, and
+ * when two invoices both match the same line only the one whose amount fits
+ * it best is kept; the other shows as not linked for a person to place.
  */
 
 const SETTLED = new Set(["AUTO_APPLIED", "ALIAS_APPLIED", "RESOLVED", "ALREADY_PAID_SKIPPED"]);
 
-type Target = { key: string; sovItemId: string | null; changeOrderId: string | null; description: string };
+type Target = { key: string; sovItemId: string | null; changeOrderId: string | null; description: string; valueCents: number | null };
 
 export async function syncProjectInvoices(
   projectId: string,
@@ -26,15 +33,32 @@ export async function syncProjectInvoices(
 ): Promise<{ rows: number; unmatchedLines: number }> {
   const invoices = prefetched ?? (await fetchDealInvoices(dealId));
 
-  const manualInvoiceIds = new Set(
+  const manualRows = await prisma.hubSpotSovInvoice.findMany({
+    where: { projectId, manual: true },
+    select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true },
+  });
+  // Automatic rows are rebuilt below, so remember which ones the sync has
+  // already counted as paid and carry that across (see applyPaidLinks.ts).
+  const appliedAt = new Map(
     (
-      await prisma.hubSpotSovInvoice.findMany({ where: { projectId, manual: true }, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] })
-    ).map((r) => r.hubspotInvoiceId),
+      await prisma.hubSpotSovInvoice.findMany({
+        where: { projectId, manual: false, paidAppliedAt: { not: null } },
+        select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true, paidAppliedAt: true },
+      })
+    ).map((r) => [`${r.hubspotInvoiceId}|${r.sovItemId ? `sov:${r.sovItemId}` : `co:${r.changeOrderId}`}`, r.paidAppliedAt]),
+  );
+  const manualInvoiceIds = new Set(manualRows.map((r) => r.hubspotInvoiceId));
+  // Lines a person already gave to an invoice that is still on the deal.
+  const onDeal = new Set(invoices.map((i) => i.id));
+  const heldByHand = new Set(
+    manualRows
+      .filter((r) => onDeal.has(r.hubspotInvoiceId))
+      .flatMap((r) => (r.sovItemId ? [`sov:${r.sovItemId}`] : r.changeOrderId ? [`co:${r.changeOrderId}`] : [])),
   );
 
   const [sovItems, changeOrders, aliases, ledger] = await Promise.all([
-    prisma.projectSOVItem.findMany({ where: { sov: { projectId } }, select: { id: true, description: true } }),
-    prisma.projectChangeOrder.findMany({ where: { projectId }, select: { id: true, title: true } }),
+    prisma.projectSOVItem.findMany({ where: { sov: { projectId } }, select: { id: true, description: true, scheduledValueCents: true } }),
+    prisma.projectChangeOrder.findMany({ where: { projectId }, select: { id: true, title: true, contractValueCents: true } }),
     prisma.hubSpotSovAlias.findMany({ where: { projectId, active: true }, select: { hubspotText: true, sovItemId: true } }),
     prisma.hubSpotInvoiceLineItemMatch.findMany({
       where: { hubspotLineItemId: { in: invoices.flatMap((i) => i.lineItems.map((li) => li.id)) } },
@@ -43,9 +67,9 @@ export async function syncProjectInvoices(
   ]);
 
   const targets: Target[] = [
-    ...sovItems.map((i) => ({ key: `sov:${i.id}`, sovItemId: i.id, changeOrderId: null, description: i.description })),
-    ...changeOrders.map((c) => ({ key: `co:${c.id}`, sovItemId: null, changeOrderId: c.id, description: c.title })),
-  ];
+    ...sovItems.map((i) => ({ key: `sov:${i.id}`, sovItemId: i.id, changeOrderId: null, description: i.description, valueCents: i.scheduledValueCents })),
+    ...changeOrders.map((c) => ({ key: `co:${c.id}`, sovItemId: null, changeOrderId: c.id, description: c.title, valueCents: c.contractValueCents })),
+  ].filter((t) => !heldByHand.has(t.key));
   const targetByKey = new Map(targets.map((t) => [t.key, t]));
   const aliasByText = new Map(aliases.map((a) => [a.hubspotText, a.sovItemId]));
   const ledgerByLine = new Map(ledger.map((l) => [l.hubspotLineItemId, l]));
@@ -74,6 +98,22 @@ export async function syncProjectInvoices(
     for (const [key, amountCents] of byTarget) rows.push({ invoice, target: targetByKey.get(key)!, amountCents });
   }
 
+  // One invoice per line: where several matched the same line, keep the one
+  // closest to the line's value, then the earliest.
+  const winnerByTarget = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    const current = winnerByTarget.get(r.target.key);
+    if (!current) {
+      winnerByTarget.set(r.target.key, r);
+      continue;
+    }
+    const off = (x: typeof r) => Math.abs(x.amountCents - (x.target.valueCents ?? 0));
+    const date = (x: typeof r) => x.invoice.invoiceDate ?? "";
+    if (off(r) < off(current) || (off(r) === off(current) && date(r) < date(current))) winnerByTarget.set(r.target.key, r);
+  }
+  unmatchedLines += rows.length - winnerByTarget.size;
+  const keptRows = [...winnerByTarget.values()];
+
   // Auto rows are rebuilt from scratch each time: there's no natural unique
   // key (sovItemId/changeOrderId are each nullable), and a project has at
   // most a few dozen invoice lines.
@@ -85,12 +125,13 @@ export async function syncProjectInvoices(
       },
     }),
     prisma.hubSpotSovInvoice.createMany({
-      data: rows.map((r) => ({
+      data: keptRows.map((r) => ({
         projectId,
         hubspotInvoiceId: r.invoice.id,
         sovItemId: r.target.sovItemId,
         changeOrderId: r.target.changeOrderId,
         amountCents: r.amountCents,
+        paidAppliedAt: appliedAt.get(`${r.invoice.id}|${r.target.key}`) ?? null,
         ...invoiceSnapshot(r.invoice),
       })),
     }),
@@ -99,7 +140,7 @@ export async function syncProjectInvoices(
       .map((i) => prisma.hubSpotSovInvoice.updateMany({ where: { projectId, hubspotInvoiceId: i.id }, data: invoiceSnapshot(i) })),
   ]);
 
-  return { rows: rows.length, unmatchedLines };
+  return { rows: keptRows.length, unmatchedLines };
 }
 
 export async function syncAllProjectInvoices(): Promise<{ projects: number; rows: number; errors: string[] }> {
@@ -115,6 +156,11 @@ export async function syncAllProjectInvoices(): Promise<{ projects: number; rows
     } catch (e) {
       errors.push(`${p.jobTitle}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+  try {
+    await applyPaidInvoiceLinks();
+  } catch (e) {
+    errors.push(`linked invoices: ${e instanceof Error ? e.message : String(e)}`);
   }
   return { projects: projects.length, rows, errors };
 }

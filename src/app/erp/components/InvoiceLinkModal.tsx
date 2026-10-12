@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import { Button, Modal, inputClass } from "@/app/erp/components/ui";
 
-export type LinkTarget = { id: string; label: string; hint: string };
+export type LinkTarget = {
+  id: string;
+  label: string;
+  hint: string;
+  /** Project lines only: the invoice this line is on now. A line holds one invoice. */
+  heldBy?: { invoiceId: string; number: string | null } | null;
+};
 export type ExistingLink = { targetId: string | null; amountCents: number; manual: boolean };
 
 /** Even split in cents, any leftover cents on the first pick. */
@@ -19,6 +25,8 @@ function splitEvenly(totalCents: number, ids: string[]): Record<string, string> 
  * Pick which units (building) or SOV items / change orders (project) one
  * HubSpot invoice covers, with each one's share. Saves through
  * /api/erp/hubspot-invoice-links; saved picks override the automatic match.
+ * On a project, picking a line that's on another invoice moves it here, and
+ * saving with nothing picked keeps the invoice unlinked.
  */
 export function InvoiceLinkModal({
   open,
@@ -67,14 +75,14 @@ export function InvoiceLinkModal({
     });
   }
 
-  async function save(links: Array<{ targetId: string; amountCents: number }>) {
+  async function save(links: Array<{ targetId: string; amountCents: number }>, unlinked = false) {
     setSaving(true);
     setError("");
     try {
       const res = await fetch("/api/erp/hubspot-invoice-links", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope, ownerId, hubspotInvoiceId: invoice.id, links }),
+        body: JSON.stringify({ scope, ownerId, hubspotInvoiceId: invoice.id, links, unlinked }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Save failed (${res.status})`);
@@ -87,6 +95,8 @@ export function InvoiceLinkModal({
   }
 
   const noun = scope === "building" ? "units" : "SOV items or change orders";
+  // Units can't hold a "linked to nothing" marker, so this is project only.
+  const canLeaveUnlinked = scope === "project";
 
   return (
     <Modal open={open} onClose={onClose} dismissible={false} size="lg">
@@ -115,6 +125,12 @@ export function InvoiceLinkModal({
                 <span className="min-w-0">
                   <span className="block truncate text-gray-900" title={t.label}>{t.label}</span>
                   {t.hint && <span className="block text-xs text-gray-400">{t.hint}</span>}
+                  {t.heldBy && t.heldBy.invoiceId !== invoice.id && (
+                    <span className={`block text-xs ${checked ? "text-amber-700" : "text-gray-400"}`}>
+                      On {t.heldBy.number ?? "another invoice"}
+                      {checked ? ". Saving moves it here." : ""}
+                    </span>
+                  )}
                 </span>
               </label>
               {checked && (
@@ -163,10 +179,16 @@ export function InvoiceLinkModal({
           </Button>
           <Button
             size="sm"
-            disabled={saving || selected.length === 0}
-            onClick={() => save(selected.map((id) => ({ targetId: id, amountCents: Math.round(Number(amounts[id] || 0) * 100) })))}
+            disabled={saving || (selected.length === 0 && !canLeaveUnlinked)}
+            title={selected.length === 0 && canLeaveUnlinked ? "Keep this invoice off every line, so the automatic match doesn't put it back" : undefined}
+            onClick={() =>
+              save(
+                selected.map((id) => ({ targetId: id, amountCents: Math.round(Number(amounts[id] || 0) * 100) })),
+                selected.length === 0,
+              )
+            }
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving..." : selected.length === 0 && canLeaveUnlinked ? "Save as not linked" : "Save"}
           </Button>
         </div>
       </div>

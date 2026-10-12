@@ -11,6 +11,7 @@ import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
+import { parseLienRole, parseLienState } from "@/lib/erp/lienDeadline";
 import type { ErpRole } from "@/lib/erpSession";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
@@ -172,6 +173,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.estimatedDays =
       body.estimatedDays === null || body.estimatedDays === "" ? null : Math.round(Number(body.estimatedDays));
   }
+  if (body.lienState !== undefined) data.lienState = parseLienState(body.lienState);
+  if (body.lienRole !== undefined) data.lienRole = parseLienRole(body.lienRole);
+  if (body.lienResidential !== undefined) data.lienResidential = body.lienResidential === true;
   if (body.commissionPaid !== undefined) {
     // commissionPaidOn (YYYY-MM-DD) lets Finance record when it was actually
     // paid, which decides the payroll period it lands in. Defaults to now.

@@ -10,7 +10,8 @@ import { buildCsv, downloadCsv, slugForFilename, type CsvColumn } from "@/lib/er
 
 export type EmployeeLaborEntryRow = {
   id: string;
-  source: "PROJECT" | "CHANGE_ORDER";
+  source: "PROJECT" | "CHANGE_ORDER" | "JANITORIAL";
+  /** The project, or for a janitorial shift the contract. */
   projectId: string;
   projectTitle: string;
   changeOrderTitle: string | null;
@@ -62,7 +63,9 @@ export function EmployeeLaborSection({
   const [exporting, setExporting] = useState(false);
 
   function filterParams(): URLSearchParams {
-    const params = new URLSearchParams({ employeeId });
+    // Janitorial shifts belong to a contract, not a project, so they drop
+    // out when a project is picked (the API does that).
+    const params = new URLSearchParams({ employeeId, includeJanitorial: "1" });
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
     if (projectId) params.set("projectId", projectId);
@@ -82,7 +85,7 @@ export function EmployeeLaborSection({
 
       const columns: CsvColumn<EmployeeLaborEntryRow>[] = [
         { header: "Date", get: (r) => r.workDate.slice(0, 10) },
-        { header: "Project", get: (r) => r.projectTitle },
+        { header: "Project", get: (r) => (r.source === "JANITORIAL" ? `${r.projectTitle} (janitorial)` : r.projectTitle) },
         { header: "Change Order", get: (r) => (r.source === "CHANGE_ORDER" ? r.changeOrderTitle ?? "Yes" : "") },
         { header: "Role", get: (r) => r.role ?? "" },
         { header: "Hours", get: (r) => r.hours.toFixed(2) },
@@ -229,9 +232,17 @@ export function EmployeeLaborSection({
                   <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">{formatDate(entry.workDate)}</td>
                     <td className="px-4 py-2.5">
-                      <Link href={`/erp/projects/${entry.projectId}`} className="text-pink-600 hover:underline">
+                      <Link
+                        href={entry.source === "JANITORIAL" ? `/erp/janitorial/contracts/${entry.projectId}` : `/erp/projects/${entry.projectId}`}
+                        className="text-pink-600 hover:underline"
+                      >
                         {entry.projectTitle}
                       </Link>
+                      {entry.source === "JANITORIAL" ? (
+                        <span className="ml-1.5 inline-flex rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700" title="Janitorial shift">
+                          Janitorial
+                        </span>
+                      ) : null}
                       {entry.source === "CHANGE_ORDER" ? (
                         <span
                           className="ml-1.5 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"

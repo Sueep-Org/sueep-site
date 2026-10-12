@@ -139,6 +139,13 @@ export function matchUnitNumber(haystackNormalized: string, knownUnitNumbers: st
  * items, not just scored ones, since a confidently-matched (or aliased) line
  * item whose amount doesn't fit the target's expected value is exactly the
  * kind of false positive this system exists to prevent. */
+/**
+ * How far an invoice amount can be from the line it pays and still count as
+ * paying it in full. Invoices pick up small rounding and fee differences
+ * (a $4,240.00 line invoiced at $4,240.65); anything past this goes to review.
+ */
+export const AMOUNT_TOLERANCE_CENTS = 1000;
+
 export function amountReconciles(sumCents: number, expectedCents: number, toleranceCents: number = 0): boolean {
   return Math.abs(sumCents - expectedCents) <= toleranceCents;
 }

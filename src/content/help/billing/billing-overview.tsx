@@ -1,4 +1,4 @@
-import { Callout, H2, H3, P, UL, LI, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, H3, P, Steps, Step, ImgPlaceholder, A } from "@/app/erp/components/help/HelpComponents";
 
 export function BillingOverview() {
   return (
@@ -6,11 +6,9 @@ export function BillingOverview() {
       <H2>Overview</H2>
       <P>
         The Project Billing page (<strong>ERP → Project Billing</strong>) is where completed work
-        gets marked as billed and paid. It has four tabs: <strong>Post-Construction</strong>,{" "}
-        <strong>Janitorial</strong>, <strong>Recurring</strong>, and <strong>Needs Review</strong>.
-        The first three list completed work in a date range and let you flip its billing status;
-        the fourth is a queue of HubSpot invoice line items the system couldn&apos;t confidently
-        match on its own.
+        gets marked as billed and paid. It has three tabs: <strong>Post-Construction</strong>,{" "}
+        <strong>Janitorial</strong>, and <strong>Recurring</strong>. Each lists completed work in a
+        date range and lets you flip its billing status.
       </P>
       <ImgPlaceholder label="Project Billing page with tabs and date range" />
 
@@ -33,6 +31,14 @@ export function BillingOverview() {
           Click the <strong>Billing Status</strong> pill on any row to flip it between{" "}
           <strong>Not Billed</strong>, <strong>Billed</strong>, and <strong>Paid</strong>, it saves
           immediately. The total at the bottom reflects everything currently shown.
+          <Callout type="info">
+            A <strong>Lien deadline</strong> pill next to a project shows how many days are left
+            to file a lien while work on it is unpaid. It counts from the project&apos;s completion date, turns
+            amber at 60 days and red at 30. The <strong>Lien deadlines</strong> box above the
+            table lists every unpaid job that is close, whatever date range is showing. Set the
+            state and who hired us on the project&apos;s <strong>Financials</strong> tab. These
+            are general deadlines, check with an attorney before relying on them.
+          </Callout>
         </Step>
 
         <Step n={3} title="Janitorial tab">
@@ -52,34 +58,22 @@ export function BillingOverview() {
         </Step>
 
         <Step n={5} title="Downloading a CSV">
-          Every one of the first three tabs has a <strong>Download CSV</strong> button, top right,
+          Every tab has a <strong>Download CSV</strong> button, top right,
           that exports exactly what&apos;s currently shown (respecting the active date range or
           search) with a running total row.
         </Step>
 
-        <Step n={6} title="Needs Review tab">
-          HubSpot invoice line items get matched automatically to a project&apos;s SOV items or a
-          turnover unit. This tab is the queue of ones the system wasn&apos;t confident enough to
-          apply on its own.
-          <ImgPlaceholder label="Needs Review tab with a candidate match" />
-          <UL>
-            <LI>
-              Each card shows the original HubSpot line item and amount, plus a searchable dropdown
-              of likely SOV items or units to match it to.
-            </LI>
-            <LI>
-              Pick the right match and click <strong>Confirm match</strong>, or click{" "}
-              <strong>Not applicable</strong> if none of the candidates are right.
-            </LI>
-            <LI>
-              <strong>Remember this for future invoices</strong> is checked by default, leave it
-              on so the same line item text auto-matches next time instead of landing back in this
-              queue.
-            </LI>
-          </UL>
-          <Callout type="tip">
-            An empty Needs Review tab is a good sign, it means every HubSpot invoice line item so
-            far matched confidently on its own.
+        <Step n={6} title="When a HubSpot invoice is on the wrong line">
+          HubSpot invoices are matched to SOV items, change orders and units automatically. To
+          fix a match, open the project or building, go to <strong>Invoices &amp; Quotes</strong>,
+          and click <strong>Edit</strong> on the invoice. An invoice can cover several lines, but a
+          project line holds one invoice. A <strong>not linked</strong> flag on a billing row
+          means an invoice on that project still needs a line.
+          <Callout type="info">
+            A line or change order is marked <strong>Paid</strong> on its own when the paid
+            invoices linked to it add up to its value, within $10. Linking a paid invoice by hand
+            on the <strong>Invoices &amp; Quotes</strong> tab does the same. A line that is still{" "}
+            <strong>Not Billed</strong> is only moved to Paid this way when a person made the link.
           </Callout>
         </Step>
       </Steps>
