@@ -9,7 +9,7 @@ import {
 import { searchDealsInConfiguredStages, type HubSpotDealRecord } from "@/lib/hubspot/dealSearch";
 import { syncDealContactsToProject, HubSpotScopesError } from "@/lib/hubspot/syncDealContactsToProject";
 import { hubspotFetch } from "@/lib/hubspot/client";
-import { isBilledStatus } from "@/lib/erp/billingStatus";
+import { isBilledStatus, isPaidStatus } from "@/lib/erp/billingStatus";
 
 function prop(r: HubSpotDealRecord, name: string): string | null {
   const v = r.properties[name];
@@ -189,7 +189,10 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             ...(completionBillingStatus === "PAID" && !existing.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
             ...(completionBillingStatus
               ? { billingStatus: completionBillingStatus }
-              : phase === "BILLING"
+              : // A project already marked Paid in the ERP stays Paid. The deal
+                // often sits in the Billing stage in HubSpot long after the
+                // money came in, and every sync used to pull it back to Billed.
+                phase === "BILLING" && !isPaidStatus(existing.billingStatus)
                 ? { billingStatus: "BILLED" }
                 : {}),
           },
