@@ -8,7 +8,7 @@ export type LinkTarget = {
   id: string;
   label: string;
   hint: string;
-  /** Project lines only: the invoice this line is on now. A line holds one invoice. */
+  /** SOV items and change orders only: the invoice this line is on now. A line holds one invoice. */
   heldBy?: { invoiceId: string; number: string | null } | null;
 };
 export type ExistingLink = { targetId: string | null; amountCents: number; manual: boolean };
@@ -22,11 +22,11 @@ function splitEvenly(totalCents: number, ids: string[]): Record<string, string> 
 }
 
 /**
- * Pick which units (building) or SOV items / change orders (project) one
- * HubSpot invoice covers, with each one's share. Saves through
+ * Pick which units, unit change orders and janitorial contract months
+ * (building) or SOV items / change orders (project) one HubSpot invoice covers, with each one's share. Saves through
  * /api/erp/hubspot-invoice-links; saved picks override the automatic match.
- * On a project, picking a line that's on another invoice moves it here, and
- * saving with nothing picked keeps the invoice unlinked.
+ * Picking an SOV item or change order that's on another invoice moves it
+ * here, and on a project saving with nothing picked keeps the invoice unlinked.
  */
 export function InvoiceLinkModal({
   open,
@@ -94,7 +94,7 @@ export function InvoiceLinkModal({
     }
   }
 
-  const noun = scope === "building" ? "units" : "SOV items or change orders";
+  const noun = scope === "building" ? "units, change orders or contract months" : "SOV items or change orders";
   // Units can't hold a "linked to nothing" marker, so this is project only.
   const canLeaveUnlinked = scope === "project";
 
@@ -102,7 +102,7 @@ export function InvoiceLinkModal({
     <Modal open={open} onClose={onClose} dismissible={false} size="lg">
       <h2 className="text-base font-semibold text-gray-900">Link {invoice.number ?? "invoice"}</h2>
       <p className="mt-0.5 text-sm text-gray-500">
-        Invoice total {centsToDollars(total)}. Pick every {scope === "building" ? "unit" : "item"} it covers.
+        Invoice total {centsToDollars(total)}. Pick every {scope === "building" ? "unit, change order or contract month" : "item"} it covers.
       </p>
 
       <input

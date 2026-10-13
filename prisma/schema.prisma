@@ -74,10 +74,35 @@ model Project {
   /// What the deadline to file a lien on this job depends on (see
   /// src/lib/erp/lienDeadline.ts). PA | NJ | DE | NY
   /// The last day of work is projectEndDate of a COMPLETE project, kept only there.
-  lienState       String?
+  lienState          String?
   /// Who hired Sueep: SUB (a general contractor) | DIRECT (the property owner)
-  lienRole        String?
-  lienResidential Boolean @default(false)
+  lienRole           String?
+  lienResidential    Boolean   @default(false)
+  /// The day a notice the law requires before filing went out (Pennsylvania
+  /// subcontractor notice, New Jersey Notice of Unpaid Balance). Midnight UTC date label.
+  lienNoticeSentOn   DateTime?
+  /// Certified mail or courier tracking number for that notice
+  lienNoticeTracking String?
+  /// Who a lien notice goes to: the property owner, and the general
+  /// contractor when Sueep was hired by one. Names and mailing addresses.
+  lienOwnerName      String?
+  lienOwnerAddress   String?
+  lienGcName         String?
+  lienGcAddress      String?
+  /// Lien steps a person ticked on the Liens tab: { stepKey: { at, by } }
+  /// (see LIEN_MANUAL_STEP_KEYS in src/lib/erp/lienDeadline.ts).
+  lienSteps          Json?
+  /// What was decided about a lien on this job: PURSUING | NOT_PURSUING | FILED.
+  /// Null = nobody has decided. Not pursuing and filed take it off the
+  /// lien list and stop its alert emails.
+  lienDecision       String?
+  lienDecisionNote   String?
+  lienDecisionAt     DateTime?
+  /// Email of the ERP user who set it
+  lienDecisionBy     String?
+  /// The furthest lien stage already emailed about (see lienAlerts.ts), so
+  /// each stage is announced once.
+  lienAlertedStage   String?
 
   estMaterialCents Int?
   estTravelCents   Int?
@@ -626,8 +651,9 @@ model RecurringContractPeriod {
   /// Extras in `charges` are not commissioned.
   commissionPaidAt DateTime?
 
-  projects Project[]
-  charges  RecurringContractCharge[]
+  projects        Project[]
+  charges         RecurringContractCharge[]
+  hubspotInvoices HubSpotContractInvoice[]
 
   @@unique([recurringContractId, periodStart])
 }
@@ -2627,6 +2653,43 @@ model HubSpotSovInvoice {
   @@index([hubspotInvoiceId])
   @@index([sovItemId])
   @@index([changeOrderId])
+}
+
+/// A HubSpot invoice on a building's deal linked to one month of that
+/// building's janitorial contract. Always linked by hand from the building's
+/// Invoices & Quotes tab; there is no automatic match. A month can hold
+/// several invoices (say the flat amount and an extra billed separately),
+/// and when its paid invoices add up to the month's total the month is
+/// marked Paid (see applyPaidLinks.ts).
+model HubSpotContractInvoice {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  periodId String
+  period   RecurringContractPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  hubspotInvoiceId  String
+  invoiceNumber     String?
+  /// draft | open | paid | voided (HubSpot's hs_invoice_status)
+  status            String?
+  invoiceDate       DateTime?
+  dueDate           DateTime?
+  paidDate          DateTime?
+  /// This month's share of the invoice.
+  amountCents       Int
+  invoiceTotalCents Int?
+  balanceDueCents   Int?
+  viewUrl           String?
+  pdfUrl            String?
+  linkedByName      String?
+  /// When the sync counted this invoice as paying its month. It does that
+  /// once: if the month is moved back afterwards, it stays where the person
+  /// put it.
+  paidAppliedAt     DateTime?
+
+  @@unique([hubspotInvoiceId, periodId])
+  @@index([periodId])
 }
 
 model ChangeOrderMaterialEntry {

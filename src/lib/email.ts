@@ -818,6 +818,32 @@ export function buildManagementReminderEmail(params: {
   `;
 }
 
+/** Jobs that reached a new lien stage this morning. Internal, to Admins and PMs. */
+export function buildLienAlertEmail(params: {
+  items: { jobTitle: string; headline: string; detail: string; url: string }[];
+  billingUrl: string;
+}) {
+  const rows = params.items
+    .map(
+      (i) => `<tr>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;vertical-align:top">
+          <a href="${escapeHtml(i.url)}" style="color:#111;font-weight:bold;text-decoration:none">${escapeHtml(i.jobTitle)}</a><br>
+          <span style="color:#b45309;font-weight:bold">${escapeHtml(i.headline)}</span><br>
+          <span style="color:#6b7280;font-size:13px">${escapeHtml(i.detail)}</span>
+        </td>
+      </tr>`
+    )
+    .join("");
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.5;max-width:640px">
+      <h2 style="margin-bottom:12px;color:#E73C6E">Lien steps coming up</h2>
+      <table style="border-collapse:collapse;margin:12px 0 20px;width:100%">${rows}</table>
+      <p style="margin:20px 0"><a href="${escapeHtml(params.billingUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Open Project Billing</a></p>
+      <p style="margin-top:24px;font-size:13px;color:#6b7280">Each job is announced once per stage. Record a decision on the project's Liens tab to stop alerts for it. These are general deadlines, check with an attorney before relying on them.</p>
+    </div>
+  `;
+}
+
 /** To the property manager after a quality check visit. Ratings only; notes and photos when staff chose to include them. */
 export function buildQualityCheckSummaryEmail(params: {
   building: string;

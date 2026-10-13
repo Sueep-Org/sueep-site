@@ -26,16 +26,23 @@ export async function GET(req: Request) {
   }
 
   // Searching bypasses the date range entirely, matching by building name
-  // across every period rather than only the ones in the visible window.
+  // or invoice number across every period rather than only the ones in the
+  // visible window.
   const periods = await prisma.recurringContractPeriod.findMany({
     where: q
-      ? { recurringContract: { building: { name: { contains: q, mode: "insensitive" } } } }
+      ? {
+          OR: [
+            { recurringContract: { building: { name: { contains: q, mode: "insensitive" } } } },
+            { hubspotInvoices: { some: { invoiceNumber: { contains: q, mode: "insensitive" } } } },
+          ],
+        }
       : { periodStart: { gte: start!, lte: end! } },
     include: {
       recurringContract: {
         select: { id: true, building: { select: { id: true, name: true } } },
       },
       charges: { select: { description: true, amountCents: true } },
+      hubspotInvoices: { orderBy: { invoiceDate: "desc" } },
     },
     orderBy: [{ periodStart: "asc" }],
   });
@@ -47,6 +54,8 @@ export async function GET(req: Request) {
     totalCents: number;
     extras: string[];
     billingStatus: string;
+    /** HubSpot invoices linked to this month on the building's Invoices & Quotes tab. */
+    invoices: Array<{ id: string; invoiceNumber: string | null; status: string | null; dueDate: string | null; paidDate: string | null; amountCents: number; viewUrl: string | null }>;
   };
 
   type BuildingRow = {
@@ -71,6 +80,15 @@ export async function GET(req: Request) {
       totalCents: periodTotalCents(period),
       extras: period.charges.map((c) => c.description),
       billingStatus: period.billingStatus,
+      invoices: period.hubspotInvoices.map((i) => ({
+        id: i.id,
+        invoiceNumber: i.invoiceNumber,
+        status: i.status,
+        dueDate: i.dueDate?.toISOString() ?? null,
+        paidDate: i.paidDate?.toISOString() ?? null,
+        amountCents: i.amountCents,
+        viewUrl: i.viewUrl,
+      })),
     });
   }
 

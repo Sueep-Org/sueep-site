@@ -126,46 +126,6 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
       <DetailTabs tabs={[
         {
-          label: "Pipeline",
-          content: (
-            <CandidateApplicationEditor
-              initial={{
-                id: row.id,
-                status: row.status,
-                internalNotes: row.internalNotes,
-                paperwork: row.paperwork as { label: string; url: string }[] | null,
-                bankAccountRequired: row.bankAccountRequired,
-              }}
-            />
-          ),
-        },
-        {
-          label: "Paperwork",
-          content: (
-            <CandidatePaperworkPanel
-              id={row.id}
-              email={row.email}
-              status={row.status}
-              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
-              paperworkUploadToken={row.paperworkUploadToken}
-              paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
-              resendConfigured={Boolean(process.env.RESEND_API_KEY)}
-              siteUrl={siteUrl}
-            />
-          ),
-        },
-        {
-          label: "Onboarding",
-          content: (
-            <FinishOnboardingPanel
-              id={row.id}
-              fullName={row.fullName}
-              status={row.status}
-              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
-            />
-          ),
-        },
-        {
           label: "Submission",
           content: (
             <>
@@ -247,6 +207,46 @@ export default async function CandidateDetailPage({ params }: PageProps) {
               </dl>
               <p className="mt-4 text-xs text-zinc-600 font-mono">id: {row.id}</p>
             </>
+          ),
+        },
+        {
+          label: "Pipeline",
+          content: (
+            <CandidateApplicationEditor
+              initial={{
+                id: row.id,
+                status: row.status,
+                internalNotes: row.internalNotes,
+                paperwork: row.paperwork as { label: string; url: string }[] | null,
+                bankAccountRequired: row.bankAccountRequired,
+              }}
+            />
+          ),
+        },
+        {
+          label: "Paperwork",
+          content: (
+            <CandidatePaperworkPanel
+              id={row.id}
+              email={row.email}
+              status={row.status}
+              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+              paperworkUploadToken={row.paperworkUploadToken}
+              paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
+              resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+              siteUrl={siteUrl}
+            />
+          ),
+        },
+        {
+          label: "Onboarding",
+          content: (
+            <FinishOnboardingPanel
+              id={row.id}
+              fullName={row.fullName}
+              status={row.status}
+              paperwork={(row.paperwork ?? []) as { label: string; url: string }[]}
+            />
           ),
         },
         ...(isSubcontractor

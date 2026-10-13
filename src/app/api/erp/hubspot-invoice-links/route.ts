@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { fetchDealInvoices } from "@/lib/hubspot/dealDocuments";
-import { invoiceSnapshot, syncBuildingUnitInvoices } from "@/lib/hubspot/syncUnitInvoices";
+import { invoiceSnapshot, syncBuildingUnitInvoices, unitChangeOrderProjects, contractMonthLinks } from "@/lib/hubspot/syncUnitInvoices";
 import { syncProjectInvoices } from "@/lib/hubspot/syncProjectInvoices";
 import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
 
@@ -13,8 +13,9 @@ type Body = {
   scope: "building" | "project";
   ownerId: string;
   hubspotInvoiceId: string;
-  /** Turn ids (building) or "sov:<id>" / "co:<id>" (project), each with its
-   * share of the invoice. Empty = drop the manual links and go back to
+  /** Turn ids, "co:<id>" for a unit's change order or "month:<id>" for a
+   * janitorial contract month (building), or
+   * "sov:<id>" / "co:<id>" (project), each with its share of the invoice. Empty = drop the manual links and go back to
    * whatever the automatic match finds. */
   links: Array<{ targetId: string; amountCents: number }>;
   /** Project only, with no links: keep this invoice linked to nothing, so
@@ -23,10 +24,11 @@ type Body = {
 };
 
 /**
- * Replaces which units (building) or SOV items / change orders (project) one
- * HubSpot invoice is linked to. One invoice can cover several, but on a
- * project each SOV item or change order holds one invoice: linking a line
- * that's on another invoice moves it here. Saved links are marked manual so
+ * Replaces which units, unit change orders and janitorial contract months
+ * (building) or SOV items / change orders (project) one HubSpot invoice is
+ * linked to. One invoice can
+ * cover several, but each SOV item or change order holds one invoice: linking
+ * a line that's on another invoice moves it here. Saved links are marked manual so
  * the hourly sync never overwrites them. When the
  * invoice is paid and its share matches the line's value, the line is marked
  * Paid (see applyPaidInvoiceLinks).
@@ -64,23 +66,53 @@ export async function PUT(req: Request) {
   const snapshot = invoiceSnapshot(invoice);
 
   if (body.scope === "building") {
-    const turns = await prisma.turnoverRequest.findMany({
-      where: { id: { in: links.map((l) => l.targetId) }, buildingId: body.ownerId },
-      select: { id: true, unitNumber: true },
-    });
+    const coLinks = links.filter((l) => l.targetId.startsWith("co:")).map((l) => ({ changeOrderId: l.targetId.slice(3), amountCents: l.amountCents }));
+    const monthLinks = links.filter((l) => l.targetId.startsWith("month:")).map((l) => ({ periodId: l.targetId.slice(6), amountCents: l.amountCents }));
+    const turnLinks = links.filter((l) => !l.targetId.startsWith("co:") && !l.targetId.startsWith("month:"));
+    const unitProjects = unitChangeOrderProjects(body.ownerId);
+    const [turns, changeOrders, monthCount] = await Promise.all([
+      prisma.turnoverRequest.findMany({
+        where: { id: { in: turnLinks.map((l) => l.targetId) }, buildingId: body.ownerId },
+        select: { id: true, unitNumber: true },
+      }),
+      prisma.projectChangeOrder.findMany({
+        where: { id: { in: coLinks.map((l) => l.changeOrderId) }, project: unitProjects },
+        select: { id: true, projectId: true },
+      }),
+      prisma.recurringContractPeriod.count({ where: { id: { in: monthLinks.map((l) => l.periodId) }, recurringContract: { buildingId: body.ownerId } } }),
+    ]);
     const turnById = new Map(turns.map((t) => [t.id, t]));
-    if (links.some((l) => !turnById.get(l.targetId)?.unitNumber)) {
-      return NextResponse.json({ error: "Every pick must be a unit in this building" }, { status: 400 });
+    const coProjectById = new Map(changeOrders.map((c) => [c.id, c.projectId]));
+    if (turnLinks.some((l) => !turnById.get(l.targetId)?.unitNumber) || coLinks.some((l) => !coProjectById.has(l.changeOrderId)) || monthCount !== monthLinks.length) {
+      return NextResponse.json({ error: "Every pick must be a unit, a unit change order or a contract month in this building" }, { status: 400 });
     }
-    const units = links.map((l) => turnById.get(l.targetId)!.unitNumber!);
+    const units = turnLinks.map((l) => turnById.get(l.targetId)!.unitNumber!);
     if (new Set(units).size !== units.length) {
       return NextResponse.json({ error: "Pick one turn per unit on the same invoice" }, { status: 400 });
     }
 
     await prisma.$transaction([
       prisma.hubSpotUnitInvoice.deleteMany({ where: { buildingId: body.ownerId, hubspotInvoiceId: invoice.id } }),
+      prisma.hubSpotSovInvoice.deleteMany({ where: { hubspotInvoiceId: invoice.id, project: unitProjects } }),
+      // One invoice per change order: take these off any other invoice.
+      prisma.hubSpotSovInvoice.deleteMany({ where: { changeOrderId: { in: coLinks.map((l) => l.changeOrderId) } } }),
+      prisma.hubSpotSovInvoice.createMany({
+        data: coLinks.map((l) => ({
+          projectId: coProjectById.get(l.changeOrderId)!,
+          hubspotInvoiceId: invoice.id,
+          changeOrderId: l.changeOrderId,
+          amountCents: l.amountCents,
+          manual: true,
+          linkedByName,
+          ...snapshot,
+        })),
+      }),
+      prisma.hubSpotContractInvoice.deleteMany({ where: { hubspotInvoiceId: invoice.id, ...contractMonthLinks(body.ownerId) } }),
+      prisma.hubSpotContractInvoice.createMany({
+        data: monthLinks.map((l) => ({ periodId: l.periodId, hubspotInvoiceId: invoice.id, amountCents: l.amountCents, linkedByName, ...snapshot })),
+      }),
       prisma.hubSpotUnitInvoice.createMany({
-        data: links.map((l) => ({
+        data: turnLinks.map((l) => ({
           buildingId: body.ownerId,
           hubspotInvoiceId: invoice.id,
           unitNumber: turnById.get(l.targetId)!.unitNumber!,

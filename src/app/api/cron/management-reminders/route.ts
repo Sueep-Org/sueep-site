@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendManagementReminders } from "@/lib/erp/managementReminders";
 import { sendQualityCheckReminders } from "@/lib/erp/janitorialQualityChecks";
+import { sendLienAlerts } from "@/lib/erp/lienAlerts";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic";
  * Runs daily (see vercel.json), ~8am Eastern (7am during EST, fixed UTC like
  * the other crons). Emails Admins and PMs the Management calendar items that
  * reach one of their category's reminder days today, plus the quality check
- * emails (tomorrow's checks to whoever does them, and overdue ones).
+ * emails (tomorrow's checks to whoever does them, and overdue ones) and the
+ * lien alerts (jobs that reached a new lien stage).
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -19,5 +21,6 @@ export async function GET(req: Request) {
 
   const result = await sendManagementReminders();
   const qualityChecks = await sendQualityCheckReminders();
-  return NextResponse.json({ ...result, qualityChecks });
+  const lienAlerts = await sendLienAlerts().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return NextResponse.json({ ...result, qualityChecks, lienAlerts });
 }
