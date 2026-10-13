@@ -540,6 +540,7 @@ function PaidDateModal({
 function CombinedRowTr({
   row,
   buildingCell,
+  showPaid,
   onTogglePaid,
   savingId,
   onToggleRecurringPaid,
@@ -547,6 +548,8 @@ function CombinedRowTr({
 }: {
   row: CombinedRow;
   buildingCell: ReactNode;
+  /** False in the Not eligible table: there's nothing to pay out on a $0 row. */
+  showPaid: boolean;
   onTogglePaid: (row: CommissionDealRow) => void;
   savingId: string | null;
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
@@ -595,9 +598,11 @@ function CombinedRowTr({
             linkHref={d.isUnitTurn && d.buildingId ? `/erp/buildings/${d.buildingId}${INVOICES_TAB}` : `/erp/projects/${d.projectId}${INVOICES_TAB}`}
           />
         </td>
-        <td className="px-3 py-2">
-          <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
-        </td>
+        {showPaid && (
+          <td className="px-3 py-2">
+            <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
+          </td>
+        )}
       </tr>
     );
   }
@@ -624,9 +629,11 @@ function CombinedRowTr({
           linkHref={`/erp/buildings/${r.buildingId}${INVOICES_TAB}`}
         />
       </td>
-      <td className="px-3 py-2">
-        <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
-      </td>
+      {showPaid && (
+        <td className="px-3 py-2">
+          <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
+        </td>
+      )}
     </tr>
   );
 }
@@ -678,7 +685,79 @@ function RepPanel({
         : combinedSortValue(a, sort.key) - combinedSortValue(b, sort.key)
     );
 
-  const displayRows = groupJanitorialByBuilding(visibleRows);
+  // Rows that earn nothing sit in their own table underneath.
+  const eligibleRows = visibleRows.filter((row) => combinedSortValue(row, "commission") !== 0);
+  const notEligibleRows = visibleRows.filter((row) => combinedSortValue(row, "commission") === 0);
+
+  const renderTable = (rows: CombinedRow[], showPaid: boolean) => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
+          <tr>
+            <th className="px-3 py-2 text-left">Building</th>
+            <th className="px-3 py-2 text-left">Project</th>
+            <th className="px-3 py-2 text-right">Date</th>
+            <th className="px-3 py-2 text-right">Contract</th>
+            <th className="px-3 py-2 text-right">Margin</th>
+            <th className="px-3 py-2 text-right">Rate</th>
+            <th className="px-3 py-2 text-right">Commission</th>
+            <th className="min-w-[12rem] px-3 py-2 text-left">
+              <span className="flex items-center gap-1">
+                Invoice
+                <InfoTip align="right" text="HubSpot invoices linked to this row. An amber tag means part of it has no invoice linked. Click it to link one on the Invoices & Quotes tab." />
+              </span>
+            </th>
+            {showPaid && <th className="px-3 py-2 text-left">Paid</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {groupJanitorialByBuilding(rows).map((entry) => {
+            if (entry.kind === "single") {
+              const buildingCell =
+                entry.row.kind === "deal" && janitorialBuildingKey(entry.row)
+                  ? <span className="font-medium text-gray-900">{entry.row.deal.buildingName}</span>
+                  : <span className="text-gray-300 select-none">—</span>;
+              return (
+                <CombinedRowTr
+                  key={combinedRowKey(entry.row)}
+                  row={entry.row}
+                  buildingCell={buildingCell}
+                  showPaid={showPaid}
+                  onTogglePaid={onTogglePaid}
+                  savingId={savingId}
+                  onToggleRecurringPaid={onToggleRecurringPaid}
+                  savingRecurringId={savingRecurringId}
+                />
+              );
+            }
+
+            return (
+              <Fragment key={entry.buildingId}>
+                {entry.rows.map((row, idx) => (
+                  <CombinedRowTr
+                    key={combinedRowKey(row)}
+                    row={row}
+                    buildingCell={
+                      idx === 0 ? (
+                        <span className="font-medium text-gray-900">{entry.buildingName}</span>
+                      ) : (
+                        <span className="text-gray-300 select-none">↳</span>
+                      )
+                    }
+                    showPaid={showPaid}
+                    onTogglePaid={onTogglePaid}
+                    savingId={savingId}
+                    onToggleRecurringPaid={onToggleRecurringPaid}
+                    savingRecurringId={savingRecurringId}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -716,71 +795,19 @@ function RepPanel({
           {visibleRows.length === 0 ? (
             <p className="p-4 text-center text-sm text-gray-400">No deals match the current filters.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Building</th>
-                    <th className="px-3 py-2 text-left">Project</th>
-                    <th className="px-3 py-2 text-right">Date</th>
-                    <th className="px-3 py-2 text-right">Contract</th>
-                    <th className="px-3 py-2 text-right">Margin</th>
-                    <th className="px-3 py-2 text-right">Rate</th>
-                    <th className="px-3 py-2 text-right">Commission</th>
-                    <th className="min-w-[12rem] px-3 py-2 text-left">
-                      <span className="flex items-center gap-1">
-                        Invoice
-                        <InfoTip align="right" text="HubSpot invoices linked to this row. An amber tag means part of it has no invoice linked. Click it to link one on the Invoices & Quotes tab." />
-                      </span>
-                    </th>
-                    <th className="px-3 py-2 text-left">Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayRows.map((entry) => {
-                    if (entry.kind === "single") {
-                      const buildingCell =
-                        entry.row.kind === "deal" && janitorialBuildingKey(entry.row)
-                          ? <span className="font-medium text-gray-900">{entry.row.deal.buildingName}</span>
-                          : <span className="text-gray-300 select-none">—</span>;
-                      return (
-                        <CombinedRowTr
-                          key={combinedRowKey(entry.row)}
-                          row={entry.row}
-                          buildingCell={buildingCell}
-                          onTogglePaid={onTogglePaid}
-                          savingId={savingId}
-                          onToggleRecurringPaid={onToggleRecurringPaid}
-                          savingRecurringId={savingRecurringId}
-                        />
-                      );
-                    }
-
-                    return (
-                      <Fragment key={entry.buildingId}>
-                        {entry.rows.map((row, idx) => (
-                          <CombinedRowTr
-                            key={combinedRowKey(row)}
-                            row={row}
-                            buildingCell={
-                              idx === 0 ? (
-                                <span className="font-medium text-gray-900">{entry.buildingName}</span>
-                              ) : (
-                                <span className="text-gray-300 select-none">↳</span>
-                              )
-                            }
-                            onTogglePaid={onTogglePaid}
-                            savingId={savingId}
-                            onToggleRecurringPaid={onToggleRecurringPaid}
-                            savingRecurringId={savingRecurringId}
-                          />
-                        ))}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {eligibleRows.length > 0 && renderTable(eligibleRows, true)}
+              {notEligibleRows.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1 border-y border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
+                    Not eligible
+                    <span className="font-normal text-gray-500">({notEligibleRows.length})</span>
+                    <InfoTip text="Rows that earn $0 commission: a margin under 10%, no sales rep assigned, or a janitorial contract month past its second year." />
+                  </div>
+                  {renderTable(notEligibleRows, false)}
+                </>
+              )}
+            </>
           )}
         </div>
       )}

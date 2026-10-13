@@ -192,6 +192,7 @@ async function applyUnitGroup(
   buildingId: string,
   unitNumber: string,
   group: UnitResolution[],
+  paidOn: Date | null,
 ): Promise<{ outcome: ApplyOutcome; perLineItem: Map<string, ApplyOutcome> }> {
   const perLineItem = new Map<string, ApplyOutcome>();
 
@@ -220,7 +221,7 @@ async function applyUnitGroup(
 
   const target = reconciling[0]!;
   await prisma.turnoverRequest.update({ where: { id: target.id }, data: { billingStatus: "PAID" } });
-  await syncProjectBillingFromRequest(target.id, "PAID");
+  await syncProjectBillingFromRequest(target.id, "PAID", paidOn);
 
   for (const r of group) {
     perLineItem.set(r.li.id, {
@@ -377,7 +378,7 @@ export async function processPaidInvoices(): Promise<{ processed: number; errors
             return !!prior && APPLIED_STATUSES.has(prior.status) && !!prior.matchedTurnoverRequestId && prior.matchedUnitNumber === unitNumber;
           });
           if (alreadyApplied) continue;
-          const { perLineItem } = await applyUnitGroup(building.id, unitNumber, group);
+          const { perLineItem } = await applyUnitGroup(building.id, unitNumber, group, invoicePaidOn(invoice));
           for (const r of group) {
             const outcome = perLineItem.get(r.li.id) ?? { status: "PENDING_REVIEW" as const };
             await upsertLedgerRow({

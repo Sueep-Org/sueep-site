@@ -15,8 +15,10 @@ function mapBillingToProject(status: string): { billingStatus: string | null; pe
  * Projects link TO the request (Project.turnoverRequestId) — usually just
  * one, but looped individually (rather than updateMany) so each project's
  * own current billingCompletedAt can be checked before stamping it.
+ * `paidOn` is the day the payment came in (a HubSpot invoice's paid date),
+ * used for that stamp instead of now.
  */
-export async function syncProjectBillingFromRequest(turnoverRequestId: string, billingStatus: string) {
+export async function syncProjectBillingFromRequest(turnoverRequestId: string, billingStatus: string, paidOn: Date | null = null) {
   const data = mapBillingToProject(billingStatus);
   const projects = await prisma.project.findMany({
     where: { turnoverRequestId },
@@ -28,11 +30,17 @@ export async function syncProjectBillingFromRequest(turnoverRequestId: string, b
         where: { id: p.id },
         data: {
           ...data,
-          ...(data.billingStatus === "PAID" && !p.billingCompletedAt ? { billingCompletedAt: new Date() } : {}),
+          ...(data.billingStatus === "PAID" && !p.billingCompletedAt ? { billingCompletedAt: paidOn ?? new Date() } : {}),
         },
       })
     )
   );
+}
+
+/** Moves the paid date of a turn's project(s) to the day its invoice was
+ * paid. For a turn that was marked Paid before its invoice was linked. */
+export async function setRequestPaidDate(turnoverRequestId: string, paidOn: Date) {
+  await prisma.project.updateMany({ where: { turnoverRequestId, billingStatus: "PAID" }, data: { billingCompletedAt: paidOn } });
 }
 
 /**
