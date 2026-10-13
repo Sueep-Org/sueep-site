@@ -11,6 +11,7 @@ import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveC
 import { bidBonusCentsForCount, mondayOf, type BidBonusRow } from "@/lib/erp/bidBonus";
 import { isPaidStatus } from "@/lib/erp/billingStatus";
 import type { CommissionDealRow, RecurringCommissionRow } from "@/app/erp/(shell)/commission/CommissionByRep";
+import type { UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 
 export type CommissionDeal = CommissionDealRow & { ownerId: string | null; year: number };
 export type CommissionRecurring = RecurringCommissionRow & { ownerId: string | null; ownerName: string | null; year: number };
@@ -21,6 +22,41 @@ export type CommissionRecurring = RecurringCommissionRow & { ownerId: string | n
  * calendar year) anyway, so dropping older years can't change what 2026+
  * commission looks like. */
 const COMMISSION_MIN_YEAR = 2026;
+
+type InvoiceLinkRow = {
+  id: string;
+  hubspotInvoiceId: string;
+  invoiceNumber: string | null;
+  status: string | null;
+  dueDate: Date | null;
+  paidDate: Date | null;
+  amountCents: number;
+  viewUrl: string | null;
+};
+
+/** One chip per HubSpot invoice (an invoice split over several lines of the
+ * same row shows once, with the shares added up). Voided invoices are left out. */
+function invoiceChips(rows: InvoiceLinkRow[]): UnitInvoiceChip[] {
+  const byInvoice = new Map<string, UnitInvoiceChip>();
+  for (const r of rows) {
+    if (r.status === "voided") continue;
+    const chip = byInvoice.get(r.hubspotInvoiceId);
+    if (chip) {
+      chip.amountCents += r.amountCents;
+      continue;
+    }
+    byInvoice.set(r.hubspotInvoiceId, {
+      id: r.id,
+      invoiceNumber: r.invoiceNumber,
+      status: r.status,
+      dueDate: r.dueDate?.toISOString() ?? null,
+      paidDate: r.paidDate?.toISOString() ?? null,
+      amountCents: r.amountCents,
+      viewUrl: r.viewUrl,
+    });
+  }
+  return [...byInvoice.values()];
+}
 
 export async function loadCommissionRows(): Promise<{
   deals: CommissionDeal[];
@@ -50,6 +86,8 @@ export async function loadCommissionRows(): Promise<{
         createdByEmployeeId: true,
         buildingId: true,
         building: { select: { name: true } },
+        turnoverRequestId: true,
+        sov: { select: { items: { select: { id: true, description: true }, orderBy: { order: "asc" } } } },
         projectDate: true,
         projectEndDate: true,
         billingCompletedAt: true,
@@ -91,6 +129,7 @@ export async function loadCommissionRows(): Promise<{
         recurringContract: {
           select: { buildingId: true, startDate: true, commissionEmployeeId: true, building: { select: { name: true } } },
         },
+        hubspotInvoices: true,
       },
     }),
     prisma.bidBonusEntry.findMany({ orderBy: { weekStart: "desc" } }),
@@ -110,7 +149,8 @@ export async function loadCommissionRows(): Promise<{
   // own "qualifying" filter. Anything else still open (DRAFT/SUBMITTED/
   // APPROVED/BILLING, or COMPLETED but not yet paid) means the deal isn't
   // fully settled yet, so the whole project's commission row waits rather
-  // than showing the base project while a change order is still pending.
+  // than showing the base project while a change order is still pending
+  // (unit turns don't wait, see settledProjects below).
   function qualifyingChangeOrders<T extends { status: string }>(p: { changeOrders: T[] }): T[] {
     return p.changeOrders.filter((co) => co.status !== "VOID" && co.status !== "REJECTED");
   }
@@ -152,7 +192,14 @@ export async function loadCommissionRows(): Promise<{
     return coDates.length === 0 ? base : new Date(Math.max(base.getTime(), ...coDates.map((d) => d.getTime())));
   }
 
-  const eligibleProjects = projects.filter(isCommissionEligible);
+  // Unit turns are the exception to "every change order must be paid first":
+  // a unit that's billed and paid earns its commission now, even while a
+  // change order on it (say a repair) is still open. Only its done-and-paid
+  // change orders are rolled into the row, the rest join once they're paid.
+  const settledProjects = projects.map((p) =>
+    p.turnoverRequestId ? { ...p, changeOrders: qualifyingChangeOrders(p).filter(isFullyPaidCo) } : p
+  );
+  const eligibleProjects = settledProjects.filter(isCommissionEligible);
   const commissionProjects = eligibleProjects.filter((p) => dealDate(p).getUTCFullYear() >= COMMISSION_MIN_YEAR);
   const commissionRecurringPeriods = recurringPeriods.filter(
     (period) => period.periodStart.getUTCFullYear() >= COMMISSION_MIN_YEAR
@@ -195,6 +242,7 @@ export async function loadCommissionRows(): Promise<{
         // in computeCommissionCentsByDeal.
         commissionCents: period.recurringContract.commissionEmployeeId ? computeRecurringCommissionCents(period.amountCents, monthIndex) : 0,
         paidAt: period.commissionPaidAt ? period.commissionPaidAt.toISOString() : null,
+        invoices: invoiceChips(period.hubspotInvoices),
         ownerId: period.recurringContract.commissionEmployeeId,
         ownerName: nameOf(period.recurringContract.commissionEmployeeId),
         year: period.periodStart.getUTCFullYear(),
@@ -232,6 +280,27 @@ export async function loadCommissionRows(): Promise<{
   const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc, recurringRevenueForCalc);
   const yearByDeal = new Map(dealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
 
+  // HubSpot invoices linked to each row's lines, the same links the Billing
+  // page shows: a unit turn's invoices (HubSpotUnitInvoice), and an SOV
+  // item's or change order's (HubSpotSovInvoice).
+  const [turnInvoices, lineInvoices] = await Promise.all([
+    prisma.hubSpotUnitInvoice.findMany({
+      where: { turnoverRequestId: { in: commissionProjects.flatMap((p) => p.turnoverRequestId ?? []) } },
+      orderBy: { invoiceDate: "desc" },
+    }),
+    prisma.hubSpotSovInvoice.findMany({
+      where: {
+        projectId: { in: commissionProjects.map((p) => p.id) },
+        OR: [{ sovItemId: { not: null } }, { changeOrderId: { not: null } }],
+      },
+      orderBy: { invoiceDate: "desc" },
+    }),
+  ]);
+  const liveTurnInvoices = turnInvoices.filter((i) => i.status !== "voided");
+  const liveLineInvoices = lineInvoices.filter((i) => i.status !== "voided");
+  const invoicedSovItemIds = new Set(liveLineInvoices.flatMap((i) => i.sovItemId ?? []));
+  const invoicedChangeOrderIds = new Set(liveLineInvoices.flatMap((i) => i.changeOrderId ?? []));
+
   const deals: CommissionDeal[] = commissionProjects.map((p) => {
     const a = actuals.get(p.id)!;
     const ownerId = ownerIdByProject.get(p.id) ?? null;
@@ -242,6 +311,19 @@ export async function loadCommissionRows(): Promise<{
     // (e.g. data from before this was combined) reads as unpaid rather than
     // falsely paid.
     const fullyPaid = !!p.commissionPaidAt && qualifyingCOs.every((co) => !!co.commissionPaidAt);
+    const ownTurnInvoices = p.turnoverRequestId ? liveTurnInvoices.filter((i) => i.turnoverRequestId === p.turnoverRequestId) : [];
+    const sovItems = p.sov?.items ?? [];
+    // Every paid line of this row that has no invoice behind it. A project
+    // with no SOV items has nothing an invoice can be linked to, so its own
+    // contract always lands here.
+    const uninvoicedLines = [
+      ...(p.turnoverRequestId
+        ? ownTurnInvoices.length === 0 ? ["Unit turn"] : []
+        : sovItems.length === 0
+          ? ["Contract (no SOV items to link an invoice to)"]
+          : sovItems.filter((i) => !invoicedSovItemIds.has(i.id)).map((i) => i.description)),
+      ...qualifyingCOs.filter((co) => !invoicedChangeOrderIds.has(co.id)).map((co) => `Change order: ${co.title}`),
+    ];
     return {
       projectId: p.id,
       jobTitle: p.jobTitle,
@@ -254,6 +336,9 @@ export async function loadCommissionRows(): Promise<{
       marginCents: a.marginCents,
       commissionCents: commissionCentsByDeal.get(p.id) ?? 0,
       paidAt: fullyPaid ? p.commissionPaidAt!.toISOString() : null,
+      invoices: invoiceChips([...ownTurnInvoices, ...liveLineInvoices.filter((i) => i.projectId === p.id)]),
+      uninvoicedLines,
+      isUnitTurn: !!p.turnoverRequestId,
       completedAt: dealDate(p).toISOString(),
       includedChangeOrders: qualifyingCOs.map((co) => ({
         id: co.id,

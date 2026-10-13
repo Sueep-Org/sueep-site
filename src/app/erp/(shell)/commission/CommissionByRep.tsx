@@ -6,7 +6,8 @@ import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
-import { Modal } from "@/app/erp/components/ui";
+import { InfoTip, Modal } from "@/app/erp/components/ui";
+import { UnitInvoiceChips, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { payPeriodForDay, TWO_WEEKS_MS } from "@/lib/erp/payPeriods";
 
@@ -21,6 +22,12 @@ export type CommissionDealRow = {
   marginCents: number | null;
   commissionCents: number;
   paidAt: string | null;
+  /** HubSpot invoices linked to this row's lines (unit turn, SOV items, change orders). */
+  invoices: UnitInvoiceChip[];
+  /** Lines of this row with no invoice linked, by name. Empty = fully covered. */
+  uninvoicedLines: string[];
+  /** Unit turns are linked on the building's Invoices & Quotes tab, everything else on the project's. */
+  isUnitTurn: boolean;
   completedAt: string;
   /** Change orders rolled into this row's contract value/margin above, every one is
    * already completed + paid by the time it shows up here, purely informational. */
@@ -57,6 +64,8 @@ export type RecurringCommissionRow = {
   monthIndex: number;
   commissionCents: number;
   paidAt: string | null;
+  /** HubSpot invoices linked to this month on the building's Invoices & Quotes tab. */
+  invoices: UnitInvoiceChip[];
 };
 
 export type RepGroup = {
@@ -379,6 +388,26 @@ function PaidBadge({ paidAt, disabled, onClick }: { paidAt: string | null; disab
   );
 }
 
+const INVOICES_TAB = `?tab=${encodeURIComponent("Invoices & Quotes")}`;
+
+/** The row's linked HubSpot invoices, plus a link to where the missing ones get linked. */
+function InvoiceCell({ invoices, uninvoicedLines, linkHref }: { invoices: UnitInvoiceChip[]; uninvoicedLines: string[]; linkHref: string }) {
+  return (
+    <div className="space-y-1">
+      <UnitInvoiceChips invoices={invoices} compact />
+      {uninvoicedLines.length > 0 ? (
+        <Link
+          href={linkHref}
+          title={`No invoice linked: ${uninvoicedLines.join(", ")}`}
+          className="inline-block whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 hover:underline"
+        >
+          {invoices.length === 0 ? "No invoice" : `${uninvoicedLines.length} not linked`}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 type PaidTarget =
   | { kind: "deal"; ownerKey: string; row: CommissionDealRow }
   | { kind: "recurring"; ownerKey: string; row: RecurringCommissionRow };
@@ -560,6 +589,13 @@ function CombinedRowTr({
         </td>
         <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
         <td className="px-3 py-2">
+          <InvoiceCell
+            invoices={d.invoices}
+            uninvoicedLines={d.uninvoicedLines}
+            linkHref={d.isUnitTurn && d.buildingId ? `/erp/buildings/${d.buildingId}${INVOICES_TAB}` : `/erp/projects/${d.projectId}${INVOICES_TAB}`}
+          />
+        </td>
+        <td className="px-3 py-2">
           <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
         </td>
       </tr>
@@ -581,6 +617,13 @@ function CombinedRowTr({
       <td className="px-3 py-2 text-right tabular-nums text-gray-400">—</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
+      <td className="px-3 py-2">
+        <InvoiceCell
+          invoices={r.invoices}
+          uninvoicedLines={r.invoices.length === 0 ? ["Contract month"] : []}
+          linkHref={`/erp/buildings/${r.buildingId}${INVOICES_TAB}`}
+        />
+      </td>
       <td className="px-3 py-2">
         <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
       </td>
@@ -684,6 +727,12 @@ function RepPanel({
                     <th className="px-3 py-2 text-right">Margin</th>
                     <th className="px-3 py-2 text-right">Rate</th>
                     <th className="px-3 py-2 text-right">Commission</th>
+                    <th className="min-w-[12rem] px-3 py-2 text-left">
+                      <span className="flex items-center gap-1">
+                        Invoice
+                        <InfoTip align="right" text="HubSpot invoices linked to this row. An amber tag means part of it has no invoice linked. Click it to link one on the Invoices & Quotes tab." />
+                      </span>
+                    </th>
                     <th className="px-3 py-2 text-left">Paid</th>
                   </tr>
                 </thead>
