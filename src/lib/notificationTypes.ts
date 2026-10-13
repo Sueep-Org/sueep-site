@@ -333,6 +333,13 @@ export const NOTIFICATIONS = {
     automatic: "Every Admin and PM",
   }),
 
+  LIEN_ALERTS: def({
+    label: "Lien alerts",
+    group: "Reminders",
+    when: "About 8am, when an unpaid post-construction job reaches the day to decide on a lien, or a required lien notice comes due. Once per job per stage",
+    automatic: "Every Admin and PM",
+  }),
+
   QUALITY_CHECK_ASSIGNED: def({
     label: "Quality check assigned",
     group: "Reminders",

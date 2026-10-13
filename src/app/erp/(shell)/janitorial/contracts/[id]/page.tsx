@@ -41,7 +41,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
         },
         periods: {
           orderBy: { periodStart: "desc" },
-          include: { charges: { orderBy: { createdAt: "asc" } } },
+          include: { charges: { orderBy: { createdAt: "asc" } }, hubspotInvoices: { orderBy: { invoiceDate: "desc" } } },
         },
         shiftPatterns: {
           orderBy: [{ effectiveFrom: "asc" }, { startTime: "asc" }],
@@ -274,6 +274,15 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   billingStatus: p.billingStatus,
                   commissionPaid: p.commissionPaidAt != null,
                   charges: p.charges.map((c) => ({ id: c.id, description: c.description, amountCents: c.amountCents })),
+                  invoices: p.hubspotInvoices.map((i) => ({
+                    id: i.id,
+                    invoiceNumber: i.invoiceNumber,
+                    status: i.status,
+                    dueDate: i.dueDate?.toISOString() ?? null,
+                    paidDate: i.paidDate?.toISOString() ?? null,
+                    amountCents: i.amountCents,
+                    viewUrl: i.viewUrl,
+                  })),
                 }))}
               />
             ),

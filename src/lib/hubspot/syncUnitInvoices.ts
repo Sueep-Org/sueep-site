@@ -22,6 +22,22 @@ function toDate(iso: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Projects whose change orders are billed on this building's deal: its unit
+ * (turn) projects. Their change orders can be linked by hand to one of the
+ * building's invoices, saved as HubSpotSovInvoice rows like a project's own.
+ * Projects with their own deal are left out, since syncProjectInvoices owns
+ * their rows.
+ */
+export function unitChangeOrderProjects(buildingId: string) {
+  return { hubspotDealId: null, OR: [{ buildingId }, { turnoverRequest: { buildingId } }] };
+}
+
+/** Invoice links on the months of this building's janitorial contract (HubSpotContractInvoice). */
+export function contractMonthLinks(buildingId: string) {
+  return { period: { recurringContract: { buildingId } } };
+}
+
 /** The invoice fields copied onto every mirror row, auto or manual. */
 export function invoiceSnapshot(inv: DealInvoice) {
   return {
@@ -73,13 +89,17 @@ export async function syncBuildingUnitInvoices(
 ): Promise<{ rows: number; unmatchedLines: number }> {
   const invoices = prefetched ?? (await fetchDealInvoices(dealId));
 
-  // Invoices someone linked by hand: only their HubSpot details get
-  // refreshed, never which units they point at.
-  const manualInvoiceIds = new Set(
-    (
-      await prisma.hubSpotUnitInvoice.findMany({ where: { buildingId, manual: true }, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] })
-    ).map((r) => r.hubspotInvoiceId),
-  );
+  // Invoices someone linked by hand, to units, a unit's change orders or a
+  // janitorial contract month: only their HubSpot details get refreshed,
+  // never what they point at.
+  const coLinkWhere = { manual: true, project: unitChangeOrderProjects(buildingId) };
+  const monthLinkWhere = contractMonthLinks(buildingId);
+  const [manualUnitRows, manualCoRows, monthRows] = await Promise.all([
+    prisma.hubSpotUnitInvoice.findMany({ where: { buildingId, manual: true }, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
+    prisma.hubSpotSovInvoice.findMany({ where: coLinkWhere, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
+    prisma.hubSpotContractInvoice.findMany({ where: monthLinkWhere, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
+  ]);
+  const manualInvoiceIds = new Set([...manualUnitRows, ...manualCoRows, ...monthRows].map((r) => r.hubspotInvoiceId));
 
   const [turns, aliases, ledger] = await Promise.all([
     prisma.turnoverRequest.findMany({
@@ -148,6 +168,8 @@ export async function syncBuildingUnitInvoices(
   for (const inv of invoices) {
     if (manualInvoiceIds.has(inv.id)) {
       await prisma.hubSpotUnitInvoice.updateMany({ where: { buildingId, hubspotInvoiceId: inv.id }, data: invoiceSnapshot(inv) });
+      await prisma.hubSpotSovInvoice.updateMany({ where: { ...coLinkWhere, hubspotInvoiceId: inv.id }, data: invoiceSnapshot(inv) });
+      await prisma.hubSpotContractInvoice.updateMany({ where: { ...monthLinkWhere, hubspotInvoiceId: inv.id }, data: invoiceSnapshot(inv) });
     }
   }
 
@@ -163,6 +185,8 @@ export async function syncBuildingUnitInvoices(
       ],
     },
   });
+  await prisma.hubSpotSovInvoice.deleteMany({ where: { ...coLinkWhere, hubspotInvoiceId: { notIn: liveIds } } });
+  await prisma.hubSpotContractInvoice.deleteMany({ where: { ...monthLinkWhere, hubspotInvoiceId: { notIn: liveIds } } });
 
   return { rows: rows.length, unmatchedLines };
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { centsToDollars } from "@/lib/erp/money";
 import { useConfirm } from "@/app/erp/components/ui";
+import { UnitInvoiceChips, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 import { PERIOD_BILLING_OPTIONS, billingBadgeCls } from "../../badges";
 
 type Charge = { id: string; description: string; amountCents: number };
@@ -14,6 +15,8 @@ type Month = {
   billingStatus: string;
   commissionPaid: boolean;
   charges: Charge[];
+  /** HubSpot invoices linked to this month on the building's Invoices & Quotes tab. */
+  invoices?: UnitInvoiceChip[];
 };
 
 function formatMonth(iso: string): string {
@@ -166,7 +169,14 @@ export function ContractMonthsTable({
               ) : (
                 months.map((m) => (
                   <tr key={m.id} className="border-t border-gray-100 align-top">
-                    <td className="px-4 py-3 font-medium text-gray-900">{formatMonth(m.periodStart)}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {formatMonth(m.periodStart)}
+                      {(m.invoices ?? []).length > 0 && (
+                        <div className="mt-1 font-normal">
+                          <UnitInvoiceChips invoices={m.invoices ?? []} compact />
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {editingAmountId === m.id ? (
                         <div className="flex items-center justify-end gap-2">

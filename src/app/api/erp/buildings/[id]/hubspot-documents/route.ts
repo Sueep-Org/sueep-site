@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { fetchDealDocuments } from "@/lib/hubspot/dealDocuments";
-import { syncBuildingUnitInvoices } from "@/lib/hubspot/syncUnitInvoices";
+import { syncBuildingUnitInvoices, unitChangeOrderProjects } from "@/lib/hubspot/syncUnitInvoices";
+import { periodTotalCents } from "@/lib/erp/recurringContracts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,7 +11,9 @@ export const runtime = "nodejs";
 /**
  * Invoices and quotes on this building's HubSpot deal, read live. Each
  * invoice line item is tagged with the unit the paid-invoice sync already
- * matched it to (HubSpotInvoiceLineItemMatch), when there is one.
+ * matched it to (HubSpotInvoiceLineItemMatch), when there is one. Invoices
+ * can be linked to the building's turns, to change orders on its units and
+ * to months of its janitorial contract.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getErpAuth();
@@ -41,7 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     console.error("[hubspot-documents] unit invoice sync failed", err);
   }
 
-  const [unitRows, turns] = await Promise.all([
+  const [unitRows, turns, changeOrders, contractMonths] = await Promise.all([
     prisma.hubSpotUnitInvoice.findMany({
       where: { buildingId: id },
       select: { hubspotInvoiceId: true, unitNumber: true, turnoverRequestId: true, amountCents: true, manual: true, linkedByName: true },
@@ -51,13 +54,62 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       select: { id: true, unitNumber: true, startDate: true, createdAt: true, approvedPriceCents: true, priceCents: true },
       orderBy: [{ unitNumber: "asc" }, { startDate: "desc" }],
     }),
+    // Change orders on this building's unit projects, billed on the same deal.
+    prisma.projectChangeOrder.findMany({
+      where: { project: unitChangeOrderProjects(id) },
+      select: {
+        id: true,
+        title: true,
+        contractValueCents: true,
+        completedAt: true,
+        createdAt: true,
+        project: { select: { jobTitle: true, turnoverRequest: { select: { unitNumber: true } } } },
+        hubspotSovInvoices: { select: { hubspotInvoiceId: true, invoiceNumber: true, amountCents: true, manual: true, linkedByName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    // Months of this building's janitorial contract, billed on the same deal.
+    prisma.recurringContractPeriod.findMany({
+      where: { recurringContract: { buildingId: id } },
+      select: {
+        id: true,
+        periodStart: true,
+        amountCents: true,
+        charges: { select: { amountCents: true } },
+        hubspotInvoices: { select: { hubspotInvoiceId: true, amountCents: true, linkedByName: true } },
+      },
+      orderBy: { periodStart: "desc" },
+    }),
   ]);
+  const monthLabel = (m: (typeof contractMonths)[number]) =>
+    `Janitorial contract · ${m.periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}`;
+  const coLabel = (co: (typeof changeOrders)[number]) => {
+    const unit = co.project.turnoverRequest?.unitNumber;
+    return `${unit ? unitLabel(unit) : co.project.jobTitle} · CO: ${co.title}`;
+  };
   const linksByInvoice = new Map<string, InvoiceLink[]>();
   for (const r of unitRows) {
     linksByInvoice.set(r.hubspotInvoiceId, [
       ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
       { targetId: r.turnoverRequestId, label: unitLabel(r.unitNumber), amountCents: r.amountCents, manual: r.manual, linkedByName: r.linkedByName },
     ]);
+  }
+  for (const co of changeOrders) {
+    for (const r of co.hubspotSovInvoices) {
+      linksByInvoice.set(r.hubspotInvoiceId, [
+        ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
+        { targetId: `co:${co.id}`, label: coLabel(co), amountCents: r.amountCents, manual: r.manual, linkedByName: r.linkedByName },
+      ]);
+    }
+  }
+
+  for (const m of contractMonths) {
+    for (const r of m.hubspotInvoices) {
+      linksByInvoice.set(r.hubspotInvoiceId, [
+        ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
+        { targetId: `month:${m.id}`, label: monthLabel(m), amountCents: r.amountCents, manual: true, linkedByName: r.linkedByName },
+      ]);
+    }
   }
 
   return NextResponse.json({
@@ -72,11 +124,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     link: {
       scope: "building",
       ownerId: id,
-      targets: turns.map((t) => ({
-        id: t.id,
-        label: unitLabel(t.unitNumber!),
-        hint: [fmtDay(t.startDate ?? t.createdAt), cents(t.approvedPriceCents ?? t.priceCents)].filter(Boolean).join(" · "),
-      })),
+      targets: [
+        ...contractMonths.map((m) => ({ id: `month:${m.id}`, label: monthLabel(m), hint: cents(periodTotalCents(m)) })),
+        ...turns.map((t) => ({
+          id: t.id,
+          label: unitLabel(t.unitNumber!),
+          hint: [fmtDay(t.startDate ?? t.createdAt), cents(t.approvedPriceCents ?? t.priceCents)].filter(Boolean).join(" · "),
+        })),
+        ...changeOrders.map((co) => ({
+          id: `co:${co.id}`,
+          label: coLabel(co),
+          hint: [fmtDay(co.completedAt ?? co.createdAt), cents(co.contractValueCents)].filter(Boolean).join(" · "),
+          heldBy: co.hubspotSovInvoices[0] ? { invoiceId: co.hubspotSovInvoices[0].hubspotInvoiceId, number: co.hubspotSovInvoices[0].invoiceNumber } : null,
+        })),
+      ],
     },
   });
 }

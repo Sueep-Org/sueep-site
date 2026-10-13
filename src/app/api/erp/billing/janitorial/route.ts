@@ -85,7 +85,7 @@ function buildUnitRow(project: ProjectForUnitRow) {
   };
 }
 
-/** HubSpot invoices for a turn (see syncUnitInvoices.ts). */
+/** HubSpot invoices for a turn or one of its change orders (see syncUnitInvoices.ts). */
 type InvoiceRow = {
   id: string;
   invoiceNumber: string | null;
@@ -106,6 +106,7 @@ type CORow = {
   contractValueCents: number;
   billingStatus: string;
   completedAt: string;
+  invoices: InvoiceRow[];
 };
 
 type BuildingRow = {
@@ -234,6 +235,7 @@ export async function GET(req: Request) {
         ? {
             OR: [
               { title: { contains: q, mode: "insensitive" as const } },
+              { hubspotSovInvoices: { some: { invoiceNumber: { contains: q, mode: "insensitive" as const } } } },
               { project: { jobTitle: { contains: q, mode: "insensitive" as const } } },
               { project: { building: { name: { contains: q, mode: "insensitive" as const } } } },
             ],
@@ -253,6 +255,7 @@ export async function GET(req: Request) {
       completedAt: true,
       updatedAt: true,
       projectId: true,
+      hubspotSovInvoices: { orderBy: { invoiceDate: "desc" } },
       project: {
         select: {
           id: true,
@@ -290,6 +293,16 @@ export async function GET(req: Request) {
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: normalizeBillingStatus(co.billingStatus),
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
+      invoices: co.hubspotSovInvoices.map((i) => ({
+        id: i.id,
+        invoiceNumber: i.invoiceNumber,
+        status: i.status,
+        dueDate: i.dueDate?.toISOString() ?? null,
+        paidDate: i.paidDate?.toISOString() ?? null,
+        amountCents: i.amountCents,
+        viewUrl: i.viewUrl,
+        pdfUrl: i.pdfUrl,
+      })),
     });
   }
 

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { LienDeadlinePill, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
-import { LIEN_ROLE_OPTIONS, LIEN_STATE_OPTIONS, formatLienDay } from "@/lib/erp/lienDeadline";
+import { LIEN_DECISION_OPTIONS, LIEN_ROLE_OPTIONS, LIEN_STATE_OPTIONS, formatLienDay } from "@/lib/erp/lienDeadline";
 import type { LienWatchRow } from "@/lib/erp/lienWatch";
+import { ProjectLienPacket } from "./ProjectLienPacket";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -15,12 +16,42 @@ type Props = {
   lienState: string | null;
   lienRole: string | null;
   lienResidential: boolean;
+  lienNoticeSentOnIso: string | null;
+  lienDecision: string | null;
+  lienDecisionNote: string | null;
+  lienNoticeTracking: string | null;
+  lienOwnerName: string | null;
+  lienOwnerAddress: string | null;
+  lienGcName: string | null;
+  lienGcAddress: string | null;
 };
 
-export function ProjectLienEditor({ projectId, lienState, lienRole, lienResidential }: Props) {
+export function ProjectLienEditor({
+  projectId,
+  lienState,
+  lienRole,
+  lienResidential,
+  lienNoticeSentOnIso,
+  lienDecision,
+  lienDecisionNote,
+  lienNoticeTracking,
+  lienOwnerName,
+  lienOwnerAddress,
+  lienGcName,
+  lienGcAddress,
+}: Props) {
   const [state, setState] = useState(lienState ?? "");
   const [role, setRole] = useState(lienRole ?? "");
   const [residential, setResidential] = useState(lienResidential);
+  const [noticeSent, setNoticeSent] = useState(lienNoticeSentOnIso ? lienNoticeSentOnIso.slice(0, 10) : "");
+  const [decision, setDecision] = useState(lienDecision ?? "");
+  const [decisionNote, setDecisionNote] = useState(lienDecisionNote ?? "");
+  const [noticeTracking, setNoticeTracking] = useState(lienNoticeTracking ?? "");
+  const [ownerName, setOwnerName] = useState(lienOwnerName ?? "");
+  const [ownerAddress, setOwnerAddress] = useState(lienOwnerAddress ?? "");
+  const [gcName, setGcName] = useState(lienGcName ?? "");
+  const [gcAddress, setGcAddress] = useState(lienGcAddress ?? "");
+  const [tickingStep, setTickingStep] = useState<string | null>(null);
   const [row, setRow] = useState<LienWatchRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +79,14 @@ export function ProjectLienEditor({ projectId, lienState, lienRole, lienResident
           lienState: state || null,
           lienRole: role || null,
           lienResidential: residential,
+          lienNoticeSentOn: noticeSent || null,
+          lienDecision: decision || null,
+          lienDecisionNote: decisionNote,
+          lienNoticeTracking: noticeTracking,
+          lienOwnerName: ownerName,
+          lienOwnerAddress: ownerAddress,
+          lienGcName: gcName,
+          lienGcAddress: gcAddress,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -59,6 +98,28 @@ export function ProjectLienEditor({ projectId, lienState, lienRole, lienResident
       setSaving(false);
     }
   }
+
+  // Ticks save on their own, apart from the Save button, so a step is never lost with unsaved fields.
+  async function tickStep(key: string, done: boolean) {
+    setError("");
+    setTickingStep(key);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lienStep: { key, done } }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setError(data.error || "Update failed"); return; }
+      loadStatus();
+    } catch {
+      setError("Network error");
+    } finally {
+      setTickingStep(null);
+    }
+  }
+
+  const hiredByContractor = role !== "DIRECT";
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
@@ -131,7 +192,65 @@ export function ProjectLienEditor({ projectId, lienState, lienRole, lienResident
         </div>
       </div>
 
+      <div>
+        <div className="flex items-center gap-1">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Parties</h4>
+          <InfoTip text="Who a lien notice is addressed to. Use the legal name and the mailing address, since notices go by mail." />
+        </div>
+        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={label} htmlFor="lien-owner-name">Property owner</label>
+            <input id="lien-owner-name" type="text" className={input} value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Legal name" maxLength={200} />
+            <textarea id="lien-owner-address" aria-label="Property owner mailing address" rows={2} className={input} value={ownerAddress} onChange={(e) => setOwnerAddress(e.target.value)} placeholder="Mailing address" maxLength={400} />
+          </div>
+          {hiredByContractor ? (
+            <div>
+              <label className={label} htmlFor="lien-gc-name">General contractor</label>
+              <input id="lien-gc-name" type="text" className={input} value={gcName} onChange={(e) => setGcName(e.target.value)} placeholder="Legal name" maxLength={200} />
+              <textarea id="lien-gc-address" aria-label="General contractor mailing address" rows={2} className={input} value={gcAddress} onChange={(e) => setGcAddress(e.target.value)} placeholder="Mailing address" maxLength={400} />
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,14rem)_1fr]">
+        <div>
+          <label className={label} htmlFor="lien-decision">
+            <span className="inline-flex items-center gap-1">
+              Decision
+              <InfoTip text="What was decided about a lien on this job. Not pursuing and Lien filed take it off the Lien deadlines list and stop its alert emails. Who set it and when are saved." />
+            </span>
+          </label>
+          <select id="lien-decision" className={input} value={decision} onChange={(e) => setDecision(e.target.value)}>
+            <option value="">Not decided</option>
+            {LIEN_DECISION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        {decision ? (
+          <div>
+            <label className={label} htmlFor="lien-decision-note">Note</label>
+            <input
+              id="lien-decision-note"
+              type="text"
+              className={input}
+              value={decisionNote}
+              onChange={(e) => setDecisionNote(e.target.value)}
+              placeholder="Why, or what happens next"
+              maxLength={300}
+            />
+            {row?.decision?.onKey ? (
+              <p className="mt-1 text-xs text-gray-500">
+                Set{row.decision.by ? ` by ${row.decision.by.split("@")[0]}` : ""} on {formatLienDay(row.decision.onKey)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
       {row?.deadline ? <p className="text-xs text-gray-500">{row.deadline.rule}</p> : null}
+
       {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
 
       <button
@@ -142,6 +261,68 @@ export function ProjectLienEditor({ projectId, lienState, lienRole, lienResident
       >
         {saving ? "Saving…" : "Save"}
       </button>
+
+      {row?.readiness ? (
+        <div className="rounded-md border border-gray-200 bg-white p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-xs font-semibold text-gray-700">Lien steps</h4>
+            <InfoTip text="The steps to a lien on this job, in order. Grayed boxes are worked out by the ERP. The others are ticked by a person, and who ticked each one and when is saved. Steps marked optional don't hold up Ready to file." />
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${row.readiness.canFileNow ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+              {row.readiness.canFileNow ? "Ready to file" : "Not ready"}
+            </span>
+          </div>
+          <ul className="mt-2 divide-y divide-gray-100">
+            {row.readiness.steps.map((st, i) => {
+              const firstAfter = st.afterFiling && !row.readiness!.steps[i - 1]?.afterFiling;
+              return (
+                <li key={st.key} className={`py-1.5 text-xs ${firstAfter ? "mt-2 border-t-2 border-gray-200 pt-2" : ""}`}>
+                  {firstAfter ? <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">After filing</p> : null}
+                  <div className="flex items-start gap-2">
+                    <input
+                      id={`lien-step-${st.key}`}
+                      type="checkbox"
+                      checked={st.done}
+                      disabled={st.kind !== "MANUAL" || tickingStep === st.key}
+                      onChange={(e) => st.manualKey && tickStep(st.manualKey, e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-pink-600 disabled:opacity-60"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor={`lien-step-${st.key}`} className={st.done ? "text-gray-500" : "text-gray-900"}>
+                        {st.label}
+                        {!st.required && !st.afterFiling ? <span className="ml-1.5 text-[10px] text-gray-400">optional</span> : null}
+                      </label>
+                      {st.detail ? <span className="ml-2 text-gray-500">{st.detail}</span> : null}
+                      {st.kind === "MANUAL" && st.done && st.onKey ? (
+                        <span className="ml-2 text-gray-400">
+                          {st.by ? `${st.by.split("@")[0]}, ` : ""}
+                          {formatLienDay(st.onKey)}
+                        </span>
+                      ) : null}
+                      {st.kind === "NOTICE" ? (
+                        <div className="mt-1.5 flex flex-wrap items-end gap-2">
+                          <div>
+                            <label className={label} htmlFor="lien-notice-sent">Mailed on</label>
+                            <input id="lien-notice-sent" type="date" className={inputClass.xs} value={noticeSent} onChange={(e) => setNoticeSent(e.target.value)} />
+                          </div>
+                          <div>
+                            <label className={label} htmlFor="lien-notice-tracking">Tracking number</label>
+                            <input id="lien-notice-tracking" type="text" className={inputClass.xs} value={noticeTracking} onChange={(e) => setNoticeTracking(e.target.value)} placeholder="Certified mail" maxLength={80} />
+                          </div>
+                          <button type="button" onClick={save} disabled={saving} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                            {saving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {row?.deadline ? <ProjectLienPacket projectId={projectId} onPrepared={loadStatus} /> : null}
     </div>
   );
 }

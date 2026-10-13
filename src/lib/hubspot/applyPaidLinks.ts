@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { amountReconciles, AMOUNT_TOLERANCE_CENTS } from "@/lib/hubspot/billingMatch";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { unitChangeOrderProjects, contractMonthLinks } from "@/lib/hubspot/syncUnitInvoices";
+import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
 
 /**
@@ -49,15 +51,21 @@ function groupBy<T>(rows: T[], key: (r: T) => string | null): Map<string, T[]> {
   return out;
 }
 
-export type PaidLinksResult = { sovItems: number; changeOrders: number; units: number; reviewCleared: number };
+export type PaidLinksResult = { sovItems: number; changeOrders: number; units: number; contractMonths: number; reviewCleared: number };
 
-/** Pass a projectId or buildingId to limit it to one, e.g. right after a link is saved by hand. */
+/** Pass a projectId or buildingId to limit it to one, e.g. right after a link is saved by hand.
+ * A building covers its units, the change orders on its unit projects and
+ * the months of its janitorial contract. */
 export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildingId?: string } = {}): Promise<PaidLinksResult> {
-  const result: PaidLinksResult = { sovItems: 0, changeOrders: 0, units: 0, reviewCleared: 0 };
+  const result: PaidLinksResult = { sovItems: 0, changeOrders: 0, units: 0, contractMonths: 0, reviewCleared: 0 };
 
-  if (!scope.buildingId) {
+  {
     const links = await prisma.hubSpotSovInvoice.findMany({
-      where: { status: "paid", ...(scope.projectId ? { projectId: scope.projectId } : {}) },
+      where: {
+        status: "paid",
+        ...(scope.projectId ? { projectId: scope.projectId } : {}),
+        ...(scope.buildingId ? { project: unitChangeOrderProjects(scope.buildingId) } : {}),
+      },
       select: { id: true, projectId: true, sovItemId: true, changeOrderId: true, hubspotInvoiceId: true, amountCents: true, manual: true, paidDate: true, paidAppliedAt: true },
     });
     // Links whose line is Paid by the end of this pass, to stamp as counted.
@@ -147,6 +155,35 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
     }
     if (countedUnits.length > 0) {
       await prisma.hubSpotUnitInvoice.updateMany({ where: { id: { in: countedUnits } }, data: { paidAppliedAt: new Date() } });
+    }
+
+    // Janitorial contract months: always linked by hand, and a month can
+    // hold several invoices, so they're added up against the month's total
+    // (flat amount plus extras).
+    const monthLinks = (
+      await prisma.hubSpotContractInvoice.findMany({
+        where: { status: "paid", ...(scope.buildingId ? contractMonthLinks(scope.buildingId) : {}) },
+        select: { id: true, periodId: true, hubspotInvoiceId: true, amountCents: true, paidDate: true, paidAppliedAt: true },
+      })
+    ).map((l) => ({ ...l, manual: true }));
+    const byPeriod = groupBy(monthLinks, (l) => l.periodId);
+    const periods = await prisma.recurringContractPeriod.findMany({
+      where: { id: { in: [...byPeriod.keys()] } },
+      select: { id: true, billingStatus: true, amountCents: true, charges: { select: { amountCents: true } } },
+    });
+    const countedMonths: string[] = [];
+    for (const period of periods) {
+      const group = byPeriod.get(period.id)!;
+      if (period.billingStatus !== "PAID") {
+        if (!canApply(group, period.billingStatus, periodTotalCents(period))) continue;
+        // Same as marking the month Paid by hand (see the period PATCH route).
+        await prisma.recurringContractPeriod.update({ where: { id: period.id }, data: { billingStatus: "PAID", paidAt: summarize(group).paidOn ?? new Date() } });
+        result.contractMonths += 1;
+      }
+      countedMonths.push(...group.filter((l) => !l.paidAppliedAt).map((l) => l.id));
+    }
+    if (countedMonths.length > 0) {
+      await prisma.hubSpotContractInvoice.updateMany({ where: { id: { in: countedMonths } }, data: { paidAppliedAt: new Date() } });
     }
   }
 

@@ -61,7 +61,7 @@ type PageProps = { params: Promise<{ id: string }> };
 const PROJECT_TAB_GROUPS: { label: string; members: Record<string, string> }[] = [
   {
     label: "Financials",
-    members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes" },
+    members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes", Liens: "Liens" },
   },
   { label: "Labor", members: { Labor: "Hourly", Contractors: "Contractors" } },
   { label: "Quality & Safety", members: { Checklist: "Checklist", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
@@ -693,17 +693,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               marginCents: actuals.marginCents,
             }}
           />
-          {isPostConstruction && (
-            <>
-              <hr className="my-6 border-gray-200" />
-              <ProjectLienEditor
-                projectId={project.id}
-                lienState={project.lienState}
-                lienRole={project.lienRole}
-                lienResidential={project.lienResidential}
-              />
-            </>
-          )}
           <hr className="my-6 border-gray-200" />
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Schedule of Values</p>
           <ProjectSOVSection
@@ -957,6 +946,28 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           endpoint={`/api/erp/projects/${project.id}/hubspot-documents`}
           noDealMessage="No HubSpot deal is linked to this project."
           invoicesInfo="Read live from this project's HubSpot deal."
+        />
+      ),
+    });
+  }
+  // Liens only apply to construction work, so the tab is post-construction only.
+  if (isPostConstruction && !project.turnoverRequest) {
+    allTabs.push({
+      label: "Liens",
+      content: (
+        <ProjectLienEditor
+          projectId={project.id}
+          lienState={project.lienState}
+          lienRole={project.lienRole}
+          lienResidential={project.lienResidential}
+          lienNoticeSentOnIso={project.lienNoticeSentOn ? project.lienNoticeSentOn.toISOString() : null}
+          lienDecision={project.lienDecision}
+          lienDecisionNote={project.lienDecisionNote}
+          lienNoticeTracking={project.lienNoticeTracking}
+          lienOwnerName={project.lienOwnerName}
+          lienOwnerAddress={project.lienOwnerAddress}
+          lienGcName={project.lienGcName}
+          lienGcAddress={project.lienGcAddress}
         />
       ),
     });

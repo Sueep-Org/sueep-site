@@ -132,8 +132,8 @@ export async function GET(req: Request) {
     projectId: string;
     jobTitle: string;
     projectBillingStatus: string | null;
-    // Only meaningful when items/changeOrders are both empty — the
-    // whole-project fallback amount for a project with no SOV/CO detail.
+    // The project's flat contract, shown as its own line when it has no SOV
+    // lines here (alone, or next to its change orders). Null otherwise.
     contractValueCents: number | null;
     items: SOVItemRow[];
     changeOrders: CORow[];
@@ -205,13 +205,20 @@ export async function GET(req: Request) {
             ],
           }),
     },
-    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true },
+    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true, sov: { select: { _count: { select: { items: true } } } } },
   });
 
   for (const project of wholeProjects) {
-    // Already has real SOV items/COs from above — those are the source of
-    // truth for this project, no fallback row needed alongside them.
-    if (projectMap.has(project.id)) continue;
+    const existing = projectMap.get(project.id);
+    if (existing) {
+      // Change orders only, on a project with no SOV at all: its flat
+      // contract still needs its own line next to them. A project with SOV
+      // lines is billed line by line, so it gets no contract line.
+      if (existing.items.length === 0 && (project.sov?._count.items ?? 0) === 0) {
+        existing.contractValueCents = project.contractValueCents;
+      }
+      continue;
+    }
     projectMap.set(project.id, {
       projectId: project.id,
       jobTitle: project.jobTitle,
