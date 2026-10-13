@@ -3,7 +3,7 @@ import { amountReconciles, AMOUNT_TOLERANCE_CENTS } from "@/lib/hubspot/billingM
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { unitChangeOrderProjects, contractMonthLinks } from "@/lib/hubspot/syncUnitInvoices";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
-import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest } from "@/lib/sovSync";
+import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest, setRequestPaidDate } from "@/lib/sovSync";
 
 /**
  * Marks a line Paid when the HubSpot invoices linked to it are paid and add
@@ -22,7 +22,10 @@ import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncPro
  *    match is wrong;
  *  - each invoice is applied to its line once (paidAppliedAt). If someone
  *    moves the line back to Billed or Not billed afterwards, that's their
- *    call and it's left alone. Linking the invoice again by hand resets it.
+ *    call and it's left alone. Linking the invoice again by hand resets it;
+ *  - a line that was already Paid when its invoice is first counted takes
+ *    the invoice's paid date, since the date it had is only the day someone
+ *    marked it. That happens once too, so a date typed afterwards stays.
  */
 
 type Link = { id: string; hubspotInvoiceId: string; amountCents: number; manual: boolean; paidDate: Date | null; paidAppliedAt: Date | null };
@@ -40,6 +43,12 @@ function canApply(links: Link[], billingStatus: string | null, valueCents: numbe
   const { sumCents, anyManual } = summarize(links);
   if (status === "NOT_BILLED" && !anyManual) return false;
   return amountReconciles(sumCents, valueCents, AMOUNT_TOLERANCE_CENTS);
+}
+
+/** The invoice's paid date for a line that's already Paid, the first time
+ * its invoices are counted. Null when there's nothing to move. */
+function firstPaidOn(links: Link[]): Date | null {
+  return links.some((l) => l.paidAppliedAt) ? null : summarize(links).paidOn;
 }
 
 function groupBy<T>(rows: T[], key: (r: T) => string | null): Map<string, T[]> {
@@ -80,6 +89,8 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
     for (const item of sovItems) {
       const group = bySov.get(item.id)!;
       if (item.billingStatus === "PAID") {
+        const paidOn = firstPaidOn(group);
+        if (paidOn) await prisma.projectSOVItem.update({ where: { id: item.id }, data: { paidAt: paidOn } });
         counted.push(...group.map((l) => l.id));
         continue;
       }
@@ -103,6 +114,8 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
     for (const co of changeOrders) {
       const group = byCo.get(co.id)!;
       if (normalizeBillingStatus(co.billingStatus) === "PAID") {
+        const paidOn = firstPaidOn(group);
+        if (paidOn) await prisma.projectChangeOrder.update({ where: { id: co.id }, data: { paidAt: paidOn } });
         counted.push(...group.map((l) => l.id));
         continue;
       }
@@ -148,8 +161,11 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
       if (turn.billingStatus !== "PAID") {
         if (!canApply(group, turn.billingStatus, turn.approvedPriceCents ?? turn.priceCents)) continue;
         await prisma.turnoverRequest.update({ where: { id: turn.id }, data: { billingStatus: "PAID" } });
-        await syncProjectBillingFromRequest(turn.id, "PAID");
+        await syncProjectBillingFromRequest(turn.id, "PAID", summarize(group).paidOn);
         result.units += 1;
+      } else {
+        const paidOn = firstPaidOn(group);
+        if (paidOn) await setRequestPaidDate(turn.id, paidOn);
       }
       countedUnits.push(...group.filter((l) => !l.paidAppliedAt).map((l) => l.id));
     }
@@ -179,6 +195,9 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
         // Same as marking the month Paid by hand (see the period PATCH route).
         await prisma.recurringContractPeriod.update({ where: { id: period.id }, data: { billingStatus: "PAID", paidAt: summarize(group).paidOn ?? new Date() } });
         result.contractMonths += 1;
+      } else {
+        const paidOn = firstPaidOn(group);
+        if (paidOn) await prisma.recurringContractPeriod.update({ where: { id: period.id }, data: { paidAt: paidOn } });
       }
       countedMonths.push(...group.filter((l) => !l.paidAppliedAt).map((l) => l.id));
     }
