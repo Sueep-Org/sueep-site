@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
@@ -9,8 +10,12 @@ import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager,
 import { loadCoiAlerts } from "@/lib/erp/coiAlerts";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
-import { DashboardTabs, resolveDashboardTab, type DashboardTab } from "./_dashboard/DashboardTabs";
+import { DASHBOARD_TAB_LABELS, resolveDashboardTab, type DashboardTab } from "./_dashboard/DashboardTabs";
+import { CustomizeDashboard } from "./_dashboard/CustomizeDashboard";
 import { FinanceTab } from "./_dashboard/FinanceTab";
+import { CardPlaceholder, CardTabPanel, DashboardTabsWithAlerts } from "./_dashboard/CardTabPanel";
+import { visibleCardTabs, type CardTab } from "@/lib/erp/dashboardCards";
+import { loadDashboardPrefs } from "@/lib/erp/dashboardPrefs";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +52,14 @@ const TIME_OFF_TYPE_LABEL: Record<string, string> = {
   UNPAID: "Unpaid",
   OTHER: "Other",
 };
+
+/** Projects costed at a time for the Overview margins widget. */
+const MARGIN_BATCH = 16;
+
+/** A role's tabs as Customize's "Open the dashboard on" choices. */
+function tabOptions(tabs: DashboardTab[]): { value: string; label: string }[] {
+  return tabs.map((t) => ({ value: t, label: DASHBOARD_TAB_LABELS[t] }));
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -153,35 +166,53 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
 
     // ── Finance ────────────────────────────────────────────────────────────
     if (role === "FINANCE") {
-      const financeTabs: DashboardTab[] = ["overview", "finance"];
-      const financeTab = resolveDashboardTab(tabParam, financeTabs);
+      const prefs = await loadDashboardPrefs(email);
+      const financeCardTabs = visibleCardTabs(role, prefs);
+      // Money first; the old link cards became the links row on it. If every
+      // card is hidden, Overview (just the links) comes back.
+      const financeTabs: DashboardTab[] = [...(financeCardTabs.length ? financeCardTabs : (["overview"] as const)), "finance"];
+      const financeHome = resolveDashboardTab(undefined, financeTabs, prefs.startTab);
+      const financeTab = resolveDashboardTab(tabParam, financeTabs, prefs.startTab);
+      const financeLinks = (
+        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label="Finance pages">
+          {[
+            { href: "/erp/billing", title: "Billing" },
+            { href: "/erp/payroll", title: "Commission & reimbursements" },
+            { href: "/erp/employees", title: "Employees" },
+            { href: "/erp/projects", title: "Projects" },
+            { href: "/erp/candidates", title: "Candidates" },
+            { href: "/erp/contractors", title: "Contractors" },
+            { href: "/erp/insurance", title: "Insurance & COIs" },
+          ].map((c) => (
+            <Link key={c.href} href={c.href} className="font-medium text-gray-500 hover:text-pink-600">
+              {c.title}
+            </Link>
+          ))}
+        </nav>
+      );
       return (
         <div className="space-y-6">
           <div>
             <p className="text-sm text-gray-400">{today}</p>
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
-          <DashboardTabs tabs={financeTabs} active={financeTab} />
-          {financeTab === "finance" ? <FinanceTab period={period} by={by} /> : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { href: "/erp/billing", label: "Billing", title: "Project Billing", dot: "bg-emerald-400" },
-              { href: "/erp/payroll", label: "Payroll", title: "Payroll Export", dot: "bg-violet-400" },
-              { href: "/erp/employees", label: "Employees", title: "Employee Records", dot: "bg-blue-400" },
-              { href: "/erp/projects", label: "Projects", title: "All Projects", dot: "bg-sky-400" },
-              { href: "/erp/candidates", label: "Hiring", title: "Candidates", dot: "bg-amber-400" },
-              { href: "/erp/contractors", label: "Hiring", title: "Contractor Verification", dot: "bg-teal-400" },
-              { href: "/erp/insurance", label: "Compliance", title: "Insurance & COIs", dot: "bg-rose-400" },
-            ].map((c) => (
-              <Link key={c.title} href={c.href} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${c.dot}`} />
-                  {c.label}
-                </p>
-                <p className="mt-0.5 text-base font-semibold text-gray-900">{c.title}</p>
-              </Link>
-            ))}
-          </div>
+          <DashboardTabsWithAlerts
+            role={role}
+            prefs={prefs}
+            tabs={financeTabs}
+            active={financeTab}
+            home={financeHome}
+            trailing={<CustomizeDashboard role={role} prefs={prefs} startTabOptions={tabOptions(financeTabs)} />}
+          />
+          {financeTab === "finance" ? (
+            <Suspense fallback={<CardPlaceholder title="Finance" tall />}>
+              <FinanceTab period={period} by={by} />
+            </Suspense>
+          ) : (
+            <div className="space-y-4">
+              {financeLinks}
+              {financeTab !== "overview" && <CardTabPanel tab={financeTab as CardTab} role={role} email={email} prefs={prefs} />}
+            </div>
           )}
         </div>
       );
@@ -189,25 +220,10 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
 
     // ── Estimation ─────────────────────────────────────────────────────────
     if (role === "ESTIMATION") {
-      const [missingEstimates, recentChangeOrders] = await Promise.all([
-        prisma.project.findMany({
-          where: {
-            OR: [{ estLaborCents: null }, { estMaterialCents: null }],
-            NOT: { status: { in: ["COMPLETED", "ARCHIVED", "CANCELLED"] } },
-          },
-          select: { id: true, jobTitle: true, estLaborCents: true, estMaterialCents: true, segment: true, status: true },
-          orderBy: { updatedAt: "desc" },
-          take: 20,
-        }),
-        prisma.projectChangeOrder.findMany({
-          orderBy: { updatedAt: "desc" },
-          take: 10,
-          select: {
-            id: true, title: true, status: true, updatedAt: true,
-            project: { select: { id: true, jobTitle: true } },
-          },
-        }),
-      ]);
+      const prefs = await loadDashboardPrefs(email);
+      const estimationTabs: DashboardTab[] = visibleCardTabs(role, prefs);
+      const estimationHome = estimationTabs.length ? resolveDashboardTab(undefined, estimationTabs, prefs.startTab) : null;
+      const estimationTab = estimationTabs.length ? resolveDashboardTab(tabParam, estimationTabs, prefs.startTab) : null;
 
       return (
         <div className="space-y-6">
@@ -215,65 +231,19 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             <p className="text-sm text-gray-400">{today}</p>
             <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
           </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Projects needing estimates */}
-            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900" title="Need est. labor or material">Projects missing estimates</h2>
-                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-600">{missingEstimates.length}</span>
-              </div>
-              {missingEstimates.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">All projects have estimates.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {missingEstimates.map((p) => (
-                    <li key={p.id}>
-                      <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
-                          <div className="mt-0.5 flex gap-1.5">
-                            {p.estLaborCents == null && <span className="text-[10px] font-medium text-orange-500">Missing labor est.</span>}
-                            {p.estMaterialCents == null && <span className="text-[10px] font-medium text-orange-500">Missing material est.</span>}
-                          </div>
-                        </div>
-                        <span className="ml-3 shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                          {projectSegmentLabel(p.segment)}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Recent change orders */}
-            <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Recent change orders</h2>
-              </div>
-              {recentChangeOrders.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">No change orders yet.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {recentChangeOrders.map((co) => (
-                    <li key={co.id}>
-                      <Link href={`/erp/projects/${co.project.id}/change-orders/${co.id}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900" title={co.title}>{co.title}</p>
-                          <p className="truncate text-xs text-gray-400" title={co.project.jobTitle}>{co.project.jobTitle}</p>
-                        </div>
-                        <div className="ml-3 shrink-0 text-right">
-                          <span className="text-xs font-medium text-gray-600">{co.status}</span>
-                          <p className="text-[11px] text-gray-400">{timeAgo(co.updatedAt)}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+          <DashboardTabsWithAlerts
+            role={role}
+            prefs={prefs}
+            tabs={estimationTabs}
+            active={estimationTab}
+            home={estimationHome}
+            trailing={<CustomizeDashboard role={role} prefs={prefs} startTabOptions={tabOptions(estimationTabs)} />}
+          />
+          {estimationTab ? (
+            <CardTabPanel tab={estimationTab as CardTab} role={role} email={email} prefs={prefs} />
+          ) : (
+            <p className="py-12 text-center text-sm text-gray-400">All your dashboard cards are hidden. Use Customize to show them again.</p>
+          )}
         </div>
       );
     }
@@ -630,13 +600,18 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
     }
 
     // ── Admin / Project Manager / Sales ────────────────────────────────────
+    // Card tabs (Sales, Jobs, Money...) sit between Operations and Finance.
+    const adminPrefs = await loadDashboardPrefs(email);
+    const adminCardTabs = visibleCardTabs(role, adminPrefs);
     const adminTabs: DashboardTab[] = [
       "overview",
       "operations",
+      ...adminCardTabs,
       ...(canSeeFinanceDashboard(role) ? (["finance"] as const) : []),
       ...(role === "ADMIN" || isProjectManager(role) ? (["team"] as const) : []),
     ];
-    const activeTab = resolveDashboardTab(tabParam, adminTabs);
+    const adminHome = resolveDashboardTab(undefined, adminTabs, adminPrefs.startTab);
+    const activeTab = resolveDashboardTab(tabParam, adminTabs, adminPrefs.startTab);
     const adminHeader = (
       <>
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -653,914 +628,983 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             </Link>
           </div>
         </div>
-        <DashboardTabs tabs={adminTabs} active={activeTab} />
+        <DashboardTabsWithAlerts
+          role={role}
+          prefs={adminPrefs}
+          tabs={adminTabs}
+          active={activeTab}
+          home={adminHome}
+          trailing={<CustomizeDashboard role={role} prefs={adminPrefs} startTabOptions={tabOptions(adminTabs)} />}
+        />
       </>
     );
+
+    // Card tabs load only their own cards, none of the operational queries below.
+    if ((adminCardTabs as DashboardTab[]).includes(activeTab)) {
+      return (
+        <div className="space-y-6">
+          {adminHeader}
+          <CardTabPanel tab={activeTab as CardTab} role={role} email={email} prefs={adminPrefs} />
+        </div>
+      );
+    }
 
     // Finance has its own data, none of the operational queries below.
     if (activeTab === "finance") {
       return (
         <div className="space-y-6">
           {adminHeader}
-          <FinanceTab period={period} by={by} />
+          <Suspense fallback={<CardPlaceholder title="Finance" tall />}>
+            <FinanceTab period={period} by={by} />
+          </Suspense>
         </div>
       );
     }
 
-    // Eastern-anchored, not naive UTC — "today" has to mean the Eastern
-    // business day (same reasoning as the schedule calendar fix), not
-    // whatever day UTC happens to be on, which runs ~4-5 hours ahead of
-    // Eastern every evening.
-    const adminTodayStart = todayEasternAsUtcMidnight();
-    const adminTodayEnd = new Date(adminTodayStart);
-    adminTodayEnd.setUTCHours(23, 59, 59, 999);
+    // The rest of this tab's page loads behind a placeholder, so the header
+    // and tab row show right away instead of waiting on every query below.
+    const adminBody = (async (): Promise<React.ReactNode> => {
+      try {
+        // Eastern-anchored, not naive UTC — "today" has to mean the Eastern
+        // business day (same reasoning as the schedule calendar fix), not
+        // whatever day UTC happens to be on, which runs ~4-5 hours ahead of
+        // Eastern every evening.
+        const adminTodayStart = todayEasternAsUtcMidnight();
+        const adminTodayEnd = new Date(adminTodayStart);
+        adminTodayEnd.setUTCHours(23, 59, 59, 999);
 
-    const flagWindowStart = new Date(adminTodayStart);
-    flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
+        const flagWindowStart = new Date(adminTodayStart);
+        flagWindowStart.setUTCDate(flagWindowStart.getUTCDate() - 13);
 
-    const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck, upcomingTimeOff] = await Promise.all([
-      prisma.project.findMany({
-        select: {
-          id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
-          contractValueCents: true, segment: true,
-          recurringContractPeriodId: true, turnoverRequestId: true,
-          actualLaborCents: true, actualMaterialCents: true,
-          laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
-          materialEntries: { select: { costCents: true } },
-          contractorAssignments: { select: { costCents: true } },
-          // Any day with a sub who runs jobs without a supervisor on it, see
-          // Contractor.runsWithoutSupervisor. Clears "No supervisor" below.
-          workerDayAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-          dayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-          changeOrders: {
+        // Side widgets' queries start now, alongside the main batch below,
+        // instead of waiting in line after it.
+        const coiAlertsPromise = canManageInsurance(role)
+          ? Promise.all([loadCoiAlerts(), prisma.coiRequest.count({ where: { status: "NEW" } })])
+          : Promise.resolve(null);
+        const pmRequestCountPromise = canManagePropertyManagers(role)
+          ? Promise.all([prisma.propertyManagerRequest.count({ where: { status: "REQUESTED" } }), prisma.propertyManagerChange.count({ where: { status: "OPEN" } })]).then(([a, b]) => a + b)
+          : Promise.resolve(0);
+        // If the main batch fails first, these are never awaited; keep that
+        // from surfacing as an unhandled rejection (awaiting them still throws).
+        coiAlertsPromise.catch(() => {});
+        pmRequestCountPromise.catch(() => {});
+
+        const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck, upcomingTimeOff] = await Promise.all([
+          prisma.project.findMany({
             select: {
-              id: true, title: true, status: true, supervisorUserId: true, startDate: true,
-              coWorkerAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-              coDayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-              contractValueCents: true, estimatedCostCents: true,
+              id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
+              contractValueCents: true, segment: true,
+              recurringContractPeriodId: true, turnoverRequestId: true,
               actualLaborCents: true, actualMaterialCents: true,
+              laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
               materialEntries: { select: { costCents: true } },
-              laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
               contractorAssignments: { select: { costCents: true } },
+              // Any day with a sub who runs jobs without a supervisor on it, see
+              // Contractor.runsWithoutSupervisor. Clears "No supervisor" below.
+              workerDayAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+              dayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+              changeOrders: {
+                select: {
+                  id: true, title: true, status: true, supervisorUserId: true, startDate: true,
+                  coWorkerAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+                  coDayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+                  contractValueCents: true, estimatedCostCents: true,
+                  actualLaborCents: true, actualMaterialCents: true,
+                  materialEntries: { select: { costCents: true } },
+                  laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+                  contractorAssignments: { select: { costCents: true } },
+                },
+              },
             },
-          },
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 500,
-      }),
-      prisma.employee.findMany({
-        select: {
-          id: true, firstName: true, lastName: true, status: true, requiredDocuments: true,
-          documents: { select: { documentType: true, expiresAt: true } },
-          backgroundCheckStatus: true, backgroundCheckExpiresAt: true,
-        },
-      }),
-      prisma.candidateApplication.groupBy({ by: ["status"], _count: { _all: true } }),
-      prisma.contractor.findMany({
-        where: { status: "ACTIVE" },
-        select: { id: true, name: true, workersCompExpiresAt: true, workersCompExempt: true, glExpiresAt: true },
-      }),
-      prisma.project.findMany({
-        select: {
-          id: true, jobTitle: true, status: true, segment: true,
-          supervisor: true, updatedAt: true, projectDate: true, billingStatus: true,
-          contractValueCents: true, percentDone: true, percentInvoiced: true,
-          changeOrders: { select: { status: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 15,
-      }),
-      prisma.laborEntry.findMany({
-        where: { employeeId: { not: null }, workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
-        select: {
-          employeeId: true, workerName: true, workDate: true, hours: true,
-          project: { select: { id: true, jobTitle: true } },
-        },
-      }),
-      prisma.projectDayAssignment.findMany({
-        where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
-        select: {
-          projectId: true,
-          project: { select: { jobTitle: true } },
-          supervisorContractor: { select: { runsWithoutSupervisor: true } },
-        },
-      }),
-      prisma.projectWorkerDayAssignment.findMany({
-        where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
-        select: {
-          projectId: true,
-          project: { select: { jobTitle: true } },
-          employee: { select: { firstName: true, lastName: true } },
-          contractor: { select: { name: true, runsWithoutSupervisor: true } },
-        },
-      }),
-      prisma.dailySafetyCheck.findMany({
-        where: { checkDate: { gte: adminTodayStart, lte: adminTodayEnd } },
-        include: { workers: { select: { passed: true } } },
-      }),
-      prisma.safetyIncident.count({ where: { status: { in: ["OPEN", "ESCALATED"] } } }),
-      prisma.safetyIncident.count({ where: { status: "ESCALATED" } }),
-      // Planned coverage for a day that's already passed, company-wide —
-      // paired with loggedDaysForMissingCheck below to find ones with no
-      // labor ever logged for that project/day, same "missed" concept the
-      // Supervisor dashboard and the calendar's overdue-planned chip use.
-      prisma.projectDayAssignment.findMany({
-        where: { date: { gte: flagWindowStart, lt: adminTodayStart } },
-        select: { projectId: true, date: true, project: { select: { jobTitle: true, status: true } } },
-      }),
-      // No employeeId filter here (unlike laborForFlags) — a contractor-only
-      // or ad-hoc-named entry still proves labor was logged that day, and
-      // excluding it would falsely flag an already-logged day as missing.
-      prisma.laborEntry.findMany({
-        where: { workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
-        select: { projectId: true, workDate: true },
-      }),
-      // Currently-out or about-to-be-out employees, oldest start date first.
-      // endDate >= today catches PTO already in progress, not just what
-      // hasn't started yet. Capped short on purpose, see the widget below.
-      prisma.employeeTimeOff.findMany({
-        where: { status: { not: "DENIED" }, endDate: { gte: adminTodayStart } },
-        orderBy: { startDate: "asc" },
-        take: 8,
-        select: {
-          id: true,
-          startDate: true,
-          endDate: true,
-          type: true,
-          status: true,
-          employee: { select: { id: true, firstName: true, lastName: true } },
-        },
-      }),
-    ]);
+            orderBy: { updatedAt: "desc" },
+            take: 500,
+          }),
+          prisma.employee.findMany({
+            select: {
+              id: true, firstName: true, lastName: true, status: true, requiredDocuments: true,
+              documents: { select: { documentType: true, expiresAt: true } },
+              backgroundCheckStatus: true, backgroundCheckExpiresAt: true,
+            },
+          }),
+          prisma.candidateApplication.groupBy({ by: ["status"], _count: { _all: true } }),
+          prisma.contractor.findMany({
+            where: { status: "ACTIVE" },
+            select: { id: true, name: true, workersCompExpiresAt: true, workersCompExempt: true, glExpiresAt: true },
+          }),
+          prisma.project.findMany({
+            select: {
+              id: true, jobTitle: true, status: true, segment: true,
+              supervisor: true, updatedAt: true, projectDate: true, billingStatus: true,
+              contractValueCents: true, percentDone: true, percentInvoiced: true,
+              changeOrders: { select: { status: true } },
+            },
+            orderBy: { updatedAt: "desc" },
+            take: 15,
+          }),
+          prisma.laborEntry.findMany({
+            where: { employeeId: { not: null }, workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
+            select: {
+              employeeId: true, workerName: true, workDate: true, hours: true,
+              project: { select: { id: true, jobTitle: true } },
+            },
+          }),
+          prisma.projectDayAssignment.findMany({
+            where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
+            select: {
+              projectId: true,
+              project: { select: { jobTitle: true } },
+              supervisorContractor: { select: { runsWithoutSupervisor: true } },
+            },
+          }),
+          prisma.projectWorkerDayAssignment.findMany({
+            where: { date: { gte: adminTodayStart, lte: adminTodayEnd } },
+            select: {
+              projectId: true,
+              project: { select: { jobTitle: true } },
+              employee: { select: { firstName: true, lastName: true } },
+              contractor: { select: { name: true, runsWithoutSupervisor: true } },
+            },
+          }),
+          prisma.dailySafetyCheck.findMany({
+            where: { checkDate: { gte: adminTodayStart, lte: adminTodayEnd } },
+            include: { workers: { select: { passed: true } } },
+          }),
+          prisma.safetyIncident.count({ where: { status: { in: ["OPEN", "ESCALATED"] } } }),
+          prisma.safetyIncident.count({ where: { status: "ESCALATED" } }),
+          // Planned coverage for a day that's already passed, company-wide —
+          // paired with loggedDaysForMissingCheck below to find ones with no
+          // labor ever logged for that project/day, same "missed" concept the
+          // Supervisor dashboard and the calendar's overdue-planned chip use.
+          prisma.projectDayAssignment.findMany({
+            where: { date: { gte: flagWindowStart, lt: adminTodayStart } },
+            select: { projectId: true, date: true, project: { select: { jobTitle: true, status: true } } },
+          }),
+          // No employeeId filter here (unlike laborForFlags) — a contractor-only
+          // or ad-hoc-named entry still proves labor was logged that day, and
+          // excluding it would falsely flag an already-logged day as missing.
+          prisma.laborEntry.findMany({
+            where: { workDate: { gte: flagWindowStart, lte: adminTodayEnd } },
+            select: { projectId: true, workDate: true },
+          }),
+          // Currently-out or about-to-be-out employees, oldest start date first.
+          // endDate >= today catches PTO already in progress, not just what
+          // hasn't started yet. Capped short on purpose, see the widget below.
+          prisma.employeeTimeOff.findMany({
+            where: { status: { not: "DENIED" }, endDate: { gte: adminTodayStart } },
+            orderBy: { startDate: "asc" },
+            take: 8,
+            select: {
+              id: true,
+              startDate: true,
+              endDate: true,
+              type: true,
+              status: true,
+              employee: { select: { id: true, firstName: true, lastName: true } },
+            },
+          }),
+        ]);
 
-    // Lifecycle bucketing
-    let wipCount = 0, upcomingCount = 0;
-    let wipValue = 0;
-    for (const p of allProjects) {
-      const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders));
-      if (lc === "ACTIVE") { wipCount++; wipValue += p.contractValueCents ?? 0; }
-      else if (lc === "UPCOMING") upcomingCount++;
-    }
+        // Lifecycle bucketing
+        let wipCount = 0, upcomingCount = 0;
+        let wipValue = 0;
+        for (const p of allProjects) {
+          const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders));
+          if (lc === "ACTIVE") { wipCount++; wipValue += p.contractValueCents ?? 0; }
+          else if (lc === "UPCOMING") upcomingCount++;
+        }
 
-    // Recently updated margins — ACTUAL cost vs. contract, computed the exact
-    // same way (OT-aware labor from logs + contractor cost + rolled-up change
-    // orders) as the Projects table itself, via the shared
-    // computeProjectActualsWithChangeOrders — so this and the table can
-    // never quietly disagree on a project's real margin again. Ordered by how
-    // recently the project was updated (allProjects is already `orderBy:
-    // updatedAt desc`), not by worst margin, so this surfaces what changed.
-    const projectActuals = await computeProjectActualsWithChangeOrders(allProjects);
-    const recentMarginProjects = allProjects
-      .map((p) => {
-        const actuals = projectActuals.get(p.id);
-        if (!actuals || actuals.contractValueCents == null || actuals.contractValueCents === 0 || actuals.marginCents == null) return null;
-        const marginPct = Math.round((actuals.marginCents / actuals.contractValueCents) * 100);
-        return { id: p.id, jobTitle: p.jobTitle, marginCents: actuals.marginCents, marginPct };
-      })
-      .filter((p): p is NonNullable<typeof p> => p !== null)
-      .slice(0, 8);
-
-    // Employee compliance
-    const activeEmployees = employees.filter((e) => e.status === "ACTIVE");
-    const nonCompliant = activeEmployees.filter((e) => {
-      const req = parseRequiredDocuments(e.requiredDocuments);
-      return evaluateEmployeeCompliance(e.status, req, e.documents) === "NON_COMPLIANT";
-    });
-
-    // Background check alerts: a FAILED check on file, or one expiring within
-    // 30 days. Background check status isn't part of document compliance
-    // (see nonCompliant above), so it needs its own signal here, same
-    // "expiring soon" window the individual employee page already uses.
-    const bgCheckExpiryWindow = new Date(adminTodayStart);
-    bgCheckExpiryWindow.setUTCDate(bgCheckExpiryWindow.getUTCDate() + 30);
-    const bgCheckAlerts = activeEmployees
-      .filter(
-        (e) =>
-          e.backgroundCheckStatus === "FAILED" ||
-          (e.backgroundCheckExpiresAt != null && e.backgroundCheckExpiresAt <= bgCheckExpiryWindow)
-      )
-      .sort((a, b) => {
-        if (a.backgroundCheckStatus === "FAILED" && b.backgroundCheckStatus !== "FAILED") return -1;
-        if (b.backgroundCheckStatus === "FAILED" && a.backgroundCheckStatus !== "FAILED") return 1;
-        const at = a.backgroundCheckExpiresAt?.getTime() ?? Infinity;
-        const bt = b.backgroundCheckExpiresAt?.getTime() ?? Infinity;
-        return at - bt;
-      })
-      .slice(0, 8);
-    const bgCheckFailedCount = activeEmployees.filter((e) => e.backgroundCheckStatus === "FAILED").length;
-
-    // Workers comp alerts: same "expiring within 30 days" window as
-    // background checks above, but a contractor with no expiration date on
-    // file at all (never submitted a COI) counts as an alert too, since
-    // "missing" is just as much a compliance gap as "expired".
-    const wcExpiryWindow = new Date(adminTodayStart);
-    wcExpiryWindow.setUTCDate(wcExpiryWindow.getUTCDate() + 30);
-    // Sub insurance alerts: workers comp missing (unless exempt), expired,
-    // or expiring within 30 days, plus general liability expired or
-    // expiring once a date is on file. One line per sub, most urgent issue.
-    const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    const allWcAlerts = contractors
-      .map((c) => {
-        const issues: { text: string; urgent: boolean; at: number }[] = [];
-        if (!c.workersCompExempt) {
-          if (c.workersCompExpiresAt == null) issues.push({ text: "WC not on file", urgent: true, at: -Infinity });
-          else if (c.workersCompExpiresAt <= wcExpiryWindow) {
-            const expired = c.workersCompExpiresAt <= adminTodayStart;
-            issues.push({ text: `WC ${expired ? "expired" : "expires"} ${shortDay(c.workersCompExpiresAt)}`, urgent: expired, at: c.workersCompExpiresAt.getTime() });
+        // Recently updated margins — ACTUAL cost vs. contract, computed the exact
+        // same way (OT-aware labor from logs + contractor cost + rolled-up change
+        // orders) as the Projects table itself, via the shared
+        // computeProjectActualsWithChangeOrders — so this and the table can
+        // never quietly disagree on a project's real margin again. Ordered by how
+        // recently the project was updated (allProjects is already `orderBy:
+        // updatedAt desc`), not by worst margin, so this surfaces what changed.
+        // Only the most recent projects with a price are costed (a batch at a
+        // time until 8 have a margin), not every project ever: costing is the
+        // slow part, and the widget only shows 8.
+        const recentMarginProjects: { id: string; jobTitle: string; marginCents: number; marginPct: number }[] = [];
+        const priced = allProjects.filter((p) => p.contractValueCents != null || p.changeOrders.length > 0);
+        for (let i = 0; i < priced.length && recentMarginProjects.length < 8; i += MARGIN_BATCH) {
+          const batch = priced.slice(i, i + MARGIN_BATCH);
+          const projectActuals = await computeProjectActualsWithChangeOrders(batch);
+          for (const p of batch) {
+            const actuals = projectActuals.get(p.id);
+            if (!actuals || actuals.contractValueCents == null || actuals.contractValueCents === 0 || actuals.marginCents == null) continue;
+            if (recentMarginProjects.length < 8) {
+              recentMarginProjects.push({ id: p.id, jobTitle: p.jobTitle, marginCents: actuals.marginCents, marginPct: Math.round((actuals.marginCents / actuals.contractValueCents) * 100) });
+            }
           }
         }
-        if (c.glExpiresAt && c.glExpiresAt <= wcExpiryWindow) {
-          const expired = c.glExpiresAt <= adminTodayStart;
-          issues.push({ text: `GL ${expired ? "expired" : "expires"} ${shortDay(c.glExpiresAt)}`, urgent: expired, at: c.glExpiresAt.getTime() });
-        }
-        issues.sort((a, b) => a.at - b.at);
-        return issues.length ? { id: c.id, name: c.name, issue: issues[0], more: issues.length - 1 } : null;
-      })
-      .filter((a): a is NonNullable<typeof a> => a != null)
-      .sort((a, b) => a.issue.at - b.issue.at);
-    const wcAlerts = allWcAlerts.slice(0, 8);
-    const wcMissingOrExpiredCount = allWcAlerts.filter((a) => a.issue.urgent).length;
 
-    const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
-    const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
-
-    // "Where we are": which projects are actually scheduled today, company-
-    // wide — a supervisor day-assignment, a planned worker day-assignment,
-    // actual labor already logged today (pulled out of laborForFlags, which
-    // already spans a window including today), OR a project whose start/end
-    // date is today with none of the above yet — i.e. work that's on the
-    // books for today but nobody has been assigned to. That last case used
-    // to be invisible here (this widget only ever looked at
-    // assignment/labor rows), which silently hid exactly the projects most
-    // in need of a supervisor. Not "recently touched" — genuinely today, so
-    // an empty result is a real, meaningful signal ("nothing's on the
-    // calendar for today") rather than just quiet data.
-    const supervisorByProjectId = new Map(allProjects.map((p) => [p.id, p.supervisorUserId]));
-    type ScheduledToday = {
-      projectId: string;
-      jobTitle: string;
-      loggedWorkers: Set<string>;
-      plannedWorkers: Set<string>;
-      supervisorUserId: string | null;
-      /** A sub who runs jobs without a supervisor is on it today. */
-      soloSubToday: boolean;
-    };
-    const scheduledTodayMap = new Map<string, ScheduledToday>();
-    function getOrInitScheduled(projectId: string, jobTitle: string): ScheduledToday {
-      const existing = scheduledTodayMap.get(projectId);
-      if (existing) return existing;
-      const created: ScheduledToday = {
-        projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set(),
-        supervisorUserId: supervisorByProjectId.get(projectId) ?? null,
-        soloSubToday: false,
-      };
-      scheduledTodayMap.set(projectId, created);
-      return created;
-    }
-    for (const a of todayDayAssignments) {
-      const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
-      if (a.supervisorContractor?.runsWithoutSupervisor) entry.soloSubToday = true;
-    }
-    for (const a of todayWorkerAssignments) {
-      const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
-      const name = a.employee ? `${a.employee.firstName} ${a.employee.lastName}`.trim() : a.contractor?.name;
-      if (name) entry.plannedWorkers.add(name);
-      if (a.contractor?.runsWithoutSupervisor) entry.soloSubToday = true;
-    }
-    for (const e of laborForFlags) {
-      if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;
-      const entry = getOrInitScheduled(e.project.id, e.project.jobTitle);
-      entry.loggedWorkers.add(e.workerName);
-    }
-    // Same "starts or ends today" rule the schedule calendar's amber
-    // "needs a supervisor" chip uses — surfaces work that's on the books
-    // for today even when nobody (day-assignment, planned worker, or
-    // logged labor) has touched it yet.
-    for (const p of allProjects) {
-      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
-      const startsToday = p.projectDate != null && p.projectDate >= adminTodayStart && p.projectDate <= adminTodayEnd;
-      const endsToday = p.projectEndDate != null && p.projectEndDate >= adminTodayStart && p.projectEndDate <= adminTodayEnd;
-      if (startsToday || endsToday) getOrInitScheduled(p.id, p.jobTitle);
-    }
-    const scheduledToday = [...scheduledTodayMap.values()].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
-
-    // Scheduled but never logged, company-wide (last 14 days) — a
-    // ProjectDayAssignment whose date has passed with no matching LaborEntry
-    // for that project on that day. Same "missed" signal as the Supervisor
-    // dashboard's per-project feed and the calendar's red ⚠ overdue-planned
-    // chip, just company-wide instead of scoped to one supervisor.
-    const loggedDayKeys = new Set(loggedDaysForMissingCheck.map((e) => `${e.projectId}::${utcDateKey(e.workDate)}`));
-    type MissingLaborProject = { projectId: string; jobTitle: string; dayKeys: string[] };
-    const missingLaborByProject = new Map<string, MissingLaborProject>();
-    for (const a of overdueDayAssignments) {
-      if (a.project.status === "COMPLETE" || a.project.status === "ARCHIVED") continue;
-      const dk = utcDateKey(a.date);
-      if (loggedDayKeys.has(`${a.projectId}::${dk}`)) continue;
-      const entry = missingLaborByProject.get(a.projectId) ?? { projectId: a.projectId, jobTitle: a.project.jobTitle, dayKeys: [] };
-      if (!entry.dayKeys.includes(dk)) entry.dayKeys.push(dk);
-      missingLaborByProject.set(a.projectId, entry);
-    }
-    const missingLaborProjects = [...missingLaborByProject.values()]
-      .sort((a, b) => b.dayKeys.length - a.dayKeys.length || a.jobTitle.localeCompare(b.jobTitle))
-      .slice(0, 8);
-
-    // Labor red flags: hours concentrated on a single project, either in one
-    // day or over a week, within the last 14 days (roughly a pay period).
-    // Two independent signals merged into one list: a single long shift can
-    // be a data-entry error or a burnout risk even if the week overall looks
-    // normal; a high weekly total on one project can hide a bad entry spread
-    // across several days. Distinct from the payroll OT split in
-    // laborCost.ts, which sums a worker's hours across ALL projects for
-    // pay — this is specifically about concentration on ONE project.
-    const DAY_HOURS_FLAG_THRESHOLD = 12;
-    const WEEK_HOURS_FLAG_THRESHOLD = 40;
-    type LaborFlag = { kind: "day" | "week"; workerName: string; projectId: string; jobTitle: string; hours: number; label: string };
-
-    const dayFlags: LaborFlag[] = laborForFlags
-      .filter((e) => e.hours >= DAY_HOURS_FLAG_THRESHOLD)
-      .map((e) => ({
-        kind: "day" as const,
-        workerName: e.workerName,
-        projectId: e.project.id,
-        jobTitle: e.project.jobTitle,
-        hours: e.hours,
-        label: `${new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · single day`,
-      }));
-
-    const weekBuckets = new Map<string, { workerName: string; projectId: string; jobTitle: string; hours: number; weekStart: string }>();
-    for (const e of laborForFlags) {
-      const weekStart = mondayOf(e.workDate);
-      const key = `${e.employeeId}::${e.project.id}::${weekStart}`;
-      const bucket = weekBuckets.get(key) ?? { workerName: e.workerName, projectId: e.project.id, jobTitle: e.project.jobTitle, hours: 0, weekStart };
-      bucket.hours += e.hours;
-      weekBuckets.set(key, bucket);
-    }
-    const weekFlags: LaborFlag[] = [...weekBuckets.values()]
-      .filter((w) => w.hours >= WEEK_HOURS_FLAG_THRESHOLD)
-      .map((w) => ({
-        kind: "week" as const,
-        workerName: w.workerName,
-        projectId: w.projectId,
-        jobTitle: w.jobTitle,
-        hours: w.hours,
-        label: `week of ${new Date(`${w.weekStart}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
-      }));
-
-    const laborFlags = [...dayFlags, ...weekFlags].sort((a, b) => b.hours - a.hours).slice(0, 8);
-
-    // Safety KPIs
-    const safetyWorkers = todaySafetyChecks.flatMap((c) => c.workers);
-    const safetyTotal = safetyWorkers.length;
-    const safetyPassed = safetyWorkers.filter((w) => w.passed).length;
-    const safetyComplianceRate = safetyTotal > 0 ? Math.round((safetyPassed / safetyTotal) * 100) : null;
-
-    // "Needs labor logged", company-wide, mirrors the calendar's red ⚠
-    // overdue-planned chip. Rendered inside the "Needs attention" grid below,
-    // same spot for every role that reaches this dashboard now (previously
-    // moved between top and bottom depending on PM vs Admin, consolidated
-    // for a simpler, more consistent layout).
-    const needsLaborLoggedWidget = (
-      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-          <h3 className="text-sm font-semibold text-gray-900" title="Scheduled on the calendar, day already passed, still no labor logged">
-            <span aria-hidden className="mr-1 text-red-600">⚠</span>Needs labor logged
-          </h3>
-          {missingLaborProjects.length > 0 && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{missingLaborProjects.length}</span>
-          )}
-        </div>
-        {missingLaborProjects.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing overdue in the last 14 days.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {missingLaborProjects.map((p) => (
-              <li key={p.projectId}>
-                <Link href={`/erp/projects/${p.projectId}#labor-log`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                  <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
-                  <p className="shrink-0 text-xs font-semibold text-red-600">
-                    {p.dayKeys.length} day{p.dayKeys.length === 1 ? "" : "s"} missed
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-
-    // "No supervisor assigned", company-wide — a project or change order
-    // that never had anyone put on it AND never got any labor logged, i.e.
-    // it would otherwise just sit invisible until someone happens to notice
-    // (this is what the Schedule calendar's own amber ⚠ chip flags per day;
-    // this is the same population, just month-independent). Distinct from
-    // needsLaborLoggedWidget above — that one requires a day-assignment to
-    // have existed and then been missed; this is about ones that never got
-    // that far in the first place.
-    //
-    // Floored at Aug 1, 2026 on purpose — this card shipped this week, and
-    // there's no value in dredging up months of pre-existing backlog on
-    // first load; only what's happened since it started being tracked.
-    const NEEDS_ATTENTION_SINCE = new Date(Date.UTC(2026, 7, 1));
-    type NoSupervisorItem = { key: string; projectId: string; title: string; dateKey: string; overdue: boolean };
-    const noSupervisorItems: NoSupervisorItem[] = [];
-    for (const p of allProjects) {
-      // A recurring contract's own billing placeholder (see the same
-      // exclusion on the Schedule calendar query) never legitimately gets a
-      // supervisor or logged labor — it's not real field work, so it would
-      // otherwise sit here as a permanent false positive every month.
-      if (p.recurringContractPeriodId && !p.turnoverRequestId) continue;
-      if (p.supervisorUserId) continue;
-      if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
-      if (!p.projectDate || p.projectDate < NEEDS_ATTENTION_SINCE) continue;
-      if (p.laborEntries.length > 0) continue;
-      if (p.workerDayAssignments.length > 0 || p.dayAssignments.length > 0) continue;
-      noSupervisorItems.push({
-        key: `proj-${p.id}`, projectId: p.id, title: p.jobTitle,
-        dateKey: utcDateKey(p.projectDate), overdue: p.projectDate < adminTodayStart,
-      });
-      for (const co of p.changeOrders) {
-        if (co.supervisorUserId) continue;
-        if (co.status === "COMPLETED" || co.status === "REJECTED" || co.status === "VOID") continue;
-        if (!co.startDate || co.startDate < NEEDS_ATTENTION_SINCE) continue;
-        if (co.laborers.length > 0) continue;
-        if (co.coWorkerAssignments.length > 0 || co.coDayAssignments.length > 0) continue;
-        noSupervisorItems.push({
-          key: `co-${co.id}`, projectId: p.id, title: co.title,
-          dateKey: utcDateKey(co.startDate), overdue: co.startDate < adminTodayStart,
+        // Employee compliance
+        const activeEmployees = employees.filter((e) => e.status === "ACTIVE");
+        const nonCompliant = activeEmployees.filter((e) => {
+          const req = parseRequiredDocuments(e.requiredDocuments);
+          return evaluateEmployeeCompliance(e.status, req, e.documents) === "NON_COMPLIANT";
         });
-      }
-    }
-    noSupervisorItems.sort((a, b) => (a.overdue !== b.overdue ? (a.overdue ? -1 : 1) : a.dateKey.localeCompare(b.dateKey)));
 
-    // Projects not yet paid whose COI is expired or expiring (GCs hold
-    // payment over it), for roles that can see Insurance & COIs.
-    const showCoiAlerts = canManageInsurance(role);
-    const [coiAlerts, newCoiRequests] = showCoiAlerts
-      ? await Promise.all([loadCoiAlerts(), prisma.coiRequest.count({ where: { status: "NEW" } })])
-      : [[], 0];
-    const coiAlertsWidget = showCoiAlerts ? (
-      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-          <h3 className="text-sm font-semibold text-gray-900" title="New COI requests, and unpaid projects whose COI is expired or expires within 30 days. GCs may hold payment until they get a new one.">
-            <span aria-hidden className="mr-1 text-red-600">⚠</span>COIs
-          </h3>
-          {coiAlerts.length + newCoiRequests > 0 && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{coiAlerts.length + newCoiRequests}</span>
-          )}
-        </div>
-        {coiAlerts.length === 0 && newCoiRequests === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-gray-400">No new requests or expiring COIs.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {newCoiRequests > 0 && (
-              <li>
-                <Link href="/erp/insurance/requests" className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                  <p className="text-sm font-medium text-gray-900">New requests</p>
-                  <span className="shrink-0 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{newCoiRequests}</span>
-                </Link>
-              </li>
-            )}
-            {coiAlerts.slice(0, 8).map((a) => (
-              <li key={a.projectId}>
-                <Link href={`/erp/projects/${a.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-gray-900" title={a.jobTitle}>{a.jobTitle}</p>
-                    <p className="truncate text-xs text-gray-400">{a.status.holderName}</p>
-                  </div>
-                  <span className={`shrink-0 text-xs font-semibold ${a.status.status === "EXPIRED" ? "text-red-600" : "text-orange-600"}`}>
-                    {a.status.status === "EXPIRED" ? "Expired " : "Expires "}
-                    {a.status.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    ) : null;
+        // Background check alerts: a FAILED check on file, or one expiring within
+        // 30 days. Background check status isn't part of document compliance
+        // (see nonCompliant above), so it needs its own signal here, same
+        // "expiring soon" window the individual employee page already uses.
+        const bgCheckExpiryWindow = new Date(adminTodayStart);
+        bgCheckExpiryWindow.setUTCDate(bgCheckExpiryWindow.getUTCDate() + 30);
+        const bgCheckAlerts = activeEmployees
+          .filter(
+            (e) =>
+              e.backgroundCheckStatus === "FAILED" ||
+              (e.backgroundCheckExpiresAt != null && e.backgroundCheckExpiresAt <= bgCheckExpiryWindow)
+          )
+          .sort((a, b) => {
+            if (a.backgroundCheckStatus === "FAILED" && b.backgroundCheckStatus !== "FAILED") return -1;
+            if (b.backgroundCheckStatus === "FAILED" && a.backgroundCheckStatus !== "FAILED") return 1;
+            const at = a.backgroundCheckExpiresAt?.getTime() ?? Infinity;
+            const bt = b.backgroundCheckExpiresAt?.getTime() ?? Infinity;
+            return at - bt;
+          })
+          .slice(0, 8);
+        const bgCheckFailedCount = activeEmployees.filter((e) => e.backgroundCheckStatus === "FAILED").length;
 
-    // Turnovers property managers asked for on their link, waiting on staff.
-    const pmRequestCount = canManagePropertyManagers(role)
-      ? (await prisma.propertyManagerRequest.count({ where: { status: "REQUESTED" } })) + (await prisma.propertyManagerChange.count({ where: { status: "OPEN" } }))
-      : 0;
-    const pmRequestsWidget =
-      pmRequestCount > 0 ? (
-        <Link
-          href="/erp/property-managers/requests"
-          className="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-white px-4 py-3 shadow-sm transition hover:bg-violet-50/40"
-        >
-          <h3 className="text-sm font-semibold text-gray-900" title="Turnovers property managers requested on their link, and cancels or new dates they asked for, waiting for someone to answer">
-            Turnover requests to answer
-          </h3>
-          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">{pmRequestCount}</span>
-        </Link>
-      ) : null;
+        // Workers comp alerts: same "expiring within 30 days" window as
+        // background checks above, but a contractor with no expiration date on
+        // file at all (never submitted a COI) counts as an alert too, since
+        // "missing" is just as much a compliance gap as "expired".
+        const wcExpiryWindow = new Date(adminTodayStart);
+        wcExpiryWindow.setUTCDate(wcExpiryWindow.getUTCDate() + 30);
+        // Sub insurance alerts: workers comp missing (unless exempt), expired,
+        // or expiring within 30 days, plus general liability expired or
+        // expiring once a date is on file. One line per sub, most urgent issue.
+        const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+        const allWcAlerts = contractors
+          .map((c) => {
+            const issues: { text: string; urgent: boolean; at: number }[] = [];
+            if (!c.workersCompExempt) {
+              if (c.workersCompExpiresAt == null) issues.push({ text: "WC not on file", urgent: true, at: -Infinity });
+              else if (c.workersCompExpiresAt <= wcExpiryWindow) {
+                const expired = c.workersCompExpiresAt <= adminTodayStart;
+                issues.push({ text: `WC ${expired ? "expired" : "expires"} ${shortDay(c.workersCompExpiresAt)}`, urgent: expired, at: c.workersCompExpiresAt.getTime() });
+              }
+            }
+            if (c.glExpiresAt && c.glExpiresAt <= wcExpiryWindow) {
+              const expired = c.glExpiresAt <= adminTodayStart;
+              issues.push({ text: `GL ${expired ? "expired" : "expires"} ${shortDay(c.glExpiresAt)}`, urgent: expired, at: c.glExpiresAt.getTime() });
+            }
+            issues.sort((a, b) => a.at - b.at);
+            return issues.length ? { id: c.id, name: c.name, issue: issues[0], more: issues.length - 1 } : null;
+          })
+          .filter((a): a is NonNullable<typeof a> => a != null)
+          .sort((a, b) => a.issue.at - b.issue.at);
+        const wcAlerts = allWcAlerts.slice(0, 8);
+        const wcMissingOrExpiredCount = allWcAlerts.filter((a) => a.issue.urgent).length;
 
-    const noSupervisorWidget = (
-      <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-          <h3 className="text-sm font-semibold text-gray-900" title="Never had a supervisor assigned, nothing ever logged — since Aug 1, 2026">
-            <span aria-hidden className="mr-1 text-red-600">⚠</span>No supervisor assigned
-          </h3>
-          {noSupervisorItems.length > 0 && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{noSupervisorItems.length}</span>
-          )}
-        </div>
-        {noSupervisorItems.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing unassigned since Aug 1.</p>
-        ) : (
-          <ul className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
-            {noSupervisorItems.map((item) => (
-              <li key={item.key}>
-                <Link href={`/erp/projects/${item.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                  <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={item.title}>{item.title}</p>
-                  <p className={`shrink-0 text-xs font-semibold ${item.overdue ? "text-red-600" : "text-amber-600"}`}>
-                    {new Date(`${item.dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
+        const candidateMap = Object.fromEntries(candidates.map((c) => [c.status, c._count._all]));
+        const pendingCandidates = (candidateMap.APPLIED ?? 0) + (candidateMap.INTERVIEWING ?? 0);
 
-    // Small uppercase group labels above each cluster of cards, so the page
-    // reads as a few organized zones (Today / Needs attention / Financials /
-    // Activity / Staffing) instead of one flat stack of same-looking tables.
-    // Each one carries a colored dot (flex layout lives here so every call
-    // site only has to add the dot + text) — the same dot-and-label language
-    // the stat strip and activity feed already use, so that color-coding
-    // carries all the way up to the section level instead of stopping at
-    // the card boundary.
-    const sectionLabelCls = "flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400";
-    const sectionDotCls = "h-1.5 w-1.5 shrink-0 rounded-full";
+        // "Where we are": which projects are actually scheduled today, company-
+        // wide — a supervisor day-assignment, a planned worker day-assignment,
+        // actual labor already logged today (pulled out of laborForFlags, which
+        // already spans a window including today), OR a project whose start/end
+        // date is today with none of the above yet — i.e. work that's on the
+        // books for today but nobody has been assigned to. That last case used
+        // to be invisible here (this widget only ever looked at
+        // assignment/labor rows), which silently hid exactly the projects most
+        // in need of a supervisor. Not "recently touched" — genuinely today, so
+        // an empty result is a real, meaningful signal ("nothing's on the
+        // calendar for today") rather than just quiet data.
+        const supervisorByProjectId = new Map(allProjects.map((p) => [p.id, p.supervisorUserId]));
+        type ScheduledToday = {
+          projectId: string;
+          jobTitle: string;
+          loggedWorkers: Set<string>;
+          plannedWorkers: Set<string>;
+          supervisorUserId: string | null;
+          /** A sub who runs jobs without a supervisor is on it today. */
+          soloSubToday: boolean;
+        };
+        const scheduledTodayMap = new Map<string, ScheduledToday>();
+        function getOrInitScheduled(projectId: string, jobTitle: string): ScheduledToday {
+          const existing = scheduledTodayMap.get(projectId);
+          if (existing) return existing;
+          const created: ScheduledToday = {
+            projectId, jobTitle, loggedWorkers: new Set(), plannedWorkers: new Set(),
+            supervisorUserId: supervisorByProjectId.get(projectId) ?? null,
+            soloSubToday: false,
+          };
+          scheduledTodayMap.set(projectId, created);
+          return created;
+        }
+        for (const a of todayDayAssignments) {
+          const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
+          if (a.supervisorContractor?.runsWithoutSupervisor) entry.soloSubToday = true;
+        }
+        for (const a of todayWorkerAssignments) {
+          const entry = getOrInitScheduled(a.projectId, a.project.jobTitle);
+          const name = a.employee ? `${a.employee.firstName} ${a.employee.lastName}`.trim() : a.contractor?.name;
+          if (name) entry.plannedWorkers.add(name);
+          if (a.contractor?.runsWithoutSupervisor) entry.soloSubToday = true;
+        }
+        for (const e of laborForFlags) {
+          if (e.workDate < adminTodayStart || e.workDate > adminTodayEnd) continue;
+          const entry = getOrInitScheduled(e.project.id, e.project.jobTitle);
+          entry.loggedWorkers.add(e.workerName);
+        }
+        // Same "starts or ends today" rule the schedule calendar's amber
+        // "needs a supervisor" chip uses — surfaces work that's on the books
+        // for today even when nobody (day-assignment, planned worker, or
+        // logged labor) has touched it yet.
+        for (const p of allProjects) {
+          if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
+          const startsToday = p.projectDate != null && p.projectDate >= adminTodayStart && p.projectDate <= adminTodayEnd;
+          const endsToday = p.projectEndDate != null && p.projectEndDate >= adminTodayStart && p.projectEndDate <= adminTodayEnd;
+          if (startsToday || endsToday) getOrInitScheduled(p.id, p.jobTitle);
+        }
+        const scheduledToday = [...scheduledTodayMap.values()].sort((a, b) => a.jobTitle.localeCompare(b.jobTitle));
 
-    return (
-      <div className="space-y-6">
-        {adminHeader}
+        // Scheduled but never logged, company-wide (last 14 days) — a
+        // ProjectDayAssignment whose date has passed with no matching LaborEntry
+        // for that project on that day. Same "missed" signal as the Supervisor
+        // dashboard's per-project feed and the calendar's red ⚠ overdue-planned
+        // chip, just company-wide instead of scoped to one supervisor.
+        const loggedDayKeys = new Set(loggedDaysForMissingCheck.map((e) => `${e.projectId}::${utcDateKey(e.workDate)}`));
+        type MissingLaborProject = { projectId: string; jobTitle: string; dayKeys: string[] };
+        const missingLaborByProject = new Map<string, MissingLaborProject>();
+        for (const a of overdueDayAssignments) {
+          if (a.project.status === "COMPLETE" || a.project.status === "ARCHIVED") continue;
+          const dk = utcDateKey(a.date);
+          if (loggedDayKeys.has(`${a.projectId}::${dk}`)) continue;
+          const entry = missingLaborByProject.get(a.projectId) ?? { projectId: a.projectId, jobTitle: a.project.jobTitle, dayKeys: [] };
+          if (!entry.dayKeys.includes(dk)) entry.dayKeys.push(dk);
+          missingLaborByProject.set(a.projectId, entry);
+        }
+        const missingLaborProjects = [...missingLaborByProject.values()]
+          .sort((a, b) => b.dayKeys.length - a.dayKeys.length || a.jobTitle.localeCompare(b.jobTitle))
+          .slice(0, 8);
 
-        {activeTab === "overview" && (<>
-        {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
-        <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-          {/* grid-cols steps at 2/4/8 — exact factors of the 8 tiles below, so
-              a row never wraps an odd tile out with a stray divider border
-              from the sibling before it (divide-x/divide-y apply by DOM
-              order, not row position). Also gives a real 4-col step between
-              mobile and the full 8-col row instead of jumping straight from
-              2 to 8 right past the sm breakpoint, which was crushing every
-              label/value into ~80px columns before it had room to reflow. */}
-          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-8 lg:divide-y-0">
-            {[
-              { label: "WIP", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", dot: "bg-emerald-400", val: "text-emerald-700" },
-              { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", dot: "bg-violet-400", val: "text-violet-700" },
-              { label: "Employees", value: activeEmployees.length, sub: null, href: "/erp/employees", dot: "bg-blue-400", val: "text-blue-700" },
-              { label: "Contractors", value: contractors.length, sub: null, href: "/erp/contractors", dot: "bg-sky-400", val: "text-sky-700" },
-              { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
-              { label: "BG Failed", value: bgCheckFailedCount, sub: null, href: "/erp/employees?backgroundCheck=FAILED", dot: "bg-red-400", val: "text-gray-900", alert: bgCheckFailedCount > 0 },
-              { label: "Sub Insurance", value: wcMissingOrExpiredCount, sub: null, href: "/erp/contractors", dot: "bg-red-400", val: "text-gray-900", alert: wcMissingOrExpiredCount > 0 },
-              { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
-            ].map((k) => (
-              <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
-                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
-                  {k.label}
-                </p>
-                <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
-                {k.sub && <p className="text-[11px] text-gray-400">{k.sub}</p>}
-              </Link>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-4 sm:divide-y-0" title="Safety — today">
-            {[
-              { label: "Checks today", value: todaySafetyChecks.length, dot: "bg-teal-400", val: "text-teal-700", alert: false },
-              { label: "Compliance", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
-              { label: "Incidents", value: openIncidentCount, dot: "bg-amber-400", val: "text-gray-900", alert: openIncidentCount > 0 },
-              { label: "Escalated", value: escalatedIncidentCount, dot: "bg-red-400", val: "text-gray-900", alert: escalatedIncidentCount > 0 },
-            ].map((k) => (
-              <div key={k.label} className="px-4 py-3">
-                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
-                  {k.label}
-                </p>
-                <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        </>)}
+        // Labor red flags: hours concentrated on a single project, either in one
+        // day or over a week, within the last 14 days (roughly a pay period).
+        // Two independent signals merged into one list: a single long shift can
+        // be a data-entry error or a burnout risk even if the week overall looks
+        // normal; a high weekly total on one project can hide a bad entry spread
+        // across several days. Distinct from the payroll OT split in
+        // laborCost.ts, which sums a worker's hours across ALL projects for
+        // pay — this is specifically about concentration on ONE project.
+        const DAY_HOURS_FLAG_THRESHOLD = 12;
+        const WEEK_HOURS_FLAG_THRESHOLD = 40;
+        type LaborFlag = { kind: "day" | "week"; workerName: string; projectId: string; jobTitle: string; hours: number; label: string };
 
-        {/* Today */}
-        {activeTab === "operations" && (
-        <div className="space-y-3">
-          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-emerald-400`} />Today</h2>
-          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-            <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
+        const dayFlags: LaborFlag[] = laborForFlags
+          .filter((e) => e.hours >= DAY_HOURS_FLAG_THRESHOLD)
+          .map((e) => ({
+            kind: "day" as const,
+            workerName: e.workerName,
+            projectId: e.project.id,
+            jobTitle: e.project.jobTitle,
+            hours: e.hours,
+            label: `${new Date(e.workDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · single day`,
+          }));
+
+        const weekBuckets = new Map<string, { workerName: string; projectId: string; jobTitle: string; hours: number; weekStart: string }>();
+        for (const e of laborForFlags) {
+          const weekStart = mondayOf(e.workDate);
+          const key = `${e.employeeId}::${e.project.id}::${weekStart}`;
+          const bucket = weekBuckets.get(key) ?? { workerName: e.workerName, projectId: e.project.id, jobTitle: e.project.jobTitle, hours: 0, weekStart };
+          bucket.hours += e.hours;
+          weekBuckets.set(key, bucket);
+        }
+        const weekFlags: LaborFlag[] = [...weekBuckets.values()]
+          .filter((w) => w.hours >= WEEK_HOURS_FLAG_THRESHOLD)
+          .map((w) => ({
+            kind: "week" as const,
+            workerName: w.workerName,
+            projectId: w.projectId,
+            jobTitle: w.jobTitle,
+            hours: w.hours,
+            label: `week of ${new Date(`${w.weekStart}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+          }));
+
+        const laborFlags = [...dayFlags, ...weekFlags].sort((a, b) => b.hours - a.hours).slice(0, 8);
+
+        // Safety KPIs
+        const safetyWorkers = todaySafetyChecks.flatMap((c) => c.workers);
+        const safetyTotal = safetyWorkers.length;
+        const safetyPassed = safetyWorkers.filter((w) => w.passed).length;
+        const safetyComplianceRate = safetyTotal > 0 ? Math.round((safetyPassed / safetyTotal) * 100) : null;
+
+        // "Needs labor logged", company-wide, mirrors the calendar's red ⚠
+        // overdue-planned chip. Rendered inside the "Needs attention" grid below,
+        // same spot for every role that reaches this dashboard now (previously
+        // moved between top and bottom depending on PM vs Admin, consolidated
+        // for a simpler, more consistent layout).
+        const needsLaborLoggedWidget = (
+          <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+              <h3 className="text-sm font-semibold text-gray-900" title="Scheduled on the calendar, day already passed, still no labor logged">
+                <span aria-hidden className="mr-1 text-red-600">⚠</span>Needs labor logged
+              </h3>
+              {missingLaborProjects.length > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{missingLaborProjects.length}</span>
+              )}
             </div>
-            {scheduledToday.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-400">
-                No projects scheduled.{" "}
-                <Link href="/erp/schedule" className="text-pink-600 hover:underline">Schedule projects on the calendar</Link>
-              </p>
+            {missingLaborProjects.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing overdue in the last 14 days.</p>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {scheduledToday.map((p) => {
-                  const workers = [...p.loggedWorkers, ...[...p.plannedWorkers].filter((w) => !p.loggedWorkers.has(w))];
+                {missingLaborProjects.map((p) => (
+                  <li key={p.projectId}>
+                    <Link href={`/erp/projects/${p.projectId}#labor-log`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                      <p className="shrink-0 text-xs font-semibold text-red-600">
+                        {p.dayKeys.length} day{p.dayKeys.length === 1 ? "" : "s"} missed
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+
+        // "No supervisor assigned", company-wide — a project or change order
+        // that never had anyone put on it AND never got any labor logged, i.e.
+        // it would otherwise just sit invisible until someone happens to notice
+        // (this is what the Schedule calendar's own amber ⚠ chip flags per day;
+        // this is the same population, just month-independent). Distinct from
+        // needsLaborLoggedWidget above — that one requires a day-assignment to
+        // have existed and then been missed; this is about ones that never got
+        // that far in the first place.
+        //
+        // Floored at Aug 1, 2026 on purpose — this card shipped this week, and
+        // there's no value in dredging up months of pre-existing backlog on
+        // first load; only what's happened since it started being tracked.
+        const NEEDS_ATTENTION_SINCE = new Date(Date.UTC(2026, 7, 1));
+        type NoSupervisorItem = { key: string; projectId: string; title: string; dateKey: string; overdue: boolean };
+        const noSupervisorItems: NoSupervisorItem[] = [];
+        for (const p of allProjects) {
+          // A recurring contract's own billing placeholder (see the same
+          // exclusion on the Schedule calendar query) never legitimately gets a
+          // supervisor or logged labor — it's not real field work, so it would
+          // otherwise sit here as a permanent false positive every month.
+          if (p.recurringContractPeriodId && !p.turnoverRequestId) continue;
+          if (p.supervisorUserId) continue;
+          if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
+          if (!p.projectDate || p.projectDate < NEEDS_ATTENTION_SINCE) continue;
+          if (p.laborEntries.length > 0) continue;
+          if (p.workerDayAssignments.length > 0 || p.dayAssignments.length > 0) continue;
+          noSupervisorItems.push({
+            key: `proj-${p.id}`, projectId: p.id, title: p.jobTitle,
+            dateKey: utcDateKey(p.projectDate), overdue: p.projectDate < adminTodayStart,
+          });
+          for (const co of p.changeOrders) {
+            if (co.supervisorUserId) continue;
+            if (co.status === "COMPLETED" || co.status === "REJECTED" || co.status === "VOID") continue;
+            if (!co.startDate || co.startDate < NEEDS_ATTENTION_SINCE) continue;
+            if (co.laborers.length > 0) continue;
+            if (co.coWorkerAssignments.length > 0 || co.coDayAssignments.length > 0) continue;
+            noSupervisorItems.push({
+              key: `co-${co.id}`, projectId: p.id, title: co.title,
+              dateKey: utcDateKey(co.startDate), overdue: co.startDate < adminTodayStart,
+            });
+          }
+        }
+        noSupervisorItems.sort((a, b) => (a.overdue !== b.overdue ? (a.overdue ? -1 : 1) : a.dateKey.localeCompare(b.dateKey)));
+
+        // Projects not yet paid whose COI is expired or expiring (GCs hold
+        // payment over it), for roles that can see Insurance & COIs.
+        const showCoiAlerts = canManageInsurance(role);
+        const [coiAlerts, newCoiRequests] = (await coiAlertsPromise) ?? [[], 0];
+        const coiAlertsWidget = showCoiAlerts ? (
+          <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+              <h3 className="text-sm font-semibold text-gray-900" title="New COI requests, and unpaid projects whose COI is expired or expires within 30 days. GCs may hold payment until they get a new one.">
+                <span aria-hidden className="mr-1 text-red-600">⚠</span>COIs
+              </h3>
+              {coiAlerts.length + newCoiRequests > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{coiAlerts.length + newCoiRequests}</span>
+              )}
+            </div>
+            {coiAlerts.length === 0 && newCoiRequests === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">No new requests or expiring COIs.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {newCoiRequests > 0 && (
+                  <li>
+                    <Link href="/erp/insurance/requests" className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <p className="text-sm font-medium text-gray-900">New requests</p>
+                      <span className="shrink-0 rounded-full bg-pink-100 px-2 py-0.5 text-xs font-semibold text-pink-700">{newCoiRequests}</span>
+                    </Link>
+                  </li>
+                )}
+                {coiAlerts.slice(0, 8).map((a) => (
+                  <li key={a.projectId}>
+                    <Link href={`/erp/projects/${a.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900" title={a.jobTitle}>{a.jobTitle}</p>
+                        <p className="truncate text-xs text-gray-400">{a.status.holderName}</p>
+                      </div>
+                      <span className={`shrink-0 text-xs font-semibold ${a.status.status === "EXPIRED" ? "text-red-600" : "text-orange-600"}`}>
+                        {a.status.status === "EXPIRED" ? "Expired " : "Expires "}
+                        {a.status.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null;
+
+        // Turnovers property managers asked for on their link, waiting on staff.
+        const pmRequestCount = await pmRequestCountPromise;
+        const pmRequestsWidget =
+          pmRequestCount > 0 ? (
+            <Link
+              href="/erp/property-managers/requests"
+              className="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-white px-4 py-3 shadow-sm transition hover:bg-violet-50/40"
+            >
+              <h3 className="text-sm font-semibold text-gray-900" title="Turnovers property managers requested on their link, and cancels or new dates they asked for, waiting for someone to answer">
+                Turnover requests to answer
+              </h3>
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">{pmRequestCount}</span>
+            </Link>
+          ) : null;
+
+        const noSupervisorWidget = (
+          <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+              <h3 className="text-sm font-semibold text-gray-900" title="Never had a supervisor assigned, nothing ever logged — since Aug 1, 2026">
+                <span aria-hidden className="mr-1 text-red-600">⚠</span>No supervisor assigned
+              </h3>
+              {noSupervisorItems.length > 0 && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{noSupervisorItems.length}</span>
+              )}
+            </div>
+            {noSupervisorItems.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">Nothing unassigned since Aug 1.</p>
+            ) : (
+              <ul className="max-h-80 divide-y divide-gray-100 overflow-y-auto">
+                {noSupervisorItems.map((item) => (
+                  <li key={item.key}>
+                    <Link href={`/erp/projects/${item.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                      <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={item.title}>{item.title}</p>
+                      <p className={`shrink-0 text-xs font-semibold ${item.overdue ? "text-red-600" : "text-amber-600"}`}>
+                        {new Date(`${item.dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+
+        // Small uppercase group labels above each cluster of cards, so the page
+        // reads as a few organized zones (Today / Needs attention / Financials /
+        // Activity / Staffing) instead of one flat stack of same-looking tables.
+        // Each one carries a colored dot (flex layout lives here so every call
+        // site only has to add the dot + text) — the same dot-and-label language
+        // the stat strip and activity feed already use, so that color-coding
+        // carries all the way up to the section level instead of stopping at
+        // the card boundary.
+        const sectionLabelCls = "flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-gray-400";
+        const sectionDotCls = "h-1.5 w-1.5 shrink-0 rounded-full";
+
+        return (
+          <>
+            {activeTab === "overview" && (<>
+            {/* Stat strip — Overview + Safety, one card, thin dividers instead of boxed tiles */}
+            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+              {/* grid-cols steps at 2/4/8 — exact factors of the 8 tiles below, so
+                  a row never wraps an odd tile out with a stray divider border
+                  from the sibling before it (divide-x/divide-y apply by DOM
+                  order, not row position). Also gives a real 4-col step between
+                  mobile and the full 8-col row instead of jumping straight from
+                  2 to 8 right past the sm breakpoint, which was crushing every
+                  label/value into ~80px columns before it had room to reflow. */}
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-8 lg:divide-y-0">
+                {[
+                  { label: "WIP", value: wipCount, sub: showFinancials ? centsToDollarsShort(wipValue) : null, href: "/erp/projects", dot: "bg-emerald-400", val: "text-emerald-700" },
+                  { label: "Upcoming", value: upcomingCount, sub: null, href: "/erp/projects", dot: "bg-violet-400", val: "text-violet-700" },
+                  { label: "Employees", value: activeEmployees.length, sub: null, href: "/erp/employees", dot: "bg-blue-400", val: "text-blue-700" },
+                  { label: "Contractors", value: contractors.length, sub: null, href: "/erp/contractors", dot: "bg-sky-400", val: "text-sky-700" },
+                  { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
+                  { label: "BG Failed", value: bgCheckFailedCount, sub: null, href: "/erp/employees?backgroundCheck=FAILED", dot: "bg-red-400", val: "text-gray-900", alert: bgCheckFailedCount > 0 },
+                  { label: "Sub Insurance", value: wcMissingOrExpiredCount, sub: null, href: "/erp/contractors", dot: "bg-red-400", val: "text-gray-900", alert: wcMissingOrExpiredCount > 0 },
+                  { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
+                ].map((k) => (
+                  <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
+                    <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                      {k.label}
+                    </p>
+                    <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
+                    {k.sub && <p className="text-[11px] text-gray-400">{k.sub}</p>}
+                  </Link>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-4 sm:divide-y-0" title="Safety — today">
+                {[
+                  { label: "Checks today", value: todaySafetyChecks.length, dot: "bg-teal-400", val: "text-teal-700", alert: false },
+                  { label: "Compliance", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
+                  { label: "Incidents", value: openIncidentCount, dot: "bg-amber-400", val: "text-gray-900", alert: openIncidentCount > 0 },
+                  { label: "Escalated", value: escalatedIncidentCount, dot: "bg-red-400", val: "text-gray-900", alert: escalatedIncidentCount > 0 },
+                ].map((k) => (
+                  <div key={k.label} className="px-4 py-3">
+                    <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                      {k.label}
+                    </p>
+                    <p className={`mt-0.5 text-lg font-semibold ${k.alert ? "text-red-600" : k.val}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            </>)}
+
+            {/* Today */}
+            {activeTab === "operations" && (
+            <div className="space-y-3">
+              <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-emerald-400`} />Today</h2>
+              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
+                </div>
+                {scheduledToday.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-gray-400">
+                    No projects scheduled.{" "}
+                    <Link href="/erp/schedule" className="text-pink-600 hover:underline">Schedule projects on the calendar</Link>
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {scheduledToday.map((p) => {
+                      const workers = [...p.loggedWorkers, ...[...p.plannedWorkers].filter((w) => !p.loggedWorkers.has(w))];
+                      return (
+                        <li key={p.projectId}>
+                          <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                            <div className="min-w-0">
+                              <p className="flex items-center gap-1 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>
+                                {!p.supervisorUserId && !p.soloSubToday && (
+                                  <span className="shrink-0 text-amber-500" title="No supervisor assigned">⚠</span>
+                                )}
+                                <span className="truncate">{p.jobTitle}</span>
+                              </p>
+                              <p className="truncate text-xs text-gray-400">
+                                {workers.length > 0 ? workers.join(", ") : "No crew assigned yet"}
+                              </p>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                              {!p.supervisorUserId && !p.soloSubToday && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  No supervisor
+                                </span>
+                              )}
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.loggedWorkers.size > 0 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                                {p.loggedWorkers.size > 0 ? "Logged" : "Planned"}
+                              </span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+            )}
+
+            {/* Needs attention: alert-style widgets together, same spot for
+                every role now (previously needsLaborLoggedWidget alone moved
+                between top and bottom depending on PM vs Admin; grouping it with
+                Labor red flags here makes it consistently easy to find instead). */}
+            {activeTab === "overview" && (
+            <div className="space-y-3">
+              <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-red-400`} />Needs attention</h2>
+              <div className={`grid gap-4 ${showCoiAlerts ? "lg:grid-cols-2 2xl:grid-cols-4" : "lg:grid-cols-3"}`}>
+                {noSupervisorWidget}
+
+                {/* Same red-tinted chrome as its two neighbors above (noSupervisorWidget,
+                    needsLaborLoggedWidget) — all three are alerts in the same grid, so they
+                    should read as one consistent set instead of two loud cards and one plain one. */}
+                <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">
+                      <span aria-hidden className="mr-1 text-red-600">⚠</span>Labor red flags
+                    </h3>
+                    {laborFlags.length > 0 && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
+                    )}
+                  </div>
+                  {laborFlags.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {laborFlags.map((f, i) => (
+                        <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`}>
+                          <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
+                              <p className="truncate text-xs text-gray-400" title={f.jobTitle}>{f.jobTitle}</p>
+                            </div>
+                            <div className="ml-2 shrink-0 text-right">
+                              <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
+                              <p className="text-[11px] text-gray-400">{f.label}</p>
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {needsLaborLoggedWidget}
+                {pmRequestsWidget}
+                {coiAlertsWidget}
+              </div>
+            </div>
+            )}
+
+            {/* Financials: only shown to roles that can see them */}
+            {activeTab === "operations" && showFinancials && (
+              <div className="space-y-3">
+                <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-blue-400`} />Financials</h2>
+                <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h3>
+                  </div>
+                  {recentMarginProjects.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-gray-400">No projects with a contract value yet.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {recentMarginProjects.map((p) => (
+                        <li key={p.id}>
+                          <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                            <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                            <div className="shrink-0 text-right">
+                              {p.marginPct != null && (
+                                <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
+                              )}
+                              <p className="text-[11px] text-gray-400">{signedDollarsShort(p.marginCents)}</p>
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Activity */}
+            {activeTab === "operations" && (
+            <div className="space-y-3">
+              <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-violet-400`} />Activity</h2>
+              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Recent project activity</h3>
+                  <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
+                </div>
+              <ul className="divide-y divide-gray-100">
+                {recentProjects.map((p) => {
+                  const activity = describeProjectActivity(p);
                   return (
-                    <li key={p.projectId}>
-                      <Link href={`/erp/projects/${p.projectId}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="flex items-center gap-1 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>
-                            {!p.supervisorUserId && !p.soloSubToday && (
-                              <span className="shrink-0 text-amber-500" title="No supervisor assigned">⚠</span>
-                            )}
-                            <span className="truncate">{p.jobTitle}</span>
-                          </p>
-                          <p className="truncate text-xs text-gray-400">
-                            {workers.length > 0 ? workers.join(", ") : "No crew assigned yet"}
+                    <li key={p.id}>
+                      <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                        <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${activity.dot}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
+                          <p className="text-xs text-gray-400">
+                            {projectSegmentLabel(p.segment)}{p.supervisor ? ` · ${p.supervisor}` : ""}
                           </p>
                         </div>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          {!p.supervisorUserId && !p.soloSubToday && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              No supervisor
-                            </span>
-                          )}
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.loggedWorkers.size > 0 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                            {p.loggedWorkers.size > 0 ? "Logged" : "Planned"}
-                          </span>
-                        </span>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs text-gray-500">{activity.text}</p>
+                          <p className="text-[11px] text-gray-400">{timeAgo(p.updatedAt)}</p>
+                        </div>
                       </Link>
                     </li>
                   );
                 })}
               </ul>
+            </div>
+            </div>
             )}
-          </div>
-        </div>
-        )}
 
-        {/* Needs attention: alert-style widgets together, same spot for
-            every role now (previously needsLaborLoggedWidget alone moved
-            between top and bottom depending on PM vs Admin; grouping it with
-            Labor red flags here makes it consistently easy to find instead). */}
-        {activeTab === "overview" && (
-        <div className="space-y-3">
-          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-red-400`} />Needs attention</h2>
-          <div className={`grid gap-4 ${showCoiAlerts ? "lg:grid-cols-2 2xl:grid-cols-4" : "lg:grid-cols-3"}`}>
-            {noSupervisorWidget}
-
-            {/* Same red-tinted chrome as its two neighbors above (noSupervisorWidget,
-                needsLaborLoggedWidget) — all three are alerts in the same grid, so they
-                should read as one consistent set instead of two loud cards and one plain one. */}
-            <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-                <h3 className="text-sm font-semibold text-gray-900" title="Last 14 days · 12+ hrs in a day or 40+ hrs in a week, on one project">
-                  <span aria-hidden className="mr-1 text-red-600">⚠</span>Labor red flags
-                </h3>
-                {laborFlags.length > 0 && (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{laborFlags.length}</span>
-                )}
-              </div>
-              {laborFlags.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-gray-400">No flagged hours in the last 14 days.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {laborFlags.map((f, i) => (
-                    <li key={`${f.kind}-${f.projectId}-${f.workerName}-${i}`}>
-                      <Link href={`/erp/projects/${f.projectId}`} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{f.workerName}</p>
-                          <p className="truncate text-xs text-gray-400" title={f.jobTitle}>{f.jobTitle}</p>
-                        </div>
-                        <div className="ml-2 shrink-0 text-right">
-                          <p className="text-xs font-semibold text-red-600">{f.hours.toFixed(2)}h</p>
-                          <p className="text-[11px] text-gray-400">{f.label}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {needsLaborLoggedWidget}
-            {pmRequestsWidget}
-            {coiAlertsWidget}
-          </div>
-        </div>
-        )}
-
-        {/* Financials: only shown to roles that can see them */}
-        {activeTab === "operations" && showFinancials && (
-          <div className="space-y-3">
-            <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-blue-400`} />Financials</h2>
-            <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                <h3 className="text-sm font-semibold text-gray-900" title="Actual margin (contract minus actual labor + material, including change orders), most recently updated projects first">Recently updated margins</h3>
-              </div>
-              {recentMarginProjects.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-gray-400">No projects with a contract value yet.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {recentMarginProjects.map((p) => (
-                    <li key={p.id}>
-                      <Link href={`/erp/projects/${p.id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                        <p className="min-w-0 truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
-                        <div className="shrink-0 text-right">
-                          {p.marginPct != null && (
-                            <p className={`text-xs font-semibold ${marginPctColorClass(p.marginPct)}`}>{p.marginPct}%</p>
-                          )}
-                          <p className="text-[11px] text-gray-400">{signedDollarsShort(p.marginCents)}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Activity */}
-        {activeTab === "operations" && (
-        <div className="space-y-3">
-          <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-violet-400`} />Activity</h2>
-          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <h3 className="text-sm font-semibold text-gray-900">Recent project activity</h3>
-              <Link href="/erp/projects" className="text-xs text-pink-600 hover:underline">See all</Link>
-            </div>
-          <ul className="divide-y divide-gray-100">
-            {recentProjects.map((p) => {
-              const activity = describeProjectActivity(p);
-              return (
-                <li key={p.id}>
-                  <Link href={`/erp/projects/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
-                    <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${activity.dot}`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900" title={p.jobTitle}>{p.jobTitle}</p>
-                      <p className="text-xs text-gray-400">
-                        {projectSegmentLabel(p.segment)}{p.supervisor ? ` · ${p.supervisor}` : ""}
-                      </p>
+            {/* Staffing: Admin/PM only (the Team tab isn't offered to anyone else). */}
+            {activeTab === "team" && (
+              <div className="space-y-3">
+                <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-sky-400`} />Staffing</h2>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
+                      {/* Neutral gray, not blue — this is a plain count, not an alert
+                          like its Staffing siblings below, and shouldn't borrow color
+                          that reads as "needs attention" for something that doesn't. */}
+                      {upcomingTimeOff.length > 0 && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                          {upcomingTimeOff.length}
+                        </span>
+                      )}
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-xs text-gray-500">{activity.text}</p>
-                      <p className="text-[11px] text-gray-400">{timeAgo(p.updatedAt)}</p>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-        </div>
-        )}
-
-        {/* Staffing: Admin/PM only (the Team tab isn't offered to anyone else). */}
-        {activeTab === "team" && (
-          <div className="space-y-3">
-            <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-sky-400`} />Staffing</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Upcoming time off</h3>
-                  {/* Neutral gray, not blue — this is a plain count, not an alert
-                      like its Staffing siblings below, and shouldn't borrow color
-                      that reads as "needs attention" for something that doesn't. */}
-                  {upcomingTimeOff.length > 0 && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
-                      {upcomingTimeOff.length}
-                    </span>
-                  )}
-                </div>
-                {upcomingTimeOff.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-400">No upcoming time off logged.</p>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {upcomingTimeOff.map((t) => {
-                      const start = t.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                      const end = t.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                      const isNow = t.startDate <= adminTodayStart && t.endDate >= adminTodayStart;
-                      return (
-                        <li key={t.id}>
-                          <Link
-                            href={`/erp/employees/${t.employee.id}`}
-                            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
-                          >
-                            <p className="truncate text-sm font-medium text-gray-900">
-                              {t.employee.firstName} {t.employee.lastName}
-                            </p>
-                            <span className="flex shrink-0 items-center gap-2">
-                              {t.status === "PENDING" && (
-                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                                  Pending
+                    {upcomingTimeOff.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-gray-400">No upcoming time off logged.</p>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {upcomingTimeOff.map((t) => {
+                          const start = t.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                          const end = t.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                          const isNow = t.startDate <= adminTodayStart && t.endDate >= adminTodayStart;
+                          return (
+                            <li key={t.id}>
+                              <Link
+                                href={`/erp/employees/${t.employee.id}`}
+                                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                              >
+                                <p className="truncate text-sm font-medium text-gray-900">
+                                  {t.employee.firstName} {t.employee.lastName}
+                                </p>
+                                <span className="flex shrink-0 items-center gap-2">
+                                  {t.status === "PENDING" && (
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                      Pending
+                                    </span>
+                                  )}
+                                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                    {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
+                                  </span>
+                                  <span className={`text-xs ${isNow ? "font-semibold text-amber-600" : "text-gray-400"}`}>
+                                    {isNow ? "Out now · " : ""}
+                                    {start === end ? start : `${start}–${end}`}
+                                  </span>
                                 </span>
-                              )}
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                                {TIME_OFF_TYPE_LABEL[t.type] ?? t.type}
-                              </span>
-                              <span className={`text-xs ${isNow ? "font-semibold text-amber-600" : "text-gray-400"}`}>
-                                {isNow ? "Out now · " : ""}
-                                {start === end ? start : `${start}–${end}`}
-                              </span>
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Background check alerts</h3>
-                  {bgCheckAlerts.length > 0 && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                      {bgCheckAlerts.length}
-                    </span>
-                  )}
-                </div>
-                {bgCheckAlerts.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-400">No failed or expiring background checks.</p>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {bgCheckAlerts.map((e) => {
-                      const failed = e.backgroundCheckStatus === "FAILED";
-                      const expires = e.backgroundCheckExpiresAt
-                        ? e.backgroundCheckExpiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                        : null;
-                      return (
-                        <li key={e.id}>
-                          <Link
-                            href={`/erp/employees/${e.id}`}
-                            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
-                          >
-                            <p className="truncate text-sm font-medium text-gray-900">
-                              {e.firstName} {e.lastName}
-                            </p>
-                            <span
-                              className={`shrink-0 text-xs font-semibold ${failed ? "text-red-600" : "text-orange-600"}`}
-                            >
-                              {failed ? "Failed" : expires ? `Expires ${expires}` : "Expiring soon"}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
+                  <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Background check alerts</h3>
+                      {bgCheckAlerts.length > 0 && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                          {bgCheckAlerts.length}
+                        </span>
+                      )}
+                    </div>
+                    {bgCheckAlerts.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-gray-400">No failed or expiring background checks.</p>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {bgCheckAlerts.map((e) => {
+                          const failed = e.backgroundCheckStatus === "FAILED";
+                          const expires = e.backgroundCheckExpiresAt
+                            ? e.backgroundCheckExpiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            : null;
+                          return (
+                            <li key={e.id}>
+                              <Link
+                                href={`/erp/employees/${e.id}`}
+                                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                              >
+                                <p className="truncate text-sm font-medium text-gray-900">
+                                  {e.firstName} {e.lastName}
+                                </p>
+                                <span
+                                  className={`shrink-0 text-xs font-semibold ${failed ? "text-red-600" : "text-orange-600"}`}
+                                >
+                                  {failed ? "Failed" : expires ? `Expires ${expires}` : "Expiring soon"}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Sub insurance alerts</h3>
-                  {wcAlerts.length > 0 && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                      {wcAlerts.length}
-                    </span>
-                  )}
+                  <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Sub insurance alerts</h3>
+                      {wcAlerts.length > 0 && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                          {wcAlerts.length}
+                        </span>
+                      )}
+                    </div>
+                    {wcAlerts.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-gray-400">No missing or expiring sub insurance.</p>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {wcAlerts.map((c) => {
+                          return (
+                            <li key={c.id}>
+                              <Link
+                                href={`/erp/contractors/${c.id}`}
+                                className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                              >
+                                <p className="truncate text-sm font-medium text-gray-900">{c.name}</p>
+                                <span className={`shrink-0 text-xs font-semibold ${c.issue.urgent ? "text-red-600" : "text-orange-600"}`}>
+                                  {c.issue.text}
+                                  {c.more > 0 && <span className="font-normal text-gray-400"> +{c.more}</span>}
+                                </span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                {wcAlerts.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-400">No missing or expiring sub insurance.</p>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {wcAlerts.map((c) => {
-                      return (
-                        <li key={c.id}>
-                          <Link
-                            href={`/erp/contractors/${c.id}`}
-                            className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
-                          >
-                            <p className="truncate text-sm font-medium text-gray-900">{c.name}</p>
-                            <span className={`shrink-0 text-xs font-semibold ${c.issue.urgent ? "text-red-600" : "text-orange-600"}`}>
-                              {c.issue.text}
-                              {c.more > 0 && <span className="font-normal text-gray-400"> +{c.more}</span>}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
               </div>
-            </div>
-          </div>
-        )}
+            )}
+        </>
+        );
+      } catch (e: unknown) {
+        return <DatabaseUnavailable error={e} />;
+      }
+    })();
+
+    return (
+      <div className="space-y-6">
+        {adminHeader}
+        <Suspense fallback={<AdminBodyPlaceholder />}>
+          <Resolved promise={adminBody} />
+        </Suspense>
       </div>
     );
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return (
-      <div className="rounded-lg border border-red-300 bg-red-50 p-6 text-sm text-red-800">
-        <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
-        <p className="mt-2 text-red-700">
-          The dashboard could not reach PostgreSQL. Set <code className="text-red-900">DATABASE_URL</code> to a hosted database, then redeploy.
-        </p>
-        <p className="mt-2 text-xs text-red-600">Details: {msg}</p>
-      </div>
-    );
+    return <DatabaseUnavailable error={e} />;
   }
+}
+
+function DatabaseUnavailable({ error }: { error: unknown }) {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="rounded-lg border border-red-300 bg-red-50 p-6 text-sm text-red-800">
+      <h1 className="text-lg font-semibold text-red-900">ERP database unavailable</h1>
+      <p className="mt-2 text-red-700">
+        The dashboard could not reach PostgreSQL. Set <code className="text-red-900">DATABASE_URL</code> to a hosted database, then redeploy.
+      </p>
+      <p className="mt-2 text-xs text-red-600">Details: {msg}</p>
+    </div>
+  );
+}
+
+/** Renders a page section that was started earlier, once it's ready (see adminBody). */
+async function Resolved({ promise }: { promise: Promise<React.ReactNode> }) {
+  return <>{await promise}</>;
+}
+
+/** Stand-in for the Overview / Operations / Team body while it loads. */
+function AdminBodyPlaceholder() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2" aria-busy="true">
+      <div className="h-24 animate-pulse rounded-xl border border-gray-100 bg-white shadow-sm lg:col-span-2" />
+      <CardPlaceholder title="Loading" tall />
+      <CardPlaceholder title="Loading" tall />
+    </div>
+  );
 }

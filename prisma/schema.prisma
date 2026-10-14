@@ -3143,6 +3143,28 @@ model EmailLogRead {
   @@index([userEmail])
 }
 
+/// One person's own dashboard layout (see src/lib/erp/dashboardCards.ts).
+/// No row = the role's default layout.
+model DashboardPreference {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Lowercased login email
+  userEmail   String   @unique
+  /// Card ids this person hid. Unknown ids are ignored when applied.
+  hiddenCards String[] @default([])
+  /// { [tab]: cardId[] } custom order within each tab. Cards missing from
+  /// a saved list keep their default order after the saved ones.
+  cardOrder   Json?
+  /// Tab the dashboard opens on, if it's still one this person can see.
+  startTab    String?
+  /// "Since you last visited": previousSeenAt is the cutoff for "new",
+  /// lastSeenAt is this visit.
+  lastSeenAt     DateTime?
+  previousSeenAt DateTime?
+}
+
 /// The last schedule invite sent per calendar event (one worker or
 /// supervisor, one day), so an edit that doesn't change anything that
 /// person sees doesn't email them again. See sendDayInvite.
