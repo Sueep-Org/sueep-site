@@ -21,7 +21,11 @@ export type DealLifecyclePhase = "AWARDED" | "WIP" | "COMPLETED" | "BILLING" | "
 
 export type HubSpotPipelineStageMap = {
   /** Post-construction pipeline object id (string from HubSpot) */
-  postConstruction: { pipelineId: string; stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string } };
+  postConstruction: {
+    pipelineId: string;
+    /** quoteSent is optional, for the dashboard's quote turnaround; HubSpot's default pipeline falls back to its built-in "presentationscheduled". */
+    stages: { quoteApproved: string; workInProgress: string; workCompleted: string; billing?: string; quoteSent?: string };
+  };
   /** Janitorial pipeline. quoteApproved/workInProgress map to this
    * pipeline's actual "Awarded"/"Signed" stages; walkthrough/proposal/
    * activeTurnovers are additional stages surfaced only when searching for

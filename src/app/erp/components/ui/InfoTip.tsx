@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
  * any ancestor marked `group` (like CollapsibleSection's <details>), opening
  * every tip in the section whenever anything in it is hovered or focused.
  */
-export function InfoTip({ text, align = "left" }: { text: React.ReactNode; align?: "left" | "right" }) {
+export function InfoTip({ text, align = "left", wide = false }: { text: React.ReactNode; align?: "left" | "right"; /** Wider bubble for longer explanations, keeping line breaks. */ wide?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
 
@@ -41,7 +41,7 @@ export function InfoTip({ text, align = "left" }: { text: React.ReactNode; align
       </button>
       <span
         role="tooltip"
-        className={`absolute top-full z-30 mt-1 w-64 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-white shadow-lg ${
+        className={`absolute top-full z-30 mt-1 ${wide ? "w-80 max-w-[calc(100vw-2rem)] whitespace-pre-line" : "w-64"} rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-white shadow-lg ${
           align === "right" ? "right-0" : "left-0"
         } ${open ? "block" : "hidden group-hover/infotip:block group-focus-within/infotip:block"}`}
       >

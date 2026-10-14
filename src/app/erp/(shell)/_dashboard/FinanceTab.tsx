@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { FinanceDateRange } from "./FinanceDateRange";
 import { JobTabs, type JobTabRow } from "./JobTabs";
@@ -435,6 +436,12 @@ function futureRows(jobs: FutureJob[], todayKey: string): JobTabRow[] {
   });
 }
 
+/** How long a Finance tab calculation is reused, per view and date range. */
+const SUMMARY_SECONDS = 300;
+
+/** The whole Finance tab calculation is the slow part, so the same view is reused for 5 minutes. */
+const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v1"], { revalidate: SUMMARY_SECONDS });
+
 export async function FinanceTab({ period, by }: { period: string | undefined; by: string | undefined }) {
   const anchor: FinanceAnchor = by === "paid" ? "paid" : "completed";
   // A single month ("YYYY-MM") can be any month, even before the data start;
@@ -446,7 +453,7 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
     ? rangeMatch[1] <= rangeMatch[2] ? { from: rangeMatch[1], to: rangeMatch[2] } : { from: rangeMatch[2], to: rangeMatch[1] }
     : null;
   const startKey = pickedMonth && prevMonthKey(pickedMonth) < FINANCE_DATA_START ? prevMonthKey(pickedMonth) : FINANCE_DATA_START;
-  const summary = await computeFinanceSummary(anchor, range ? { range } : { startKey });
+  const summary = await cachedFinanceSummary(anchor, range ? { range } : { startKey });
   const { currentMonthKey } = summary;
   const currentYear = currentMonthKey.slice(0, 4);
   const month = pickedMonth && pickedMonth <= currentMonthKey ? pickedMonth : null;
