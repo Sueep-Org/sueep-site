@@ -101,12 +101,12 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     roles: ["SALES"],
     info: "Your deals, janitorial contract months and bid bonuses, the same numbers as the Commission tab on Payroll. Counted by the date each one became commissionable.",
   },
-  // Jobs (Project Managers, Admin)
+  // Jobs (Project Managers, Business Manager, Admin)
   {
     id: "job-status-board",
     title: "Job status board",
     tab: "jobs",
-    roles: ["PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Every active job with its problems: past its end date, budget (turnovers use the same hour budget as the Supervisor dashboard, other jobs cost or hours vs the estimate), scheduled days in the last 14 with nothing logged, and COIs expired or expiring within 30 days.",
     wide: true,
   },
@@ -114,36 +114,36 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     id: "waiting-on-others",
     title: "Waiting on others",
     tab: "jobs",
-    roles: ["PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Property manager turnover requests, cancels and new dates nobody has answered. Change orders in Draft or Submitted over 3 days. Subs on the schedule in the next 14 days with no workers comp on file, or workers comp or liability that will have expired by their first day.",
   },
   {
     id: "crew-conflicts",
     title: "Crew conflicts",
     tab: "jobs",
-    roles: ["PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Next 14 days. Double-booked: an employee on two different jobs the same day (subs can run more than one crew, so they aren't flagged). Time off: crew or supervisors scheduled on a day they have approved or requested time off.",
   },
-  // Money (Finance, Project Managers, Admin)
+  // Money (Project Managers, Business Manager, Admin)
   {
     id: "needs-action",
     title: "Needs action",
     tab: "money",
-    roles: ["FINANCE", "PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Overdue: open HubSpot invoices past their due date, counted once per invoice. Ready to bill: finished work still Not billed since Aug 1. Payroll: whether the last pay period is locked. Liens: steps due in the next 30 days.",
   },
   {
     id: "checks",
     title: "Checks",
     tab: "money",
-    roles: ["FINANCE", "PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Losing money: open jobs costing more than their price, or more than their estimate (change orders included). Reconciliation: HubSpot invoices not linked to anything in the ERP, and lines marked Billed over 7 days ago with no invoice linked, since Aug 1.",
   },
   {
     id: "cash-forecast",
     title: "Cash forecast",
     tab: "money",
-    roles: ["FINANCE", "PROJECT_MANAGER", "ADMIN"],
+    roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Next 8 weeks. In: open invoices by due date (overdue in week 1), work ready to bill and janitorial months paid after the payment terms. Out: payroll at its recent rate on each payday, commission owed, and subcontractors, materials, reimbursements and insurance at their recent rate. An estimate, not a bank balance.",
     wide: true,
   },

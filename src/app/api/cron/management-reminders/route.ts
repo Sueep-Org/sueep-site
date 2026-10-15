@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Runs daily (see vercel.json), ~8am Eastern (7am during EST, fixed UTC like
- * the other crons). Emails Admins and PMs the Management calendar items that
+ * the other crons). Emails Admins, PMs and the Business Manager the Management calendar items that
  * reach one of their category's reminder days today, plus the quality check
  * emails (tomorrow's checks to whoever does them, and overdue ones) and the
  * lien alerts (jobs that reached a new lien stage).

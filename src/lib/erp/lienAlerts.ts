@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { buildLienAlertEmail, sendEmail } from "@/lib/email";
 import { LIEN_STAGE_RANK, formatLienDay, lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
 import { loadLienWatch, type LienWatchRow } from "./lienWatch";
@@ -33,7 +34,7 @@ export async function sendLienAlerts(): Promise<{ sent: number; jobs: number }> 
   const due = lienAlertsDue(await loadLienWatch());
   if (!due.length) return { sent: 0, jobs: 0 };
 
-  const recipients = await prisma.erpUser.findMany({ where: { role: { in: ["ADMIN", "PROJECT_MANAGER"] } }, select: { email: true } });
+  const recipients = await prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } });
   if (!recipients.length) return { sent: 0, jobs: due.length };
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "").replace(/\/$/, "");

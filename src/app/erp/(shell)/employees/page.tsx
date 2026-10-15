@@ -117,7 +117,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   // This page had no auth guard at all before — reachable and fully
   // rendered (including the Hourly pay column) for any authenticated ERP
   // session regardless of role. canSeeFinancials matches the role set the
-  // nav already restricts the Employees link to (FINANCE_UP).
+  // nav already restricts the Employees link to (PM_SALES).
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
   const canSeePay = canEditPayInfo(auth.role);

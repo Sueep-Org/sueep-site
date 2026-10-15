@@ -12,11 +12,11 @@ export function CompensationOverview() {
         sub-tabs), and <strong>Reimbursements</strong>.
       </P>
       <Callout type="warning">
-        Finance and Sales can access this page, but only see the <strong>Commission</strong> and{" "}
-        <strong>Reimbursements</strong> tabs — <strong>Payroll</strong> and{" "}
-        <strong>Offshore Payroll</strong> are hidden for both roles. Finance can still view and
-        edit pay rates on an employee&apos;s own profile (Employees page); it&apos;s just the
-        payroll totals themselves that are restricted.
+        Sales can access this page, but only sees the <strong>Commission</strong> and{" "}
+        <strong>Reimbursements</strong> tabs. <strong>Payroll</strong> and{" "}
+        <strong>Offshore Payroll</strong> are hidden. Sales can still view and edit pay rates on an
+        employee&apos;s own profile (Employees page); it&apos;s just the payroll totals themselves
+        that are restricted. Admins, Project Managers, and the Business Manager see every tab.
       </Callout>
       <Img src="/help/compensation/compensation_1.png" alt="Compensation page tabs" />
 

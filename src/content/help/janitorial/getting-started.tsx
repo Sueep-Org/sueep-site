@@ -141,7 +141,7 @@ export function JanitorialGettingStarted() {
 
       <H3>Who can use it</H3>
       <P>
-        Admins, Project Managers, Sales, and Finance can see Janitorial Contracts and make changes. Everyone else who can see
+        Admins, Project Managers, the Business Manager, and Sales can see Janitorial Contracts and make changes. Everyone else who can see
         the Schedule can view the janitorial calendar but can&apos;t change it.
       </P>
     </>

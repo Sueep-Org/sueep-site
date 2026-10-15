@@ -26,7 +26,7 @@ export function PropertyManagerLinks() {
         <LI>Apply or decline the cancels and new dates they ask for.</LI>
       </UL>
       <Callout type="info">
-        Admins, Project Managers, Sales, and Finance can use the <strong>Property Managers</strong> page (left menu, under
+        Admins, Project Managers, the Business Manager, and Sales can use the <strong>Property Managers</strong> page (left menu, under
         Projects). It shows prices, so other roles can&apos;t see it.
       </Callout>
 

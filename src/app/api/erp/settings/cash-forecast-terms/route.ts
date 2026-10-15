@@ -15,7 +15,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const auth = await getErpAuth();
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canEditForecastTerms(auth.role)) return NextResponse.json({ error: "Only Admin and Finance can change this" }, { status: 403 });
+  if (!canEditForecastTerms(auth.role)) return NextResponse.json({ error: "Only Admin and Business Manager can change this" }, { status: 403 });
 
   const body = (await req.json().catch(() => null)) as { days?: unknown } | null;
   const days = Number(body?.days);

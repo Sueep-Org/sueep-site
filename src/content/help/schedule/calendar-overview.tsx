@@ -86,7 +86,7 @@ export function ScheduleCalendarOverview() {
           <UL>
             <LI>
               <strong>Supervisor:</strong> show only one supervisor&apos;s projects. Only
-              available to Admins, PMs, Finance, and Estimation. Supervisors don&apos;t get this
+              available to Admins, PMs, the Business Manager, Sales, and Estimation. Supervisors don&apos;t get this
               filter since their calendar is already scoped to their own projects (see the last
               step below).
             </LI>
@@ -203,7 +203,7 @@ export function ScheduleCalendarOverview() {
         <Step n={10} title="What supervisors and PMs see">
           Supervisors only see projects on their calendar that they&apos;re assigned to (at the
           project level or for a specific day) or have personally logged labor on, not the whole
-          company&apos;s schedule. Everyone else (Admin, PM, Finance, Estimation) sees the full
+          company&apos;s schedule. Everyone else (Admin, PM, Business Manager, Sales, Estimation) sees the full
           calendar.
           <P>
             This scoping carries over to the ERP dashboard too: a supervisor&apos;s dashboard has

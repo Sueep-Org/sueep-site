@@ -306,7 +306,7 @@ export const NOTIFICATIONS = {
   TIME_OFF_REVIEWED: def({
     label: "Time off approved or denied",
     group: "People",
-    when: "An Admin or PM approves or denies a time off request",
+    when: "An Admin, PM or Business Manager approves or denies a time off request",
     automatic: "The person who requested it",
     ccEditable: true,
   }),
@@ -330,14 +330,14 @@ export const NOTIFICATIONS = {
     label: "Management calendar reminders",
     group: "Reminders",
     when: "About 8am, when calendar items reach their category's reminder days",
-    automatic: "Every Admin and PM",
+    automatic: "Every Admin, PM and Business Manager",
   }),
 
   LIEN_ALERTS: def({
     label: "Lien alerts",
     group: "Reminders",
     when: "About 8am, when an unpaid post-construction job reaches the day to decide on a lien, or a required lien notice comes due. Once per job per stage",
-    automatic: "Every Admin and PM",
+    automatic: "Every Admin, PM and Business Manager",
   }),
 
   QUALITY_CHECK_ASSIGNED: def({

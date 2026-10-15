@@ -6,7 +6,7 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isProjectManager, canManageInsurance, canManagePropertyManagers } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isPmLevel, canManageInsurance, canManagePropertyManagers } from "@/lib/erpAuth";
 import { loadCoiAlerts } from "@/lib/erp/coiAlerts";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
@@ -160,60 +160,6 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           >
             View Schedule
           </Link>
-        </div>
-      );
-    }
-
-    // ── Finance ────────────────────────────────────────────────────────────
-    if (role === "FINANCE") {
-      const prefs = await loadDashboardPrefs(email);
-      const financeCardTabs = visibleCardTabs(role, prefs);
-      // Money first; the old link cards became the links row on it. If every
-      // card is hidden, Overview (just the links) comes back.
-      const financeTabs: DashboardTab[] = [...(financeCardTabs.length ? financeCardTabs : (["overview"] as const)), "finance"];
-      const financeHome = resolveDashboardTab(undefined, financeTabs, prefs.startTab);
-      const financeTab = resolveDashboardTab(tabParam, financeTabs, prefs.startTab);
-      const financeLinks = (
-        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm" aria-label="Finance pages">
-          {[
-            { href: "/erp/billing", title: "Billing" },
-            { href: "/erp/payroll", title: "Commission & reimbursements" },
-            { href: "/erp/employees", title: "Employees" },
-            { href: "/erp/projects", title: "Projects" },
-            { href: "/erp/candidates", title: "Candidates" },
-            { href: "/erp/contractors", title: "Contractors" },
-            { href: "/erp/insurance", title: "Insurance & COIs" },
-          ].map((c) => (
-            <Link key={c.href} href={c.href} className="font-medium text-gray-500 hover:text-pink-600">
-              {c.title}
-            </Link>
-          ))}
-        </nav>
-      );
-      return (
-        <div className="space-y-6">
-          <div>
-            <p className="text-sm text-gray-400">{today}</p>
-            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
-          </div>
-          <DashboardTabsWithAlerts
-            role={role}
-            prefs={prefs}
-            tabs={financeTabs}
-            active={financeTab}
-            home={financeHome}
-            trailing={<CustomizeDashboard role={role} prefs={prefs} startTabOptions={tabOptions(financeTabs)} />}
-          />
-          {financeTab === "finance" ? (
-            <Suspense fallback={<CardPlaceholder title="Finance" tall />}>
-              <FinanceTab period={period} by={by} />
-            </Suspense>
-          ) : (
-            <div className="space-y-4">
-              {financeLinks}
-              {financeTab !== "overview" && <CardTabPanel tab={financeTab as CardTab} role={role} email={email} prefs={prefs} />}
-            </div>
-          )}
         </div>
       );
     }
@@ -599,7 +545,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       );
     }
 
-    // ── Admin / Project Manager / Sales ────────────────────────────────────
+    // ── Admin / Project Manager / Business Manager / Sales ─────────────────────
     // Card tabs (Sales, Jobs, Money...) sit between Operations and Finance.
     const adminPrefs = await loadDashboardPrefs(email);
     const adminCardTabs = visibleCardTabs(role, adminPrefs);
@@ -608,7 +554,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
       "operations",
       ...adminCardTabs,
       ...(canSeeFinanceDashboard(role) ? (["finance"] as const) : []),
-      ...(role === "ADMIN" || isProjectManager(role) ? (["team"] as const) : []),
+      ...(isPmLevel(role) ? (["team"] as const) : []),
     ];
     const adminHome = resolveDashboardTab(undefined, adminTabs, adminPrefs.startTab);
     const activeTab = resolveDashboardTab(tabParam, adminTabs, adminPrefs.startTab);

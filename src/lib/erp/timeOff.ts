@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ErpAuthContext } from "@/lib/erpAuth";
+import { isPmLevel } from "@/lib/erpRoles";
 
 export const TIME_OFF_TYPES = ["VACATION", "SICK", "HALF_DAY", "UNPAID", "OTHER"] as const;
 export type TimeOffType = (typeof TIME_OFF_TYPES)[number];
@@ -135,21 +136,21 @@ export function unpaidTimeOffDays(entry: { startDate: Date; endDate: Date; type:
 }
 
 /** Why `approver` can't approve or deny this person's time off, or null if
- * they can. Admins and PMs can review. Nobody reviews their own time off,
- * and time off for a PM or Admin needs an Admin. The person is matched to
+ * they can. Admins, PMs and the Business Manager can review. Nobody reviews
+ * their own time off, and time off for any of those roles needs an Admin. The person is matched to
  * their ERP login by email. */
 export function timeOffReviewBlock(
   approver: Pick<ErpAuthContext, "email" | "role">,
   subject: { email: string | null; erpRole: string | null }
 ): string | null {
-  if (approver.role !== "ADMIN" && approver.role !== "PROJECT_MANAGER") {
-    return "Only an Admin or PM can approve time off.";
+  if (!isPmLevel(approver.role)) {
+    return "Only an Admin, PM or Business Manager can approve time off.";
   }
   if (subject.email && subject.email.trim().toLowerCase() === approver.email.trim().toLowerCase()) {
     return "You can't approve your own time off. An Admin needs to.";
   }
-  if ((subject.erpRole === "PROJECT_MANAGER" || subject.erpRole === "ADMIN") && approver.role !== "ADMIN") {
-    return "Time off for a PM or Admin needs an Admin to approve it.";
+  if (isPmLevel(subject.erpRole) && approver.role !== "ADMIN") {
+    return "Time off for a PM, Business Manager or Admin needs an Admin to approve it.";
   }
   return null;
 }

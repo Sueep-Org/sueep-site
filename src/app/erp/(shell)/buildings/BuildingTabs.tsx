@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { centsToDollars } from "@/lib/erp/money";
@@ -42,6 +43,8 @@ type Props = {
   currentUserId: string | null;
   /** Null for roles that can't manage property managers */
   propertyManagers?: BuildingPropertyManager[] | null;
+  /** Client & billing section, for roles that can see companies */
+  companySection?: ReactNode;
 };
 
 export function BuildingTabs({
@@ -63,6 +66,7 @@ export function BuildingTabs({
   initialNotes,
   currentUserId,
   propertyManagers = null,
+  companySection = null,
 }: Props) {
   const allTabs = [
     {
@@ -87,6 +91,7 @@ export function BuildingTabs({
               canEditCommissionOwner={canEditPricing}
             />
           )}
+          {companySection && <div className="mt-4">{companySection}</div>}
           {propertyManagers && (
             <div className="mt-4">
               <BuildingPropertyManagersSection

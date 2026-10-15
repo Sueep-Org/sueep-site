@@ -88,7 +88,7 @@ export function ManagementCalendar() {
           categories there too. A category can only be deleted once it has no events, and the automatic ones can&apos;t be
           deleted (hide them with the filter instead).
           <P>
-            <strong>Remind</strong> is a list of days, like <strong>30, 7</strong>. Every morning, Admins and PMs get one
+            <strong>Remind</strong> is a list of days, like <strong>30, 7</strong>. Every morning, Admins, PMs and the Business Manager get one
             email listing anything that is exactly that many days away. Use <strong>0</strong> to be reminded on the day
             itself. Leave it blank for no reminders. Items marked done aren&apos;t included.
           </P>
