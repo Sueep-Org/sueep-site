@@ -7,7 +7,7 @@ export function JanitorialContracts() {
       <P>
         The Janitorial Contracts page (<strong>ERP → Janitorial Contracts</strong>) is where recurring janitorial
         contracts live: buildings we clean on a flat monthly rate instead of per-job turnover
-        pricing. Each contract belongs to one building. Admins, Project Managers, Sales, and Finance
+        pricing. Each contract belongs to one building. Admins, Project Managers, the Business Manager, and Sales
         can see this page. New to it? Start with{" "}
         <A href="/erp/help/janitorial/getting-started">Janitorial Contracts: Getting Started</A>.
       </P>
@@ -141,8 +141,8 @@ export function JanitorialContracts() {
               day; the count at the top shows how many upcoming shifts need cover.
             </LI>
             <LI>
-              Everyone who can see Schedule can view this calendar; Admins, Project Managers, Sales,
-              and Finance can make changes. Paused contracts don&apos;t show.
+              Everyone who can see Schedule can view this calendar; Admins, Project Managers, the Business
+              Manager, and Sales can make changes. Paused contracts don&apos;t show.
             </LI>
           </UL>
         </Step>

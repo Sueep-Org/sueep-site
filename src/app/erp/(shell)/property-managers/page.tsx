@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManagePropertyManagers } from "@/lib/erpAuth";
 import { defaultSueepContact, propertyManagerLinkUrl } from "@/lib/erp/propertyManagers";
+import { companyOptionLabel } from "@/lib/erp/clientCompanies";
+import { loadCompanyOptions } from "@/lib/erp/clientCompaniesServer";
 import { PropertyManagersHeader } from "./PropertyManagersHeader";
 import { PropertyManagersTable, type BuildingOption, type PropertyManagerRow } from "./PropertyManagersTable";
 
@@ -23,7 +25,7 @@ export default async function PropertyManagersPage({ searchParams }: PageProps) 
   const [managers, buildings, openRequests, openChanges, defaultContact] = await Promise.all([
     prisma.propertyManager.findMany({
       orderBy: { name: "asc" },
-      include: { buildings: { select: { buildingId: true } } },
+      include: { buildings: { select: { buildingId: true } }, companyRecord: { select: { name: true } } },
     }),
     prisma.building.findMany({
       orderBy: { name: "asc" },
@@ -37,7 +39,9 @@ export default async function PropertyManagersPage({ searchParams }: PageProps) 
   const rows: PropertyManagerRow[] = managers.map((m) => ({
     id: m.id,
     name: m.name,
-    company: m.company,
+    // The linked company's current name, else whatever was typed.
+    company: m.companyRecord?.name ?? m.company,
+    companyId: m.companyId,
     email: m.email,
     phone: m.phone,
     notes: m.notes,
@@ -51,6 +55,7 @@ export default async function PropertyManagersPage({ searchParams }: PageProps) 
     sueepContactEmail: m.sueepContactEmail,
   }));
   const buildingOptions: BuildingOption[] = buildings;
+  const companies = await loadCompanyOptions(managers.map((m) => m.companyId));
 
   return (
     <div className="space-y-6">
@@ -59,6 +64,7 @@ export default async function PropertyManagersPage({ searchParams }: PageProps) 
         managers={rows}
         buildings={buildingOptions}
         defaultContact={defaultContact}
+        companyOptions={companies.map((c) => ({ value: c.id, label: companyOptionLabel(c) }))}
         initialAddBuildingId={add ?? null}
         initialOpenId={open ?? null}
       />

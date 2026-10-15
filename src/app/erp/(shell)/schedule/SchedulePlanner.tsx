@@ -235,7 +235,8 @@ const PROJECT_TYPE_FILTER_OPTIONS: { value: ProjectTypeFilter; label: string; sw
 
 const ALL_PROJECT_TYPE_FILTERS = PROJECT_TYPE_FILTER_OPTIONS.map((o) => o.value);
 
-type Person = { id: string; displayName: string };
+/** pickable false: shown by name where already assigned, but not offered in pickers. */
+type Person = { id: string; displayName: string; pickable?: boolean };
 /** Employees/contractors specifically — unlike a supervisor/PM (always an
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
@@ -1848,7 +1849,7 @@ export function SchedulePlanner({
               <SearchableSelect
                 value={eventDayPmId}
                 onChange={setEventDayPmId}
-                options={projectManagers.map((pm) => ({ value: pm.id, label: pm.displayName }))}
+                options={projectManagers.filter((pm) => pm.pickable !== false || pm.id === eventDayPmId).map((pm) => ({ value: pm.id, label: pm.displayName }))}
                 placeholder="Search…"
                 allLabel="— None —"
                 className="mt-0.5"

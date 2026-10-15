@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial, canManagePropertyManagers, canSeeFinancials } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canAddTurnoverUnit, canAddLaborLogs, canManageJanitorial, canManagePropertyManagers, canSeeFinancials, canViewCompanies, canEditCompanies } from "@/lib/erpAuth";
+import { companyOptionLabel, overrideFromColumns } from "@/lib/erp/clientCompanies";
+import { loadCompanyOptions } from "@/lib/erp/clientCompaniesServer";
+import { loadBuildingInvoiceDestination } from "@/lib/erp/invoiceDestination";
+import { utcDateKey } from "@/lib/erp/dates";
+import { BuildingCompanySection } from "./BuildingCompanySection";
 import { BuildingTabs } from "../BuildingTabs";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
@@ -30,6 +35,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           select: { propertyManager: { select: { id: true, name: true, email: true, active: true, lastSeenAt: true } } },
           orderBy: { propertyManager: { name: "asc" } },
         },
+        managementHistory: { include: { company: { select: { name: true } } }, orderBy: [{ createdAt: "desc" }] },
       },
     }),
     prisma.employee.findMany({
@@ -77,6 +83,11 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           orderBy: { invoiceDate: "desc" },
         })
       : [];
+
+  const showCompanies = !!auth && canViewCompanies(auth.role);
+  const [companyOptions, destination] = showCompanies
+    ? await Promise.all([loadCompanyOptions([building.managedByCompanyId, building.ownedByCompanyId]), loadBuildingInvoiceDestination(building.id)])
+    : [[], null];
 
   const units: BuildingUnit[] = unitProjects
     .filter((p) => p.turnoverRequest)
@@ -158,6 +169,26 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         commissionEmployeeId={building.commissionEmployeeId}
         initialNotes={building.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         currentUserId={currentErpUser?.id ?? null}
+        companySection={
+          showCompanies && destination ? (
+            <BuildingCompanySection
+              buildingId={building.id}
+              managedByCompanyId={building.managedByCompanyId}
+              ownedByCompanyId={building.ownedByCompanyId}
+              history={building.managementHistory.map((h) => ({
+                id: h.id,
+                companyId: h.companyId,
+                companyName: h.company.name,
+                from: h.fromDate ? utcDateKey(h.fromDate) : null,
+                to: h.toDate ? utcDateKey(h.toDate) : null,
+              }))}
+              options={companyOptions.map((c) => ({ value: c.id, label: companyOptionLabel(c) }))}
+              canEditBilling={canEditCompanies(auth!.role)}
+              override={overrideFromColumns(building)}
+              destination={destination}
+            />
+          ) : null
+        }
         propertyManagers={
           auth && canManagePropertyManagers(auth.role)
             ? building.propertyManagers.map(({ propertyManager: m }) => ({ ...m, lastSeenAt: m.lastSeenAt?.toISOString() ?? null }))

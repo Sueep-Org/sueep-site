@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { SearchableSelect, type SearchableSelectOption } from "@/app/erp/components/SearchableSelect";
+
+/** Picker value for "not on the Companies page, type the name". */
+const OTHER_COMPANY = "__other__";
 
 export type PropertyManagerRow = {
   id: string;
   name: string;
   company: string | null;
+  companyId: string | null;
   email: string;
   phone: string | null;
   notes: string | null;
@@ -43,12 +48,14 @@ export function PropertyManagersTable({
   managers,
   buildings,
   defaultContact,
+  companyOptions,
   initialAddBuildingId = null,
   initialOpenId = null,
 }: {
   managers: PropertyManagerRow[];
   buildings: BuildingOption[];
   defaultContact: ContactDefaults;
+  companyOptions: SearchableSelectOption[];
   initialAddBuildingId?: string | null;
   initialOpenId?: string | null;
 }) {
@@ -170,6 +177,7 @@ export function PropertyManagersTable({
           buildings={buildings}
           suggestions={editing === "new" ? suggestions : []}
           defaultContact={defaultContact}
+          companyOptions={companyOptions}
           presetBuildingId={editing === "new" ? presetBuildingId : null}
           onClose={() => {
             setEditing(null);
@@ -324,6 +332,7 @@ function PropertyManagerForm({
   buildings,
   suggestions,
   defaultContact,
+  companyOptions,
   presetBuildingId,
   onClose,
 }: {
@@ -331,6 +340,7 @@ function PropertyManagerForm({
   buildings: BuildingOption[];
   suggestions: ContactSuggestion[];
   defaultContact: ContactDefaults;
+  companyOptions: SearchableSelectOption[];
   presetBuildingId: string | null;
   onClose: () => void;
 }) {
@@ -342,6 +352,8 @@ function PropertyManagerForm({
   const [form, setForm] = useState({
     name: manager?.name ?? presetContact?.name ?? "",
     company: manager?.company ?? "",
+    // A linked company, OTHER_COMPANY for a typed name, or "" for none.
+    companyId: manager?.companyId ?? (manager?.company ? OTHER_COMPANY : ""),
     email: manager?.email ?? presetContact?.email ?? "",
     phone: manager?.phone ?? presetContact?.phone ?? "",
     notes: manager?.notes ?? "",
@@ -369,7 +381,12 @@ function PropertyManagerForm({
       const res = await fetch(manager ? `/api/erp/property-managers/${manager.id}` : "/api/erp/property-managers", {
         method: manager ? "PUT" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(manager ? form : { ...form, sendWelcome }),
+        body: JSON.stringify({
+          ...form,
+          companyId: form.companyId === OTHER_COMPANY ? null : form.companyId || null,
+          company: form.companyId === OTHER_COMPANY ? form.company : null,
+          ...(manager ? {} : { sendWelcome }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -464,7 +481,28 @@ function PropertyManagerForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           {field("name", "Name *")}
-          {field("company", "Company")}
+          <div>
+            <span className={`${labelClass.default} flex items-center gap-1`}>
+              Company
+              <InfoTip text="Pick one from the Companies page, or Other to type a name that isn't there yet." />
+            </span>
+            <SearchableSelect
+              value={form.companyId}
+              onChange={(v) => set("companyId", v)}
+              options={[...companyOptions, { value: OTHER_COMPANY, label: "Other (type a name)" }]}
+              allLabel="None"
+              className="mt-1"
+            />
+            {form.companyId === OTHER_COMPANY && (
+              <input
+                aria-label="Company name"
+                value={form.company}
+                onChange={(e) => set("company", e.target.value)}
+                placeholder="Company name"
+                className={inputClass.md}
+              />
+            )}
+          </div>
           {field("email", "Email *", "email")}
           {field("phone", "Phone", "tel")}
         </div>

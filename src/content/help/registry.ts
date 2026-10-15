@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { ErpRole } from "@/lib/erpSession";
+import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { UploadingAContract } from "./contracts/uploading-a-contract";
 import { CreatingAProject } from "./projects/creating-a-project";
 import { HubSpotSync } from "./projects/hubspot-sync";
@@ -27,6 +28,7 @@ import { InsuranceOverview } from "./insurance/insurance-overview";
 import { CoiQuickStart } from "./insurance/coi-quick-start";
 import { PropertyManagerLinks } from "./turnover/property-manager-links";
 import { CompanyInfoOverview } from "./company-info/company-info-overview";
+import { CompaniesOverview } from "./companies/companies-overview";
 
 export type ArticleEntry = {
   slug: string;
@@ -47,7 +49,7 @@ export const registry: ArticleEntry[] = [
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
     order: 6,
     component: UploadingAContract,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "projects/creating-a-project",
@@ -56,7 +58,7 @@ export const registry: ArticleEntry[] = [
     description: "How to manually create a new project in the ERP.",
     order: 2,
     component: CreatingAProject,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "projects/hubspot-sync",
@@ -65,7 +67,7 @@ export const registry: ArticleEntry[] = [
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
     order: 7,
     component: HubSpotSync,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "turnover/creating-a-request",
@@ -74,7 +76,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create and manage a turnover or regular cleaning request.",
     order: 1,
     component: CreatingATurnoverRequest,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "sops/onboarding-new-employee",
@@ -92,7 +94,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create a change order for a post-construction project in the ERP",
     order: 3,
     component: CreatingAChangeOrder,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "projects/projects-overview",
@@ -101,7 +103,7 @@ export const registry: ArticleEntry[] = [
     description: "Overview of the projects table, project details page, and editing projects.",
     order: 1,
     component: ProjectsOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"],
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "workers/labor-logs",
@@ -110,7 +112,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter, edit, and sort through labor logs on projects and change orders.",
     order: 3,
     component: InputtingLaborLogs,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"],
+    roles: [...PM_LEVEL_ROLES, "SALES", "SUPERVISOR"],
   },
   {
     slug: "workers/adding-employees",
@@ -119,7 +121,7 @@ export const registry: ArticleEntry[] = [
     description: "How to enter employees into the system and manage their documentation",
     order: 1,
     component: AddingEmployees,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "projects/material-logs",
@@ -128,7 +130,7 @@ export const registry: ArticleEntry[] = [
     description: "How to log materials bought on projects",
     order: 4,
     component: MaterialsLog,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "workers/adding-contractors",
@@ -137,7 +139,7 @@ export const registry: ArticleEntry[] = [
     description: "How to register contractors in our system to be added onto projects",
     order: 4,
     component: AddingContractors,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "workers/logging-contractors",
@@ -146,7 +148,7 @@ export const registry: ArticleEntry[] = [
     description: "How to log contractors on projects much like you add laborers",
     order: 5,
     component: LoggingContractors,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "schedule/calendar-overview",
@@ -163,7 +165,7 @@ export const registry: ArticleEntry[] = [
     description: "Insurance expirations, time off, deadlines and your own events in one calendar, with email reminders.",
     order: 7,
     component: ManagementCalendar,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: [...PM_LEVEL_ROLES],
   },
   {
     slug: "notifications/my-notifications",
@@ -180,7 +182,7 @@ export const registry: ArticleEntry[] = [
     description: "Turn ERP and website emails on or off, change who gets them, and check the Email Log.",
     order: 8,
     component: NotificationsOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: [...PM_LEVEL_ROLES],
   },
   {
     slug: "compensation/compensation-overview",
@@ -189,7 +191,7 @@ export const registry: ArticleEntry[] = [
     description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",
     order: 2,
     component: CompensationOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "projects/quality-checks",
@@ -198,7 +200,7 @@ export const registry: ArticleEntry[] = [
     description: "How to create, view, and edit quality checks from a project's Quality Checks tab.",
     order: 5,
     component: QualityChecks,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION", "SUPERVISOR"],
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION", "SUPERVISOR"],
   },
   {
     slug: "billing/billing-overview",
@@ -207,7 +209,7 @@ export const registry: ArticleEntry[] = [
     description: "How to mark completed work billed and paid across Post-Construction, Janitorial, and Recurring.",
     order: 1,
     component: BillingOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "turnover/property-manager-links",
@@ -216,7 +218,16 @@ export const registry: ArticleEntry[] = [
     description: "Give property managers a private turnover page, confirm requests from their page and the website form, and handle cancels and new dates.",
     order: 3,
     component: PropertyManagerLinks,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "companies/companies-overview",
+    title: "Companies and Billing Info",
+    category: "Turnovers & Buildings",
+    description: "Client companies, how each wants to be billed, and where a building's or project's invoices go.",
+    order: 4,
+    component: CompaniesOverview,
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "buildings/buildings-overview",
@@ -233,7 +244,7 @@ export const registry: ArticleEntry[] = [
     description: "The whole janitorial cycle step by step: set up a contract, schedule janitors, clock-in links, daily and weekly checks, payroll, and billing.",
     order: 1,
     component: JanitorialGettingStarted,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "janitorial/janitorial-contracts",
@@ -242,7 +253,7 @@ export const registry: ArticleEntry[] = [
     description: "How to set up a recurring janitorial contract, schedule janitors, send clock-in links, review hours, and bill its months.",
     order: 2,
     component: JanitorialContracts,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "finance/finance-dashboard",
@@ -251,7 +262,7 @@ export const registry: ArticleEntry[] = [
     description: "What each number on the dashboard's Finance tab means and how it's calculated: revenue, costs, net profit, billed vs paid, and future revenue.",
     order: 3,
     component: FinanceDashboard,
-    roles: ["ADMIN", "PROJECT_MANAGER", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES],
   },
   {
     slug: "insurance/insurance-overview",
@@ -260,7 +271,7 @@ export const registry: ArticleEntry[] = [
     description: "Our insurance policies, certificate holders, COI requests, and the COIs given out on each project.",
     order: 2,
     component: InsuranceOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "insurance/coi-quick-start",
@@ -269,7 +280,7 @@ export const registry: ArticleEntry[] = [
     description: "A GC asks for a COI: the 5 steps, keeping COIs current, subs, and insurance words in plain English.",
     order: 1,
     component: CoiQuickStart,
-    roles: ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"],
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "company-info/company-info-overview",
@@ -278,6 +289,6 @@ export const registry: ArticleEntry[] = [
     description: "Our IDs, licenses, banking, financial statements, and website logins: where they live and how locked values work.",
     order: 1,
     component: CompanyInfoOverview,
-    roles: ["ADMIN", "PROJECT_MANAGER"],
+    roles: [...PM_LEVEL_ROLES],
   },
 ];

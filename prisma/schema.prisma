@@ -130,6 +130,18 @@ model Project {
   buildingId String?
   building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
 
+  /// Who we bill for this job. Blank means the building's managing company.
+  clientCompanyId String?
+  clientCompany   ClientCompany? @relation("ProjectClientCompany", fields: [clientCompanyId], references: [id], onDelete: SetNull)
+
+  /// Billing overrides: each one set here wins over the building's and the
+  /// client company's for this one job (see lib/erp/invoiceDestination.ts).
+  billingOverrideMethod    String?
+  billingOverridePortalUrl String?
+  billingOverrideSendTo    String[] @default([])
+  billingOverrideCc        String[] @default([])
+  billingOverrideNote      String?
+
   /// Optional link to the originating TurnoverRequest (set for janitorial unit projects)
   turnoverRequestId String?
   turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: Cascade)
@@ -210,6 +222,7 @@ model Project {
   @@index([status])
   @@index([projectDate])
   @@index([recurringContractPeriodId])
+  @@index([clientCompanyId])
 }
 
 model Building {
@@ -261,8 +274,27 @@ model Building {
   propertyManagerRequests PropertyManagerRequest[]
   propertyManagerChanges  PropertyManagerChange[]
 
+  /// Property management company running the building now. Past ones are
+  /// in managementHistory.
+  managedByCompanyId String?
+  managedByCompany   ClientCompany?             @relation("BuildingManagedBy", fields: [managedByCompanyId], references: [id], onDelete: SetNull)
+  /// Owner of the property, when known (liens)
+  ownedByCompanyId   String?
+  ownedByCompany     ClientCompany?             @relation("BuildingOwnedBy", fields: [ownedByCompanyId], references: [id], onDelete: SetNull)
+  managementHistory  BuildingManagementPeriod[]
+
+  /// Billing overrides: each one set here wins over the building's and the
+  /// client company's for every job here (see lib/erp/invoiceDestination.ts).
+  billingOverrideMethod    String?
+  billingOverridePortalUrl String?
+  billingOverrideSendTo    String[] @default([])
+  billingOverrideCc        String[] @default([])
+  billingOverrideNote      String?
+
   @@index([name])
   @@index([commissionEmployeeId])
+  @@index([managedByCompanyId])
+  @@index([ownedByCompanyId])
 }
 
 enum TurnoverRequestType {
@@ -2894,6 +2926,10 @@ model CoiHolder {
   /// Hidden from pickers, kept for history
   archived Boolean @default(false)
 
+  /// Optional link to the client company this holder belongs to
+  companyId     String?
+  companyRecord ClientCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
   cois ProjectCoi[]
 
   @@index([archived, name])
@@ -3187,6 +3223,9 @@ model PropertyManager {
 
   name    String
   company String?
+  /// Optional link to the company record. The text `company` above is kept.
+  companyId     String?
+  companyRecord ClientCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   /// Where their emails and sign-in codes go. One property manager per email.
   email   String  @unique
   phone   String?
@@ -3485,6 +3524,17 @@ model CompanyLogin {
   owner             String?
   notes             String?
   updatedByEmail    String?
+
+  /// Unused: client portal logins are linked through ClientCompanyLogin
+  /// instead, so one login can serve several companies. Kept because
+  /// migrations here are additive only. Always null.
+  clientCompanyId String?
+  clientCompany   ClientCompany? @relation(fields: [clientCompanyId], references: [id], onDelete: Cascade)
+
+  /// Client companies that bill through this login (e.g. one Procore login for several GCs)
+  clientCompanyLinks ClientCompanyLogin[]
+
+  @@index([clientCompanyId])
 }
 
 /// People we deal with about our own insurance (broker, agent, carrier
@@ -3501,4 +3551,101 @@ model InsuranceContact {
   email   String?
   phone   String?
   notes   String?
+}
+
+/// A client company: property manager, general contractor or owner. Holds
+/// how they want to be billed. Pages: /erp/companies.
+model ClientCompany {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name             String
+  /// PROPERTY_MANAGER | GENERAL_CONTRACTOR | OWNER (lib/erp/clientCompanies.ts)
+  type             String
+  /// Other spellings (e.g. "JAG" for Jefferson Apartment Group), searchable
+  aliases          String[] @default([])
+  notes            String?
+  /// Set when imported from HubSpot, so a re-import matches instead of duplicating
+  hubspotCompanyId String?  @unique
+  /// Hidden from pickers, kept for history
+  archived         Boolean  @default(false)
+
+  /// EMAIL | REALPAGE_EMAIL | PROCORE | COUPA | VENDOR_PORTAL | OTHER
+  billingMethod       String?
+  billingPortalUrl    String?
+  billingSendTo       String[] @default([])
+  billingCc           String[] @default([])
+  /// Day of the month invoices or pay apps are due, e.g. 20
+  billingCutoffDay    Int?
+  billingCutoffNote   String?
+  /// MONTHLY (one invoice a month) | PER_JOB
+  billingFrequency    String?
+  paymentTermsDays    Int?
+  billingInstructions String?
+  updatedByEmail      String?
+
+  contacts          ClientCompanyContact[]
+  /// Unused, see CompanyLogin.clientCompanyId. Use loginLinks.
+  portalLogins      CompanyLogin[]
+  /// Company Info logins this company's billing portal uses
+  loginLinks        ClientCompanyLogin[]
+  managedBuildings  Building[]                 @relation("BuildingManagedBy")
+  ownedBuildings    Building[]                 @relation("BuildingOwnedBy")
+  managementHistory BuildingManagementPeriod[]
+  projects          Project[]                  @relation("ProjectClientCompany")
+  propertyManagers  PropertyManager[]
+  coiHolders        CoiHolder[]
+
+  @@index([archived, name])
+}
+
+/// A person at a client company (billing contact, regional manager...).
+model ClientCompanyContact {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String
+  company   ClientCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name  String
+  role  String?
+  email String?
+  phone String?
+  notes String?
+
+  @@index([companyId])
+}
+
+/// Which company managed a building and when. The open row (toDate null)
+/// matches Building.managedByCompanyId. fromDate null means start unknown.
+model BuildingManagementPeriod {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  buildingId     String
+  building       Building      @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  companyId      String
+  company        ClientCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromDate       DateTime?     @db.Date
+  toDate         DateTime?     @db.Date
+  changedByEmail String?
+
+  @@index([buildingId])
+  @@index([companyId])
+}
+
+/// A Company Info login used for a client company's billing portal. One
+/// login can be linked to several companies.
+model ClientCompanyLogin {
+  createdAt     DateTime @default(now())
+  companyId     String
+  company       ClientCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  loginId       String
+  login         CompanyLogin  @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  linkedByEmail String?
+
+  @@id([companyId, loginId])
+  @@index([loginId])
 }

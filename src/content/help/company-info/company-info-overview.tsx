@@ -7,7 +7,7 @@ export function CompanyInfoOverview() {
       <P>
         Company Info (<strong>ERP → Company Info</strong>) is the one place for Sueep&apos;s own details: tax IDs, licenses,
         certifications, banking, financial statements, and the logins to the websites we use. It replaces the
-        &quot;General information&quot; Google Sheet. Only Admins and PMs can see it.
+        &quot;General information&quot; Google Sheet. Only Admins, PMs and the Business Manager can see it.
       </P>
 
       <H2>Steps</H2>

@@ -3,27 +3,25 @@
 import { useState } from "react";
 import { useConfirm, useToast } from "@/app/erp/components/ui";
 
-const ROLES = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
+const ROLES = ["ADMIN", "PROJECT_MANAGER", "BUSINESS_MANAGER", "SALES", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
 type ErpRole = (typeof ROLES)[number];
 
 const ROLE_LABELS: Record<ErpRole, string> = {
   ADMIN: "Admin",
   PROJECT_MANAGER: "Project Manager",
+  BUSINESS_MANAGER: "Business Manager",
   SALES: "Sales",
-  FINANCE: "Finance",
   SUPERVISOR: "Supervisor",
   ESTIMATION: "Estimation",
   EMPLOYEE: "Employee",
 };
 
-const ALL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
-const PM_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES"];
-const FINANCE_UP: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
-const FIELD: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "SUPERVISOR"];
-const PM_EST: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
-// Payroll + Offshore Payroll specifically — same set as canSeePayroll in
-// src/lib/erpAuth.ts, narrower than every other FINANCE_UP/PM_UP row.
-const PAYROLL_ROLES: ErpRole[] = ["ADMIN", "PROJECT_MANAGER"];
+const ALL_ROLES: ErpRole[] = [...ROLES];
+// Same set as PM_LEVEL_ROLES in src/lib/erpRoles.ts.
+const PM_LEVEL: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "BUSINESS_MANAGER"];
+const PM_UP: ErpRole[] = [...PM_LEVEL, "SALES"];
+const FIELD: ErpRole[] = [...PM_LEVEL, "SALES", "SUPERVISOR"];
+const PM_EST: ErpRole[] = [...PM_LEVEL, "SALES", "ESTIMATION"];
 
 const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Dashboard", roles: ALL_ROLES },
@@ -34,18 +32,31 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Labor assignments", roles: FIELD },
   { label: "Quality checks", roles: FIELD },
   { label: "Contractor assignments", roles: PM_UP },
-  { label: "View financials (contract value, costs)", roles: FINANCE_UP },
-  { label: "Employees", roles: FINANCE_UP },
-  // Payroll/Offshore Payroll are the one place Finance AND Sales are both
-  // cut out — everything else on this page still uses FINANCE_UP/PM_UP.
-  { label: "Payroll", roles: PAYROLL_ROLES },
-  { label: "Offshore Payroll", roles: PAYROLL_ROLES },
-  { label: "Commission & reimbursements", roles: FINANCE_UP },
-  { label: "Project billing", roles: FINANCE_UP },
-  { label: "Candidates", roles: FINANCE_UP },
-  { label: "Contractor verification", roles: FINANCE_UP },
+  { label: "View financials (contract value, costs)", roles: PM_UP },
+  { label: "Employees", roles: PM_UP },
+  // Payroll/Offshore Payroll: same set as canSeePayroll in src/lib/erpAuth.ts,
+  // the one place Sales is cut out of the money pages.
+  { label: "Payroll", roles: PM_LEVEL },
+  { label: "Offshore Payroll", roles: PM_LEVEL },
+  { label: "Commission & reimbursements", roles: PM_UP },
+  { label: "Project billing", roles: PM_UP },
+  { label: "Janitorial contracts", roles: PM_UP },
+  { label: "Property managers", roles: PM_UP },
+  { label: "Companies (view, pick on buildings and projects)", roles: PM_UP },
+  { label: "Edit companies and billing overrides", roles: ["ADMIN", "BUSINESS_MANAGER"] },
+  { label: "Insurance & COIs", roles: PM_UP },
+  { label: "Candidates", roles: PM_UP },
+  { label: "Contractor verification", roles: PM_UP },
   { label: "AI Estimator", roles: PM_EST },
-  { label: "Edit employee pay info", roles: FINANCE_UP },
+  { label: "Edit employee pay info", roles: PM_UP },
+  { label: "Finance dashboard", roles: PM_LEVEL },
+  { label: "Change cash forecast payment terms", roles: ["ADMIN", "BUSINESS_MANAGER"] },
+  { label: "Approve time off", roles: PM_LEVEL },
+  { label: "Management calendar", roles: PM_LEVEL },
+  { label: "Company info", roles: PM_LEVEL },
+  { label: "Notification settings", roles: PM_LEVEL },
+  { label: "Listed as PM on the schedule", roles: ["PROJECT_MANAGER"] },
+  { label: "Janitorial quality checks (doing them)", roles: ["ADMIN", "PROJECT_MANAGER"] },
   { label: "User management", roles: ["ADMIN"] },
 ];
 

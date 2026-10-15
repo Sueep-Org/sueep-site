@@ -19,7 +19,8 @@ import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-type Person = { id: string; displayName: string };
+/** pickable false: shown by name where already assigned, but not offered in pickers. */
+type Person = { id: string; displayName: string; pickable?: boolean };
 /** Employees/contractors specifically — unlike a supervisor/PM (always an
  * ErpUser, always has an email), a crew member's email is optional, and
  * that's the one thing that gates whether they get a schedule invite at
@@ -367,7 +368,7 @@ export function CoDayPopover({
                 <SearchableSelect
                   value={projectManagerUserId}
                   onChange={setProjectManagerUserId}
-                  options={projectManagers.map((p) => ({ value: p.id, label: p.displayName }))}
+                  options={projectManagers.filter((p) => p.pickable !== false || p.id === projectManagerUserId).map((p) => ({ value: p.id, label: p.displayName }))}
                   placeholder="Search…"
                   allLabel="PM (if no supervisor)"
                 />

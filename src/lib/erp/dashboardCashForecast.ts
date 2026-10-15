@@ -85,7 +85,7 @@ async function computeRecentCosts(from: string, to: string): Promise<RecentCosts
 const cachedRecentCosts = unstable_cache(computeRecentCosts, ["cash-forecast-recent-costs-v1"], { revalidate: RECENT_COSTS_SECONDS });
 
 export function canEditForecastTerms(role: ErpRole): boolean {
-  return role === "ADMIN" || role === "FINANCE";
+  return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }
 
 export async function loadTermsDays(): Promise<number> {

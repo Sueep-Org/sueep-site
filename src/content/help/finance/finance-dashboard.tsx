@@ -7,7 +7,7 @@ export function FinanceDashboard() {
       <P>
         The Finance tab on the dashboard (<strong>ERP → Dashboard → Finance</strong>) shows revenue, costs, and profit from
         what&apos;s entered in the ERP: projects, labor logs, materials, janitorial hours, and payroll settings. Admins,
-        Project Managers, and Finance can see it.
+        Project Managers, and the Business Manager can see it.
       </P>
       <Callout type="info">
         It&apos;s a management view to spot trends, not an accounting report. Expenses that aren&apos;t in the ERP, like rent,

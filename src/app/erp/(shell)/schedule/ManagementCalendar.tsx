@@ -679,7 +679,7 @@ function CategoriesDialog({ categories, onClose, onChanged }: { categories: Mana
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-semibold text-gray-900">Categories</h3>
-          <InfoTip text="Reminders: days before an item to include it in the morning email to Admins and PMs, like 30, 7. Leave blank for no reminders." />
+          <InfoTip text="Reminders: days before an item to include it in the morning email to Admins, PMs and the Business Manager, like 30, 7. Leave blank for no reminders." />
         </div>
         <ul className="divide-y divide-gray-100">
           {categories.map((c) => (

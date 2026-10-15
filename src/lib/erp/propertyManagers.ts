@@ -26,7 +26,10 @@ export function newPropertyManagerToken(): string {
 
 export type PropertyManagerInput = {
   name: string;
+  /** Text name, kept in step with the linked company's name when one is picked */
   company: string | null;
+  /** Linked company from the Companies page, or null for a typed name */
+  companyId: string | null;
   email: string;
   phone: string | null;
   notes: string | null;
@@ -62,10 +65,18 @@ export async function parsePropertyManagerBody(
     ? await prisma.building.findMany({ where: { id: { in: requested } }, select: { id: true } })
     : [];
 
+  // A picked company wins; otherwise the typed name is kept as plain text.
+  const linked =
+    typeof body.companyId === "string" && body.companyId
+      ? await prisma.clientCompany.findUnique({ where: { id: body.companyId }, select: { id: true, name: true } })
+      : null;
+  if (typeof body.companyId === "string" && body.companyId && !linked) return { error: "That company no longer exists" };
+
   return {
     data: {
       name,
-      company: text(body.company),
+      company: linked ? linked.name : text(body.company),
+      companyId: linked?.id ?? null,
       email,
       phone: text(body.phone, 50),
       notes: text(body.notes, 2000),

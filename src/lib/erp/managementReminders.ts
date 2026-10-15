@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { buildManagementReminderEmail, sendEmail } from "@/lib/email";
 import { todayEasternKey } from "./dates";
 import { addDaysKey, daysBetween, formatItemDates } from "./managementCalendar";
@@ -24,7 +25,7 @@ export async function sendManagementReminders(todayKey: string = todayEasternKey
   });
   if (!items.length) return { sent: 0, items: 0 };
 
-  const recipients = await prisma.erpUser.findMany({ where: { role: { in: ["ADMIN", "PROJECT_MANAGER"] } }, select: { email: true } });
+  const recipients = await prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } });
   if (!recipients.length) return { sent: 0, items: items.length };
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";

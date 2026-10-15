@@ -2,7 +2,11 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance, canManageCommunications } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance, canManageCommunications, canViewCompanies, canEditCompanies } from "@/lib/erpAuth";
+import { companyOptionLabel, overrideFromColumns } from "@/lib/erp/clientCompanies";
+import { loadCompanyOptions } from "@/lib/erp/clientCompaniesServer";
+import { loadProjectInvoiceDestination } from "@/lib/erp/invoiceDestination";
+import { ProjectCompanySection } from "./ProjectCompanySection";
 import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
 import { ProjectCoisTab } from "./ProjectCoisTab";
 import { ProjectCommunicationsTab } from "./ProjectCommunicationsTab";
@@ -93,7 +97,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
-  const canEditSOV = auth?.role === "ADMIN" || auth?.role === "PROJECT_MANAGER" || auth?.role === "SALES" || auth?.role === "ESTIMATION";
+  const canEditSOV = !!auth && canEditPricing(auth.role);
   const canEditPricingForRole = auth ? canEditPricing(auth.role) : false;
   // Commission owner assignment — semantically canSeeFinancials, not
   // canEditPayInfo (same role set today, but this is about commission
@@ -226,6 +230,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     auth?.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : Promise.resolve(null),
   ]);
   if (!project) notFound();
+
+  const showCompanies = !!auth && canViewCompanies(auth.role);
+  const [companyOptions, invoiceDestination] = showCompanies
+    ? await Promise.all([loadCompanyOptions([project.clientCompanyId]), loadProjectInvoiceDestination(project.id)])
+    : [[], null];
 
   // Commission owner must be someone with an ERP login — most Employee rows
   // are crew (painters/cleaners) with no ErpUser account at all.
@@ -584,6 +593,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             projectEndDateIso={project.projectEndDate ? project.projectEndDate.toISOString() : null}
             hasActiveChangeOrder={hasActiveChangeOrder(changeOrders)}
           />
+          {invoiceDestination && (
+            <>
+              <hr className="my-6 border-gray-200" />
+              <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">Client &amp; billing</p>
+              <ProjectCompanySection
+                projectId={project.id}
+                clientCompanyId={project.clientCompanyId}
+                hasBuilding={!!project.building}
+                options={companyOptions.map((c) => ({ value: c.id, label: companyOptionLabel(c) }))}
+                canEditBilling={canEditCompanies(auth!.role)}
+                override={overrideFromColumns(project)}
+                destination={invoiceDestination}
+              />
+            </>
+          )}
           <hr className="my-6 border-gray-200" />
           <ProjectWorkOrderNotifier
             projectId={project.id}

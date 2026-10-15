@@ -137,10 +137,12 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       orderBy: { email: "asc" },
     }),
     // PMs, for the rare "no supervisor, only PM" day assignment, same shape
-    // as supervisorUsers, resolved to display names the same way below.
+    // as supervisorUsers, resolved to display names the same way below. Only
+    // the PROJECT_MANAGER role can be picked (Business Manager can't), but
+    // anyone already on a day as PM is loaded so their name still shows.
     prisma.erpUser.findMany({
-      where: { role: "PROJECT_MANAGER" },
-      select: { id: true, email: true },
+      where: { OR: [{ role: "PROJECT_MANAGER" }, { dayAssignmentsAsPM: { some: {} } }, { coDayAssignmentsAsPM: { some: {} } }] },
+      select: { id: true, email: true, role: true },
       orderBy: { email: "asc" },
     }),
     prisma.laborEntry.findMany({
@@ -554,6 +556,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const projectManagers = projectManagerUsers.map((u) => ({
     id: u.id,
     displayName: employeeNameByEmail.get(u.email.toLowerCase()) || u.email.split("@")[0]!,
+    pickable: u.role === "PROJECT_MANAGER",
   }));
 
   const projects: ScheduleProject[] = projectRows.map((r) => {

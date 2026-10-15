@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 /**
  * Runs daily (see vercel.json), ~8am Eastern (7am during EST — this fixed-UTC
  * schedule doesn't correct for DST, same as the existing recurring-contracts
- * cron). Emails every PROJECT_MANAGER-role user the list of ACTIVE projects
- * still unscheduled for today; skipped entirely if nothing is unscheduled.
+ * cron). Emails each project's PM (by name, any role, backup PMs when no
+ * match) the ACTIVE projects still unscheduled for today; skipped entirely if nothing is unscheduled.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");

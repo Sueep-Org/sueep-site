@@ -305,7 +305,7 @@ export function TimeOffSection({
             <h2 className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
               Request time off
               <InfoTip
-                text={`Starts as pending. Once an Admin or PM approves it, it blocks scheduling this ${kind} for those days (a PM or Admin can still override).${
+                text={`Starts as pending. Once an Admin, PM or Business Manager approves it, it blocks scheduling this ${kind} for those days (a PM or Admin can still override).${
                   paidDayLimit !== undefined
                     ? ` Paid time off is capped at ${paidDayLimit} days a year; only an Admin can go past it. Unpaid days come off a salaried employee's pay once approved.`
                     : ""

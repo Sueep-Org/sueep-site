@@ -7,21 +7,14 @@ import { usePathname } from "next/navigation";
 import { ErpBrandLogo } from "@/app/erp/components/ErpBrandLogo";
 import { ErpLogoutButton } from "./ErpLogoutButton";
 import type { ErpRole } from "@/lib/erpSession";
+import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { INBOX_CHANGED_EVENT } from "./inbox/areas";
 
 type AllRoles = ErpRole[];
-const ALL: AllRoles = [
-  "ADMIN",
-  "PROJECT_MANAGER",
-  "SALES",
-  "FINANCE",
-  "SUPERVISOR",
-  "ESTIMATION",
-  "EMPLOYEE",
-];
-const PM_EST: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "ESTIMATION"];
-const FINANCE_UP: AllRoles = ["ADMIN", "PROJECT_MANAGER", "SALES", "FINANCE"];
-const PM_ADMIN: AllRoles = ["ADMIN", "PROJECT_MANAGER"];
+const ALL: AllRoles = [...PM_LEVEL_ROLES, "SALES", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"];
+const PM_EST: AllRoles = [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"];
+const PM_SALES: AllRoles = [...PM_LEVEL_ROLES, "SALES"];
+const PM_ADMIN: AllRoles = [...PM_LEVEL_ROLES];
 
 // Small outline icon set, same 24x24/stroke-based convention already used
 // for the hamburger/X/chevron icons elsewhere in this file — one per nav
@@ -547,27 +540,28 @@ const projectGroupItems: NavItem[] = [
     icon: PlusCircleIcon,
   },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
-  { href: "/erp/janitorial", label: "Janitorial Contracts", roles: FINANCE_UP, icon: BroomIcon },
-  { href: "/erp/property-managers", label: "Property Managers", roles: FINANCE_UP, icon: IdCardIcon },
+  { href: "/erp/janitorial", label: "Janitorial Contracts", roles: PM_SALES, icon: BroomIcon },
+  { href: "/erp/property-managers", label: "Property Managers", roles: PM_SALES, icon: IdCardIcon },
+  { href: "/erp/companies", label: "Companies", roles: PM_SALES, icon: BuildingIcon },
 ];
 
 const billingGroupItems: NavItem[] = [
   {
     href: "/erp/billing",
     label: "Project Billing",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: DocumentIcon,
   },
   {
     href: "/erp/payroll",
     label: "Compensation",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: BanknotesIcon,
   },
   {
     href: "/erp/insurance",
     label: "Insurance & COIs",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: ShieldIcon,
   },
 ];
@@ -576,19 +570,19 @@ const employmentGroupItems: NavItem[] = [
   {
     href: "/erp/employees",
     label: "Employees",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: UserCircleIcon,
   },
   {
     href: "/erp/candidates",
     label: "Candidates",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: UserPlusIcon,
   },
   {
     href: "/erp/contractors",
     label: "Contractors",
-    roles: FINANCE_UP,
+    roles: PM_SALES,
     icon: BriefcaseIcon,
   },
   {

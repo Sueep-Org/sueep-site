@@ -14,7 +14,7 @@ export function CompanyInfoHeader({ active, showAccessLog }: { active: (typeof T
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold text-pink-600">Company Info</h1>
-        <InfoTip text="Our IDs, licenses, and company details for vendor forms and bids. Admins and PMs only. Locked values are encrypted, and every reveal is logged." />
+        <InfoTip text="Our IDs, licenses, and company details for vendor forms and bids. Admins, PMs and the Business Manager only. Locked values are encrypted, and every reveal is logged." />
       </div>
       <nav className="flex gap-1 overflow-x-auto border-b border-gray-200" aria-label="Company Info sections">
         {TABS.filter((t) => !("adminOnly" in t) || showAccessLog).map((t) => {
