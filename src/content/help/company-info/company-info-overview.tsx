@@ -97,6 +97,13 @@ export function CompanyInfoOverview() {
           calendar&apos;s categories.
         </Step>
       </Steps>
+
+      <H2>Client portal logins</H2>
+      <P>
+        Logins for client billing portals (Procore, Coupa, vendor portals) are saved here on <strong>Logins</strong> like any
+        other login, then linked to each client company that uses them from the company&apos;s page. One Procore login can be
+        linked to every GC that uses it. Revealing a password from a company page is logged here too.
+      </P>
     </>
   );
 }

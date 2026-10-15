@@ -40,6 +40,7 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Offshore Payroll", roles: PM_LEVEL },
   { label: "Commission & reimbursements", roles: PM_UP },
   { label: "Project billing", roles: PM_UP },
+  { label: "Ready to send (approve invoices)", roles: ["ADMIN", "BUSINESS_MANAGER"] },
   { label: "Janitorial contracts", roles: PM_UP },
   { label: "Property managers", roles: PM_UP },
   { label: "Companies (view, pick on buildings and projects)", roles: PM_UP },

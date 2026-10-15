@@ -130,7 +130,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Needs action",
     tab: "money",
     roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Overdue: open HubSpot invoices past their due date, counted once per invoice. Ready to bill: finished work still Not billed since Aug 1. Payroll: whether the last pay period is locked. Liens: steps due in the next 30 days.",
+    info: "Ready to send (Admin and Business Manager): auto-drafted invoices waiting for approval. Overdue: open HubSpot invoices past their due date, counted once per invoice. Ready to bill: finished work still Not billed since Aug 1. Payroll: whether the last pay period is locked. Liens: steps due in the next 30 days.",
   },
   {
     id: "checks",

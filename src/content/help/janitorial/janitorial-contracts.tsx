@@ -274,6 +274,13 @@ export function JanitorialContracts() {
         before this change may still have an old &quot;Monthly Contract&quot; project in the Projects
         list; billing for those months is now tracked on the contract instead.
       </Callout>
+
+      <H2>Auto-drafted invoices</H2>
+      <P>
+        Each contract&apos;s monthly invoice can be drafted in HubSpot automatically. Turn it on per contract at the bottom of{" "}
+        <A href="/erp/help/billing/ready-to-send">Ready to send</A>, and set the name shown on the invoice line. Extras added
+        to a month on Billing become their own lines on that month&apos;s invoice.
+      </P>
     </>
   );
 }

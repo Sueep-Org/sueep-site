@@ -6,6 +6,24 @@ Shareable overview for leadership (charts, numbers, reasoning): https://claude.a
 
 **To start a new chat:** "Read DEALS_BILLING_PLAN.md and start Phase N." Each phase lists the questions that must be answered first. Ask the ones still open before writing code.
 
+## Status (updated 2026-10-15)
+
+| Phase | State |
+|---|---|
+| 0. Prep | HubSpot scopes added. Still open: required lost reason in HubSpot, change the reused portal password, save portal logins on Company Info. |
+| 1. Business Manager | Built, committed (b21d08d). Jennifer is BUSINESS_MANAGER. |
+| 2. Companies | Built, committed (b21d08d), seeded (11 companies, 13 buildings linked). |
+| 3. Invoices | Built, NOT committed. Janitorial auto-drafts + Ready to bill (pick finished work). Migration `20261015200000_item_invoice_drafts` not applied yet. Not tested against HubSpot. |
+| 4 to 6 | Not started. |
+
+**Decisions made while building (not in the original plan):**
+- Model is `ClientCompany` (not `Company`). Portal logins live on Company Info > Logins and are linked to companies (`ClientCompanyLogin`), visible to whoever can open Company Info.
+- Companies: Admin + Business Manager edit; PM, BM, Sales view and pick. Post-construction projects can be added from a company page. Property manager Company is a company picker with Other.
+- Invoices: Admin + Business Manager approve. Approve is behind an Admin-only switch (off) until the first one is done with the bookkeeper. Auto-draft is per janitorial contract, off by default. Finished work is only drafted when someone picks it (Ready to bill), one invoice per building or job.
+- Data fixes: The Smith $15,000/month and The George $9,800/month (Aug to Oct too), The George linked to its HubSpot deal.
+
+**Waiting on people:** HubSpot admin to confirm API invoice creation on our plan. Nick: Russo, Bozzuto billing method, Nolan billing email. Fix JAG send-to (remove "email-"). Stop hand-making the first auto-draft contract's invoice before Oct 29.
+
 ---
 
 ## Ground rules for every phase

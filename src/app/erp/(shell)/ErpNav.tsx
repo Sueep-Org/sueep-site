@@ -553,6 +553,12 @@ const billingGroupItems: NavItem[] = [
     icon: DocumentIcon,
   },
   {
+    href: "/erp/ready-to-send",
+    label: "Ready to Send",
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
+    icon: DocumentIcon,
+  },
+  {
     href: "/erp/payroll",
     label: "Compensation",
     roles: PM_SALES,

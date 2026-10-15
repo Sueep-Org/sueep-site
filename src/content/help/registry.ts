@@ -20,6 +20,7 @@ import { MyNotifications } from "./notifications/my-notifications";
 import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
+import { ReadyToSendHelp } from "./billing/ready-to-send";
 import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 import { JanitorialGettingStarted } from "./janitorial/getting-started";
@@ -29,6 +30,7 @@ import { CoiQuickStart } from "./insurance/coi-quick-start";
 import { PropertyManagerLinks } from "./turnover/property-manager-links";
 import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
+import { RolesAndPermissions } from "./people/roles-and-permissions";
 
 export type ArticleEntry = {
   slug: string;
@@ -151,6 +153,14 @@ export const registry: ArticleEntry[] = [
     roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
+    slug: "people/roles-and-permissions",
+    title: "Roles and Permissions",
+    category: "People & Schedule",
+    description: "What each role can see and do, including the Business Manager.",
+    order: 0,
+    component: RolesAndPermissions,
+  },
+  {
     slug: "schedule/calendar-overview",
     title: "Using the Schedule Calendar",
     category: "People & Schedule",
@@ -210,6 +220,15 @@ export const registry: ArticleEntry[] = [
     order: 1,
     component: BillingOverview,
     roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "billing/ready-to-send",
+    title: "Ready to Send (Auto-Drafted Invoices)",
+    category: "Billing, Pay & Finance",
+    description: "Draft HubSpot invoices for janitorial months and finished work, then review, approve or discard them.",
+    order: 2,
+    component: ReadyToSendHelp,
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
   },
   {
     slug: "turnover/property-manager-links",

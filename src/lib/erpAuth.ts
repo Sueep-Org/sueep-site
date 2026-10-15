@@ -96,6 +96,11 @@ export function canEditCompanies(role: ErpRole): boolean {
   return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }
 
+/** Ready to send: review, edit, approve and discard auto-drafted invoices. */
+export function canApproveInvoices(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "BUSINESS_MANAGER";
+}
+
 /** Company Info's Access log tab: who revealed or copied which locked value. */
 export function canViewCompanyInfoAccessLog(role: ErpRole): boolean {
   return role === "ADMIN";
