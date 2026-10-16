@@ -31,6 +31,7 @@ import { PropertyManagerLinks } from "./turnover/property-manager-links";
 import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
 import { RolesAndPermissions } from "./people/roles-and-permissions";
+import { WinLossHelp } from "./sales/win-loss";
 
 export type ArticleEntry = {
   slug: string;
@@ -246,6 +247,15 @@ export const registry: ArticleEntry[] = [
     description: "Client companies, how each wants to be billed, and where a building's or project's invoices go.",
     order: 4,
     component: CompaniesOverview,
+    roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "sales/win-loss",
+    title: "Win/Loss and GC Scorecards",
+    category: "Projects",
+    description: "Post-construction win rates by quarter, GC and job size, why we lose, and stale quotes.",
+    order: 9,
+    component: WinLossHelp,
     roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {

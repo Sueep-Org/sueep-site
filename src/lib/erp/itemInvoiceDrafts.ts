@@ -19,6 +19,7 @@ import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination } from "./invoiceDestination";
 import { isApproveEnabled } from "./janitorialInvoiceDrafts";
+import { deliverApprovedInvoice, invoiceLinesFor } from "./invoiceDelivery";
 import { syncProjectBillingFromRequest, syncProjectBillingFromSOV, syncSovPercentDone } from "@/lib/sovSync";
 import {
   associateDefault,
@@ -278,7 +279,7 @@ async function linkedItems(hubspotInvoiceId: string) {
   return { units, sov };
 }
 
-export async function approveItemDraft(draftId: string, email: string): Promise<{ ok: true; number: string | null } | { error: string }> {
+export async function approveItemDraft(draftId: string, email: string): Promise<{ ok: true; number: string | null; delivery: string } | { error: string }> {
   if (!(await isApproveEnabled())) return { error: "Approve is turned off. An Admin turns it on for the first invoice with the bookkeeper." };
   const draft = await prisma.itemInvoiceDraft.findUnique({ where: { id: draftId } });
   if (!draft || draft.status !== "DRAFT") return { error: "This draft isn't waiting anymore." };
@@ -320,7 +321,24 @@ export async function approveItemDraft(draftId: string, email: string): Promise<
     await syncSovPercentDone(projectId);
     await syncProjectBillingFromSOV(projectId);
   }
-  return { ok: true, number: snap.number };
+  const { lines } = await invoiceLinesFor(draft.hubspotInvoiceId);
+  const delivery = await deliverApprovedInvoice(
+    {
+      hubspotInvoiceId: draft.hubspotInvoiceId,
+      number: snap.number,
+      title: draft.title,
+      totalCents: draft.totalCents,
+      dueDate: snap.dueDate,
+      viewUrl: snap.viewUrl,
+      pdfUrl: snap.pdfUrl,
+      lines,
+      destType: draft.groupType === "PROJECT" ? "PROJECT" : "BUILDING",
+      destId: draft.groupId,
+      link: draft.groupType === "PROJECT" ? `/erp/projects/${draft.groupId}` : `/erp/buildings/${draft.groupId}`,
+    },
+    email,
+  );
+  return { ok: true, number: snap.number, delivery };
 }
 
 /** Deletes the draft in HubSpot; its items go back on Ready to bill. */

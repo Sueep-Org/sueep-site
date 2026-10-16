@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 export type DownloadableContract = {
   contractPdfFilename: string | null;
@@ -27,11 +28,10 @@ async function docusealGet<T>(path: string): Promise<T | null> {
 }
 
 function pdfResponse(bytes: ArrayBuffer | Buffer, filename: string) {
-  const safeName = filename.replace(/["\\\r\n]/g, "");
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${safeName}"`,
+      "Content-Disposition": contentDisposition("attachment", filename),
       "Cache-Control": "private, no-store",
     },
   });

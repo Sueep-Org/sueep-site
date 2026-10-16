@@ -1,11 +1,11 @@
-import { Callout, H2, H3, P, UL, LI, Steps, Step } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, H3, P, UL, LI, Steps, Step, A } from "@/app/erp/components/help/HelpComponents";
 
 export function CompaniesOverview() {
   return (
     <>
       <H2>What this is</H2>
       <P>
-        <strong>Companies</strong> (left menu, under Projects) lists the property managers, general contractors and owners
+        <strong>Companies</strong> (left menu, Projects, then Clients) lists the property managers, general contractors and owners
         we work with, and how each one wants to be billed: by email, a RealPage inbox, Procore, Coupa or a vendor portal.
       </P>
       <UL>
@@ -52,6 +52,11 @@ export function CompaniesOverview() {
       </P>
 
       <H3>Where invoices go</H3>
+      <P>
+        The billing method decides what happens when an invoice is approved on{" "}
+        <A href="/erp/help/billing/ready-to-send">Ready to send</A>: Email and RealPage email are emailed to Send to and Cc;
+        Procore, Coupa and vendor portals go on the upload list.
+      </P>
       <P>
         <strong>Invoices go to</strong> shows the answer and where each line came from. The most specific setting wins:
       </P>

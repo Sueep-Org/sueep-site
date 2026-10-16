@@ -12,7 +12,7 @@ export function CreatingAProject() {
       <H2>Steps</H2>
       <Steps>
         <Step n={1} title="Go to New Project">
-          Click <strong>New Project</strong> in the left sidebar under Project Information or at the top of the projects table.
+          Open <strong>Projects</strong> and click <strong>New project</strong> at the top of the projects table.
            <Img src="/help/projects/projects_1.png" alt="New Projects form locations" />
 
         </Step>

@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { loadBuildingInvoiceDestination } from "./invoiceDestination";
+import { deliverApprovedInvoice } from "./invoiceDelivery";
 import {
   associateDefault,
   createDraftInvoice,
@@ -242,8 +243,8 @@ export async function editDraft(
   return refreshDraft(periodId);
 }
 
-/** Opens the draft in HubSpot (sends it to QuickBooks) and marks the month BILLED. */
-export async function approveDraft(periodId: string, email: string): Promise<{ ok: true; number: string | null } | { error: string }> {
+/** Opens the draft in HubSpot (sends it to QuickBooks), marks the month BILLED, then delivers it (invoiceDelivery.ts). */
+export async function approveDraft(periodId: string, email: string): Promise<{ ok: true; number: string | null; delivery: string } | { error: string }> {
   if (!(await isApproveEnabled())) return { error: "Approve is turned off. An Admin turns it on for the first invoice with the bookkeeper." };
   const refreshed = await refreshDraft(periodId);
   if ("error" in refreshed) return refreshed;
@@ -256,7 +257,25 @@ export async function approveDraft(periodId: string, email: string): Promise<{ o
       prisma.hubSpotContractInvoice.update({ where: { id: found.link.id }, data: { ...snapshotColumns(snap), approvedAt: new Date(), approvedByEmail: email } }),
       prisma.recurringContractPeriod.updateMany({ where: { id: periodId, billingStatus: "NOT_BILLED" }, data: { billingStatus: "BILLED", draftError: null, draftErrorAt: null } }),
     ]);
-    return { ok: true, number: snap.number };
+    const { p } = found;
+    const lines = draftLines(labelFor(p), p);
+    const delivery = await deliverApprovedInvoice(
+      {
+        hubspotInvoiceId: found.link.hubspotInvoiceId,
+        number: snap.number,
+        title: `${p.recurringContract.building.name}, ${monthLabel(p.periodStart)}`,
+        totalCents: linesTotal(lines),
+        dueDate: snap.dueDate,
+        viewUrl: snap.viewUrl,
+        pdfUrl: snap.pdfUrl,
+        lines,
+        destType: "BUILDING",
+        destId: p.recurringContract.buildingId,
+        link: `/erp/janitorial/contracts/${p.recurringContract.id}`,
+      },
+      email,
+    );
+    return { ok: true, number: snap.number, delivery };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }

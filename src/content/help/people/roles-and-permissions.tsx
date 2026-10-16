@@ -31,7 +31,7 @@ export function RolesAndPermissions() {
           </tr>
           <tr>
             <TD>Sales</TD>
-            <TD>Projects, billing, commission and reimbursements, companies. No payroll totals.</TD>
+            <TD>Projects, billing, commission and reimbursements, companies, win/loss. No payroll totals.</TD>
           </tr>
           <tr>
             <TD>Estimation</TD>

@@ -4,6 +4,7 @@ import { NOTIFICATIONS, isEmailType, type NotificationGroup } from "@/lib/notifi
 export const AREA_DOT: Record<NotificationGroup, string> = {
   "Projects & schedule": "bg-sky-400",
   Turnovers: "bg-teal-400",
+  Billing: "bg-emerald-500",
   People: "bg-violet-400",
   Insurance: "bg-amber-400",
   Reminders: "bg-rose-400",

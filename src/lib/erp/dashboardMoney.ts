@@ -280,7 +280,7 @@ function payrollSection(periods: PayrollPeriodState[]): CardSection {
 
 type WaitingDraft = { id: string; title: string; note: string; cents: number };
 
-/** Drafts waiting on Ready to send: janitorial months and picked finished work. */
+/** Waiting on Ready to send: approved invoices still to upload or send, then drafts (janitorial months and picked finished work). */
 const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
   const [months, items] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
@@ -290,7 +290,18 @@ const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
     }),
     prisma.itemInvoiceDraft.findMany({ where: { status: "DRAFT" }, select: { hubspotInvoiceId: true, title: true, totalCents: true }, orderBy: { createdAt: "asc" } }),
   ]);
+  const deliveries = await prisma.invoiceDelivery.findMany({
+    where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } },
+    select: { id: true, title: true, status: true, invoiceNumber: true, totalCents: true },
+    orderBy: { createdAt: "asc" },
+  });
   return [
+    ...deliveries.map((d) => ({
+      id: `delivery-${d.id}`,
+      title: d.title,
+      note: `${d.invoiceNumber ? `${d.invoiceNumber}, ` : ""}${d.status === "NEEDS_UPLOAD" ? "needs upload" : "needs sending"}`,
+      cents: d.totalCents,
+    })),
     ...months.map((d) => ({
       id: d.hubspotInvoiceId,
       title: d.period.recurringContract.building.name,
@@ -307,7 +318,7 @@ function readyToSendSection(drafts: WaitingDraft[]): CardSection {
     label: "Ready to send",
     alertCount: drafts.length,
     rows: drafts.map((d) => ({ id: d.id, href: "/erp/ready-to-send", title: d.title, note: d.note, value: centsToDollars(d.cents) })),
-    empty: "No drafts waiting.",
+    empty: "Nothing to approve or send.",
     href: "/erp/ready-to-send",
   };
 }

@@ -3704,3 +3704,44 @@ model ItemInvoiceDraft {
 
   @@index([status])
 }
+
+/// How an approved invoice reached the client (Phase 4). Email clients are
+/// emailed on Approve; portal clients (Procore, Coupa, vendor portals) and
+/// anything that couldn't be emailed land on Ready to send's Needs sending
+/// list until someone marks them done.
+model InvoiceDelivery {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hubspotInvoiceId String   @unique
+  invoiceNumber    String?
+  /// Building name or job title
+  title            String
+  totalCents       Int
+  /// BUILDING or PROJECT whose billing settings decide where it goes, for Email again
+  destType         String
+  destId           String
+  /// ERP page for the invoice's building or project
+  link             String?
+  clientCompanyId  String?
+  clientName       String?
+  /// Billing method at the time (EMAIL, PROCORE...), null when not set
+  method           String?
+  portalUrl        String?
+  viewUrl          String?
+  pdfUrl           String?
+  /// EMAILED | NEEDS_UPLOAD | NEEDS_SENDING | DONE
+  status           String
+  /// Why it's on Needs sending, e.g. "No Send to address"
+  reason           String?
+  sentTo           String[] @default([])
+  cc               String[] @default([])
+  emailedAt        DateTime?
+  approvedByEmail  String?
+  /// Who marked it uploaded or sent by hand, and when
+  doneAt           DateTime?
+  doneByEmail      String?
+
+  @@index([status])
+}

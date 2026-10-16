@@ -27,7 +27,7 @@ const LOST_LABEL = /deal lost|not awarded/i;
 /** HubSpot's built-in id for the default pipeline's "Quote Sent" stage. */
 const DEFAULT_QUOTE_SENT_STAGE = "presentationscheduled";
 
-type PipelineRules = {
+export type PipelineRules = {
   key: "post-con" | "janitorial";
   label: string;
   pipelineId: string;
@@ -47,7 +47,8 @@ export type WinsSummary = {
 
 type HubSpotStage = { id: string; label: string; displayOrder: number };
 
-async function loadRules(): Promise<PipelineRules[]> {
+/** Won/lost stage sets per pipeline, from HubSpot's own stage order. Also used by the Win/loss page. */
+export async function loadRules(): Promise<PipelineRules[]> {
   const cfg = parseHubSpotPipelineStageMap();
   if (!cfg) throw new Error("HUBSPOT_PIPELINE_STAGE_MAP is not set");
   const res = await hubspotFetch("/crm/v3/pipelines/deals");

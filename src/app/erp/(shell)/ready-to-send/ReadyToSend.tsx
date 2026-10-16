@@ -25,7 +25,31 @@ export type DraftRow = MonthRow & {
   client: string | null;
   method: string | null;
   sendTo: string | null;
+  /** What happens on Approve, e.g. "Emails it to ap@udr.com." */
+  deliveryPlan: string;
 };
+
+export type DeliveryRow = {
+  id: string;
+  status: "NEEDS_UPLOAD" | "NEEDS_SENDING";
+  title: string;
+  invoiceNumber: string | null;
+  totalCents: number;
+  reason: string | null;
+  clientName: string | null;
+  clientCompanyId: string | null;
+  method: string | null;
+  portalUrl: string | null;
+  viewUrl: string | null;
+  pdfUrl: string | null;
+  link: string | null;
+  lines: { name: string; description: string; amountCents: number }[];
+  /** Company Info logins linked to the client company */
+  logins: string[];
+  approvedAt: string;
+};
+
+export type SentRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; how: string; when: string };
 
 export type BillableItemRow = { key: string; kind: "TURN" | "SOV" | "CO"; title: string; lineDescription: string; cents: number; doneKey: string; href: string };
 
@@ -69,6 +93,8 @@ async function call(url: string, method: string, body?: unknown): Promise<{ ok: 
 
 export function ReadyToSend({
   drafts,
+  deliveries,
+  sent,
   billable,
   failed,
   discarded,
@@ -77,6 +103,8 @@ export function ReadyToSend({
   isAdmin,
 }: {
   drafts: DraftRow[];
+  deliveries: DeliveryRow[];
+  sent: SentRow[];
   billable: BillableGroupRow[];
   failed: MonthRow[];
   discarded: MonthRow[];
@@ -122,7 +150,9 @@ export function ReadyToSend({
     const total = rows.reduce((s, r) => s + r.totalCents, 0);
     const ok = await confirm({
       title: rows.length === 1 ? `Approve ${rows[0]!.building}, ${rows[0]!.month}?` : `Approve ${rows.length} invoices?`,
-      message: `Opens ${rows.length === 1 ? "the invoice" : "them"} in HubSpot (${centsToDollars(total)}). HubSpot sends open invoices to QuickBooks. This can't be undone from the ERP.`,
+      message: `Opens ${rows.length === 1 ? "the invoice" : "them"} in HubSpot (${centsToDollars(total)}). HubSpot sends open invoices to QuickBooks. This can't be undone from the ERP. ${rows
+        .map((r) => (rows.length === 1 ? r.deliveryPlan : `${r.building}: ${r.deliveryPlan}`))
+        .join(" ")}`,
       confirmLabel: "Approve",
       danger: false,
     });
@@ -135,9 +165,9 @@ export function ReadyToSend({
           toast(`${r.building} ${r.month}: ${String(data.error ?? "Could not approve.")}`);
           break;
         }
-        done.push(String(data.number ?? r.building));
+        done.push(`${String(data.number ?? r.building)}: ${String(data.delivery ?? "")}`);
       }
-      if (done.length) toast(`Approved ${done.join(", ")}.`);
+      if (done.length) toast(`Approved ${done.join(" ")}`);
       setSelected(new Set());
     });
   }
@@ -198,6 +228,8 @@ export function ReadyToSend({
         )}
       </div>
 
+      <NeedsSending rows={deliveries} />
+
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Drafts waiting ({drafts.length})</h2>
         {drafts.length === 0 ? (
@@ -253,6 +285,7 @@ export function ReadyToSend({
                     ))}
                   </tbody>
                 </table>
+                <p className="mt-2 text-xs text-gray-600">On Approve: {d.deliveryPlan}</p>
                 {(d.note || stale) && (
                   <div className="mt-2 space-y-1 text-xs text-amber-800">
                     {d.note && <p className="rounded bg-amber-50 px-2 py-1">{d.note}</p>}
@@ -321,6 +354,29 @@ export function ReadyToSend({
                 <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void redraft(m)}>
                   Draft again
                 </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {sent.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+            Recently sent
+            <InfoTip text="Invoices emailed or marked done in the last 14 days. Every email is also in the Email Log." />
+          </h2>
+          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
+            {sent.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                <span className="text-gray-900">
+                  {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
+                  {r.title}
+                  <span className="ml-2 text-xs text-gray-500">{r.how}</span>
+                </span>
+                <span className="text-xs tabular-nums text-gray-500">
+                  {centsToDollars(r.totalCents)} · {new Date(r.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
               </li>
             ))}
           </ul>
@@ -599,6 +655,98 @@ function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
           );
         })
       )}
+    </section>
+  );
+}
+
+
+/** Approved invoices that still have to reach the client: portal uploads, and emails that couldn't go out. */
+function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!rows.length) return null;
+
+  async function act(r: DeliveryRow, what: "done" | "email-again") {
+    setBusy(r.id);
+    const { ok, data } = await call(`/api/erp/invoice-deliveries/${r.id}/${what}`, "POST");
+    setBusy(null);
+    toast(ok ? (what === "done" ? "Marked done." : String(data.note ?? "Emailed.")) : String(data.error ?? "Could not save."));
+    router.refresh();
+  }
+
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+        Needs sending ({rows.length})
+        <InfoTip text="Approved invoices that still have to reach the client. Portal clients: upload the PDF with these numbers, then Mark done. Email problems: fix the address on the company, building or project, then Email again." />
+      </h2>
+      {rows.map((r) => (
+        <div key={r.id} className="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="font-medium text-gray-900">
+                {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
+                {r.title}
+              </div>
+              <div className="text-xs text-gray-500">
+                {[r.clientName ?? "No client company", r.method].filter(Boolean).join(" · ")}
+              </div>
+              <div className="mt-1 text-xs text-amber-800">{r.reason}</div>
+            </div>
+            <div className="text-right text-lg font-semibold tabular-nums text-gray-900">{centsToDollars(r.totalCents)}</div>
+          </div>
+          <table className="mt-3 w-full text-sm">
+            <tbody className="divide-y divide-gray-100">
+              {r.lines.map((l, i) => (
+                <tr key={i}>
+                  <td className="py-1 pr-2 text-gray-900">
+                    {l.name}
+                    {l.description && <span className="ml-2 text-xs text-gray-500">{l.description}</span>}
+                  </td>
+                  <td className="py-1 text-right tabular-nums text-gray-900">
+                    <button type="button" title="Copy amount" className="hover:text-pink-600" onClick={() => void navigator.clipboard.writeText((l.amountCents / 100).toFixed(2)).then(() => toast("Amount copied."))}>
+                      {centsToDollars(l.amountCents)}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+            {r.portalUrl && (
+              <a href={r.portalUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
+                Open {r.method ?? "portal"}
+              </a>
+            )}
+            {r.pdfUrl && (
+              <a href={r.pdfUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
+                Invoice PDF
+              </a>
+            )}
+            {r.viewUrl && (
+              <a href={r.viewUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
+                HubSpot invoice
+              </a>
+            )}
+            {r.clientCompanyId && (
+              <a href={`/erp/companies/${r.clientCompanyId}`} className="font-medium text-pink-600 hover:underline">
+                {r.logins.length ? `Login: ${r.logins.join(", ")}` : "Company page"}
+              </a>
+            )}
+            <span className="ml-auto flex gap-2">
+              {r.status === "NEEDS_SENDING" && (
+                <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void act(r, "email-again")}>
+                  Email again
+                </Button>
+              )}
+              <Button size="xs" disabled={busy !== null} onClick={() => void act(r, "done")}>
+                {r.status === "NEEDS_UPLOAD" ? "Mark uploaded" : "Mark sent"}
+              </Button>
+            </span>
+          </div>
+        </div>
+      ))}
     </section>
   );
 }

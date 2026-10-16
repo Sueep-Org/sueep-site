@@ -16,6 +16,7 @@ import { toContactRow } from "@/lib/erp/clientCompaniesServer";
 import { utcDateKey } from "@/lib/erp/dates";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { CompanyEditButton, ContactsSection, LinksSection, PortalLoginsSection, ProjectsSection } from "./CompanyDetailClient";
+import { GcScorecard } from "./GcScorecard";
 
 export const metadata: Metadata = { title: "Company" };
 export const dynamic = "force-dynamic";
@@ -136,6 +137,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <GcScorecard companyId={company.id} />
         <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
             Billing

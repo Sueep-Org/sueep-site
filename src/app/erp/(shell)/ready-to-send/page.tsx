@@ -8,8 +8,9 @@ import { addDaysKey } from "@/lib/erp/manualHoursRepeat";
 import { BILLING_METHOD_LABELS } from "@/lib/erp/clientCompanies";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "@/lib/erp/invoiceDestination";
 import { loadBillableGroups, loadWaitingItemDrafts } from "@/lib/erp/itemInvoiceDrafts";
+import { describePlan, invoiceLinesFor, planDelivery } from "@/lib/erp/invoiceDelivery";
 import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, isApproveEnabled, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
-import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DraftRow, type MonthRow } from "./ReadyToSend";
+import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type SentRow } from "./ReadyToSend";
 
 export const metadata: Metadata = { title: "Ready to send" };
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function ReadyToSendPage() {
     recurringContract: { select: { id: true, billingDayOfMonth: true, invoiceLabel: true, buildingId: true, building: { select: { name: true } } } },
   };
 
-  const [drafts, failed, discarded, contracts, approveEnabled, billable, itemDrafts] = await Promise.all([
+  const [drafts, failed, discarded, contracts, approveEnabled, billable, itemDrafts, waitingDeliveries, sentDeliveries] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
       where: { draftedByErp: true, status: "draft" },
       select: { hubspotInvoiceId: true, amountCents: true, invoiceDate: true, dueDate: true, period: { select: periodSelect } },
@@ -72,6 +73,8 @@ export default async function ReadyToSendPage() {
     isApproveEnabled(),
     loadBillableGroups(),
     loadWaitingItemDrafts(),
+    prisma.invoiceDelivery.findMany({ where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } }, orderBy: { createdAt: "asc" } }),
+    prisma.invoiceDelivery.findMany({ where: { status: { in: ["EMAILED", "DONE"] }, updatedAt: { gte: new Date(Date.now() - 14 * 86_400_000) } }, orderBy: { updatedAt: "desc" }, take: 30 }),
   ]);
 
   // Where each building's or job's invoices go, keyed "BUILDING:<id>" / "PROJECT:<id>".
@@ -109,6 +112,7 @@ export default async function ReadyToSendPage() {
       totalCents: linesTotal(lines),
       draftTotalCents: d.amountCents,
       ...destinationSummary(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null),
+      deliveryPlan: describePlan(planDelivery(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null)),
     };
   });
   for (const { draft, lines, dueDate } of itemDrafts) {
@@ -130,8 +134,45 @@ export default async function ReadyToSendPage() {
       totalCents: total,
       draftTotalCents: total,
       ...destinationSummary(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null),
+      deliveryPlan: describePlan(planDelivery(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null)),
     });
   }
+
+  // Portal logins (from Company Info) linked to each client company on Needs sending.
+  const companyIds = [...new Set(waitingDeliveries.map((d) => d.clientCompanyId).filter((x): x is string => !!x))];
+  const loginLinks = companyIds.length
+    ? await prisma.clientCompanyLogin.findMany({ where: { companyId: { in: companyIds } }, select: { companyId: true, login: { select: { name: true } } } })
+    : [];
+  const deliveryRows: DeliveryRow[] = [];
+  for (const d of waitingDeliveries) {
+    const { lines } = await invoiceLinesFor(d.hubspotInvoiceId);
+    deliveryRows.push({
+      id: d.id,
+      status: d.status === "NEEDS_UPLOAD" ? "NEEDS_UPLOAD" : "NEEDS_SENDING",
+      title: d.title,
+      invoiceNumber: d.invoiceNumber,
+      totalCents: d.totalCents,
+      reason: d.reason,
+      clientName: d.clientName,
+      clientCompanyId: d.clientCompanyId,
+      method: d.method && d.method in BILLING_METHOD_LABELS ? BILLING_METHOD_LABELS[d.method as keyof typeof BILLING_METHOD_LABELS] : null,
+      portalUrl: d.portalUrl,
+      viewUrl: d.viewUrl,
+      pdfUrl: d.pdfUrl,
+      link: d.link,
+      lines,
+      logins: loginLinks.filter((l) => l.companyId === d.clientCompanyId).map((l) => l.login.name),
+      approvedAt: d.createdAt.toISOString(),
+    });
+  }
+  const sentRows: SentRow[] = sentDeliveries.map((d) => ({
+    id: d.id,
+    title: d.title,
+    invoiceNumber: d.invoiceNumber,
+    totalCents: d.totalCents,
+    how: d.status === "EMAILED" ? `Emailed to ${d.sentTo.join(", ")}` : `Marked done by ${d.doneByEmail ?? "someone"}`,
+    when: (d.emailedAt ?? d.doneAt ?? d.updatedAt).toISOString(),
+  }));
 
   const billableRows: BillableGroupRow[] = billable.map((g) => ({
     key: g.key,
@@ -163,6 +204,8 @@ export default async function ReadyToSendPage() {
       </h1>
       <ReadyToSend
         drafts={draftRows}
+        deliveries={deliveryRows}
+        sent={sentRows}
         billable={billableRows}
         failed={failed.map(monthRow)}
         discarded={discarded.map(monthRow)}

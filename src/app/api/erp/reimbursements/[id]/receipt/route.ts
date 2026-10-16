@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,7 +23,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(reimbursement.receiptData as unknown as BodyInit, {
     headers: {
       "Content-Type": reimbursement.receiptMimeType ?? "application/octet-stream",
-      "Content-Disposition": `inline; filename="${reimbursement.receiptFilename ?? "receipt"}"`,
+      "Content-Disposition": contentDisposition("inline", reimbursement.receiptFilename ?? "receipt"),
       "Cache-Control": "private, max-age=3600",
     },
   });

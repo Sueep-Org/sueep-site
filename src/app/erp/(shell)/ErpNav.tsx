@@ -97,31 +97,6 @@ function FolderIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
-function PlusCircleIcon({ className = iconCls }: IconProps) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.75}
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 8.25v7.5M8.25 12h7.5"
-      />
-    </svg>
-  );
-}
 function CalendarIcon({ className = iconCls }: IconProps) {
   return (
     <svg
@@ -532,17 +507,17 @@ const dashboardItem: NavItem = {
 };
 
 const projectGroupItems: NavItem[] = [
+  // New projects are started from the Projects page's New project button.
   { href: "/erp/projects", label: "Projects", roles: ALL, icon: FolderIcon },
-  {
-    href: "/erp/projects/new",
-    label: "New Project",
-    roles: PM_EST,
-    icon: PlusCircleIcon,
-  },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
   { href: "/erp/janitorial", label: "Janitorial Contracts", roles: PM_SALES, icon: BroomIcon },
-  { href: "/erp/property-managers", label: "Property Managers", roles: PM_SALES, icon: IdCardIcon },
+];
+
+/** Who we work for, and how we're doing with them. A subsection of Projects. */
+const clientGroupItems: NavItem[] = [
   { href: "/erp/companies", label: "Companies", roles: PM_SALES, icon: BuildingIcon },
+  { href: "/erp/property-managers", label: "Property Managers", roles: PM_SALES, icon: IdCardIcon },
+  { href: "/erp/win-loss", label: "Win/Loss", roles: PM_SALES, icon: DocumentIcon },
 ];
 
 const billingGroupItems: NavItem[] = [
@@ -744,14 +719,19 @@ function RailLink({ item, pathname, badge }: { item: NavItem; pathname: string; 
 function RailGroup({
   label,
   icon: Icon,
-  items,
+  items: flatItems = [],
+  sections,
   pathname,
 }: {
   label: string;
   icon: (props: IconProps) => ReactNode;
-  items: NavItem[];
+  items?: NavItem[];
+  /** Several labeled lists in one flyout (e.g. Team and Clients under Team). Empty sections are skipped. */
+  sections?: { label: string; items: NavItem[] }[];
   pathname: string;
 }) {
+  const groups = (sections ?? [{ label, items: flatItems }]).filter((g) => g.items.length > 0);
+  const items = groups.flatMap((g) => g.items);
   const active = isGroupActive(pathname, items);
   // Tap-driven, not hover-only: on a touchscreen (iPad et al.) there's no
   // hover, so the old hover-to-reveal flyout was unreachable and tapping the
@@ -803,31 +783,35 @@ function RailGroup({
       {open && (
         <div className="absolute left-full top-0 z-50 pl-2">
           <div className="w-56 rounded-xl border border-gray-100 bg-white py-2 shadow-xl">
-            <p className="px-3.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-              {label}
-            </p>
-            <div className="flex flex-col gap-0.5 px-2">
-              {items.map((item) => {
-                const itemActive =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={[
-                      "rounded-lg px-2.5 py-2 text-sm transition-colors",
-                      itemActive
-                        ? "bg-pink-50 font-medium text-pink-600"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+            {groups.map((group, gi) => (
+              <div key={group.label} className={gi > 0 ? "mt-1.5 border-t border-gray-100 pt-1.5" : ""}>
+                <p className="px-3.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  {group.label}
+                </p>
+                <div className="flex flex-col gap-0.5 px-2">
+                  {group.items.map((item) => {
+                    const itemActive =
+                      pathname === item.href ||
+                      pathname.startsWith(item.href + "/");
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={[
+                          "rounded-lg px-2.5 py-2 text-sm transition-colors",
+                          itemActive
+                            ? "bg-pink-50 font-medium text-pink-600"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -921,6 +905,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
 
   const showDashboard = allowed(dashboardItem, role);
   const visibleProjectItems = projectGroupItems.filter((i) => allowed(i, role));
+  const visibleClientItems = clientGroupItems.filter((i) => allowed(i, role));
   const visibleBillingItems = billingGroupItems.filter((i) => allowed(i, role));
   const visibleTeamItems = employmentGroupItems.filter((i) => allowed(i, role));
   const hasTeamSection = visibleTeamItems.length > 0;
@@ -934,13 +919,20 @@ export function ErpNav({ role }: { role: ErpRole }) {
         {showDashboard && <NavLink item={dashboardItem} pathname={pathname} />}
         <NavLink item={notificationsItem} pathname={pathname} badge={unread} />
 
-        {visibleProjectItems.length > 0 && (
+        {(visibleProjectItems.length > 0 || visibleClientItems.length > 0) && (
           <>
             <SectionLabel>Projects</SectionLabel>
             <NavGroup
               label="Project Info"
               icon={BuildingIcon}
               items={projectGroupItems}
+              pathname={pathname}
+              role={role}
+            />
+            <NavGroup
+              label="Clients"
+              icon={IdCardIcon}
+              items={clientGroupItems}
               pathname={pathname}
               role={role}
             />
@@ -1030,11 +1022,14 @@ export function ErpNav({ role }: { role: ErpRole }) {
             <div className="my-1 h-px w-8 shrink-0 bg-gray-100" />
           )}
 
-          {visibleProjectItems.length > 0 && (
+          {(visibleProjectItems.length > 0 || visibleClientItems.length > 0) && (
             <RailGroup
               label="Projects"
               icon={BuildingIcon}
-              items={visibleProjectItems}
+              sections={[
+                { label: "Projects", items: visibleProjectItems },
+                { label: "Clients", items: visibleClientItems },
+              ]}
               pathname={pathname}
             />
           )}

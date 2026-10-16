@@ -43,6 +43,31 @@ export function ReadyToSendHelp() {
         <LI>Tick several and use <strong>Approve selected</strong> to approve them together.</LI>
       </UL>
 
+      <H2>After Approve: getting it to the client</H2>
+      <P>
+        Approve also sends the invoice, based on where it goes (the client company&apos;s billing, or a building or project
+        override). The draft card says what will happen under <strong>On Approve</strong>.
+      </P>
+      <UL>
+        <LI>
+          <strong>Email or RealPage email inbox:</strong> emailed right away from Sueep&apos;s address with the invoice PDF and
+          HubSpot&apos;s view and pay link. Replies go to whoever approved it. It shows in the Email Log.
+        </LI>
+        <LI>
+          <strong>Procore, Coupa or a vendor portal:</strong> goes on <strong>Needs sending</strong> with the portal link, the
+          PDF, the login to use and each line&apos;s amount (click an amount to copy it). Upload it, then click{" "}
+          <strong>Mark uploaded</strong>.
+        </LI>
+        <LI>
+          <strong>No Send to address, method Other, or the daily email limit reached:</strong> goes on Needs sending with the
+          reason. Fix it, then click <strong>Email again</strong>, or send it yourself and click <strong>Mark sent</strong>.
+        </LI>
+      </UL>
+      <P>
+        <strong>Recently sent</strong> lists what went out in the last 14 days. Needs sending also shows on the dashboard&apos;s
+        Money tab.
+      </P>
+
       <H2>Ready to bill</H2>
       <P>
         Every finished unit turn, post-construction SOV line and change order that isn&apos;t billed and has no invoice yet,

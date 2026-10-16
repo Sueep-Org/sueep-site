@@ -389,7 +389,8 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
               </Link>
             </div>
           )}
-          {!isSupervisor && (
+          {/* Same roles the new project page lets in. */}
+          {!isSupervisor && auth?.role !== "EMPLOYEE" && (
             <Link
               href="/erp/projects/new"
               className="rounded-md bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"

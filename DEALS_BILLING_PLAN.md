@@ -13,8 +13,10 @@ Shareable overview for leadership (charts, numbers, reasoning): https://claude.a
 | 0. Prep | HubSpot scopes added. Still open: required lost reason in HubSpot, change the reused portal password, save portal logins on Company Info. |
 | 1. Business Manager | Built, committed (b21d08d). Jennifer is BUSINESS_MANAGER. |
 | 2. Companies | Built, committed (b21d08d), seeded (11 companies, 13 buildings linked). |
-| 3. Invoices | Built, NOT committed. Janitorial auto-drafts + Ready to bill (pick finished work). Migration `20261015200000_item_invoice_drafts` not applied yet. Not tested against HubSpot. |
-| 4 to 6 | Not started. |
+| 3. Invoices | Built, committed (061441c). Janitorial auto-drafts + Ready to bill (pick finished work). Migrations applied. Not tested against HubSpot. |
+| 4. Delivery | Built, NOT committed. Email on Approve (PDF + pay link, replies to approver), Needs sending list for portals and problems. Migration `20261015220000_invoice_delivery` not applied. Not tested. |
+| 5. Win/loss | Built, NOT committed. No migration. Win/Loss page, GC scorecard on company pages, Stale quotes card (Sales tab: Sales, BM, Admin). Decisions: won = Quote Approved and later, keep HubSpot lost reasons, stale = 30 days, no monthly email, no big-loss flagging. |
+| 6. Post-con tools | Not started. Includes the estimating calendar. |
 
 **Decisions made while building (not in the original plan):**
 - Model is `ClientCompany` (not `Company`). Portal logins live on Company Info > Logins and are linked to companies (`ClientCompanyLogin`), visible to whoever can open Company Info.

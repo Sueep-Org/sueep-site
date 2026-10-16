@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(photo.data as unknown as BodyInit, {
     headers: {
       "Content-Type": photo.mimeType,
-      "Content-Disposition": `inline; filename="${photo.filename}"`,
+      "Content-Disposition": contentDisposition("inline", photo.filename),
       "Cache-Control": "private, max-age=31536000",
     },
   });

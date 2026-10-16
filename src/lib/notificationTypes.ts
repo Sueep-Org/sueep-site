@@ -12,7 +12,7 @@
  * cc would send the same person a copy of every one.
  */
 
-export type NotificationGroup = "Projects & schedule" | "Turnovers" | "People" | "Insurance" | "Reminders" | "Website" | "Admin";
+export type NotificationGroup = "Projects & schedule" | "Turnovers" | "Billing" | "People" | "Insurance" | "Reminders" | "Website" | "Admin";
 export type ToMode = "recipients" | "also" | "ifNone";
 /** Sender name: "erp" for staff emails, "sueep" for workers and clients, "website" for site forms. */
 export type SenderKind = "erp" | "sueep" | "website";
@@ -311,6 +311,16 @@ export const NOTIFICATIONS = {
     ccEditable: true,
   }),
 
+  INVOICE_TO_CLIENT: def({
+    label: "Invoice to client",
+    group: "Billing",
+    when: "Someone approves an invoice on Ready to send for a client billed by email. Has the invoice PDF and HubSpot's pay link.",
+    automatic: "The client company's Send to and Cc (or the building's or project's billing override)",
+    sender: "sueep",
+    // An approved invoice must reach the client, so it can't be switched off.
+    alwaysOn: true,
+  }),
+
   COI_REQUEST_RECEIVED: def({
     label: "COI request received",
     group: "Insurance",
@@ -431,7 +441,7 @@ export function isEmailType(v: unknown): v is EmailType {
 export const BACKUP_PMS_KEY = "BACKUP_PMS";
 export const defaultBackupPms = () => [env("DOCUSEAL_SUEEP_SIGNER_EMAIL", "david@sueep.com"), "jennifer@sueep.com"];
 
-export const NOTIFICATION_GROUPS: NotificationGroup[] = ["Projects & schedule", "Turnovers", "People", "Insurance", "Reminders", "Website", "Admin"];
+export const NOTIFICATION_GROUPS: NotificationGroup[] = ["Projects & schedule", "Turnovers", "Billing", "People", "Insurance", "Reminders", "Website", "Admin"];
 
 export const TO_MODE_LABEL: Record<ToMode, string> = {
   recipients: "Send to",
