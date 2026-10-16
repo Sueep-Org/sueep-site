@@ -73,6 +73,11 @@ export function canManageManagementCalendar(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
+/** Management calendar, read-only and Bids category only: bid due dates and job walks. */
+export function canSeeBidCalendar(role: ErpRole): boolean {
+  return isPmLevel(role) || role === "SALES" || role === "ESTIMATION";
+}
+
 /** Schedule Timeline tab: dragging a project bar to change its start/end dates. */
 export function canRescheduleOnTimeline(role: ErpRole): boolean {
   return isPmLevel(role);

@@ -123,6 +123,7 @@ export async function loadProjectInvoiceDestination(projectId: string): Promise<
     where: { id: projectId },
     select: {
       jobTitle: true,
+      billingCutoffDay: true,
       ...overrideSelect,
       clientCompany: { select: companySelect },
       building: { select: { name: true, ...overrideSelect, managedByCompany: { select: companySelect } } },
@@ -130,12 +131,14 @@ export async function loadProjectInvoiceDestination(projectId: string): Promise<
   });
   if (!p) return null;
   const company = p.clientCompany ?? p.building?.managedByCompany ?? null;
-  return resolveInvoiceDestination({
+  const d = resolveInvoiceDestination({
     project: { name: p.jobTitle, override: overrideFromColumns(p) },
     building: p.building ? { name: p.building.name, override: overrideFromColumns(p.building) } : null,
     company,
     companyVia: p.clientCompany ? "project" : company ? "building" : null,
   });
+  // A job's own billing cutoff wins over the company's.
+  return p.billingCutoffDay != null ? { ...d, cutoffDay: p.billingCutoffDay } : d;
 }
 
 export async function loadBuildingInvoiceDestination(buildingId: string): Promise<InvoiceDestination | null> {

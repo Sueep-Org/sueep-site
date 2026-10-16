@@ -13,6 +13,9 @@ import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from
 import { utcDateKey } from "./dates";
 import { COMPANY_INFO_SECTIONS } from "./companyInfo";
 import { checkerName, namesByEmail } from "./janitorialQualityChecks";
+import { dealUrl, loadDealBundle, outcomeOf } from "./winLoss";
+import { centsToDollarsCompact } from "./money";
+import { cutoffsBetween, loadCutoffJobs } from "./billingCutoffs";
 import {
   eventOccurrences,
   formatItemDates,
@@ -374,6 +377,40 @@ export async function loadManagementItems(
       tracksDone: true,
       ...oneDay(q.scheduledDate),
     });
+  }
+
+  if (want("BIDS")) {
+    // From HubSpot (cached an hour). A HubSpot problem leaves the category empty instead of breaking the calendar.
+    try {
+      const bundle = await loadDealBundle();
+      for (const d of bundle.deals) {
+        if (outcomeOf(bundle, d.stageId) === "lost") continue;
+        const detail = [bundle.stageLabels[d.stageId]?.trim(), d.ownerId ? bundle.owners[d.ownerId] : null, d.cents ? centsToDollarsCompact(d.cents) : null].filter(Boolean).join(" · ");
+        const href = dealUrl(bundle.hubId, d.id);
+        for (const [day, label, kind] of [
+          [d.bidDate, "Bid due", "bid"],
+          [d.walkDate, "Job walk", "walk"],
+        ] as const) {
+          if (!day || day < startKey || day > endKey) continue;
+          add("BIDS", { key: `${kind}:${d.id}`, title: `${label}: ${d.name}`, detail, href, start: day, end: day });
+        }
+      }
+    } catch (e) {
+      console.error("Management calendar: HubSpot bids", e);
+    }
+  }
+
+  if (want("BILLING_CUTOFFS")) {
+    for (const { job, day } of cutoffsBetween(await loadCutoffJobs(), startKey, endKey)) {
+      add("BILLING_CUTOFFS", {
+        key: `cutoff:${job.projectId}:${day}`,
+        title: `Billing cutoff: ${job.jobTitle}`,
+        detail: [job.companyName, job.pmName, job.fromProject ? "job's own cutoff" : null].filter(Boolean).join(" · ") || null,
+        href: `/erp/projects/${job.projectId}`,
+        start: day,
+        end: day,
+      });
+    }
   }
 
   const known = new Set(categories.map((c) => c.id));

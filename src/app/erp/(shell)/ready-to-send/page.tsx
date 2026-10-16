@@ -113,6 +113,7 @@ export default async function ReadyToSendPage() {
       draftTotalCents: d.amountCents,
       ...destinationSummary(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null),
       deliveryPlan: describePlan(planDelivery(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null)),
+      paymentTermsDays: destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`)?.paymentTermsDays ?? null,
     };
   });
   for (const { draft, lines, dueDate } of itemDrafts) {
@@ -135,6 +136,7 @@ export default async function ReadyToSendPage() {
       draftTotalCents: total,
       ...destinationSummary(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null),
       deliveryPlan: describePlan(planDelivery(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null)),
+      paymentTermsDays: destinations.get(`${draft.groupType}:${draft.groupId}`)?.paymentTermsDays ?? null,
     });
   }
 

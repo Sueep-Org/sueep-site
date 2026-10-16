@@ -6,7 +6,7 @@ Shareable overview for leadership (charts, numbers, reasoning): https://claude.a
 
 **To start a new chat:** "Read DEALS_BILLING_PLAN.md and start Phase N." Each phase lists the questions that must be answered first. Ask the ones still open before writing code.
 
-## Status (updated 2026-10-15)
+## Status (updated 2026-10-16)
 
 | Phase | State |
 |---|---|
@@ -14,9 +14,9 @@ Shareable overview for leadership (charts, numbers, reasoning): https://claude.a
 | 1. Business Manager | Built, committed (b21d08d). Jennifer is BUSINESS_MANAGER. |
 | 2. Companies | Built, committed (b21d08d), seeded (11 companies, 13 buildings linked). |
 | 3. Invoices | Built, committed (061441c). Janitorial auto-drafts + Ready to bill (pick finished work). Migrations applied. Not tested against HubSpot. |
-| 4. Delivery | Built, NOT committed. Email on Approve (PDF + pay link, replies to approver), Needs sending list for portals and problems. Migration `20261015220000_invoice_delivery` not applied. Not tested. |
-| 5. Win/loss | Built, NOT committed. No migration. Win/Loss page, GC scorecard on company pages, Stale quotes card (Sales tab: Sales, BM, Admin). Decisions: won = Quote Approved and later, keep HubSpot lost reasons, stale = 30 days, no monthly email, no big-loss flagging. |
-| 6. Post-con tools | Not started. Includes the estimating calendar. |
+| 4. Delivery | Built, committed (481177b), migration applied. Email on Approve (PDF + pay link, replies to approver), Needs sending list for portals and problems. Not tested against HubSpot. |
+| 5. Win/loss | Built, committed (481177b). Type of work split not committed yet. Win/Loss page, GC scorecard on company pages, Stale quotes card (Sales tab: Sales, BM, Admin). Decisions: won = Quote Approved and later, keep HubSpot lost reasons, stale = 30 days, no monthly email, no big-loss flagging. Won $ uses ERP contract value for won ERP projects. Type of work (cleaning, painting, both) from deal line items, then Type of business. |
+| 6. Post-con tools | In progress, one tool at a time: 1) Estimating calendar BUILT, not committed, migration applied (Bids category on Management calendar from HubSpot Bid Date / Job Walk Date, open + won only, reminders 3 and 1 days, Sales and Estimation see Bids only). 2) Billing cutoffs BUILT, not committed (company cutoff day or Project.billingCutoffDay; calendar category; PM email 5 days before; Missed on Money tab when no invoice dated that month; migration `20261016150000_billing_cutoffs` not applied; all 12 active/upcoming post-con jobs linked to their GC, 5 GC companies created; no company has a cutoff day yet). 3) Quote price check BUILT, not committed (Estimation Queue card: open quotes active in 30 days vs middle half of won $/sq ft for their type of work, all bids when fewer than 5 wins; 3x off goes to Check the numbers; today 47 checked, 15 outside, 9 likely typos). Next: 4) pipeline board, 5) bid inbox reader (inbox not decided). |
 
 **Decisions made while building (not in the original plan):**
 - Model is `ClientCompany` (not `Company`). Portal logins live on Company Info > Logins and are linked to companies (`ClientCompanyLogin`), visible to whoever can open Company Info.

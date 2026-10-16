@@ -97,10 +97,15 @@ function labelFor(p: LoadedPeriod): string {
   return p.recurringContract.invoiceLabel?.trim() || p.recurringContract.building.name;
 }
 
-async function dueDateFor(buildingId: string, invoiceDateKey: string): Promise<string> {
+/**
+ * Company payment terms decide the due date. Without terms it's the date
+ * someone set on the draft (Ready to send), else due on receipt, same as
+ * today's invoices.
+ */
+async function dueDateFor(buildingId: string, invoiceDateKey: string, setDueKey: string | null = null): Promise<string> {
   const terms = (await loadBuildingInvoiceDestination(buildingId))?.paymentTermsDays ?? null;
-  // No terms on the company: due on receipt, same as today's invoices.
-  return addDaysKey(invoiceDateKey, terms ?? 0);
+  if (terms != null) return addDaysKey(invoiceDateKey, terms);
+  return setDueKey ?? invoiceDateKey;
 }
 
 /** Marks the period as being drafted. False if another run holds it. */
@@ -219,7 +224,9 @@ export async function refreshDraft(periodId: string): Promise<{ ok: true } | { e
   try {
     const lines = draftLines(labelFor(p), p);
     const invoiceDateKey = billingDateKey(p.periodStart, p.recurringContract.billingDayOfMonth);
-    await setInvoiceDates(link.hubspotInvoiceId, { invoiceDateKey, dueDateKey: await dueDateFor(p.recurringContract.buildingId, invoiceDateKey) });
+    // Keeps a due date someone set by hand when the company has no terms.
+    const setDue = link.dueDate ? utcDateKey(link.dueDate) : null;
+    await setInvoiceDates(link.hubspotInvoiceId, { invoiceDateKey, dueDateKey: await dueDateFor(p.recurringContract.buildingId, invoiceDateKey, setDue) });
     await replaceInvoiceLines(link.hubspotInvoiceId, lines);
     const snap = await fetchInvoiceSnapshot(link.hubspotInvoiceId);
     await prisma.hubSpotContractInvoice.update({ where: { id: link.id }, data: { amountCents: linesTotal(lines), ...snapshotColumns(snap) } });

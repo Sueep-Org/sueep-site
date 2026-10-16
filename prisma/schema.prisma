@@ -130,6 +130,10 @@ model Project {
   buildingId String?
   building   Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
 
+  /// Day of the month this job's pay app / invoice is due to the GC, when it
+  /// differs from the client company's billing cutoff. Null uses the company's.
+  billingCutoffDay Int?
+
   /// Who we bill for this job. Blank means the building's managing company.
   clientCompanyId String?
   clientCompany   ClientCompany? @relation("ProjectClientCompany", fields: [clientCompanyId], references: [id], onDelete: SetNull)

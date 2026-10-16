@@ -10,6 +10,7 @@ import { centsToDollars, centsToDollarsCompact } from "./money";
 import { DEFAULT_PAYROLL_ANCHOR, TWO_WEEKS_MS, payPeriodForDay } from "./payPeriods";
 import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "./projectMargin";
 import { loadLienWatch } from "./lienWatch";
+import { loadCutoffStatus } from "./billingCutoffs";
 import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
 
 /**
@@ -323,6 +324,33 @@ function readyToSendSection(drafts: WaitingDraft[]): CardSection {
   };
 }
 
+// ── Billing cutoffs ────────────────────────────────────────────────────────
+
+const CUTOFF_SOON_DAYS = 7;
+
+/** Missed cutoffs this month (red), then cutoffs in the next week not billed yet. */
+async function billingCutoffSection(todayKey: string): Promise<CardSection> {
+  const soon = addDaysKey(todayKey, CUTOFF_SOON_DAYS);
+  const rows = (await loadCutoffStatus(todayKey))
+    .filter((s) => s.state === "MISSED" || (s.state === "UPCOMING" && s.day <= soon))
+    .sort((a, b) => (a.state === b.state ? a.day.localeCompare(b.day) : a.state === "MISSED" ? -1 : 1));
+  return {
+    key: "cutoffs",
+    label: "Billing cutoffs",
+    alertCount: rows.filter((r) => r.state === "MISSED").length,
+    rows: rows.map((r) => ({
+      id: `cutoff-${r.job.projectId}`,
+      href: `/erp/projects/${r.job.projectId}`,
+      title: r.job.jobTitle,
+      note: [r.job.companyName, r.job.pmName].filter(Boolean).join(" · ") || undefined,
+      value: r.state === "MISSED" ? `Missed ${shortDate(r.day)}` : `Due ${shortDate(r.day)}`,
+      negative: r.state === "MISSED",
+    })),
+    empty: "No missed cutoffs this month and none in the next week.",
+    href: "/erp/schedule?calendar=management",
+  };
+}
+
 // ── Liens ──────────────────────────────────────────────────────────────────
 
 const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]; urgent: number }> => {
@@ -354,17 +382,19 @@ const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]
 export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData> {
   const todayKey = todayEasternKey();
   const showPayroll = canSeePayroll(role);
-  const [overdue, ready, periods, liens, drafts] = await Promise.all([
+  const [overdue, ready, periods, liens, drafts, cutoffs] = await Promise.all([
     loadOverdueInvoices(todayKey),
     loadReadyToBill(todayKey),
     showPayroll ? loadPayrollPeriods(todayKey) : Promise.resolve(null),
     loadLienRows(todayKey),
     canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve(null),
+    billingCutoffSection(todayKey),
   ]);
   const sections: CardSection[] = [
     ...(drafts ? [readyToSendSection(drafts)] : []),
     overdueSection(overdue),
     readyToBillSection(ready, todayKey),
+    cutoffs,
     ...(periods ? [payrollSection(periods)] : []),
     { key: "liens", label: "Liens", alertCount: liens.urgent, rows: liens.rows, empty: `No lien steps due in the next ${LIEN_WINDOW_DAYS} days.`, href: "/erp/billing" },
   ];
@@ -374,13 +404,14 @@ export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData>
 /** Red number on the Money tab: overdue invoices + last pay period not locked + liens needing a step now + drafts waiting (approvers). */
 export async function countNeedsActionAlerts(role: ErpRole): Promise<number> {
   const todayKey = todayEasternKey();
-  const [overdue, periods, liens, drafts] = await Promise.all([
+  const [overdue, periods, liens, drafts, cutoffs] = await Promise.all([
     loadOverdueInvoices(todayKey),
     canSeePayroll(role) ? loadPayrollPeriods(todayKey) : Promise.resolve([]),
     loadLienRows(todayKey),
     canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve([]),
+    billingCutoffSection(todayKey),
   ]);
-  return overdue.length + periods.filter((p) => p.ended && !p.locked).length + liens.urgent + drafts.length;
+  return overdue.length + periods.filter((p) => p.ended && !p.locked).length + liens.urgent + drafts.length + (cutoffs.alertCount ?? 0);
 }
 
 // ── Checks card: losing money ──────────────────────────────────────────────
